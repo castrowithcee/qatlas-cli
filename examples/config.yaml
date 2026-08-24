@@ -1,0 +1,264 @@
+# Example qatlas configuration.
+#
+# Copy this file to ~/.qatlas/cli/config.yaml and replace the placeholders. It contains no real
+# endpoints and no secrets: a credential only says where its secrets come from, never what they are.
+#
+# Check your edits with:       qatlas config validate
+# See where secrets come from: qatlas config validate --secrets
+
+version: 1
+
+# A service is one technical API endpoint of one provider.
+services:
+  wiki-primary:
+    provider: bookstack
+    base_url: https://wiki.example.invalid
+
+  # A second instance of the same provider needs no duplication beyond its own endpoint.
+  wiki-archive:
+    provider: bookstack
+    base_url: https://archive.example.invalid
+
+  # Telegram uses the Bot API root. The TUI fills this default when Telegram is selected.
+  telegram-main:
+    provider: telegram
+    base_url: https://api.telegram.org
+
+  # Lexware accepts only its fixed production gateway, because an API key is bound to that one origin.
+  books:
+    provider: lexware
+    base_url: https://api.lexware.io
+
+  # Twenty CRM is either the managed cloud or a self-hosted workspace. Both are bare https origins: the
+  # requests of a connection never leave the origin its service names.
+  crm-cloud:
+    provider: twentycrm
+    base_url: https://api.twenty.com
+
+  crm-selfhosted:
+    provider: twentycrm
+    base_url: https://crm.example.invalid
+
+  # SeaTable is one instance per service: the managed cloud, a dedicated instance, or a self-hosted
+  # server. Every request of a connection stays on the origin its service names.
+  tables-cloud:
+    provider: seatable
+    base_url: https://cloud.seatable.io
+
+  tables-onprem:
+    provider: seatable
+    base_url: https://seatable.example.invalid
+
+  # Nextcloud is one instance per service. The URL may carry an installation path when the instance does
+  # not sit at the root of its host; every request of a connection stays inside it.
+  cloud-main:
+    provider: nextcloud
+    base_url: https://cloud.example.invalid
+
+  cloud-partner:
+    provider: nextcloud
+    base_url: https://partner.example.invalid/nextcloud
+
+# A credential says where secrets come from. BookStack needs the roles token-id and token-secret.
+# A credential names the source of the secrets one provider needs, never a secret itself.
+#
+# provider is optional and names the system these secrets belong to. Secret roles are provider-defined, so
+# it is what tells a token-id/token-secret pair apart from a bot-token: `qatlas tui` then asks for
+# exactly those roles instead of every role every compiled provider knows. A credential without it stays
+# valid and keeps offering all of them.
+credentials:
+  # type: keyring keeps the secrets in the credential store of the platform, so nothing has to be
+  # exported and nothing lands in this file. Fill it with:
+  #
+  #     printf %s "$TOKEN_ID" | qatlas credential set wiki-reader token-id
+  #     printf %s "$TOKEN_SECRET" | qatlas credential set wiki-reader token-secret
+  #
+  # QATLAS_WIKI_READER_TOKEN_ID and QATLAS_WIKI_READER_TOKEN_SECRET still override the store when
+  # they are set; the derived name is always QATLAS_<CREDENTIAL>_<ROLE>.
+  wiki-reader:
+    provider: bookstack
+    type: keyring
+
+  # type: env names the variables instead, which is the way for CI and for headless machines. Such a
+  # credential is resolved from those variables alone: no store and no file stands in for one that is
+  # unset, so a missing secret stays a visible failure.
+  wiki-auditor:
+    provider: bookstack
+    type: env
+    values:
+      token-id: QATLAS_WIKI_AUDITOR_TOKEN_ID
+      token-secret: QATLAS_WIKI_AUDITOR_TOKEN_SECRET
+
+  telegram-notifier:
+    provider: telegram
+    type: env
+    values:
+      bot-token: QATLAS_TELEGRAM_NOTIFIER_BOT_TOKEN
+
+  # Lexware needs the single role api-key. Give the key the smallest permission the reads require.
+  books-accountant:
+    provider: lexware
+    type: keyring
+
+  # Twenty needs the single role api-key too. Assign each key a workspace role that may only read
+  # companies, and keep one key per workspace so the two never mix.
+  crm-cloud-reader:
+    provider: twentycrm
+    type: keyring
+
+  crm-selfhosted-reader:
+    provider: twentycrm
+    type: keyring
+
+  # SeaTable needs the single role api-token. An API token belongs to exactly one base and carries its
+  # own permission, so give each one the permission r for this read-only tool. Qatlas exchanges it for
+  # a short-lived base token on every run and never stores that token.
+  #
+  # These two tokens address the same base with different permissions, which is why they are two
+  # credentials rather than one.
+  sales-base-reader:
+    provider: seatable
+    type: keyring
+
+  sales-base-auditor:
+    provider: seatable
+    type: keyring
+
+  # A second base of the same instance needs its own token, because a token never leaves its base.
+  support-base-reader:
+    provider: seatable
+    type: keyring
+
+  onprem-base-reader:
+    provider: seatable
+    type: keyring
+
+  # Nextcloud needs the two roles user-id and app-password, because both belong to one identity. Create
+  # the app password under Settings, Security, Devices and sessions; it is revocable on its own and never
+  # exposes the account password or defeats a second factor.
+  #
+  # These two credentials are two identities of the same instance, so a connection always says which one
+  # it reads as.
+  cloud-reader:
+    provider: nextcloud
+    type: keyring
+
+  cloud-auditor:
+    provider: nextcloud
+    type: env
+    values:
+      user-id: QATLAS_CLOUD_AUDITOR_USER_ID
+      app-password: QATLAS_CLOUD_AUDITOR_APP_PASSWORD
+
+  partner-reader:
+    provider: nextcloud
+    type: keyring
+
+# A connection is what you select with --connection. It binds one service to one credential.
+#
+# description is optional and yours to maintain: one line of at most 200 characters saying what the route
+# is for. A name is a stable selector, not an explanation, so this is what tells two routes of the same
+# provider apart. It is published by 'qatlas tool <tool-id>' and by qatlas.describe, it is never sent
+# to a provider, and it never selects a route on its own. Because it is published, never write a secret or
+# personal data into it.
+connections:
+  wiki:
+    service: wiki-primary
+    credential: wiki-reader
+    description: the live team wiki, everyone reads this one
+
+  # The same service with a different key, for example a more restricted account.
+  wiki-audit:
+    service: wiki-primary
+    credential: wiki-auditor
+    description: the same instance read with the restricted audit account
+
+  # A different service reusing the same credential, optionally scoped with target.
+  archive:
+    service: wiki-archive
+    credential: wiki-reader
+    target: books
+    description: retired wiki content, read-only reference
+
+  # Telegram requires a fixed non-secret target on every connection. Two connections can bind the same
+  # bot to different chats without mixing their targets.
+  telegram-alerts:
+    service: telegram-main
+    credential: telegram-notifier
+    target: "-1001111111111"
+  telegram-operations:
+    service: telegram-main
+    credential: telegram-notifier
+    target: "-1002222222222"
+
+  # Lexware needs no target: the organization follows from the API key.
+  accounting:
+    service: books
+    credential: books-accountant
+
+  # Twenty needs no target either: the workspace follows from the API key. Two workspaces stay two
+  # connections, so a read always names the one it means.
+  crm:
+    service: crm-cloud
+    credential: crm-cloud-reader
+    description: the managed Twenty workspace used by sales
+
+  crm-internal:
+    service: crm-selfhosted
+    credential: crm-selfhosted-reader
+    description: the self-hosted Twenty workspace for internal accounts
+
+  # A SeaTable connection binds one instance, one base token, and one fixed table. The optional view
+  # after the slash narrows the rows a list returns; id:TABLEID and id:VIEWID address them by
+  # identifier, which is also the way to reach a name that contains a slash.
+  sales-rows:
+    service: tables-cloud
+    credential: sales-base-reader
+    target: Kunden
+
+  sales-rows-audit:
+    service: tables-cloud
+    credential: sales-base-auditor
+    target: Kunden/Aktive
+
+  support-rows:
+    service: tables-cloud
+    credential: support-base-reader
+    target: id:0001
+
+  onprem-rows:
+    service: tables-onprem
+    credential: onprem-base-reader
+    target: Tickets
+
+  # A Nextcloud connection binds one instance, one identity, and one fixed root folder below the Files of
+  # that identity. A read may address a path below that folder and nothing above it. A single / would
+  # bind the whole Files root of the identity.
+  files-reports:
+    service: cloud-main
+    credential: cloud-reader
+    target: Reports
+
+  files-archive:
+    service: cloud-main
+    credential: cloud-reader
+    target: Archive/2026
+
+  # The same instance read as a second identity, with its own app password and its own root folder.
+  files-audit:
+    service: cloud-main
+    credential: cloud-auditor
+    target: Audit
+
+  files-partner:
+    service: cloud-partner
+    credential: partner-reader
+    target: Shared/Qatlas
+
+# Defaults are useful for read operations. The key is a tool namespace such as bookstack, or a complete
+# tool ID such as bookstack.pages.list when one tool needs its own route. Confirmed Telegram sends and
+# the Lexware, Twenty CRM, SeaTable and Nextcloud reads deliberately ignore defaults and require the
+# connection in the exact invoke request.
+defaults:
+  connections:
+    bookstack: wiki
