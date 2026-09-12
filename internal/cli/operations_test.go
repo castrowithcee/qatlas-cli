@@ -129,7 +129,9 @@ connections:
 defaults: {}
 `)
 	registry := capability.NewRegistry()
-	if err := registry.RegisterProvider(config.ProviderMetadata{ID: "fake", Name: "Fake"}, nil); err != nil {
+	if err := registry.RegisterProvider(config.ProviderMetadata{
+		ID: "fake", Name: "Fake", DefaultPermissions: []config.Permission{config.PermissionCreate},
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	descriptor := capability.Descriptor{
@@ -198,7 +200,9 @@ connections:
 defaults: {}
 `)
 	registry := capability.NewRegistry()
-	if err := registry.RegisterProvider(config.ProviderMetadata{ID: "fake", Name: "Fake"}, nil); err != nil {
+	if err := registry.RegisterProvider(config.ProviderMetadata{
+		ID: "fake", Name: "Fake", DefaultPermissions: []config.Permission{config.PermissionCreate},
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	descriptor := capability.Descriptor{

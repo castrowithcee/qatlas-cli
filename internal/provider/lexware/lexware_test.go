@@ -158,25 +158,59 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 2 {
-		t.Fatalf("operations = %d, want the list and the get operation", len(operations))
+	if len(operations) != 3 {
+		t.Fatalf("operations = %d, want three invoice operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
 			!descriptor.RequiresExplicitConnection ||
-			descriptor.Risk.Effect != capability.EffectRead ||
-			descriptor.Risk.Idempotency != capability.IdempotencySafe ||
-			descriptor.Risk.Confirmation != capability.ConfirmationNone ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
-			t.Errorf("descriptor %s = %+v, want a safe read requiring an explicit connection",
+			t.Errorf("descriptor %s = %+v, want a bounded operation requiring an explicit connection",
 				descriptor.ID, descriptor)
 		}
-		if len(descriptor.Examples) == 0 || strings.Contains(string(descriptor.Examples[0].Arguments), "key") {
+		if len(descriptor.Examples) > 0 && strings.Contains(string(descriptor.Examples[0].Arguments), "key") {
 			t.Errorf("descriptor %s examples = %s", descriptor.ID, descriptor.Examples)
 		}
 	}
-	if operations[0].ID != "lexware.invoices.get" || operations[1].ID != "lexware.invoices.list" {
-		t.Errorf("operation IDs = %s, %s", operations[0].ID, operations[1].ID)
+	if operations[0].ID != "lexware.invoices.create" || operations[2].ID != "lexware.invoices.list" {
+		t.Errorf("operation IDs are not sorted: %+v", operations)
+	}
+}
+
+func TestCreateInvoicePostsAnExplicitPayloadAndFinalizeFlag(t *testing.T) {
+	serve(t, func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodPost || request.URL.Path != "/v1/invoices" || request.URL.Query().Get("finalize") != "true" {
+			t.Errorf("request = %s %s", request.Method, request.URL.String())
+		}
+		var payload map[string]json.RawMessage
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		if _, ok := payload["lineItems"]; !ok {
+			t.Error("lineItems missing")
+		}
+		return jsonResponse(http.StatusCreated, `{"id":"`+invoiceID+`","version":1}`), nil
+	})
+	input := createInput{Finalize: true, VoucherDate: "2026-09-12T00:00:00+02:00", Currency: "EUR", TaxType: "net", ShippingDate: "2026-09-12T00:00:00+02:00", ShippingType: "service"}
+	input.Address.ContactID = invoiceID
+	input.LineItems = append(input.LineItems, struct {
+		Type        string      `json:"type"`
+		Name        string      `json:"name"`
+		Description string      `json:"description,omitempty"`
+		Quantity    json.Number `json:"quantity,omitempty"`
+		UnitName    string      `json:"unit_name,omitempty"`
+		Currency    string      `json:"currency,omitempty"`
+		NetAmount   json.Number `json:"net_amount,omitempty"`
+		TaxRate     json.Number `json:"tax_rate_percentage,omitempty"`
+		Discount    json.Number `json:"discount_percentage,omitempty"`
+	}{Type: "text", Name: "Note"})
+	c, _ := client(t)
+	got, err := c.CreateInvoice(context.Background(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != invoiceID || !got.Finalized {
+		t.Fatalf("result = %+v", got)
 	}
 }
 

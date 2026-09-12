@@ -89,14 +89,14 @@ func TestTwentyToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[2]{effect,id,title}:", "read,twentycrm.companies.get,", "read,twentycrm.companies.list,",
+		"tools[5]{effect,id,title}:", "create,twentycrm.companies.create,", "delete,twentycrm.companies.delete,", "read,twentycrm.companies.get,", "read,twentycrm.companies.list,", "update,twentycrm.companies.update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--config", path))); len(got) != 2 {
-		t.Errorf("twentycrm tools = %v, want exactly the two company tools", got)
+	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--config", path))); len(got) != 5 {
+		t.Errorf("twentycrm tools = %v, want all five company tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -243,8 +243,8 @@ func TestTwentyMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 2 || searched.Operations[0].ID != "twentycrm.companies.get" ||
-		searched.Operations[1].ID != "twentycrm.companies.list" {
+	if len(searched.Operations) != 5 || searched.Operations[0].ID != "twentycrm.companies.create" ||
+		searched.Operations[4].ID != "twentycrm.companies.update" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 

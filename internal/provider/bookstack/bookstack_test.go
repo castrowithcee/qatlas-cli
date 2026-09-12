@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -606,8 +607,8 @@ func TestRegister(t *testing.T) {
 	}
 
 	got := reg.Provider(Provider)
-	if len(got) != 2 {
-		t.Fatalf("capabilities = %d, want 2", len(got))
+	if len(got) != 5 {
+		t.Fatalf("capabilities = %d, want 5", len(got))
 	}
 	wantRisk := capability.Risk{
 		Effect:          capability.EffectRead,
@@ -622,6 +623,9 @@ func TestRegister(t *testing.T) {
 	}{
 		{Provider + ".pages.get", wantRisk},
 		{Provider + ".pages.list", wantRisk},
+		{Provider + ".pages.create", pagesCreate.Risk},
+		{Provider + ".pages.update", pagesUpdate.Risk},
+		{Provider + ".pages.delete", pagesDelete.Risk},
 	} {
 		t.Run(tt.id, func(t *testing.T) {
 			var descriptor capability.Descriptor
@@ -644,6 +648,38 @@ func TestRegister(t *testing.T) {
 				t.Errorf("operation %q has no registered handler", descriptor.ID)
 			}
 		})
+	}
+}
+
+func TestPageMutationsUseOnlyThePagesRoute(t *testing.T) {
+	methods := []string{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		methods = append(methods, r.Method+" "+r.URL.Path)
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Error(err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(page(42, "Changed"))
+	}))
+	defer server.Close()
+	c := newClient(t, server.URL, nil)
+	if _, err := c.CreatePage(context.Background(), pageMutation{Name: "New", BookID: 7, Markdown: "body"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.UpdatePage(context.Background(), "42", pageMutation{Name: "Changed"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeletePage(context.Background(), "42"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"POST /api/pages", "PUT /api/pages/42", "DELETE /api/pages/42"}
+	if !reflect.DeepEqual(methods, want) {
+		t.Fatalf("requests = %v, want %v", methods, want)
 	}
 }
 

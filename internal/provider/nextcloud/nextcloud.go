@@ -1,4 +1,4 @@
-// Package nextcloud implements read-only access to the Files app of one Nextcloud instance over WebDAV.
+// Package nextcloud implements controlled access to the Files app of one Nextcloud instance over WebDAV.
 //
 // A Nextcloud installation holds many identities, and every identity owns its own file tree below
 // /remote.php/dav/files/{user-id}/. That cardinality is the configuration: a service is one instance with
@@ -6,8 +6,7 @@
 // and a connection binds them to one fixed root folder. An invoke request can name neither the instance,
 // nor the identity, nor the root; it may only address a path below the root the connection is bound to.
 //
-// The adapter produces exactly one HTTP method, PROPFIND, and asks for a fixed property set. It therefore
-// never reads file content, never writes, and never reaches another app of the instance. Names, DAV
+// The adapter produces only explicit Files WebDAV requests and never reaches another app of the instance. Names, DAV
 // properties, and the whole multi-status document arrive from the provider and are treated as untrusted
 // data: they are normalised into a stable metadata envelope, passed through the output encoders, and
 // never rendered or stored.
@@ -47,7 +46,7 @@ const (
 
 // dataSensitivity classifies results as file metadata of the configured Nextcloud identity. It is
 // deliberately provider-specific; the architecture defines no global sensitivity taxonomy.
-const dataSensitivity = "nextcloud-files-metadata"
+const dataSensitivity = "nextcloud-files"
 
 // filesRoot are the fixed path segments of the authenticated Files WebDAV endpoint. The user ID follows
 // them, and the configured root folder follows the user ID.
@@ -77,6 +76,7 @@ const propfindBody = `<?xml version="1.0" encoding="UTF-8"?>` +
 // complete. A caller who needs a larger folder narrows the connection root instead.
 const (
 	maxBodyBytes   = 4 << 20
+	maxFileBytes   = 4 << 20
 	maxEntries     = 500
 	maxXMLDepth    = 20
 	maxTextBytes   = 8 << 10
@@ -186,13 +186,34 @@ var filesStat = capability.Descriptor{
 	}},
 }
 
-// Register adds Nextcloud metadata, its read-only connection test, and the two read operations.
+var filesGet = capability.Descriptor{
+	ID: Provider + ".files.get", Version: 1, Title: "Read Nextcloud file content",
+	Description: "Read one bounded file below the fixed root of an explicit connection as base64",
+	Tags:        []string{"nextcloud", "files", "webdav", "get", "content"}, Risk: nextcloudReadRisk, Provider: Provider, RequiresExplicitConnection: true,
+	InputSchema:  json.RawMessage(`{"type":"object","properties":{"path":` + pathSchema + `},"required":["path"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"},"content_base64":{"type":"string"},"content_type":{"type":"string"},"size":{"type":"integer"},"etag":{"type":"string"}},"required":["path","content_base64","size"],"additionalProperties":false}`),
+}
+
+var filesCreate = fileMutationDescriptor("create", capability.EffectCreate, `{"type":"object","properties":{"path":`+pathSchema+`,"content_base64":{"type":"string","maxLength":5592408}},"required":["path","content_base64"],"additionalProperties":false}`)
+var filesUpdate = fileMutationDescriptor("update", capability.EffectUpdate, `{"type":"object","properties":{"path":`+pathSchema+`,"content_base64":{"type":"string","maxLength":5592408},"etag":{"type":"string","minLength":1,"maxLength":1024}},"required":["path","content_base64","etag"],"additionalProperties":false}`)
+var filesDelete = fileMutationDescriptor("delete", capability.EffectDelete, `{"type":"object","properties":{"path":`+pathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024}},"required":["path","etag"],"additionalProperties":false}`)
+
+func fileMutationDescriptor(action string, effect capability.Effect, input string) capability.Descriptor {
+	return capability.Descriptor{ID: Provider + ".files." + action, Version: 1,
+		Title:       strings.ToUpper(action[:1]) + action[1:] + " a Nextcloud file",
+		Description: strings.ToUpper(action[:1]) + action[1:] + " one file below the fixed root of an explicit connection",
+		Tags:        []string{"nextcloud", "files", "webdav", action}, Provider: Provider, RequiresExplicitConnection: true,
+		Risk:        capability.Risk{Effect: effect, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema: json.RawMessage(input), OutputSchema: json.RawMessage(`{"type":"object","properties":{"` + action + `d":{"type":"boolean"},"etag":{"type":"string"}},"required":["` + action + `d"],"additionalProperties":false}`)}
+}
+
+// Register adds Nextcloud metadata, its read-only connection test, and the bounded file operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "Nextcloud",
+		ID: Provider, Name: "Nextcloud", DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleUserID,
-			Description: "Nextcloud user ID of the identity to read as: the value shown as username in " +
+			Description: "Nextcloud user ID of the identity to act as: the value shown as username in " +
 				"Settings, Personal info, not the display name and not an email address unless the " +
 				"account uses one as its user ID",
 		}, {
@@ -204,7 +225,7 @@ func Register(reg *capability.Registry) error {
 		Target: config.TargetMetadata{
 			Label:    "root folder",
 			Required: true,
-			Description: "fixed folder below the Files of this identity that this connection may read, " +
+			Description: "fixed folder below the Files of this identity that this connection may access, " +
 				"for example Reports or Team/Reports; a single / binds the whole Files root",
 		},
 	}, TestConnection); err != nil {
@@ -213,6 +234,10 @@ func Register(reg *capability.Registry) error {
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: filesList, Handler: capability.Handler(invokeFilesList)},
 		capability.Operation{Descriptor: filesStat, Handler: capability.Handler(invokeFilesStat)},
+		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
+		capability.Operation{Descriptor: filesCreate, Handler: capability.Handler(invokeFilesCreate)},
+		capability.Operation{Descriptor: filesUpdate, Handler: capability.Handler(invokeFilesUpdate)},
+		capability.Operation{Descriptor: filesDelete, Handler: capability.Handler(invokeFilesDelete)},
 	)
 }
 
@@ -246,6 +271,61 @@ func invokeFilesStat(ctx context.Context, resolved *config.Resolved, secrets *se
 		return nil, err
 	}
 	return client.StatFile(ctx, input.Path)
+}
+
+type contentArguments struct {
+	Path    string `json:"path"`
+	Content string `json:"content_base64"`
+	ETag    string `json:"etag"`
+}
+
+func openForContent(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (*Client, contentArguments, error) {
+	var input contentArguments
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, input, providerError("file operation", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	return client, input, err
+}
+
+func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	client, input, err := openForContent(resolved, secrets, red, raw)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetFile(ctx, input.Path)
+}
+func invokeFilesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	client, input, err := openForContent(resolved, secrets, red, raw)
+	if err != nil {
+		return nil, err
+	}
+	etag, err := client.PutFile(ctx, "create file", input.Path, input.Content, "*")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"created": true, "etag": etag}, nil
+}
+func invokeFilesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	client, input, err := openForContent(resolved, secrets, red, raw)
+	if err != nil {
+		return nil, err
+	}
+	etag, err := client.PutFile(ctx, "update file", input.Path, input.Content, input.ETag)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"updated": true, "etag": etag}, nil
+}
+func invokeFilesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	client, input, err := openForContent(resolved, secrets, red, raw)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.DeleteFile(ctx, input.Path, input.ETag); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"deleted": true}, nil
 }
 
 // Client binds one identity of one configured Nextcloud instance to the fixed root folder of one
@@ -546,6 +626,14 @@ type ListResult struct {
 	Count   int     `json:"count"`
 }
 
+type Content struct {
+	Path          string `json:"path"`
+	ContentBase64 string `json:"content_base64"`
+	ContentType   string `json:"content_type,omitempty"`
+	Size          int    `json:"size"`
+	ETag          string `json:"etag,omitempty"`
+}
+
 // ListFiles reads the immediate children of the connection root, or of one folder below it, with a single
 // PROPFIND of depth 1. The requested folder itself is normalised out of the children.
 func (c *Client) ListFiles(ctx context.Context, path string) (*ListResult, error) {
@@ -609,6 +697,105 @@ func (c *Client) StatFile(ctx context.Context, path string) (*Entry, error) {
 		return nil, providerError(op, err.Error())
 	}
 	return c.stat(ctx, op, rel, false)
+}
+
+func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
+	rel, err := splitRelative(path)
+	if err != nil || len(rel) == 0 {
+		return nil, providerError("get file", "a file path below the connection root is required")
+	}
+	response, err := c.webdav(ctx, "get file", http.MethodGet, rel, nil, "", "")
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxFileBytes+1))
+	if err != nil || len(body) > maxFileBytes {
+		return nil, invalidResponse("get file", "the Nextcloud file exceeds the size limit")
+	}
+	return &Content{Path: path, ContentBase64: base64.StdEncoding.EncodeToString(body), ContentType: bounded(response.Header.Get("Content-Type")), Size: len(body), ETag: bounded(strings.Trim(response.Header.Get("ETag"), `"`))}, nil
+}
+
+func (c *Client) PutFile(ctx context.Context, op, path, encoded, match string) (string, error) {
+	rel, err := splitRelative(path)
+	if err != nil || len(rel) == 0 {
+		return "", providerError(op, "a file path below the connection root is required")
+	}
+	content, err := base64.StdEncoding.Strict().DecodeString(encoded)
+	if err != nil || len(content) > maxFileBytes {
+		return "", providerError(op, "content_base64 is invalid or exceeds the size limit")
+	}
+	if match != "*" && !validETag(match) {
+		return "", providerError(op, "etag is not a usable file version")
+	}
+	header := "If-Match"
+	if match == "*" {
+		header = "If-None-Match"
+	}
+	response, err := c.webdav(ctx, op, http.MethodPut, rel, strings.NewReader(string(content)), header, match)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	return bounded(strings.Trim(response.Header.Get("ETag"), `"`)), nil
+}
+
+func (c *Client) DeleteFile(ctx context.Context, path, etag string) error {
+	rel, err := splitRelative(path)
+	if err != nil || len(rel) == 0 {
+		return providerError("delete file", "a file path below the connection root is required")
+	}
+	if !validETag(etag) {
+		return providerError("delete file", "etag is not a usable file version")
+	}
+	entry, err := c.stat(ctx, "delete file", rel, false)
+	if err != nil {
+		return err
+	}
+	if entry.Type != typeFile {
+		return providerError("delete file", "folders cannot be deleted by this operation")
+	}
+	response, err := c.webdav(ctx, "delete file", http.MethodDelete, rel, nil, "If-Match", etag)
+	if err != nil {
+		return err
+	}
+	response.Body.Close()
+	return nil
+}
+
+func validETag(value string) bool {
+	trimmed := strings.Trim(value, `"`)
+	if trimmed == "" || trimmed == "*" || len(trimmed) > maxValueLength {
+		return false
+	}
+	for _, r := range trimmed {
+		if r < 0x20 || r == 0x7f || r == '"' {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *Client) webdav(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.requestURL(rel), body)
+	if err != nil {
+		return nil, providerError(op, "the request could not be built")
+	}
+	req.Header.Set("Authorization", c.auth)
+	if condition == "If-None-Match" {
+		req.Header.Set(condition, "*")
+	} else if condition != "" {
+		req.Header.Set(condition, `"`+strings.Trim(value, `"`)+`"`)
+	}
+	response, err := c.http.Do(req)
+	if err != nil {
+		return nil, transportError(op, err)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		defer response.Body.Close()
+		return nil, statusError(op, response.StatusCode)
+	}
+	return response, nil
 }
 
 // stat performs one depth 0 PROPFIND and normalises the single node it must answer with. Only the
@@ -804,13 +991,15 @@ func statusError(op string, status int) error {
 	case http.StatusForbidden:
 		return &provider.Error{
 			Class: provider.ClassPermission, Op: op,
-			Message: "this Nextcloud identity may not read this path",
+			Message: "this Nextcloud identity may not perform this operation on the path",
 		}
 	case http.StatusNotFound:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: messageNotFound}
+	case http.StatusPreconditionFailed:
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "the Nextcloud file changed or already exists"}
 	case http.StatusMethodNotAllowed, http.StatusConflict:
 		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op, Message: "Nextcloud refused this read on this path",
+			Class: provider.ClassProviderError, Op: op, Message: "Nextcloud refused this operation on this path",
 		}
 	case http.StatusLocked:
 		return &provider.Error{

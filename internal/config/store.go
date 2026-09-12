@@ -54,7 +54,12 @@ func (c *Config) Clone() *Config {
 		out.Credentials[name] = copied
 	}
 	for name, conn := range c.Connections {
-		out.Connections[name] = conn
+		copied := conn
+		copied.Permissions = append([]Permission(nil), conn.Permissions...)
+		if conn.Permissions != nil && copied.Permissions == nil {
+			copied.Permissions = []Permission{}
+		}
+		out.Connections[name] = copied
 	}
 	if c.Defaults.Connections != nil {
 		out.Defaults.Connections = cloneStrings(c.Defaults.Connections)

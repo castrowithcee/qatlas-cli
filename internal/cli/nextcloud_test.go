@@ -106,14 +106,14 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[2]{effect,id,title}:", "read,nextcloud.files.list,", "read,nextcloud.files.stat,",
+		"tools[6]{effect,id,title}:", "create,nextcloud.files.create,", "delete,nextcloud.files.delete,", "read,nextcloud.files.get,", "read,nextcloud.files.list,", "read,nextcloud.files.stat,", "update,nextcloud.files.update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--config", path))); len(got) != 2 {
-		t.Errorf("nextcloud tools = %v, want exactly the two files tools", got)
+	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--config", path))); len(got) != 6 {
+		t.Errorf("nextcloud tools = %v, want all six files tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -274,8 +274,8 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 2 || searched.Operations[0].ID != "nextcloud.files.list" ||
-		searched.Operations[1].ID != "nextcloud.files.stat" {
+	if len(searched.Operations) != 6 || searched.Operations[0].ID != "nextcloud.files.create" ||
+		searched.Operations[5].ID != "nextcloud.files.update" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 

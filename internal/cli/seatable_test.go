@@ -107,14 +107,14 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[2]{effect,id,title}:", "read,seatable.rows.get,", "read,seatable.rows.list,",
+		"tools[5]{effect,id,title}:", "create,seatable.rows.create,", "delete,seatable.rows.delete,", "read,seatable.rows.get,", "read,seatable.rows.list,", "update,seatable.rows.update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--config", path))); len(got) != 2 {
-		t.Errorf("seatable tools = %v, want exactly the two row tools", got)
+	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--config", path))); len(got) != 5 {
+		t.Errorf("seatable tools = %v, want all five row tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -265,8 +265,8 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 2 || searched.Operations[0].ID != "seatable.rows.get" ||
-		searched.Operations[1].ID != "seatable.rows.list" {
+	if len(searched.Operations) != 5 || searched.Operations[0].ID != "seatable.rows.create" ||
+		searched.Operations[4].ID != "seatable.rows.update" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 

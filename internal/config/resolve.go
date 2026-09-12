@@ -8,14 +8,15 @@ import "fmt"
 // the variable names. Both are needed to resolve a secret, and neither is a secret. Nothing here reads a
 // value; that happens later, in package secret, and only for the role a provider actually needs.
 type Resolved struct {
-	Name       string
-	Provider   string
-	BaseURL    string
-	Options    map[string]string
-	Target     string
-	Service    string
-	Credential string
-	Secrets    Credential
+	Name        string
+	Provider    string
+	BaseURL     string
+	Options     map[string]string
+	Target      string
+	Service     string
+	Credential  string
+	Secrets     Credential
+	Permissions []Permission
 }
 
 // SelectionError reports that no single connection could be determined for a domain. It is a usage
@@ -52,13 +53,14 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 	cred := c.Credentials[conn.Credential]
 
 	return &Resolved{
-		Name:       name,
-		Provider:   service.Provider,
-		BaseURL:    service.BaseURL,
-		Options:    service.Options,
-		Target:     conn.Target,
-		Service:    conn.Service,
-		Credential: conn.Credential,
-		Secrets:    cred,
+		Name:        name,
+		Provider:    service.Provider,
+		BaseURL:     service.BaseURL,
+		Options:     service.Options,
+		Target:      conn.Target,
+		Service:     conn.Service,
+		Credential:  conn.Credential,
+		Secrets:     cred,
+		Permissions: c.ConnectionPermissions(name),
 	}, nil
 }

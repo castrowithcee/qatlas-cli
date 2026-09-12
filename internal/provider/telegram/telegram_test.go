@@ -57,7 +57,7 @@ func telegramClient(t *testing.T, target string, transport http.RoundTripper) (*
 	return client, red
 }
 
-func TestRegisterContainsMetadataAndSendDescriptor(t *testing.T) {
+func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
 		t.Fatalf("Register() = %v", err)
@@ -68,16 +68,58 @@ func TestRegisterContainsMetadataAndSendDescriptor(t *testing.T) {
 		t.Fatalf("metadata = %+v, %v", metadata, ok)
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 1 {
-		t.Fatalf("operations = %v, want one", operations)
+	if len(operations) != 3 {
+		t.Fatalf("operations = %v, want three", operations)
 	}
-	descriptor := operations[0]
+	descriptor, _, ok := reg.Lookup("telegram.messages.send")
+	if !ok {
+		t.Fatal("send descriptor is missing")
+	}
 	if descriptor.ID != "telegram.messages.send" || !descriptor.RequiresExplicitConnection ||
 		descriptor.Risk.Effect != capability.EffectCreate ||
 		descriptor.Risk.Idempotency != capability.IdempotencyNonIdempotent ||
 		descriptor.Risk.Confirmation != capability.ConfirmationRequired || !descriptor.Risk.OpenWorld ||
 		descriptor.Risk.DataSensitivity != dataSensitivity {
 		t.Fatalf("descriptor = %+v", descriptor)
+	}
+}
+
+func TestEditAndDeleteUseTheFixedTarget(t *testing.T) {
+	const target = "-1001234567890"
+	requests := 0
+	client, _ := telegramClient(t, target, roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requests++
+		var body map[string]any
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if body["chat_id"] != target || body["message_id"] != float64(91) {
+			t.Errorf("body = %#v", body)
+		}
+		switch request.URL.Path {
+		case "/bot" + testToken + "/editMessageText":
+			if body["text"] != "corrected" || len(body) != 3 {
+				t.Errorf("edit body = %#v", body)
+			}
+			return response(http.StatusOK, `{"ok":true,"result":{"message_id":91}}`), nil
+		case "/bot" + testToken + "/deleteMessage":
+			if len(body) != 2 {
+				t.Errorf("delete body = %#v", body)
+			}
+			return response(http.StatusOK, `{"ok":true,"result":true}`), nil
+		default:
+			t.Fatalf("path = %s", request.URL.Path)
+			return nil, nil
+		}
+	}))
+	if got, err := client.EditMessage(context.Background(), 91, "corrected"); err != nil || got["message_id"] != int64(91) {
+		t.Fatalf("EditMessage() = %#v, %v", got, err)
+	}
+	if got, err := client.DeleteMessage(context.Background(), 91); err != nil || got["deleted"] != true {
+		t.Fatalf("DeleteMessage() = %#v, %v", got, err)
+	}
+	if requests != 2 {
+		t.Fatalf("requests = %d, want 2", requests)
 	}
 }
 

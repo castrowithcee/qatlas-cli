@@ -1,5 +1,5 @@
 // Package telegram implements the deliberately small Telegram Bot API surface used by Qatlas: a safe
-// getMe connection check and one confirmed plain-text send operation.
+// getMe connection check and confirmed plain-text send, edit, and delete operations.
 package telegram
 
 import (
@@ -67,10 +67,64 @@ var messagesSend = capability.Descriptor{
 	}},
 }
 
-// Register adds Telegram metadata, its read-only connection test, and the single send operation.
+var messagesEdit = capability.Descriptor{
+	ID:          Provider + ".messages.edit",
+	Version:     1,
+	Title:       "Edit a Telegram message",
+	Description: "Replace the plain text of one message in the fixed target of an explicit Telegram connection",
+	Tags:        []string{"telegram", "messages", "edit"},
+	Risk: capability.Risk{
+		Effect: capability.EffectUpdate, Idempotency: capability.IdempotencyUnknown,
+		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
+	},
+	Provider: Provider, RequiresExplicitConnection: true,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"message_id":{"type":"integer","minimum":1},` +
+		`"text":{"type":"string","minLength":1,"maxLength":4096}},` +
+		`"required":["message_id","text"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer"}},` +
+		`"required":["message_id"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		{Name: "message_id", Description: "Identifier of the message in the fixed target", Required: true},
+		{Name: "text", Description: "Replacement plain text, from 1 through 4096 characters", Required: true},
+	},
+	Fields: []capability.Field{{Name: "message_id", Description: "Edited Telegram message identifier"}},
+	Examples: []capability.Example{{
+		Description: "Replace the text of a message sent to this connection's target",
+		Arguments:   json.RawMessage(`{"message_id":91,"text":"Deployment completed"}`),
+	}},
+}
+
+var messagesDelete = capability.Descriptor{
+	ID:          Provider + ".messages.delete",
+	Version:     1,
+	Title:       "Delete a Telegram message",
+	Description: "Delete one message from the fixed target of an explicit Telegram connection",
+	Tags:        []string{"telegram", "messages", "delete"},
+	Risk: capability.Risk{
+		Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,
+		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
+	},
+	Provider: Provider, RequiresExplicitConnection: true,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer","minimum":1}},` +
+		`"required":["message_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
+		`"required":["deleted"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{{
+		Name: "message_id", Description: "Identifier of the message in the fixed target", Required: true,
+	}},
+	Fields: []capability.Field{{Name: "deleted", Description: "True when Telegram accepted the deletion"}},
+	Examples: []capability.Example{{
+		Description: "Delete a message from this connection's target",
+		Arguments:   json.RawMessage(`{"message_id":91}`),
+	}},
+}
+
+// Register adds Telegram metadata, its read-only connection test, and the message operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Telegram", DefaultBaseURL: defaultURL,
+		DefaultPermissions: []config.Permission{config.PermissionCreate},
 		SecretRoles: []config.SecretRole{{
 			Name:        roleBotToken,
 			Description: "Telegram bot token issued by BotFather",
@@ -81,10 +135,11 @@ func Register(reg *capability.Registry) error {
 	}, TestConnection); err != nil {
 		return err
 	}
-	return reg.Register(Provider, capability.Operation{
-		Descriptor: messagesSend,
-		Handler:    capability.Handler(invokeMessagesSend),
-	})
+	return reg.Register(Provider,
+		capability.Operation{Descriptor: messagesSend, Handler: capability.Handler(invokeMessagesSend)},
+		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
+		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
+	)
 }
 
 func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -102,6 +157,37 @@ func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets 
 		return nil, err
 	}
 	return client.SendMessage(ctx, arguments.Text)
+}
+
+func invokeMessagesEdit(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var arguments struct {
+		MessageID int64  `json:"message_id"`
+		Text      string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &arguments); err != nil {
+		return nil, providerError("edit message", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.EditMessage(ctx, arguments.MessageID, arguments.Text)
+}
+
+func invokeMessagesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var arguments struct {
+		MessageID int64 `json:"message_id"`
+	}
+	if err := json.Unmarshal(raw, &arguments); err != nil {
+		return nil, providerError("delete message", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.DeleteMessage(ctx, arguments.MessageID)
 }
 
 // Client binds one bot token to the fixed target of one resolved connection.
@@ -237,6 +323,84 @@ func (c *Client) SendMessage(ctx context.Context, text string) (map[string]any, 
 		}
 	}
 	return map[string]any{"message_id": result.Result.MessageID, "date": result.Result.Date}, nil
+}
+
+// EditMessage replaces one message's plain text in the fixed target without retrying an ambiguous result.
+func (c *Client) EditMessage(ctx context.Context, messageID int64, text string) (map[string]any, error) {
+	if messageID < 1 {
+		return nil, providerError("edit message", "the message identifier must be positive")
+	}
+	if count := utf8.RuneCountInString(text); !utf8.ValidString(text) || count < 1 || count > maxMessageLength {
+		return nil, providerError("edit message", "the plain-text message is outside the supported length")
+	}
+	body, err := json.Marshal(struct {
+		ChatID    string `json:"chat_id"`
+		MessageID int64  `json:"message_id"`
+		Text      string `json:"text"`
+	}{ChatID: c.target, MessageID: messageID, Text: text})
+	if err != nil {
+		return nil, providerError("edit message", "the request could not be encoded")
+	}
+	responseBody, err := c.mutate(ctx, "edit message", "editMessageText", body)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		OK     bool `json:"ok"`
+		Result struct {
+			MessageID int64 `json:"message_id"`
+		} `json:"result"`
+	}
+	if json.Unmarshal(responseBody, &result) != nil || !result.OK || result.Result.MessageID != messageID {
+		return nil, invalidResponse("edit message")
+	}
+	return map[string]any{"message_id": result.Result.MessageID}, nil
+}
+
+// DeleteMessage removes one message from the fixed target without retrying an ambiguous result.
+func (c *Client) DeleteMessage(ctx context.Context, messageID int64) (map[string]any, error) {
+	if messageID < 1 {
+		return nil, providerError("delete message", "the message identifier must be positive")
+	}
+	body, err := json.Marshal(struct {
+		ChatID    string `json:"chat_id"`
+		MessageID int64  `json:"message_id"`
+	}{ChatID: c.target, MessageID: messageID})
+	if err != nil {
+		return nil, providerError("delete message", "the request could not be encoded")
+	}
+	responseBody, err := c.mutate(ctx, "delete message", "deleteMessage", body)
+	if err != nil {
+		return nil, err
+	}
+	var result struct {
+		OK     bool `json:"ok"`
+		Result bool `json:"result"`
+	}
+	if json.Unmarshal(responseBody, &result) != nil || !result.OK || !result.Result {
+		return nil, invalidResponse("delete message")
+	}
+	return map[string]any{"deleted": true}, nil
+}
+
+func (c *Client) mutate(ctx context.Context, op, method string, body []byte) ([]byte, error) {
+	response, err := c.do(ctx, op, http.MethodPost, method, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		defer response.Body.Close()
+		return nil, statusError(op, response.StatusCode)
+	}
+	responseBody, err := readResponse(response.Body)
+	if err != nil {
+		return nil, invalidResponse(op)
+	}
+	return responseBody, nil
+}
+
+func invalidResponse(op string) error {
+	return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Telegram returned an invalid response"}
 }
 
 func (c *Client) do(ctx context.Context, op, method, apiMethod string, body io.Reader) (*http.Response, error) {

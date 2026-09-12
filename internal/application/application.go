@@ -97,7 +97,7 @@ func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
 			ID: descriptor.ID, Version: descriptor.Version, Title: title,
 			Description: descriptor.Description, Tags: nonNilStrings(descriptor.Tags),
 			Provider: descriptor.Provider, Effect: descriptor.Risk.Effect,
-			Connections: c.connectionNames(descriptor.Provider),
+			Connections: c.connectionNamesFor(descriptor),
 		})
 	}
 	return SearchResponse{Operations: hits}, nil
@@ -131,7 +131,7 @@ func (c *Core) Providers() ProvidersResponse {
 			index = len(providers)
 			at[descriptor.Provider] = index
 			providers = append(providers, ProviderSummary{
-				Provider: descriptor.Provider, Connections: len(c.connectionNames(descriptor.Provider)),
+				Provider: descriptor.Provider, Connections: len(c.connectionNamesWithAnyOperation(descriptor.Provider)),
 			})
 		}
 		providers[index].Tools++
@@ -200,6 +200,9 @@ func (c *Core) catalog(request SearchRequest, limit int) ([]capability.Descripto
 		if selectedProvider != "" && descriptor.Provider != selectedProvider {
 			continue
 		}
+		if request.Connection != "" && !c.connectionAllows(request.Connection, descriptor) {
+			continue
+		}
 		if request.Effect != "" && descriptor.Risk.Effect != request.Effect {
 			continue
 		}
@@ -252,13 +255,13 @@ func (c *Core) Describe(request DescribeRequest) (DescribeResponse, error) {
 	if err != nil {
 		return DescribeResponse{}, err
 	}
-	connections := c.connectionRefs(descriptor.Provider)
+	connections := c.connectionRefs(descriptor)
 	if request.Connection != "" {
 		resolved, err := c.connection(request.Connection)
 		if err != nil {
 			return DescribeResponse{}, err
 		}
-		if resolved.Provider != descriptor.Provider {
+		if resolved.Provider != descriptor.Provider || !c.connectionAllows(request.Connection, descriptor) {
 			return DescribeResponse{}, &capability.UnsupportedError{
 				Connection: request.Connection, Capability: request.Operation,
 			}
@@ -408,7 +411,7 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 		if err != nil {
 			return nil, err
 		}
-		if resolved.Provider != descriptor.Provider {
+		if resolved.Provider != descriptor.Provider || !c.connectionAllows(explicit, descriptor) {
 			return nil, &capability.UnsupportedError{Connection: explicit, Capability: descriptor.ID}
 		}
 		return resolved, nil
@@ -431,13 +434,13 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 		if err != nil {
 			return nil, err
 		}
-		if resolved.Provider != descriptor.Provider {
+		if resolved.Provider != descriptor.Provider || !c.connectionAllows(name, descriptor) {
 			return nil, &capability.UnsupportedError{Connection: name, Capability: descriptor.ID}
 		}
 		return resolved, nil
 	}
 
-	connections := c.connectionNames(descriptor.Provider)
+	connections := c.connectionNamesFor(descriptor)
 	switch len(connections) {
 	case 0:
 		return nil, &ConnectionSelectionError{Operation: descriptor.ID}
@@ -457,19 +460,50 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 	return &config.Resolved{
 		Name: name, Provider: service.Provider, BaseURL: service.BaseURL, Options: service.Options,
 		Target: connection.Target, Service: connection.Service, Credential: connection.Credential,
-		Secrets: c.config.Credentials[connection.Credential],
+		Secrets:     c.config.Credentials[connection.Credential],
+		Permissions: c.config.ConnectionPermissions(name),
 	}, nil
 }
 
 // connectionRefs is the described form of connectionNames: the same routes in the same order, each with
 // the description its owner maintains.
-func (c *Core) connectionRefs(provider string) []ConnectionRef {
-	names := c.connectionNames(provider)
+func (c *Core) connectionRefs(descriptor capability.Descriptor) []ConnectionRef {
+	names := c.connectionNamesFor(descriptor)
 	refs := make([]ConnectionRef, len(names))
 	for i, name := range names {
 		refs[i] = c.connectionRef(name)
 	}
 	return refs
+}
+
+func (c *Core) connectionNamesFor(descriptor capability.Descriptor) []string {
+	names := c.connectionNames(descriptor.Provider)
+	allowed := names[:0]
+	for _, name := range names {
+		if c.connectionAllows(name, descriptor) {
+			allowed = append(allowed, name)
+		}
+	}
+	return allowed
+}
+
+func (c *Core) connectionNamesWithAnyOperation(providerID string) []string {
+	names := c.connectionNames(providerID)
+	descriptors := c.registry.Provider(providerID)
+	allowed := names[:0]
+	for _, name := range names {
+		for _, descriptor := range descriptors {
+			if c.connectionAllows(name, descriptor) {
+				allowed = append(allowed, name)
+				break
+			}
+		}
+	}
+	return allowed
+}
+
+func (c *Core) connectionAllows(name string, descriptor capability.Descriptor) bool {
+	return c.config.ConnectionAllows(name, string(descriptor.Risk.Effect))
 }
 
 func (c *Core) connectionRef(name string) ConnectionRef {

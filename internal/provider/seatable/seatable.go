@@ -1,4 +1,4 @@
-// Package seatable implements read-only access to the rows of one fixed SeaTable table.
+// Package seatable implements controlled row access to one fixed SeaTable table.
 //
 // A SeaTable installation holds many bases, and every base can issue several API tokens with their own
 // read or write permission. That cardinality is the configuration: a service is one instance, a credential
@@ -40,7 +40,7 @@ const Provider = "seatable"
 const cloudOrigin = "https://cloud.seatable.io"
 
 // roleAPIToken is the single secret role a SeaTable credential must supply. It is the API token of exactly
-// one base, and for this read-only slice it needs the permission r.
+// one base; SeaTable grants it either read-only permission r or read/write permission rw.
 const roleAPIToken = "api-token"
 
 // dataSensitivity classifies results as row content of the configured SeaTable base. It is deliberately
@@ -73,6 +73,7 @@ const (
 	maxResponseBytes = 1 << 20
 	maxMetadataBytes = 4 << 20
 	maxTokenBytes    = 64 << 10
+	maxRequestBytes  = 1 << 20
 	defaultTimeout   = 30 * time.Second
 )
 
@@ -176,15 +177,34 @@ var rowsGet = capability.Descriptor{
 	}},
 }
 
-// Register adds SeaTable metadata, its read-only connection test, and the two read operations.
+var rowsCreate = rowMutationDescriptor("create", capability.EffectCreate, capability.IdempotencyNonIdempotent,
+	`{"type":"object","properties":{"values":{"type":"object"}},"required":["values"],"additionalProperties":false}`,
+	`{"type":"object","properties":{"created":{"type":"boolean"}},"required":["created"],"additionalProperties":false}`)
+var rowsUpdate = rowMutationDescriptor("update", capability.EffectUpdate, capability.IdempotencyIdempotent,
+	`{"type":"object","properties":{"row_id":{"type":"string","minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"},"values":{"type":"object"}},"required":["row_id","values"],"additionalProperties":false}`,
+	`{"type":"object","properties":{"updated":{"type":"boolean"}},"required":["updated"],"additionalProperties":false}`)
+var rowsDelete = rowMutationDescriptor("delete", capability.EffectDelete, capability.IdempotencyIdempotent,
+	`{"type":"object","properties":{"row_id":{"type":"string","minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"}},"required":["row_id"],"additionalProperties":false}`,
+	`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`)
+
+func rowMutationDescriptor(action string, effect capability.Effect, idempotency capability.Idempotency, input, output string) capability.Descriptor {
+	return capability.Descriptor{ID: Provider + ".rows." + action, Version: 1,
+		Title:       strings.ToUpper(action[:1]) + action[1:] + " a SeaTable row",
+		Description: strings.ToUpper(action[:1]) + action[1:] + " one row in the fixed table of an explicit SeaTable connection",
+		Tags:        []string{"seatable", "base", "rows", action, "table"}, Provider: Provider, RequiresExplicitConnection: true,
+		Risk:        capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema: json.RawMessage(input), OutputSchema: json.RawMessage(output)}
+}
+
+// Register adds SeaTable metadata, its read-only connection test, and the bounded row operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "SeaTable", DefaultBaseURL: cloudOrigin,
+		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIToken,
-			Description: "SeaTable API token of one base: open the base, choose Advanced, API tokens, " +
-				"add a token with the permission r for read only; Qatlas exchanges it for a " +
-				"short-lived base token and never writes",
+			Description: "SeaTable API token of one base: choose permission r for reads or rw for intended " +
+				"writes; Qatlas exchanges it for a short-lived base token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "table",
@@ -198,6 +218,9 @@ func Register(reg *capability.Registry) error {
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: rowsList, Handler: capability.Handler(invokeRowsList)},
 		capability.Operation{Descriptor: rowsGet, Handler: capability.Handler(invokeRowsGet)},
+		capability.Operation{Descriptor: rowsCreate, Handler: capability.Handler(invokeRowsCreate)},
+		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},
+		capability.Operation{Descriptor: rowsDelete, Handler: capability.Handler(invokeRowsDelete)},
 	)
 }
 
@@ -227,6 +250,56 @@ func invokeRowsGet(ctx context.Context, resolved *config.Resolved, secrets *secr
 		return nil, err
 	}
 	return client.GetRow(ctx, arguments.RowID)
+}
+
+type rowMutationInput struct {
+	RowID  string                     `json:"row_id"`
+	Values map[string]json.RawMessage `json:"values"`
+}
+
+func invokeRowsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input rowMutationInput
+	if json.Unmarshal(raw, &input) != nil {
+		return nil, providerError("create row", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.CreateRow(ctx, input.Values); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"created": true}, nil
+}
+
+func invokeRowsUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input rowMutationInput
+	if json.Unmarshal(raw, &input) != nil {
+		return nil, providerError("update row", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.UpdateRow(ctx, input.RowID, input.Values); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"updated": true}, nil
+}
+
+func invokeRowsDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input rowMutationInput
+	if json.Unmarshal(raw, &input) != nil {
+		return nil, providerError("delete row", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.DeleteRow(ctx, input.RowID); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"deleted": true}, nil
 }
 
 // target is the fixed table, and optional view, one connection is bound to. Both are configuration: an
@@ -562,7 +635,7 @@ func (c *Client) checkServer(op, raw string) error {
 }
 
 // ListOptions are the controlled paging arguments of the list operation. Nothing else reaches the
-// provider: the base, the table, the view, and the read-only nature are fixed.
+// provider: the base, table, and optional view are fixed.
 type ListOptions struct {
 	Start int `json:"start"`
 	Limit int `json:"limit"`
@@ -687,6 +760,76 @@ func (c *Client) GetRow(ctx context.Context, rowID string) (*Row, error) {
 	return row, nil
 }
 
+func (c *Client) CreateRow(ctx context.Context, values map[string]json.RawMessage) error {
+	return c.changeRows(ctx, "create row", http.MethodPost, map[string]any{"rows": []any{values}}, values, "")
+}
+
+func (c *Client) UpdateRow(ctx context.Context, rowID string, values map[string]json.RawMessage) error {
+	if !validRowID(rowID) {
+		return providerError("update row", "a SeaTable row identifier has 22 letters, digits, '-' or '_'")
+	}
+	return c.changeRows(ctx, "update row", http.MethodPut, map[string]any{"updates": []any{map[string]any{"row_id": rowID, "row": values}}}, values, rowID)
+}
+
+func (c *Client) DeleteRow(ctx context.Context, rowID string) error {
+	if !validRowID(rowID) {
+		return providerError("delete row", "a SeaTable row identifier has 22 letters, digits, '-' or '_'")
+	}
+	return c.changeRows(ctx, "delete row", http.MethodDelete, map[string]any{"row_ids": []string{rowID}}, nil, rowID)
+}
+
+func (c *Client) changeRows(ctx context.Context, op, method string, payload map[string]any, values map[string]json.RawMessage, rowID string) error {
+	if values != nil {
+		if len(values) == 0 {
+			return providerError(op, "at least one column value is required")
+		}
+		for name := range values {
+			if name == "" || strings.HasPrefix(name, systemPrefix) {
+				return providerError(op, "system and empty column names cannot be written")
+			}
+		}
+	}
+	access, err := c.access(ctx, op)
+	if err != nil {
+		return err
+	}
+	if values != nil {
+		if err := c.checkColumns(ctx, op, access, values); err != nil {
+			return err
+		}
+	}
+	payload[c.target.tableParam] = c.target.table
+	encoded, err := json.Marshal(payload)
+	if err != nil || len(encoded) > maxRequestBytes {
+		return providerError(op, "the request exceeds the size limit")
+	}
+	return c.change(ctx, op, method, gatewayPath+url.PathEscape(access.uuid)+rowsPath, access.token, encoded)
+}
+
+func (c *Client) checkColumns(ctx context.Context, op string, access *baseAccess, values map[string]json.RawMessage) error {
+	var document metadataJSON
+	if err := c.get(ctx, op, gatewayPath+url.PathEscape(access.uuid)+metadataPath, nil,
+		access.token, maxMetadataBytes, &document); err != nil {
+		return err
+	}
+	for _, table := range document.Metadata.Tables {
+		if !c.matchesTable(table) {
+			continue
+		}
+		columns := make(map[string]bool, len(table.Columns))
+		for _, column := range table.Columns {
+			columns[column.Name] = true
+		}
+		for name := range values {
+			if !columns[name] {
+				return providerError(op, "the fixed SeaTable table does not define every requested column")
+			}
+		}
+		return nil
+	}
+	return providerError(op, "the fixed SeaTable table no longer exists")
+}
+
 // The system keys SeaTable adds to every row. They become the stable envelope; every other key is a
 // column of the base and stays in the value map.
 const (
@@ -753,8 +896,11 @@ type metadataJSON struct {
 }
 
 type tableJSON struct {
-	ID    string `json:"_id"`
-	Name  string `json:"name"`
+	ID      string `json:"_id"`
+	Name    string `json:"name"`
+	Columns []struct {
+		Name string `json:"name"`
+	} `json:"columns"`
 	Views []struct {
 		ID   string `json:"_id"`
 		Name string `json:"name"`
@@ -808,6 +954,33 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, tok
 	return nil
 }
 
+func (c *Client) change(ctx context.Context, op, method, path, token string, body []byte) error {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "the request ended while it waited for the SeaTable rate limit"}
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.origin+path, strings.NewReader(string(body)))
+	if err != nil {
+		return providerError(op, "the request could not be built")
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	response, err := c.http.Do(req)
+	if err != nil {
+		return transportError(op, err)
+	}
+	defer response.Body.Close()
+	c.observeRateLimit(response.Header)
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return statusError(op, response.StatusCode)
+	}
+	read, err := io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil || read > maxResponseBytes {
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the SeaTable response could not be read within the size limit"}
+	}
+	return nil
+}
+
 // observeRateLimit reads the budget headers of the API gateway. When the budget of this token is spent,
 // the next request waits for the reported reset instead of running into a refusal.
 func (c *Client) observeRateLimit(header http.Header) {
@@ -835,7 +1008,7 @@ func statusError(op string, status int) error {
 	case http.StatusForbidden:
 		return &provider.Error{
 			Class: provider.ClassPermission, Op: op,
-			Message: "this SeaTable API token may not perform this read",
+			Message: "this SeaTable API token may not perform this operation",
 		}
 	case http.StatusNotFound:
 		return &provider.Error{

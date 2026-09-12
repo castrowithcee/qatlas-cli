@@ -1,4 +1,4 @@
-// Package twentycrm implements read-only access to the companies of one Twenty workspace.
+// Package twentycrm implements controlled company access to one Twenty workspace.
 //
 // Twenty generates its REST and GraphQL APIs from the schema of each workspace, so there is no global
 // static field reference. This provider therefore talks to the generated REST core API directly, reads
@@ -9,6 +9,7 @@
 package twentycrm
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -168,14 +169,34 @@ var companiesGet = capability.Descriptor{
 	}},
 }
 
-// Register adds Twenty metadata, its read-only connection test, and the two read operations.
+var companiesCreate = companyMutationDescriptor("create", capability.EffectCreate, capability.IdempotencyNonIdempotent,
+	`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"domain":{"type":"string","maxLength":253,"pattern":"^[A-Za-z0-9.-]*$"}},"required":["name"],"additionalProperties":false}`,
+	json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},"domain":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name"],"additionalProperties":false}`))
+var companiesUpdate = companyMutationDescriptor("update", capability.EffectUpdate, capability.IdempotencyIdempotent,
+	`{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"},"name":{"type":"string","minLength":1,"maxLength":255},"domain":{"type":"string","maxLength":253,"pattern":"^[A-Za-z0-9.-]*$"}},"required":["id"],"additionalProperties":false}`,
+	companiesCreate.OutputSchema)
+var companiesDelete = companyMutationDescriptor("delete", capability.EffectDelete, capability.IdempotencyIdempotent,
+	`{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"}},"required":["id"],"additionalProperties":false}`,
+	json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`))
+
+func companyMutationDescriptor(action string, effect capability.Effect, idempotency capability.Idempotency, input string, output json.RawMessage) capability.Descriptor {
+	return capability.Descriptor{ID: Provider + ".companies." + action, Version: 1,
+		Title:       strings.ToUpper(action[:1]) + action[1:] + " a Twenty CRM company",
+		Description: strings.ToUpper(action[:1]) + action[1:] + " one company in the workspace of an explicit connection",
+		Tags:        []string{"twentycrm", "crm", "companies", action}, Provider: Provider, RequiresExplicitConnection: true,
+		Risk:        capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema: json.RawMessage(input), OutputSchema: output}
+}
+
+// Register adds Twenty metadata, its read-only connection test, and the bounded company operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Twenty CRM", DefaultBaseURL: cloudOrigin,
+		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,
 			Description: "Twenty API key: the value shown once when you create a key under API & Webhooks; " +
-				"it is sent as the bearer token, so give its workspace role read access to companies only",
+				"its workspace role must grant only the company operations this connection needs",
 		}},
 		Target: config.TargetMetadata{
 			Label:       "target",
@@ -187,6 +208,9 @@ func Register(reg *capability.Registry) error {
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: companiesList, Handler: capability.Handler(invokeCompaniesList)},
 		capability.Operation{Descriptor: companiesGet, Handler: capability.Handler(invokeCompaniesGet)},
+		capability.Operation{Descriptor: companiesCreate, Handler: capability.Handler(invokeCompaniesCreate)},
+		capability.Operation{Descriptor: companiesUpdate, Handler: capability.Handler(invokeCompaniesUpdate)},
+		capability.Operation{Descriptor: companiesDelete, Handler: capability.Handler(invokeCompaniesDelete)},
 	)
 }
 
@@ -216,6 +240,51 @@ func invokeCompaniesGet(ctx context.Context, resolved *config.Resolved, secrets 
 		return nil, err
 	}
 	return client.GetCompany(ctx, arguments.ID)
+}
+
+type companyMutationInput struct {
+	ID     string  `json:"id"`
+	Name   *string `json:"name"`
+	Domain *string `json:"domain"`
+}
+
+func invokeCompaniesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input companyMutationInput
+	if json.Unmarshal(raw, &input) != nil || input.Name == nil {
+		return nil, providerError("create company", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.CreateCompany(ctx, *input.Name, input.Domain)
+}
+
+func invokeCompaniesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input companyMutationInput
+	if json.Unmarshal(raw, &input) != nil || (input.Name == nil && input.Domain == nil) {
+		return nil, providerError("update company", "name or domain is required")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.UpdateCompany(ctx, input.ID, input.Name, input.Domain)
+}
+
+func invokeCompaniesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input companyMutationInput
+	if json.Unmarshal(raw, &input) != nil {
+		return nil, providerError("delete company", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.DeleteCompany(ctx, input.ID); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"deleted": true}, nil
 }
 
 // Client binds one Twenty API key to the origin of one configured service and to the rate limit that key
@@ -398,7 +467,7 @@ func (c *Client) checkWorkspaceSchema(ctx context.Context, op string) error {
 }
 
 // ListOptions are the controlled search, sort, and paging arguments of the list operation. Nothing else
-// reaches the provider: the object, the route, and the read-only nature are fixed.
+// reaches the provider: the object and route are fixed.
 type ListOptions struct {
 	NameContains   string `json:"name_contains"`
 	DomainContains string `json:"domain_contains"`
@@ -550,6 +619,51 @@ func (c *Client) GetCompany(ctx context.Context, id string) (*Company, error) {
 	}, nil
 }
 
+func companyPayload(name *string, domain *string) map[string]any {
+	payload := map[string]any{}
+	if name != nil {
+		payload["name"] = *name
+	}
+	if domain != nil {
+		link := *domain
+		if link != "" {
+			link = "https://" + link
+		}
+		payload["domainName"] = map[string]string{"primaryLinkUrl": link, "primaryLinkLabel": *domain}
+	}
+	return payload
+}
+
+func (c *Client) CreateCompany(ctx context.Context, name string, domain *string) (*Company, error) {
+	return c.changeCompany(ctx, "create company", http.MethodPost, companiesPath, companyPayload(&name, domain), "")
+}
+
+func (c *Client) UpdateCompany(ctx context.Context, id string, name, domain *string) (*Company, error) {
+	if !validUUID(id) {
+		return nil, providerError("update company", "the company identifier must be a UUID")
+	}
+	return c.changeCompany(ctx, "update company", http.MethodPatch, companiesPath+"/"+url.PathEscape(id), companyPayload(name, domain), id)
+}
+
+func (c *Client) DeleteCompany(ctx context.Context, id string) error {
+	if !validUUID(id) {
+		return providerError("delete company", "the company identifier must be a UUID")
+	}
+	return c.change(ctx, "delete company", http.MethodDelete, companiesPath+"/"+url.PathEscape(id), nil, nil)
+}
+
+func (c *Client) changeCompany(ctx context.Context, op, method, path string, payload map[string]any, expectedID string) (*Company, error) {
+	var response companyMutationJSON
+	if err := c.change(ctx, op, method, path, payload, &response); err != nil {
+		return nil, err
+	}
+	record := response.record()
+	if !validUUID(record.ID) || (expectedID != "" && !strings.EqualFold(record.ID, expectedID)) {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Twenty returned a company without the expected identifier"}
+	}
+	return &Company{ID: record.ID, Name: record.Name, Domain: primaryDomain(record.DomainName), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
+}
+
 // companyRecordJSON mirrors the Twenty record fields this provider reads. DomainName stays raw because a
 // workspace may carry it as a link object or, in an older schema, as plain text.
 type companyRecordJSON struct {
@@ -574,6 +688,26 @@ type companyJSON struct {
 	Data struct {
 		Company companyRecordJSON `json:"company"`
 	} `json:"data"`
+}
+
+// companyMutationJSON accepts the stable envelopes emitted by Twenty versions for generated REST
+// mutations. The operation-specific field names differ, but the company record itself does not.
+type companyMutationJSON struct {
+	Data struct {
+		Company       companyRecordJSON `json:"company"`
+		CreateCompany companyRecordJSON `json:"createCompany"`
+		UpdateCompany companyRecordJSON `json:"updateCompany"`
+	} `json:"data"`
+}
+
+func (r companyMutationJSON) record() companyRecordJSON {
+	if r.Data.Company.ID != "" {
+		return r.Data.Company
+	}
+	if r.Data.CreateCompany.ID != "" {
+		return r.Data.CreateCompany
+	}
+	return r.Data.UpdateCompany
 }
 
 // openAPIJSON mirrors the two parts of the generated workspace document the connection test inspects.
@@ -653,6 +787,52 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, lim
 	return nil
 }
 
+func (c *Client) change(ctx context.Context, op, method, path string, payload any, out any) error {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "the request ended while it waited for the Twenty rate limit"}
+	}
+	var body io.Reader
+	if payload != nil {
+		encoded, err := json.Marshal(payload)
+		if err != nil || len(encoded) > maxResponseBytes {
+			return providerError(op, "the request exceeds the size limit")
+		}
+		body = bytes.NewReader(encoded)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.origin+path, body)
+	if err != nil {
+		return providerError(op, "the request could not be built")
+	}
+	req.Header.Set("Authorization", c.auth)
+	req.Header.Set("Accept", "application/json")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	response, err := c.http.Do(req)
+	if err != nil {
+		return transportError(op, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return statusError(op, response.StatusCode)
+	}
+	if out == nil {
+		read, err := io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes+1))
+		if err != nil || read > maxResponseBytes {
+			return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the Twenty response could not be read within the size limit"}
+		}
+		return nil
+	}
+	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil || len(bodyBytes) > maxResponseBytes {
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the Twenty response could not be read within the size limit"}
+	}
+	if json.Unmarshal(bodyBytes, out) != nil {
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Twenty returned an invalid response"}
+	}
+	return nil
+}
+
 // statusError maps an HTTP status to a stable class. The provider message is never copied: Twenty echoes
 // request and record detail into it, and the class plus the status is what a caller can act on.
 func statusError(op string, status int) error {
@@ -662,7 +842,7 @@ func statusError(op string, status int) error {
 	case http.StatusForbidden:
 		return &provider.Error{
 			Class: provider.ClassPermission, Op: op,
-			Message: "the workspace role of this API key may not perform this read",
+			Message: "the workspace role of this API key may not perform this operation",
 		}
 	case http.StatusNotFound:
 		return &provider.Error{

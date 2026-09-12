@@ -95,13 +95,13 @@ credentials:
     values:
       bot-token: QATLAS_TELEGRAM_NOTIFIER_BOT_TOKEN
 
-  # Lexware needs the single role api-key. Give the key the smallest permission the reads require.
+  # Lexware needs the single role api-key. Give the key only the API access this connection requires.
   books-accountant:
     provider: lexware
     type: keyring
 
-  # Twenty needs the single role api-key too. Assign each key a workspace role that may only read
-  # companies, and keep one key per workspace so the two never mix.
+  # Twenty needs the single role api-key too. Assign each key a workspace role limited to the intended
+  # company operations, and keep one key per workspace so the two never mix.
   crm-cloud-reader:
     provider: twentycrm
     type: keyring
@@ -111,7 +111,7 @@ credentials:
     type: keyring
 
   # SeaTable needs the single role api-token. An API token belongs to exactly one base and carries its
-  # own permission, so give each one the permission r for this read-only tool. Qatlas exchanges it for
+  # own permission, so use r for a reader and rw only when writes are intended. Qatlas exchanges it for
   # a short-lived base token on every run and never stores that token.
   #
   # These two tokens address the same base with different permissions, which is why they are two
@@ -161,17 +161,25 @@ credentials:
 # provider apart. It is published by 'qatlas tool <tool-id>' and by qatlas.describe, it is never sent
 # to a provider, and it never selects a route on its own. Because it is published, never write a secret or
 # personal data into it.
+#
+# permissions is Qatlas' independent local allow-list. It can only restrict a provider credential, never
+# expand it. Supported effects are read, create, update, delete, and execute. When omitted, the provider's
+# compatibility default preserves only operations that existed before connection permissions were added.
+# An explicit YAML list `permissions: []` disables the connection without deleting it; the TUI spells
+# this value `none` and uses an empty field for the compatibility default.
 connections:
   wiki:
     service: wiki-primary
     credential: wiki-reader
     description: the live team wiki, everyone reads this one
+    permissions: [read, create, update, delete]
 
   # The same service with a different key, for example a more restricted account.
   wiki-audit:
     service: wiki-primary
     credential: wiki-auditor
     description: the same instance read with the restricted audit account
+    permissions: [read]
 
   # A different service reusing the same credential, optionally scoped with target.
   archive:
@@ -179,6 +187,7 @@ connections:
     credential: wiki-reader
     target: books
     description: retired wiki content, read-only reference
+    permissions: [read]
 
   # Telegram requires a fixed non-secret target on every connection. Two connections can bind the same
   # bot to different chats without mixing their targets.
@@ -186,15 +195,18 @@ connections:
     service: telegram-main
     credential: telegram-notifier
     target: "-1001111111111"
+    permissions: [create, update, delete]
   telegram-operations:
     service: telegram-main
     credential: telegram-notifier
     target: "-1002222222222"
+    permissions: [create]
 
   # Lexware needs no target: the organization follows from the API key.
   accounting:
     service: books
     credential: books-accountant
+    permissions: [read, create]
 
   # Twenty needs no target either: the workspace follows from the API key. Two workspaces stay two
   # connections, so a read always names the one it means.
@@ -202,11 +214,13 @@ connections:
     service: crm-cloud
     credential: crm-cloud-reader
     description: the managed Twenty workspace used by sales
+    permissions: [read, create, update, delete]
 
   crm-internal:
     service: crm-selfhosted
     credential: crm-selfhosted-reader
     description: the self-hosted Twenty workspace for internal accounts
+    permissions: [read]
 
   # A SeaTable connection binds one instance, one base token, and one fixed table. The optional view
   # after the slash narrows the rows a list returns; id:TABLEID and id:VIEWID address them by
@@ -215,21 +229,25 @@ connections:
     service: tables-cloud
     credential: sales-base-reader
     target: Kunden
+    permissions: [read, create, update, delete]
 
   sales-rows-audit:
     service: tables-cloud
     credential: sales-base-auditor
     target: Kunden/Aktive
+    permissions: [read]
 
   support-rows:
     service: tables-cloud
     credential: support-base-reader
     target: id:0001
+    permissions: [read]
 
   onprem-rows:
     service: tables-onprem
     credential: onprem-base-reader
     target: Tickets
+    permissions: [read]
 
   # A Nextcloud connection binds one instance, one identity, and one fixed root folder below the Files of
   # that identity. A read may address a path below that folder and nothing above it. A single / would
@@ -238,22 +256,26 @@ connections:
     service: cloud-main
     credential: cloud-reader
     target: Reports
+    permissions: [read, create, update, delete]
 
   files-archive:
     service: cloud-main
     credential: cloud-reader
     target: Archive/2026
+    permissions: [read]
 
   # The same instance read as a second identity, with its own app password and its own root folder.
   files-audit:
     service: cloud-main
     credential: cloud-auditor
     target: Audit
+    permissions: [read]
 
   files-partner:
     service: cloud-partner
     credential: partner-reader
     target: Shared/Qatlas
+    permissions: [read]
 
 # Defaults are useful for read operations. The key is a tool namespace such as bookstack, or a complete
 # tool ID such as bookstack.pages.list when one tool needs its own route. Confirmed Telegram sends and

@@ -251,7 +251,9 @@ func TestMCPToolErrorsAreSafeAndProtocolErrorsStaySeparate(t *testing.T) {
 func TestMCPConfirmedMutationKeepsAuditOffProtocol(t *testing.T) {
 	const message = "private-message-canary-1842"
 	registry := capability.NewRegistry()
-	if err := registry.RegisterProvider(config.ProviderMetadata{ID: "fake", Name: "Fake"}, nil); err != nil {
+	if err := registry.RegisterProvider(config.ProviderMetadata{
+		ID: "fake", Name: "Fake", DefaultPermissions: []config.Permission{config.PermissionCreate},
+	}, nil); err != nil {
 		t.Fatal(err)
 	}
 	descriptor := capability.Descriptor{

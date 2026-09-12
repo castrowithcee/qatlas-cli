@@ -109,10 +109,10 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Fatal("defaultRegistry() = nil")
 	}
 	got := reg.Provider("bookstack")
-	if len(got) != 2 {
-		t.Fatalf("provider capabilities = %v, want the two BookStack capabilities", got)
+	if len(got) != 5 {
+		t.Fatalf("provider capabilities = %v, want five BookStack capabilities", got)
 	}
-	if got[0].ID != "bookstack.pages.get" || got[1].ID != "bookstack.pages.list" {
+	if got[0].ID != "bookstack.pages.create" || got[4].ID != "bookstack.pages.update" {
 		t.Errorf("capabilities = %v", got)
 	}
 	telegram, ok := reg.ProviderMetadata("telegram")
@@ -121,9 +121,8 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Errorf("Telegram metadata = %+v, %v", telegram, ok)
 	}
 	operations := reg.Provider("telegram")
-	if len(operations) != 1 || operations[0].ID != "telegram.messages.send" ||
-		!operations[0].RequiresExplicitConnection ||
-		operations[0].Risk.Confirmation != capability.ConfirmationRequired {
-		t.Errorf("Telegram operations = %v, want the explicit confirmed send operation", operations)
+	if len(operations) != 3 || operations[0].ID != "telegram.messages.delete" ||
+		operations[2].ID != "telegram.messages.send" {
+		t.Errorf("Telegram operations = %v, want the three explicit message operations", operations)
 	}
 }

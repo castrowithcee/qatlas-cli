@@ -172,7 +172,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	for _, want := range []string{
 		// BookStack has exactly one configured connection, Telegram one, and every other compiled
 		// provider none. An unconfigured namespace stays visible with zero.
-		"1,bookstack,2", "1,telegram,1", "0,lexware,2", "0,nextcloud,2", "0,seatable,2", "0,twentycrm,2",
+		"1,bookstack,5", "1,telegram,3", "0,lexware,3", "0,nextcloud,6", "0,seatable,5", "0,twentycrm,5",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -231,7 +231,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	if !strings.HasPrefix(stdout, "tools[2]{effect,id,title}:\n") || !strings.HasSuffix(stdout, "\n") ||
+	if !strings.HasPrefix(stdout, "tools[5]{effect,id,title}:\n") || !strings.HasSuffix(stdout, "\n") ||
 		strings.Contains(stdout, "\r") {
 		t.Errorf("stdout = %q, want an LF TOON table of effect, id and title rows", stdout)
 	}
@@ -263,8 +263,8 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Errorf("TOON output = %q, want the TOON rendering of the JSON data %q", stdout, got)
 		}
 		for _, tool := range toolSummaries(t, jsonOut) {
-			if tool.Title == "" || tool.Effect != capability.EffectRead {
-				t.Errorf("%s = %+v, want a titled read tool", tool.ID, tool)
+			if tool.Title == "" {
+				t.Errorf("%s = %+v, want a titled tool", tool.ID, tool)
 			}
 		}
 	})
@@ -288,17 +288,17 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		args []string
 		want []string
 	}{
-		{"namespace", []string{"bookstack"}, []string{"bookstack.pages.get", "bookstack.pages.list"}},
-		{"namespace telegram", []string{"telegram"}, []string{"telegram.messages.send"}},
-		{"namespace lexware", []string{"lexware"}, []string{"lexware.invoices.get", "lexware.invoices.list"}},
+		{"namespace", []string{"bookstack"}, []string{"bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update"}},
+		{"namespace telegram", []string{"telegram"}, []string{"telegram.messages.delete", "telegram.messages.edit", "telegram.messages.send"}},
+		{"namespace lexware", []string{"lexware"}, []string{"lexware.invoices.create", "lexware.invoices.get", "lexware.invoices.list"}},
 		{"namespace twentycrm", []string{"twentycrm"}, []string{
-			"twentycrm.companies.get", "twentycrm.companies.list",
+			"twentycrm.companies.create", "twentycrm.companies.delete", "twentycrm.companies.get", "twentycrm.companies.list", "twentycrm.companies.update",
 		}},
-		{"namespace seatable", []string{"seatable"}, []string{"seatable.rows.get", "seatable.rows.list"}},
+		{"namespace seatable", []string{"seatable"}, []string{"seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.update"}},
 		{"namespace nextcloud", []string{"nextcloud"}, []string{
-			"nextcloud.files.list", "nextcloud.files.stat",
+			"nextcloud.files.create", "nextcloud.files.delete", "nextcloud.files.get", "nextcloud.files.list", "nextcloud.files.stat", "nextcloud.files.update",
 		}},
-		{"query", []string{"--query", "pages"}, []string{"bookstack.pages.get", "bookstack.pages.list"}},
+		{"query", []string{"--query", "pages"}, []string{"bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update"}},
 		{"namespace and query", []string{"bookstack", "--query", "list"}, []string{"bookstack.pages.list"}},
 		{"query without a match", []string{"--query", "absent"}, []string{}},
 	}

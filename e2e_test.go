@@ -230,8 +230,8 @@ defaults:
 			t.Errorf("stdout = %q, want a TOON index of the compiled namespaces", stdout)
 		}
 		for _, want := range []string{
-			"2,bookstack,2", "0,telegram,1", "0,lexware,2", "0,twentycrm,2", "0,seatable,2",
-			"0,nextcloud,2",
+			"2,bookstack,5", "0,telegram,3", "0,lexware,3", "0,twentycrm,5", "0,seatable,5",
+			"0,nextcloud,6",
 		} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout = %q, want it to contain %q", stdout, want)
@@ -249,7 +249,7 @@ defaults:
 		if code != 0 {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		if !strings.HasPrefix(stdout, "tools[2]{effect,id,title}:\n") {
+		if !strings.HasPrefix(stdout, "tools[5]{effect,id,title}:\n") {
 			t.Errorf("stdout = %q, want a TOON listing of the BookStack tools", stdout)
 		}
 		for _, want := range []string{"read,bookstack.pages.get,", "read,bookstack.pages.list,"} {

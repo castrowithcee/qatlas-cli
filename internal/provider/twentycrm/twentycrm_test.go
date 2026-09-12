@@ -163,25 +163,49 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 2 {
-		t.Fatalf("operations = %d, want the list and the get operation", len(operations))
+	if len(operations) != 5 {
+		t.Fatalf("operations = %d, want five company operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
 			!descriptor.RequiresExplicitConnection ||
-			descriptor.Risk.Effect != capability.EffectRead ||
-			descriptor.Risk.Idempotency != capability.IdempotencySafe ||
-			descriptor.Risk.Confirmation != capability.ConfirmationNone ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
-			t.Errorf("descriptor %s = %+v, want a safe read requiring an explicit connection",
+			t.Errorf("descriptor %s = %+v, want a bounded operation requiring an explicit connection",
 				descriptor.ID, descriptor)
 		}
-		if len(descriptor.Examples) == 0 || strings.Contains(string(descriptor.Examples[0].Arguments), "key") {
+		if len(descriptor.Examples) > 0 && strings.Contains(string(descriptor.Examples[0].Arguments), "key") {
 			t.Errorf("descriptor %s examples = %s", descriptor.ID, descriptor.Examples)
 		}
 	}
-	if operations[0].ID != "twentycrm.companies.get" || operations[1].ID != "twentycrm.companies.list" {
-		t.Errorf("operation IDs = %s, %s", operations[0].ID, operations[1].ID)
+	if operations[0].ID != "twentycrm.companies.create" || operations[4].ID != "twentycrm.companies.update" {
+		t.Errorf("operation IDs are not sorted: %+v", operations)
+	}
+}
+
+func TestCompanyMutationsUseTheCompanyRESTRoute(t *testing.T) {
+	methods := []string{}
+	serve(t, func(request *http.Request) (*http.Response, error) {
+		methods = append(methods, request.Method+" "+request.URL.Path)
+		if request.Method == http.MethodDelete {
+			return jsonResponse(http.StatusNoContent, ``), nil
+		}
+		return jsonResponse(http.StatusOK, companyBody), nil
+	})
+	c, _ := client(t)
+	domain := "example.invalid"
+	if _, err := c.CreateCompany(context.Background(), "New", &domain); err != nil {
+		t.Fatal(err)
+	}
+	name := "Changed"
+	if _, err := c.UpdateCompany(context.Background(), companyID, &name, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteCompany(context.Background(), companyID); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"POST /rest/companies", "PATCH /rest/companies/" + companyID, "DELETE /rest/companies/" + companyID}
+	if !reflect.DeepEqual(methods, want) {
+		t.Fatalf("requests = %v, want %v", methods, want)
 	}
 }
 

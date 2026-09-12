@@ -115,6 +115,8 @@ const (
 	// carry a secret out of this machine.
 	descriptionHint = "optional; one line saying what this route is for. discovery publishes it, so it " +
 		"must never carry a secret or personal data"
+	permissionsHint = "comma-separated local agent permissions: read, create, update, delete, execute; " +
+		"none denies all, empty keeps this provider's safe compatibility default"
 	secretHint = "s system keyring · p unencrypted file (asks first) · x remove; typing is masked"
 	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
 	// describes a free choice, which is the opposite of what this field does.
@@ -959,9 +961,10 @@ func (m *Model) buildFields(name string) []field {
 			choiceField("service", m.providerServices(provider), conn.Service),
 			choiceField("credential", m.providerCredentials(provider), conn.Credential),
 			textField("target", conn.Target, false),
-			// The description stands last: it explains the route the fields above it define, and it is the
-			// only field here whose text leaves this machine as published configuration.
+			// Description and permissions explain the route the fields above define. Only the description
+			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
+			textField("permissions", config.FormatPermissions(conn.Permissions), false).withHint(permissionsHint),
 		)
 		fields[4].hint = m.targetHint(fields[2].value())
 	case sectionDefaults:
@@ -1038,11 +1041,16 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		}
 		return cfg.SetCredential(name, cred)
 	case sectionConnections:
+		permissions, err := config.ParsePermissions(m.fieldValue("permissions"))
+		if err != nil {
+			return err
+		}
 		return cfg.SetConnection(name, config.Connection{
 			Service:     m.fieldValue("service"),
 			Credential:  m.fieldValue("credential"),
 			Target:      m.fieldValue("target"),
 			Description: m.fieldValue("description"),
+			Permissions: permissions,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))

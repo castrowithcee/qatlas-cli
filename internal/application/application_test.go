@@ -51,6 +51,49 @@ func TestSearchAndDescribeAreLocalAndDeterministic(t *testing.T) {
 	}
 }
 
+func TestConnectionPermissionsFilterDiscoveryAndDirectInvoke(t *testing.T) {
+	core, calls := testCore(t, []string{"reader", "editor"}, nil, true)
+	reader := core.config.Connections["reader"]
+	reader.Permissions = []config.Permission{config.PermissionRead}
+	core.config.Connections["reader"] = reader
+	editor := core.config.Connections["editor"]
+	editor.Permissions = []config.Permission{config.PermissionRead, config.PermissionDelete}
+	core.config.Connections["editor"] = editor
+
+	searched, err := core.Search(SearchRequest{Connection: "reader"})
+	if err != nil || len(searched.Operations) != 1 || searched.Operations[0].ID != "fake.pages.get" {
+		t.Fatalf("Search(reader) = %+v, %v", searched, err)
+	}
+	tools, err := core.Tools(SearchRequest{Connection: "reader"})
+	if err != nil || len(tools.Tools) != 1 || tools.Tools[0].ID != "fake.pages.get" {
+		t.Fatalf("Tools(reader) = %+v, %v", tools, err)
+	}
+	described, err := core.Describe(DescribeRequest{Operation: "fake.pages.delete"})
+	if err != nil || len(described.Connections) != 1 || described.Connections[0].Name != "editor" {
+		t.Fatalf("Describe(delete) = %+v, %v", described, err)
+	}
+	if _, err := core.Describe(DescribeRequest{Operation: "fake.pages.delete", Connection: "reader"}); err == nil {
+		t.Fatal("Describe(delete, reader) exposed a locally denied route")
+	}
+	reader.Permissions = []config.Permission{}
+	core.config.Connections["reader"] = reader
+	editor.Permissions = []config.Permission{}
+	core.config.Connections["editor"] = editor
+	if got := core.Providers().Providers[0].Connections; got != 0 {
+		t.Fatalf("deny-all connections in provider summary = %d, want 0", got)
+	}
+	reader.Permissions = []config.Permission{config.PermissionRead}
+	core.config.Connections["reader"] = reader
+	_, err = core.Invoke(context.Background(), InvokeRequest{
+		Operation: "fake.pages.delete", Connection: "reader", Confirmed: true,
+		Arguments: json.RawMessage(`{"id":"7"}`),
+	})
+	var unsupported *capability.UnsupportedError
+	if !errors.As(err, &unsupported) || *calls != 0 {
+		t.Fatalf("Invoke(reader delete) = %T %v, calls=%d", err, err, *calls)
+	}
+}
+
 // Search stays bounded for the request-bound agent surface, while Tools answers the complete catalog the
 // CLI publishes. Both apply the same filters to the same data, but Tools publishes only what choosing a
 // tool needs: the ID, the title, and the effect.
@@ -319,7 +362,9 @@ func TestExplicitConnectionAndConfirmationPrecedeSecretsIOAndAudit(t *testing.T)
 	cfg.Credentials["sender"] = config.Credential{
 		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
 	}
-	cfg.Connections["alerts"] = config.Connection{Service: "service", Credential: "sender"}
+	cfg.Connections["alerts"] = config.Connection{
+		Service: "service", Credential: "sender", Permissions: []config.Permission{config.PermissionCreate},
+	}
 	cfg.Defaults.Connections["fake"] = "alerts"
 	resolver := secret.NewWith(func(string) string { secretReads++; return "test-token" }, nil, nil, nil)
 	core := New(registry, cfg, resolver, nil)
@@ -523,6 +568,9 @@ func testCore(t *testing.T, connections []string, defaults map[string]string, wi
 		}
 		cfg.Connections[name] = config.Connection{
 			Service: service, Credential: credential, Description: testDescriptions[name],
+			Permissions: []config.Permission{
+				config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete,
+			},
 		}
 	}
 	env := func(name string) string {

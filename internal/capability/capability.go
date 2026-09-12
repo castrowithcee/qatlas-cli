@@ -157,6 +157,20 @@ func (r *Registry) RegisterProvider(metadata config.ProviderMetadata, tester Con
 	if strings.TrimSpace(metadata.Name) == "" {
 		return fmt.Errorf("provider %q must have a display name", metadata.ID)
 	}
+	knownPermissions := map[config.Permission]bool{}
+	for _, permission := range config.Permissions() {
+		knownPermissions[permission] = true
+	}
+	seenPermissions := map[config.Permission]bool{}
+	for _, permission := range metadata.DefaultPermissions {
+		if !knownPermissions[permission] {
+			return fmt.Errorf("provider %q has unknown default permission %q", metadata.ID, permission)
+		}
+		if seenPermissions[permission] {
+			return fmt.Errorf("provider %q declares default permission %q twice", metadata.ID, permission)
+		}
+		seenPermissions[permission] = true
+	}
 	seen := map[string]bool{}
 	for _, role := range metadata.SecretRoles {
 		if !validConfigName(role.Name) {
@@ -205,6 +219,7 @@ func (r *Registry) TestConnection(ctx context.Context, resolved *config.Resolved
 
 func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 	metadata.SecretRoles = append([]config.SecretRole(nil), metadata.SecretRoles...)
+	metadata.DefaultPermissions = append([]config.Permission(nil), metadata.DefaultPermissions...)
 	return metadata
 }
 

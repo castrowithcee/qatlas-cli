@@ -1,10 +1,11 @@
-// Package bookstack implements read-only access to a BookStack instance over its REST API.
+// Package bookstack implements controlled page access to a BookStack instance over its REST API.
 //
 // Page content arrives as HTML and Markdown. Qatlas treats both as untrusted data: it is passed through
 // to the output encoders and never rendered, interpreted, or stored.
 package bookstack
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -38,6 +39,8 @@ const (
 
 // maxCount is the largest page size the BookStack API accepts.
 const maxCount = 500
+
+const maxPageContentBytes = 1 << 20
 
 // defaultTimeout bounds every request. Without it a hanging server would block the command forever.
 const defaultTimeout = 30 * time.Second
@@ -108,12 +111,45 @@ var (
 			Arguments:   json.RawMessage(`{"id":42}`),
 		}},
 	}
+
+	pagesCreate = capability.Descriptor{
+		ID: Provider + ".pages.create", Version: 1, Title: "Create a BookStack page",
+		Description: "Create one Markdown page in a specified book or chapter",
+		Tags:        []string{"knowledge", "pages", "bookstack", "create"}, Provider: Provider,
+		RequiresExplicitConnection: true,
+		Risk:                       capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema:                json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"book_id":{"type":"integer","minimum":1},"chapter_id":{"type":"integer","minimum":1},"markdown":{"type":"string","minLength":1,"maxLength":1048576}},"required":["name","markdown"],"additionalProperties":false}`),
+		OutputSchema:               pagesGet.OutputSchema,
+		Arguments:                  []capability.Argument{{Name: "name", Description: "Page title", Required: true}, {Name: "book_id", Description: "Containing book; required when chapter_id is omitted"}, {Name: "chapter_id", Description: "Containing chapter; mutually exclusive with book_id"}, {Name: "markdown", Description: "Markdown page content", Required: true}},
+	}
+
+	pagesUpdate = capability.Descriptor{
+		ID: Provider + ".pages.update", Version: 1, Title: "Update a BookStack page",
+		Description: "Replace the title and/or Markdown of one page by identifier",
+		Tags:        []string{"knowledge", "pages", "bookstack", "update"}, Provider: Provider,
+		RequiresExplicitConnection: true,
+		Risk:                       capability.Risk{Effect: capability.EffectUpdate, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema:                json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},"markdown":{"type":"string","minLength":1,"maxLength":1048576}},"required":["id"],"additionalProperties":false}`),
+		OutputSchema:               pagesGet.OutputSchema,
+		Arguments:                  []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}, {Name: "name", Description: "New page title"}, {Name: "markdown", Description: "New Markdown content"}},
+	}
+
+	pagesDelete = capability.Descriptor{
+		ID: Provider + ".pages.delete", Version: 1, Title: "Delete a BookStack page",
+		Description: "Permanently delete one page by identifier",
+		Tags:        []string{"knowledge", "pages", "bookstack", "delete"}, Provider: Provider,
+		RequiresExplicitConnection: true,
+		Risk:                       capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema:                json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
+		OutputSchema:               json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
+		Arguments:                  []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}},
+	}
 )
 
 // Register records this provider's operations and their existing command handlers.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
-		ID: Provider, Name: "BookStack",
+		ID: Provider, Name: "BookStack", DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{
 			{Name: roleTokenID, Description: "BookStack token ID: the value labeled Token ID when you create an API token; it is not a name you choose"},
 			{Name: roleTokenSecret, Description: "BookStack token secret: the value labeled Token Secret when you create the same API token"},
@@ -132,6 +168,9 @@ func Register(reg *capability.Registry) error {
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: pagesList, Handler: capability.Handler(invokePagesList)},
 		capability.Operation{Descriptor: pagesGet, Handler: capability.Handler(invokePagesGet)},
+		capability.Operation{Descriptor: pagesCreate, Handler: capability.Handler(invokePagesCreate)},
+		capability.Operation{Descriptor: pagesUpdate, Handler: capability.Handler(invokePagesUpdate)},
+		capability.Operation{Descriptor: pagesDelete, Handler: capability.Handler(invokePagesDelete)},
 	)
 }
 
@@ -164,6 +203,68 @@ func invokePagesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 		return nil, err
 	}
 	return client.GetPage(ctx, strconv.FormatInt(arguments.ID, 10))
+}
+
+type pageMutation struct {
+	Name      string `json:"name,omitempty"`
+	BookID    int64  `json:"book_id,omitempty"`
+	ChapterID int64  `json:"chapter_id,omitempty"`
+	Markdown  string `json:"markdown,omitempty"`
+}
+
+func invokePagesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input pageMutation
+	if json.Unmarshal(raw, &input) != nil || (input.BookID == 0) == (input.ChapterID == 0) {
+		return nil, providerError("create page", "exactly one of book_id or chapter_id is required")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.CreatePage(ctx, input)
+}
+
+func invokePagesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input struct {
+		ID       int64   `json:"id"`
+		Name     *string `json:"name"`
+		Markdown *string `json:"markdown"`
+	}
+	if json.Unmarshal(raw, &input) != nil || (input.Name == nil && input.Markdown == nil) {
+		return nil, providerError("update page", "name or markdown is required")
+	}
+	change := pageMutation{}
+	if input.Name != nil {
+		change.Name = *input.Name
+	}
+	if input.Markdown != nil {
+		change.Markdown = *input.Markdown
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.UpdatePage(ctx, strconv.FormatInt(input.ID, 10), change)
+}
+
+func invokePagesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input struct {
+		ID int64 `json:"id"`
+	}
+	if json.Unmarshal(raw, &input) != nil {
+		return nil, providerError("delete page", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.DeletePage(ctx, strconv.FormatInt(input.ID, 10)); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"deleted": true}, nil
 }
 
 // Client talks to one BookStack instance with one credential.
@@ -333,6 +434,30 @@ func (c *Client) GetPage(ctx context.Context, id string) (output.Object, error) 
 	}}, nil
 }
 
+func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Object, error) {
+	var page pageJSON
+	if err := c.mutate(ctx, "create page", http.MethodPost, "/api/pages", input, &page); err != nil {
+		return output.Object{}, err
+	}
+	return pageObject(page), nil
+}
+
+func (c *Client) UpdatePage(ctx context.Context, id string, input pageMutation) (output.Object, error) {
+	var page pageJSON
+	if err := c.mutate(ctx, "update page", http.MethodPut, "/api/pages/"+url.PathEscape(id), input, &page); err != nil {
+		return output.Object{}, err
+	}
+	return pageObject(page), nil
+}
+
+func (c *Client) DeletePage(ctx context.Context, id string) error {
+	return c.mutate(ctx, "delete page", http.MethodDelete, "/api/pages/"+url.PathEscape(id), nil, nil)
+}
+
+func pageObject(page pageJSON) output.Object {
+	return output.Object{Fields: []output.Field{{Name: "id", Value: page.ID}, {Name: "name", Value: page.Name}, {Name: "slug", Value: page.Slug}, {Name: "book_id", Value: page.BookID}, {Name: "chapter_id", Value: page.ChapterID}, {Name: "created_at", Value: page.CreatedAt}, {Name: "updated_at", Value: page.UpdatedAt}, {Name: "html", Value: page.HTML}, {Name: "markdown", Value: page.Markdown}}}
+}
+
 // TestConnection performs the smallest authenticated read and reports the stable outcome class.
 func (c *Client) TestConnection(ctx context.Context) provider.Class {
 	query := url.Values{}
@@ -378,6 +503,53 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 		}
 	}
 	return nil
+}
+
+func (c *Client) mutate(ctx context.Context, op, method, path string, input any, out any) error {
+	var body io.Reader
+	if input != nil {
+		encoded, err := json.Marshal(input)
+		if err != nil || len(encoded) > maxPageContentBytes+4096 {
+			return providerError(op, "the request exceeds the size limit")
+		}
+		body = bytes.NewReader(encoded)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.base.JoinPath(path).String(), body)
+	if err != nil {
+		return providerError(op, "could not build the request")
+	}
+	req.Header.Set("Authorization", c.auth)
+	req.Header.Set("Accept", "application/json")
+	if input != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return transportError(op, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return statusError(op, resp)
+	}
+	if out == nil {
+		read, err := io.Copy(io.Discard, io.LimitReader(resp.Body, maxPageContentBytes+1))
+		if err != nil || read > maxPageContentBytes {
+			return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the response exceeded the size limit"}
+		}
+		return nil
+	}
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, maxPageContentBytes+1))
+	if err != nil || len(responseBody) > maxPageContentBytes {
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the response exceeded the size limit"}
+	}
+	if err := json.Unmarshal(responseBody, out); err != nil {
+		return providerError(op, "the response was not valid JSON")
+	}
+	return nil
+}
+
+func providerError(op, message string) error {
+	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message}
 }
 
 // transportError classifies a failure that happened before a status code existed. The shared classifier

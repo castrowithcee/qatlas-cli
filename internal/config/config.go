@@ -68,10 +68,31 @@ type Credential struct {
 // routes of one provider apart. Discovery publishes it verbatim and nothing is ever sent to a provider,
 // which is why it is configuration, never a secret and never personal data.
 type Connection struct {
-	Service     string `yaml:"service"`
-	Credential  string `yaml:"credential"`
-	Target      string `yaml:"target,omitempty"`
-	Description string `yaml:"description,omitempty"`
+	Service     string       `yaml:"service"`
+	Credential  string       `yaml:"credential"`
+	Target      string       `yaml:"target,omitempty"`
+	Description string       `yaml:"description,omitempty"`
+	Permissions []Permission `yaml:"permissions,omitempty"`
+}
+
+// MarshalYAML preserves the semantic difference between a missing permissions field (provider
+// compatibility default) and an explicit empty list (deny all). A plain omitempty slice cannot represent
+// both states when a configuration is saved through the TUI.
+func (c Connection) MarshalYAML() (any, error) {
+	type wire struct {
+		Service     string        `yaml:"service"`
+		Credential  string        `yaml:"credential"`
+		Target      string        `yaml:"target,omitempty"`
+		Description string        `yaml:"description,omitempty"`
+		Permissions *[]Permission `yaml:"permissions,omitempty"`
+	}
+	var permissions *[]Permission
+	if c.Permissions != nil {
+		copy := append(make([]Permission, 0, len(c.Permissions)), c.Permissions...)
+		permissions = &copy
+	}
+	return wire{Service: c.Service, Credential: c.Credential, Target: c.Target,
+		Description: c.Description, Permissions: permissions}, nil
 }
 
 // Defaults holds the connection chosen for a domain when no connection is given explicitly.
@@ -340,6 +361,18 @@ func (c *Config) Validate() error {
 		if err := validateDescription(conn.Description); err != nil {
 			report("connections.%s.description: %v", name, err)
 		}
+		seenPermissions := map[Permission]bool{}
+		for _, permission := range conn.Permissions {
+			if !validPermission(permission) {
+				report("connections.%s.permissions: unknown permission %q, supported permissions are %s",
+					name, permission, permissionNames())
+				continue
+			}
+			if seenPermissions[permission] {
+				report("connections.%s.permissions: permission %q is listed more than once", name, permission)
+			}
+			seenPermissions[permission] = true
+		}
 		if ok {
 			metadata, _ := providers.ProviderMetadata(service.Provider)
 			if metadata.Target.Required && strings.TrimSpace(conn.Target) == "" {
@@ -427,6 +460,52 @@ func (c *Config) SecretRolesOf(provider string) []string {
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func validPermission(permission Permission) bool {
+	for _, candidate := range Permissions() {
+		if permission == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func permissionNames() string {
+	names := make([]string, len(Permissions()))
+	for i, permission := range Permissions() {
+		names[i] = string(permission)
+	}
+	return strings.Join(names, ", ")
+}
+
+// ConnectionPermissions returns the explicit local permissions of a connection. A missing field keeps
+// only the provider's pre-permission operation classes, so adding a new mutation never grants it silently.
+// An explicitly empty list disables every operation on the connection.
+func (c *Config) ConnectionPermissions(name string) []Permission {
+	conn, ok := c.Connections[name]
+	if !ok {
+		return nil
+	}
+	if conn.Permissions != nil {
+		return append(make([]Permission, 0, len(conn.Permissions)), conn.Permissions...)
+	}
+	service := c.Services[conn.Service]
+	metadata, _ := c.ProviderMetadata(service.Provider)
+	if len(metadata.DefaultPermissions) > 0 {
+		return append([]Permission(nil), metadata.DefaultPermissions...)
+	}
+	return []Permission{PermissionRead}
+}
+
+// ConnectionAllows reports whether the local configuration exposes one operation effect on a connection.
+func (c *Config) ConnectionAllows(name, effect string) bool {
+	for _, permission := range c.ConnectionPermissions(name) {
+		if string(permission) == effect {
 			return true
 		}
 	}

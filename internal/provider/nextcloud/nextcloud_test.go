@@ -233,15 +233,12 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 2 || descriptors[0].ID != "nextcloud.files.list" ||
-		descriptors[1].ID != "nextcloud.files.stat" {
+	if len(descriptors) != 6 || descriptors[0].ID != "nextcloud.files.create" ||
+		descriptors[5].ID != "nextcloud.files.update" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
-		if descriptor.Risk.Effect != capability.EffectRead ||
-			descriptor.Risk.Idempotency != capability.IdempotencySafe ||
-			descriptor.Risk.Confirmation != capability.ConfirmationNone ||
-			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
+		if !descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
 			t.Errorf("descriptor %s risk = %+v", descriptor.ID, descriptor.Risk)
 		}
 		if !descriptor.RequiresExplicitConnection {
@@ -255,6 +252,51 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 				t.Errorf("the input schema of %s offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
 		}
+	}
+}
+
+func TestFileContentMutationsUseWebDAVPreconditions(t *testing.T) {
+	calls := serve(t, func(request *http.Request) (*http.Response, error) {
+		switch request.Method {
+		case http.MethodGet:
+			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"text/plain"}, "Etag": []string{`"v1"`}}, Body: io.NopCloser(strings.NewReader("hello"))}, nil
+		case http.MethodPut:
+			if request.Header.Get("If-None-Match") == "" && request.Header.Get("If-Match") == "" {
+				t.Error("PUT has no precondition")
+			}
+			return &http.Response{StatusCode: http.StatusNoContent, Header: http.Header{"Etag": []string{`"v2"`}}, Body: io.NopCloser(strings.NewReader(""))}, nil
+		case methodPropfind:
+			return xmlResponse(http.StatusMultiStatus, multistatus(fileXML(aliceRoot+"/note.txt", "note.txt", "1003", "5"))), nil
+		case http.MethodDelete:
+			if request.Header.Get("If-Match") != `"v2"` {
+				t.Errorf("If-Match = %q", request.Header.Get("If-Match"))
+			}
+			return &http.Response{StatusCode: http.StatusNoContent, Header: http.Header{}, Body: io.NopCloser(strings.NewReader(""))}, nil
+		default:
+			t.Fatalf("unexpected method %s", request.Method)
+			return nil, nil
+		}
+	})
+	c, _ := client(t)
+	encoded := base64.StdEncoding.EncodeToString([]byte("hello"))
+	if _, err := c.PutFile(context.Background(), "create file", "note.txt", encoded, "*"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.PutFile(context.Background(), "update file", "note.txt", encoded, "v1"); err != nil {
+		t.Fatal(err)
+	}
+	content, err := c.GetFile(context.Background(), "note.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content.ContentBase64 != encoded {
+		t.Fatalf("content = %+v", content)
+	}
+	if err := c.DeleteFile(context.Background(), "note.txt", "v2"); err != nil {
+		t.Fatal(err)
+	}
+	if len(*calls) != 5 {
+		t.Fatalf("calls = %+v", *calls)
 	}
 }
 

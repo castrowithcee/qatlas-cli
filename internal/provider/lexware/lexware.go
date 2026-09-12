@@ -1,4 +1,4 @@
-// Package lexware implements read-only access to the open and overdue outgoing invoices of a Lexware
+// Package lexware implements controlled access to outgoing invoices of a Lexware
 // Office organization.
 //
 // The provider talks to one fixed production gateway and offers exactly two safe reads: a bounded page of
@@ -8,6 +8,7 @@
 package lexware
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -189,10 +190,27 @@ var invoicesGet = capability.Descriptor{
 	}},
 }
 
-// Register adds Lexware metadata, its read-only connection test, and the two read operations.
+var invoicesCreate = capability.Descriptor{
+	ID: Provider + ".invoices.create", Version: 1, Title: "Create a Lexware invoice",
+	Description: "Create one outgoing invoice as a draft or finalize it immediately; Lexware does not expose invoice update or delete endpoints",
+	Tags:        []string{"lexware", "invoices", "create", "accounting"}, Provider: Provider, RequiresExplicitConnection: true,
+	Risk: capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"finalize":{"type":"boolean"},"voucher_date":{"type":"string","minLength":1,"maxLength":40},` +
+		`"address":{"type":"object","properties":{"contact_id":{"type":"string","maxLength":36},"name":{"type":"string","maxLength":255},"supplement":{"type":"string","maxLength":255},"street":{"type":"string","maxLength":255},"city":{"type":"string","maxLength":255},"zip":{"type":"string","maxLength":32},"country_code":{"type":"string","minLength":2,"maxLength":2}},"additionalProperties":false},` +
+		`"line_items":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"object","properties":{"type":{"type":"string","enum":["custom","text"]},"name":{"type":"string","minLength":1,"maxLength":255},"description":{"type":"string","maxLength":4096},"quantity":{"type":"number"},"unit_name":{"type":"string","maxLength":64},"currency":{"type":"string","minLength":3,"maxLength":3},"net_amount":{"type":"number"},"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"}},"required":["type","name"],"additionalProperties":false}},` +
+		`"currency":{"type":"string","minLength":3,"maxLength":3},"tax_type":{"type":"string","enum":["net","gross","vatfree"]},` +
+		`"shipping_date":{"type":"string","minLength":1,"maxLength":40},"shipping_end_date":{"type":"string","minLength":1,"maxLength":40},"shipping_type":{"type":"string","enum":["delivery","deliveryperiod","service","serviceperiod","none"]},` +
+		`"title":{"type":"string","maxLength":255},"introduction":{"type":"string","maxLength":4096},"remark":{"type":"string","maxLength":4096}},` +
+		`"required":["voucher_date","address","line_items","currency","tax_type","shipping_type"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"created_date":{"type":"string"},"updated_date":{"type":"string"},"version":{"type":"integer"},"finalized":{"type":"boolean"}},"required":["id","finalized"],"additionalProperties":false}`),
+}
+
+// Register adds Lexware metadata, its read-only connection test, and the supported invoice operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
+		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,
 			Description: "Lexware private API key: the value shown once when you create a key under " +
@@ -208,6 +226,7 @@ func Register(reg *capability.Registry) error {
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: invoicesList, Handler: capability.Handler(invokeInvoicesList)},
 		capability.Operation{Descriptor: invoicesGet, Handler: capability.Handler(invokeInvoicesGet)},
+		capability.Operation{Descriptor: invoicesCreate, Handler: capability.Handler(invokeInvoicesCreate)},
 	)
 }
 
@@ -237,6 +256,84 @@ func invokeInvoicesGet(ctx context.Context, resolved *config.Resolved, secrets *
 		return nil, err
 	}
 	return client.GetInvoice(ctx, arguments.ID)
+}
+
+type createInput struct {
+	Finalize    bool   `json:"finalize"`
+	VoucherDate string `json:"voucher_date"`
+	Address     struct {
+		ContactID   string `json:"contact_id,omitempty"`
+		Name        string `json:"name,omitempty"`
+		Supplement  string `json:"supplement,omitempty"`
+		Street      string `json:"street,omitempty"`
+		City        string `json:"city,omitempty"`
+		Zip         string `json:"zip,omitempty"`
+		CountryCode string `json:"country_code,omitempty"`
+	} `json:"address"`
+	LineItems []struct {
+		Type        string      `json:"type"`
+		Name        string      `json:"name"`
+		Description string      `json:"description,omitempty"`
+		Quantity    json.Number `json:"quantity,omitempty"`
+		UnitName    string      `json:"unit_name,omitempty"`
+		Currency    string      `json:"currency,omitempty"`
+		NetAmount   json.Number `json:"net_amount,omitempty"`
+		TaxRate     json.Number `json:"tax_rate_percentage,omitempty"`
+		Discount    json.Number `json:"discount_percentage,omitempty"`
+	} `json:"line_items"`
+	Currency        string `json:"currency"`
+	TaxType         string `json:"tax_type"`
+	ShippingDate    string `json:"shipping_date"`
+	ShippingEndDate string `json:"shipping_end_date"`
+	ShippingType    string `json:"shipping_type"`
+	Title           string `json:"title,omitempty"`
+	Introduction    string `json:"introduction,omitempty"`
+	Remark          string `json:"remark,omitempty"`
+}
+
+func invokeInvoicesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input createInput
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&input) != nil {
+		return nil, providerError("create invoice", "the validated arguments could not be read")
+	}
+	if err := input.validate(); err != nil {
+		return nil, providerError("create invoice", err.Error())
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.CreateInvoice(ctx, input)
+}
+
+func (input createInput) validate() error {
+	if _, err := time.Parse(time.RFC3339, input.VoucherDate); err != nil {
+		return errors.New("voucher_date must be an RFC 3339 timestamp")
+	}
+	if input.Address.ContactID == "" && (input.Address.Name == "" || input.Address.CountryCode == "") {
+		return errors.New("address needs contact_id or name and country_code")
+	}
+	if len(input.LineItems) == 0 {
+		return errors.New("at least one line item is required")
+	}
+	for _, item := range input.LineItems {
+		if item.Type == "custom" && (item.Quantity == "" || item.UnitName == "" || item.NetAmount == "" || item.TaxRate == "") {
+			return errors.New("a custom line item needs quantity, unit_name, net_amount, and tax_rate_percentage")
+		}
+	}
+	if input.ShippingType != "none" {
+		if _, err := time.Parse(time.RFC3339, input.ShippingDate); err != nil {
+			return errors.New("shipping_date must be an RFC 3339 timestamp")
+		}
+	}
+	if strings.HasSuffix(input.ShippingType, "period") {
+		if _, err := time.Parse(time.RFC3339, input.ShippingEndDate); err != nil {
+			return errors.New("shipping_end_date is required for a shipping period")
+		}
+	}
+	return nil
 }
 
 // Client binds one Lexware API key to the fixed gateway and to the rate limit that key shares.
@@ -575,6 +672,72 @@ func (c *Client) GetInvoice(ctx context.Context, id string) (*Invoice, error) {
 	return invoice, nil
 }
 
+type createResult struct {
+	ID          string `json:"id"`
+	CreatedDate string `json:"created_date,omitempty"`
+	UpdatedDate string `json:"updated_date,omitempty"`
+	Version     int    `json:"version,omitempty"`
+	Finalized   bool   `json:"finalized"`
+}
+
+func (c *Client) CreateInvoice(ctx context.Context, input createInput) (*createResult, error) {
+	const op = "create invoice"
+	address := map[string]any{"name": input.Address.Name, "supplement": input.Address.Supplement, "street": input.Address.Street, "city": input.Address.City, "zip": input.Address.Zip, "countryCode": input.Address.CountryCode}
+	if input.Address.ContactID != "" {
+		address = map[string]any{"contactId": input.Address.ContactID}
+	}
+	items := make([]map[string]any, 0, len(input.LineItems))
+	for _, item := range input.LineItems {
+		value := map[string]any{"type": item.Type, "name": item.Name}
+		if item.Description != "" {
+			value["description"] = item.Description
+		}
+		if item.Type == "custom" {
+			currency := item.Currency
+			if currency == "" {
+				currency = input.Currency
+			}
+			value["quantity"] = item.Quantity
+			value["unitName"] = item.UnitName
+			value["unitPrice"] = map[string]any{"currency": currency, "netAmount": item.NetAmount, "taxRatePercentage": item.TaxRate}
+			if item.Discount != "" {
+				value["discountPercentage"] = item.Discount
+			}
+		}
+		items = append(items, value)
+	}
+	shipping := map[string]string{"shippingType": input.ShippingType}
+	if input.ShippingDate != "" {
+		shipping["shippingDate"] = input.ShippingDate
+	}
+	if input.ShippingEndDate != "" {
+		shipping["shippingEndDate"] = input.ShippingEndDate
+	}
+	payload := map[string]any{"voucherDate": input.VoucherDate, "address": address, "lineItems": items, "totalPrice": map[string]string{"currency": input.Currency}, "taxConditions": map[string]string{"taxType": input.TaxType}, "shippingConditions": shipping, "title": input.Title, "introduction": input.Introduction, "remark": input.Remark}
+	for _, field := range []struct{ name, value string }{{"title", input.Title}, {"introduction", input.Introduction}, {"remark", input.Remark}} {
+		if field.value == "" {
+			delete(payload, field.name)
+		}
+	}
+	query := url.Values{}
+	if input.Finalize {
+		query.Set("finalize", "true")
+	}
+	var response struct {
+		ID          string `json:"id"`
+		CreatedDate string `json:"createdDate"`
+		UpdatedDate string `json:"updatedDate"`
+		Version     int    `json:"version"`
+	}
+	if err := c.post(ctx, op, "/v1/invoices", query, payload, &response); err != nil {
+		return nil, err
+	}
+	if !validUUID(response.ID) {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invoice without a usable identifier"}
+	}
+	return &createResult{ID: response.ID, CreatedDate: response.CreatedDate, UpdatedDate: response.UpdatedDate, Version: response.Version, Finalized: input.Finalize}, nil
+}
+
 // voucherListJSON mirrors the provider fields the list operation reads.
 type voucherListJSON struct {
 	Content []struct {
@@ -686,6 +849,43 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 		return &provider.Error{
 			Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invalid response",
 		}
+	}
+	return nil
+}
+
+func (c *Client) post(ctx context.Context, op, path string, query url.Values, payload, out any) error {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "the request ended while it waited for the Lexware rate limit"}
+	}
+	body, err := json.Marshal(payload)
+	if err != nil || len(body) > maxResponseBytes {
+		return providerError(op, "the request exceeds the size limit")
+	}
+	target := gateway + path
+	if encoded := query.Encode(); encoded != "" {
+		target += "?" + encoded
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
+	if err != nil {
+		return providerError(op, "the request could not be built")
+	}
+	req.Header.Set("Authorization", c.auth)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	response, err := c.http.Do(req)
+	if err != nil {
+		return transportError(op, err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return statusError(op, response.StatusCode)
+	}
+	answer, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil || len(answer) > maxResponseBytes {
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the Lexware response could not be read within the size limit"}
+	}
+	if json.Unmarshal(answer, out) != nil {
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invalid response"}
 	}
 	return nil
 }

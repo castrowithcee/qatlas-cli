@@ -211,8 +211,9 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		t.Fatalf("metadata = %+v, %v", metadata, ok)
 	}
 	// The TUI has to name the least privilege this slice needs, and the fixed table it binds.
-	if !strings.Contains(metadata.SecretRoles[0].Description, "permission r") {
-		t.Errorf("role description = %q, want the read-only permission named", metadata.SecretRoles[0].Description)
+	if !strings.Contains(metadata.SecretRoles[0].Description, "permission r") ||
+		!strings.Contains(metadata.SecretRoles[0].Description, "rw") {
+		t.Errorf("role description = %q, want both provider permission levels named", metadata.SecretRoles[0].Description)
 	}
 	if !metadata.Target.Required || metadata.Target.Label != "table" ||
 		!strings.Contains(metadata.Target.Description, "TABLE/VIEW") {
@@ -220,18 +221,21 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 2 {
-		t.Fatalf("operations = %d, want the list and the get operation", len(operations))
+	if len(operations) != 5 {
+		t.Fatalf("operations = %d, want five row operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
 			!descriptor.RequiresExplicitConnection ||
-			descriptor.Risk.Effect != capability.EffectRead ||
-			descriptor.Risk.Idempotency != capability.IdempotencySafe ||
-			descriptor.Risk.Confirmation != capability.ConfirmationNone ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
-			t.Errorf("descriptor %s = %+v, want a safe read requiring an explicit connection",
+			t.Errorf("descriptor %s = %+v, want a bounded operation requiring an explicit connection",
 				descriptor.ID, descriptor)
+		}
+		if descriptor.Risk.Effect == capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationNone {
+			t.Errorf("read %s requires confirmation", descriptor.ID)
+		}
+		if descriptor.Risk.Effect != capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationRequired {
+			t.Errorf("mutation %s does not require confirmation", descriptor.ID)
 		}
 		// Neither the base, the table, the view, nor a URL is an argument of the contract.
 		for _, forbidden := range []string{"base", "table", "view", "url", "token", "sql"} {
@@ -240,8 +244,42 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "seatable.rows.get" || operations[1].ID != "seatable.rows.list" {
-		t.Errorf("operation IDs = %s, %s", operations[0].ID, operations[1].ID)
+	if operations[0].ID != "seatable.rows.create" || operations[4].ID != "seatable.rows.update" {
+		t.Errorf("operation IDs are not sorted: %+v", operations)
+	}
+}
+
+func TestRowMutationsStayOnTheFixedTable(t *testing.T) {
+	methods := []string{}
+	serveBase(t, func(request *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(request.URL.Path, metadataPath) {
+			return jsonResponse(http.StatusOK, `{"metadata":{"tables":[{"_id":"0001","name":"Kunden","columns":[{"name":"Name"}]}]}}`), nil
+		}
+		methods = append(methods, request.Method)
+		var payload map[string]json.RawMessage
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		var table string
+		_ = json.Unmarshal(payload["table_name"], &table)
+		if table != "Kunden" {
+			t.Errorf("table = %q", table)
+		}
+		return jsonResponse(http.StatusOK, `{}`), nil
+	})
+	c, _ := client(t, "Kunden")
+	values := map[string]json.RawMessage{"Name": json.RawMessage(`"Ada"`)}
+	if err := c.CreateRow(context.Background(), values); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.UpdateRow(context.Background(), rowID, values); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteRow(context.Background(), rowID); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{http.MethodPost, http.MethodPut, http.MethodDelete}; !reflect.DeepEqual(methods, want) {
+		t.Fatalf("methods = %v, want %v", methods, want)
 	}
 }
 
