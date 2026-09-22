@@ -97,3 +97,40 @@ func TestPermissionTextDistinguishesDefaultAndDenyAll(t *testing.T) {
 		t.Fatal("permission formatting lost default/deny-all distinction")
 	}
 }
+
+func TestSeaTableTargetAllowListRoundTripsWithoutChangingSingleTargets(t *testing.T) {
+	input := `version: 1
+services:
+  main: {provider: seatable, base_url: https://cloud.seatable.io}
+credentials:
+  reader: {type: keyring}
+connections:
+  selected:
+    service: main
+    credential: reader
+    targets: [id:0000, id:0001]
+  all:
+    service: main
+    credential: reader
+    target: "*"
+defaults: {}
+`
+	cfg, err := Decode(strings.NewReader(input), testProviders)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roundTrip, err := Decode(strings.NewReader(string(encoded)), testProviders)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := roundTrip.Connections["selected"].TargetValues(); !reflect.DeepEqual(got, []string{"id:0000", "id:0001"}) {
+		t.Fatalf("allow-list = %v", got)
+	}
+	if got := roundTrip.Connections["all"]; got.Target != "*" || len(got.Targets) != 0 {
+		t.Fatalf("wildcard = %+v", got)
+	}
+}

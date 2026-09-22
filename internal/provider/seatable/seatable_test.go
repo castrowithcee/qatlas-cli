@@ -186,7 +186,7 @@ const rowBody = `{"_id":"` + rowID + `","_ctime":"2026-03-01T09:00:00+01:00",
 
 // metadataBody is the metadata of a base that holds both fixture tables and their views.
 const metadataBody = `{"metadata":{"tables":[
- {"_id":"0000","name":"Kunden","columns":[{"key":"0000","name":"Name"}],
+ {"_id":"0000","name":"Kunden","columns":[{"key":"0000","name":"Name","type":"text"}],
   "views":[{"_id":"0000","name":"Standard"},{"_id":"7Yk3","name":"Aktive"}]},
  {"_id":"0001","name":"Tickets","columns":[],"views":[{"_id":"0000","name":"Standard"}]}
 ],"version":42,"format_version":9}}`
@@ -197,9 +197,8 @@ func rowRoute(base, id string) string {
 	return gatewayPath + base + rowsPath + id + "/"
 }
 
-// Register publishes the configuration metadata the TUI needs and exactly two read-only operations. The
-// credential role points at an API token with the read permission, and the target is required.
-func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
+// Register publishes the configuration metadata the TUI needs, schema discovery, and the row operations.
+func TestRegisterPublishesMetadataAndSevenOperations(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
 		t.Fatalf("Register() = %v", err)
@@ -210,24 +209,29 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		len(metadata.SecretRoles) != 1 || metadata.SecretRoles[0].Name != roleAPIToken {
 		t.Fatalf("metadata = %+v, %v", metadata, ok)
 	}
-	// The TUI has to name the least privilege this slice needs, and the fixed table it binds.
+	// The TUI has to name the least privilege this slice needs and the supported table boundary.
 	if !strings.Contains(metadata.SecretRoles[0].Description, "permission r") ||
 		!strings.Contains(metadata.SecretRoles[0].Description, "rw") {
 		t.Errorf("role description = %q, want both provider permission levels named", metadata.SecretRoles[0].Description)
 	}
-	if !metadata.Target.Required || metadata.Target.Label != "table" ||
+	if !metadata.Target.Required || !metadata.Target.Multiple || metadata.Target.Wildcard != "*" ||
+		metadata.Target.WildcardWarning == "" || metadata.Target.Label != "table" ||
 		!strings.Contains(metadata.Target.Description, "TABLE/VIEW") {
-		t.Errorf("target metadata = %+v, want a required table with an optional view", metadata.Target)
+		t.Errorf("target metadata = %+v, want table allow-lists and an explicit wildcard", metadata.Target)
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 5 {
-		t.Fatalf("operations = %d, want five row operations", len(operations))
+	if len(operations) != 7 {
+		t.Fatalf("operations = %d, want two schema and five row operations", len(operations))
 	}
 	for _, descriptor := range operations {
+		wantSensitivity := dataSensitivity
+		if descriptor.ID == "seatable.columns.list" || descriptor.ID == "seatable.tables.list" {
+			wantSensitivity = schemaSensitivity
+		}
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
 			!descriptor.RequiresExplicitConnection ||
-			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
+			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != wantSensitivity {
 			t.Errorf("descriptor %s = %+v, want a bounded operation requiring an explicit connection",
 				descriptor.ID, descriptor)
 		}
@@ -237,14 +241,14 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		if descriptor.Risk.Effect != capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationRequired {
 			t.Errorf("mutation %s does not require confirmation", descriptor.ID)
 		}
-		// Neither the base, the table, the view, nor a URL is an argument of the contract.
-		for _, forbidden := range []string{"base", "table", "view", "url", "token", "sql"} {
+		// The base, a view, a URL, and credentials stay outside every operation contract.
+		for _, forbidden := range []string{"base_uuid", "view_name", "view_id", "url", "token", "sql"} {
 			if strings.Contains(string(descriptor.InputSchema), forbidden) {
 				t.Errorf("the input schema of %s offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
 		}
 	}
-	if operations[0].ID != "seatable.rows.create" || operations[4].ID != "seatable.rows.update" {
+	if operations[0].ID != "seatable.columns.list" || operations[6].ID != "seatable.tables.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -283,14 +287,15 @@ func TestRowMutationsStayOnTheFixedTable(t *testing.T) {
 	}
 }
 
-// Open binds the instance, the fixed table, and the API token of one connection, and refuses everything
+// Open binds the instance, table scope, and API token of one connection, and refuses everything
 // that is not a usable instance or target before any request happens.
 func TestOpenBindsTheInstanceTargetAndToken(t *testing.T) {
 	refuse(t)
 
 	t.Run("the API token is registered for redaction", func(t *testing.T) {
 		c, red := client(t, "Kunden")
-		if c.origin != cloudOrigin || c.target.tableParam != "table_name" || c.target.table != "Kunden" {
+		if c.origin != cloudOrigin || len(c.scope.targets) != 1 ||
+			c.scope.targets[0].tableParam != "table_name" || c.scope.targets[0].table != "Kunden" {
 			t.Fatalf("client = %+v", c)
 		}
 		if red.Apply("token "+salesToken) != "token "+redact.Marker {
@@ -364,6 +369,113 @@ func TestTargetFormsBecomeTheFixedQueryParameters(t *testing.T) {
 				t.Errorf("query = %v, want %v", got, want)
 			}
 		})
+	}
+}
+
+func TestAllowListAndWildcardSelectOnlyExplicitTables(t *testing.T) {
+	openScope := func(t *testing.T, values []string) *Client {
+		t.Helper()
+		resolved := resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "")
+		resolved.Targets = values
+		red := &redact.Redactor{}
+		client, err := open(resolved, resolver(red), red, freeLimiter())
+		if err != nil {
+			t.Fatalf("open() = %v", err)
+		}
+		return client
+	}
+
+	t.Run("an allow-list requires and enforces a table", func(t *testing.T) {
+		var query url.Values
+		serveBase(t, func(request *http.Request) (*http.Response, error) {
+			query = request.URL.Query()
+			return jsonResponse(http.StatusOK, `{"rows":[]}`), nil
+		})
+		client := openScope(t, []string{"id:0000", "id:0001"})
+		if _, err := client.ListRows(context.Background(), ListOptions{}); err == nil {
+			t.Fatal("an ambiguous allow-list selected a table silently")
+		}
+		if _, err := client.ListRows(context.Background(), ListOptions{Table: "id:9999"}); err == nil {
+			t.Fatal("a table outside the allow-list was accepted")
+		}
+		if _, err := client.ListRows(context.Background(), ListOptions{Table: "id:0001"}); err != nil {
+			t.Fatalf("allowed table = %v", err)
+		}
+		if query.Get("table_id") != "0001" {
+			t.Errorf("query = %v, want table 0001", query)
+		}
+	})
+
+	t.Run("the wildcard still requires one selected table", func(t *testing.T) {
+		var query url.Values
+		serveBase(t, func(request *http.Request) (*http.Response, error) {
+			query = request.URL.Query()
+			return jsonResponse(http.StatusOK, `{"rows":[]}`), nil
+		})
+		client := openScope(t, []string{"*"})
+		if _, err := client.ListRows(context.Background(), ListOptions{}); err == nil {
+			t.Fatal("the wildcard selected a table silently")
+		}
+		if _, err := client.ListRows(context.Background(), ListOptions{Table: "id:0007"}); err != nil {
+			t.Fatalf("wildcard table = %v", err)
+		}
+		if query.Get("table_id") != "0007" {
+			t.Errorf("query = %v, want table 0007", query)
+		}
+	})
+
+	t.Run("a fixed target remains backward compatible", func(t *testing.T) {
+		refuse(t)
+		client, _ := client(t, "Kunden")
+		if _, err := client.ListRows(context.Background(), ListOptions{Table: "Tickets"}); err == nil {
+			t.Fatal("a fixed connection accepted another table")
+		}
+	})
+}
+
+func TestSchemaDiscoveryIsBoundedByTheConnectionScope(t *testing.T) {
+	serveBase(t, func(request *http.Request) (*http.Response, error) {
+		if !strings.HasSuffix(request.URL.Path, metadataPath) {
+			t.Fatalf("path = %s, want metadata", request.URL.Path)
+		}
+		return jsonResponse(http.StatusOK, metadataBody), nil
+	})
+	resolved := resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "")
+	resolved.Targets = []string{"*"}
+	red := &redact.Redactor{}
+	client, err := open(resolved, resolver(red), red, freeLimiter())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tables, err := client.ListTables(context.Background(), PageOptions{Limit: 1})
+	if err != nil {
+		t.Fatalf("ListTables() = %v", err)
+	}
+	if len(tables.Tables) != 1 || tables.Tables[0].Reference != "id:0000" ||
+		!tables.HasMore || tables.NextStart != 1 {
+		t.Fatalf("tables = %+v", tables)
+	}
+	columns, err := client.ListColumns(context.Background(), ColumnsOptions{Table: "id:0000"})
+	if err != nil {
+		t.Fatalf("ListColumns() = %v", err)
+	}
+	if columns.Table != "id:0000" || len(columns.Columns) != 1 ||
+		columns.Columns[0] != (Column{Key: "0000", Name: "Name", Type: "text"}) {
+		t.Fatalf("columns = %+v", columns)
+	}
+
+	resolved.Targets = []string{"id:0001"}
+	client, err = open(resolved, resolver(red), red, freeLimiter())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tables, err = client.ListTables(context.Background(), PageOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tables.Tables) != 1 || tables.Tables[0].Reference != "id:0001" {
+		t.Fatalf("allow-listed tables = %+v", tables)
 	}
 }
 
@@ -473,10 +585,10 @@ func TestListRowsRejectsAnUnusableAnswer(t *testing.T) {
 	}
 }
 
-// The get operation reads exactly the row of a validated identifier from the fixed table of the same
+// The get operation reads exactly the row of a validated identifier from the selected allowed table of the same
 // connection, and refuses an answer that is a different row.
 func TestGetRowReadsExactlyTheValidatedRow(t *testing.T) {
-	t.Run("the request names the row and the fixed table", func(t *testing.T) {
+	t.Run("the request names the row and the selected table", func(t *testing.T) {
 		var requests []string
 		serveBase(t, func(request *http.Request) (*http.Response, error) {
 			requests = append(requests, request.URL.Path+"?"+request.URL.RawQuery)
@@ -633,6 +745,27 @@ func TestTestConnectionValidatesTheTargetWithoutWriting(t *testing.T) {
 		class, err := TestConnection(context.Background(),
 			resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "id:0000/id:7Yk3"),
 			resolver(nil), nil)
+		if err != nil || class != provider.ClassOK {
+			t.Fatalf("TestConnection() = %q, %v", class, err)
+		}
+	})
+
+	t.Run("an allow-list validates every configured table", func(t *testing.T) {
+		metadata(t)
+		stubLimiter(t, salesToken)
+		resolved := resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "")
+		resolved.Targets = []string{"id:0000", "id:0001"}
+		class, err := TestConnection(context.Background(), resolved, resolver(nil), nil)
+		if err != nil || class != provider.ClassOK {
+			t.Fatalf("TestConnection() = %q, %v", class, err)
+		}
+	})
+
+	t.Run("the wildcard validates base access without choosing a table", func(t *testing.T) {
+		metadata(t)
+		stubLimiter(t, salesToken)
+		class, err := TestConnection(context.Background(),
+			resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "*"), resolver(nil), nil)
 		if err != nil || class != provider.ClassOK {
 			t.Fatalf("TestConnection() = %q, %v", class, err)
 		}
@@ -920,6 +1053,60 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	if !strings.Contains(string(got.Result), `"id":"`+rowID+`"`) ||
 		!strings.Contains(string(got.Result), `"updated_at":"2026-04-02T11:15:00+01:00"`) {
 		t.Errorf("get result = %s", got.Result)
+	}
+}
+
+func TestApplicationCoreRoutesDynamicTablesInsideTheConfiguredScope(t *testing.T) {
+	var query url.Values
+	serveBase(t, func(request *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(request.URL.Path, metadataPath) {
+			return jsonResponse(http.StatusOK, metadataBody), nil
+		}
+		query = request.URL.Query()
+		return jsonResponse(http.StatusOK, `{"rows":[]}`), nil
+	})
+	stubLimiter(t, salesToken)
+
+	cfg := coreConfig()
+	cfg.Connections["all-tables"] = config.Connection{
+		Service: "sea-cloud", Credential: "sales-reader", Target: "*",
+	}
+	cfg.Connections["selected-tables"] = config.Connection{
+		Service: "sea-cloud", Credential: "sales-reader", Targets: []string{"id:0000", "id:0001"},
+	}
+	red := &redact.Redactor{}
+	core := application.New(registry(t), cfg, resolver(red), red)
+	for operation, arguments := range map[string]json.RawMessage{
+		"seatable.tables.list":  json.RawMessage(`{}`),
+		"seatable.columns.list": json.RawMessage(`{"table":"id:0000"}`),
+	} {
+		if _, err := core.Invoke(context.Background(), application.InvokeRequest{
+			Operation: operation, Connection: "all-tables", Arguments: arguments,
+		}); err != nil {
+			t.Fatalf("%s = %v", operation, err)
+		}
+	}
+
+	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
+		Operation: "seatable.rows.list", Connection: "all-tables",
+		Arguments: json.RawMessage(`{"table":"id:0001"}`),
+	}); err != nil {
+		t.Fatalf("wildcard invoke = %v", err)
+	}
+	if query.Get("table_id") != "0001" {
+		t.Fatalf("query = %v", query)
+	}
+
+	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
+		Operation: "seatable.rows.list", Connection: "selected-tables",
+		Arguments: json.RawMessage(`{"table":"id:9999"}`),
+	}); err == nil {
+		t.Fatal("the core accepted a table outside the allow-list")
+	}
+	if _, err := core.Invoke(context.Background(), application.InvokeRequest{
+		Operation: "seatable.rows.list", Connection: "selected-tables", Arguments: json.RawMessage(`{}`),
+	}); err == nil {
+		t.Fatal("the core selected one allow-listed table silently")
 	}
 }
 

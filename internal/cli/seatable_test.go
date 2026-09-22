@@ -65,6 +65,14 @@ connections:
     service: tables-cloud
     credential: support-base-reader
     target: "id:0001"
+  sales-allow-list:
+    service: tables-cloud
+    credential: sales-base-reader
+    targets: ["id:0000", "id:0001"]
+  sales-all-tables:
+    service: tables-cloud
+    credential: sales-base-reader
+    target: "*"
   onprem-rows:
     service: tables-onprem
     credential: onprem-base-reader
@@ -96,8 +104,7 @@ func runSeatableCLI(t *testing.T, reads *atomic.Int32, input string, args ...str
 	return code, stdout.String(), stderr.String()
 }
 
-// The SeaTable namespace publishes exactly the two read-only row tools, with the connections that can run
-// them and without contacting an instance.
+// The SeaTable namespace publishes schema discovery and the row tools without contacting an instance.
 func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 	path := seatableConfig(t)
 	var reads atomic.Int32
@@ -107,23 +114,25 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[5]{effect,id,title}:", "create,seatable.rows.create,", "delete,seatable.rows.delete,", "read,seatable.rows.get,", "read,seatable.rows.list,", "update,seatable.rows.update,",
+		"tools[7]{effect,id,title}:", "read,seatable.columns.list,", "create,seatable.rows.create,",
+		"delete,seatable.rows.delete,", "read,seatable.rows.get,", "read,seatable.rows.list,",
+		"update,seatable.rows.update,", "read,seatable.tables.list,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--config", path))); len(got) != 5 {
-		t.Errorf("seatable tools = %v, want all five row tools", got)
+	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--config", path))); len(got) != 7 {
+		t.Errorf("seatable tools = %v, want schema discovery and all five row tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
 	}
 }
 
-// One tool document carries the complete contract. The base, the table, and the view are not part of it:
-// an agent can name neither them nor a URL through the contract.
-func TestSeaTableToolContractKeepsBaseTableAndViewOutOfTheArguments(t *testing.T) {
+// One tool document carries the complete contract. A table can be selected inside the configured scope;
+// the base, views, credentials and URLs remain connection-owned.
+func TestSeaTableToolContractKeepsBaseAndCredentialsOutOfTheArguments(t *testing.T) {
 	path := seatableConfig(t)
 
 	code, stdout, stderr := runSeatableCLI(t, nil, "", "tool", "seatable.rows.list", "--config", path)
@@ -132,7 +141,7 @@ func TestSeaTableToolContractKeepsBaseTableAndViewOutOfTheArguments(t *testing.T
 	}
 	for _, want := range []string{
 		"id: seatable.rows.list", "version: 1", "effect: read", "idempotency: safe",
-		"confirmation: none", "requires_explicit_connection: true", "start", "limit",
+		"confirmation: none", "requires_explicit_connection: true", "table", "start", "limit",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tool contract does not contain %q:\n%s", want, stdout)
@@ -159,8 +168,8 @@ func TestSeaTableToolContractKeepsBaseTableAndViewOutOfTheArguments(t *testing.T
 			t.Errorf("the input schema offers %q: %s", forbidden, described.Tool.InputSchema)
 		}
 	}
-	if len(described.Connections) != 4 {
-		t.Errorf("connections = %v, want all four configured SeaTable connections", described.Connections)
+	if len(described.Connections) != 6 {
+		t.Errorf("connections = %v, want all six configured SeaTable connections", described.Connections)
 	}
 }
 
@@ -176,7 +185,7 @@ func TestSeaTableInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 		code  string
 	}{
 		{
-			name: "four connections without an explicit one", input: `{}`,
+			name: "several connections without an explicit one", input: `{}`,
 			args: []string{"invoke", "seatable.rows.list", "--config", path},
 			code: "connection-selection",
 		},
@@ -265,8 +274,8 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 5 || searched.Operations[0].ID != "seatable.rows.create" ||
-		searched.Operations[4].ID != "seatable.rows.update" {
+	if len(searched.Operations) != 7 || searched.Operations[0].ID != "seatable.columns.list" ||
+		searched.Operations[6].ID != "seatable.tables.list" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
@@ -287,7 +296,7 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		t.Fatalf("MCP code=%q CLI code=%q exit=%d", mcpCode, cliCode, code)
 	}
 
-	// The broker does not pick one of the four bases either.
+	// The broker does not pick one of the configured scopes either.
 	ambiguous := toolResultFrom(t, responses[`"ambiguous"`])
 	if !ambiguous.IsError || !strings.HasPrefix(ambiguous.Content[0].Text, "connection-selection:") {
 		t.Fatalf("ambiguous invoke = %+v, want an explicit connection to be required", ambiguous)

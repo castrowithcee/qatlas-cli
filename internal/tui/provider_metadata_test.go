@@ -194,7 +194,7 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 		}
 	}
 
-	// A SeaTable connection names its instance, its base credential, and the fixed table it reads. The
+	// A SeaTable connection names its instance, its base credential, and the table scope it reads. The
 	// table is required, the view is the optional part after the slash, and two tokens of the same base
 	// stay two visibly separate connections.
 	seatableFields := m.buildFields("sales-rows")
@@ -214,7 +214,7 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 		}
 	}
 	if got := m.dashboardEntry(sectionConnections, "sales-rows-audit"); !strings.Contains(got, "Kunden/Aktive") {
-		t.Fatalf("SeaTable dashboard entry = %q, want the fixed table and view", got)
+		t.Fatalf("SeaTable dashboard entry = %q, want the configured table and view", got)
 	}
 
 	// A Nextcloud connection names its instance, the identity it reads as, and the fixed root folder below
@@ -238,6 +238,81 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	}
 	if got := m.dashboardEntry(sectionConnections, "files-partner"); !strings.Contains(got, "Shared/Qatlas") {
 		t.Fatalf("Nextcloud dashboard entry = %q, want the fixed root folder", got)
+	}
+}
+
+func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *testing.T) {
+	reg := capability.NewRegistry()
+	for _, register := range []func(*capability.Registry) error{
+		bookstack.Register, telegram.Register, lexware.Register, twentycrm.Register, seatable.Register,
+		nextcloud.Register,
+	} {
+		if err := register(reg); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store := config.NewStore(filepath.Join(t.TempDir(), "config.yaml"), reg)
+	m, err := New(store, nil, nil, &redact.Redactor{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.cfg.Services["tables"] = config.Service{Provider: "seatable", BaseURL: "https://cloud.seatable.io"}
+	m.cfg.Credentials["base"] = config.Credential{Provider: "seatable", Type: config.CredentialTypeKeyring}
+	m.cfg.Connections["all-tables"] = config.Connection{
+		Service: "tables", Credential: "base", Target: "*",
+	}
+	m.section, m.screen, m.editing = sectionConnections, screenForm, "all-tables"
+	m.fields = m.buildFields("all-tables")
+	m.width, m.height = 120, 80
+
+	permissions := m.field("permissions")
+	wantChoices := []string{"default", "read", "create", "update", "delete"}
+	if permissions == nil || permissions.kind != fieldMultiChoice ||
+		!reflect.DeepEqual(permissions.choices, wantChoices) || !permissions.selected["default"] {
+		t.Fatalf("permissions = %+v, want selectable SeaTable effects and the compatibility default", permissions)
+	}
+	permissions.toggleChoice()
+	if got := permissions.value(); got != "none" {
+		t.Fatalf("cleared default = %q, want none", got)
+	}
+	permissions.toggleChoice()
+	view := m.View()
+	if !strings.Contains(view, "warning: All tables in this SeaTable base are exposed to the agent") {
+		t.Fatalf("wildcard view has no warning:\n%s", view)
+	}
+
+	permissions.index = indexOf(t, permissions.choices, "create")
+	permissions.toggleChoice()
+	if got := permissions.value(); got != "create" {
+		t.Fatalf("permissions after toggle = %q", got)
+	}
+	permissions.toggleChoice()
+	if got := permissions.value(); got != "none" {
+		t.Fatalf("empty explicit selection = %q, want none", got)
+	}
+
+	target := m.field("target")
+	target.input.SetValue("id:0000, id:0001")
+	candidate := m.cfg.Clone()
+	if err := m.apply(candidate, "all-tables"); err != nil {
+		t.Fatalf("apply allow-list = %v", err)
+	}
+	connection := candidate.Connections["all-tables"]
+	if connection.Target != "" || !reflect.DeepEqual(connection.Targets, []string{"id:0000", "id:0001"}) {
+		t.Fatalf("connection targets = %#v / %#v", connection.Target, connection.Targets)
+	}
+
+	providers := map[string][]string{
+		"bookstack": {"default", "read", "create", "update", "delete"},
+		"lexware":   {"default", "read", "create"},
+		"nextcloud": {"default", "read", "create", "update", "delete"},
+		"telegram":  {"default", "create", "update", "delete"},
+		"twentycrm": {"default", "read", "create", "update", "delete"},
+	}
+	for provider, want := range providers {
+		if got := m.permissionChoices(provider); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s permissions = %v, want %v", provider, got, want)
+		}
 	}
 }
 

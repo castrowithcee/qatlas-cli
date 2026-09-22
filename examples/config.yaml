@@ -222,9 +222,9 @@ connections:
     description: the self-hosted Twenty workspace for internal accounts
     permissions: [read]
 
-  # A SeaTable connection binds one instance, one base token, and one fixed table. The optional view
-  # after the slash narrows the rows a list returns; id:TABLEID and id:VIEWID address them by
-  # identifier, which is also the way to reach a name that contains a slash.
+  # A SeaTable connection binds one instance and one base token to one table, an explicit allow-list, or
+  # the explicit * wildcard. The optional view after a slash narrows listing; id:TABLEID and id:VIEWID
+  # address tables and views by identifier, which is also the way to reach a name containing a slash.
   sales-rows:
     service: tables-cloud
     credential: sales-base-reader
@@ -241,6 +241,20 @@ connections:
     service: tables-cloud
     credential: support-base-reader
     target: id:0001
+    permissions: [read]
+
+  sales-selected-tables:
+    service: tables-cloud
+    credential: sales-base-reader
+    targets: ["id:0000", "id:0001"]
+    permissions: [read]
+
+  # This deliberately exposes every table in the base to the agent. Prefer targets when a smaller scope
+  # is enough. Row and column operations then require a table reference from seatable.tables.list.
+  sales-all-tables:
+    service: tables-cloud
+    credential: sales-base-reader
+    target: "*"
     permissions: [read]
 
   onprem-rows:

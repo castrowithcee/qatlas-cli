@@ -459,7 +459,8 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 	service := c.config.Services[connection.Service]
 	return &config.Resolved{
 		Name: name, Provider: service.Provider, BaseURL: service.BaseURL, Options: service.Options,
-		Target: connection.Target, Service: connection.Service, Credential: connection.Credential,
+		Target: connection.Target, Targets: append([]string(nil), connection.Targets...),
+		Service: connection.Service, Credential: connection.Credential,
 		Secrets:     c.config.Credentials[connection.Credential],
 		Permissions: c.config.ConnectionPermissions(name),
 	}, nil

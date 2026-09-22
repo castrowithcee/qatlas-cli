@@ -1,10 +1,10 @@
-// Package seatable implements controlled row access to one fixed SeaTable table.
+// Package seatable implements controlled schema and row access to a SeaTable base.
 //
 // A SeaTable installation holds many bases, and every base can issue several API tokens with their own
 // read or write permission. That cardinality is the configuration: a service is one instance, a credential
-// is one API token of one base, and a connection binds them to one fixed table and optionally one fixed
-// view. The API token itself never reaches a base route; it is exchanged for a short-lived base token that
-// is kept in memory for the current process and never stored.
+// is one API token of one base, and a connection binds it to one table, an explicit table allow-list, or
+// the explicit * wildcard. The API token itself never reaches a base route; it is exchanged for a
+// short-lived base token that is kept in memory for the current process and never stored.
 //
 // Column names and cell values arrive from the provider and are treated as untrusted data: they are
 // normalised into a stable envelope of identifier, time metadata, and a dynamic value map, passed through
@@ -46,6 +46,7 @@ const roleAPIToken = "api-token"
 // dataSensitivity classifies results as row content of the configured SeaTable base. It is deliberately
 // provider-specific; the architecture defines no global sensitivity taxonomy.
 const dataSensitivity = "seatable-base-rows"
+const schemaSensitivity = "seatable-base-schema"
 
 // The routes this provider uses. The account route exchanges the API token for a base token; the two base
 // routes are served by the API gateway of the same instance.
@@ -105,6 +106,14 @@ var seatableReadRisk = capability.Risk{
 	DataSensitivity: dataSensitivity,
 }
 
+var seatableSchemaRisk = capability.Risk{
+	Effect:          capability.EffectRead,
+	Idempotency:     capability.IdempotencySafe,
+	Confirmation:    capability.ConfirmationNone,
+	OpenWorld:       true,
+	DataSensitivity: schemaSensitivity,
+}
+
 // rowSchema is the stable envelope of one row: the identifier, the time metadata SeaTable maintains, and
 // the dynamic column values. The value map is deliberately unconstrained, because every base defines its
 // own columns; adopting a base schema as a Qatlas contract is not part of this slice.
@@ -112,17 +121,90 @@ const rowSchema = `{"type":"object","properties":{` +
 	`"id":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"},` +
 	`"values":{"type":"object"}},"required":["id","values"],"additionalProperties":false}`
 
-var rowsList = capability.Descriptor{
-	ID:      Provider + ".rows.list",
+const tableSelectionSchema = `{"type":"string","minLength":1,"maxLength":512}`
+
+var tablesList = capability.Descriptor{
+	ID:      Provider + ".tables.list",
 	Version: 1,
-	Title:   "List SeaTable rows",
-	Description: "List one bounded page of rows from the fixed table, or view, of an explicit SeaTable " +
-		"connection",
+	Title:   "List SeaTable tables",
+	Description: "List one bounded page of tables visible through an explicit SeaTable connection, " +
+		"including the reference accepted by row and column operations",
+	Tags:                       []string{"seatable", "base", "tables", "schema", "list"},
+	Risk:                       seatableSchemaRisk,
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
+		`"limit":{"type":"integer","minimum":1,"maximum":100}},` +
+		`"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"tables":{"type":"array","items":{"type":"object","properties":{` +
+		`"id":{"type":"string"},"name":{"type":"string"},"reference":{"type":"string"}},` +
+		`"required":["id","name","reference"],"additionalProperties":false}},` +
+		`"start":{"type":"integer"},"limit":{"type":"integer"},"next_start":{"type":"integer"},` +
+		`"has_more":{"type":"boolean"}},` +
+		`"required":["tables","start","limit","has_more"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		{Name: "start", Description: "Zero-based table offset, up to 10000"},
+		{Name: "limit", Description: "Tables per page, from 1 through 100; 25 when omitted"},
+	},
+	Fields: []capability.Field{
+		{Name: "tables", Description: "Allowed tables and their stable invocation references"},
+		{Name: "start", Description: "Table offset this page started at"},
+		{Name: "limit", Description: "Page size the request applied"},
+		{Name: "next_start", Description: "Offset of the following page, absent on the last page"},
+		{Name: "has_more", Description: "True when another table page exists"},
+	},
+}
+
+var columnsList = capability.Descriptor{
+	ID:      Provider + ".columns.list",
+	Version: 1,
+	Title:   "List SeaTable columns",
+	Description: "List one bounded page of columns of an allowed table through an explicit SeaTable " +
+		"connection; table is optional only when the connection resolves to one table",
+	Tags:                       []string{"seatable", "base", "table", "columns", "schema", "list"},
+	Risk:                       seatableSchemaRisk,
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"table":` + tableSelectionSchema + `,` +
+		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
+		`"limit":{"type":"integer","minimum":1,"maximum":100}},` +
+		`"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"table":{"type":"string"},"columns":{"type":"array","items":{"type":"object","properties":{` +
+		`"key":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"}},` +
+		`"required":["key","name","type"],"additionalProperties":false}},` +
+		`"start":{"type":"integer"},"limit":{"type":"integer"},"next_start":{"type":"integer"},` +
+		`"has_more":{"type":"boolean"}},` +
+		`"required":["table","columns","start","limit","has_more"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+		{Name: "start", Description: "Zero-based column offset, up to 10000"},
+		{Name: "limit", Description: "Columns per page, from 1 through 100; 25 when omitted"},
+	},
+	Fields: []capability.Field{
+		{Name: "table", Description: "The selected table reference"},
+		{Name: "columns", Description: "Column keys, names and SeaTable types"},
+		{Name: "start", Description: "Column offset this page started at"},
+		{Name: "limit", Description: "Page size the request applied"},
+		{Name: "next_start", Description: "Offset of the following page, absent on the last page"},
+		{Name: "has_more", Description: "True when another column page exists"},
+	},
+}
+
+var rowsList = capability.Descriptor{
+	ID:                         Provider + ".rows.list",
+	Version:                    1,
+	Title:                      "List SeaTable rows",
+	Description:                "List one bounded page of rows from a table allowed by an explicit SeaTable connection",
 	Tags:                       []string{"seatable", "base", "rows", "list", "table"},
 	Risk:                       seatableReadRisk,
 	Provider:                   Provider,
 	RequiresExplicitConnection: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"table":` + tableSelectionSchema + `,` +
 		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100}},` +
 		`"additionalProperties":false}`),
@@ -132,7 +214,8 @@ var rowsList = capability.Descriptor{
 		`"has_more":{"type":"boolean"}},` +
 		`"required":["rows","start","limit","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "start", Description: "Zero-based row offset inside the fixed table or view, up to 10000"},
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+		{Name: "start", Description: "Zero-based row offset inside the selected table or view, up to 10000"},
 		{Name: "limit", Description: "Rows per page, from 1 through 100; 25 when omitted"},
 	},
 	Fields: []capability.Field{
@@ -152,17 +235,18 @@ var rowsGet = capability.Descriptor{
 	ID:      Provider + ".rows.get",
 	Version: 1,
 	Title:   "Get a SeaTable row",
-	Description: "Read one row of the fixed table of an explicit SeaTable connection by its row " +
+	Description: "Read one row of a table allowed by an explicit SeaTable connection by its row " +
 		"identifier",
 	Tags:                       []string{"seatable", "base", "rows", "get", "table"},
 	Risk:                       seatableReadRisk,
 	Provider:                   Provider,
 	RequiresExplicitConnection: true,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"row_id":{"type":"string",` +
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"table":` + tableSelectionSchema + `,"row_id":{"type":"string",` +
 		`"minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"}},` +
 		`"required":["row_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(rowSchema),
 	Arguments: []capability.Argument{
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
 		{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.rows.list", Required: true},
 	},
 	Fields: []capability.Field{
@@ -178,25 +262,26 @@ var rowsGet = capability.Descriptor{
 }
 
 var rowsCreate = rowMutationDescriptor("create", capability.EffectCreate, capability.IdempotencyNonIdempotent,
-	`{"type":"object","properties":{"values":{"type":"object"}},"required":["values"],"additionalProperties":false}`,
+	`{"type":"object","properties":{"table":`+tableSelectionSchema+`,"values":{"type":"object"}},"required":["values"],"additionalProperties":false}`,
 	`{"type":"object","properties":{"created":{"type":"boolean"}},"required":["created"],"additionalProperties":false}`)
 var rowsUpdate = rowMutationDescriptor("update", capability.EffectUpdate, capability.IdempotencyIdempotent,
-	`{"type":"object","properties":{"row_id":{"type":"string","minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"},"values":{"type":"object"}},"required":["row_id","values"],"additionalProperties":false}`,
+	`{"type":"object","properties":{"table":`+tableSelectionSchema+`,"row_id":{"type":"string","minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"},"values":{"type":"object"}},"required":["row_id","values"],"additionalProperties":false}`,
 	`{"type":"object","properties":{"updated":{"type":"boolean"}},"required":["updated"],"additionalProperties":false}`)
 var rowsDelete = rowMutationDescriptor("delete", capability.EffectDelete, capability.IdempotencyIdempotent,
-	`{"type":"object","properties":{"row_id":{"type":"string","minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"}},"required":["row_id"],"additionalProperties":false}`,
+	`{"type":"object","properties":{"table":`+tableSelectionSchema+`,"row_id":{"type":"string","minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"}},"required":["row_id"],"additionalProperties":false}`,
 	`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`)
 
 func rowMutationDescriptor(action string, effect capability.Effect, idempotency capability.Idempotency, input, output string) capability.Descriptor {
 	return capability.Descriptor{ID: Provider + ".rows." + action, Version: 1,
 		Title:       strings.ToUpper(action[:1]) + action[1:] + " a SeaTable row",
-		Description: strings.ToUpper(action[:1]) + action[1:] + " one row in the fixed table of an explicit SeaTable connection",
+		Description: strings.ToUpper(action[:1]) + action[1:] + " one row in a table allowed by an explicit SeaTable connection",
 		Tags:        []string{"seatable", "base", "rows", action, "table"}, Provider: Provider, RequiresExplicitConnection: true,
 		Risk:        capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
 		InputSchema: json.RawMessage(input), OutputSchema: json.RawMessage(output)}
 }
 
-// Register adds SeaTable metadata, its read-only connection test, and the bounded row operations.
+// Register adds SeaTable metadata, its read-only connection test, schema discovery, and bounded row
+// operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "SeaTable", DefaultBaseURL: cloudOrigin,
@@ -209,19 +294,51 @@ func Register(reg *capability.Registry) error {
 		Target: config.TargetMetadata{
 			Label:    "table",
 			Required: true,
-			Description: "fixed table of this base, optionally with a view: TABLE, TABLE/VIEW, or " +
-				"id:TABLEID and id:TABLEID/id:VIEWID to address them by identifier",
+			Multiple: true,
+			Wildcard: "*",
+			WildcardWarning: "All tables in this SeaTable base are exposed to the agent. " +
+				"Use an allow-list when the whole base is not required.",
+			Description: "one table, a comma-separated table allow-list, or * for the whole base; use " +
+				"TABLE, TABLE/VIEW, id:TABLEID, or id:TABLEID/id:VIEWID",
 		},
 	}, TestConnection); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
+		capability.Operation{Descriptor: columnsList, Handler: capability.Handler(invokeColumnsList)},
 		capability.Operation{Descriptor: rowsList, Handler: capability.Handler(invokeRowsList)},
 		capability.Operation{Descriptor: rowsGet, Handler: capability.Handler(invokeRowsGet)},
 		capability.Operation{Descriptor: rowsCreate, Handler: capability.Handler(invokeRowsCreate)},
 		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},
 		capability.Operation{Descriptor: rowsDelete, Handler: capability.Handler(invokeRowsDelete)},
+		capability.Operation{Descriptor: tablesList, Handler: capability.Handler(invokeTablesList)},
 	)
+}
+
+func invokeTablesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var options PageOptions
+	if err := json.Unmarshal(raw, &options); err != nil {
+		return nil, providerError("list tables", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.ListTables(ctx, options)
+}
+
+func invokeColumnsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var options ColumnsOptions
+	if err := json.Unmarshal(raw, &options); err != nil {
+		return nil, providerError("list columns", "the validated arguments could not be read")
+	}
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.ListColumns(ctx, options)
 }
 
 func invokeRowsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -240,6 +357,7 @@ func invokeRowsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 func invokeRowsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
+		Table string `json:"table"`
 		RowID string `json:"row_id"`
 	}
 	if err := json.Unmarshal(raw, &arguments); err != nil {
@@ -249,10 +367,11 @@ func invokeRowsGet(ctx context.Context, resolved *config.Resolved, secrets *secr
 	if err != nil {
 		return nil, err
 	}
-	return client.GetRow(ctx, arguments.RowID)
+	return client.GetRowFrom(ctx, arguments.Table, arguments.RowID)
 }
 
 type rowMutationInput struct {
+	Table  string                     `json:"table"`
 	RowID  string                     `json:"row_id"`
 	Values map[string]json.RawMessage `json:"values"`
 }
@@ -266,7 +385,7 @@ func invokeRowsCreate(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	if err := client.CreateRow(ctx, input.Values); err != nil {
+	if err := client.CreateRowIn(ctx, input.Table, input.Values); err != nil {
 		return nil, err
 	}
 	return map[string]bool{"created": true}, nil
@@ -281,7 +400,7 @@ func invokeRowsUpdate(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	if err := client.UpdateRow(ctx, input.RowID, input.Values); err != nil {
+	if err := client.UpdateRowIn(ctx, input.Table, input.RowID, input.Values); err != nil {
 		return nil, err
 	}
 	return map[string]bool{"updated": true}, nil
@@ -296,14 +415,13 @@ func invokeRowsDelete(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	if err := client.DeleteRow(ctx, input.RowID); err != nil {
+	if err := client.DeleteRowFrom(ctx, input.Table, input.RowID); err != nil {
 		return nil, err
 	}
 	return map[string]bool{"deleted": true}, nil
 }
 
-// target is the fixed table, and optional view, one connection is bound to. Both are configuration: an
-// invoke request can name neither, so a connection can never read another table of the base.
+// target is one table and optional view inside a connection scope.
 type target struct {
 	tableParam string
 	table      string
@@ -311,15 +429,22 @@ type target struct {
 	view       string
 }
 
-// Client binds one API token to the origin of one configured service, to the fixed table of one
-// connection, and to the rate limit that token shares.
+// scope is the complete table boundary of one connection. A wildcard is explicit configuration; an empty
+// target never becomes a wider scope by accident.
+type scope struct {
+	targets  []target
+	wildcard bool
+}
+
+// Client binds one API token to the origin and table scope of one configured connection and to the rate
+// limit that token shares.
 //
 // A client is opened per request by the application core and is never shared between goroutines, so the
 // exchanged base token is kept in a plain field.
 type Client struct {
 	origin   string
 	apiToken string
-	target   target
+	scope    scope
 	http     *http.Client
 	limiter  *ratelimit.Limiter
 	redactor *redact.Redactor
@@ -349,7 +474,7 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if err != nil {
 		return nil, providerError("open", err.Error())
 	}
-	bound, err := parseTarget(resolved.Target)
+	bound, err := parseScope(resolved)
 	if err != nil {
 		return nil, providerError("open", err.Error())
 	}
@@ -372,9 +497,62 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 		lim = limiters.For(value.Secret)
 	}
 	return &Client{
-		origin: origin, apiToken: value.Secret, target: bound, http: newHTTPClient(),
+		origin: origin, apiToken: value.Secret, scope: bound, http: newHTTPClient(),
 		limiter: lim, redactor: red,
 	}, nil
+}
+
+func parseScope(resolved *config.Resolved) (scope, error) {
+	values := append([]string(nil), resolved.Targets...)
+	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
+		values = []string{resolved.Target}
+	}
+	if len(values) == 0 {
+		return scope{}, errors.New("a SeaTable connection needs at least one table or the * wildcard")
+	}
+	if len(values) == 1 && strings.TrimSpace(values[0]) == "*" {
+		return scope{wildcard: true}, nil
+	}
+	bound := scope{targets: make([]target, 0, len(values))}
+	for _, value := range values {
+		if strings.TrimSpace(value) == "*" {
+			return scope{}, errors.New("the SeaTable * wildcard must be the only configured target")
+		}
+		parsed, err := parseTarget(value)
+		if err != nil {
+			return scope{}, err
+		}
+		for _, existing := range bound.targets {
+			if existing == parsed {
+				return scope{}, errors.New("the SeaTable table allow-list contains a duplicate target")
+			}
+		}
+		bound.targets = append(bound.targets, parsed)
+	}
+	return bound, nil
+}
+
+func (s scope) selectTarget(raw string) (target, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		if len(s.targets) == 1 {
+			return s.targets[0], nil
+		}
+		return target{}, errors.New("this SeaTable connection requires an explicit table from seatable.tables.list")
+	}
+	selected, err := parseTarget(trimmed)
+	if err != nil {
+		return target{}, fmt.Errorf("the selected SeaTable table is unusable: %w", err)
+	}
+	if s.wildcard {
+		return selected, nil
+	}
+	for _, allowed := range s.targets {
+		if selected == allowed {
+			return selected, nil
+		}
+	}
+	return target{}, errors.New("the selected SeaTable table is outside this connection's allow-list")
 }
 
 // originOf validates the configured service origin and returns it without a trailing slash. Cloud,
@@ -407,15 +585,15 @@ const (
 // idPrefix marks the identifier form of a table or a view inside a target.
 const idPrefix = "id:"
 
-// parseTarget reads the fixed table, and optional view, of one connection. The form is TABLE, TABLE/VIEW,
-// or the identifier form id:TABLEID and id:TABLEID/id:VIEWID.
+// parseTarget reads one table, and optional view, of a connection scope. The form is TABLE, TABLE/VIEW, or
+// the identifier form id:TABLEID and id:TABLEID/id:VIEWID.
 //
 // qatlas-dev: a table or view whose name contains a slash has to be addressed by its identifier,
 // because the separator is what keeps the target one configuration field.
 func parseTarget(raw string) (target, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return target{}, errors.New("a SeaTable connection needs a fixed table as its target")
+		return target{}, errors.New("a SeaTable table reference must not be empty")
 	}
 	if len(trimmed) > maxTargetLength {
 		return target{}, errors.New("the configured SeaTable target is too long")
@@ -500,10 +678,9 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// TestConnection verifies that the connection can serve this provider at all: the API token must be
-// exchangeable for a base token of the configured instance, and the base must still hold the fixed table
-// and, when configured, the fixed view. The check reads metadata only; it never writes, so a token with a
-// wider permission is still only read from here.
+// TestConnection verifies that the API token is exchangeable for the configured instance and that every
+// allow-listed table and view still exists. A wildcard validates base access without silently selecting a
+// table. The check reads metadata only.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
 	client, err := Open(resolved, secrets, red)
@@ -535,8 +712,8 @@ func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
 	return provider.ClassOK, nil
 }
 
-// checkTarget reads the metadata of the base the API token belongs to and verifies the fixed target. The
-// metadata itself is never reported.
+// checkTarget reads the metadata of the base the API token belongs to and verifies every allow-listed
+// target. The metadata itself is never reported.
 func (c *Client) checkTarget(ctx context.Context, op string) error {
 	access, err := c.access(ctx, op)
 	if err != nil {
@@ -549,37 +726,43 @@ func (c *Client) checkTarget(ctx context.Context, op string) error {
 		return err
 	}
 
+	if c.scope.wildcard {
+		return nil
+	}
+	for _, wanted := range c.scope.targets {
+		if err := metadataHasTarget(document, wanted); err != nil {
+			return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: err.Error()}
+		}
+	}
+	return nil
+}
+
+func metadataHasTarget(document metadataJSON, wanted target) error {
 	for _, table := range document.Metadata.Tables {
-		if !c.matchesTable(table) {
+		if !matchesTable(wanted, table) {
 			continue
 		}
-		if c.target.view == "" {
+		if wanted.view == "" {
 			return nil
 		}
 		for _, view := range table.Views {
-			if c.target.viewParam == "view_id" && view.ID == c.target.view {
+			if wanted.viewParam == "view_id" && view.ID == wanted.view {
 				return nil
 			}
-			if c.target.viewParam == "view_name" && view.Name == c.target.view {
+			if wanted.viewParam == "view_name" && view.Name == wanted.view {
 				return nil
 			}
 		}
-		return &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: op,
-			Message: "this SeaTable base does not hold the view this connection is bound to",
-		}
+		return errors.New("this SeaTable base does not hold one view in the connection allow-list")
 	}
-	return &provider.Error{
-		Class: provider.ClassInvalidResponse, Op: op,
-		Message: "this SeaTable base does not hold the table this connection is bound to",
-	}
+	return errors.New("this SeaTable base does not hold one table in the connection allow-list")
 }
 
-func (c *Client) matchesTable(table tableJSON) bool {
-	if c.target.tableParam == "table_id" {
-		return table.ID == c.target.table
+func matchesTable(wanted target, table tableJSON) bool {
+	if wanted.tableParam == "table_id" {
+		return table.ID == wanted.table
 	}
-	return table.Name == c.target.table
+	return table.Name == wanted.table
 }
 
 // access returns the base this API token belongs to, exchanging the token on first use. The base token is
@@ -634,11 +817,71 @@ func (c *Client) checkServer(op, raw string) error {
 	return nil
 }
 
-// ListOptions are the controlled paging arguments of the list operation. Nothing else reaches the
-// provider: the base, table, and optional view are fixed.
+// ListOptions are the controlled table-selection and paging arguments of the list operation. The selected
+// table cannot escape the connection scope.
 type ListOptions struct {
+	Table string `json:"table"`
+	Start int    `json:"start"`
+	Limit int    `json:"limit"`
+}
+
+// PageOptions are the common bounded offset arguments used by schema discovery.
+type PageOptions struct {
 	Start int `json:"start"`
 	Limit int `json:"limit"`
+}
+
+func (o *PageOptions) normalize() error {
+	if o.Limit == 0 {
+		o.Limit = defaultPageSize
+	}
+	if o.Limit < 1 || o.Limit > maxPageSize {
+		return fmt.Errorf("the page size must be between 1 and %d", maxPageSize)
+	}
+	if o.Start < 0 || o.Start > maxStart {
+		return fmt.Errorf("the page offset must be between 0 and %d", maxStart)
+	}
+	return nil
+}
+
+// ColumnsOptions select one allowed table and one bounded page of its schema.
+type ColumnsOptions struct {
+	Table string `json:"table"`
+	Start int    `json:"start"`
+	Limit int    `json:"limit"`
+}
+
+// TableSummary is the stable discovery view of one table.
+type TableSummary struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Reference string `json:"reference"`
+}
+
+// TablesResult is one bounded page of allowed tables.
+type TablesResult struct {
+	Tables    []TableSummary `json:"tables"`
+	Start     int            `json:"start"`
+	Limit     int            `json:"limit"`
+	NextStart int            `json:"next_start,omitempty"`
+	HasMore   bool           `json:"has_more"`
+}
+
+// Column is the stable discovery view of one SeaTable column.
+type Column struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+// ColumnsResult is one bounded page of a selected table's columns.
+type ColumnsResult struct {
+	Table     string   `json:"table"`
+	Columns   []Column `json:"columns"`
+	Start     int      `json:"start"`
+	Limit     int      `json:"limit"`
+	NextStart int      `json:"next_start,omitempty"`
+	HasMore   bool     `json:"has_more"`
 }
 
 // normalize applies the defaults and the bounds of one list request. The application core validates the
@@ -675,10 +918,132 @@ type ListResult struct {
 	HasMore   bool  `json:"has_more"`
 }
 
-// ListRows reads exactly one bounded page of the fixed table or view.
+// ListTables exposes the base schema only inside the configured table boundary. It reads SeaTable's one
+// metadata document and projects a bounded page; raw metadata and unrelated tables never leave the client.
+func (c *Client) ListTables(ctx context.Context, options PageOptions) (*TablesResult, error) {
+	const op = "list tables"
+	if err := options.normalize(); err != nil {
+		return nil, providerError(op, err.Error())
+	}
+	document, err := c.metadata(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+
+	allowed := make([]TableSummary, 0, len(document.Metadata.Tables))
+	for _, table := range document.Metadata.Tables {
+		if c.scope.wildcard {
+			if !validID(table.ID) || !validName(table.Name) {
+				return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+					Message: "SeaTable returned a table without a usable identifier or name"}
+			}
+			allowed = append(allowed, TableSummary{ID: table.ID, Name: table.Name, Reference: idPrefix + table.ID})
+			continue
+		}
+		for _, wanted := range c.scope.targets {
+			if matchesTable(wanted, table) {
+				allowed = append(allowed, TableSummary{ID: table.ID, Name: table.Name,
+					Reference: formatTarget(wanted)})
+				break
+			}
+		}
+	}
+	return tablesPage(allowed, options), nil
+}
+
+func tablesPage(tables []TableSummary, options PageOptions) *TablesResult {
+	result := &TablesResult{Tables: []TableSummary{}, Start: options.Start, Limit: options.Limit}
+	if options.Start >= len(tables) {
+		return result
+	}
+	end := min(options.Start+options.Limit, len(tables))
+	result.Tables = append(result.Tables, tables[options.Start:end]...)
+	result.HasMore = end < len(tables)
+	if result.HasMore {
+		result.NextStart = end
+	}
+	return result
+}
+
+// ListColumns exposes a bounded schema page of one selected and allowed table.
+func (c *Client) ListColumns(ctx context.Context, options ColumnsOptions) (*ColumnsResult, error) {
+	const op = "list columns"
+	page := PageOptions{Start: options.Start, Limit: options.Limit}
+	if err := page.normalize(); err != nil {
+		return nil, providerError(op, err.Error())
+	}
+	selected, err := c.scope.selectTarget(options.Table)
+	if err != nil {
+		return nil, providerError(op, err.Error())
+	}
+	document, err := c.metadata(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+	for _, table := range document.Metadata.Tables {
+		if !matchesTable(selected, table) {
+			continue
+		}
+		columns := make([]Column, len(table.Columns))
+		for i, column := range table.Columns {
+			if !validID(column.Key) || !validName(column.Name) || !validName(column.Type) {
+				return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+					Message: "SeaTable returned a column without a usable key, name, or type"}
+			}
+			columns[i] = Column{Key: column.Key, Name: column.Name, Type: column.Type}
+		}
+		result := &ColumnsResult{Table: formatTarget(selected), Columns: []Column{},
+			Start: page.Start, Limit: page.Limit}
+		if page.Start >= len(columns) {
+			return result, nil
+		}
+		end := min(page.Start+page.Limit, len(columns))
+		result.Columns = append(result.Columns, columns[page.Start:end]...)
+		result.HasMore = end < len(columns)
+		if result.HasMore {
+			result.NextStart = end
+		}
+		return result, nil
+	}
+	return nil, providerError(op, "the selected SeaTable table no longer exists")
+}
+
+func (c *Client) metadata(ctx context.Context, op string) (metadataJSON, error) {
+	access, err := c.access(ctx, op)
+	if err != nil {
+		return metadataJSON{}, err
+	}
+	var document metadataJSON
+	if err := c.get(ctx, op, gatewayPath+url.PathEscape(access.uuid)+metadataPath, nil,
+		access.token, maxMetadataBytes, &document); err != nil {
+		return metadataJSON{}, err
+	}
+	return document, nil
+}
+
+func formatTarget(value target) string {
+	table := value.table
+	if value.tableParam == "table_id" {
+		table = idPrefix + table
+	}
+	if value.view == "" {
+		return table
+	}
+	view := value.view
+	if value.viewParam == "view_id" {
+		view = idPrefix + view
+	}
+	return table + "/" + view
+}
+
+// ListRows reads exactly one bounded page from the selected table or view inside the connection scope.
 func (c *Client) ListRows(ctx context.Context, options ListOptions) (*ListResult, error) {
 	const op = "list rows"
 	if err := options.normalize(); err != nil {
+		return nil, providerError(op, err.Error())
+	}
+	selected, err := c.scope.selectTarget(options.Table)
+	if err != nil {
 		return nil, providerError(op, err.Error())
 	}
 	access, err := c.access(ctx, op)
@@ -687,9 +1052,9 @@ func (c *Client) ListRows(ctx context.Context, options ListOptions) (*ListResult
 	}
 
 	query := url.Values{}
-	query.Set(c.target.tableParam, c.target.table)
-	if c.target.view != "" {
-		query.Set(c.target.viewParam, c.target.view)
+	query.Set(selected.tableParam, selected.table)
+	if selected.view != "" {
+		query.Set(selected.viewParam, selected.view)
 	}
 	query.Set("start", strconv.Itoa(options.Start))
 	query.Set("limit", strconv.Itoa(options.Limit))
@@ -726,12 +1091,21 @@ func (c *Client) ListRows(ctx context.Context, options ListOptions) (*ListResult
 	return result, nil
 }
 
-// GetRow reads exactly the row of a validated identifier from the fixed table and performs no other
-// provider I/O. A configured view narrows the list operation; the identifier addresses the table itself.
+// GetRow reads a validated identifier from a connection that resolves to one table. A configured view
+// narrows the list operation; the identifier addresses the table itself.
 func (c *Client) GetRow(ctx context.Context, rowID string) (*Row, error) {
+	return c.GetRowFrom(ctx, "", rowID)
+}
+
+// GetRowFrom reads one row from the selected table inside this connection's boundary.
+func (c *Client) GetRowFrom(ctx context.Context, table, rowID string) (*Row, error) {
 	const op = "get row"
 	if !validRowID(rowID) {
 		return nil, providerError(op, "a SeaTable row identifier has 22 letters, digits, '-' or '_'")
+	}
+	selected, err := c.scope.selectTarget(table)
+	if err != nil {
+		return nil, providerError(op, err.Error())
 	}
 	access, err := c.access(ctx, op)
 	if err != nil {
@@ -739,7 +1113,7 @@ func (c *Client) GetRow(ctx context.Context, rowID string) (*Row, error) {
 	}
 
 	query := url.Values{}
-	query.Set(c.target.tableParam, c.target.table)
+	query.Set(selected.tableParam, selected.table)
 	query.Set("convert_keys", convertKeys)
 
 	var raw map[string]json.RawMessage
@@ -761,24 +1135,40 @@ func (c *Client) GetRow(ctx context.Context, rowID string) (*Row, error) {
 }
 
 func (c *Client) CreateRow(ctx context.Context, values map[string]json.RawMessage) error {
-	return c.changeRows(ctx, "create row", http.MethodPost, map[string]any{"rows": []any{values}}, values, "")
+	return c.CreateRowIn(ctx, "", values)
+}
+
+func (c *Client) CreateRowIn(ctx context.Context, table string, values map[string]json.RawMessage) error {
+	return c.changeRows(ctx, "create row", http.MethodPost, table,
+		map[string]any{"rows": []any{values}}, values, "")
 }
 
 func (c *Client) UpdateRow(ctx context.Context, rowID string, values map[string]json.RawMessage) error {
+	return c.UpdateRowIn(ctx, "", rowID, values)
+}
+
+func (c *Client) UpdateRowIn(ctx context.Context, table, rowID string, values map[string]json.RawMessage) error {
 	if !validRowID(rowID) {
 		return providerError("update row", "a SeaTable row identifier has 22 letters, digits, '-' or '_'")
 	}
-	return c.changeRows(ctx, "update row", http.MethodPut, map[string]any{"updates": []any{map[string]any{"row_id": rowID, "row": values}}}, values, rowID)
+	return c.changeRows(ctx, "update row", http.MethodPut, table,
+		map[string]any{"updates": []any{map[string]any{"row_id": rowID, "row": values}}}, values, rowID)
 }
 
 func (c *Client) DeleteRow(ctx context.Context, rowID string) error {
+	return c.DeleteRowFrom(ctx, "", rowID)
+}
+
+func (c *Client) DeleteRowFrom(ctx context.Context, table, rowID string) error {
 	if !validRowID(rowID) {
 		return providerError("delete row", "a SeaTable row identifier has 22 letters, digits, '-' or '_'")
 	}
-	return c.changeRows(ctx, "delete row", http.MethodDelete, map[string]any{"row_ids": []string{rowID}}, nil, rowID)
+	return c.changeRows(ctx, "delete row", http.MethodDelete, table,
+		map[string]any{"row_ids": []string{rowID}}, nil, rowID)
 }
 
-func (c *Client) changeRows(ctx context.Context, op, method string, payload map[string]any, values map[string]json.RawMessage, rowID string) error {
+func (c *Client) changeRows(ctx context.Context, op, method, table string, payload map[string]any,
+	values map[string]json.RawMessage, rowID string) error {
 	if values != nil {
 		if len(values) == 0 {
 			return providerError(op, "at least one column value is required")
@@ -789,16 +1179,20 @@ func (c *Client) changeRows(ctx context.Context, op, method string, payload map[
 			}
 		}
 	}
+	selected, err := c.scope.selectTarget(table)
+	if err != nil {
+		return providerError(op, err.Error())
+	}
 	access, err := c.access(ctx, op)
 	if err != nil {
 		return err
 	}
 	if values != nil {
-		if err := c.checkColumns(ctx, op, access, values); err != nil {
+		if err := c.checkColumns(ctx, op, access, selected, values); err != nil {
 			return err
 		}
 	}
-	payload[c.target.tableParam] = c.target.table
+	payload[selected.tableParam] = selected.table
 	encoded, err := json.Marshal(payload)
 	if err != nil || len(encoded) > maxRequestBytes {
 		return providerError(op, "the request exceeds the size limit")
@@ -806,14 +1200,15 @@ func (c *Client) changeRows(ctx context.Context, op, method string, payload map[
 	return c.change(ctx, op, method, gatewayPath+url.PathEscape(access.uuid)+rowsPath, access.token, encoded)
 }
 
-func (c *Client) checkColumns(ctx context.Context, op string, access *baseAccess, values map[string]json.RawMessage) error {
+func (c *Client) checkColumns(ctx context.Context, op string, access *baseAccess, selected target,
+	values map[string]json.RawMessage) error {
 	var document metadataJSON
 	if err := c.get(ctx, op, gatewayPath+url.PathEscape(access.uuid)+metadataPath, nil,
 		access.token, maxMetadataBytes, &document); err != nil {
 		return err
 	}
 	for _, table := range document.Metadata.Tables {
-		if !c.matchesTable(table) {
+		if !matchesTable(selected, table) {
 			continue
 		}
 		columns := make(map[string]bool, len(table.Columns))
@@ -822,12 +1217,12 @@ func (c *Client) checkColumns(ctx context.Context, op string, access *baseAccess
 		}
 		for name := range values {
 			if !columns[name] {
-				return providerError(op, "the fixed SeaTable table does not define every requested column")
+				return providerError(op, "the selected SeaTable table does not define every requested column")
 			}
 		}
 		return nil
 	}
-	return providerError(op, "the fixed SeaTable table no longer exists")
+	return providerError(op, "the selected SeaTable table no longer exists")
 }
 
 // The system keys SeaTable adds to every row. They become the stable envelope; every other key is a
@@ -899,7 +1294,9 @@ type tableJSON struct {
 	ID      string `json:"_id"`
 	Name    string `json:"name"`
 	Columns []struct {
+		Key  string `json:"key"`
 		Name string `json:"name"`
+		Type string `json:"type"`
 	} `json:"columns"`
 	Views []struct {
 		ID   string `json:"_id"`

@@ -45,7 +45,8 @@ var testProviders ProviderCatalog = testProviderCatalog{
 		ID: "seatable", Name: "SeaTable", DefaultBaseURL: "https://cloud.seatable.io",
 		SecretRoles: []SecretRole{{Name: "api-token", Description: "SeaTable API token of one base"}},
 		Target: TargetMetadata{
-			Label: "table", Required: true, Description: "fixed table, optionally with a view",
+			Label: "table", Required: true, Multiple: true, Wildcard: "*",
+			Description: "fixed tables, optionally with a view",
 		},
 	},
 	"nextcloud": {
@@ -63,6 +64,60 @@ var testProviders ProviderCatalog = testProviderCatalog{
 		SecretRoles: []SecretRole{{Name: "bot-token", Description: "Telegram bot token"}},
 		Target:      TargetMetadata{Label: "chat ID", Required: true},
 	},
+}
+
+func TestOnlyProvidersThatDeclareMultipleTargetsAcceptAnAllowList(t *testing.T) {
+	const prefix = `version: 1
+services:
+  main:
+    provider: PROVIDER
+    base_url: https://example.invalid
+credentials:
+  reader:
+    type: keyring
+connections:
+  route:
+    service: main
+    credential: reader
+    targets: [id:0000, id:0001]
+defaults: {}
+`
+
+	seatable := strings.Replace(prefix, "PROVIDER", "seatable", 1)
+	cfg, err := Decode(strings.NewReader(seatable), testProviders)
+	if err != nil {
+		t.Fatalf("SeaTable allow-list = %v", err)
+	}
+	if got := cfg.Connections["route"].TargetValues(); len(got) != 2 || got[0] != "id:0000" || got[1] != "id:0001" {
+		t.Fatalf("targets = %v", got)
+	}
+
+	for _, provider := range []string{"bookstack", "lexware", "nextcloud", "telegram", "twentycrm"} {
+		input := strings.Replace(prefix, "PROVIDER", provider, 1)
+		if _, err := Decode(strings.NewReader(input), testProviders); err == nil ||
+			!strings.Contains(err.Error(), "accepts only one") {
+			t.Errorf("provider %s allow-list error = %v", provider, err)
+		}
+	}
+}
+
+func TestWildcardMustBeAnExplicitExclusiveSeaTableTarget(t *testing.T) {
+	input := `version: 1
+services:
+  main: {provider: seatable, base_url: https://cloud.seatable.io}
+credentials:
+  reader: {type: keyring}
+connections:
+  route:
+    service: main
+    credential: reader
+    targets: ["*", id:0000]
+defaults: {}
+`
+	if _, err := Decode(strings.NewReader(input), testProviders); err == nil ||
+		!strings.Contains(err.Error(), "must be the only target") {
+		t.Fatalf("mixed wildcard error = %v", err)
+	}
 }
 
 func TestProviderMetadataValidatesTelegramTargets(t *testing.T) {

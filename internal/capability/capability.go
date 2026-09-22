@@ -220,6 +220,7 @@ func (r *Registry) TestConnection(ctx context.Context, resolved *config.Resolved
 func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 	metadata.SecretRoles = append([]config.SecretRole(nil), metadata.SecretRoles...)
 	metadata.DefaultPermissions = append([]config.Permission(nil), metadata.DefaultPermissions...)
+	metadata.SupportedPermissions = append([]config.Permission(nil), metadata.SupportedPermissions...)
 	return metadata
 }
 
@@ -283,6 +284,18 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 		}
 		r.byProvider[provider][d.ID] = d
 	}
+	metadata := r.metadata[provider]
+	seenEffects := map[config.Permission]bool{}
+	for _, descriptor := range r.byProvider[provider] {
+		seenEffects[config.Permission(descriptor.Risk.Effect)] = true
+	}
+	metadata.SupportedPermissions = metadata.SupportedPermissions[:0]
+	for _, permission := range config.Permissions() {
+		if seenEffects[permission] {
+			metadata.SupportedPermissions = append(metadata.SupportedPermissions, permission)
+		}
+	}
+	r.metadata[provider] = metadata
 	return nil
 }
 

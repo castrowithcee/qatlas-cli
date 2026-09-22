@@ -71,6 +71,7 @@ type Connection struct {
 	Service     string       `yaml:"service"`
 	Credential  string       `yaml:"credential"`
 	Target      string       `yaml:"target,omitempty"`
+	Targets     []string     `yaml:"targets,omitempty"`
 	Description string       `yaml:"description,omitempty"`
 	Permissions []Permission `yaml:"permissions,omitempty"`
 }
@@ -83,6 +84,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		Service     string        `yaml:"service"`
 		Credential  string        `yaml:"credential"`
 		Target      string        `yaml:"target,omitempty"`
+		Targets     []string      `yaml:"targets,omitempty"`
 		Description string        `yaml:"description,omitempty"`
 		Permissions *[]Permission `yaml:"permissions,omitempty"`
 	}
@@ -91,7 +93,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		copy := append(make([]Permission, 0, len(c.Permissions)), c.Permissions...)
 		permissions = &copy
 	}
-	return wire{Service: c.Service, Credential: c.Credential, Target: c.Target,
+	return wire{Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
 		Description: c.Description, Permissions: permissions}, nil
 }
 
@@ -375,9 +377,33 @@ func (c *Config) Validate() error {
 		}
 		if ok {
 			metadata, _ := providers.ProviderMetadata(service.Provider)
-			if metadata.Target.Required && strings.TrimSpace(conn.Target) == "" {
+			targets := conn.TargetValues()
+			if metadata.Target.Required && len(targets) == 0 {
 				report("connections.%s.target: provider %q requires %s", name, service.Provider,
 					metadata.Target.Label)
+			}
+			if strings.TrimSpace(conn.Target) != "" && len(conn.Targets) > 0 {
+				report("connections.%s: target and targets cannot both be set", name)
+			}
+			if len(conn.Targets) > 0 && !metadata.Target.Multiple {
+				report("connections.%s.targets: provider %q accepts only one %s", name,
+					service.Provider, metadata.Target.Label)
+			}
+			seenTargets := map[string]bool{}
+			for _, target := range targets {
+				target = strings.TrimSpace(target)
+				if target == "" {
+					report("connections.%s.targets: targets must not be empty", name)
+					continue
+				}
+				if seenTargets[target] {
+					report("connections.%s.targets: a target is listed more than once", name)
+				}
+				seenTargets[target] = true
+			}
+			if metadata.Target.Wildcard != "" && seenTargets[metadata.Target.Wildcard] && len(targets) != 1 {
+				report("connections.%s.targets: wildcard %q must be the only target", name,
+					metadata.Target.Wildcard)
 			}
 		}
 	}
@@ -391,6 +417,18 @@ func (c *Config) Validate() error {
 	}
 
 	return errors.Join(problems...)
+}
+
+// TargetValues returns the configured target boundary in declaration order. Existing single-target
+// connections keep using Target; providers that explicitly support an allow-list use Targets instead.
+func (c Connection) TargetValues() []string {
+	if len(c.Targets) > 0 {
+		return append([]string(nil), c.Targets...)
+	}
+	if strings.TrimSpace(c.Target) == "" {
+		return nil
+	}
+	return []string{c.Target}
 }
 
 func providerCatalog(providers []ProviderCatalog) ProviderCatalog {

@@ -230,7 +230,7 @@ defaults:
 			t.Errorf("stdout = %q, want a TOON index of the compiled namespaces", stdout)
 		}
 		for _, want := range []string{
-			"2,bookstack,5", "0,telegram,3", "0,lexware,3", "0,twentycrm,5", "0,seatable,5",
+			"2,bookstack,5", "0,telegram,3", "0,lexware,3", "0,twentycrm,5", "0,seatable,7",
 			"0,nextcloud,6",
 		} {
 			if !strings.Contains(stdout, want) {

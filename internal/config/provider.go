@@ -23,8 +23,8 @@ func Permissions() []Permission {
 	return []Permission{PermissionRead, PermissionCreate, PermissionUpdate, PermissionDelete, PermissionExecute}
 }
 
-// ParsePermissions reads the comma-separated form used by the TUI. An empty value keeps the provider's
-// compatibility default; "none" expresses an explicit deny-all list in the TUI.
+// ParsePermissions reads the stable comma-separated form used internally by configuration editors. An
+// empty value keeps the provider's compatibility default; "none" expresses an explicit deny-all list.
 func ParsePermissions(raw string) ([]Permission, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -65,19 +65,23 @@ type SecretRole struct {
 
 // TargetMetadata describes the non-secret target bound to a connection.
 type TargetMetadata struct {
-	Label       string
-	Description string
-	Required    bool
+	Label           string
+	Description     string
+	Required        bool
+	Multiple        bool
+	Wildcard        string
+	WildcardWarning string
 }
 
 // ProviderMetadata is the configuration contract of one compiled provider.
 type ProviderMetadata struct {
-	ID                 string
-	Name               string
-	DefaultBaseURL     string
-	DefaultPermissions []Permission
-	SecretRoles        []SecretRole
-	Target             TargetMetadata
+	ID                   string
+	Name                 string
+	DefaultBaseURL       string
+	DefaultPermissions   []Permission
+	SupportedPermissions []Permission
+	SecretRoles          []SecretRole
+	Target               TargetMetadata
 }
 
 // ProviderCatalog is the provider metadata view used by configuration and user interfaces.

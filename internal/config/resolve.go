@@ -13,6 +13,7 @@ type Resolved struct {
 	BaseURL     string
 	Options     map[string]string
 	Target      string
+	Targets     []string
 	Service     string
 	Credential  string
 	Secrets     Credential
@@ -58,6 +59,7 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 		BaseURL:     service.BaseURL,
 		Options:     service.Options,
 		Target:      conn.Target,
+		Targets:     append([]string(nil), conn.Targets...),
 		Service:     conn.Service,
 		Credential:  conn.Credential,
 		Secrets:     cred,

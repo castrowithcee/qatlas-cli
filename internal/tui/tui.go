@@ -9,6 +9,7 @@ package tui
 
 import (
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"os"
@@ -67,6 +68,7 @@ type fieldKind int
 const (
 	fieldText fieldKind = iota
 	fieldChoice
+	fieldMultiChoice
 	// fieldEnvName holds the NAME of an environment variable, for a credential of type env.
 	fieldEnvName
 	// fieldSecret is the row of one role of a keyring credential. It holds no value at all: it shows where
@@ -75,11 +77,12 @@ const (
 )
 
 type field struct {
-	label   string
-	kind    fieldKind
-	input   textinput.Model
-	choices []string
-	index   int
+	label    string
+	kind     fieldKind
+	input    textinput.Model
+	choices  []string
+	index    int
+	selected map[string]bool
 	// hint says in one line what this field expects. It stays general: every rule belongs to the
 	// configuration core, and the editor must not grow schema knowledge of its own.
 	hint string
@@ -110,13 +113,14 @@ const (
 	// below may offer.
 	connectionProviderHint = "the system this route leads to; it decides which services and credentials " +
 		"can be chosen below"
+	connectionServiceHint    = "the configured API endpoint this route uses; left/right chooses another instance"
+	connectionCredentialHint = "the provider credential this route authenticates with; secret values stay " +
+		"outside this file"
 	// descriptionHint names the one consequence that sets this field apart from everything else in the
 	// editor: what is typed here is published by discovery, so it is the one place where free text can
 	// carry a secret out of this machine.
 	descriptionHint = "optional; one line saying what this route is for. discovery publishes it, so it " +
 		"must never carry a secret or personal data"
-	permissionsHint = "comma-separated local agent permissions: read, create, update, delete, execute; " +
-		"none denies all, empty keeps this provider's safe compatibility default"
 	secretHint = "s system keyring · p unencrypted file (asks first) · x remove; typing is masked"
 	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
 	// describes a free choice, which is the opposite of what this field does.
@@ -157,6 +161,21 @@ func (f field) withHint(hint string) field {
 }
 
 func (f field) value() string {
+	if f.kind == fieldMultiChoice {
+		if f.selected["default"] {
+			return ""
+		}
+		var values []string
+		for _, choice := range f.choices {
+			if choice != "default" && f.selected[choice] {
+				values = append(values, choice)
+			}
+		}
+		if len(values) == 0 {
+			return "none"
+		}
+		return strings.Join(values, ", ")
+	}
 	if f.kind == fieldChoice {
 		if f.index < 0 || f.index >= len(f.choices) {
 			return ""
@@ -497,6 +516,18 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			m.targetChosen()
 		}
 		return nil
+	case fieldMultiChoice:
+		switch key.String() {
+		case "left", "h":
+			current.index = wrap(current.index-1, len(current.choices))
+		case "right", "l":
+			current.index = wrap(current.index+1, len(current.choices))
+		case " ":
+			current.toggleChoice()
+		default:
+			return nil
+		}
+		return nil
 	case fieldSecret:
 		// A secret row holds nothing to type into, so its keys are free for what a secret needs.
 		return m.secretRowKey(current.label, key)
@@ -587,6 +618,7 @@ func (m *Model) connectionProviderChosen() {
 	if target := m.field("target"); target != nil {
 		target.hint = m.targetHint(m.fieldValue("service"))
 	}
+	m.replacePermissionChoices(provider)
 }
 
 // replaceChoices puts a new set of options on one choice row, keeping the current value when it is still
@@ -610,6 +642,67 @@ func (m *Model) targetChosen() {
 	if target := m.field("target"); target != nil {
 		target.hint = m.targetHint(m.fieldValue("service"))
 	}
+}
+
+func (m *Model) permissionHint(provider string) string {
+	metadata, _ := m.cfg.ProviderMetadata(provider)
+	defaults := make([]string, len(metadata.DefaultPermissions))
+	for i, permission := range metadata.DefaultPermissions {
+		defaults[i] = string(permission)
+	}
+	if len(defaults) == 0 {
+		defaults = []string{"read"}
+	}
+	return "space toggles the local agent permissions offered by this provider; default currently means " +
+		strings.Join(defaults, ", ") + "; selecting none denies every operation"
+}
+
+func (m *Model) permissionChoices(provider string) []string {
+	metadata, _ := m.cfg.ProviderMetadata(provider)
+	choices := []string{"default"}
+	for _, permission := range metadata.SupportedPermissions {
+		choices = append(choices, string(permission))
+	}
+	return choices
+}
+
+func (m *Model) permissionChoicesFor(provider string, current []config.Permission) []string {
+	choices := m.permissionChoices(provider)
+	for _, permission := range current {
+		name := string(permission)
+		found := false
+		for _, choice := range choices {
+			if choice == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			choices = append(choices, name)
+		}
+	}
+	return choices
+}
+
+func (m *Model) replacePermissionChoices(provider string) {
+	f := m.field("permissions")
+	if f == nil || f.kind != fieldMultiChoice {
+		return
+	}
+	selected, wasDefault := f.selected, f.selected["default"]
+	f.choices = m.permissionChoices(provider)
+	f.selected = map[string]bool{}
+	if wasDefault {
+		f.selected["default"] = true
+	} else {
+		for _, choice := range f.choices {
+			if selected[choice] {
+				f.selected[choice] = true
+			}
+		}
+	}
+	f.index = 0
+	f.hint = m.permissionHint(provider)
 }
 
 func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
@@ -956,15 +1049,23 @@ func (m *Model) buildFields(name string) []field {
 		if provider == "" {
 			provider = m.firstProviderWithService()
 		}
+		metadata, _ := m.cfg.ProviderMetadata(provider)
+		targetValue := conn.Target
+		if metadata.Target.Multiple {
+			targetValue = formatTargets(conn)
+		}
+		permissions := permissionField(m.permissionChoicesFor(provider, conn.Permissions), conn.Permissions)
+		permissions.hint = m.permissionHint(provider)
 		fields = append(fields,
 			choiceField(providerLabel, m.connectionProviders(), provider).withHint(connectionProviderHint),
-			choiceField("service", m.providerServices(provider), conn.Service),
-			choiceField("credential", m.providerCredentials(provider), conn.Credential),
-			textField("target", conn.Target, false),
+			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint),
+			choiceField("credential", m.providerCredentials(provider), conn.Credential).
+				withHint(connectionCredentialHint),
+			textField("target", targetValue, false),
 			// Description and permissions explain the route the fields above define. Only the description
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
-			textField("permissions", config.FormatPermissions(conn.Permissions), false).withHint(permissionsHint),
+			permissions,
 		)
 		fields[4].hint = m.targetHint(fields[2].value())
 	case sectionDefaults:
@@ -1045,10 +1146,20 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if err != nil {
 			return err
 		}
+		provider := m.fieldValue(providerLabel)
+		metadata, _ := cfg.ProviderMetadata(provider)
+		target, targets := m.fieldValue("target"), []string(nil)
+		if metadata.Target.Multiple {
+			target, targets, err = parseTargets(target)
+			if err != nil {
+				return err
+			}
+		}
 		return cfg.SetConnection(name, config.Connection{
 			Service:     m.fieldValue("service"),
 			Credential:  m.fieldValue("credential"),
-			Target:      m.fieldValue("target"),
+			Target:      target,
+			Targets:     targets,
 			Description: m.fieldValue("description"),
 			Permissions: permissions,
 		})
@@ -1151,7 +1262,7 @@ func (m *Model) firstEditable() int {
 func (m *Model) trimFields() {
 	for i := range m.fields {
 		f := &m.fields[i]
-		if f.kind == fieldChoice {
+		if f.kind == fieldChoice || f.kind == fieldMultiChoice {
 			continue
 		}
 		if trimmed := strings.TrimSpace(f.input.Value()); trimmed != f.input.Value() {
@@ -1162,7 +1273,8 @@ func (m *Model) trimFields() {
 
 func (m *Model) applyFocus() {
 	for i := range m.fields {
-		if i == m.focus && m.fields[i].kind != fieldChoice && !m.fields[i].readOnly {
+		if i == m.focus && m.fields[i].kind != fieldChoice &&
+			m.fields[i].kind != fieldMultiChoice && !m.fields[i].readOnly {
 			m.fields[i].input.Focus()
 			continue
 		}
@@ -1223,6 +1335,72 @@ func choiceField(label string, choices []string, value string) field {
 	return f
 }
 
+func permissionField(choices []string, permissions []config.Permission) field {
+	f := field{label: "permissions", kind: fieldMultiChoice, choices: choices, selected: map[string]bool{}}
+	if permissions == nil {
+		f.selected["default"] = true
+		return f
+	}
+	for _, permission := range permissions {
+		f.selected[string(permission)] = true
+	}
+	return f
+}
+
+func (f *field) toggleChoice() {
+	if f.index < 0 || f.index >= len(f.choices) {
+		return
+	}
+	choice := f.choices[f.index]
+	if choice == "default" {
+		if f.selected["default"] {
+			f.selected = map[string]bool{}
+		} else {
+			f.selected = map[string]bool{"default": true}
+		}
+		return
+	}
+	delete(f.selected, "default")
+	f.selected[choice] = !f.selected[choice]
+	if !f.selected[choice] {
+		delete(f.selected, choice)
+	}
+}
+
+func formatTargets(connection config.Connection) string {
+	values := connection.TargetValues()
+	if len(values) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	w := csv.NewWriter(&b)
+	_ = w.Write(values)
+	w.Flush()
+	return strings.TrimSuffix(b.String(), "\n")
+}
+
+func parseTargets(raw string) (string, []string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return "", nil, nil
+	}
+	if strings.ContainsAny(raw, "\r\n") {
+		return "", nil, errors.New("the table allow-list must stay on one line")
+	}
+	r := csv.NewReader(strings.NewReader(raw))
+	r.TrimLeadingSpace = true
+	values, err := r.Read()
+	if err != nil {
+		return "", nil, errors.New("the table allow-list must be one CSV row; quote a table name that contains a comma")
+	}
+	for i := range values {
+		values[i] = strings.TrimSpace(values[i])
+	}
+	if len(values) == 1 {
+		return values[0], nil, nil
+	}
+	return "", values, nil
+}
+
 func wrap(i, n int) int {
 	if n <= 0 {
 		return 0
@@ -1238,10 +1416,11 @@ func sectionShortcut(key string) (section, bool) {
 }
 
 var (
-	titleStyle  = lipgloss.NewStyle().Bold(true)
-	activeStyle = lipgloss.NewStyle().Bold(true)
-	hintStyle   = lipgloss.NewStyle().Faint(true)
-	failStyle   = lipgloss.NewStyle().Bold(true)
+	titleStyle   = lipgloss.NewStyle().Bold(true)
+	activeStyle  = lipgloss.NewStyle().Bold(true)
+	hintStyle    = lipgloss.NewStyle().Faint(true)
+	failStyle    = lipgloss.NewStyle().Bold(true)
+	warningStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3"))
 )
 
 // View renders the current screen.
@@ -1320,8 +1499,14 @@ func (m *Model) buildEditorView(dense bool) string {
 			if hint := m.fieldHint(f); hint != "" {
 				b.WriteString(m.indented(hint) + "\n")
 			}
+			if warning := m.fieldWarning(f); warning != "" {
+				b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
+			}
 		}
 		keys := "tab move · left/right choose · enter save · esc cancel"
+		if m.fields[m.focus].kind == fieldMultiChoice {
+			keys = "left/right choose · space toggle · " + keys
+		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
 				keys = "enter save credential first · tab move · esc cancel"
@@ -1635,8 +1820,8 @@ func (m *Model) dashboardEntry(s section, name string) string {
 	case sectionConnections:
 		connection := m.cfg.Connections[name]
 		detail := fmt.Sprintf("%s · %s + %s", name, connection.Service, connection.Credential)
-		if connection.Target != "" {
-			detail += " → " + connection.Target
+		if targets := formatTargets(connection); targets != "" {
+			detail += " → " + targets
 		}
 		return detail
 	case sectionDefaults:
@@ -1795,8 +1980,12 @@ func (m *Model) fit(prefix string) (string, int) {
 // indented draws a hint under the row it belongs to and keeps its continuation lines there too, so a hint
 // that needs two lines still reads as one hint rather than as a stray sentence at the left margin.
 func (m *Model) indented(text string) string {
+	return m.indentedWith(hintStyle, text)
+}
+
+func (m *Model) indentedWith(style lipgloss.Style, text string) string {
 	indent, width := m.fit("    ")
-	lines := strings.Split(hintStyle.Width(width).Render(text), "\n")
+	lines := strings.Split(style.Width(width).Render(text), "\n")
 	for i, l := range lines {
 		lines[i] = indent + l
 	}
@@ -1821,6 +2010,34 @@ func (m *Model) fieldHint(f field) string {
 		return m.secretRowHint(m.editing, f.label, f.roleLead)
 	}
 	return f.hint
+}
+
+func (m *Model) fieldWarning(f field) string {
+	if f.label != "target" {
+		return ""
+	}
+	service := m.fieldValue("service")
+	metadata, ok := m.cfg.ProviderMetadata(m.cfg.Services[service].Provider)
+	if !ok || metadata.Target.Wildcard == "" || metadata.Target.WildcardWarning == "" {
+		return ""
+	}
+	for _, value := range parseTargetValuesForWarning(f.value()) {
+		if value == metadata.Target.Wildcard {
+			return metadata.Target.WildcardWarning
+		}
+	}
+	return ""
+}
+
+func parseTargetValuesForWarning(raw string) []string {
+	_, values, err := parseTargets(raw)
+	if err != nil {
+		return nil
+	}
+	if values == nil && strings.TrimSpace(raw) != "" {
+		return []string{strings.TrimSpace(raw)}
+	}
+	return values
 }
 
 // testLine keeps the stable class visible and adds the next useful interpretation for a human.
@@ -1886,8 +2103,8 @@ func (m *Model) describe(name string) string {
 	case sectionConnections:
 		conn := m.cfg.Connections[name]
 		detail := fmt.Sprintf("%s  %s / %s", name, conn.Service, conn.Credential)
-		if conn.Target != "" {
-			detail += " / " + conn.Target
+		if targets := formatTargets(conn); targets != "" {
+			detail += " / " + targets
 		}
 		return detail
 	case sectionDefaults:
@@ -1910,6 +2127,19 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = "(nothing to choose)"
 	case f.kind == fieldChoice:
 		value = "< " + value + " >"
+	case f.kind == fieldMultiChoice:
+		parts := make([]string, len(f.choices))
+		for i, choice := range f.choices {
+			mark := " "
+			if f.selected[choice] {
+				mark = "x"
+			}
+			parts[i] = "[" + mark + "] " + choice
+			if focused && i == f.index {
+				parts[i] = "<" + parts[i] + ">"
+			}
+		}
+		value = strings.Join(parts, "  ")
 	case focused && !f.readOnly:
 		value = f.input.View()
 		if f.kind == fieldEnvName && f.value() != "" {
