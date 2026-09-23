@@ -1,0 +1,483 @@
+package tui
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
+)
+
+// walkSetup walks the guided setup of an empty configuration up to, not into, the given step, the way a
+// person does: a new service, a new keyring credential with both secrets typed, a connection named personal.
+func walkSetup(t *testing.T, m *Model, until int) {
+	t.Helper()
+	m.screen = screenMenu
+	press(t, m, "c")
+	if m.wizard == nil || m.screen != screenForm {
+		t.Fatalf("c did not open the guided setup: screen %v, error %q", m.screen, m.fail)
+	}
+	steps := []func(){
+		func() { press(t, m, "enter") },
+		func() {
+			press(t, m, "tab")
+			typeText(t, m, "wiki")
+			press(t, m, "tab")
+			typeText(t, m, "https://wiki.example.invalid")
+			press(t, m, "enter")
+		},
+		func() {
+			press(t, m, "tab")
+			typeText(t, m, "reader")
+			press(t, m, "tab", "tab")
+			typeText(t, m, canaryID)
+			press(t, m, "tab")
+			typeText(t, m, canarySecret)
+			press(t, m, "enter")
+		},
+		func() {
+			clearField(t, m)
+			typeText(t, m, "personal")
+			press(t, m, "tab", "tab")
+			typeText(t, m, "team wiki, read only")
+			press(t, m, "enter")
+		},
+		func() { press(t, m, "enter") },
+	}
+	for step := 0; step < until; step++ {
+		steps[step]()
+		if m.fail != "" || m.wizard.step != step+1 {
+			t.Fatalf("step %s did not advance: at %s, error %q", setupTitles[step], setupTitles[m.wizard.step],
+				m.fail)
+		}
+	}
+}
+
+func assertNoStoredSecret(t *testing.T, mem *secret.MemoryStore, dir string) {
+	t.Helper()
+	for _, role := range []string{"token-id", "token-secret"} {
+		if _, err := mem.Get(secret.StoreKey("reader", role)); !errors.Is(err, secret.ErrNoEntry) {
+			t.Errorf("the credential store holds reader/%s: %v", role, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, secret.FileName)); err == nil {
+		t.Error("a plaintext credential file was written")
+	}
+}
+
+func assertNoCanary(t *testing.T, what, text string) {
+	t.Helper()
+	for _, value := range []string{canaryID, canarySecret} {
+		if strings.Contains(text, value) {
+			t.Errorf("%s exposed a secret value %q:\n%s", what, value, text)
+		}
+	}
+}
+
+// A person reaches a working keyring connection from an empty configuration without opening a section, and
+// the secrets end up in the store only, never on screen or in the file.
+func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
+	m, store, path, _, mem := newStoreModel(t)
+	var views strings.Builder
+	record := func() { views.WriteString(m.View() + "\n") }
+
+	record()
+	walkSetup(t, m, stepCredential)
+	record()
+	// The secrets are typed right here, masked; the rows of a variable name stay out of sight.
+	press(t, m, "tab")
+	typeText(t, m, "reader")
+	press(t, m, "tab")
+	if m.fieldValue(storageLabel) != storageKeyring {
+		t.Errorf("the recommended storage is not preselected: %q", m.fieldValue(storageLabel))
+	}
+	press(t, m, "tab")
+	typeText(t, m, canaryID)
+	record()
+	press(t, m, "tab")
+	typeText(t, m, canarySecret)
+	record()
+	press(t, m, "enter")
+	record()
+	if m.wizard.step != stepScope {
+		t.Fatalf("credential step did not advance: %q", m.fail)
+	}
+	if m.fieldValue("name") != "bookstack" {
+		t.Errorf("the connection name is not suggested: %q", m.fieldValue("name"))
+	}
+	press(t, m, "enter")
+	record()
+	press(t, m, "enter")
+	record()
+	if m.screen != screenSummary {
+		t.Fatalf("screen = %v, want the summary", m.screen)
+	}
+	summary := m.View()
+	for _, want := range []string{"wiki (new)", "reader (new) · system keyring: token-id, token-secret",
+		"default: read"} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("summary does not contain %q:\n%s", want, summary)
+		}
+	}
+	if _, err := os.Stat(path); err == nil {
+		t.Fatal("the configuration was written before the setup was saved")
+	}
+	assertNoStoredSecret(t, mem, filepath.Dir(path))
+
+	pump(t, m, "enter")
+	record()
+	if m.fail != "" || m.wizard.saved != "bookstack" {
+		t.Fatalf("save failed: %q", m.fail)
+	}
+	for role, want := range map[string]string{"token-id": canaryID, "token-secret": canarySecret} {
+		if got, err := mem.Get(secret.StoreKey("reader", role)); err != nil || got != want {
+			t.Errorf("stored reader/%s: err %v, match %v", role, err, got == want)
+		}
+	}
+	saved, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+	cred := saved.Credentials["reader"]
+	if cred.Type != config.CredentialTypeKeyring || cred.Provider != "bookstack" || len(cred.Values) != 0 {
+		t.Errorf("credential = %+v", cred)
+	}
+	if conn := saved.Connections["bookstack"]; conn.Service != "wiki" || conn.Credential != "reader" ||
+		conn.Permissions != nil || conn.Tools != nil {
+		t.Errorf("connection = %+v", conn)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	assertNoCanary(t, "the configuration file", string(raw))
+	assertNoCanary(t, "the editor", views.String())
+
+	press(t, m, "enter")
+	if m.wizard != nil || m.screen != screenList || m.section != sectionConnections {
+		t.Fatalf("enter after saving did not open Connections: screen %v", m.screen)
+	}
+	if name, _ := m.selected(); name != "bookstack" {
+		t.Errorf("selected = %q, want the new connection", name)
+	}
+}
+
+// A configured service and credential are offered first and reused as they are, never copied.
+func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
+	m, store, path, _, mem := newStoreModel(t)
+	addService(t, m, "wiki", "https://wiki.example.invalid")
+	addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
+
+	m.screen = screenMenu
+	press(t, m, "c", "enter")
+	if m.fieldValue("service") != "wiki" || !m.field("name").hidden {
+		t.Fatalf("service step does not offer the configured service first: %q", m.fieldValue("service"))
+	}
+	press(t, m, "enter")
+	if m.fieldValue("credential") != "reader" {
+		t.Fatalf("credential step does not offer the configured credential first: %q",
+			m.fieldValue("credential"))
+	}
+	for _, f := range m.fields[1:] {
+		if !f.hidden {
+			t.Errorf("row %q of a new credential is shown while one is reused", f.label)
+		}
+	}
+	press(t, m, "enter", "enter", "enter")
+	if !strings.Contains(m.View(), "reader (existing, unchanged)") {
+		t.Errorf("summary does not say the credential is reused:\n%s", m.View())
+	}
+	pump(t, m, "enter")
+	if m.fail != "" {
+		t.Fatalf("save failed: %q", m.fail)
+	}
+
+	saved, err := store.Load()
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+	if len(saved.Services) != 1 || len(saved.Credentials) != 1 || len(saved.Connections) != 1 {
+		t.Fatalf("saved configuration = %+v", saved)
+	}
+	if conn := saved.Connections["bookstack"]; conn.Service != "wiki" || conn.Credential != "reader" {
+		t.Errorf("connection = %+v", conn)
+	}
+	assertNoStoredSecret(t, mem, filepath.Dir(path))
+}
+
+// Leaving the setup at any step, the plaintext confirmation included, writes nothing anywhere.
+func TestCancellingTheGuidedSetupWritesNothing(t *testing.T) {
+	for step := stepProvider; step <= stepSummary; step++ {
+		t.Run(setupTitles[step], func(t *testing.T) {
+			m, _, path, _, mem := newStoreModel(t)
+			walkSetup(t, m, step)
+			press(t, m, "esc")
+			if m.wizard != nil || m.screen != screenMenu {
+				t.Fatalf("esc did not leave the setup: screen %v", m.screen)
+			}
+			if _, err := os.Stat(path); err == nil {
+				t.Error("the configuration was written")
+			}
+			assertNoStoredSecret(t, mem, filepath.Dir(path))
+		})
+	}
+
+	t.Run("plaintext confirmation", func(t *testing.T) {
+		m, _, path, _, mem := newStoreModel(t)
+		walkSetup(t, m, stepCredential)
+		press(t, m, "tab")
+		typeText(t, m, "reader")
+		press(t, m, "tab")
+		selectChoice(t, m, storagePlaintext)
+		press(t, m, "tab")
+		typeText(t, m, canaryID)
+		press(t, m, "tab")
+		typeText(t, m, canarySecret)
+		press(t, m, "enter")
+		if m.screen != screenPlaintextConfirm {
+			t.Fatalf("an unencrypted file was chosen without asking: screen %v", m.screen)
+		}
+		assertNoCanary(t, "the confirmation", m.View())
+		m.Update(tea.WindowSizeMsg{Width: 20, Height: 5})
+		press(t, m, "esc")
+		if m.wizard != nil || m.screen != screenMenu {
+			t.Fatalf("esc from a screen too small did not leave the setup: screen %v", m.screen)
+		}
+		if _, err := os.Stat(path); err == nil {
+			t.Error("the configuration was written")
+		}
+		assertNoStoredSecret(t, mem, filepath.Dir(path))
+	})
+}
+
+// A step the core refuses stays open with everything typed into it, and so do the steps before it.
+func TestARefusedStepKeepsItsInput(t *testing.T) {
+	m, _, path, _, _ := newStoreModel(t)
+	addService(t, m, "wiki", "https://wiki.example.invalid")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+
+	m.screen = screenMenu
+	press(t, m, "c", "enter")
+	selectChoice(t, m, newService)
+	press(t, m, "tab")
+	typeText(t, m, "wiki")
+	press(t, m, "tab")
+	typeText(t, m, "https://archive.example.invalid")
+	press(t, m, "enter")
+	if m.wizard.step != stepService || !strings.Contains(m.fail, "already exists") {
+		t.Fatalf("a second service named wiki was accepted: step %d, error %q", m.wizard.step, m.fail)
+	}
+	press(t, m, "tab", "tab")
+	clearField(t, m)
+	typeText(t, m, "archive")
+	press(t, m, "tab")
+	clearField(t, m)
+	typeText(t, m, "ftp://archive.example.invalid")
+	press(t, m, "enter")
+	if m.wizard.step != stepService || !strings.Contains(m.fail, "base_url") {
+		t.Fatalf("the core did not refuse the base url in its step: step %d, error %q", m.wizard.step, m.fail)
+	}
+	if m.fieldValue("name") != "archive" || m.fieldValue("base url") != "ftp://archive.example.invalid" {
+		t.Errorf("the refused step lost its input: %q %q", m.fieldValue("name"), m.fieldValue("base url"))
+	}
+	clearField(t, m)
+	typeText(t, m, "https://archive.example.invalid")
+	press(t, m, "enter")
+
+	// A new keyring credential needs every secret of its provider.
+	selectChoice(t, m, newCredential)
+	press(t, m, "tab")
+	typeText(t, m, "reader")
+	press(t, m, "tab", "tab")
+	typeText(t, m, canaryID)
+	press(t, m, "enter")
+	if m.wizard.step != stepCredential || !strings.Contains(m.fail, "token-secret is empty") {
+		t.Fatalf("a missing secret was accepted: step %d, error %q", m.wizard.step, m.fail)
+	}
+	assertNoCanary(t, "the error", m.fail)
+	assertNoCanary(t, "the refused step", m.View())
+	if m.fieldValue("name") != "reader" || m.fieldValue("token-id") != canaryID {
+		t.Error("the refused credential step lost its input")
+	}
+
+	// Going back shows the confirmed step as it was, and coming forward again the refused one.
+	press(t, m, "ctrl+b")
+	if m.wizard.step != stepService || m.fieldValue("service") != newService ||
+		m.fieldValue("name") != "archive" || m.fieldValue("base url") != "https://archive.example.invalid" {
+		t.Fatalf("going back lost the service step: step %d name %q", m.wizard.step, m.fieldValue("name"))
+	}
+	press(t, m, "enter")
+	if m.wizard.step != stepCredential || m.fieldValue("name") != "reader" || m.fieldValue("token-id") != canaryID {
+		t.Fatalf("coming forward lost the credential step")
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Error("a refused step changed the configuration file")
+	}
+}
+
+// A keyring that cannot be used leaves nothing behind, and neither does a configuration that cannot be
+// written after the secrets were: those secrets are removed again, and every input stays for a retry.
+func TestAFailedSaveLeavesNothingBehind(t *testing.T) {
+	t.Run("keyring unavailable", func(t *testing.T) {
+		m, _, path, _, mem := newStoreModel(t)
+		walkSetup(t, m, stepSummary)
+		mem.Fail(secret.ErrUnavailable)
+		pump(t, m, "enter")
+		mem.Fail(nil)
+		if m.wizard.saved != "" || !strings.Contains(m.fail, "ctrl+b") {
+			t.Fatalf("a failed keyring did not say how to go on: %q", m.fail)
+		}
+		if _, err := os.Stat(path); err == nil {
+			t.Error("the configuration was written without its secrets")
+		}
+		assertNoStoredSecret(t, mem, filepath.Dir(path))
+	})
+
+	t.Run("configuration not writable", func(t *testing.T) {
+		m, store, path, _, mem := newStoreModel(t)
+		walkSetup(t, m, stepSummary)
+		// A directory where the file belongs lets the core check pass and the write fail.
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		pump(t, m, "enter")
+		if m.wizard.saved != "" || !strings.Contains(m.fail, "the configuration was not changed") {
+			t.Fatalf("a failed write was not reported: %q", m.fail)
+		}
+		assertNoCanary(t, "the error", m.fail)
+		assertNoStoredSecret(t, mem, filepath.Dir(path))
+
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		pump(t, m, "enter")
+		if m.fail != "" || m.wizard.saved != "personal" {
+			t.Fatalf("retry failed: %q", m.fail)
+		}
+		if _, err := store.Load(); err != nil {
+			t.Errorf("Load() = %v", err)
+		}
+		if got, err := mem.Get(secret.StoreKey("reader", "token-id")); err != nil || got != canaryID {
+			t.Errorf("the retried save did not store the secret: %v", err)
+		}
+	})
+}
+
+// Environment variables and the unencrypted file stay reachable, the file only after explicit consent.
+func TestGuidedSetupOtherSecretSources(t *testing.T) {
+	t.Run("environment variables", func(t *testing.T) {
+		m, store, path, _, mem := newStoreModel(t)
+		walkSetup(t, m, stepCredential)
+		press(t, m, "tab")
+		typeText(t, m, "reader")
+		press(t, m, "tab")
+		selectChoice(t, m, storageEnv)
+		press(t, m, "tab")
+		typeText(t, m, "WIKI_ID")
+		press(t, m, "tab")
+		typeText(t, m, "WIKI_SECRET")
+		press(t, m, "enter", "enter", "enter")
+		pump(t, m, "enter")
+		if m.fail != "" {
+			t.Fatalf("save failed: %q", m.fail)
+		}
+		saved, err := store.Load()
+		if err != nil {
+			t.Fatalf("Load() = %v", err)
+		}
+		cred := saved.Credentials["reader"]
+		if cred.Type != config.CredentialTypeEnv || cred.Values["token-id"] != "WIKI_ID" ||
+			cred.Values["token-secret"] != "WIKI_SECRET" {
+			t.Errorf("credential = %+v", cred)
+		}
+		assertNoStoredSecret(t, mem, filepath.Dir(path))
+	})
+
+	t.Run("unencrypted file", func(t *testing.T) {
+		m, _, path, secrets, mem := newStoreModel(t)
+		walkSetup(t, m, stepCredential)
+		press(t, m, "tab")
+		typeText(t, m, "reader")
+		press(t, m, "tab")
+		selectChoice(t, m, storagePlaintext)
+		press(t, m, "tab")
+		typeText(t, m, canaryID)
+		press(t, m, "tab")
+		typeText(t, m, canarySecret)
+		press(t, m, "enter", "n")
+		if m.screen != screenForm || m.wizard.step != stepCredential || m.fieldValue("name") != "reader" {
+			t.Fatalf("no did not return to the credential step: screen %v", m.screen)
+		}
+		press(t, m, "enter", "y")
+		if m.wizard.step != stepScope {
+			t.Fatalf("yes did not continue: step %d, error %q", m.wizard.step, m.fail)
+		}
+		if _, err := os.Stat(filepath.Join(filepath.Dir(path), secret.FileName)); err == nil {
+			t.Fatal("the unencrypted file was written before the setup was saved")
+		}
+		press(t, m, "enter", "enter")
+		if !strings.Contains(m.View(), "unencrypted") {
+			t.Errorf("summary does not warn about the unencrypted file:\n%s", m.View())
+		}
+		pump(t, m, "enter")
+		if m.fail != "" {
+			t.Fatalf("save failed: %q", m.fail)
+		}
+		if source, _ := secrets.Status("reader", config.Credential{Type: config.CredentialTypeKeyring},
+			"token-secret"); source != secret.SourcePlaintext {
+			t.Errorf("token-secret resolves from %q, want the plaintext file", source)
+		}
+		if _, err := mem.Get(secret.StoreKey("reader", "token-id")); !errors.Is(err, secret.ErrNoEntry) {
+			t.Errorf("the credential store was written: %v", err)
+		}
+	})
+}
+
+// The saved connection is tested by the very tester the Connections list uses.
+func TestGuidedSetupTestsWithTheSameTester(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
+	secrets, _ := newResolver(t, dir, nil)
+	var calls []string
+	tester := func(_ context.Context, name string) (provider.Class, error) {
+		calls = append(calls, name)
+		return provider.ClassAuth, nil
+	}
+	m, err := New(store, tester, secrets, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	walkSetup(t, m, stepSummary)
+	pump(t, m, "enter")
+	if m.fail != "" {
+		t.Fatalf("save failed: %q", m.fail)
+	}
+	pump(t, m, "t")
+	if len(calls) != 1 || calls[0] != "personal" {
+		t.Fatalf("tester calls = %v", calls)
+	}
+	if view := m.View(); !strings.Contains(view, "personal: auth") {
+		t.Errorf("summary does not show the test result:\n%s", view)
+	}
+
+	press(t, m, "enter")
+	runTest(t, m)
+	if len(calls) != 2 || calls[1] != "personal" {
+		t.Errorf("the Connections list did not test through the same tester: %v", calls)
+	}
+}

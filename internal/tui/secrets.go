@@ -214,6 +214,11 @@ func (m *Model) confirmPlaintext(role string) {
 func (m *Model) updatePlaintextConfirm(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "y":
+		if m.wizard != nil {
+			// The guided setup asks as its credential step is left and writes the secrets only on save.
+			m.setupShow(stepCredential + 1)
+			return nil
+		}
 		m.askSecret(m.secretRole, true)
 	case "n", "esc":
 		m.screen = screenForm

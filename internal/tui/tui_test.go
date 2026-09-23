@@ -413,7 +413,8 @@ func TestDashboardLayoutsFitTheirTerminal(t *testing.T) {
 		m.cfg.Services[name] = config.Service{Provider: "bookstack", BaseURL: "https://" + name + ".example.invalid"}
 	}
 	view = m.View()
-	for _, want := range []string{"bookstack · archive", "+2 more", "…"} {
+	// The line that offers the guided setup takes one row from each card.
+	for _, want := range []string{"bookstack · archive", "+3 more", "…"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("overflowing dashboard card does not contain %q:\n%s", want, view)
 		}
@@ -1108,7 +1109,8 @@ func TestStartsWithoutAConfigurationFile(t *testing.T) {
 	view := m.View()
 	for _, want := range []string{
 		"created on first save",
-		"Next: add a Service",
+		"Set up a connection",
+		"Next: press c to set up a connection",
 		"1. Services",
 		"2. Credentials",
 		"3. Connections",

@@ -63,6 +63,8 @@ const (
 	screenSecret
 	// screenPicker is the searchable list of one choice row of the form, over the form it was opened from.
 	screenPicker
+	// screenSummary is the last step of the guided setup: what will be saved, and after saving, the test.
+	screenSummary
 )
 
 type fieldKind int
@@ -79,6 +81,9 @@ const (
 	// fieldToolList is a set of registered tools, ticked in a searchable picker because a provider may
 	// register more tools than a form row can show.
 	fieldToolList
+	// fieldMasked takes a secret value in the guided setup. It is typed masked and drawn without its value;
+	// the value leaves the editor only towards the credential store, when the setup is saved.
+	fieldMasked
 )
 
 type field struct {
@@ -98,6 +103,9 @@ type field struct {
 	// roleLead marks the first of the secret role rows. What those rows hold is the same for all of them,
 	// so it is said once, above them, rather than repeated under each one.
 	roleLead bool
+	// hidden takes a row out of the form without dropping what was typed into it: the guided setup shows
+	// the rows of a new entry only while a new entry is chosen, and brings them back unchanged.
+	hidden bool
 }
 
 // Field hints. They name the shape of an entry, never a rule the core owns: the core states the exact
@@ -207,6 +215,10 @@ func (f field) value() string {
 	if f.kind == fieldToolList {
 		return strings.Join(f.marked(), ", ")
 	}
+	if f.kind == fieldMasked {
+		// A secret is taken as typed, like in the masked prompt of a credential.
+		return f.input.Value()
+	}
 	return strings.TrimSpace(f.input.Value())
 }
 
@@ -286,6 +298,9 @@ type Model struct {
 	testID     int
 	cancelTest context.CancelFunc
 
+	// wizard is the guided setup while it runs, and nil otherwise.
+	wizard *setup
+
 	quitting bool
 }
 
@@ -346,6 +361,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePlaced(msg)
 	case writtenMsg:
 		return m, m.handleWritten(msg)
+	case setupSavedMsg:
+		return m, m.setupSaved(msg)
 	case tea.WindowSizeMsg:
 		// A zero dimension is also how focused tests report only the dimension they exercise. Real size
 		// messages carry both; keep the last known value until a non-zero replacement arrives.
@@ -383,6 +400,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.updateSecret(msg)
 		case screenPicker:
 			return m, m.updatePicker(msg)
+		case screenSummary:
+			return m, m.updateSummary(msg)
 		}
 	}
 	return m, nil
@@ -409,6 +428,8 @@ func (m *Model) updateMenu(key tea.KeyMsg) tea.Cmd {
 		m.moveDashboardFocus(1, 0)
 	case "enter":
 		return m.openSection(section(m.cursor))
+	case "c":
+		m.startSetup()
 	case "n":
 		cmd := m.openSection(section(m.cursor))
 		if reason := m.newEntryBlocked(); reason != "" {
@@ -557,6 +578,9 @@ func (m *Model) leaveScreen() tea.Cmd {
 		m.screen = screenForm
 		return nil
 	default:
+		if m.wizard != nil {
+			return m.leaveSetup()
+		}
 		cmd := m.returnToList("")
 		m.status = "Cancelled"
 		return cmd
@@ -564,6 +588,18 @@ func (m *Model) leaveScreen() tea.Cmd {
 }
 
 func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
+	if m.wizard != nil {
+		switch key.String() {
+		case "esc":
+			return m.leaveSetup()
+		case "enter":
+			m.setupNext()
+			return nil
+		case "ctrl+b":
+			m.setupBack()
+			return nil
+		}
+	}
 	switch key.String() {
 	case "esc":
 		// Cancelling discards the form; nothing was written.
@@ -630,6 +666,10 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 // choiceChanged brings the rows that depend on the focused choice row in line with its new value, however
 // that value was chosen.
 func (m *Model) choiceChanged(previous string) tea.Cmd {
+	if m.wizard != nil {
+		m.setupRefresh()
+		return nil
+	}
 	switch m.fields[m.focus].label {
 	case typeLabel:
 		return m.credentialTypeChosen()
@@ -805,7 +845,11 @@ func (m *Model) providerCredentials(provider string) []string {
 
 // targetHint says what the target of one service means, in that provider's own words.
 func (m *Model) targetHint(service string) string {
-	metadata, _ := m.cfg.ProviderMetadata(m.cfg.Services[service].Provider)
+	return m.providerTargetHint(m.cfg.Services[service].Provider)
+}
+
+func (m *Model) providerTargetHint(provider string) string {
+	metadata, _ := m.cfg.ProviderMetadata(provider)
 	hint := metadata.Target.Description
 	if metadata.Target.Required {
 		hint += "; required for " + metadata.Name
@@ -865,7 +909,7 @@ func (m *Model) toolChoices(provider string, current []string) []string {
 // toolText is how one tool reads in the picker: its ID and effect, and whether the permissions of the form
 // allow that effect at all. The same text is what the filter searches.
 func (m *Model) toolText(id string) string {
-	metadata, _ := m.cfg.ProviderMetadata(m.fieldValue(providerLabel))
+	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 	for _, tool := range metadata.Tools {
 		if tool.ID != id {
 			continue
@@ -877,6 +921,35 @@ func (m *Model) toolText(id string) string {
 		return text
 	}
 	return id + "  (not registered)"
+}
+
+// formProvider is the provider the form belongs to: the provider row of a connection form, or the provider
+// the guided setup was started for, whose later steps carry no provider row of their own.
+func (m *Model) formProvider() string {
+	if m.wizard != nil {
+		return m.wizard.provider
+	}
+	return m.fieldValue(providerLabel)
+}
+
+// toolFields are the tools mode row and the tool list row of a connection, over the tools it lists now.
+func (m *Model) toolFields(provider string, current []string) []field {
+	// A connection without a tools list offers every tool its permissions allow, and a new one starts
+	// that way too, so the editor writes a list only when one is chosen here.
+	mode := toolsAll
+	if current != nil {
+		mode = toolsSelected
+	}
+	tools := field{label: toolListLabel, kind: fieldToolList,
+		choices: m.toolChoices(provider, current), selected: map[string]bool{}}
+	for _, tool := range current {
+		tools.selected[tool] = true
+	}
+	tools.readOnly, tools.hint = current == nil, toolListOffHint
+	if current != nil {
+		tools.hint = toolListHint
+	}
+	return []field{choiceField(toolsLabel, []string{toolsAll, toolsSelected}, mode).withHint(toolsHint), tools}
 }
 
 // permittedEffects are the effects the permissions row of the form allows right now.
@@ -1008,8 +1081,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// startTest runs the connection test for the selected connection. The event loop keeps handling keys
-// while it runs, so the editor never blocks.
+// startTest runs the connection test for the selected connection.
 func (m *Model) startTest() tea.Cmd {
 	if m.section != sectionConnections {
 		return nil
@@ -1018,6 +1090,12 @@ func (m *Model) startTest() tea.Cmd {
 	if !ok {
 		return nil
 	}
+	return m.testConnection(name)
+}
+
+// testConnection runs the connection test for one saved connection. The event loop keeps handling keys
+// while it runs, so the editor never blocks.
+func (m *Model) testConnection(name string) tea.Cmd {
 	if m.tester == nil {
 		m.fail = "connection testing is unavailable"
 		return nil
@@ -1346,21 +1424,6 @@ func (m *Model) buildFields(name string) []field {
 		}
 		permissions := permissionField(m.permissionChoicesFor(provider, conn.Permissions), conn.Permissions)
 		permissions.hint = m.permissionHint(provider)
-		// A connection without a tools list offers every tool its permissions allow, and a new one starts
-		// that way too, so the editor writes a list only when one is chosen here.
-		mode := toolsAll
-		if conn.Tools != nil {
-			mode = toolsSelected
-		}
-		tools := field{label: toolListLabel, kind: fieldToolList,
-			choices: m.toolChoices(provider, conn.Tools), selected: map[string]bool{}}
-		for _, tool := range conn.Tools {
-			tools.selected[tool] = true
-		}
-		tools.readOnly, tools.hint = conn.Tools == nil, toolListOffHint
-		if conn.Tools != nil {
-			tools.hint = toolListHint
-		}
 		fields = append(fields,
 			choiceField(providerLabel, m.connectionProviders(), provider).withHint(connectionProviderHint),
 			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint),
@@ -1371,9 +1434,8 @@ func (m *Model) buildFields(name string) []field {
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
 			permissions,
-			choiceField(toolsLabel, []string{toolsAll, toolsSelected}, mode).withHint(toolsHint),
-			tools,
 		)
+		fields = append(fields, m.toolFields(provider, conn.Tools)...)
 		fields[4].hint = m.targetHint(fields[2].value())
 	case sectionDefaults:
 		fields = append(fields,
@@ -1549,7 +1611,7 @@ func (m *Model) moveFocus(by int) {
 	next := m.focus
 	for i := 0; i < len(m.fields); i++ {
 		next = wrap(next+by, len(m.fields))
-		if !m.fields[next].readOnly {
+		if !m.fields[next].readOnly && !m.fields[next].hidden {
 			break
 		}
 	}
@@ -1561,7 +1623,7 @@ func (m *Model) moveFocus(by int) {
 // takes input, so the user starts where typing has an effect.
 func (m *Model) firstEditable() int {
 	for i := range m.fields {
-		if !m.fields[i].readOnly {
+		if !m.fields[i].readOnly && !m.fields[i].hidden {
 			return i
 		}
 	}
@@ -1574,7 +1636,7 @@ func (m *Model) firstEditable() int {
 func (m *Model) trimFields() {
 	for i := range m.fields {
 		f := &m.fields[i]
-		if f.kind == fieldChoice || f.kind == fieldMultiChoice || f.kind == fieldToolList {
+		if f.kind == fieldChoice || f.kind == fieldMultiChoice || f.kind == fieldToolList || f.kind == fieldMasked {
 			continue
 		}
 		if trimmed := strings.TrimSpace(f.input.Value()); trimmed != f.input.Value() {
@@ -1787,8 +1849,15 @@ func (m *Model) buildEditorView(dense bool) string {
 		if m.editing != "" {
 			what = "Edit " + m.editing
 		}
-		b.WriteString(titleStyle.Render(what) + "\n\n")
+		if m.wizard != nil {
+			b.WriteString(m.setupHeading(dense))
+		} else {
+			b.WriteString(titleStyle.Render(what) + "\n\n")
+		}
 		for i, f := range m.fields {
+			if f.hidden {
+				continue
+			}
 			// A field and its hint are one block, and the blank line stands between the blocks. Without it
 			// the hint is as close to the next field as to its own, and an indented line under a row of
 			// rows reads as the introduction to what follows rather than as the note of what precedes.
@@ -1824,8 +1893,15 @@ func (m *Model) buildEditorView(dense bool) string {
 				keys = "s system keyring · p unencrypted file (asks first) · x remove · " + keys
 			}
 		}
+		if m.wizard != nil {
+			keys = strings.Replace(keys, "enter save · esc cancel", setupKeys(m.wizard.step), 1)
+		}
 		b.WriteString(m.hint(keys))
 	case screenPlaintextConfirm:
+		if m.wizard != nil {
+			b.WriteString(m.setupPlaintextView())
+			break
+		}
 		b.WriteString(titleStyle.Render("Store this secret unencrypted?") + "\n\n")
 		b.WriteString(m.wrapped(failStyle,
 			fmt.Sprintf("This does not use the system keyring. It writes %s.%s as readable text for your "+
@@ -1861,6 +1937,8 @@ func (m *Model) buildEditorView(dense bool) string {
 			}
 		}
 		b.WriteString(m.hint("y remove · n keep"))
+	case screenSummary:
+		b.WriteString(m.summaryView())
 	}
 
 	b.WriteString(m.notes())
@@ -2150,10 +2228,12 @@ func (m *Model) dashboardView() string {
 		}
 		b.WriteString(wrapCells("Next: "+m.nextStep(), m.width))
 		b.WriteByte('\n')
-		b.WriteString(m.clipLine("arrows/hjkl/tab · enter · n · 1-4 · q"))
+		b.WriteString(m.clipLine("c setup · arrows · enter · n · 1-4 · q"))
 	} else {
 		path := m.dashboardPath()
 		b.WriteString(wrapCells(path, m.width))
+		b.WriteByte('\n')
+		b.WriteString(wrapCells(setupEntry, m.width))
 		b.WriteByte('\n')
 		b.WriteString(wrapCells("Next: "+m.nextStep(), m.width))
 		b.WriteByte('\n')
@@ -2176,9 +2256,9 @@ func (m *Model) dashboardView() string {
 				b.WriteByte('\n')
 			}
 		}
-		help := "arrows/hjkl/tab · enter · n · 1-4 · q"
+		help := "c setup · arrows/hjkl/tab · enter · n · 1-4 · q"
 		if layout == dashboardWide {
-			help = "arrows/hjkl/tab move · enter open · n new · 1-4 open · q quit"
+			help = "c guided setup · arrows/hjkl/tab move · enter open · n new · 1-4 open · q quit"
 		}
 		b.WriteString(m.clipLine(help))
 	}
@@ -2209,6 +2289,7 @@ func (m *Model) dashboardPath() string {
 
 func (m *Model) dashboardRows(layout dashboardLayout, path string) int {
 	headerRows := 1 + len(strings.Split(wrapCells(path, m.width), "\n")) +
+		len(strings.Split(wrapCells(setupEntry, m.width), "\n")) +
 		len(strings.Split(wrapCells("Next: "+m.nextStep(), m.width), "\n")) + 1
 	if layout == dashboardWide {
 		headerRows++ // the blank line between the two card rows
@@ -2404,12 +2485,10 @@ func padLine(text string, width int) string {
 
 func (m *Model) nextStep() string {
 	switch {
-	case len(m.cfg.Services) == 0:
-		return "add a Service and choose its provider"
-	case len(m.cfg.Credentials) == 0:
-		return "add Credentials and store the required provider secrets"
 	case len(m.cfg.Connections) == 0:
-		return "add a Connection that combines the service and credentials"
+		// The guided setup creates whatever of service and credential is still missing, so it is the
+		// next step however far the expert sections got.
+		return "press c to set up a connection step by step"
 	case len(m.cfg.Defaults.Connections) == 0:
 		return "open Connections and press t to test; Defaults are optional"
 	default:
@@ -2515,8 +2594,11 @@ func (m *Model) fieldWarning(f field) string {
 	if f.label != "target" {
 		return ""
 	}
-	service := m.fieldValue("service")
-	metadata, ok := m.cfg.ProviderMetadata(m.cfg.Services[service].Provider)
+	provider := m.cfg.Services[m.fieldValue("service")].Provider
+	if m.wizard != nil {
+		provider = m.wizard.provider
+	}
+	metadata, ok := m.cfg.ProviderMetadata(provider)
 	if !ok || metadata.Target.Wildcard == "" || metadata.Target.WildcardWarning == "" {
 		return ""
 	}
@@ -2622,6 +2704,13 @@ func (m *Model) renderField(f field, focused bool) string {
 		// A secret row shows where the role resolves from and nothing else: there is no value to draw,
 		// and the resolver would not hand one out.
 		value = "(" + m.storedSource(m.editing, f.label) + ")"
+	case f.kind == fieldMasked && focused:
+		// The input draws one mask character per typed character and never the characters themselves.
+		value = f.input.View()
+	case f.kind == fieldMasked && f.input.Value() != "":
+		value = "(entered, masked)"
+	case f.kind == fieldMasked:
+		value = hintStyle.Render("(empty)")
 	case f.kind == fieldChoice && len(f.choices) == 0:
 		value = "(nothing to choose)"
 	case f.kind == fieldChoice:

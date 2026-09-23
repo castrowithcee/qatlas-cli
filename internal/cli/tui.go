@@ -16,10 +16,21 @@ import (
 func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tui",
-		Short: "Edit the configuration in a terminal interface",
-		Long: "The editor manages services, credentials, connections, and domain defaults, can test a\n" +
-			"selected connection, and stores the secrets of a keyring credential in a masked field. It\n" +
-			"never displays a stored secret back: what it shows is which source delivers a role.\n\n" +
+		Short: "Set up connections and edit the configuration in a terminal interface",
+		Long: "The editor opens on a dashboard whose primary entry, c, sets up a connection step by step:\n" +
+			"provider, service, credential, scope, permissions, and a summary that saves the connection and\n" +
+			"can test it right away. Each step offers only what the chosen provider defines, and offers the\n" +
+			"configured services and credentials of that provider first, so they are reused instead of\n" +
+			"duplicated; the same checks as every other save refuse a step before the next one opens, and a\n" +
+			"refused step keeps its input. A new credential keeps its secrets in the system keyring\n" +
+			"(recommended), names environment variables, or, after an explicit confirmation, writes them to\n" +
+			"an unencrypted file. Secrets are typed masked and never shown. Nothing is written before the\n" +
+			"summary is saved: esc cancels at any step, ctrl+b goes back one step, and should the\n" +
+			"configuration fail to save, the secrets just stored are removed again.\n\n" +
+			"The four sections of the dashboard remain for direct editing. The editor manages services,\n" +
+			"credentials, connections, and domain defaults, can test a selected connection, and stores the\n" +
+			"secrets of a keyring credential in a masked field. It never displays a stored secret back:\n" +
+			"what it shows is which source delivers a role.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +
