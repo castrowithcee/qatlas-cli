@@ -23,10 +23,13 @@ type rawProject struct {
 	IsFavorite  bool    `json:"is_favorite"`
 	IsShared    bool    `json:"is_shared"`
 	IsArchived  bool    `json:"is_archived"`
+	IsDeleted   bool    `json:"is_deleted"`
 	IsInbox     bool    `json:"inbox_project"`
-	ViewStyle   string  `json:"view_style"`
-	CreatedAt   *string `json:"created_at"`
-	UpdatedAt   *string `json:"updated_at"`
+	// WorkspaceID is set only on a project of a Todoist workspace, never on a personal one.
+	WorkspaceID json.RawMessage `json:"workspace_id"`
+	ViewStyle   string          `json:"view_style"`
+	CreatedAt   *string         `json:"created_at"`
+	UpdatedAt   *string         `json:"updated_at"`
 }
 
 type rawSection struct {
@@ -380,19 +383,27 @@ func (c *Client) listProjects(ctx context.Context, call listCall) (*ProjectList,
 }
 
 func (c *Client) getProject(ctx context.Context, id string) (*Project, error) {
-	const op = "get project"
-	var raw rawProject
-	if err := c.get(ctx, op, "/projects/"+url.PathEscape(id), nil, &raw); err != nil {
+	raw, err := c.readProject(ctx, "get project", id)
+	if err != nil {
 		return nil, err
-	}
-	if raw.ID == "" {
-		return nil, invalidResponse(op)
-	}
-	if !c.scope.allows(raw.ID) {
-		return nil, outsideScope("project")
 	}
 	project := projectOf(raw, true)
 	return &project, nil
+}
+
+// readProject reads one project and refuses it when it lies outside the connection.
+func (c *Client) readProject(ctx context.Context, op, id string) (rawProject, error) {
+	var raw rawProject
+	if err := c.get(ctx, op, "/projects/"+url.PathEscape(id), nil, &raw); err != nil {
+		return rawProject{}, err
+	}
+	if raw.ID == "" {
+		return rawProject{}, invalidResponse(op)
+	}
+	if raw.IsDeleted || !c.scope.allows(raw.ID) {
+		return rawProject{}, outsideScope("project")
+	}
+	return raw, nil
 }
 
 // listSections reads one page of sections and keeps those of the connection's projects and, when one is
@@ -451,13 +462,17 @@ func (c *Client) listLabels(ctx context.Context, call listCall) (*LabelList, err
 	}
 	result := &LabelList{Labels: make([]Label, 0, len(raws)), Continuation: more}
 	for _, raw := range raws {
-		label := Label{ID: raw.ID, Name: raw.Name, Color: raw.Color, IsFavorite: raw.IsFavorite}
-		if raw.Order != nil {
-			label.Order = *raw.Order
-		}
-		result.Labels = append(result.Labels, label)
+		result.Labels = append(result.Labels, labelOf(raw))
 	}
 	return result, nil
+}
+
+func labelOf(raw rawLabel) Label {
+	label := Label{ID: raw.ID, Name: raw.Name, Color: raw.Color, IsFavorite: raw.IsFavorite}
+	if raw.Order != nil {
+		label.Order = *raw.Order
+	}
+	return label
 }
 
 // dueWindow is the structured due filter of a task list. Bounds are inclusive YYYY-MM-DD dates compared
@@ -601,10 +616,14 @@ func (c *Client) listReminders(ctx context.Context, call listCall, taskID string
 		if parent == "" {
 			parent = taskID
 		}
-		result.Reminders = append(result.Reminders, Reminder{ID: raw.ID, TaskID: parent, Type: raw.Type,
-			Due: dueOf(raw.Due), MinuteOffset: raw.MinuteOffset, IsUrgent: raw.IsUrgent})
+		result.Reminders = append(result.Reminders, reminderOf(raw, parent))
 	}
 	return result, nil
+}
+
+func reminderOf(raw rawReminder, taskID string) Reminder {
+	return Reminder{ID: raw.ID, TaskID: taskID, Type: raw.Type, Due: dueOf(raw.Due), MinuteOffset: raw.MinuteOffset,
+		IsUrgent: raw.IsUrgent}
 }
 
 // listFilters reads the saved filters of the account through one read-only Sync request, the only route

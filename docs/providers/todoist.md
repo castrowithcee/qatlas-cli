@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes the Todoist provider: setup with a personal API token, project and account scope, the task, project, section, label, comment, reminder, completed-task, and saved-filter reads, the confirmed task and comment changes with their retry contract, structured and expression filters, the cursor contract, plan-dependent errors, and the boundary to workspace and account administration.
+  Describes the Todoist provider: setup with a personal API token, project and account scope, the task, project, section, label, comment, reminder, completed-task, and saved-filter reads, the confirmed task, comment, reminder, project, section, and label changes with their retry contract and scope rules, structured and expression filters, the cursor contract, plan-dependent errors, and the boundary to workspace and account administration.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -11,9 +11,10 @@ updated: 2026-09-23
 
 Todoist is a provider for one personal Todoist account through the official Todoist API v1. It reads active
 projects, sections, personal labels, tasks, completed tasks, task and project comments, reminders, and saved
-filters. It creates, updates, moves, closes, reopens, and deletes tasks and creates, updates, and deletes task
-and project comments of the connection's projects; every change needs its own confirmation. Projects,
-sections, labels, reminders, and filters are only read.
+filters. It creates, updates, moves, closes, reopens, and deletes tasks, creates, updates, and deletes task
+and project comments and time-based reminders, and creates, updates, reorders, moves, archives, and deletes
+personal projects, sections, and personal labels, each within the connection's scope; every change needs its
+own confirmation. Saved filters are only read.
 
 ## Configuration
 
@@ -67,6 +68,25 @@ connection's projects, and a comment is changed only when its task or project be
 argument is checked against the connection before any request. A `*` connection holds every project, so it
 reads nothing first and leaves the combination to Todoist.
 
+The structure changes follow the same boundary:
+
+- A project connection updates, archives, unarchives, and deletes only its own projects, and creates, changes,
+  reorders, moves, and deletes sections only inside them; a section moves only to another project of the
+  connection.
+- A new project would lie outside every project list, so `todoist.projects.create` is offered only by a `*`
+  connection; a project connection refuses it as an unsupported capability before a secret is read. The new
+  project does not join any connection's target.
+- Todoist archives and deletes a project together with all its subprojects. On a project connection Qatlas
+  therefore reads the project tree first (the active projects, and for a delete the archived ones too) and
+  refuses the change when a subproject at any depth lies outside the connection. A tree of more than 25 pages
+  of 200 projects is refused unchecked. Unarchiving restores the project alone, as a top-level project.
+- Only personal projects are changed. Every project change reads the project first, on every connection,
+  and refuses a workspace project; a new project is never created in a workspace or below a workspace project.
+- Personal labels belong to the account, not to a project, and a label change reaches every task that carries
+  the label, so the label changes are offered only by a `*` connection.
+- A reminder belongs to a task. On a project connection a new reminder's task, or an existing reminder and
+  then its task, is read first and must belong to the connection.
+
 Personal labels belong to the account, not to a project; every connection may list their names and colors,
 never tasks through them. Saved filters span every project, so only a `*` connection offers
 `todoist.filters.list`; a project connection refuses it as an unsupported capability before a secret is
@@ -87,6 +107,7 @@ read. A project connection reads reminders only for one named task.
 | `todoist.completedtasks.list` | tasks completed between `since` and `until` |
 | `todoist.comments.list` | the comments of exactly one `task_id` or one `project_id` |
 | `todoist.reminders.list` | time-based reminders; of one `task_id` on a project connection |
+| `todoist.reminders.get` | one time-based reminder of a task of the connection |
 | `todoist.filters.list` | saved filters with their queries; `*` connections only |
 
 The changes:
@@ -102,6 +123,32 @@ The changes:
 | `todoist.comments.create` | `create` | adds a second comment | one text comment on one `task_id` or one `project_id` |
 | `todoist.comments.update` | `update` | same state | the text of one comment |
 | `todoist.comments.delete` | `delete` | same state | deletes one comment permanently |
+| `todoist.reminders.create` | `create` | adds a second reminder | one time-based reminder of one task |
+| `todoist.reminders.update` | `update` | same state | the time or urgency of one reminder |
+| `todoist.reminders.delete` | `delete` | same state | deletes one reminder |
+
+The structure changes:
+
+| Tool | Effect | Repeating it | Connection | Changes |
+| --- | --- | --- | --- | --- |
+| `todoist.projects.create` | `create` | creates a second project | `*` only | one personal project, optionally below a personal parent |
+| `todoist.projects.update` | `update` | same state | any | name, description, color, favorite mark, view style |
+| `todoist.projects.archive` | `update` | same state | any | archives one project with all its subprojects |
+| `todoist.projects.unarchive` | `update` | same state | any | restores one archived project alone, as a top-level project |
+| `todoist.projects.delete` | `delete`, listed only | same state | any | deletes one project with its subprojects, sections, tasks, and comments |
+| `todoist.sections.create` | `create` | creates a second section | any | one section in a project |
+| `todoist.sections.update` | `update` | same state | any | name and description of one section |
+| `todoist.sections.reorder` | `update` | same state | any | the position of one section in its project |
+| `todoist.sections.move` | `update` | same state | any | moves one section with its tasks to another project |
+| `todoist.sections.delete` | `delete`, listed only | same state | any | deletes one section with all its tasks |
+| `todoist.labels.create` | `create` | creates a second label or fails | `*` only | one personal label |
+| `todoist.labels.update` | `update` | same state | `*` only | name, color, favorite mark; a new name reaches every task |
+| `todoist.labels.reorder` | `update` | same state | `*` only | the position of one label in the label list |
+| `todoist.labels.delete` | `delete`, listed only | same state | `*` only | deletes one label and removes it from every task |
+
+"Any" means a `*` connection or a project connection within its projects. A tool marked listed only takes more
+than itself with it, so it is offered only by a connection whose `tools` list names it, whatever its
+`permissions`; a connection without a `tools` list never offers it.
 
 Lists return compact tasks: ID, content, project, section, parent, labels, priority (1 normal to 4 urgent),
 due date, deadline, and comment count. Only `todoist.tasks.get` adds the description and timestamps, and
@@ -109,10 +156,12 @@ only `todoist.comments.list` returns comments. A comment attachment is described
 never by its address. Location reminders are not read.
 
 The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and every
-tool except `todoist.filters.list`. The profile `account-read` adds the saved filters for a `*` connection.
-The profile `tasks` adds every change except the two deletes and ticks `[read, create, update]`; tick
-`delete` and the delete tools deliberately. A profile is a visible starting selection, not a role: only the
-ticked `permissions` and `tools` are saved.
+read tool except `todoist.filters.list`. The profile `account-read` adds the saved filters for a `*`
+connection. The profile `tasks` adds the task, comment, and reminder changes except the deletes and ticks
+`[read, create, update]`. The profile `organize`, for a `*` connection, adds to `account-read` and `tasks`
+the creates, updates, reorders, and moves of projects, sections, and labels. No profile ticks an archive, an
+unarchive, or a delete: tick `delete` and those tools deliberately. A profile is a visible starting
+selection, not a role: only the ticked `permissions` and `tools` are saved.
 
 ```sh
 qatlas invoke todoist.tasks.list --connection todoist-work
@@ -121,6 +170,10 @@ echo '{"due_from":"2026-09-21","due_to":"2026-09-27","label":"waiting"}' |
 qatlas invoke todoist.tasks.get --connection todoist-work --arg task_id=6X7rM8997g3RQmvh
 echo '{"content":"Send the invoice","due_string":"tomorrow 9am"}' |
   qatlas invoke todoist.tasks.create --connection todoist-tasks --confirm
+echo '{"task_id":"6X7rM8997g3RQmvh","minute_offset":30}' |
+  qatlas invoke todoist.reminders.create --connection todoist-tasks --confirm
+echo '{"name":"Waiting","project_id":"6XGgm6PHrGgMpCFX"}' |
+  qatlas invoke todoist.sections.create --connection todoist-organize --confirm
 ```
 
 ## Changes
@@ -152,16 +205,38 @@ connection. Comments are read and changed only by the comment tools, for one tas
 in the request; no task tool reads or changes them. A comment is text only: attachments are not offered,
 because Todoist takes them only as an uploaded file or a link to one.
 
+`todoist.reminders.create` takes `task_id` and exactly one time: `minute_offset` (0 through 43200 minutes
+before the task is due; the task needs a due time) makes a relative reminder, `due_string` (optionally with
+`due_lang`) or `due_datetime` (RFC 3339) an absolute one. `is_urgent` marks an urgent reminder.
+`todoist.reminders.update` changes the time or the urgency; Todoist decides which time fits the reminder's
+type. Location reminders are not offered: their coordinates and triggers are outside this provider's
+contract. The delivery channel of a reminder is left to the account.
+
+`todoist.projects.create` and `todoist.projects.update` take `name` (one line, at most 120 characters),
+`description`, `color` (a Todoist color name such as `blue` or `berry_red`), `is_favorite`, and `view_style`
+(`list`, `board`, or `calendar`); a create takes `parent_id` of a personal project as well. Sections take
+`name` (one line, at most 2048 characters) and `description`; a create without `project_id` goes to the
+connection's only project. Labels take `name` (one line, at most 128 characters), `color`, and
+`is_favorite`. Reordering is a tool of its own: `todoist.sections.reorder` and `todoist.labels.reorder` set
+one `order` position and change nothing else.
+
+`todoist.sections.move` is the one change API v1 offers only through its Sync endpoint. Qatlas sends exactly
+one `section_move` command with the section and the destination project and reads that command's own result;
+no other command, no command a caller names, and no Sync passthrough exist.
+
 Each change is one request that Qatlas never repeats on its own. It carries a fresh `X-Request-Id`, which
 Todoist uses to recognise a duplicate delivery of the same request. When the outcome is unclear, because
 the connection broke, Todoist did not answer in time, answered with a server error, or sent an unreadable
 answer, the error says that the change may have been applied: read the task or the comments before repeating
-it. This matters most for the non-idempotent changes: a repeated create makes a second task or comment, and
-a repeated close of a recurring task skips an occurrence. A change Todoist refused as invalid, forbidden, or
-rate-limited was not applied.
+it. This matters most for the non-idempotent changes: a repeated create makes a second task, comment, reminder,
+project, section, or label, and a repeated close of a recurring task skips an occurrence. It matters as much
+for the destructive ones: after an unclear archive or delete, read the project, section, label, or reminder
+before deciding. A change Todoist refused as invalid, forbidden, or rate-limited was not applied. The reads a
+scope check needs are no part of the change and are made before it is sent.
 
-Tasks and comments return in the same shape as `todoist.tasks.get` and `todoist.comments.list`; a close,
-reopen, or delete returns the `id` and the `result` (`closed`, `reopened`, or `deleted`). The audit event of
+Tasks, comments, projects, sections, labels, and reminders return in the same shape as their reads; a close,
+reopen, archive, unarchive, section move, or delete returns the `id` and the `result` (`closed`,
+`reopened`, `archived`, `unarchived`, `moved`, or `deleted`). The audit event of
 a confirmed change names the tool, the connection, the confirmation, the result, and the time, never its
 arguments, the token, or a Todoist answer.
 
@@ -173,10 +248,14 @@ the date part of a task's due date) or `without_due` is applied by Qatlas. A tas
 matches a due window.
 
 A Todoist filter expression, such as `today | overdue` or the query of a saved filter, is accepted only by
-`todoist.tasks.filter` as `query` (at most 1024 characters, no control characters). Its results are held to
-the connection's projects like every other list, so an expression that names another project returns
-nothing of it. `todoist.completedtasks.list` takes no expression, only `since`, `until` (RFC 3339, at most
-three months apart), `project_id`, and `section_id`.
+`todoist.tasks.filter` as `query` (at most 1024 characters, no control characters), and for completed tasks
+by `todoist.completedtasks.list` as `query`. Their results are held to the connection's projects like every
+other list, so an expression that names another project returns nothing of it.
+
+`todoist.completedtasks.list` reads the tasks completed from `since` (inclusive) until `until` (exclusive),
+both RFC 3339 and at most three months apart, optionally narrowed by `project_id`, `section_id`, and a
+`query` that Todoist supports for completed tasks. The narrowing is passed to Todoist on every page, and the
+cursor is bound to it.
 
 ## Cursor contract
 
@@ -202,7 +281,7 @@ Errors keep stable classes and never carry the token, a provider body, or a URL 
 | Class | Cause |
 | --- | --- |
 | `auth` | Todoist rejected the token |
-| `permission` | the account's plan does not include the feature (reminders, filters, or older completed tasks), or the token may not read or change the resource; the message tells them apart |
+| `permission` | the account's plan does not include the feature (reminders, filters, more labels, or older completed tasks), or the token may not read or change the resource; the message tells them apart |
 | `rate-limited` | Todoist asked to wait; the next request of the same token waits as asked, at most one minute |
 | `provider-error` | Todoist does not hold the resource, rejected the request, no longer accepts the cursor, or answered a change with a server error |
 | `invalid-provider-response` | the answer was unreadable, too large, or lacked identifiers |
@@ -219,9 +298,10 @@ query unless a caller passes it to `todoist.tasks.filter`.
 
 ## Boundary
 
-The provider reads a personal account and changes its tasks and comments. It does not change projects,
-sections, labels, reminders, or filters, uploads no files, offers no bulk changes, does not administer
-workspaces, collaborators, users, notifications, or OAuth apps, does not read live notifications, activity,
-backups, or archived projects, offers no generic Sync or API passthrough, and keeps no local copy of the
-account. Tasks of workspace projects the account has joined are read and changed like any other project when
-the connection names them.
+The provider reads a personal account and changes its tasks, comments, reminders, personal projects,
+sections, and personal labels. It does not change saved filters, shared labels, location reminders, or
+workspace projects, uploads no files, offers no bulk changes, does not administer workspaces, folders,
+collaborators, invitations, users, billing, account, view, or notification settings, or OAuth apps, does not
+read live notifications, activity, backups, or archived projects, offers no generic Sync or API passthrough,
+and keeps no local copy of the account. Tasks and sections of workspace projects the account has joined are
+read and changed like any other project when the connection names them; the workspace project itself is not.

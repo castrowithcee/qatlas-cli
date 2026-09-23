@@ -70,7 +70,7 @@ func (f *fakeTodoist) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if f.failure != nil && f.failure(w, r) {
 		return
 	}
-	if serveChange(w, r, record) {
+	if serveChange(w, r, record) || serveStructure(w, r, record) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -246,6 +246,11 @@ func coreConfig() *config.Config {
 			"accountwriter": {Service: "td", Credential: "td-reader", Target: wildcard, Permissions: changePermissions},
 			"limited": {Service: "td", Credential: "td-reader", Target: ownProject, Permissions: changePermissions,
 				Tools: []string{"todoist.tasks.get", "todoist.tasks.create"}},
+			// The organizers list every tool, so they also offer the deletes a tools list must name.
+			"organizer": {Service: "td", Credential: "td-reader", Target: wildcard, Permissions: changePermissions,
+				Tools: allTools()},
+			"multiorganizer": {Service: "td", Credential: "td-reader", Targets: []string{ownProject, otherProject},
+				Permissions: changePermissions, Tools: allTools()},
 		},
 	}
 }
@@ -304,22 +309,46 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		t.Errorf("target = %+v, want a required project list with an explicit, warned wildcard", target)
 	}
 	want := []string{"todoist.comments.create", "todoist.comments.delete", "todoist.comments.list",
-		"todoist.comments.update", "todoist.completedtasks.list", "todoist.filters.list", "todoist.labels.list",
-		"todoist.projects.get", "todoist.projects.list", "todoist.reminders.list", "todoist.sections.get",
-		"todoist.sections.list", "todoist.tasks.close", "todoist.tasks.create", "todoist.tasks.delete",
-		"todoist.tasks.filter", "todoist.tasks.get", "todoist.tasks.list", "todoist.tasks.move",
-		"todoist.tasks.reopen", "todoist.tasks.update"}
-	// Every change needs confirmation; a create and a close are not safe to repeat.
+		"todoist.comments.update", "todoist.completedtasks.list", "todoist.filters.list", "todoist.labels.create",
+		"todoist.labels.delete", "todoist.labels.list", "todoist.labels.reorder", "todoist.labels.update",
+		"todoist.projects.archive", "todoist.projects.create", "todoist.projects.delete", "todoist.projects.get",
+		"todoist.projects.list", "todoist.projects.unarchive", "todoist.projects.update", "todoist.reminders.create",
+		"todoist.reminders.delete", "todoist.reminders.get", "todoist.reminders.list", "todoist.reminders.update",
+		"todoist.sections.create", "todoist.sections.delete", "todoist.sections.get", "todoist.sections.list",
+		"todoist.sections.move", "todoist.sections.reorder", "todoist.sections.update", "todoist.tasks.close",
+		"todoist.tasks.create", "todoist.tasks.delete", "todoist.tasks.filter", "todoist.tasks.get",
+		"todoist.tasks.list", "todoist.tasks.move", "todoist.tasks.reopen", "todoist.tasks.update"}
+	// Every change needs confirmation; a create and a close are not safe to repeat. Deleting a project, a
+	// section, or a label takes more than itself, so only a connection whose tools list names it offers it.
+	listedOnly := map[string]bool{"todoist.projects.delete": true, "todoist.sections.delete": true,
+		"todoist.labels.delete": true}
 	changes := map[string]capability.Risk{
-		"todoist.tasks.create":    changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-		"todoist.tasks.update":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"todoist.tasks.move":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"todoist.tasks.close":     changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
-		"todoist.tasks.reopen":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"todoist.tasks.delete":    changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
-		"todoist.comments.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-		"todoist.comments.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"todoist.comments.delete": changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"todoist.projects.create":    changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"todoist.projects.update":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.projects.archive":   changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.projects.unarchive": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.projects.delete":    changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"todoist.sections.create":    changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"todoist.sections.update":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.sections.reorder":   changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.sections.move":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.sections.delete":    changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"todoist.labels.create":      changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"todoist.labels.update":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.labels.reorder":     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.labels.delete":      changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"todoist.reminders.create":   changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"todoist.reminders.update":   changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.reminders.delete":   changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"todoist.tasks.create":       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"todoist.tasks.update":       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.tasks.move":         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.tasks.close":        changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
+		"todoist.tasks.reopen":       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.tasks.delete":       changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"todoist.comments.create":    changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"todoist.comments.update":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.comments.delete":    changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	}
 	var got []string
 	for _, descriptor := range reg.Provider(Provider) {
@@ -328,8 +357,10 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		if !change {
 			wantRisk = readRisk
 		}
-		if descriptor.Risk != wantRisk || !descriptor.RequiresExplicitConnection || descriptor.RequiresToolAllowList {
-			t.Errorf("%s risk = %+v, want %+v on an explicit connection", descriptor.ID, descriptor.Risk, wantRisk)
+		if descriptor.Risk != wantRisk || !descriptor.RequiresExplicitConnection ||
+			descriptor.RequiresToolAllowList != listedOnly[descriptor.ID] {
+			t.Errorf("%s risk = %+v, listed only = %t, want %+v on an explicit connection", descriptor.ID,
+				descriptor.Risk, descriptor.RequiresToolAllowList, wantRisk)
 		}
 		if change && wantRisk.Confirmation != capability.ConfirmationRequired {
 			t.Errorf("%s needs no confirmation", descriptor.ID)
@@ -344,8 +375,10 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	}
 	for _, profile := range metadata.Profiles {
 		for _, id := range profile.Tools {
-			if _, change := changes[id]; change && (profile.Recommended || strings.HasSuffix(id, ".delete")) {
-				t.Errorf("profile %s ticks %s, want changes only in a chosen profile and no delete", profile.ID, id)
+			if _, change := changes[id]; change && (profile.Recommended || strings.HasSuffix(id, ".delete") ||
+				strings.HasSuffix(id, "archive")) {
+				t.Errorf("profile %s ticks %s, want changes only in a chosen profile and no delete or archive",
+					profile.ID, id)
 			}
 		}
 	}

@@ -1,6 +1,7 @@
 // Package todoist implements controlled access to one personal Todoist account through the official Todoist
-// API v1: reads of its projects, sections, labels, tasks, comments, reminders, and saved filters, and
-// confirmed changes of its tasks and comments.
+// API v1: reads of its projects, sections, labels, tasks, completed tasks, comments, reminders, and saved
+// filters, and confirmed changes of its tasks, comments, reminders, personal projects, sections, and
+// personal labels. Workspaces, collaborators, and account or notification settings are not reachable.
 //
 // A connection binds one personal API token either to an explicit set of projects or, after a deliberate
 // choice, to the whole account through the * wildcard. A project connection answers only with tasks,
@@ -17,9 +18,10 @@
 // data: they are normalised into a stable Qatlas shape, passed through the output encoders, and never
 // rendered, executed, or stored.
 //
-// A change is sent once and never repeated. On a project connection it first reads the task or comment it
-// concerns and every task, section, or project it names, so nothing outside the connection's projects is
-// changed, moved into, or attached to.
+// A change is sent once and never repeated. On a project connection it first reads the task, comment,
+// reminder, section, or project it concerns and every task, section, or project it names, so nothing outside
+// the connection's projects is changed, moved into, or attached to. A change of the whole account, such as a
+// new project or a label, is offered only by a * connection.
 package todoist
 
 import (
@@ -431,6 +433,56 @@ func (c *Client) change(ctx context.Context, op, method, path string, body any, 
 	return c.do(ctx, op, method, apiRoot+path, payload, contentType, out, true)
 }
 
+// command sends exactly one typed Sync command, once, and reports its own result. The command type and its
+// arguments are fixed by the tool that calls it; no caller value becomes a command type, and no other
+// command travels with it. Todoist answers the outcome of the command in sync_status under its UUID.
+func (c *Client) command(ctx context.Context, op, kind string, args map[string]any) error {
+	id, err := newCommandUUID()
+	if err != nil {
+		return providerError(op, "the request could not be built")
+	}
+	commands, err := json.Marshal([]map[string]any{{"type": kind, "uuid": id, "args": args}})
+	if err != nil {
+		return providerError(op, "the request could not be built")
+	}
+	var answer struct {
+		SyncStatus map[string]json.RawMessage `json:"sync_status"`
+	}
+	form := url.Values{"commands": {string(commands)}}
+	if err := c.do(ctx, op, http.MethodPost, apiRoot+"/sync", []byte(form.Encode()),
+		"application/x-www-form-urlencoded", &answer, true); err != nil {
+		return err
+	}
+	status, ok := answer.SyncStatus[id]
+	if !ok {
+		return invalidChange(op, true)
+	}
+	var result string
+	if json.Unmarshal(status, &result) == nil {
+		if result == "ok" {
+			return nil
+		}
+		return invalidChange(op, true)
+	}
+	var detail errorJSON
+	if err := json.Unmarshal(status, &detail); err != nil {
+		return invalidChange(op, true)
+	}
+	return commandError(op, detail)
+}
+
+// newCommandUUID returns a random version 4 UUID for one Sync command.
+func newCommandUUID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	value[6] = value[6]&0x0f | 0x40
+	value[8] = value[8]&0x3f | 0x80
+	encoded := hex.EncodeToString(value[:])
+	return encoded[:8] + "-" + encoded[8:12] + "-" + encoded[12:16] + "-" + encoded[16:20] + "-" + encoded[20:], nil
+}
+
 // syncRead performs one read-only request of the Sync endpoint for the named resource types. It carries no
 // command, so nothing can change through it.
 func (c *Client) syncRead(ctx context.Context, op string, resourceTypes []string, out any) error {
@@ -525,9 +577,10 @@ func newRequestID() (string, error) {
 // errorJSON is the part of a Todoist error body this provider inspects. It is read for classification only
 // and never copied, because Todoist may echo request values into it.
 type errorJSON struct {
-	Tag   string `json:"error_tag"`
-	Error string `json:"error"`
-	Extra struct {
+	Tag      string `json:"error_tag"`
+	Error    string `json:"error"`
+	HTTPCode int    `json:"http_code"`
+	Extra    struct {
 		Argument   string `json:"argument"`
 		RetryAfter int    `json:"retry_after"`
 	} `json:"error_extra"`
@@ -584,6 +637,24 @@ func (c *Client) statusError(op string, response *http.Response, change bool) *p
 	}
 	return &provider.Error{Class: provider.ClassProviderError, Op: op,
 		Message: fmt.Sprintf("Todoist rejected the operation (HTTP %d)", status)}
+}
+
+// commandError classifies the refusal of one Sync command that Todoist reported in sync_status. Todoist
+// answered it explicitly, so the command was not applied.
+func commandError(op string, detail errorJSON) *provider.Error {
+	switch {
+	case detail.HTTPCode == http.StatusUnauthorized:
+		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Todoist rejected the token"}
+	case planLimited(detail):
+		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: planMessage}
+	case detail.HTTPCode == http.StatusForbidden:
+		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: changeDenied}
+	case detail.HTTPCode == http.StatusNotFound:
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: notFoundMessage}
+	case detail.HTTPCode == http.StatusTooManyRequests:
+		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Todoist rate-limited the operation"}
+	}
+	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "Todoist rejected the request as invalid"}
 }
 
 // planLimited recognises a refusal because the account's plan lacks a feature, such as reminders on a

@@ -456,10 +456,11 @@ connections:
       todoist.tasks.filter, todoist.tasks.get, todoist.completedtasks.list, todoist.comments.list,
       todoist.reminders.list]
 
-  # This connection also creates, updates, moves, closes, and reopens tasks and writes comments in one
-  # project. Nothing outside the project is changed, every change needs its own confirmation, and the
-  # delete tools stay out of its tools list. It reuses the reading credential: a Todoist personal token
-  # always reaches the whole account, so the target and the tools list are what limit this route.
+  # This connection also creates, updates, moves, closes, and reopens tasks and writes comments and
+  # reminders in one project. Nothing outside the project is changed, every change needs its own
+  # confirmation, and the delete tools stay out of its tools list. It reuses the reading credential: a
+  # Todoist personal token always reaches the whole account, so the target and the tools list are what
+  # limit this route.
   todoist-tasks:
     service: todoist
     credential: todoist-reader
@@ -467,8 +468,23 @@ connections:
     description: manages the tasks of one personal Todoist project
     permissions: [read, create, update]
     tools: [todoist.projects.get, todoist.sections.list, todoist.tasks.list, todoist.tasks.get,
-      todoist.comments.list, todoist.tasks.create, todoist.tasks.update, todoist.tasks.move, todoist.tasks.close,
-      todoist.tasks.reopen, todoist.comments.create, todoist.comments.update]
+      todoist.comments.list, todoist.reminders.list, todoist.tasks.create, todoist.tasks.update,
+      todoist.tasks.move, todoist.tasks.close, todoist.tasks.reopen, todoist.comments.create,
+      todoist.comments.update, todoist.reminders.create, todoist.reminders.update]
+
+  # This connection organizes the whole account: it creates and changes personal projects, sections, and
+  # labels, which only a * connection may do for projects and labels. Archiving and the deletes are left
+  # out; a project, section, or label delete is offered only when the tools list names it.
+  todoist-organize:
+    service: todoist
+    credential: todoist-reader
+    target: "*"
+    description: organizes the projects, sections, and labels of the personal Todoist account
+    permissions: [read, create, update]
+    tools: [todoist.projects.list, todoist.projects.get, todoist.sections.list, todoist.labels.list,
+      todoist.projects.create, todoist.projects.update, todoist.sections.create, todoist.sections.update,
+      todoist.sections.reorder, todoist.sections.move, todoist.labels.create, todoist.labels.update,
+      todoist.labels.reorder]
 
   # This deliberately exposes the whole Todoist account, including saved filters. Prefer project IDs when a
   # smaller scope is enough; only such an account connection offers todoist.filters.list.

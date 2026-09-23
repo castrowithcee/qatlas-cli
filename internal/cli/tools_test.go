@@ -172,7 +172,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	for _, want := range []string{
 		// BookStack has exactly one configured connection, Telegram one, and every other compiled
 		// provider none. An unconfigured namespace stays visible with zero.
-		"1,bookstack,5", "1,telegram,3", "0,github,37", "0,lexware,3", "0,nextcloud,6", "0,seatable,7", "0,todoist,21",
+		"1,bookstack,5", "1,telegram,3", "0,github,37", "0,lexware,3", "0,nextcloud,6", "0,seatable,7", "0,todoist,39",
 		"0,twentycrm,5",
 	} {
 		if !strings.Contains(stdout, want) {

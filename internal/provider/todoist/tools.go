@@ -203,7 +203,7 @@ var tasksList = descriptor("tasks", "list", "List Todoist tasks",
 
 var tasksFilter = descriptor("tasks", "filter", "Filter Todoist tasks by expression",
 	"List one bounded batch of compact active tasks that match a Todoist filter expression, held to the "+
-		"projects of an explicit Todoist connection; the only tool that accepts a filter expression",
+		"projects of an explicit Todoist connection; the only active-task list that accepts a filter expression",
 	[]string{"tasks", "filter", "query"},
 	`{"type":"object","properties":{"query":`+querySchema+`,`+pageInput+`},"required":["query"],"additionalProperties":false}`,
 	listOutput("tasks", taskSchema),
@@ -233,16 +233,22 @@ var tasksGet = descriptor("tasks", "get", "Get a Todoist task",
 
 var completedList = descriptor("completedtasks", "list", "List completed Todoist tasks",
 	"List one bounded batch of the tasks of the projects of an explicit Todoist connection completed in a time "+
-		"window of at most three months; how far back Todoist answers depends on the account's plan",
-	[]string{"tasks", "completed", "list", "history"},
+		"window of at most three months, optionally of one project or section or matching a Todoist filter "+
+		"expression; how far back Todoist answers depends on the account's plan",
+	[]string{"tasks", "completed", "list", "history", "filter"},
 	`{"type":"object","properties":{"since":`+instantSchema+`,"until":`+instantSchema+`,"project_id":`+idSchema+`,`+
-		`"section_id":`+idSchema+`,`+pageInput+`},"required":["since","until"],"additionalProperties":false}`,
+		`"section_id":`+idSchema+`,"query":`+querySchema+`,`+pageInput+`},"required":["since","until"],`+
+		`"additionalProperties":false}`,
 	listOutput("tasks", taskSchema),
 	[]capability.Argument{
-		{Name: "since", Description: "Start of the completion window, RFC 3339 such as 2026-09-01T00:00:00Z", Required: true},
-		{Name: "until", Description: "End of the completion window, RFC 3339; at most three months after since", Required: true},
+		{Name: "since", Description: "Start of the completion window, inclusive, RFC 3339 such as 2026-09-01T00:00:00Z",
+			Required: true},
+		{Name: "until", Description: "End of the completion window, exclusive, RFC 3339; at most three months after since",
+			Required: true},
 		{Name: "project_id", Description: "Return only tasks of this project of the connection"},
 		{Name: "section_id", Description: "Return only tasks of this section"},
+		{Name: "query", Description: "Todoist filter expression such as \"@waiting\"; tasks outside the " +
+			"connection's projects are never returned"},
 		limitArgument, cursorArgument,
 	},
 	[]capability.Field{
@@ -250,7 +256,11 @@ var completedList = descriptor("completedtasks", "list", "List completed Todoist
 		nextCursorField, hasMoreField,
 	},
 	[]capability.Example{{Description: "List what was completed in September",
-		Arguments: json.RawMessage(`{"since":"2026-09-01T00:00:00Z","until":"2026-10-01T00:00:00Z"}`)}})
+		Arguments: json.RawMessage(`{"since":"2026-09-01T00:00:00Z","until":"2026-10-01T00:00:00Z"}`)}, {
+		Description: "List the completed tasks of one section carrying a label",
+		Arguments: json.RawMessage(`{"since":"2026-09-01T00:00:00Z","until":"2026-10-01T00:00:00Z",` +
+			`"section_id":"6Jf8VQXxpwv56VQ7","query":"@waiting"}`),
+	}})
 
 var commentsList = descriptor("comments", "list", "List Todoist comments",
 	"List one bounded batch of the comments of exactly one task or one project of an explicit Todoist "+
@@ -307,10 +317,10 @@ var filtersList = descriptor("filters", "list", "List Todoist saved filters",
 // projectTools are the reads a project connection offers. The saved filters join them only on an account
 // connection.
 var projectTools = []string{projectsList.ID, projectsGet.ID, sectionsList.ID, sectionsGet.ID, labelsList.ID,
-	tasksList.ID, tasksFilter.ID, tasksGet.ID, completedList.ID, commentsList.ID, remindersList.ID}
+	tasksList.ID, tasksFilter.ID, tasksGet.ID, completedList.ID, commentsList.ID, remindersList.ID, remindersGet.ID}
 
 // Register adds Todoist metadata, its read-only connection test, the read operations, and the confirmed
-// task and comment changes. A new connection starts with reads only.
+// task, comment, reminder, and structure changes. A new connection starts with reads only.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Todoist", DefaultBaseURL: apiRoot,
@@ -325,8 +335,9 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Wildcard: wildcard,
-			WildcardWarning: "Every project, saved filter, and reminder of this Todoist account is exposed to the " +
-				"agent. Use project IDs when the whole account is not required.",
+			WildcardWarning: "Every project, saved filter, label, and reminder of this Todoist account is exposed " +
+				"to the agent, and a change permission reaches account-wide projects and labels. Use project IDs " +
+				"when the whole account is not required.",
 			Description: "one Todoist project ID, a comma-separated project ID list, or * for the whole account",
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error {
@@ -347,9 +358,17 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "tasks", Title: "Manage tasks",
 			Description: "reads what the read profile reads and creates, updates, moves, closes, and reopens " +
-				"tasks and creates and updates comments of the connection's projects; every change needs its own " +
-				"confirmation, and the deletes stay unticked",
-			Tools: append(append([]string{}, projectTools...), changeTools...),
+				"tasks, creates and updates comments and reminders of the connection's projects; every change " +
+				"needs its own confirmation, and the deletes stay unticked",
+			Tools: append(append(append([]string{}, projectTools...), changeTools...), reminderTools...),
+		}, {
+			ID: "organize", Title: "Organize the account",
+			Description: "reads what the account-read profile reads, makes the changes of the tasks profile, and " +
+				"creates, updates, reorders, and moves projects, sections, and labels; for a * account " +
+				"connection. Every change needs its own confirmation; archiving, unarchiving, and the deletes " +
+				"stay unticked",
+			Tools: append(append(append(append(append([]string{}, projectTools...), filtersList.ID), changeTools...),
+				reminderTools...), structureTools...),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -366,7 +385,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: completedList, Handler: handle("list completed tasks", prepareCompletedList)},
 		capability.Operation{Descriptor: commentsList, Handler: handle("list comments", prepareCommentsList)},
 		capability.Operation{Descriptor: remindersList, Handler: handle("list reminders", prepareRemindersList)},
-		capability.Operation{Descriptor: filtersList, Handler: capability.Handler(invokeFiltersList)},
+		capability.Operation{Descriptor: filtersList, Handler: accountOnly(filtersList.ID, invokeFiltersList)},
+		capability.Operation{Descriptor: remindersGet, Handler: handle("get reminder", prepareRemindersGet)},
 		capability.Operation{Descriptor: tasksCreate, Handler: handle("create task", prepareTasksCreate)},
 		capability.Operation{Descriptor: tasksUpdate, Handler: handle("update task", prepareTasksUpdate)},
 		capability.Operation{Descriptor: tasksMove, Handler: handle("move task", prepareTasksMove)},
@@ -379,6 +399,31 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: commentsCreate, Handler: handle("create comment", prepareCommentsCreate)},
 		capability.Operation{Descriptor: commentsUpdate, Handler: handle("update comment", prepareCommentsUpdate)},
 		capability.Operation{Descriptor: commentsDelete, Handler: handle("delete comment", prepareCommentsDelete)},
+		capability.Operation{Descriptor: remindersCreate, Handler: handle("create reminder", prepareRemindersCreate)},
+		capability.Operation{Descriptor: remindersUpdate, Handler: handle("update reminder", prepareRemindersUpdate)},
+		capability.Operation{Descriptor: remindersDelete, Handler: handle("delete reminder", prepareRemindersDelete)},
+		capability.Operation{Descriptor: projectsCreate,
+			Handler: accountOnly(projectsCreate.ID, handle("create project", prepareProjectsCreate))},
+		capability.Operation{Descriptor: projectsUpdate, Handler: handle("update project", prepareProjectsUpdate)},
+		capability.Operation{Descriptor: projectsArchive, Handler: handle("archive project",
+			prepareProjectState("archive project", http.MethodPost, "/archive", "archived", true, false))},
+		capability.Operation{Descriptor: projectsUnarchive, Handler: handle("unarchive project",
+			prepareProjectState("unarchive project", http.MethodPost, "/unarchive", "unarchived", false, false))},
+		capability.Operation{Descriptor: projectsDelete, Handler: handle("delete project",
+			prepareProjectState("delete project", http.MethodDelete, "", "deleted", true, true))},
+		capability.Operation{Descriptor: sectionsCreate, Handler: handle("create section", prepareSectionsCreate)},
+		capability.Operation{Descriptor: sectionsUpdate, Handler: handle("update section", prepareSectionsUpdate)},
+		capability.Operation{Descriptor: sectionsReorder, Handler: handle("reorder section", prepareSectionsReorder)},
+		capability.Operation{Descriptor: sectionsMove, Handler: handle("move section", prepareSectionsMove)},
+		capability.Operation{Descriptor: sectionsDelete, Handler: handle("delete section", prepareSectionsDelete)},
+		capability.Operation{Descriptor: labelsCreate,
+			Handler: accountOnly(labelsCreate.ID, handle("create label", prepareLabelsCreate))},
+		capability.Operation{Descriptor: labelsUpdate,
+			Handler: accountOnly(labelsUpdate.ID, handle("update label", prepareLabelsUpdate))},
+		capability.Operation{Descriptor: labelsReorder,
+			Handler: accountOnly(labelsReorder.ID, handle("reorder label", prepareLabelsReorder))},
+		capability.Operation{Descriptor: labelsDelete,
+			Handler: accountOnly(labelsDelete.ID, handle("delete label", prepareLabelsDelete))},
 	)
 }
 
@@ -628,11 +673,18 @@ func prepareCompletedList(bound scope, arguments struct {
 	Until     string `json:"until"`
 	ProjectID string `json:"project_id"`
 	SectionID string `json:"section_id"`
+	Query     string `json:"query"`
 	page
 }) (run, error) {
 	query, project, err := taskSelection(bound, arguments.ProjectID, arguments.SectionID)
 	if err != nil {
 		return nil, err
+	}
+	if arguments.Query != "" {
+		if !validText(arguments.Query, 1024) {
+			return nil, invalidRequest("query must be 1 to 1024 characters without control characters or padding")
+		}
+		query.Set("filter_query", arguments.Query)
 	}
 	since, from, err := parseInstant("since", arguments.Since)
 	if err != nil {
@@ -648,7 +700,8 @@ func prepareCompletedList(bound scope, arguments struct {
 	query.Set("since", since)
 	query.Set("until", until)
 	call, err := newListCall("list completed tasks", "/tasks/completed/by_completion_date", query,
-		arguments.Limit, arguments.Cursor, completedList.ID, bound.String(), project, arguments.SectionID, since, until)
+		arguments.Limit, arguments.Cursor, completedList.ID, bound.String(), project, arguments.SectionID, since, until,
+		arguments.Query)
 	if err != nil {
 		return nil, err
 	}
@@ -711,20 +764,10 @@ func prepareRemindersList(bound scope, arguments struct {
 }
 
 // invokeFiltersList reads the saved filters. A project connection does not offer them: a saved filter
-// spans every project of the account, so it is refused as an unsupported capability before any credential
-// is resolved.
+// spans every project of the account, so accountOnly refuses it as an unsupported capability before any
+// credential is resolved.
 func invokeFiltersList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, _ json.RawMessage) (any, error) {
-	if resolved == nil {
-		return nil, providerError("open", "no connection was selected")
-	}
-	bound, err := scopeOf(resolved)
-	if err != nil {
-		return nil, providerError("open", err.Error())
-	}
-	if !bound.all {
-		return nil, &capability.UnsupportedError{Connection: resolved.Name, Capability: filtersList.ID}
-	}
 	client, err := Open(resolved, secrets, red)
 	if err != nil {
 		return nil, err
