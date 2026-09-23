@@ -301,6 +301,11 @@ func Register(reg *capability.Registry) error {
 			Description: "one table, a comma-separated table allow-list, or * for the whole base; use " +
 				"TABLE, TABLE/VIEW, id:TABLEID, or id:TABLEID/id:VIEWID",
 		},
+		Profiles: []config.ToolProfile{{
+			ID: "read", Title: "Read tables and rows", Recommended: true,
+			Description: "lists tables and columns and reads rows; changes nothing in the base",
+			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsGet.ID},
+		}},
 	}, TestConnection); err != nil {
 		return err
 	}

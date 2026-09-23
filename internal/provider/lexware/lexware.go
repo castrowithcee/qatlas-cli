@@ -220,6 +220,11 @@ func Register(reg *capability.Registry) error {
 			Label:       "target",
 			Description: "not used by Lexware; the organization follows from the API key",
 		},
+		Profiles: []config.ToolProfile{{
+			ID: "read", Title: "Read invoices", Recommended: true,
+			Description: "lists and reads invoices; creates nothing in Lexware Office",
+			Tools:       []string{invoicesList.ID, invoicesGet.ID},
+		}},
 	}, TestConnection); err != nil {
 		return err
 	}

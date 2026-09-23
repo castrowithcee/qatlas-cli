@@ -148,6 +148,17 @@ const (
 		"tools above to pick them"
 )
 
+// The profile row of a connection. A profile is a provider's named starting selection: choosing one ticks
+// the permissions and tools it expands to, and nothing else. The row shows the profile the ticks match, or
+// custom, so it holds no state of its own and nothing of it is saved.
+const (
+	profileLabel  = "profile"
+	profileCustom = "custom"
+	profileHint   = "a starting selection, not a role: only the ticks below are saved, and they do not narrow " +
+		"what the credential itself may do at the provider"
+	profileCustomHint = "custom: the ticks below match no profile; choosing a profile replaces them after asking"
+)
+
 // The tools modes of a connection. The first one is a connection without a tools list, the second one a
 // list, which may also be empty.
 const (
@@ -258,6 +269,9 @@ type Model struct {
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
 	// confirmation is about the selected entry of the list.
 	confirmRole string
+	// pendingProfile names the profile the confirmation would apply to the permission and tool ticks of the
+	// form. Empty means the confirmation is about something else.
+	pendingProfile string
 
 	status string
 	fail   string
@@ -385,24 +399,30 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		var cmd tea.Cmd
 		switch m.screen {
 		case screenMenu:
-			return m, m.updateMenu(msg)
+			cmd = m.updateMenu(msg)
 		case screenList:
-			return m, m.updateList(msg)
+			cmd = m.updateList(msg)
 		case screenForm:
-			return m, m.updateForm(msg)
+			cmd = m.updateForm(msg)
 		case screenConfirm:
-			return m, m.updateConfirm(msg)
+			cmd = m.updateConfirm(msg)
 		case screenPlaintextConfirm:
-			return m, m.updatePlaintextConfirm(msg)
+			cmd = m.updatePlaintextConfirm(msg)
 		case screenSecret:
-			return m, m.updateSecret(msg)
+			cmd = m.updateSecret(msg)
 		case screenPicker:
-			return m, m.updatePicker(msg)
+			cmd = m.updatePicker(msg)
 		case screenSummary:
-			return m, m.updateSummary(msg)
+			cmd = m.updateSummary(msg)
 		}
+		// Whatever a key changed, the profile row shows what the ticks now are.
+		if m.screen == screenForm {
+			m.syncProfile()
+		}
+		return m, cmd
 	}
 	return m, nil
 }
@@ -666,6 +686,10 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 // choiceChanged brings the rows that depend on the focused choice row in line with its new value, however
 // that value was chosen.
 func (m *Model) choiceChanged(previous string) tea.Cmd {
+	if m.fields[m.focus].label == profileLabel {
+		m.profileChosen()
+		return nil
+	}
 	if m.wizard != nil {
 		m.setupRefresh()
 		return nil
@@ -871,6 +895,9 @@ func (m *Model) connectionProviderChosen() {
 		// Tool IDs carry their provider, so no tick survives a change of provider.
 		list.choices, list.selected = m.toolChoices(provider, nil), map[string]bool{}
 	}
+	if m.editing == "" {
+		m.applyRecommendedProfile()
+	}
 }
 
 // toolsModeChosen opens the tool list for ticking only while only selected tools are offered; otherwise the
@@ -887,20 +914,23 @@ func (m *Model) toolsModeChosen() {
 	}
 }
 
-// toolChoices are the tools one provider registered, in ID order, followed by any listed tool that is not
-// among them, so an entry is shown rather than silently dropped. The editor keeps no list of its own.
+// toolChoices are the tools a connection lists now, in its own order, followed by the other tools the
+// provider registered, in ID order. A listed tool that is not registered is shown rather than silently
+// dropped, and a saved list is written back in the order it was saved. The editor keeps no list of its own.
 func (m *Model) toolChoices(provider string, current []string) []string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	var choices []string
 	known := map[string]bool{}
-	for _, tool := range metadata.Tools {
-		choices = append(choices, tool.ID)
-		known[tool.ID] = true
-	}
 	for _, tool := range current {
 		if !known[tool] {
 			choices = append(choices, tool)
 			known[tool] = true
+		}
+	}
+	for _, tool := range metadata.Tools {
+		if !known[tool.ID] {
+			choices = append(choices, tool.ID)
+			known[tool.ID] = true
 		}
 	}
 	return choices
@@ -950,6 +980,123 @@ func (m *Model) toolFields(provider string, current []string) []field {
 		tools.hint = toolListHint
 	}
 	return []field{choiceField(toolsLabel, []string{toolsAll, toolsSelected}, mode).withHint(toolsHint), tools}
+}
+
+// profileChosen applies the profile now shown on the profile row. Ticks changed by hand, and the ticks of a
+// saved connection, are replaced only after asking; custom itself changes nothing.
+func (m *Model) profileChosen() {
+	chosen := m.fieldValue(profileLabel)
+	if chosen == profileCustom {
+		return
+	}
+	if m.matchingProfile() == "" || (m.wizard == nil && m.editing != "") {
+		m.pendingProfile = chosen
+		m.screen = screenConfirm
+		m.clearMessages()
+		return
+	}
+	m.applyProfile(chosen)
+}
+
+// applyRecommendedProfile ticks the recommended profile of the form's provider, which is how a new
+// connection starts. A provider without profiles leaves the rows as they are.
+func (m *Model) applyRecommendedProfile() {
+	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+	if profile, ok := metadata.RecommendedProfile(); ok {
+		m.applyProfile(profile.ID)
+	}
+	m.syncProfile()
+}
+
+// applyProfile expands one profile into the rows below it: the permissions its tools need, only selected
+// tools, and exactly its tools ticked. Every tick stays free to change before saving.
+func (m *Model) applyProfile(id string) {
+	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+	profile, ok := findProfile(metadata, id)
+	if !ok {
+		return
+	}
+	if permissions := m.field("permissions"); permissions != nil {
+		permissions.selected = map[string]bool{}
+		for _, permission := range metadata.ProfilePermissions(profile) {
+			permissions.selected[string(permission)] = true
+		}
+	}
+	if mode := m.field(toolsLabel); mode != nil {
+		*mode = choiceField(toolsLabel, mode.choices, toolsSelected).withHint(mode.hint)
+	}
+	if list := m.field(toolListLabel); list != nil {
+		list.selected = map[string]bool{}
+		for _, tool := range profile.Tools {
+			list.selected[tool] = true
+		}
+	}
+	m.toolsModeChosen()
+	m.syncProfile()
+}
+
+func findProfile(metadata config.ProviderMetadata, id string) (config.ToolProfile, bool) {
+	for _, profile := range metadata.Profiles {
+		if profile.ID == id {
+			return profile, true
+		}
+	}
+	return config.ToolProfile{}, false
+}
+
+// matchingProfile is the profile whose expansion the permission and tool ticks equal, or empty when they
+// match none.
+func (m *Model) matchingProfile() string {
+	list := m.field(toolListLabel)
+	if list == nil || m.fieldValue(toolsLabel) != toolsSelected {
+		return ""
+	}
+	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+	ticked := list.marked()
+	sort.Strings(ticked)
+	for _, profile := range metadata.Profiles {
+		tools := append([]string(nil), profile.Tools...)
+		sort.Strings(tools)
+		if m.fieldValue("permissions") == config.FormatPermissions(metadata.ProfilePermissions(profile)) &&
+			strings.Join(tools, ",") == strings.Join(ticked, ",") {
+			return profile.ID
+		}
+	}
+	return ""
+}
+
+// syncProfile shows on the profile row what the ticks are now: a profile they match, or custom. The row is
+// hidden for a provider that declares no profile.
+func (m *Model) syncProfile() {
+	row := m.field(profileLabel)
+	if row == nil {
+		return
+	}
+	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+	row.hidden = len(metadata.Profiles) == 0
+	row.choices = nil
+	for _, profile := range metadata.Profiles {
+		row.choices = append(row.choices, profile.ID)
+	}
+	match := m.matchingProfile()
+	if match == "" {
+		row.choices = append(row.choices, profileCustom)
+		row.index, row.hint = len(row.choices)-1, profileCustomHint+"; "+profileHint
+		return
+	}
+	profile, _ := findProfile(metadata, match)
+	*row = choiceField(profileLabel, row.choices, match)
+	row.hint = profileText(metadata, profile) + "; " + profileHint
+}
+
+// profileText says what one profile is for and exactly what it ticks.
+func profileText(metadata config.ProviderMetadata, profile config.ToolProfile) string {
+	text := profile.Title + ": " + profile.Description
+	if profile.MutationReason != "" {
+		text += "; it preselects a change because " + profile.MutationReason
+	}
+	return text + "; ticks permissions " + config.FormatPermissions(metadata.ProfilePermissions(profile)) +
+		" and tools " + strings.Join(profile.Tools, ", ")
 }
 
 // permittedEffects are the effects the permissions row of the form allows right now.
@@ -1059,6 +1206,20 @@ func (m *Model) replacePermissionChoices(provider string) {
 }
 
 func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
+	if profile := m.pendingProfile; profile != "" {
+		switch key.String() {
+		case "y":
+			m.pendingProfile, m.screen = "", screenForm
+			m.applyProfile(profile)
+			m.status = "Profile " + profile + " ticked; review the permissions and tools before saving"
+		case "n", "esc":
+			m.pendingProfile, m.screen = "", screenForm
+			m.status = "Profile not applied; the ticks are unchanged"
+		case "ctrl+c":
+			return m.quit()
+		}
+		return nil
+	}
 	switch key.String() {
 	case "y":
 		if role := m.confirmRole; role != "" {
@@ -1242,6 +1403,14 @@ func (m *Model) openForm(name string) tea.Cmd {
 	m.screen = screenForm
 	m.clearMessages()
 	m.fields = m.buildFields(name)
+	if m.section == sectionConnections {
+		// A new connection starts on the recommended profile, ticked and visible; a saved one opens as it
+		// is saved, with the profile row only saying which profile its ticks match.
+		if name == "" {
+			m.applyRecommendedProfile()
+		}
+		m.syncProfile()
+	}
 	m.focus = m.firstEditable()
 	m.applyFocus()
 	if m.section == sectionCredentials && m.credentialType() == config.CredentialTypeKeyring {
@@ -1433,6 +1602,7 @@ func (m *Model) buildFields(name string) []field {
 			// Description and permissions explain the route the fields above define. Only the description
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
+			field{label: profileLabel, kind: fieldChoice, hidden: true},
 			permissions,
 		)
 		fields = append(fields, m.toolFields(provider, conn.Tools)...)
@@ -1921,6 +2091,10 @@ func (m *Model) buildEditorView(dense bool) string {
 			"the value is masked while you type, is never shown back, and goes into "+where) + "\n")
 		b.WriteString(m.hint("enter store · esc cancel"))
 	case screenConfirm:
+		if m.pendingProfile != "" {
+			b.WriteString(m.profileConfirmView())
+			break
+		}
 		if m.confirmRole != "" {
 			b.WriteString(fmt.Sprintf("Remove the stored secret for %s.%s?\n", m.editing, m.confirmRole))
 			b.WriteString(m.indented(
@@ -2587,6 +2761,10 @@ func (m *Model) fieldHint(f field) string {
 		}
 		return m.secretRowHint(m.editing, f.label, f.roleLead)
 	}
+	if f.kind == fieldToolList && !f.readOnly && len(f.marked()) > 0 {
+		// The ticks are what is saved, so they stand in full under the row that holds them.
+		return f.hint + "; ticked: " + strings.Join(f.marked(), ", ")
+	}
 	return f.hint
 }
 
@@ -2790,4 +2968,17 @@ func Run(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	}
 	_, err = tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(out)).Run()
 	return err
+}
+
+// profileConfirmView asks before a profile replaces ticks that were changed by hand or that belong to a
+// saved connection. It names exactly what the profile ticks.
+func (m *Model) profileConfirmView() string {
+	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+	profile, _ := findProfile(metadata, m.pendingProfile)
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Replace the permission and tool ticks with profile %s?\n", profile.ID))
+	b.WriteString(m.indented(profileText(metadata, profile)) + "\n")
+	b.WriteString(m.indented("every tick stays changeable afterwards; nothing is saved before you save the form") + "\n")
+	b.WriteString(m.hint("y replace the ticks · n keep them"))
+	return b.String()
 }

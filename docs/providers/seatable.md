@@ -34,4 +34,8 @@ The credential provides `api-token`. Use provider permission `r` for read-only c
 writes are intended. The local `permissions` list is a separate ceiling and cannot turn an `r` token into a
 writer. An optional `tools` list narrows a connection further to named tools, for example
 `[seatable.rows.list]`; it never admits an effect `permissions` excludes and never widens the table scope.
-Qatlas exchanges the API token for a short-lived base token in memory.
+Qatlas exchanges the API token for a short-lived base token in memory. The terminal editor starts a new
+connection on the setup profile `read`, which ticks `[read]` and `[seatable.tables.list,
+seatable.columns.list, seatable.rows.list, seatable.rows.get]`. A profile is a visible starting selection, not
+a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
+saved connection never follows a profile.

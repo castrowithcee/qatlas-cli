@@ -194,6 +194,11 @@ credentials:
 # it. `tools: []` offers no tool at all. Every entry must be a registered tool of the connection's provider,
 # listed once, with an effect that permissions allows; anything else makes the file invalid. Each connection
 # keeps its own lists, even when it shares the provider, the service, or the credential with another one.
+#
+# The TUI starts a new connection on its provider's recommended setup profile, for example read, which
+# ticks permissions and the concrete tools it names; every tick can be changed before saving. A profile is
+# a visible starting selection, not a role: this file stores only permissions and tools, never a profile,
+# and a saved connection never follows one. The credential still decides what the provider allows.
 connections:
   wiki:
     service: wiki-primary

@@ -45,7 +45,8 @@ var setupLeads = [setupSteps]string{
 	"The connection is what agents and --connection select by name. The target narrows it to a scope inside " +
 		"the service; the credential still decides what the provider lets it reach.",
 	"Permissions limit locally what agents may do through this connection. They never grant more than the " +
-		"credential is allowed at the provider, and the tool list can narrow them further.",
+		"credential is allowed at the provider, and they do not take away what it is allowed there. A new " +
+		"connection starts on the provider's recommended profile; every tick stays yours to change.",
 	"Nothing is written yet. enter stores the new secrets first and then the configuration; if the " +
 		"configuration cannot be saved, those secrets are removed again.",
 }
@@ -129,11 +130,17 @@ func (m *Model) setupShow(step int) {
 		m.screen = screenSummary
 		return
 	}
-	if step == len(w.pages) {
+	fresh := step == len(w.pages)
+	if fresh {
 		w.pages = append(w.pages, m.setupPage(step))
 	}
 	m.fields = w.pages[step]
 	m.screen = screenForm
+	if fresh && step == stepPermissions {
+		// The permissions of a new connection start on the provider's recommended profile, ticked and
+		// visible; going back and forth keeps whatever was changed since.
+		m.applyRecommendedProfile()
+	}
 	m.setupRefresh()
 	m.focus = m.firstEditable()
 	m.applyFocus()
@@ -185,7 +192,8 @@ func (m *Model) setupPage(step int) []field {
 	case stepPermissions:
 		permissions := permissionField(m.permissionChoices(provider), nil)
 		permissions.hint = m.permissionHint(provider)
-		return append([]field{permissions}, m.toolFields(provider, nil)...)
+		return append([]field{{label: profileLabel, kind: fieldChoice, hidden: true}, permissions},
+			m.toolFields(provider, nil)...)
 	}
 	return nil
 }
@@ -242,6 +250,7 @@ func (m *Model) setupRefresh() {
 		}
 	case stepPermissions:
 		m.toolsModeChosen()
+		m.syncProfile()
 	}
 }
 

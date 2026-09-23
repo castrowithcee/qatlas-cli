@@ -17,4 +17,8 @@ The credential provides `api-key`. The key's workspace role remains the provider
 connection's local `permissions` list can only narrow it, and an optional `tools` list, for example
 `[twentycrm.companies.get]`, narrows it further to named tools without admitting an effect `permissions`
 excludes. Qatlas exposes conservative core company fields,
-does not accept custom-field payloads, and never lets invocation arguments replace the configured origin.
+does not accept custom-field payloads, and never lets invocation arguments replace the configured origin. The
+terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and
+`[twentycrm.companies.list, twentycrm.companies.get]`. A profile is a visible starting selection, not a role:
+only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved
+connection never follows a profile.

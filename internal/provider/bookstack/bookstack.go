@@ -155,6 +155,11 @@ func Register(reg *capability.Registry) error {
 			{Name: roleTokenSecret, Description: "BookStack token secret: the value labeled Token Secret when you create the same API token"},
 		},
 		Target: config.TargetMetadata{Label: "target", Description: "optional provider-specific scope inside the service"},
+		Profiles: []config.ToolProfile{{
+			ID: "read", Title: "Read pages", Recommended: true,
+			Description: "lists and reads pages; changes nothing in BookStack",
+			Tools:       []string{pagesList.ID, pagesGet.ID},
+		}},
 	}, func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor) (provider.Class, error) {
 		client, err := Open(resolved, secrets, red)

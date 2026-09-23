@@ -18,4 +18,8 @@ Credentials provide `user-id` and a revocable `app-password`. Relative paths can
 root. Connection permissions independently hide and block operations, while the identity's WebDAV rights
 remain the provider-side ceiling. An optional `tools` list narrows a connection further to named tools, for
 example `[nextcloud.files.list, nextcloud.files.stat]` for metadata without file content, and never admits
-an effect `permissions` excludes. File content is carried as base64 and never written to audit records.
+an effect `permissions` excludes. File content is carried as base64 and never written to audit records. The
+terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and
+`[nextcloud.files.list, nextcloud.files.stat, nextcloud.files.get]`. A profile is a visible starting
+selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
+saving, and a saved connection never follows a profile.

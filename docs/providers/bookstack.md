@@ -18,4 +18,7 @@ local ceiling: it may hide and block operations even when the BookStack token co
 cannot grant rights the token lacks. An optional `tools` list narrows a connection further to named tools,
 for example `[bookstack.pages.get]` for a route that reads a known page but cannot list pages; it never
 admits an effect `permissions` excludes. Page content is bounded to 1 MiB and
-treated as untrusted data.
+treated as untrusted data. The terminal editor starts a new connection on the setup profile `read`, which
+ticks `[read]` and `[bookstack.pages.list, bookstack.pages.get]`. A profile is a visible starting selection,
+not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and
+a saved connection never follows a profile.

@@ -304,6 +304,19 @@ func Register(reg *capability.Registry) error {
 				return err
 			},
 		},
+		Profiles: []config.ToolProfile{{
+			ID: "read", Title: "Read", Recommended: true,
+			Description: "reads project items, issues, and comments and changes nothing; a project connection " +
+				"runs the project reads and a repository connection the issue and comment reads, so untick " +
+				"those of the other kind",
+			Tools: []string{itemsList.ID, itemsGet.ID, issuesList.ID, issuesGet.ID, commentsList.ID},
+		}, {
+			ID: "planning", Title: "Project planning",
+			Description: "reads the project and changes its items: sets fields, adds issues, and creates " +
+				"drafts and planned issues; archiving stays unticked",
+			Tools: []string{itemsList.ID, itemsGet.ID, itemsUpdate.ID, itemsAdd.ID, draftsCreate.ID,
+				projectIssuesCreate.ID},
+		}},
 	}, TestConnection); err != nil {
 		return err
 	}

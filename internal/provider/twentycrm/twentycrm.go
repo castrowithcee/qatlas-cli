@@ -202,6 +202,11 @@ func Register(reg *capability.Registry) error {
 			Label:       "target",
 			Description: "not used by Twenty CRM; the workspace follows from the API key",
 		},
+		Profiles: []config.ToolProfile{{
+			ID: "read", Title: "Read companies", Recommended: true,
+			Description: "lists and reads companies; changes nothing in Twenty CRM",
+			Tools:       []string{companiesList.ID, companiesGet.ID},
+		}},
 	}, TestConnection); err != nil {
 		return err
 	}

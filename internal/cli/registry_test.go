@@ -126,3 +126,31 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Errorf("Telegram operations = %v, want the three explicit message operations", operations)
 	}
 }
+
+// Every shipped provider starts new connections with a valid recommended profile that selects reads only,
+// except where the provider states why a change is safe to preselect. Telegram, which has no read tool, is
+// the only such provider.
+func TestShippedProfilesAreValidAndSafe(t *testing.T) {
+	reg := defaultRegistry()
+	if err := reg.ValidateProfiles(); err != nil {
+		t.Fatal(err)
+	}
+	for _, metadata := range reg.ProviderMetadataAll() {
+		profile, ok := metadata.RecommendedProfile()
+		if !ok {
+			t.Errorf("provider %s has no recommended profile", metadata.ID)
+			continue
+		}
+		permissions := metadata.ProfilePermissions(profile)
+		readOnly := len(permissions) == 1 && permissions[0] == config.PermissionRead
+		switch {
+		case metadata.ID == "telegram":
+			if profile.MutationReason == "" || len(profile.Tools) != 1 || profile.Tools[0] != "telegram.messages.send" {
+				t.Errorf("telegram recommended profile = %+v, want only the explained send", profile)
+			}
+		case !readOnly || profile.MutationReason != "":
+			t.Errorf("provider %s recommended profile %s selects %v, want reads only", metadata.ID, profile.ID,
+				permissions)
+		}
+	}
+}

@@ -50,6 +50,14 @@ a connection with a `tools` list offers only the tools it lists, never one added
 Give each connection a `tools` list with the tools of its kind, so discovery offers only the tools it can
 run.
 
+The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and the reads of
+both kinds: `github.projectitems.list`, `github.projectitems.get`, `github.issues.list`, `github.issues.get`,
+and `github.comments.list`; untick those of the other kind. The profile `planning` ticks
+`[read, create, update]` with the project reads, `github.projectitems.update`, `github.projectitems.add`,
+`github.projectdrafts.create`, and `github.projectissues.create`; archiving stays unticked. A profile is a
+visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
+changed before saving, and a saved connection never follows a profile.
+
 ```yaml
 connections:
   roadmap:

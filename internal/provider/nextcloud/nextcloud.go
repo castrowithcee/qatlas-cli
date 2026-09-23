@@ -228,6 +228,11 @@ func Register(reg *capability.Registry) error {
 			Description: "fixed folder below the Files of this identity that this connection may access, " +
 				"for example Reports or Team/Reports; a single / binds the whole Files root",
 		},
+		Profiles: []config.ToolProfile{{
+			ID: "read", Title: "Read files", Recommended: true,
+			Description: "lists folders, reads file metadata and content; changes nothing below the root folder",
+			Tools:       []string{filesList.ID, filesStat.ID, filesGet.ID},
+		}},
 	}, TestConnection); err != nil {
 		return err
 	}

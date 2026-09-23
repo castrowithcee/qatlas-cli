@@ -39,11 +39,22 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"pgup/pgdown and home/end move, enter takes the selected value, and esc leaves the row unchanged.\n" +
 			"The form points to / on rows with many values.\n\n" +
 			"A connection's tools row decides between every tool its permissions allow, which is how a\n" +
-			"connection without a tools list behaves and how a new one starts, and only selected tools.\n" +
-			"In the second mode space or / on the tool list opens the tools the chosen provider registers,\n" +
-			"with their effect; space ticks the selected tool, typing filters, enter keeps the ticks and\n" +
-			"esc drops them. Nothing ticked stores an explicit empty list, which offers no tool at all. A\n" +
-			"change of provider clears the ticks, because tool IDs belong to their provider.",
+			"connection without a tools list behaves, and only selected tools. In the second mode space or /\n" +
+			"on the tool list opens the tools the chosen provider registers, with their effect; space ticks\n" +
+			"the selected tool, typing filters, enter keeps the ticks and esc drops them. Nothing ticked\n" +
+			"stores an explicit empty list, which offers no tool at all. A change of provider clears the\n" +
+			"ticks, because tool IDs belong to their provider.\n\n" +
+			"A new connection, in its form and in the guided setup, starts on the provider's recommended\n" +
+			"setup profile: a named starting selection that ticks the permissions its tools need, only\n" +
+			"selected tools, and exactly the tools it names, all visible and each changeable before saving.\n" +
+			"A recommended profile ticks reads only, unless the provider states why a change is safe, as\n" +
+			"Telegram does for sending to the configured chat. The profile row shows the profile the ticks\n" +
+			"match, or custom after a change by hand; choosing another profile replaces the ticks at once\n" +
+			"while they are a profile's, and asks first once they were changed by hand or belong to a saved\n" +
+			"connection. A saved connection opens and saves as it is; a profile is never applied to it on its\n" +
+			"own. A profile is a starting selection, not a role: the configuration keeps only permissions\n" +
+			"and the concrete tool IDs, so a tool a later version adds joins no saved connection, and no\n" +
+			"local tick narrows what the credential itself may do at the provider.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if opts.Agent {

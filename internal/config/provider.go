@@ -87,8 +87,25 @@ type ToolMetadata struct {
 	Effect Permission
 }
 
+// ToolProfile is a named starting selection of a provider's tools for setting up a new connection. It is
+// no role and is never stored: an editor expands it into the permissions its tools need and the concrete
+// tool IDs it lists, and only those two lists are written. A tool registered later never joins a profile or
+// a saved connection on its own, because a profile names every tool it selects.
+//
+// Exactly one profile of a provider is Recommended. It selects reads only, unless MutationReason explains
+// why its changes are safe to preselect.
+type ToolProfile struct {
+	ID             string
+	Title          string
+	Description    string
+	Recommended    bool
+	MutationReason string
+	Tools          []string
+}
+
 // ProviderMetadata is the configuration contract of one compiled provider. SupportedPermissions and Tools
 // are derived from the registered operations, sorted by effect order and by ID, and never declared by hand.
+// Profiles are declared by the provider and checked against its registered tools.
 type ProviderMetadata struct {
 	ID                   string
 	Name                 string
@@ -96,8 +113,39 @@ type ProviderMetadata struct {
 	DefaultPermissions   []Permission
 	SupportedPermissions []Permission
 	Tools                []ToolMetadata
+	Profiles             []ToolProfile
 	SecretRoles          []SecretRole
 	Target               TargetMetadata
+}
+
+// RecommendedProfile returns the profile a new connection of this provider starts with.
+func (m ProviderMetadata) RecommendedProfile() (ToolProfile, bool) {
+	for _, profile := range m.Profiles {
+		if profile.Recommended {
+			return profile, true
+		}
+	}
+	return ToolProfile{}, false
+}
+
+// ProfilePermissions returns the effects the tools of one profile need, in stable display order. A tool
+// this provider did not register contributes nothing.
+func (m ProviderMetadata) ProfilePermissions(profile ToolProfile) []Permission {
+	needed := map[Permission]bool{}
+	for _, id := range profile.Tools {
+		for _, tool := range m.Tools {
+			if tool.ID == id {
+				needed[tool.Effect] = true
+			}
+		}
+	}
+	permissions := []Permission{}
+	for _, permission := range Permissions() {
+		if needed[permission] {
+			permissions = append(permissions, permission)
+		}
+	}
+	return permissions
 }
 
 // ProviderCatalog is the provider metadata view used by configuration and user interfaces.

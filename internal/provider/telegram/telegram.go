@@ -132,6 +132,18 @@ func Register(reg *capability.Registry) error {
 		Target: config.TargetMetadata{
 			Label: "chat ID", Description: "fixed Telegram chat ID or @channel username", Required: true,
 		},
+		Profiles: []config.ToolProfile{{
+			ID: "send", Title: "Send messages", Recommended: true,
+			Description: "sends new messages to the configured chat; earlier messages stay as they are",
+			// Telegram offers no read tool, so the safe start is the narrowest change there is.
+			MutationReason: "a message goes only to the one chat fixed in the connection and every send needs " +
+				"confirmation in its own request; nothing already in the chat can be edited or deleted",
+			Tools: []string{messagesSend.ID},
+		}, {
+			ID: "messaging", Title: "Send, edit, and delete messages",
+			Description: "also edits and deletes messages the bot sent to the configured chat",
+			Tools:       []string{messagesSend.ID, messagesEdit.ID, messagesDelete.ID},
+		}},
 	}, TestConnection); err != nil {
 		return err
 	}

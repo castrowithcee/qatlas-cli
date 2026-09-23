@@ -88,8 +88,8 @@ func TestTheToolListOffersTheRegisteredToolsOfTheChosenProvider(t *testing.T) {
 	}
 }
 
-// A connection without a tools list is saved without one as long as the tools rows are left alone, and a
-// new connection starts the same way.
+// A connection without a tools list is saved without one as long as the tools rows are left alone. A new
+// connection instead starts on the recommended profile, so it is saved with the explicit tools it shows.
 func TestAConnectionWithoutToolsIsSavedWithoutTools(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
@@ -118,8 +118,9 @@ func TestAConnectionWithoutToolsIsSavedWithoutTools(t *testing.T) {
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}
-	if got := savedTools(t, path, reg, "fresh"); got != nil {
-		t.Fatalf("a new connection was saved with tools %#v, want none", got)
+	if got := savedTools(t, path, reg, "fresh"); !reflect.DeepEqual(got,
+		[]string{"bookstack.pages.get", "bookstack.pages.list"}) {
+		t.Fatalf("a new connection was saved with tools %#v, want the recommended read tools", got)
 	}
 }
 

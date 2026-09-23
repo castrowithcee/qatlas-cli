@@ -222,7 +222,76 @@ func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 	metadata.DefaultPermissions = append([]config.Permission(nil), metadata.DefaultPermissions...)
 	metadata.SupportedPermissions = append([]config.Permission(nil), metadata.SupportedPermissions...)
 	metadata.Tools = append([]config.ToolMetadata(nil), metadata.Tools...)
+	metadata.Profiles = append([]config.ToolProfile(nil), metadata.Profiles...)
+	for i := range metadata.Profiles {
+		metadata.Profiles[i].Tools = append([]string(nil), metadata.Profiles[i].Tools...)
+	}
 	return metadata
+}
+
+// ValidateProfiles checks the tool profiles of every registered provider against the registered tools. It
+// runs once all providers and operations are registered, because a profile may only name tools that exist.
+// A provider with tools declares exactly one recommended profile; every profile has a unique ID, a title,
+// and at least one tool; it lists only tools of its own provider, each once; and a recommended profile
+// selects a change only with a stated reason.
+func (r *Registry) ValidateProfiles() error {
+	owners := map[string]string{}
+	for provider, descriptors := range r.byProvider {
+		for id := range descriptors {
+			owners[id] = provider
+		}
+	}
+	for _, metadata := range r.ProviderMetadataAll() {
+		if len(metadata.Tools) > 0 && len(metadata.Profiles) == 0 {
+			return fmt.Errorf("provider %q declares no tool profile", metadata.ID)
+		}
+		effects := map[string]config.Permission{}
+		for _, tool := range metadata.Tools {
+			effects[tool.ID] = tool.Effect
+		}
+		recommended := 0
+		seen := map[string]bool{}
+		for _, profile := range metadata.Profiles {
+			if !validConfigName(profile.ID) {
+				return fmt.Errorf("provider %q profile %q must use letters, digits, '-' or '_'", metadata.ID, profile.ID)
+			}
+			if seen[profile.ID] {
+				return fmt.Errorf("provider %q declares profile %q twice", metadata.ID, profile.ID)
+			}
+			seen[profile.ID] = true
+			if strings.TrimSpace(profile.Title) == "" {
+				return fmt.Errorf("provider %q profile %q must have a title", metadata.ID, profile.ID)
+			}
+			if len(profile.Tools) == 0 {
+				return fmt.Errorf("provider %q profile %q selects no tool", metadata.ID, profile.ID)
+			}
+			listed := map[string]bool{}
+			for _, id := range profile.Tools {
+				effect, registered := effects[id]
+				switch {
+				case listed[id]:
+					return fmt.Errorf("provider %q profile %q lists tool %q twice", metadata.ID, profile.ID, id)
+				case !registered && owners[id] != "":
+					return fmt.Errorf("provider %q profile %q lists tool %q of provider %q", metadata.ID,
+						profile.ID, id, owners[id])
+				case !registered:
+					return fmt.Errorf("provider %q profile %q lists unregistered tool %q", metadata.ID, profile.ID, id)
+				case profile.Recommended && effect != config.PermissionRead &&
+					strings.TrimSpace(profile.MutationReason) == "":
+					return fmt.Errorf("provider %q recommended profile %q selects %s tool %q without a reason why "+
+						"that is safe", metadata.ID, profile.ID, effect, id)
+				}
+				listed[id] = true
+			}
+			if profile.Recommended {
+				recommended++
+			}
+		}
+		if len(metadata.Profiles) > 0 && recommended != 1 {
+			return fmt.Errorf("provider %q declares %d recommended profiles, want exactly one", metadata.ID, recommended)
+		}
+	}
+	return nil
 }
 
 func validConfigName(name string) bool {

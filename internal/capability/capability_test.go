@@ -374,3 +374,107 @@ func TestProviderMetadataListsTheRegisteredTools(t *testing.T) {
 		t.Fatal("a caller mutated the registry's tool list")
 	}
 }
+
+// profileRegistry registers fakewiki with a list, a get, and a create tool and the given profiles, and
+// faketracker with its one tool and a valid profile.
+func profileRegistry(t *testing.T, profiles []config.ToolProfile) *Registry {
+	t.Helper()
+	reg := NewRegistry()
+	if err := reg.RegisterProvider(config.ProviderMetadata{ID: "fakewiki", Name: "Fake wiki", Profiles: profiles},
+		nil); err != nil {
+		t.Fatal(err)
+	}
+	create := withEffect(withID(pagesGet, "fakewiki.pages.create"), EffectCreate)
+	if err := reg.Register("fakewiki", operation(pagesList), operation(pagesGet), operation(create)); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.RegisterProvider(config.ProviderMetadata{ID: "faketracker", Name: "Fake tracker",
+		Profiles: []config.ToolProfile{{ID: "read", Title: "Read", Recommended: true, Tools: []string{tickets.ID}}},
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Register("faketracker", operation(tickets)); err != nil {
+		t.Fatal(err)
+	}
+	return reg
+}
+
+// Profiles name registered tools of their own provider, each once, and exactly one of them is the safe start.
+func TestValidateProfilesRejectsInvalidProfiles(t *testing.T) {
+	read := config.ToolProfile{ID: "read", Title: "Read", Recommended: true,
+		Tools: []string{pagesList.ID, pagesGet.ID}}
+	with := func(change func(*config.ToolProfile)) config.ToolProfile {
+		profile := read
+		profile.Tools = append([]string(nil), read.Tools...)
+		change(&profile)
+		return profile
+	}
+	other := config.ToolProfile{ID: "write", Title: "Write", Tools: []string{"fakewiki.pages.create"}}
+	tests := []struct {
+		name     string
+		profiles []config.ToolProfile
+		want     string
+	}{
+		{"no profile", nil, "declares no tool profile"},
+		{"no recommended profile", []config.ToolProfile{with(func(p *config.ToolProfile) { p.Recommended = false })},
+			"0 recommended profiles"},
+		{"two recommended profiles", []config.ToolProfile{read, with(func(p *config.ToolProfile) { p.ID = "second" })},
+			"2 recommended profiles"},
+		{"duplicate profile", []config.ToolProfile{read, other, other}, `declares profile "write" twice`},
+		{"invalid profile ID", []config.ToolProfile{with(func(p *config.ToolProfile) { p.ID = "Read Only" })},
+			"must use letters"},
+		{"missing title", []config.ToolProfile{with(func(p *config.ToolProfile) { p.Title = " " })}, "must have a title"},
+		{"empty profile", []config.ToolProfile{with(func(p *config.ToolProfile) { p.Tools = nil })}, "selects no tool"},
+		{"unknown tool", []config.ToolProfile{with(func(p *config.ToolProfile) {
+			p.Tools = append(p.Tools, "fakewiki.pages.purge")
+		})}, `unregistered tool "fakewiki.pages.purge"`},
+		{"tool of another provider", []config.ToolProfile{with(func(p *config.ToolProfile) {
+			p.Tools = append(p.Tools, tickets.ID)
+		})}, `lists tool "faketracker.issues.list" of provider "faketracker"`},
+		{"duplicate tool", []config.ToolProfile{with(func(p *config.ToolProfile) {
+			p.Tools = append(p.Tools, pagesGet.ID)
+		})}, `lists tool "fakewiki.pages.get" twice`},
+		{"unexplained change in the recommended profile", []config.ToolProfile{with(func(p *config.ToolProfile) {
+			p.Tools = append(p.Tools, "fakewiki.pages.create")
+		})}, `selects create tool "fakewiki.pages.create" without a reason`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := profileRegistry(t, test.profiles).ValidateProfiles()
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("ValidateProfiles() = %v, want an error containing %q", err, test.want)
+			}
+		})
+	}
+
+	explained := with(func(p *config.ToolProfile) {
+		p.Tools, p.MutationReason = append(p.Tools, "fakewiki.pages.create"), "creates only drafts"
+	})
+	for _, profiles := range [][]config.ToolProfile{{read, other}, {explained}} {
+		if err := profileRegistry(t, profiles).ValidateProfiles(); err != nil {
+			t.Fatalf("ValidateProfiles(%+v) = %v", profiles, err)
+		}
+	}
+}
+
+// A profile is a list of concrete IDs: a tool registered later joins no profile, and a caller cannot change
+// the registry's profiles through an answer.
+func TestProfilesNameConcreteToolsOnly(t *testing.T) {
+	reg := profileRegistry(t, []config.ToolProfile{{ID: "read", Title: "Read", Recommended: true,
+		Tools: []string{pagesList.ID}}})
+	if err := reg.Register("fakewiki", operation(withID(pagesList, "fakewiki.books.list"))); err != nil {
+		t.Fatal(err)
+	}
+	metadata, _ := reg.ProviderMetadata("fakewiki")
+	profile, ok := metadata.RecommendedProfile()
+	if !ok || !reflect.DeepEqual(profile.Tools, []string{pagesList.ID}) {
+		t.Fatalf("recommended profile = %+v, %v; a later tool joined it", profile, ok)
+	}
+	if got := metadata.ProfilePermissions(profile); !reflect.DeepEqual(got, []config.Permission{config.PermissionRead}) {
+		t.Fatalf("profile permissions = %v, want read", got)
+	}
+	metadata.Profiles[0].Tools[0] = "mutated"
+	if again, _ := reg.ProviderMetadata("fakewiki"); again.Profiles[0].Tools[0] != pagesList.ID {
+		t.Fatal("a caller mutated the registry's profile")
+	}
+}
