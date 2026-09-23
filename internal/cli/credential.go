@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -21,10 +22,18 @@ const maxSecretBytes = 8 << 10
 func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "credential",
-		Short: "Manage the secrets of a keyring credential",
-		Long: "A credential of type keyring keeps its secrets in the credential store of the platform,\n" +
-			"never in the configuration file. These commands write and remove those entries. No command\n" +
-			"ever shows a stored secret back, not even masked.",
+		Short: "Manage the secrets of a keyring credential in the system keyring",
+		Long: "A credential of type keyring keeps its secrets in the system keyring, the credential store\n" +
+			"the operating system already provides: Secret Service on Linux (for example GNOME Keyring or\n" +
+			"KWallet), the macOS Keychain, or the Windows Credential Manager. It is the recommended place\n" +
+			"for secrets on a workstation: there is nothing to set up, no variable to export, and nothing\n" +
+			"lands in the configuration file.\n\n" +
+			"The other sources stay separate. A set variable QATLAS_<CREDENTIAL>_<ROLE> overrides a stored\n" +
+			"secret, which suits CI and containers. The plaintext fallback is an unencrypted file beside\n" +
+			"the configuration and is written only when --plaintext asks for it. QATLAS_CREDENTIAL_STORE=none\n" +
+			"switches the system keyring off for a run.\n\n" +
+			"These commands write and remove the entries. No command ever shows a stored secret back, not\n" +
+			"even masked; 'qatlas config validate --secrets' shows which source delivers each role.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
@@ -37,22 +46,25 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"shell history:\n\n" +
 			"    printf %s \"$TOKEN\" | qatlas credential set wiki-reader token-id\n" +
 			"    qatlas credential set wiki-reader token-id < token.txt\n\n" +
-			"Without --plaintext the secret goes into the system credential store, and the command fails\n" +
-			"rather than falling back silently when there is none. Success is silent, except for a\n" +
-			"warning when an environment variable would override what was just stored.",
+			"Without --plaintext the secret goes into the system keyring. When the keyring is locked,\n" +
+			"cannot be reached, or is switched off, the command fails rather than falling back silently,\n" +
+			"and says what to do on this platform. Success is silent, except for a warning when an\n" +
+			"environment variable would override what was just stored.",
 		Args: exactlyTwoArgs,
 		RunE: func(c *cobra.Command, args []string) error {
 			return setCredential(c, opts, reg, args[0], args[1], plaintext)
 		},
 	}
 	set.Flags().BoolVar(&plaintext, "plaintext", false,
-		"store the secret in the plaintext fallback file beside the configuration instead, and switch that fallback on")
+		"store the secret unencrypted in the plaintext fallback file beside the configuration instead, and switch that fallback on")
 
 	remove := &cobra.Command{
 		Use:   "delete <credential> <role>",
 		Short: "Remove the secret of one credential role",
-		Long: "The entry is removed from the credential store and from the plaintext fallback. An\n" +
-			"environment variable is not touched: it belongs to the shell, not to qatlas.",
+		Long: "The entry is removed from the system keyring and from the plaintext fallback. An\n" +
+			"environment variable is not touched: it belongs to the shell, not to qatlas. When the keyring\n" +
+			"is locked or cannot be reached, the command says so and what to do, and never reports a\n" +
+			"secret as removed that may still be stored.",
 		Args: exactlyTwoArgs,
 		RunE: func(c *cobra.Command, args []string) error {
 			return deleteCredential(c, opts, reg, args[0], args[1])
@@ -85,8 +97,11 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 		}
 	} else if err := secrets.Set(name, role, value); err != nil {
 		if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
-			return &UsageError{fmt.Errorf("%w; store it in %s with --plaintext instead, or export %s",
-				err, fallbackPath(secrets), secret.DerivedEnvName(name, role))}
+			// The advice is built from the class of the failure, never from what the platform said.
+			return &UsageError{fmt.Errorf("cannot store the secret for %s.%s: %s, then run the command "+
+				"again; or export %s; or, only if an unencrypted file is acceptable, store it in %s with "+
+				"--plaintext", name, role, secret.StoreAdvice(secret.StoreStateOf(err), runtime.GOOS),
+				secret.DerivedEnvName(name, role), fallbackPath(secrets))}
 		}
 		return classifyUserError(err)
 	}
@@ -114,6 +129,10 @@ func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry,
 		}
 		// A delete that could not clear every place says so, including what it did clear. It is never a
 		// silent success.
+		if errors.Is(err, secret.ErrUnavailable) {
+			err = fmt.Errorf("%w; %s, then run the command again", err,
+				secret.StoreAdvice(secret.StoreStateOf(err), runtime.GOOS))
+		}
 		return classifyUserError(err)
 	}
 	// A switched-off store was never consulted, so the delete says nothing about what may sit in it. Left

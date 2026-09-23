@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -93,10 +94,17 @@ func (e *MissingSecretError) Unwrap() error { return e.Err }
 // remedy names the way out. It differs by credential type, and it stays within the same rule as the rest
 // of the message: it names commands, keys, and the derived variable, never a configured text, a stored
 // value, or anything read from a file.
+//
+// A keyring that is locked, unreachable or switched off is named first, with what to do on this platform:
+// storing the secret again would run into the same keyring.
 func (e *MissingSecretError) remedy() string {
 	if e.Type == config.CredentialTypeKeyring {
-		return fmt.Sprintf("store it with 'qatlas credential set %s %s', or export %s",
-			e.Credential, e.Role, DerivedEnvName(e.Credential, e.Role))
+		env := DerivedEnvName(e.Credential, e.Role)
+		if advice := StoreAdvice(StoreStage(e.Checked), runtime.GOOS); advice != "" {
+			return fmt.Sprintf("%s; or export %s", advice, env)
+		}
+		return fmt.Sprintf("store it in the system keyring with 'qatlas credential set %s %s', or export %s",
+			e.Credential, e.Role, env)
 	}
 	return fmt.Sprintf("set the environment variable that credentials.%s.values.%s names, or change that "+
 		"credential to type keyring and use 'qatlas credential set'", e.Credential, e.Role)
@@ -119,6 +127,54 @@ var (
 	// ErrUnavailable: to the cascade a store that never answers is a store that cannot be reached.
 	ErrTimedOut = errors.New("the credential store did not answer in time")
 )
+
+// StoreState is what the system credential store said about one role. It is typed so a user interface can
+// explain the store and name the way out without reading prose, and like every other answer here it never
+// carries a value. The values are also the words the store stage uses in Checked.
+type StoreState string
+
+// The states a store can be in for one role. StoreNotAsked is the empty value: the environment delivered
+// first, or the credential names its variables and no store is consulted at all.
+const (
+	StoreNotAsked    StoreState = ""
+	StoreHolds       StoreState = "stored"
+	StoreEmpty       StoreState = "no entry"
+	StoreLocked      StoreState = "locked"
+	StoreUnavailable StoreState = "unavailable"
+	StoreTimedOut    StoreState = "timed out"
+	StoreOff         StoreState = "switched off"
+)
+
+// StoreStateOf classifies what a store operation returned. Anything unexpected counts as unavailable, the
+// same rule the cascade follows.
+func StoreStateOf(err error) StoreState {
+	switch {
+	case err == nil:
+		return StoreHolds
+	case errors.Is(err, ErrNoEntry):
+		return StoreEmpty
+	case errors.Is(err, ErrDisabled):
+		return StoreOff
+	case errors.Is(err, ErrTimedOut):
+		return StoreTimedOut
+	case errors.Is(err, ErrLocked):
+		return StoreLocked
+	default:
+		return StoreUnavailable
+	}
+}
+
+// StoreStage reads back the state the store stage reported in a list of checked stages, as Status and
+// MissingSecretError hand it out. It is StoreNotAsked when the store was not consulted.
+func StoreStage(checked []string) StoreState {
+	prefix := string(SourceStore) + " ("
+	for _, c := range checked {
+		if strings.HasPrefix(c, prefix) && strings.HasSuffix(c, ")") {
+			return StoreState(strings.TrimSuffix(strings.TrimPrefix(c, prefix), ")"))
+		}
+	}
+	return StoreNotAsked
+}
 
 // Store is the system credential store. It is an interface so a test never touches the store of the
 // machine it runs on, and so a platform without one can be represented instead of aborting.
@@ -223,21 +279,15 @@ func (r *Resolver) Resolve(credential string, cred config.Credential, role strin
 		return Value{}, missing(credential, cred, role, checked, nil)
 	}
 
+	// A machine without a running secret service must not be a dead end, so an unreachable store is one
+	// more stage that did not deliver rather than a failure.
 	switch value, err := r.store.Get(StoreKey(credential, role)); {
 	case err == nil && value != "":
 		return r.deliver(value, SourceStore, checked), nil
-	case err == nil, errors.Is(err, ErrNoEntry):
-		checked = append(checked, stage(SourceStore, "no entry"))
-	case errors.Is(err, ErrDisabled):
-		checked = append(checked, stage(SourceStore, "switched off"))
-	case errors.Is(err, ErrTimedOut):
-		checked = append(checked, stage(SourceStore, "timed out"))
-	case errors.Is(err, ErrLocked):
-		checked = append(checked, stage(SourceStore, "locked"))
+	case err == nil:
+		checked = append(checked, stage(SourceStore, string(StoreEmpty)))
 	default:
-		// A machine without a running secret service must not be a dead end, so an unreachable store is
-		// one more stage that did not deliver rather than a failure.
-		checked = append(checked, stage(SourceStore, "unavailable"))
+		checked = append(checked, stage(SourceStore, string(StoreStateOf(err))))
 	}
 
 	value, err := r.fallback(credential, role)

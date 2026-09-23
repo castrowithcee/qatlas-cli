@@ -98,6 +98,10 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 	if m.fieldValue(storageLabel) != storageKeyring {
 		t.Errorf("the recommended storage is not preselected: %q", m.fieldValue(storageLabel))
 	}
+	// The keyring is named as this platform calls it, so it reads as something the machine already has.
+	if words := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(words, secret.StoreLabel(platform)) {
+		t.Errorf("the storage row does not name the platform keyring %q:\n%s", secret.StoreLabel(platform), m.View())
+	}
 	press(t, m, "tab")
 	typeText(t, m, canaryID)
 	record()

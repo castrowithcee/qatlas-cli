@@ -236,7 +236,7 @@ func TestConnectionTestExplainsAMissingKeyringSecretInEditorTerms(t *testing.T) 
 		"open Credentials",
 		"select token-secret",
 		"press s",
-		"or p",
+		"system keyring",
 	} {
 		if !strings.Contains(words, want) {
 			t.Errorf("missing-secret result does not contain %q:\n%s", want, view)

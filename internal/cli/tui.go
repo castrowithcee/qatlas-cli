@@ -31,6 +31,16 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"credentials, connections, and domain defaults, can test a selected connection, and stores the\n" +
 			"secrets of a keyring credential in a masked field. It never displays a stored secret back:\n" +
 			"what it shows is which source delivers a role.\n\n" +
+			"The system keyring is the recommended local place for secrets: the credential store the\n" +
+			"operating system already provides, Secret Service on Linux (for example GNOME Keyring or\n" +
+			"KWallet), the macOS Keychain, or the Windows Credential Manager. It needs no setup and no\n" +
+			"exported variable, and qatlas keeps no secret store of its own. On a role of a keyring\n" +
+			"credential, s stores the secret there. The role row says in system keyring, not stored yet,\n" +
+			"keyring locked, keyring unreachable, or keyring switched off (QATLAS_CREDENTIAL_STORE=none),\n" +
+			"and for each blocked case what to do next on this platform. A set variable\n" +
+			"QATLAS_<CREDENTIAL>_<ROLE> still wins and the row says environment variable, overrides keyring;\n" +
+			"that is the way for CI and containers. p writes an unencrypted file instead, and only after a\n" +
+			"warning that has to be confirmed.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -160,7 +161,7 @@ func TestKeyringSetupHappensEntirelyInTheEditor(t *testing.T) {
 			t.Errorf("a typed secret reached the configuration:\n%s", data)
 		}
 	}
-	if !strings.Contains(rendered.String(), string(secret.SourceStore)) {
+	if !strings.Contains(rendered.String(), stateStored) {
 		t.Errorf("the editor does not say where the roles resolve from:\n%s", rendered.String())
 	}
 }
@@ -188,7 +189,7 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 	if view := m.View(); !strings.Contains(view, config.CredentialTypeKeyring) {
 		t.Errorf("the list does not show the credential type:\n%s", view)
 	}
-	if view := m.View(); !strings.Contains(view, string(secret.SourceStore)) {
+	if view := m.View(); !strings.Contains(view, stateStored) {
 		t.Errorf("the list does not show where the roles resolve from:\n%s", view)
 	}
 
@@ -391,7 +392,7 @@ func TestPlaintextIsTheNamedWayOutWithoutAStore(t *testing.T) {
 	editEntry(t, m, "reader")
 	setSecret(t, m, "token-id", canary, false)
 
-	for _, want := range []string{"unlock or configure", "retry s", "deliberately accept an unencrypted file"} {
+	for _, want := range []string{"cannot be reached", "retry s", "deliberately accept an unencrypted file"} {
 		if !strings.Contains(m.fail, want) {
 			t.Fatalf("error = %q, want it to contain %q", m.fail, want)
 		}
@@ -479,8 +480,72 @@ func TestRemovingAStoredSecret(t *testing.T) {
 	if source != secret.SourceMissing {
 		t.Errorf("the secret survived the removal: %q", source)
 	}
-	if view := m.View(); !strings.Contains(view, string(secret.SourceMissing)) {
+	if view := m.View(); !strings.Contains(view, stateEmpty) {
 		t.Errorf("the form still claims a source:\n%s", view)
+	}
+}
+
+// The row of a keyring role tells apart every state the keyring can be in and names the way out of the
+// ones that block, without ever showing a stored value. A set variable keeps winning, and the row says so.
+func TestKeyringRowsTellEveryStateApart(t *testing.T) {
+	const canary = "canary-row-state-5e07"
+	env := secret.DerivedEnvName("reader", "token-id")
+	store := func(mem *secret.MemoryStore) {
+		mustNoError(t, mem.Set(secret.StoreKey("reader", "token-id"), canary))
+	}
+	tests := []struct {
+		name    string
+		env     map[string]string
+		arrange func(mem *secret.MemoryStore)
+		source  secret.Source
+		state   string
+		next    []string
+	}{
+		{"stored", nil, store, secret.SourceStore, stateStored, nil},
+		{"overridden by the environment", map[string]string{env: canary + "-env"}, store,
+			secret.SourceEnv, stateOverride, []string{env + " is set and wins over the system keyring"}},
+		{"empty", nil, func(*secret.MemoryStore) {}, secret.SourceMissing, stateEmpty,
+			[]string{"press s to store it in " + secret.StoreLabel(platform)}},
+		{"locked", nil, func(mem *secret.MemoryStore) {
+			mem.Fail(fmt.Errorf("%w: %w", secret.ErrUnavailable, secret.ErrLocked))
+		}, secret.SourceMissing, stateLocked,
+			[]string{secret.StoreAdvice(secret.StoreLocked, platform) + ", then press s", env}},
+		{"unreachable", nil, func(mem *secret.MemoryStore) { mem.Fail(secret.ErrUnavailable) },
+			secret.SourceMissing, stateUnreachable,
+			[]string{secret.StoreAdvice(secret.StoreUnavailable, platform) + ", then press s", env}},
+		{"switched off", nil, func(mem *secret.MemoryStore) { mem.Fail(secret.ErrDisabled) },
+			secret.SourceMissing, stateOff,
+			[]string{secret.StoreAdvice(secret.StoreOff, platform), secret.StoreSelector, env}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, cfgStore, _, secrets, mem := storedCredential(t, tt.env)
+			tt.arrange(mem)
+			m, err := New(cfgStore, nil, secrets, nil)
+			if err != nil {
+				t.Fatalf("New() = %v", err)
+			}
+
+			editEntry(t, m, "reader")
+			view := m.View()
+			words := strings.Join(strings.Fields(view), " ")
+			if !strings.Contains(words, "token-id ("+tt.state+")") {
+				t.Errorf("the row does not say %q:\n%s", tt.state, view)
+			}
+			for _, want := range tt.next {
+				if !strings.Contains(words, want) {
+					t.Errorf("the row does not name the next step %q:\n%s", want, view)
+				}
+			}
+			if strings.Contains(view, canary) {
+				t.Errorf("a stored or exported value reached the screen:\n%s", view)
+			}
+			// The display follows the cascade; it does not decide it.
+			if source, _ := secrets.Status("reader", config.Credential{Type: config.CredentialTypeKeyring},
+				"token-id"); source != tt.source {
+				t.Errorf("the role resolves from %q, want %q", source, tt.source)
+			}
+		})
 	}
 }
 

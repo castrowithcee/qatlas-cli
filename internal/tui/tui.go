@@ -123,7 +123,8 @@ const (
 	// repeating the sentence under the next one would read like a fault and add nothing.
 	envHint = "every role row holds the NAME of an environment variable that holds the secret, " +
 		"never the secret itself"
-	typeHint = "env names one environment variable per role; keyring keeps the secrets in the credential store"
+	typeHint = "keyring (recommended) keeps the secrets in the system keyring of this machine, nothing to " +
+		"export; env names one environment variable per role, for CI and containers"
 	// credentialProviderHint names the one thing this choice decides, because it is not obvious from the
 	// field itself: the rows below it are the secret roles of the provider selected here.
 	credentialProviderHint = "the system these secrets belong to; it decides which secret roles are asked for below"
@@ -145,7 +146,8 @@ const (
 	undescribedHint   = undescribedMarker + ": this connection shares its provider with another one, and an " +
 		"agent that has to choose between them sees only names and descriptions; add one line on what each " +
 		"route is for"
-	secretHint = "s system keyring · p unencrypted file (asks first) · x remove; typing is masked"
+	secretHint = "s store in the system keyring (recommended) · p unencrypted file (asks first) · x remove; " +
+		"typing is masked"
 	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
 	// describes a free choice, which is the opposite of what this field does.
 	lockedHint = "read-only; delete this entry and create it again to rename it"
@@ -1334,8 +1336,8 @@ func connectionTestError(err error) string {
 	}
 	if missing.Type == config.CredentialTypeKeyring {
 		return fmt.Sprintf("credential %q is missing %s; open Credentials, edit it, select %s, and press s "+
-			"(or p when the system credential store is unavailable)",
-			missing.Credential, missing.Role, missing.Role)
+			"to store it in the system keyring; the row says what to do if the keyring is locked or "+
+			"unreachable", missing.Credential, missing.Role, missing.Role)
 	}
 	return fmt.Sprintf("credential %q is missing %s; open Credentials and set the environment variable "+
 		"named for that role", missing.Credential, missing.Role)
@@ -1692,8 +1694,8 @@ func (m *Model) save(name string) tea.Cmd {
 			}
 		}
 		m.applyFocus()
-		m.status = "Credential saved. Add the required provider secrets below: press s on each " +
-			"role, or p if the system credential store is unavailable."
+		m.status = "Credential saved. Add the required provider secrets below: press s on each role to " +
+			"store it in " + secret.StoreLabel(platform) + " (recommended)."
 		return cmd
 	}
 	cmd := m.returnToList(name)
@@ -2124,7 +2126,7 @@ func (m *Model) buildEditorView(dense bool) string {
 			if m.editing == "" {
 				keys = "enter save credential first · tab move · esc cancel"
 			} else {
-				keys = "s system keyring · p unencrypted file (asks first) · x remove · " + keys
+				keys = "s store in system keyring · p unencrypted file (asks first) · x remove · " + keys
 			}
 		}
 		if m.wizard != nil {
@@ -2140,12 +2142,11 @@ func (m *Model) buildEditorView(dense bool) string {
 		b.WriteString(m.wrapped(failStyle,
 			fmt.Sprintf("This does not use the system keyring. It writes %s.%s as readable text for your "+
 				"user account into %s.", m.editing, m.secretRole, m.plaintextPath())) + "\n")
-		b.WriteString(m.indented(
-			"Choose no if you want the keyring. Unlock or configure the system keyring, return here, and press s.") +
-			"\n")
+		b.WriteString(m.indented("Choose no if you want the keyring. Unlock or configure "+
+			secret.StoreLabel(platform)+", return here, and press s.") + "\n")
 		b.WriteString(m.hint("y continue to masked input · n/esc cancel without writing"))
 	case screenSecret:
-		where := "the credential store of this machine"
+		where := secret.StoreLabel(platform) + " of this machine"
 		if m.secretPlain {
 			where = "the plaintext file " + m.plaintextPath()
 		}
@@ -2162,7 +2163,7 @@ func (m *Model) buildEditorView(dense bool) string {
 		if m.confirmRole != "" {
 			b.WriteString(fmt.Sprintf("Remove the stored secret for %s.%s?\n", m.editing, m.confirmRole))
 			b.WriteString(m.indented(
-				"it is removed from the credential store and from the plaintext file; an environment "+
+				"it is removed from the system keyring and from the plaintext file; an environment "+
 					"variable is not touched, because it belongs to your shell") + "\n")
 		} else {
 			name, _ := m.selected()

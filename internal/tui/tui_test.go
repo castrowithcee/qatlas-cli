@@ -955,7 +955,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	if !strings.Contains(view, "a key you choose, without spaces") {
 		t.Errorf("the name field has no hint:\n%s", view)
 	}
-	if !strings.Contains(view, "keyring keeps the secrets") {
+	if !strings.Contains(words, "keyring (recommended) keeps the secrets in the system keyring") {
 		t.Errorf("the form does not say what the type decides:\n%s", view)
 	}
 
@@ -1262,7 +1262,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 		t.Fatalf("focused field kind = %v, want a secret role", m.fields[m.focus].kind)
 	}
 	view := strings.Join(strings.Fields(m.View()), " ")
-	for _, want := range []string{"Credential saved", "press s on each role", "p if the system credential store"} {
+	for _, want := range []string{"Credential saved", "press s on each role", "system keyring", "(recommended)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("continued credential form does not contain %q:\n%s", want, view)
 		}
@@ -1550,7 +1550,7 @@ func TestATallFormStaysUsableInASmallTerminal(t *testing.T) {
 	if !strings.Contains(view, "a key you choose") {
 		t.Errorf("the dense form dropped the hint of the focused field:\n%s", view)
 	}
-	if strings.Contains(view, "credential store") {
+	if strings.Contains(view, "containers") {
 		t.Errorf("the dense form kept the hint of an unfocused field:\n%s", view)
 	}
 

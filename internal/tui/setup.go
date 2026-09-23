@@ -67,15 +67,19 @@ const (
 	storageEnv       = "environment variables"
 	storagePlaintext = "unencrypted file (asks first)"
 
-	setupProviderHint   = "the system this connection leads to; it decides everything the next steps offer"
-	setupServiceHint    = "reuse a configured instance of this provider, or choose " + newService + " to add one"
-	setupCredentialHint = "reuse a credential of this provider, or choose " + newCredential + " to add one"
-	storageHint         = "system keyring keeps the secrets in the credential store of this machine; " +
-		"environment variables suit CI and containers; unencrypted file is the fallback without a keyring"
+	setupProviderHint       = "the system this connection leads to; it decides everything the next steps offer"
+	setupServiceHint        = "reuse a configured instance of this provider, or choose " + newService + " to add one"
+	setupCredentialHint     = "reuse a credential of this provider, or choose " + newCredential + " to add one"
 	maskedHint              = "typed masked and never shown; stored only when you save in the last step"
 	setupConnectionNameHint = "a key you choose, without spaces; agents and --connection select the " +
 		"connection by it"
 )
+
+// storageHint says what each place for new secrets is for. The system keyring is named as this platform
+// calls it, so a user recognises it as something the machine already has rather than something to set up.
+var storageHint = "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
+	"machine, with nothing to set up or export; environment variables suit CI and containers; unencrypted " +
+	"file is the last resort without a keyring and asks first"
 
 // setup is the state of a running guided setup. pages keeps the rows of every step that was opened, so
 // going back and forth loses nothing that was typed.
@@ -573,10 +577,10 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 
 // setupError turns a failed save into the way out. The configuration is unchanged in every case.
 func (m *Model) setupError(err error) string {
-	if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrLocked) ||
-		errors.Is(err, secret.ErrDisabled) {
-		return fmt.Sprintf("%v; nothing was saved. Unlock or configure the system keyring and press enter "+
-			"again, or press ctrl+b to go back and choose %s or %s", err, storageEnv, storagePlaintext)
+	if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
+		return fmt.Sprintf("%v; nothing was saved. %s, then press enter again, or press ctrl+b to go back "+
+			"and choose %s or %s", err, secret.StoreAdvice(secret.StoreStateOf(err), platform), storageEnv,
+			storagePlaintext)
 	}
 	return err.Error() + "; the configuration was not changed"
 }

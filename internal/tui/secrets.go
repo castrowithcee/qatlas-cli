@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -58,6 +59,23 @@ const (
 	sourceUnsaved = "save the credential first"
 	sourceUnnamed = "no variable named"
 )
+
+// What the row of a keyring role says once the resolver has answered. The system keyring is the
+// recommended place, so each state is said in its terms; the environment and the unencrypted file are
+// named as what they are, an override and a fallback.
+const (
+	stateStored      = "in system keyring"
+	stateOverride    = "environment variable, overrides keyring"
+	statePlaintext   = "unencrypted file"
+	stateEmpty       = "not stored yet"
+	stateLocked      = "keyring locked"
+	stateUnreachable = "keyring unreachable"
+	stateOff         = "keyring switched off"
+)
+
+// platform is the operating system whose keyring the texts name. The names themselves are checked for
+// every platform in the secret package, without reaching any store.
+var platform = runtime.GOOS
 
 // credQuery is one credential the editor wants the resolved sources of.
 type credQuery struct {
@@ -261,7 +279,7 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 // storeSecret hands one secret to the resolver. The write may reach the platform store, so it runs as a
 // command and the editor stays usable while it does.
 func (m *Model) storeSecret(credential, role, value string, plaintext bool) tea.Cmd {
-	where := "credential store"
+	where := "system keyring"
 	if plaintext {
 		where = "plaintext file"
 	}
@@ -310,24 +328,33 @@ func joinSources(sources []secret.Source) string {
 
 // explain turns a store failure into the way out.
 //
-// A machine without a running secret service must not be a dead end in the editor either. The plaintext
-// file is the named decision for that case, so the message says which key takes it and which file it
-// writes, and it names the derived variable as the other way. It never carries a value.
+// A machine without a running secret service must not be a dead end in the editor either. The message says
+// what the keyring's state means on this platform and how to fix it, names the derived variable as the
+// other way, and names the plaintext file only as a deliberate last resort behind its own confirmation.
+// It is built from the class of the failure and never carries a value.
 func (m *Model) explain(err error, credential, role string) string {
-	switch {
-	case errors.Is(err, secret.ErrNoEntry):
+	if errors.Is(err, secret.ErrNoEntry) {
 		return fmt.Sprintf("no stored secret for %s.%s", credential, role)
-	case errors.Is(err, secret.ErrLocked):
-		return "the system keyring is locked; unlock its login collection, then retry s. " +
-			"Only if you deliberately accept an unencrypted file, press p; it asks again before writing " +
-			m.plaintextPath()
-	case errors.Is(err, secret.ErrUnavailable), errors.Is(err, secret.ErrDisabled):
-		return fmt.Sprintf("%v; the system keyring could not be used: unlock or configure it, then retry s. "+
-			"Only if you deliberately accept an unencrypted file, press p; it asks again before writing %s. "+
-			"Alternatively export %s",
-			err, m.plaintextPath(), secret.DerivedEnvName(credential, role))
 	}
-	return err.Error()
+	if !errors.Is(err, secret.ErrUnavailable) && !errors.Is(err, secret.ErrDisabled) {
+		return err.Error()
+	}
+
+	state := secret.StoreStateOf(err)
+	text := secret.StoreAdvice(state, platform)
+	retry := "s"
+	var remaining *secret.RemainingError
+	if errors.As(err, &remaining) {
+		// A delete that could not clear the keyring says first what may still be stored.
+		text = err.Error() + "; " + text
+		retry = "x"
+	}
+	if state != secret.StoreOff {
+		text += ", then retry " + retry
+	}
+	return fmt.Sprintf("%s. Alternatively export %s. Only if you deliberately accept an unencrypted file, "+
+		"press p; it asks again before writing %s", text, secret.DerivedEnvName(credential, role),
+		m.plaintextPath())
 }
 
 func (m *Model) plaintextPath() string {
@@ -454,14 +481,65 @@ func (m *Model) envSource(name string) string {
 
 // storedSource reports where a role of a keyring credential resolves from, out of the last answer the
 // resolver gave. It never asks synchronously: that would block the whole editor on the store.
+//
+// A missing secret is told apart by what the keyring said, because each case has a different way out: an
+// empty keyring wants the secret, a locked one wants unlocking, and a switched-off one wants the switch.
 func (m *Model) storedSource(credential, role string) string {
 	if credential == "" {
 		return sourceUnsaved
 	}
-	if source, ok := m.sources[secret.StoreKey(credential, role)]; ok {
-		return string(source)
+	key := secret.StoreKey(credential, role)
+	source, ok := m.sources[key]
+	if !ok {
+		return sourcePending
 	}
-	return sourcePending
+	switch source {
+	case secret.SourceStore:
+		return stateStored
+	case secret.SourceEnv:
+		return stateOverride
+	case secret.SourcePlaintext:
+		return statePlaintext
+	}
+	switch secret.StoreStage(m.checked[key]) {
+	case secret.StoreEmpty:
+		return stateEmpty
+	case secret.StoreLocked:
+		return stateLocked
+	case secret.StoreUnavailable, secret.StoreTimedOut:
+		return stateUnreachable
+	case secret.StoreOff:
+		return stateOff
+	}
+	return string(source)
+}
+
+// secretNextStep names the one thing to do about a keyring role in its current state, or nothing when the
+// secret is where it should be. It is built from the state alone and names no value.
+func (m *Model) secretNextStep(credential, role string) string {
+	key := secret.StoreKey(credential, role)
+	source, ok := m.sources[key]
+	if !ok {
+		return ""
+	}
+	env := secret.DerivedEnvName(credential, role)
+	switch source {
+	case secret.SourceEnv:
+		// The override stays visible: it wins over the keyring for as long as it is set.
+		return fmt.Sprintf("%s is set and wins over the system keyring; unset it to use the keyring", env)
+	case secret.SourceMissing:
+	default:
+		return ""
+	}
+	switch state := secret.StoreStage(m.checked[key]); state {
+	case secret.StoreEmpty:
+		return "next: press s to store it in " + secret.StoreLabel(platform) + " (recommended)"
+	case secret.StoreLocked, secret.StoreUnavailable, secret.StoreTimedOut:
+		return fmt.Sprintf("next: %s, then press s; or export %s", secret.StoreAdvice(state, platform), env)
+	case secret.StoreOff:
+		return fmt.Sprintf("next: %s; or export %s", secret.StoreAdvice(state, platform), env)
+	}
+	return ""
 }
 
 // secretRowHint says what the keys on a secret row do, and, once the resolver has answered, which stages
@@ -480,6 +558,9 @@ func (m *Model) secretRowHint(credential, role string, lead bool) string {
 	}
 	if checked := m.checked[secret.StoreKey(credential, role)]; len(checked) > 0 {
 		parts = append(parts, "checked: "+strings.Join(checked, ", "))
+	}
+	if next := m.secretNextStep(credential, role); next != "" {
+		parts = append(parts, next)
 	}
 	return strings.Join(parts, "; ")
 }

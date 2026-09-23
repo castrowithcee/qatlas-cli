@@ -144,6 +144,145 @@ func TestLockedStoreIsNamedPrecisely(t *testing.T) {
 	}
 }
 
+// A platform failure is reported by its class only. What the service said is written for the service, and
+// passing it on would put text into a message that no remedy here was written for.
+func TestClassifyKeepsOnlyTheClass(t *testing.T) {
+	const platformText = "org.freedesktop.DBus.Error.ServiceUnknown raw-platform-detail"
+	classified := classify(errors.New(platformText))
+	if !errors.Is(classified, ErrUnavailable) || errors.Is(classified, ErrLocked) {
+		t.Fatalf("classify() = %v, want unavailable and not locked", classified)
+	}
+	if strings.Contains(classified.Error(), "raw-platform-detail") {
+		t.Errorf("classify() = %q, want the platform text dropped", classified)
+	}
+}
+
+// Every state the store can be in for one role is told apart by type, and the store stage in Checked reads
+// back as the same state. Nothing here reaches a platform store.
+func TestStoreStatesAreTyped(t *testing.T) {
+	derived := DerivedEnvName(credName, role)
+	tests := []struct {
+		name       string
+		env        map[string]string
+		arrange    func(s *MemoryStore)
+		wantSource Source
+		wantState  StoreState
+	}{
+		{"stored", nil, func(s *MemoryStore) { _ = s.Set(StoreKey(credName, role), canaryStore) },
+			SourceStore, StoreNotAsked},
+		{"overridden by the environment", map[string]string{derived: canaryEnv},
+			func(s *MemoryStore) { _ = s.Set(StoreKey(credName, role), canaryStore) }, SourceEnv, StoreNotAsked},
+		{"empty", nil, func(*MemoryStore) {}, SourceMissing, StoreEmpty},
+		{"locked", nil, func(s *MemoryStore) { s.Fail(fmt.Errorf("%w: %w", ErrUnavailable, ErrLocked)) },
+			SourceMissing, StoreLocked},
+		{"unreachable", nil, func(s *MemoryStore) { s.Fail(ErrUnavailable) }, SourceMissing, StoreUnavailable},
+		{"timed out", nil, func(s *MemoryStore) { s.Fail(fmt.Errorf("%w: %w", ErrUnavailable, ErrTimedOut)) },
+			SourceMissing, StoreTimedOut},
+		{"switched off", nil, func(s *MemoryStore) { s.Fail(ErrDisabled) }, SourceMissing, StoreOff},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r, store, _, _ := fixture(t, tt.env)
+			tt.arrange(store)
+
+			source, checked := r.Status(credName, keyringCred(), role)
+			if source != tt.wantSource {
+				t.Errorf("source = %q, want %q", source, tt.wantSource)
+			}
+			if got := StoreStage(checked); got != tt.wantState {
+				t.Errorf("StoreStage(%v) = %q, want %q", checked, got, tt.wantState)
+			}
+			for _, c := range checked {
+				if strings.Contains(c, canaryStore) || strings.Contains(c, canaryEnv) {
+					t.Errorf("checked = %v, want no value", checked)
+				}
+			}
+		})
+	}
+
+	if got := StoreStateOf(nil); got != StoreHolds {
+		t.Errorf("StoreStateOf(nil) = %q, want %q", got, StoreHolds)
+	}
+	if got := StoreStateOf(ErrNoEntry); got != StoreEmpty {
+		t.Errorf("StoreStateOf(ErrNoEntry) = %q, want %q", got, StoreEmpty)
+	}
+	if got := StoreStateOf(errors.New("anything else")); got != StoreUnavailable {
+		t.Errorf("an unexpected failure = %q, want %q", got, StoreUnavailable)
+	}
+}
+
+// Each platform's keyring carries the name its users know, checked without reaching any store.
+func TestStoreNamesPerPlatform(t *testing.T) {
+	for goos, want := range map[string]string{
+		"linux":   "the system keyring (Secret Service)",
+		"freebsd": "the system keyring (Secret Service)",
+		"darwin":  "the system keyring (macOS Keychain)",
+		"windows": "the system keyring (Windows Credential Manager)",
+		"plan9":   "the system keyring",
+	} {
+		if got := StoreLabel(goos); got != want {
+			t.Errorf("StoreLabel(%q) = %q, want %q", goos, got, want)
+		}
+	}
+}
+
+// A locked, unreachable, slow or switched-off keyring comes with a platform-specific next step. States
+// that need none say nothing.
+func TestStoreAdviceNamesTheWayOut(t *testing.T) {
+	tests := []struct {
+		state StoreState
+		goos  string
+		want  []string
+	}{
+		{StoreLocked, "linux", []string{"Secret Service", "is locked", "unlock", "GNOME Keyring"}},
+		{StoreLocked, "darwin", []string{"macOS Keychain", "is locked", "Keychain Access"}},
+		{StoreLocked, "windows", []string{"Windows Credential Manager", "is locked", "sign in"}},
+		{StoreUnavailable, "linux", []string{"Secret Service", "cannot be reached", "KWallet"}},
+		{StoreUnavailable, "darwin", []string{"macOS Keychain", "cannot be reached", "user session"}},
+		{StoreUnavailable, "windows", []string{"Windows Credential Manager", "cannot be reached"}},
+		{StoreTimedOut, "linux", []string{"did not answer", "unlock prompt"}},
+		{StoreOff, "darwin", []string{"switched off", StoreSelector + "=" + StoreNone, StoreAuto}},
+	}
+	for _, tt := range tests {
+		got := StoreAdvice(tt.state, tt.goos)
+		for _, want := range tt.want {
+			if !strings.Contains(got, want) {
+				t.Errorf("StoreAdvice(%q, %q) = %q, want it to contain %q", tt.state, tt.goos, got, want)
+			}
+		}
+	}
+	for _, state := range []StoreState{StoreNotAsked, StoreHolds, StoreEmpty} {
+		if got := StoreAdvice(state, "linux"); got != "" {
+			t.Errorf("StoreAdvice(%q) = %q, want nothing", state, got)
+		}
+	}
+}
+
+// A missing secret behind a locked keyring names the unlock, not another store attempt that would run into
+// the same lock.
+func TestMissingSecretNamesALockedKeyring(t *testing.T) {
+	r, store, _, _ := fixture(t, nil)
+	store.Fail(fmt.Errorf("%w: %w", ErrUnavailable, ErrLocked))
+
+	_, err := r.Resolve(credName, keyringCred(), role)
+	if err == nil {
+		t.Fatal("Resolve() = nil, want a missing secret")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, StoreAdvice(StoreLocked, runtime.GOOS)) {
+		t.Errorf("error = %q, want the unlock advice", msg)
+	}
+	if !strings.Contains(msg, DerivedEnvName(credName, role)) {
+		t.Errorf("error = %q, want the variable named", msg)
+	}
+
+	r, _, _, _ = fixture(t, nil)
+	_, err = r.Resolve(credName, keyringCred(), role)
+	if err == nil || !strings.Contains(err.Error(), "store it in the system keyring with 'qatlas credential set") {
+		t.Errorf("error = %v, want the keyring named as the place to store it", err)
+	}
+}
+
 // The fallback file is inert until it is switched on, and resolving never creates it.
 func TestPlaintextNeedsTheSwitch(t *testing.T) {
 	dir := t.TempDir()

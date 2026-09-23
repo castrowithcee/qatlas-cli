@@ -170,6 +170,63 @@ func TestCredentialSetNeedsThePlaintextSwitch(t *testing.T) {
 	}
 }
 
+// A locked keyring is named with its platform fix, and a delete that cannot reach it never reports
+// success. Neither message carries the secret, and neither writes anything else.
+func TestCredentialCommandsExplainALockedKeyring(t *testing.T) {
+	dir := keyringFixture(t)
+	store := secret.NewMemoryStore()
+	store.Fail(fmt.Errorf("%w: %w", secret.ErrUnavailable, secret.ErrLocked))
+	opts := testOptionsIn(t, dir, store)
+	advice := secret.StoreAdvice(secret.StoreLocked, runtime.GOOS)
+
+	code, stdout, stderr := runWithInput(t, opts, canaryStored,
+		"credential", "set", "vault-reader", "token-id", "--config", configIn(dir))
+	if code != exitUsage || stdout != "" {
+		t.Fatalf("set: exit %d, stdout %q, want a usage error", code, stdout)
+	}
+	for _, want := range []string{advice, secret.DerivedEnvName("vault-reader", "token-id"), "--plaintext"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("set: stderr = %q, want %q", stderr, want)
+		}
+	}
+	if strings.Contains(stderr, canaryStored) {
+		t.Errorf("set: stderr = %q, want the secret kept out", stderr)
+	}
+
+	code, _, stderr = runWithInput(t, opts, "", "credential", "delete", "vault-reader", "token-id",
+		"--config", configIn(dir))
+	if code == exitOK {
+		t.Fatalf("delete: exit %d, want a failure while the keyring is locked", code)
+	}
+	for _, want := range []string{"may still be stored", advice} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("delete: stderr = %q, want %q", stderr, want)
+		}
+	}
+	if len(filesIn(t, dir)) != 1 {
+		t.Errorf("files = %v, want only the configuration", filesIn(t, dir))
+	}
+}
+
+// The help of the credential commands presents the system keyring as the recommended place and keeps the
+// environment and the plaintext file apart from it.
+func TestCredentialHelpRecommendsTheSystemKeyring(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"credential", "--help"}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit %d (stderr %q)", code, stderr.String())
+	}
+	words := strings.Join(strings.Fields(stdout.String()), " ")
+	for _, want := range []string{
+		"system keyring", "recommended", "Secret Service on Linux", "macOS Keychain",
+		"Windows Credential Manager", "QATLAS_<CREDENTIAL>_<ROLE> overrides", "unencrypted file",
+		secret.StoreSelector + "=" + secret.StoreNone,
+	} {
+		if !strings.Contains(words, want) {
+			t.Errorf("credential help does not contain %q:\n%s", want, stdout.String())
+		}
+	}
+}
+
 // With the switch the fallback is written, once, with the switch recorded in it and mode 0600.
 func TestCredentialSetPlaintext(t *testing.T) {
 	dir := keyringFixture(t)

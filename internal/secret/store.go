@@ -48,6 +48,70 @@ func SystemStore() (Store, error) {
 	}
 }
 
+// StoreName returns what the platform calls the store SystemStore reaches, so a message can send a user to
+// the place they know from their own system. The operating system is an argument, as runtime.GOOS spells
+// it, so every name can be checked on any machine without reaching a store. The systems go-keyring serves
+// through Secret Service are named as such; anything else is simply the system keyring.
+func StoreName(goos string) string {
+	switch goos {
+	case "darwin":
+		return "macOS Keychain"
+	case "windows":
+		return "Windows Credential Manager"
+	case "linux", "freebsd", "openbsd", "netbsd", "dragonfly":
+		return "Secret Service"
+	}
+	return "system keyring"
+}
+
+// StoreLabel names the system keyring together with what the platform calls it, for example "the system
+// keyring (macOS Keychain)".
+func StoreLabel(goos string) string {
+	if name := StoreName(goos); name != "system keyring" {
+		return "the system keyring (" + name + ")"
+	}
+	return "the system keyring"
+}
+
+// StoreAdvice says in one sentence what a store state means on the given platform and what to do about it.
+// It is built from the state alone, so it never repeats what the platform reported and never names a
+// value. States that need no advice return an empty string.
+func StoreAdvice(state StoreState, goos string) string {
+	label := StoreLabel(goos)
+	switch state {
+	case StoreLocked:
+		fix := "unlock it"
+		switch StoreName(goos) {
+		case "macOS Keychain":
+			fix = "unlock the login keychain, for example in Keychain Access"
+		case "Windows Credential Manager":
+			fix = "sign in to Windows as this user again"
+		case "Secret Service":
+			fix = "unlock its login collection, for example in GNOME Keyring or KWallet"
+		}
+		return label + " is locked: " + fix
+	case StoreUnavailable:
+		fix := "make sure this session can reach it"
+		switch StoreName(goos) {
+		case "macOS Keychain":
+			fix = "run qatlas in your logged-in macOS user session"
+		case "Windows Credential Manager":
+			fix = "run qatlas as the signed-in Windows user"
+		case "Secret Service":
+			fix = "start a provider such as GNOME Keyring or KWallet in this login session; SSH sessions " +
+				"and containers usually have none"
+		}
+		return label + " cannot be reached: " + fix
+	case StoreTimedOut:
+		return fmt.Sprintf("%s did not answer within %s: answer a pending unlock prompt, or unlock it "+
+			"first, then try again", label, storeTimeout)
+	case StoreOff:
+		return fmt.Sprintf("%s is switched off because %s=%s: unset it, or set it to %s, to use the keyring",
+			label, StoreSelector, StoreNone, StoreAuto)
+	}
+	return ""
+}
+
 // storeTimeout bounds every call into the platform store.
 //
 // The library offers no context, and the call goes to a service in another process: a half-started
@@ -131,15 +195,16 @@ func within[T any](limit time.Duration, op func() (T, error)) (T, error) {
 	}
 }
 
-// classify turns anything the platform reports into the one class the cascade acts on. The original text
-// is kept for diagnosis: it describes the service, never a stored value.
+// classify turns anything the platform reports into the one class the cascade acts on. The platform's own
+// text is not passed on: it is phrased for the service rather than for a user, and the class together with
+// StoreAdvice already says what happened and what to do, on every platform alike.
 func classify(err error) error {
 	message := strings.ToLower(err.Error())
 	if strings.Contains(message, "locked collection") ||
 		strings.Contains(message, "failed to unlock correct collection") {
 		return fmt.Errorf("%w: %w", ErrUnavailable, ErrLocked)
 	}
-	return fmt.Errorf("%w: %v", ErrUnavailable, err)
+	return ErrUnavailable
 }
 
 // unavailableStore stands in wherever no store can be reached. It keeps a missing service from becoming a

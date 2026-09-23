@@ -73,14 +73,18 @@ services:
 # exactly those roles instead of every role every compiled provider knows. A credential without it stays
 # valid and keeps offering all of them.
 credentials:
-  # type: keyring keeps the secrets in the credential store of the platform, so nothing has to be
-  # exported and nothing lands in this file. Fill it with:
+  # type: keyring is the recommended type on a workstation. It keeps the secrets in the system keyring,
+  # the credential store the operating system already provides: Secret Service on Linux (for example
+  # GNOME Keyring or KWallet), the macOS Keychain, or the Windows Credential Manager. Nothing has to be
+  # set up or exported, and nothing lands in this file. Fill it in `qatlas tui` (s on the role) or with:
   #
   #     printf %s "$TOKEN_ID" | qatlas credential set wiki-reader token-id
   #     printf %s "$TOKEN_SECRET" | qatlas credential set wiki-reader token-secret
   #
-  # QATLAS_WIKI_READER_TOKEN_ID and QATLAS_WIKI_READER_TOKEN_SECRET still override the store when
-  # they are set; the derived name is always QATLAS_<CREDENTIAL>_<ROLE>.
+  # QATLAS_WIKI_READER_TOKEN_ID and QATLAS_WIKI_READER_TOKEN_SECRET still override the keyring when
+  # they are set; the derived name is always QATLAS_<CREDENTIAL>_<ROLE>. Without a usable keyring,
+  # `qatlas credential set --plaintext` writes an unencrypted file beside this one instead, and only
+  # when asked for; QATLAS_CREDENTIAL_STORE=none switches the keyring off for a run, for example in CI.
   wiki-reader:
     provider: bookstack
     type: keyring
