@@ -68,7 +68,7 @@ func setSecret(t *testing.T, m *Model, role, value string, plaintext bool) {
 func editEntry(t *testing.T, m *Model, name string) {
 	t.Helper()
 	openSectionByName(t, m, sectionCredentials)
-	for i := 0; i <= len(m.names); i++ {
+	for i := 0; i <= len(m.list.all); i++ {
 		if got, _ := m.selected(); got == name {
 			pump(t, m, "enter")
 			return

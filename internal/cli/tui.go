@@ -19,7 +19,10 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Short: "Edit the configuration in a terminal interface",
 		Long: "The editor manages services, credentials, connections, and domain defaults, can test a\n" +
 			"selected connection, and stores the secrets of a keyring credential in a masked field. It\n" +
-			"never displays a stored secret back: what it shows is which source delivers a role.",
+			"never displays a stored secret back: what it shows is which source delivers a role.\n\n" +
+			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
+			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
+			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if opts.Agent {

@@ -192,8 +192,10 @@ type Model struct {
 
 	screen  screen
 	section section
-	cursor  int
-	names   []string
+	// cursor is the section focused on the dashboard. The entries of the open section, with their filter,
+	// selection and scroll position, are list.
+	cursor int
+	list   filterList
 
 	editing string
 	fields  []field
@@ -264,13 +266,15 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	if secrets == nil {
 		secrets = noSecrets{}
 	}
-	return &Model{
+	m := &Model{
 		store: store, cfg: cfg, tester: tester, redactor: redactor,
 		secrets: secrets,
 		sources: map[string]secret.Source{},
 		checked: map[string][]string{},
 		width:   defaultWidth, height: defaultHeight, configExists: configExists,
-	}, nil
+	}
+	m.list = newFilterList(m.describe)
+	return m, nil
 }
 
 func asNotFound(err error, target **config.NotFoundError) bool {
@@ -287,6 +291,7 @@ func (m *Model) Init() tea.Cmd { return m.refreshSources(m.keyringQueries()) }
 
 // Update handles one event. It is the whole editor logic and needs no terminal.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	defer m.keepScrollPosition()
 	switch msg := msg.(type) {
 	case testDoneMsg:
 		m.finishTest(msg)
@@ -381,6 +386,9 @@ func (m *Model) moveDashboardFocus(horizontal, vertical int) {
 }
 
 func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
+	if m.list.editing {
+		return m.updateFilter(key)
+	}
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
@@ -392,14 +400,23 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			m.status = "Connection test cancelled"
 			return nil
 		}
+		if m.list.query() != "" {
+			// A filter is left before the list is: the first escape shows every entry again.
+			m.list.clearFilter()
+			return nil
+		}
 		m.screen, m.cursor = screenMenu, int(m.section)
 		m.clearMessages()
 	case "ctrl+c":
 		return m.quit()
+	case "/":
+		m.list.startFilter()
 	case "up", "k":
-		m.cursor = wrap(m.cursor-1, len(m.names))
+		m.list.move(-1)
 	case "down", "j":
-		m.cursor = wrap(m.cursor+1, len(m.names))
+		m.list.move(1)
+	case "pgup", "pgdown", "home", "end":
+		m.jumpList(key.String())
 	case "n":
 		if reason := m.newEntryBlocked(); reason != "" {
 			m.status = ""
@@ -420,6 +437,44 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		return m.startTest()
 	}
 	return nil
+}
+
+// updateFilter is the list while its filter is typed. Every printable key belongs to the filter, including
+// the letters and digits that are list keys otherwise; the arrows still move through what it matches.
+func (m *Model) updateFilter(key tea.KeyMsg) tea.Cmd {
+	switch key.String() {
+	case "ctrl+c":
+		return m.quit()
+	case "esc":
+		m.list.clearFilter()
+	case "enter":
+		m.list.stopFilter()
+	case "up":
+		m.list.move(-1)
+	case "down":
+		m.list.move(1)
+	case "pgup", "pgdown", "home", "end":
+		m.jumpList(key.String())
+	default:
+		return m.list.updateFilter(key)
+	}
+	return nil
+}
+
+// jumpList moves by one screen of entries or to either end of the list.
+func (m *Model) jumpList(key string) {
+	start, end := m.listWindow()
+	page := max(end-start-1, 1)
+	switch key {
+	case "pgup":
+		m.list.jump(-page)
+	case "pgdown":
+		m.list.jump(page)
+	case "home":
+		m.list.jump(-len(m.list.matches))
+	case "end":
+		m.list.jump(len(m.list.matches))
+	}
 }
 
 // newEntryBlocked keeps a form with empty choice lists from turning an obvious missing prerequisite into
@@ -462,7 +517,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 		m.clearMessages()
 		return nil
 	default:
-		cmd := m.openSection(m.section)
+		cmd := m.returnToList("")
 		m.status = "Cancelled"
 		return cmd
 	}
@@ -472,7 +527,7 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "esc":
 		// Cancelling discards the form; nothing was written.
-		cmd := m.openSection(m.section)
+		cmd := m.returnToList("")
 		m.status = "Cancelled"
 		return cmd
 	case "ctrl+c":
@@ -819,17 +874,32 @@ func (m *Model) stopTest() {
 	m.testClass = ""
 }
 
+// openSection shows a section from its first entry, without a filter.
 func (m *Model) openSection(s section) tea.Cmd {
+	m.section = s
+	m.list.reset(m.entryNames(s))
+	return m.showList()
+}
+
+// returnToList comes back to the list a form or confirmation was opened from. The filter stays, and so
+// does the selection: on the named entry when it is shown, on the entry that was selected otherwise, or,
+// when that one is gone, on the one now in its place.
+func (m *Model) returnToList(name string) tea.Cmd {
+	m.list.setItems(m.entryNames(m.section))
+	if name != "" {
+		m.list.selectName(name)
+	}
+	return m.showList()
+}
+
+func (m *Model) showList() tea.Cmd {
 	m.stopTest()
 	m.testName = ""
-	m.section = s
 	m.screen = screenList
-	m.names = m.entryNames(s)
-	m.cursor = 0
 	m.editing = ""
 	m.confirmRole = ""
 	m.clearMessages()
-	if s != sectionCredentials {
+	if m.section != sectionCredentials {
 		return nil
 	}
 	// The list says where each secret resolves from, and that answer comes from the resolver rather than
@@ -837,12 +907,7 @@ func (m *Model) openSection(s section) tea.Cmd {
 	return m.refreshSources(m.keyringQueries())
 }
 
-func (m *Model) selected() (string, bool) {
-	if m.cursor < 0 || m.cursor >= len(m.names) {
-		return "", false
-	}
-	return m.names[m.cursor], true
-}
+func (m *Model) selected() (string, bool) { return m.list.selected() }
 
 func (m *Model) entryNames(s section) []string {
 	var names []string
@@ -1115,7 +1180,7 @@ func (m *Model) save(name string) tea.Cmd {
 			"role, or p if the system credential store is unavailable."
 		return cmd
 	}
-	cmd := m.openSection(m.section)
+	cmd := m.returnToList(name)
 	m.status = "Saved " + name
 	return cmd
 }
@@ -1203,7 +1268,7 @@ func (m *Model) delete() tea.Cmd {
 	}
 	m.cfg = candidate
 	m.configExists = true
-	cmd := m.openSection(m.section)
+	cmd := m.returnToList("")
 	m.status = "Deleted " + name
 	return cmd
 }
@@ -1455,6 +1520,9 @@ func (m *Model) editorView() string {
 }
 
 func (m *Model) buildEditorView(dense bool) string {
+	if m.screen == screenList {
+		return m.listView()
+	}
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Qatlas setup") + "\n")
 	path := "Config: " + m.store.Path()
@@ -1464,20 +1532,6 @@ func (m *Model) buildEditorView(dense bool) string {
 	b.WriteString(m.wrapped(hintStyle, path) + "\n\n")
 
 	switch m.screen {
-	case screenList:
-		b.WriteString(titleStyle.Render(m.section.title()) + "\n\n")
-		if len(m.names) == 0 {
-			b.WriteString(m.wrapped(hintStyle, m.emptyHelp()) + "\n")
-		}
-		for i, name := range m.names {
-			b.WriteString(m.row(i == m.cursor, m.describe(name)) + "\n")
-		}
-		if m.section == sectionConnections {
-			b.WriteString(m.testLine())
-			b.WriteString(m.hint("n new · enter edit · d delete · t test · esc back"))
-		} else {
-			b.WriteString(m.hint("n new · enter edit · d delete · esc back"))
-		}
 	case screenForm:
 		what := "New " + strings.ToLower(m.section.title())
 		if m.editing != "" {
@@ -1553,6 +1607,13 @@ func (m *Model) buildEditorView(dense bool) string {
 		b.WriteString(m.hint("y remove · n keep"))
 	}
 
+	b.WriteString(m.notes())
+	return b.String()
+}
+
+// notes are the lines under every editor screen: what is still running, and what the last action did.
+func (m *Model) notes() string {
+	var b strings.Builder
 	for _, note := range []string{m.busy, m.probing} {
 		if note != "" {
 			b.WriteString("\n\n" + m.wrapped(hintStyle, note+" ... (the editor stays usable)"))
@@ -1564,6 +1625,111 @@ func (m *Model) buildEditorView(dense bool) string {
 		b.WriteString("\n\n" + m.wrapped(hintStyle, m.status))
 	}
 	return b.String()
+}
+
+// listView draws the list screen: its frame, and between them as many rows as fit.
+func (m *Model) listView() string {
+	header, footer := m.listFrame()
+	var b strings.Builder
+	b.WriteString(header)
+	start, end := m.listWindowIn(header, footer)
+	for i := start; i < end; i++ {
+		b.WriteString(m.listRow(i) + "\n")
+	}
+	b.WriteString(footer)
+	return b.String()
+}
+
+// listFrame is everything of the list screen except its rows: above them the heading, the position of the
+// selection and the filter; below them the test result, the keys and the notes. The rows get the lines
+// that are left, so a list of any length fits the terminal and only the rows scroll.
+func (m *Model) listFrame() (string, string) {
+	var head strings.Builder
+	head.WriteString(titleStyle.Render("Qatlas setup") + "\n")
+	path := "Config: " + m.store.Path()
+	if !m.configExists {
+		path += " (created on first save)"
+	}
+	head.WriteString(m.wrapped(hintStyle, path) + "\n\n")
+
+	title := titleStyle.Render(m.section.title())
+	total, shown := len(m.list.all), len(m.list.matches)
+	filtered := m.list.editing || m.list.query() != ""
+	switch {
+	case filtered:
+		title += fmt.Sprintf("  %d/%d (%d total)", min(m.list.cursor+1, shown), shown, total)
+	case total > 0:
+		title += fmt.Sprintf("  %d/%d", m.list.cursor+1, total)
+	}
+	head.WriteString(title + "\n")
+	if filtered {
+		head.WriteString(m.filterLine() + "\n")
+	} else {
+		head.WriteString("\n")
+	}
+	switch {
+	case total == 0:
+		head.WriteString(m.wrapped(hintStyle, m.emptyHelp()) + "\n")
+	case shown == 0:
+		head.WriteString(m.wrapped(hintStyle,
+			fmt.Sprintf("No entry matches %q. Press esc to clear the filter.", m.list.query())) + "\n")
+	}
+
+	var keys string
+	switch {
+	case m.list.editing:
+		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
+	case m.section == sectionConnections:
+		keys = "/ filter · n new · enter edit · d delete · t test · esc back"
+	default:
+		keys = "/ filter · n new · enter edit · d delete · esc back"
+	}
+	if !m.list.editing && m.list.query() != "" {
+		keys = strings.TrimSuffix(keys, "esc back") + "esc clear filter"
+	}
+	foot := m.hint(keys)
+	if m.section == sectionConnections {
+		foot = m.testLine() + foot
+	}
+	return head.String(), foot + m.notes()
+}
+
+// filterLine shows the filter: while it is typed with its cursor, afterwards as the text it holds.
+func (m *Model) filterLine() string {
+	prefix, width := m.fit("filter: ")
+	if !m.list.editing {
+		return prefix + truncateCells(m.list.query(), width)
+	}
+	in := m.list.input
+	in.Width = max(width-1, 1)
+	return prefix + in.View()
+}
+
+// listRow draws the shown entry at index i of the list.
+func (m *Model) listRow(i int) string {
+	return m.row(i == m.list.cursor, m.describe(m.list.matches[i]))
+}
+
+// listWindow is the range of shown entries whose rows fit between the frame of the list screen.
+func (m *Model) listWindow() (int, int) { return m.listWindowIn(m.listFrame()) }
+
+func (m *Model) listWindowIn(header, footer string) (int, int) {
+	room := m.height - strings.Count(header, "\n") - strings.Count(footer, "\n") - 1
+	heights := map[int]int{}
+	return m.list.window(room, func(i int) int {
+		if _, ok := heights[i]; !ok {
+			heights[i] = strings.Count(m.listRow(i), "\n") + 1
+		}
+		return heights[i]
+	})
+}
+
+// keepScrollPosition remembers where the list is scrolled to, so the next frame keeps it as long as the
+// selection stays on screen instead of jumping to put the selection at an edge.
+func (m *Model) keepScrollPosition() {
+	if m.screen == screenList && !m.terminalTooSmall() {
+		m.list.offset, _ = m.listWindow()
+	}
 }
 
 type dashboardLayout int
