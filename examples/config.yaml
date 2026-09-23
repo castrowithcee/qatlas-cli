@@ -65,6 +65,11 @@ services:
     provider: github
     base_url: https://api.github.com
 
+  # Todoist accepts only the official API v1 root, because a personal token belongs to that one service.
+  todoist:
+    provider: todoist
+    base_url: https://api.todoist.com/api/v1
+
 # A credential says where secrets come from. BookStack needs the roles token-id and token-secret.
 # A credential names the source of the secrets one provider needs, never a secret itself.
 #
@@ -189,6 +194,12 @@ credentials:
   # (a classic token of a repository administrator with repo). Grant only what the connection lists.
   github-maintainer:
     provider: github
+    type: keyring
+
+  # Todoist needs the single role token, the personal API token from Settings, Integrations, Developer. It
+  # reaches the whole account, so each connection's targets decide which projects Qatlas exposes.
+  todoist-reader:
+    provider: todoist
     type: keyring
 
 # A connection is what you select with --connection. It binds one service to one credential.
@@ -432,10 +443,31 @@ connections:
     tools: [github.actionspermissions.get, github.actionspermissions.update, github.workflowpermissions.get,
       github.workflowpermissions.update]
 
+  # A Todoist connection binds one personal account to an explicit list of project IDs. Tasks, sections,
+  # comments, and reminders of any other project are never returned, and no argument widens the list.
+  # Every Todoist tool only reads.
+  todoist-work:
+    service: todoist
+    credential: todoist-reader
+    targets: ["6XGgm6PHrGgMpCFX", "6Jf8VQXxpwv56VQ7"]
+    description: the work projects of the personal Todoist account
+    permissions: [read]
+    tools: [todoist.projects.list, todoist.projects.get, todoist.sections.list, todoist.tasks.list,
+      todoist.tasks.filter, todoist.tasks.get, todoist.completedtasks.list, todoist.comments.list,
+      todoist.reminders.list]
+
+  # This deliberately exposes the whole Todoist account, including saved filters. Prefer project IDs when a
+  # smaller scope is enough; only such an account connection offers todoist.filters.list.
+  todoist-account:
+    service: todoist
+    credential: todoist-reader
+    target: "*"
+    permissions: [read]
+
 # Defaults are useful for read operations. The key is a tool namespace such as bookstack, or a complete
 # tool ID such as bookstack.pages.list when one tool needs its own route. Confirmed Telegram sends and
-# the Lexware, Twenty CRM, SeaTable, Nextcloud and GitHub tools deliberately ignore defaults and require
-# the connection in the exact invoke request.
+# the Lexware, Twenty CRM, SeaTable, Nextcloud, GitHub and Todoist tools deliberately ignore defaults and
+# require the connection in the exact invoke request.
 defaults:
   connections:
     bookstack: wiki

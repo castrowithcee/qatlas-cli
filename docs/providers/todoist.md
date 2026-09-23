@@ -1,0 +1,155 @@
+---
+description: >
+  Describes the read-only Todoist provider: setup with a personal API token, project and account scope, the task, project, section, label, comment, reminder, completed-task, and saved-filter reads, structured and expression filters, the cursor contract, plan-dependent errors, and the boundary to workspace and account administration.
+type: knowledge
+edit: shared
+created: 2026-09-23
+updated: 2026-09-23
+---
+
+# Todoist
+
+Todoist is a read-only provider for one personal Todoist account through the official Todoist API v1. It
+reads active projects, sections, personal labels, tasks, completed tasks, task and project comments,
+reminders, and saved filters. It changes nothing: every tool has the effect `read`.
+
+## Configuration
+
+A service is always the official API root `https://api.todoist.com/api/v1`, which the terminal editor fills
+in. Qatlas refuses any other URL before a secret is read, because a personal token belongs to that one
+service.
+
+The credential provides `token`, the personal API token from Todoist under Settings, Integrations,
+Developer. That token reaches the whole account, so the connection target is what limits Qatlas. A
+successful `qatlas connection test` reads each configured project once, or one project of the account for a
+wildcard connection; it proves that the token sees the scope, not that the account's plan includes every
+feature.
+
+```yaml
+services:
+  todoist:
+    provider: todoist
+    base_url: https://api.todoist.com/api/v1
+
+credentials:
+  todoist-reader:
+    provider: todoist
+    type: keyring
+```
+
+## Scope
+
+A connection names its projects explicitly, or deliberately the whole account:
+
+| Target | Binds |
+| --- | --- |
+| `target: PROJECT_ID` | one project |
+| `targets: [PROJECT_ID, PROJECT_ID, ...]` | exactly these projects |
+| `target: "*"` | the whole account, including saved filters |
+
+A project ID is the ID `todoist.projects.list` returns (letters and digits). Subprojects are not included by
+their parent: list every project the connection may read. An empty target never means the whole account,
+and `*` must be the only target. The terminal editor warns whenever `*` is entered.
+
+No argument names or widens the scope. A `project_id` argument only selects one of the connection's
+projects and is refused before any request when it lies outside them. Todoist answers are checked again:
+a task, section, comment, or reminder of another project is never returned, even when a filter expression
+or Todoist itself answers more broadly, and reading one by its ID is refused without its content. The
+comments and reminders of a task are requested only after the task was read and found inside the scope.
+A connection bound to exactly one project narrows every task and section request to that project.
+
+Personal labels belong to the account, not to a project; every connection may list their names and colors,
+never tasks through them. Saved filters span every project, so only a `*` connection offers
+`todoist.filters.list`; a project connection refuses it as an unsupported capability before a secret is
+read. A project connection reads reminders only for one named task.
+
+## Tools
+
+| Tool | Reads |
+| --- | --- |
+| `todoist.projects.list` | active projects, optionally by `search` text |
+| `todoist.projects.get` | one project with its description |
+| `todoist.sections.list` | sections, optionally of one `project_id` or by `search` text |
+| `todoist.sections.get` | one section |
+| `todoist.labels.list` | personal labels, optionally by `search` text |
+| `todoist.tasks.list` | compact active tasks with structured filters |
+| `todoist.tasks.filter` | compact active tasks that match a Todoist filter expression |
+| `todoist.tasks.get` | one active task with its description |
+| `todoist.completedtasks.list` | tasks completed between `since` and `until` |
+| `todoist.comments.list` | the comments of exactly one `task_id` or one `project_id` |
+| `todoist.reminders.list` | time-based reminders; of one `task_id` on a project connection |
+| `todoist.filters.list` | saved filters with their queries; `*` connections only |
+
+Lists return compact tasks: ID, content, project, section, parent, labels, priority (1 normal to 4 urgent),
+due date, deadline, and comment count. Only `todoist.tasks.get` adds the description and timestamps, and
+only `todoist.comments.list` returns comments. A comment attachment is described by file name and type,
+never by its address. Location reminders are not read.
+
+The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and every
+tool except `todoist.filters.list`. The profile `account-read` adds the saved filters for a `*` connection. A
+profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved.
+
+```sh
+qatlas invoke todoist.tasks.list --connection todoist-work
+echo '{"due_from":"2026-09-21","due_to":"2026-09-27","label":"waiting"}' |
+  qatlas invoke todoist.tasks.list --connection todoist-work
+qatlas invoke todoist.tasks.get --connection todoist-work --arg task_id=6X7rM8997g3RQmvh
+```
+
+## Filters
+
+`todoist.tasks.list` accepts structured filters only: `project_id`, `section_id`, `parent_id`, and `label`
+are passed to Todoist, and the due window `due_from` and `due_to` (inclusive `YYYY-MM-DD` dates compared with
+the date part of a task's due date) or `without_due` is applied by Qatlas. A task without a due date never
+matches a due window.
+
+A Todoist filter expression, such as `today | overdue` or the query of a saved filter, is accepted only by
+`todoist.tasks.filter` as `query` (at most 1024 characters, no control characters). Its results are held to
+the connection's projects like every other list, so an expression that names another project returns
+nothing of it. `todoist.completedtasks.list` takes no expression, only `since`, `until` (RFC 3339, at most
+three months apart), `project_id`, and `section_id`.
+
+## Cursor contract
+
+Every list except the saved filters takes `limit` (1 to 200, default 50) and an opaque `cursor`, and
+answers `has_more` plus `next_cursor` whenever Todoist announced a further page. Each request reads exactly
+one Todoist page; Qatlas never loads a following page on its own. Because scope and due window are applied
+to that page, a batch may be short or even empty while `has_more` stays true: read on until `has_more` is
+false. A full batch never means the end.
+
+The cursor wraps Todoist's own cursor unchanged. It is bound to the tool, the connection's scope, and the
+arguments that produced it, and it keeps the batch size of its first batch; a cursor from other arguments,
+another tool, or another connection is an invalid request. Todoist cursors are short-lived: when Todoist no
+longer accepts one, start the list again without a cursor. Tasks that change while a caller pages can
+appear twice or move past the cursor.
+
+`todoist.filters.list` answers every saved filter at once through one read-only Sync request that asks for
+filters only and carries no command. Todoist counts it against its stricter Sync request budget.
+
+## Errors and plans
+
+Errors keep stable classes and never carry the token, a provider body, or a URL with its query:
+
+| Class | Cause |
+| --- | --- |
+| `auth` | Todoist rejected the token |
+| `permission` | the account's plan does not include the feature (reminders, filters, or older completed tasks), or the token may not read the resource; the message tells the two apart |
+| `rate-limited` | Todoist asked to wait; the next request of the same token waits as asked, at most one minute |
+| `provider-error` | Todoist does not hold the resource, rejected the request, or no longer accepts the cursor |
+| `invalid-provider-response` | the answer was unreadable, too large, or lacked identifiers |
+
+A resource outside the connection's projects is an invalid request, never a provider error, so a scope
+refusal cannot be mistaken for a missing resource.
+
+## Untrusted data
+
+Names, contents, descriptions, comments, and filter queries come from the account and are untrusted data.
+Qatlas passes them on as JSON strings and never renders Markdown or HTML, follows a link, or runs a filter
+query unless a caller passes it to `todoist.tasks.filter`.
+
+## Boundary
+
+The provider reads a personal account. It does not administer workspaces, collaborators, users,
+notifications, or OAuth apps, does not read live notifications, activity, backups, or archived projects,
+offers no generic Sync passthrough, keeps no local copy of the account, and changes nothing. Tasks of
+workspace projects the account has joined are read like any other project when the connection names them.

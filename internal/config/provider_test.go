@@ -127,6 +127,26 @@ var testProviders ProviderCatalog = testProviderCatalog{
 		Target:      TargetMetadata{Label: "chat ID", Required: true},
 		Tools:       []ToolMetadata{{ID: "telegram.messages.send", Effect: PermissionCreate}},
 	},
+	"todoist": {
+		ID: "todoist", Name: "Todoist", DefaultBaseURL: "https://api.todoist.com/api/v1",
+		SecretRoles: []SecretRole{{Name: "token", Description: "Todoist personal API token"}},
+		Target: TargetMetadata{Label: "project", Required: true, Multiple: true, Wildcard: "*",
+			Description: "project IDs or the whole account"},
+		Tools: []ToolMetadata{
+			{ID: "todoist.comments.list", Effect: PermissionRead},
+			{ID: "todoist.completedtasks.list", Effect: PermissionRead},
+			{ID: "todoist.filters.list", Effect: PermissionRead},
+			{ID: "todoist.labels.list", Effect: PermissionRead},
+			{ID: "todoist.projects.get", Effect: PermissionRead},
+			{ID: "todoist.projects.list", Effect: PermissionRead},
+			{ID: "todoist.reminders.list", Effect: PermissionRead},
+			{ID: "todoist.sections.get", Effect: PermissionRead},
+			{ID: "todoist.sections.list", Effect: PermissionRead},
+			{ID: "todoist.tasks.filter", Effect: PermissionRead},
+			{ID: "todoist.tasks.get", Effect: PermissionRead},
+			{ID: "todoist.tasks.list", Effect: PermissionRead},
+		},
+	},
 }
 
 func TestOnlyProvidersThatDeclareMultipleTargetsAcceptAnAllowList(t *testing.T) {

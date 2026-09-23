@@ -165,14 +165,15 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	if !strings.HasPrefix(stdout, "providers[7]{connections,provider,tools}:\n") ||
+	if !strings.HasPrefix(stdout, "providers[8]{connections,provider,tools}:\n") ||
 		!strings.HasSuffix(stdout, "\n") || strings.Contains(stdout, "\r") {
-		t.Errorf("stdout = %q, want an LF TOON table of seven namespace rows", stdout)
+		t.Errorf("stdout = %q, want an LF TOON table of eight namespace rows", stdout)
 	}
 	for _, want := range []string{
 		// BookStack has exactly one configured connection, Telegram one, and every other compiled
 		// provider none. An unconfigured namespace stays visible with zero.
-		"1,bookstack,5", "1,telegram,3", "0,github,37", "0,lexware,3", "0,nextcloud,6", "0,seatable,7", "0,twentycrm,5",
+		"1,bookstack,5", "1,telegram,3", "0,github,37", "0,lexware,3", "0,nextcloud,6", "0,seatable,7", "0,todoist,12",
+		"0,twentycrm,5",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)

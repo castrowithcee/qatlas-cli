@@ -18,18 +18,20 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider/nextcloud"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/seatable"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/telegram"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/todoist"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/twentycrm"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
-// providerRegistry registers the seven providers this build ships for n == 7, and otherwise n providers
+// providerRegistry registers the eight providers this build ships for n == 8, and otherwise n providers
 // whose names and IDs differ, so a search can tell the two columns apart.
 func providerRegistry(t *testing.T, n int) *capability.Registry {
 	t.Helper()
 	reg := capability.NewRegistry()
-	if n == 7 {
+	if n == 8 {
 		for _, register := range []func(*capability.Registry) error{bookstack.Register, github.Register,
-			lexware.Register, nextcloud.Register, seatable.Register, telegram.Register, twentycrm.Register} {
+			lexware.Register, nextcloud.Register, seatable.Register, telegram.Register, todoist.Register,
+			twentycrm.Register} {
 			mustNoError(t, register(reg))
 		}
 		return reg
@@ -77,10 +79,10 @@ func formState(m *Model) []string {
 	return state
 }
 
-// Every provider row, in each form and in the guided setup, opens the same table for one, seven and many
+// Every provider row, in each form and in the guided setup, opens the same table for one, eight and many
 // providers: the search line, the select marks, name and ID of every provider, and the full count.
 func TestEveryProviderRowOpensTheSameTable(t *testing.T) {
-	for _, n := range []int{1, 7, 55} {
+	for _, n := range []int{1, 8, 55} {
 		for _, form := range []string{"service", "credential", "connection", "setup"} {
 			t.Run(fmt.Sprintf("%d providers/%s", n, form), func(t *testing.T) {
 				m, _ := providerModel(t, providerRegistry(t, n))
@@ -154,9 +156,10 @@ func TestTheProviderTableSearchesNameAndIDIgnoringCase(t *testing.T) {
 		// "provider 042" is in no ID, only in a name.
 		{55, "PROVIDER 042", []string{"p042"}},
 		{55, "pRoViDeR 042", []string{"p042"}},
-		{7, "HUB", []string{"github"}},
-		{7, "crm", []string{"twentycrm"}},
-		{7, "Lexware Office", []string{"lexware"}},
+		{8, "HUB", []string{"github"}},
+		{8, "crm", []string{"twentycrm"}},
+		{8, "Lexware Office", []string{"lexware"}},
+		{8, "TODO", []string{"todoist"}},
 	}
 	for _, c := range cases {
 		m, _ := providerModel(t, providerRegistry(t, c.n))
@@ -260,7 +263,7 @@ func TestTheProviderTableTakesOnlyTheMarkedProvider(t *testing.T) {
 // Taking a provider in the service form puts its default URL in place of the default of the one before,
 // and escape leaves the URL as it was.
 func TestTheProviderTableUpdatesTheDefaultURLOfAService(t *testing.T) {
-	m, _ := providerModel(t, providerRegistry(t, 7))
+	m, _ := providerModel(t, providerRegistry(t, 8))
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
 	openProviderRow(t, m, sectionServices)
 	telegramMetadata, _ := m.cfg.ProviderMetadata("telegram")
@@ -338,14 +341,14 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 // The guided setup chooses its provider in the same table: enter takes the marked provider and goes on,
 // going back shows the table on that provider, and escape cancels the setup without writing anything.
 func TestGuidedSetupChoosesItsProviderInTheTable(t *testing.T) {
-	m, path := providerModel(t, providerRegistry(t, 7))
+	m, path := providerModel(t, providerRegistry(t, 8))
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
 	press(t, m, "c")
 	if m.screen != screenProviders {
 		t.Fatalf("c opened screen %v, want the provider table", m.screen)
 	}
 	view := m.View()
-	for _, want := range []string{"Setup step 1 of 6 · choose provider  1/7 (7 total)", "search: ", "NAME",
+	for _, want := range []string{"Setup step 1 of 6 · choose provider  1/8 (8 total)", "search: ", "NAME",
 		"> (*) BookStack", "( ) Telegram", "telegram", "enter choose and continue"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the setup table does not show %q:\n%s", want, view)
@@ -394,5 +397,38 @@ func TestTheProviderTableSetsTheRolesOfACredential(t *testing.T) {
 	}
 	if !reflect.DeepEqual(roles, []string{"p042-token"}) {
 		t.Errorf("roles = %v, want only the role of p042", roles)
+	}
+}
+
+// Todoist joins the table from its registry metadata alone: its row shows the name and the ID, and its
+// account wildcard carries the warning its metadata declares, while a project list carries none.
+func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
+	m, _ := providerModel(t, providerRegistry(t, 8))
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 60})
+	openProviderRow(t, m, sectionServices)
+	press(t, m, "enter")
+	typeText(t, m, "todoist")
+	if view := m.View(); !strings.Contains(view, "Todoist") || !strings.Contains(view, " todoist") ||
+		!strings.Contains(view, "1/1 (8 total)") {
+		t.Fatalf("the table does not show Todoist with its ID:\n%s", view)
+	}
+	press(t, m, "enter")
+	if got := m.fieldValue(providerLabel); got != "todoist" {
+		t.Fatalf("provider = %q, want todoist", got)
+	}
+
+	metadata, _ := m.cfg.ProviderMetadata("todoist")
+	m.cfg.Connections["tasks"] = config.Connection{Service: "svc-todoist", Credential: "cred-todoist", Target: "*"}
+	m.section, m.screen, m.editing = sectionConnections, screenForm, "tasks"
+	m.fields = m.buildFields("tasks")
+	if view := m.View(); !strings.Contains(view, "warning: "+metadata.Target.WildcardWarning[:40]) {
+		t.Fatalf("the account wildcard shows no warning:\n%s", view)
+	}
+	m.field("target").input.SetValue("6XGgm6PHrGgMpCFX, 6Jf8VQXxpwv56VQ7")
+	if view := m.View(); strings.Contains(view, "warning: ") {
+		t.Fatalf("a project list shows a warning:\n%s", view)
+	}
+	if got := m.permissionChoices("todoist"); !reflect.DeepEqual(got, []string{"default", "read"}) {
+		t.Errorf("todoist permissions = %v, want reads only", got)
 	}
 }
