@@ -22,7 +22,11 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"never displays a stored secret back: what it shows is which source delivers a role.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
-			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.",
+			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +
+			"In a form, left/right step through the values of a choice row. / on a choice row opens a\n" +
+			"searchable picker that marks the current value and filters as you type, ignoring case; up/down,\n" +
+			"pgup/pgdown and home/end move, enter takes the selected value, and esc leaves the row unchanged.\n" +
+			"The form points to / on rows with many values.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if opts.Agent {

@@ -61,6 +61,8 @@ const (
 	screenConfirm
 	screenPlaintextConfirm
 	screenSecret
+	// screenPicker is the searchable list of one choice row of the form, over the form it was opened from.
+	screenPicker
 )
 
 type fieldKind int
@@ -200,6 +202,9 @@ type Model struct {
 	editing string
 	fields  []field
 	focus   int
+	// picker holds the values of the focused choice row while it is searched. The row itself changes only
+	// when a value is taken.
+	picker filterList
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
 	// confirmation is about the selected entry of the list.
 	confirmRole string
@@ -274,6 +279,7 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 		width:   defaultWidth, height: defaultHeight, configExists: configExists,
 	}
 	m.list = newFilterList(m.describe)
+	m.picker = newFilterList(choiceText)
 	return m, nil
 }
 
@@ -337,6 +343,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.updatePlaintextConfirm(msg)
 		case screenSecret:
 			return m, m.updateSecret(msg)
+		case screenPicker:
+			return m, m.updatePicker(msg)
 		}
 	}
 	return m, nil
@@ -464,17 +472,7 @@ func (m *Model) updateFilter(key tea.KeyMsg) tea.Cmd {
 // jumpList moves by one screen of entries or to either end of the list.
 func (m *Model) jumpList(key string) {
 	start, end := m.listWindow()
-	page := max(end-start-1, 1)
-	switch key {
-	case "pgup":
-		m.list.jump(-page)
-	case "pgdown":
-		m.list.jump(page)
-	case "home":
-		m.list.jump(-len(m.list.matches))
-	case "end":
-		m.list.jump(len(m.list.matches))
-	}
+	m.list.page(key, start, end)
 }
 
 // newEntryBlocked keeps a form with empty choice lists from turning an obvious missing prerequisite into
@@ -516,6 +514,10 @@ func (m *Model) leaveScreen() tea.Cmd {
 		m.screen, m.cursor = screenMenu, int(m.section)
 		m.clearMessages()
 		return nil
+	case screenPicker:
+		// The picker steps back to its form, which keeps everything typed into it.
+		m.screen = screenForm
+		return nil
 	default:
 		cmd := m.returnToList("")
 		m.status = "Cancelled"
@@ -551,26 +553,13 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			current.index = wrap(current.index-1, len(current.choices))
 		case "right", "l":
 			current.index = wrap(current.index+1, len(current.choices))
+		case "/":
+			m.openPicker()
+			return nil
 		default:
 			return nil
 		}
-		if current.label == typeLabel {
-			return m.credentialTypeChosen()
-		}
-		if current.label == providerLabel {
-			switch m.section {
-			case sectionCredentials:
-				return m.credentialProviderChosen()
-			case sectionConnections:
-				m.connectionProviderChosen()
-			default:
-				m.providerChosen(previous)
-			}
-		}
-		if current.label == "service" {
-			m.targetChosen()
-		}
-		return nil
+		return m.choiceChanged(previous)
 	case fieldMultiChoice:
 		switch key.String() {
 		case "left", "h":
@@ -593,6 +582,93 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	var cmd tea.Cmd
 	current.input, cmd = current.input.Update(key)
 	return cmd
+}
+
+// choiceChanged brings the rows that depend on the focused choice row in line with its new value, however
+// that value was chosen.
+func (m *Model) choiceChanged(previous string) tea.Cmd {
+	switch m.fields[m.focus].label {
+	case typeLabel:
+		return m.credentialTypeChosen()
+	case providerLabel:
+		switch m.section {
+		case sectionCredentials:
+			return m.credentialProviderChosen()
+		case sectionConnections:
+			m.connectionProviderChosen()
+		default:
+			m.providerChosen(previous)
+		}
+	case "service":
+		m.targetChosen()
+	}
+	return nil
+}
+
+// pickerThreshold is the number of values from which the form points out the picker. Fewer values are
+// quicker to step through with left/right; the picker opens on any choice row all the same.
+const pickerThreshold = 8
+
+// openPicker opens the searchable list of the focused choice row, on its current value, with the filter
+// ready for typing.
+func (m *Model) openPicker() {
+	f := m.fields[m.focus]
+	if len(f.choices) == 0 {
+		return
+	}
+	m.picker.reset(f.choices)
+	m.picker.selectName(f.value())
+	m.picker.startFilter()
+	m.screen = screenPicker
+	m.clearMessages()
+}
+
+// updatePicker handles the picker. Every printable key belongs to the filter; enter takes the selected
+// value and esc leaves the row as it was.
+func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
+	switch key.String() {
+	case "ctrl+c":
+		return m.quit()
+	case "esc":
+		m.screen = screenForm
+	case "enter":
+		choice, ok := m.picker.selected()
+		if !ok {
+			// Nothing matches the filter, so there is nothing to take.
+			return nil
+		}
+		m.screen = screenForm
+		f := &m.fields[m.focus]
+		previous := f.value()
+		if choice == previous {
+			return nil
+		}
+		for i, c := range f.choices {
+			if c == choice {
+				f.index = i
+			}
+		}
+		return m.choiceChanged(previous)
+	case "up":
+		m.picker.move(-1)
+	case "down":
+		m.picker.move(1)
+	case "pgup", "pgdown", "home", "end":
+		start, end := m.pickerWindow()
+		m.picker.page(key.String(), start, end)
+	default:
+		return m.picker.updateFilter(key)
+	}
+	return nil
+}
+
+// choiceText is how one value of a choice row reads. The empty value, which a credential offers while it
+// names no provider, is a value too and has to be readable and findable.
+func choiceText(choice string) string {
+	if choice == "" {
+		return "(none)"
+	}
+	return choice
 }
 
 func (m *Model) providerChosen(previous string) {
@@ -1520,8 +1596,11 @@ func (m *Model) editorView() string {
 }
 
 func (m *Model) buildEditorView(dense bool) string {
-	if m.screen == screenList {
+	switch m.screen {
+	case screenList:
 		return m.listView()
+	case screenPicker:
+		return m.pickerView()
 	}
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Qatlas setup") + "\n")
@@ -1558,6 +1637,9 @@ func (m *Model) buildEditorView(dense bool) string {
 			}
 		}
 		keys := "tab move · left/right choose · enter save · esc cancel"
+		if f := m.fields[m.focus]; f.kind == fieldChoice && len(f.choices) >= pickerThreshold {
+			keys = "/ search · " + keys
+		}
 		if m.fields[m.focus].kind == fieldMultiChoice {
 			keys = "left/right choose · space toggle · " + keys
 		}
@@ -1663,7 +1745,7 @@ func (m *Model) listFrame() (string, string) {
 	}
 	head.WriteString(title + "\n")
 	if filtered {
-		head.WriteString(m.filterLine() + "\n")
+		head.WriteString(m.filterLine(&m.list) + "\n")
 	} else {
 		head.WriteString("\n")
 	}
@@ -1694,13 +1776,13 @@ func (m *Model) listFrame() (string, string) {
 	return head.String(), foot + m.notes()
 }
 
-// filterLine shows the filter: while it is typed with its cursor, afterwards as the text it holds.
-func (m *Model) filterLine() string {
+// filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.
+func (m *Model) filterLine(l *filterList) string {
 	prefix, width := m.fit("filter: ")
-	if !m.list.editing {
-		return prefix + truncateCells(m.list.query(), width)
+	if !l.editing {
+		return prefix + truncateCells(l.query(), width)
 	}
-	in := m.list.input
+	in := l.input
 	in.Width = max(width-1, 1)
 	return prefix + in.View()
 }
@@ -1714,21 +1796,79 @@ func (m *Model) listRow(i int) string {
 func (m *Model) listWindow() (int, int) { return m.listWindowIn(m.listFrame()) }
 
 func (m *Model) listWindowIn(header, footer string) (int, int) {
+	return m.windowIn(&m.list, header, footer, m.listRow)
+}
+
+// windowIn is the range of shown entries of l whose rows, drawn by row, fit between header and footer.
+func (m *Model) windowIn(l *filterList, header, footer string, row func(i int) string) (int, int) {
 	room := m.height - strings.Count(header, "\n") - strings.Count(footer, "\n") - 1
 	heights := map[int]int{}
-	return m.list.window(room, func(i int) int {
+	return l.window(room, func(i int) int {
 		if _, ok := heights[i]; !ok {
-			heights[i] = strings.Count(m.listRow(i), "\n") + 1
+			heights[i] = strings.Count(row(i), "\n") + 1
 		}
 		return heights[i]
 	})
 }
 
-// keepScrollPosition remembers where the list is scrolled to, so the next frame keeps it as long as the
-// selection stays on screen instead of jumping to put the selection at an edge.
+// pickerView draws the picker of the focused choice row like a list: its frame, and between them as many
+// values as fit.
+func (m *Model) pickerView() string {
+	header, footer := m.pickerFrame()
+	var b strings.Builder
+	b.WriteString(header)
+	start, end := m.windowIn(&m.picker, header, footer, m.pickerRow)
+	for i := start; i < end; i++ {
+		b.WriteString(m.pickerRow(i) + "\n")
+	}
+	b.WriteString(footer)
+	return b.String()
+}
+
+// pickerFrame is everything of the picker except its values: above them the row being chosen for, the
+// position among the matches, the filter and the current value; below them the keys and the notes. It
+// leaves out the heading of the other screens, so the values keep room in a small terminal.
+func (m *Model) pickerFrame() (string, string) {
+	f := m.fields[m.focus]
+	shown, total := len(m.picker.matches), len(m.picker.all)
+	var head strings.Builder
+	head.WriteString(m.wrapped(titleStyle, fmt.Sprintf("Choose %s  %d/%d (%d total)",
+		f.label, min(m.picker.cursor+1, shown), shown, total)) + "\n")
+	head.WriteString(m.filterLine(&m.picker) + "\n")
+	head.WriteString(m.wrapped(hintStyle, "current: "+choiceText(f.value())) + "\n")
+	if shown == 0 {
+		head.WriteString(m.wrapped(hintStyle,
+			fmt.Sprintf("No value matches %q. esc keeps the current one.", m.picker.query())) + "\n")
+	}
+	return head.String(), m.hint("type to filter · up/down move · enter choose · esc cancel") + m.notes()
+}
+
+// pickerRow draws the shown value at index i of the picker and marks the value the row holds now.
+func (m *Model) pickerRow(i int) string {
+	choice := m.picker.matches[i]
+	text := choiceText(choice)
+	if choice == m.fields[m.focus].value() {
+		text += "  (current)"
+	}
+	return m.row(i == m.picker.cursor, text)
+}
+
+func (m *Model) pickerWindow() (int, int) {
+	header, footer := m.pickerFrame()
+	return m.windowIn(&m.picker, header, footer, m.pickerRow)
+}
+
+// keepScrollPosition remembers where the list or the picker is scrolled to, so the next frame keeps it as
+// long as the selection stays on screen instead of jumping to put the selection at an edge.
 func (m *Model) keepScrollPosition() {
-	if m.screen == screenList && !m.terminalTooSmall() {
+	if m.terminalTooSmall() {
+		return
+	}
+	switch m.screen {
+	case screenList:
 		m.list.offset, _ = m.listWindow()
+	case screenPicker:
+		m.picker.offset, _ = m.pickerWindow()
 	}
 }
 

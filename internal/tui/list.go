@@ -93,6 +93,22 @@ func (l *filterList) jump(by int) {
 	l.cursor = min(max(l.cursor+by, 0), max(len(l.matches)-1, 0))
 }
 
+// page handles pgup/pgdown, which move by one screen of the entries the window [start, end) shows, and
+// home/end, which move to either end.
+func (l *filterList) page(key string, start, end int) {
+	page := max(end-start-1, 1)
+	switch key {
+	case "pgup":
+		l.jump(-page)
+	case "pgdown":
+		l.jump(page)
+	case "home":
+		l.jump(-len(l.matches))
+	case "end":
+		l.jump(len(l.matches))
+	}
+}
+
 func (l *filterList) startFilter() {
 	l.editing = true
 	l.input.CursorEnd()
