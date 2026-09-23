@@ -139,6 +139,12 @@ const (
 	// carry a secret out of this machine.
 	descriptionHint = "optional; one line saying what this route is for. discovery publishes it, so it " +
 		"must never carry a secret or personal data"
+	// undescribedMarker ends the row of a connection that needsDescription, and undescribedHint says once
+	// under the list what it means. Neither blocks anything: the description stays optional.
+	undescribedMarker = "(no description)"
+	undescribedHint   = undescribedMarker + ": this connection shares its provider with another one, and an " +
+		"agent that has to choose between them sees only names and descriptions; add one line on what each " +
+		"route is for"
 	secretHint = "s system keyring · p unencrypted file (asks first) · x remove; typing is masked"
 	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
 	// describes a free choice, which is the opposite of what this field does.
@@ -2255,6 +2261,12 @@ func (m *Model) listFrame() (string, string) {
 	}
 	foot := m.hint(keys)
 	if m.section == sectionConnections {
+		for _, name := range m.list.all {
+			if m.needsDescription(name) {
+				foot = m.hint(undescribedHint) + foot
+				break
+			}
+		}
 		foot = m.testLine() + foot
 	}
 	return head.String(), foot + m.notes()
@@ -2640,12 +2652,32 @@ func (m *Model) dashboardEntry(s section, name string) string {
 		if targets := formatTargets(connection); targets != "" {
 			detail += " → " + targets
 		}
+		if m.needsDescription(name) {
+			detail += " · " + undescribedMarker
+		}
 		return detail
 	case sectionDefaults:
 		return fmt.Sprintf("%s → %s", name, m.cfg.Defaults.Connections[name])
 	default:
 		return name
 	}
+}
+
+// needsDescription reports whether a connection has no description although another connection leads to the
+// same provider. Without a unique default an agent has to choose between such routes, and it sees their
+// names and descriptions only.
+func (m *Model) needsDescription(name string) bool {
+	connection := m.cfg.Connections[name]
+	provider := m.cfg.Services[connection.Service].Provider
+	if connection.Description != "" || provider == "" {
+		return false
+	}
+	for other, candidate := range m.cfg.Connections {
+		if other != name && m.cfg.Services[candidate.Service].Provider == provider {
+			return true
+		}
+	}
+	return false
 }
 
 func joinCards(left, right string) string {
@@ -2930,6 +2962,9 @@ func (m *Model) describe(name string) string {
 		detail := fmt.Sprintf("%s  %s / %s", name, conn.Service, conn.Credential)
 		if targets := formatTargets(conn); targets != "" {
 			detail += " / " + targets
+		}
+		if m.needsDescription(name) {
+			detail += "  " + undescribedMarker
 		}
 		return detail
 	case sectionDefaults:

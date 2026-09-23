@@ -47,7 +47,11 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"carries operations, has_more, which is true exactly when another match follows, and next_cursor,\n" +
 			"which is present only then. Passing next_cursor back as cursor with the same filters returns the\n" +
 			"following page; a request without cursor returns the first. A cursor that is malformed or belongs\n" +
-			"to other filters fails with invalid-request.",
+			"to other filters fails with invalid-request.\n\n" +
+			"A qatlas.invoke refused with connection-ambiguous carries structuredContent with code,\n" +
+			"message, operation, and connections: every candidate route with its name and its description,\n" +
+			"which is empty where none is maintained. Nothing is chosen for the caller; the next request\n" +
+			"names one of them as connection.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			server := newMCPServer(opts, registry, c.OutOrStdout(), c.ErrOrStderr())
@@ -494,16 +498,21 @@ func mcpServerMeta() map[string]any {
 	}
 }
 
-func toolResult(data any, err error, ctx context.Context, redactor interface{ Error(error) string }) map[string]any {
+func toolResult(data any, err error, ctx context.Context, redactor *redact.Redactor) map[string]any {
 	result := map[string]any{"resultType": "complete", "_meta": mcpServerMeta()}
 	if err != nil {
 		code := codeFor(err)
 		message := redactor.Error(err)
+		detail := errorDetailFor(err, redactor)
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			code = output.CodeTimeout
 			message = "request deadline exceeded"
+			detail = nil
 		}
 		result["content"] = []map[string]string{{"type": "text", "text": string(code) + ": " + message}}
+		if detail != nil {
+			result["structuredContent"] = detail
+		}
 		result["isError"] = true
 		return result
 	}

@@ -489,7 +489,15 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 		}
 	}
 	if len(defaults) > 1 {
-		return nil, &ConnectionAmbiguousError{Operation: descriptor.ID, Connections: sortedSet(defaults)}
+		// Conflicting defaults name the candidates, but only those that can actually take the operation.
+		candidates := make([]ConnectionRef, 0, len(defaults))
+		for _, name := range sortedSet(defaults) {
+			if resolved, err := c.connection(name); err == nil && resolved.Provider == descriptor.Provider &&
+				c.connectionAllows(name, descriptor) {
+				candidates = append(candidates, c.connectionRef(name))
+			}
+		}
+		return nil, &ConnectionAmbiguousError{Operation: descriptor.ID, Connections: candidates}
 	}
 	for name := range defaults {
 		resolved, err := c.connection(name)
@@ -502,12 +510,12 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 		return resolved, nil
 	}
 
-	connections := c.connectionNamesFor(descriptor)
+	connections := c.connectionRefs(descriptor)
 	switch len(connections) {
 	case 0:
 		return nil, &ConnectionSelectionError{Operation: descriptor.ID}
 	case 1:
-		return c.connection(connections[0])
+		return c.connection(connections[0].Name)
 	default:
 		return nil, &ConnectionAmbiguousError{Operation: descriptor.ID, Connections: connections}
 	}

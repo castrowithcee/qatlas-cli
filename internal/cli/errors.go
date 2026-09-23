@@ -8,6 +8,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
@@ -76,6 +77,37 @@ func codeFor(err error) output.Code {
 		return output.CodeUsage
 	}
 	return output.CodeRuntime
+}
+
+// errorDetail is the machine-readable form of a diagnostic whose code alone does not say how to go on. For
+// connection-ambiguous it names every route an explicit connection may choose, each with the description
+// its owner maintains and an empty one where there is none, so a caller picks a route without parsing the
+// message. Names and descriptions are all it publishes of a route: never a service, credential, target, or
+// secret source.
+type errorDetail struct {
+	Code        output.Code                 `json:"code"`
+	Message     string                      `json:"message"`
+	Operation   string                      `json:"operation"`
+	Connections []application.ConnectionRef `json:"connections"`
+}
+
+// errorDetailFor returns the detail of err, or nil when its code and message already say everything. The
+// CLI and the MCP broker both publish exactly this value, after the same redaction as the message.
+func errorDetailFor(err error, redactor *redact.Redactor) *errorDetail {
+	var ambiguous *application.ConnectionAmbiguousError
+	if !errors.As(err, &ambiguous) {
+		return nil
+	}
+	connections := make([]application.ConnectionRef, len(ambiguous.Connections))
+	for i, connection := range ambiguous.Connections {
+		connections[i] = application.ConnectionRef{
+			Name: redactor.Apply(connection.Name), Description: redactor.Apply(connection.Description),
+		}
+	}
+	return &errorDetail{
+		Code: output.CodeConnectionAmbiguous, Message: redactor.Error(err),
+		Operation: redactor.Apply(ambiguous.Operation), Connections: connections,
+	}
 }
 
 func providerCode(class provider.Class) output.Code {

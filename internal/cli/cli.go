@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -99,6 +100,10 @@ func run(cmd *cobra.Command, opts *Options, args []string, stdout, stderr io.Wri
 
 	// Redaction happens before anything is shown, including unexpected provider errors.
 	fmt.Fprintf(stderr, "qatlas: %s: %s\n", codeFor(err), opts.Redactor.Error(err))
+	// A detail follows the diagnostic as one JSON line, so a caller reads its fields instead of the text.
+	if detail := errorDetailFor(err, opts.Redactor); detail != nil {
+		_ = json.NewEncoder(stderr).Encode(detail)
+	}
 	code := exitCode(err)
 	if code == exitUsage {
 		fmt.Fprint(stderr, executed.UsageString())

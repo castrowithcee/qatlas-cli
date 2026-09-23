@@ -191,9 +191,9 @@ credentials:
 #
 # description is optional and yours to maintain: one line of at most 200 characters saying what the route
 # is for. A name is a stable selector, not an explanation, so this is what tells two routes of the same
-# provider apart. It is published by 'qatlas tool <tool-id>' and by qatlas.describe, it is never sent
-# to a provider, and it never selects a route on its own. Because it is published, never write a secret or
-# personal data into it.
+# provider apart. It is published by 'qatlas tool <tool-id>' and by qatlas.describe, and it names the
+# candidates of a connection-ambiguous diagnostic. It is never sent to a provider, and it never selects a
+# route on its own. Because it is published, never write a secret or personal data into it.
 #
 # permissions is Qatlas' independent local allow-list. It can only restrict a provider credential, never
 # expand it. Supported effects are read, create, update, delete, and execute. When omitted, the provider's

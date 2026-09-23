@@ -158,7 +158,10 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			"--connection selects the route when the configuration leaves more than one possibility, and\n" +
 			"--confirm carries the confirmation a mutating tool requires for this request.\n\n" +
 			"The result is written to stdout as JSON. Diagnostics and the audit event of a confirmed\n" +
-			"mutation go to stderr.",
+			"mutation go to stderr. A connection-ambiguous diagnostic is followed by one JSON line with\n" +
+			"code, message, operation, and connections: every candidate route with its name and its\n" +
+			"description, which is empty where none is maintained. Nothing is chosen for you; pass one of\n" +
+			"the names with --connection.",
 		Args: exactlyOneArg("tool ID"),
 		RunE: func(c *cobra.Command, args []string) error {
 			arguments, err := invokeArguments(c, registry, args[0], flagArgs)

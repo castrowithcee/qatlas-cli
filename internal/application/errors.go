@@ -24,14 +24,20 @@ func (e *UnknownOperationError) Error() string {
 }
 
 // ConnectionAmbiguousError reports that local configuration has several valid routes and no unique default.
+// Connections holds every route the operation may take, each with the description its owner maintains, so
+// the caller can choose one explicitly. The core never chooses among them by description or by order.
 type ConnectionAmbiguousError struct {
 	Operation   string
-	Connections []string
+	Connections []ConnectionRef
 }
 
 func (e *ConnectionAmbiguousError) Error() string {
+	names := make([]string, len(e.Connections))
+	for i, connection := range e.Connections {
+		names[i] = connection.Name
+	}
 	return fmt.Sprintf("operation %q has multiple matching connections: %s",
-		e.Operation, strings.Join(e.Connections, ", "))
+		e.Operation, strings.Join(names, ", "))
 }
 
 // ConnectionSelectionError reports a registered operation for which no connection can be selected.

@@ -1071,6 +1071,64 @@ func TestATooLongConnectionDescriptionIsRefused(t *testing.T) {
 	}
 }
 
+// A connection without a description is marked once another connection leads to the same provider, because
+// an agent choosing between them sees names and descriptions only. The mark is a hint: saving, loading and
+// every other action go on as before, and a description removes it.
+func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T) {
+	m, store, _ := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 200, Height: 60})
+	addService(t, m, "wiki", "https://wiki.example.invalid")
+	addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
+	addConnection(t, m, "wiki", "wiki", "reader")
+
+	listed := func() string {
+		t.Helper()
+		openSectionByName(t, m, sectionConnections)
+		return strings.Join(strings.Fields(m.View()), " ")
+	}
+	if view := listed(); strings.Contains(view, undescribedMarker) {
+		t.Fatalf("a single connection is marked:\n%s", m.View())
+	}
+
+	addConnection(t, m, "wiki-2", "wiki", "reader")
+	if m.fail != "" {
+		t.Fatalf("editor reported %q", m.fail)
+	}
+	view := listed()
+	for _, want := range []string{"wiki wiki / reader " + undescribedMarker,
+		"wiki-2 wiki / reader " + undescribedMarker, "sees only names and descriptions"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the list does not say %q:\n%s", want, m.View())
+		}
+	}
+	for _, name := range []string{"wiki", "wiki-2"} {
+		if got := m.dashboardEntry(sectionConnections, name); !strings.HasSuffix(got, undescribedMarker) {
+			t.Errorf("dashboard entry = %q, want it marked", got)
+		}
+	}
+	if saved, err := store.Load(); err != nil || len(saved.Connections) != 2 {
+		t.Fatalf("Load() = %v, %v; the mark must not keep a connection from being saved", saved, err)
+	}
+
+	openEntryForm(t, m, sectionConnections, "wiki")
+	focusField(t, m, "description")
+	typeText(t, m, "the live team wiki")
+	press(t, m, "enter")
+	if m.fail != "" {
+		t.Fatalf("editor reported %q", m.fail)
+	}
+	if m.needsDescription("wiki") || !m.needsDescription("wiki-2") {
+		t.Errorf("marks = wiki %v, wiki-2 %v; want only the connection without a description",
+			m.needsDescription("wiki"), m.needsDescription("wiki-2"))
+	}
+	// A connection of another provider is no reason for a mark.
+	m.cfg.Services["other"] = config.Service{Provider: "nextcloud", BaseURL: "https://files.example.invalid"}
+	m.cfg.Connections["files"] = config.Connection{Service: "other", Credential: "reader"}
+	if m.needsDescription("files") {
+		t.Error("a connection alone with its provider is marked")
+	}
+}
+
 // What the form shows is what the store gets: spaces at the edges are dropped where the user can see it.
 func TestSpacesAtTheEdgesAreTrimmedVisibly(t *testing.T) {
 	m, store, _ := newModel(t)

@@ -175,6 +175,112 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 	}
 }
 
+// ambiguousConfig offers bookstack.pages.list over three routes with similar names: one described, one
+// without a description, and one whose description contains a value the redactor knows. The service,
+// credential, environment variables and target are canaries that no diagnostic may carry.
+const ambiguousConfig = `
+version: 1
+services:
+  service-canary:
+    provider: bookstack
+    base_url: https://endpoint-canary.example.invalid
+credentials:
+  credential-canary:
+    type: env
+    values:
+      token-id: ENV_CANARY_ID
+      token-secret: ENV_CANARY_SECRET
+connections:
+  wiki:
+    service: service-canary
+    credential: credential-canary
+    target: target-canary
+    description: read-only account on the team wiki
+  wiki-2:
+    service: service-canary
+    credential: credential-canary
+  wiki-staging:
+    service: service-canary
+    credential: credential-canary
+    description: staging wiki secret-canary-value
+`
+
+// An ambiguous route is refused over the tool CLI and the MCP broker alike, and both name the same
+// candidates with their descriptions as data: an empty description stays an empty string, a known secret is
+// redacted, and nothing else of a route leaves the core.
+func TestConnectionAmbiguityNamesCandidatesOverCLIAndMCP(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	path := writeConfig(t, ambiguousConfig)
+	registry := fakeRegistry(t)
+	newRedactor := func() *redact.Redactor {
+		redactor := &redact.Redactor{}
+		redactor.Add("secret-canary-value")
+		return redactor
+	}
+
+	var stdout, stderr bytes.Buffer
+	redactor := newRedactor()
+	options := &Options{Input: strings.NewReader("{}"), Redactor: redactor,
+		Secrets: secret.NewWith(nil, nil, nil, redactor)}
+	code := run(newRootCommand(options, registry), options,
+		[]string{"invoke", "bookstack.pages.list", "--config", path}, &stdout, &stderr)
+	lines := strings.Split(stderr.String(), "\n")
+	if code != exitUsage || stdout.Len() != 0 || len(lines) < 2 ||
+		!strings.HasPrefix(lines[0], "qatlas: connection-ambiguous: ") {
+		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+	}
+	cliDetail := []byte(lines[1])
+
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
+		`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.list","arguments":{}}}}` + "\n"
+	responses, mcpStderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: newRedactor()})
+	if mcpStderr != "" {
+		t.Fatalf("MCP stderr = %q", mcpStderr)
+	}
+	invoke := toolResultFrom(t, responses["1"])
+	if !invoke.IsError || !strings.HasPrefix(invoke.Content[0].Text, "connection-ambiguous: ") {
+		t.Fatalf("invoke = %+v", invoke)
+	}
+	if !jsonEqual(cliDetail, invoke.Structured) {
+		t.Fatalf("CLI detail = %s, MCP detail = %s", cliDetail, invoke.Structured)
+	}
+
+	var detail struct {
+		Code        string                      `json:"code"`
+		Message     string                      `json:"message"`
+		Operation   string                      `json:"operation"`
+		Connections []application.ConnectionRef `json:"connections"`
+	}
+	decoder := json.NewDecoder(bytes.NewReader(invoke.Structured))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&detail); err != nil {
+		t.Fatalf("detail %s: %v", invoke.Structured, err)
+	}
+	want := []application.ConnectionRef{
+		{Name: "wiki", Description: "read-only account on the team wiki"},
+		{Name: "wiki-2", Description: ""},
+		{Name: "wiki-staging", Description: "staging wiki " + redact.Marker},
+	}
+	if detail.Code != string(output.CodeConnectionAmbiguous) || detail.Operation != "bookstack.pages.list" ||
+		detail.Message != strings.TrimPrefix(invoke.Content[0].Text, "connection-ambiguous: ") ||
+		!reflect.DeepEqual(detail.Connections, want) {
+		t.Fatalf("detail = %+v, want the candidates %+v", detail, want)
+	}
+	if !strings.Contains(string(invoke.Structured), `{"name":"wiki-2","description":""}`) {
+		t.Errorf("detail %s must keep the missing description as an empty string", invoke.Structured)
+	}
+	for _, published := range []string{stderr.String(), string(responses["1"].Result)} {
+		for _, canary := range []string{"service-canary", "endpoint-canary", "credential-canary", "ENV_CANARY",
+			"target-canary", "secret-canary-value"} {
+			if strings.Contains(published, canary) {
+				t.Errorf("diagnostic %q carries %q", published, canary)
+			}
+		}
+	}
+}
+
 // qatlas.search pages through the same catalog the tool CLI lists in one answer. Following next_cursor
 // from the first page names every tool of the namespace once, in the order of the CLI index, and a cursor
 // that does not continue this search fails as an invalid request.

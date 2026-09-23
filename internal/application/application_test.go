@@ -193,7 +193,7 @@ func TestConnectionToolsFilterEveryPathTheSameWay(t *testing.T) {
 		Operation: "fake.pages.list", Arguments: json.RawMessage(`{"id":"1"}`),
 	})
 	var ambiguous *ConnectionAmbiguousError
-	if !errors.As(err, &ambiguous) || !reflect.DeepEqual(ambiguous.Connections, []string{"lister", "open"}) {
+	if !errors.As(err, &ambiguous) || !reflect.DeepEqual(ambiguous.Connections, []ConnectionRef{{Name: "lister"}, {Name: "open"}}) {
 		t.Fatalf("Invoke(list) = %T %v, want a choice between lister and open", err, err)
 	}
 	cfg.Defaults.Connections["fake"] = "getter"
@@ -203,6 +203,15 @@ func TestConnectionToolsFilterEveryPathTheSameWay(t *testing.T) {
 	if !errors.As(err, &unsupported) {
 		t.Fatalf("Invoke(list) over a default without the tool = %T %v", err, err)
 	}
+	// Conflicting defaults stay ambiguous, and a default that cannot take the tool is no candidate.
+	cfg.Defaults.Connections["fake.pages.list"] = "lister"
+	_, err = core.Invoke(context.Background(), InvokeRequest{
+		Operation: "fake.pages.list", Arguments: json.RawMessage(`{"id":"1"}`),
+	})
+	if !errors.As(err, &ambiguous) || !reflect.DeepEqual(ambiguous.Connections, []ConnectionRef{{Name: "lister"}}) {
+		t.Fatalf("Invoke(list) over conflicting defaults = %T %v, want lister as the only candidate", err, err)
+	}
+	delete(cfg.Defaults.Connections, "fake.pages.list")
 	delete(cfg.Defaults.Connections, "fake")
 	if handlerCalls != 0 || secretReads != 0 {
 		t.Fatalf("refused requests reached the provider: handler calls=%d secret reads=%d", handlerCalls, secretReads)
@@ -447,6 +456,9 @@ func TestInvokeConnectionSelection(t *testing.T) {
 		explicit    string
 		want        string
 		wantErr     any
+		// candidates are the routes an ambiguity names: every one that can take the operation, each with
+		// its description, the empty string included.
+		candidates []ConnectionRef
 	}{
 		{name: "explicit", connections: []string{"primary", "archive"}, explicit: "archive", want: "archive"},
 		{name: "operation default", connections: []string{"primary", "archive"}, defaults: map[string]string{"fake.pages.get": "archive"}, want: "archive"},
@@ -454,8 +466,14 @@ func TestInvokeConnectionSelection(t *testing.T) {
 		{name: "same operation and provider default", connections: []string{"primary", "archive"}, defaults: map[string]string{"fake": "primary", "fake.pages.get": "primary"}, want: "primary"},
 		{name: "only matching", connections: []string{"primary"}, want: "primary"},
 		{name: "no matching connection", wantErr: new(ConnectionSelectionError)},
-		{name: "ambiguous", connections: []string{"primary", "archive"}, wantErr: new(ConnectionAmbiguousError)},
-		{name: "conflicting defaults", connections: []string{"primary", "archive"}, defaults: map[string]string{"fake": "primary", "fake.pages.get": "archive"}, wantErr: new(ConnectionAmbiguousError)},
+		{name: "ambiguous", connections: []string{"primary", "archive"}, wantErr: new(ConnectionAmbiguousError),
+			candidates: []ConnectionRef{{Name: "archive", Description: testDescriptions["archive"]}, {Name: "primary"}}},
+		{name: "similar names", connections: []string{"primary", "primary-2", "archive"}, wantErr: new(ConnectionAmbiguousError),
+			candidates: []ConnectionRef{
+				{Name: "archive", Description: testDescriptions["archive"]}, {Name: "primary"}, {Name: "primary-2"},
+			}},
+		{name: "conflicting defaults", connections: []string{"primary", "archive", "spare"}, defaults: map[string]string{"fake": "primary", "fake.pages.get": "archive"}, wantErr: new(ConnectionAmbiguousError),
+			candidates: []ConnectionRef{{Name: "archive", Description: testDescriptions["archive"]}, {Name: "primary"}}},
 	}
 
 	for _, tt := range tests {
@@ -468,6 +486,10 @@ func TestInvokeConnectionSelection(t *testing.T) {
 			if tt.wantErr != nil {
 				if !errorAs(err, tt.wantErr) {
 					t.Fatalf("Invoke() error = %T %v, want %T", err, err, tt.wantErr)
+				}
+				var ambiguous *ConnectionAmbiguousError
+				if errors.As(err, &ambiguous) && !reflect.DeepEqual(ambiguous.Connections, tt.candidates) {
+					t.Errorf("candidates = %#v, want %#v", ambiguous.Connections, tt.candidates)
 				}
 				return
 			}
