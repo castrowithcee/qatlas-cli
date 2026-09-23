@@ -252,7 +252,7 @@ func TestCredentialSetRejections(t *testing.T) {
 	}{
 		{"an env credential stores nothing", []string{"env-reader", "token-id"}, canaryStored, "has type \"env\""},
 		{"an unknown credential", []string{"absent", "token-id"}, canaryStored, `credential "absent" does not exist`},
-		{"an unknown role", []string{"vault-reader", "token"}, canaryStored, "unknown secret role"},
+		{"an unknown role", []string{"vault-reader", "no-such-role"}, canaryStored, "unknown secret role"},
 		{"an empty input", []string{"vault-reader", "token-id"}, "\n", "no secret"},
 		{"a missing argument", []string{"vault-reader"}, canaryStored, "expected a credential name"},
 	}

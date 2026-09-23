@@ -411,6 +411,11 @@ func (c *Config) Validate() error {
 				if seenTargets[target] {
 					report("connections.%s.targets: a target is listed more than once", name)
 				}
+				if metadata.Target.Validate != nil {
+					if err := metadata.Target.Validate(target); err != nil {
+						report("connections.%s.target: %v", name, err)
+					}
+				}
 				seenTargets[target] = true
 			}
 			if metadata.Target.Wildcard != "" && seenTargets[metadata.Target.Wildcard] && len(targets) != 1 {

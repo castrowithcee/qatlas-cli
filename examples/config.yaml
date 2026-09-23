@@ -59,6 +59,12 @@ services:
     provider: nextcloud
     base_url: https://partner.example.invalid/nextcloud
 
+  # GitHub is https://api.github.com, or https://HOST/api/v3 for GitHub Enterprise Server. Qatlas derives
+  # the GraphQL endpoint from it; every request of a connection stays on this service.
+  github:
+    provider: github
+    base_url: https://api.github.com
+
 # A credential says where secrets come from. BookStack needs the roles token-id and token-secret.
 # A credential names the source of the secrets one provider needs, never a secret itself.
 #
@@ -152,6 +158,12 @@ credentials:
 
   partner-reader:
     provider: nextcloud
+    type: keyring
+
+  # GitHub needs the single role token. Qatlas only reads, so give it a read-only token: classic with
+  # read:project plus repo (or public_repo), or fine-grained with read access to issues and projects.
+  github-reader:
+    provider: github
     type: keyring
 
 # A connection is what you select with --connection. It binds one service to one credential.
@@ -302,10 +314,29 @@ connections:
     target: Shared/Qatlas
     permissions: [read]
 
+  # A GitHub connection binds exactly one project (users/LOGIN/projects/NUMBER or
+  # orgs/LOGIN/projects/NUMBER) or one repository (repos/OWNER/REPO). Project tools run only on a project
+  # connection and issue tools only on a repository connection, so each lists the tools of its kind.
+  # Work selection starts at the project; the repository connection is the fallback for single issues.
+  planning:
+    service: github
+    credential: github-reader
+    target: orgs/octo-org/projects/7
+    description: the planning project of the example repository
+    permissions: [read]
+    tools: [github.projectitems.get, github.projectitems.list]
+
+  planning-issues:
+    service: github
+    credential: github-reader
+    target: repos/octo-org/example
+    permissions: [read]
+    tools: [github.issues.get, github.issues.list]
+
 # Defaults are useful for read operations. The key is a tool namespace such as bookstack, or a complete
 # tool ID such as bookstack.pages.list when one tool needs its own route. Confirmed Telegram sends and
-# the Lexware, Twenty CRM, SeaTable and Nextcloud reads deliberately ignore defaults and require the
-# connection in the exact invoke request.
+# the Lexware, Twenty CRM, SeaTable, Nextcloud and GitHub reads deliberately ignore defaults and require
+# the connection in the exact invoke request.
 defaults:
   connections:
     bookstack: wiki

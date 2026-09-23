@@ -3,6 +3,7 @@ package cli
 import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/lexware"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/nextcloud"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/seatable"
@@ -30,6 +31,9 @@ func defaultRegistry() *capability.Registry {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := nextcloud.Register(reg); err != nil {
+		panic("provider registration is static and must not fail: " + err.Error())
+	}
+	if err := github.Register(reg); err != nil {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	return reg

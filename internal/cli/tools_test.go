@@ -165,14 +165,14 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	if !strings.HasPrefix(stdout, "providers[6]{connections,provider,tools}:\n") ||
+	if !strings.HasPrefix(stdout, "providers[7]{connections,provider,tools}:\n") ||
 		!strings.HasSuffix(stdout, "\n") || strings.Contains(stdout, "\r") {
-		t.Errorf("stdout = %q, want an LF TOON table of six namespace rows", stdout)
+		t.Errorf("stdout = %q, want an LF TOON table of seven namespace rows", stdout)
 	}
 	for _, want := range []string{
 		// BookStack has exactly one configured connection, Telegram one, and every other compiled
 		// provider none. An unconfigured namespace stays visible with zero.
-		"1,bookstack,5", "1,telegram,3", "0,lexware,3", "0,nextcloud,6", "0,seatable,7", "0,twentycrm,5",
+		"1,bookstack,5", "1,telegram,3", "0,github,4", "0,lexware,3", "0,nextcloud,6", "0,seatable,7", "0,twentycrm,5",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -295,6 +295,9 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"twentycrm.companies.create", "twentycrm.companies.delete", "twentycrm.companies.get", "twentycrm.companies.list", "twentycrm.companies.update",
 		}},
 		{"namespace seatable", []string{"seatable"}, []string{"seatable.columns.list", "seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.update", "seatable.tables.list"}},
+		{"namespace github", []string{"github"}, []string{
+			"github.issues.get", "github.issues.list", "github.projectitems.get", "github.projectitems.list",
+		}},
 		{"namespace nextcloud", []string{"nextcloud"}, []string{
 			"nextcloud.files.create", "nextcloud.files.delete", "nextcloud.files.get", "nextcloud.files.list", "nextcloud.files.stat", "nextcloud.files.update",
 		}},

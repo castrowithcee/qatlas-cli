@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"sort"
 	"strings"
 	"testing"
@@ -64,6 +65,22 @@ var testProviders ProviderCatalog = testProviderCatalog{
 			Label: "root folder", Required: true, Description: "fixed folder below the Files of this identity",
 		},
 	},
+	"github": {
+		ID: "github", Name: "GitHub", DefaultBaseURL: "https://api.github.com",
+		SecretRoles: []SecretRole{{Name: "token", Description: "GitHub personal access token"}},
+		Target: TargetMetadata{Label: "project or repository", Required: true, Validate: func(target string) error {
+			if strings.HasPrefix(target, "repos/") || strings.HasPrefix(target, "orgs/") {
+				return nil
+			}
+			return errors.New("a GitHub target must name a project or a repository")
+		}},
+		Tools: []ToolMetadata{
+			{ID: "github.issues.get", Effect: PermissionRead},
+			{ID: "github.issues.list", Effect: PermissionRead},
+			{ID: "github.projectitems.get", Effect: PermissionRead},
+			{ID: "github.projectitems.list", Effect: PermissionRead},
+		},
+	},
 	"telegram": {
 		ID: "telegram", Name: "Telegram", DefaultBaseURL: "https://api.telegram.org",
 		SecretRoles: []SecretRole{{Name: "bot-token", Description: "Telegram bot token"}},
@@ -104,6 +121,32 @@ defaults: {}
 			!strings.Contains(err.Error(), "accepts only one") {
 			t.Errorf("provider %s allow-list error = %v", provider, err)
 		}
+	}
+}
+
+// A provider that validates its target form refuses a malformed target at load time without quoting it.
+func TestProviderTargetValidationRefusesMalformedTargets(t *testing.T) {
+	const prefix = `version: 1
+services:
+  main: {provider: github, base_url: https://api.github.com}
+credentials:
+  reader: {type: keyring}
+connections:
+  route:
+    service: main
+    credential: reader
+    target: TARGET
+defaults: {}
+`
+	if _, err := Decode(strings.NewReader(strings.Replace(prefix, "TARGET", "repos/octo-org/example", 1)),
+		testProviders); err != nil {
+		t.Fatalf("valid target = %v", err)
+	}
+	const canary = "canary-target-7c1d"
+	_, err := Decode(strings.NewReader(strings.Replace(prefix, "TARGET", canary, 1)), testProviders)
+	if err == nil || !strings.Contains(err.Error(), "connections.route.target: a GitHub target must name") ||
+		strings.Contains(err.Error(), canary) {
+		t.Fatalf("malformed target error = %v", err)
 	}
 }
 
@@ -173,8 +216,8 @@ func TestProviderMetadataNeverTreatsTargetAsASecret(t *testing.T) {
 	if !ok || !metadata.Target.Required || metadata.Target.Label != "chat ID" {
 		t.Fatalf("Telegram metadata = %+v, %v", metadata, ok)
 	}
-	if got := New(testProviders).SecretRoles(); len(got) != 7 || got[0] != "api-key" ||
-		got[2] != "app-password" || got[6] != "user-id" {
+	if got := New(testProviders).SecretRoles(); len(got) != 8 || got[0] != "api-key" ||
+		got[2] != "app-password" || got[4] != "token" || got[7] != "user-id" {
 		t.Fatalf("secret roles = %v", got)
 	}
 }
