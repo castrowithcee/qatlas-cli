@@ -43,26 +43,35 @@ func focusRole(t *testing.T, m *Model, role string) {
 	t.Fatalf("the form has no row for role %q", role)
 }
 
-// setSecret types a secret into the masked prompt of one role, the way a person does.
+// setSecret types a secret into the masked prompt of one role, the way a person does: the storage row
+// decides where s stores it.
 func setSecret(t *testing.T, m *Model, role, value string, plaintext bool) {
 	t.Helper()
+	chooseStorage(t, m, plaintext)
 	focusRole(t, m, role)
-	key := "s"
-	if plaintext {
-		key = "p"
-	}
-	press(t, m, key)
+	press(t, m, "s")
 	if plaintext {
 		if m.screen != screenPlaintextConfirm {
-			t.Fatalf("p did not open the plaintext confirmation: screen %v, error %q", m.screen, m.fail)
+			t.Fatalf("s did not open the plaintext confirmation: screen %v, error %q", m.screen, m.fail)
 		}
 		press(t, m, "y")
 	}
 	if m.screen != screenSecret {
-		t.Fatalf("%q did not open the prompt: screen %v, error %q", key, m.screen, m.fail)
+		t.Fatalf("s did not open the prompt: screen %v, error %q", m.screen, m.fail)
 	}
 	typeText(t, m, value)
 	pump(t, m, "enter")
+}
+
+// chooseStorage picks the system keyring or the unencrypted file in the storage row of the open form.
+func chooseStorage(t *testing.T, m *Model, plaintext bool) {
+	t.Helper()
+	focusField(t, m, storageLabel)
+	if plaintext {
+		selectChoice(t, m, storagePlaintext)
+	} else {
+		selectChoice(t, m, storageKeyring)
+	}
 }
 
 // editEntry opens the form of the named entry in the current section.
@@ -186,15 +195,15 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 	}
 
 	openSectionByName(t, m, sectionCredentials)
-	if view := screenOf(m); !strings.Contains(view, config.CredentialTypeKeyring) {
-		t.Errorf("the list does not show the credential type:\n%s", view)
+	if view := screenOf(m); !strings.Contains(view, placeKeyring) {
+		t.Errorf("the list does not show where the secrets are kept:\n%s", view)
 	}
 	if view := screenOf(m); !strings.Contains(view, stateStored) {
 		t.Errorf("the list does not show where the roles resolve from:\n%s", view)
 	}
 
 	pump(t, m, "enter")
-	if got := m.fieldValue(typeLabel); got != config.CredentialTypeKeyring {
+	if got := m.credentialType(); got != config.CredentialTypeKeyring {
 		t.Errorf("the form shows type %q, want keyring", got)
 	}
 	for _, role := range m.cfg.SecretRoles() {
@@ -257,8 +266,8 @@ func TestTypeChangeIsRefusedWhileASecretIsStored(t *testing.T) {
 		t.Fatalf("New() = %v", err)
 	}
 	editEntry(t, m, "reader")
-	focusField(t, m, typeLabel)
-	selectChoice(t, m, config.CredentialTypeEnv)
+	focusField(t, m, storageLabel)
+	selectChoice(t, m, storageEnv)
 	pump(t, m, "enter")
 
 	if !strings.Contains(m.fail, "token-secret") || !strings.Contains(m.fail, "still stored") {
@@ -277,8 +286,8 @@ func TestTypeChangeIsRefusedWhileASecretIsStored(t *testing.T) {
 
 	// Removing the secret is what unblocks the change, and it happens in the editor: the type goes back to
 	// keyring, where the role rows manage stored secrets again.
-	focusField(t, m, typeLabel)
-	selectChoice(t, m, config.CredentialTypeKeyring)
+	focusField(t, m, storageLabel)
+	selectChoice(t, m, storageKeyring)
 	focusRole(t, m, "token-secret")
 	press(t, m, "x")
 	if m.screen != screenConfirm {
@@ -288,8 +297,8 @@ func TestTypeChangeIsRefusedWhileASecretIsStored(t *testing.T) {
 	if m.fail != "" {
 		t.Fatalf("removing reported %q", m.fail)
 	}
-	focusField(t, m, typeLabel)
-	selectChoice(t, m, config.CredentialTypeEnv)
+	focusField(t, m, storageLabel)
+	selectChoice(t, m, storageEnv)
 	focusRole(t, m, "token-id")
 	typeText(t, m, "WIKI_ID")
 	pump(t, m, "enter")
@@ -416,7 +425,7 @@ func TestPlaintextIsTheNamedWayOutWithoutAStore(t *testing.T) {
 	if source != secret.SourcePlaintext {
 		t.Errorf("the role resolves from %q (%v), want the plaintext file", source, checked)
 	}
-	if view := screenOf(m); !strings.Contains(view, string(secret.SourcePlaintext)) {
+	if view := screenOf(m); !strings.Contains(view, "("+statePlaintext+")") {
 		t.Errorf("the form does not say the fallback delivers:\n%s", view)
 	}
 }
@@ -425,9 +434,10 @@ func TestPlaintextNeedsAWarningAndConfirmationBeforeInput(t *testing.T) {
 	m, _, path, _, _ := newStoreModel(t)
 	addKeyringCredential(t, m, "reader")
 	editEntry(t, m, "reader")
+	chooseStorage(t, m, true)
 	focusRole(t, m, "token-id")
 
-	press(t, m, "p")
+	press(t, m, "s")
 	if m.screen != screenPlaintextConfirm {
 		t.Fatalf("screen = %v, want plaintext confirmation", m.screen)
 	}
@@ -447,10 +457,10 @@ func TestPlaintextNeedsAWarningAndConfirmationBeforeInput(t *testing.T) {
 		t.Errorf("cancel left screen %v with status %q", m.screen, m.status)
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(path), secret.FileName)); !os.IsNotExist(err) {
-		t.Errorf("pressing p and cancelling created a plaintext file: %v", err)
+		t.Errorf("pressing s and cancelling created a plaintext file: %v", err)
 	}
 
-	press(t, m, "p", "y")
+	press(t, m, "s", "y")
 	if m.screen != screenSecret || !m.secretPlain {
 		t.Errorf("confirmed plaintext did not open its masked prompt: screen %v plaintext %v",
 			m.screen, m.secretPlain)
@@ -622,7 +632,7 @@ func TestSlowStoreDoesNotBlockTheEditor(t *testing.T) {
 	typeText(t, m, "reader")
 	press(t, m, "tab")
 	press(t, m, "tab")
-	selectChoice(t, m, config.CredentialTypeKeyring)
+	selectChoice(t, m, storageKeyring)
 	press(t, m, "enter")
 	if m.fail != "" {
 		t.Fatalf("creating the credential reported %q", m.fail)
@@ -686,7 +696,7 @@ func TestSlowStatusQueryDoesNotBlockTheEditor(t *testing.T) {
 	typeText(t, m, "reader")
 	press(t, m, "tab")
 	press(t, m, "tab")
-	selectChoice(t, m, config.CredentialTypeKeyring)
+	selectChoice(t, m, storageKeyring)
 	press(t, m, "enter")
 
 	// Opening the list asks the store where every keyring role resolves from.
@@ -805,8 +815,8 @@ func storedCredential(t *testing.T, env map[string]string) (
 func attemptTypeChange(t *testing.T, m *Model) {
 	t.Helper()
 	editEntry(t, m, "reader")
-	focusField(t, m, typeLabel)
-	selectChoice(t, m, config.CredentialTypeEnv)
+	focusField(t, m, storageLabel)
+	selectChoice(t, m, storageEnv)
 	focusRole(t, m, "token-id")
 	typeText(t, m, "WIKI_ID")
 	focusRole(t, m, "token-secret")
@@ -1040,8 +1050,8 @@ func TestAWaitingTypeChangeSurvivesADisplayRefresh(t *testing.T) {
 	}
 
 	editEntry(t, m, "reader")
-	focusField(t, m, typeLabel)
-	selectChoice(t, m, config.CredentialTypeEnv)
+	focusField(t, m, storageLabel)
+	selectChoice(t, m, storageEnv)
 	focusRole(t, m, "token-id")
 	typeText(t, m, "WIKI_ID")
 	_, guard := m.Update(keyMsg("enter"))
@@ -1166,8 +1176,8 @@ func TestTheGuardsWayOutReallyLeadsOut(t *testing.T) {
 	}
 
 	// Follow the message: back to keyring, remove the secret on the role it names.
-	focusField(t, m, typeLabel)
-	selectChoice(t, m, config.CredentialTypeKeyring)
+	focusField(t, m, storageLabel)
+	selectChoice(t, m, storageKeyring)
 	focusRole(t, m, "token-id")
 	press(t, m, "x")
 	pump(t, m, "y")
@@ -1210,8 +1220,8 @@ func TestQuittingDropsAWaitingTypeChange(t *testing.T) {
 		t.Fatalf("New() = %v", err)
 	}
 	editEntry(t, m, "reader")
-	focusField(t, m, typeLabel)
-	selectChoice(t, m, config.CredentialTypeEnv)
+	focusField(t, m, storageLabel)
+	selectChoice(t, m, storageEnv)
 	focusRole(t, m, "token-id")
 	typeText(t, m, "WIKI_ID")
 	_, guard := m.Update(keyMsg("enter"))

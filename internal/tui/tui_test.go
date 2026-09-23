@@ -184,7 +184,7 @@ func addCredential(t *testing.T, m *Model, name string, envNames ...string) {
 	// written before the field looks like, and then every compiled role is offered.
 	press(t, m, "tab")
 	press(t, m, "tab")
-	selectChoice(t, m, config.CredentialTypeEnv)
+	selectChoice(t, m, storageEnv)
 	for _, env := range envNames {
 		press(t, m, "tab")
 		typeText(t, m, env)
@@ -201,7 +201,7 @@ func addKeyringCredential(t *testing.T, m *Model, name string) {
 	typeText(t, m, name)
 	press(t, m, "tab")
 	press(t, m, "tab")
-	selectChoice(t, m, config.CredentialTypeKeyring)
+	selectChoice(t, m, storageKeyring)
 	pump(t, m, "enter")
 	if m.fail != "" {
 		t.Fatalf("creating the keyring credential reported %q", m.fail)
@@ -526,7 +526,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	step("enter", "2", "n")
 	typeText(t, m, "reader")
 	step("tab", "tab")
-	selectChoice(t, m, config.CredentialTypeEnv)
+	selectChoice(t, m, storageEnv)
 	step("tab")
 	typeText(t, m, "WIKI_ID")
 	step("tab")
@@ -1238,7 +1238,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	press(t, m, "n")
 	press(t, m, "tab")
 	press(t, m, "tab")
-	selectChoice(t, m, config.CredentialTypeEnv)
+	selectChoice(t, m, storageEnv)
 	view := screenOf(m)
 	words := strings.Join(strings.Fields(view), " ")
 	for _, want := range []string{"the NAME of an environment variable", "never the secret"} {
@@ -1263,8 +1263,8 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	if !strings.Contains(view, "a key you choose, without spaces") {
 		t.Errorf("the name field has no hint:\n%s", view)
 	}
-	if !strings.Contains(words, "keyring (recommended) keeps the secrets in the system keyring") {
-		t.Errorf("the form does not say what the type decides:\n%s", view)
+	if !strings.Contains(words, "system keyring keeps the secrets in the system keyring") {
+		t.Errorf("the form does not say what the secrets row decides:\n%s", view)
 	}
 
 	openSectionByName(t, m, sectionServices)
@@ -1552,7 +1552,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 	typeText(t, m, "wiki-reader")
 	press(t, m, "tab")
 	press(t, m, "tab")
-	selectChoice(t, m, config.CredentialTypeKeyring)
+	selectChoice(t, m, storageKeyring)
 	press(t, m, "tab")
 
 	before := strings.Join(strings.Fields(screenOf(m)), " ")
@@ -1738,7 +1738,7 @@ func TestAHintBelongsToTheFieldAboveIt(t *testing.T) {
 		press(t, m, "n")
 		press(t, m, "tab")
 		press(t, m, "tab")
-		selectChoice(t, m, config.CredentialTypeEnv)
+		selectChoice(t, m, storageEnv)
 
 		lines := formLines(m)
 		wrappedHints := 0
@@ -1790,7 +1790,7 @@ func TestNoHintStandsTwice(t *testing.T) {
 	press(t, m, "n")
 	press(t, m, "tab")
 	press(t, m, "tab")
-	selectChoice(t, m, config.CredentialTypeEnv)
+	selectChoice(t, m, storageEnv)
 	assertNoRepeatedHint(t, m, "the env credential form")
 	if got := strings.Count(screenOf(m), "the NAME of an environment"); got != 1 {
 		t.Errorf("the env sentence stands %d times, want once:\n%s", got, screenOf(m))
@@ -1807,7 +1807,7 @@ func TestNoHintStandsTwice(t *testing.T) {
 
 	view := screenOf(m)
 	words := strings.Join(strings.Fields(view), " ")
-	if got := strings.Count(words, "p unencrypted file (asks first)"); got != 1 {
+	if got := strings.Count(words, "x remove; typing is masked"); got != 1 {
 		t.Errorf("the secret keys stand %d times, want once:\n%s", got, view)
 	}
 	// The stages differ per role, so every role keeps its own.
@@ -1849,7 +1849,7 @@ func TestATallFormStaysUsableInASmallTerminal(t *testing.T) {
 	if dense := strings.Count(view, "\n"); dense >= full {
 		t.Errorf("dense form = %d lines, want fewer than the %d of the full one", dense, full)
 	}
-	for _, want := range []string{"name", typeLabel, "enter save"} {
+	for _, want := range []string{"name", storageLabel, "enter save"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the dense form dropped %q:\n%s", want, view)
 		}
@@ -1891,7 +1891,7 @@ func TestNamingTheProviderKeepsTheRestOfTheCredential(t *testing.T) {
 	// The name of an existing entry is read-only and enter on the provider row opens its table, so the form
 	// opens on the type row, where enter saves.
 	editEntry(t, m, "bookstack-personal")
-	if got := m.fields[m.focus].label; got != typeLabel {
+	if got := m.fields[m.focus].label; got != storageLabel {
 		t.Fatalf("the form opened on %q, want the type row", got)
 	}
 	focusField(t, m, providerLabel)

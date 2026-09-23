@@ -60,11 +60,6 @@ const (
 	newService    = "(new service)"
 	newCredential = "(new credential)"
 
-	storageLabel     = "secrets"
-	storageKeyring   = "system keyring (recommended)"
-	storageEnv       = "environment variables"
-	storagePlaintext = "unencrypted file (asks first)"
-
 	setupProviderHint       = "the system this connection leads to; it decides everything the next steps offer"
 	setupServiceHint        = "reuse a configured instance of this provider, or choose " + newService + " to add one"
 	setupCredentialHint     = "reuse a credential of this provider, or choose " + newCredential + " to add one"
@@ -72,12 +67,6 @@ const (
 	setupConnectionNameHint = "a key you choose, without spaces; agents and --connection select the " +
 		"connection by it"
 )
-
-// storageHint says what each place for new secrets is for. The system keyring is named as this platform
-// calls it, so a user recognises it as something the machine already has rather than something to set up.
-var storageHint = "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
-	"machine, with nothing to set up or export; environment variables suit CI and containers; unencrypted " +
-	"file is the last resort without a keyring and asks first"
 
 // setup is the state of a running guided setup. pages keeps the rows of every step that was opened, so
 // going back and forth loses nothing that was typed.
@@ -172,8 +161,7 @@ func (m *Model) setupPage(step int) []field {
 		fields := []field{
 			choiceField("credential", credentials, credentials[0]).withHint(setupCredentialHint),
 			textField("name", "", false).withHint(nameHint),
-			choiceField(storageLabel, []string{storageKeyring, storageEnv, storagePlaintext}, storageKeyring).
-				withHint(storageHint),
+			storageField(storageKeyring),
 		}
 		// Every role has a masked row and a row for the name of a variable. Only one of them is shown, so
 		// what was typed as a secret is never shown as a variable name after a change of mind.
@@ -251,8 +239,8 @@ func (m *Model) setupRefresh() {
 		}
 		m.fields[0].hint = setupCredentialHint
 		if existing {
-			m.fields[0].hint = fmt.Sprintf("reuses %s (type %s) unchanged, and its secrets where they are; "+
-				"choose %s to add one", chosen, m.cfg.Credentials[chosen].Type, newCredential)
+			m.fields[0].hint = fmt.Sprintf("reuses %s (%s) unchanged, and its secrets where they are; "+
+				"choose %s to add one", chosen, m.storagePlace(chosen, m.cfg.Credentials[chosen]), newCredential)
 		}
 	case stepPermissions:
 		m.toolsModeChosen()
@@ -361,9 +349,9 @@ func (m *Model) setupCandidate(upto int) (*config.Config, setupPlan, error) {
 					"credential row instead of adding it again", plan.credential)
 			}
 			plan.storage = pageValue(page, storageLabel)
-			cred := config.Credential{Provider: w.provider, Type: config.CredentialTypeKeyring}
-			if plan.storage == storageEnv {
-				cred.Type, cred.Values = config.CredentialTypeEnv, map[string]string{}
+			cred := config.Credential{Provider: w.provider, Type: storageType(plan.storage)}
+			if cred.Type == config.CredentialTypeEnv {
+				cred.Values = map[string]string{}
 			} else {
 				plan.secrets = map[string]string{}
 			}
@@ -558,7 +546,8 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 	if m.tester != nil {
 		m.status += ". Press t to test it now."
 	}
-	return nil
+	// Where the secrets of a new credential now resolve from is what the lists and the next setup name.
+	return m.refreshSources(m.keyringQueries())
 }
 
 // setupError turns a failed save into the way out. The configuration is unchanged in every case.
@@ -646,7 +635,7 @@ func (m *Model) summaryRows() []string {
 		return "existing, unchanged"
 	}
 
-	secrets := "type " + cfg.Credentials[plan.credential].Type + "; its secrets stay where they are"
+	secrets := m.storagePlace(plan.credential, cfg.Credentials[plan.credential]) + "; its secrets stay where they are"
 	roles := strings.Join(plan.roles, ", ")
 	switch {
 	case !plan.newCredential:
@@ -655,11 +644,11 @@ func (m *Model) summaryRows() []string {
 		for i, role := range plan.roles {
 			names[i] = role + " from $" + cfg.Credentials[plan.credential].Values[role]
 		}
-		secrets = "environment variables: " + strings.Join(names, ", ")
+		secrets = placeEnv + ": " + strings.Join(names, ", ")
 	case plan.storage == storagePlaintext:
-		secrets = "unencrypted file: " + roles
+		secrets = placePlaintext + ": " + roles
 	default:
-		secrets = "system keyring: " + roles
+		secrets = placeKeyring + ": " + roles
 	}
 
 	permissions := config.FormatPermissions(conn.Permissions)

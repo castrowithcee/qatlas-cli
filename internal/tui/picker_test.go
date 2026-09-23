@@ -191,7 +191,7 @@ func TestASmallChoiceKeepsLeftAndRight(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "n")
-	focusField(t, m, typeLabel)
+	focusField(t, m, storageLabel)
 	before := m.credentialType()
 	press(t, m, "right")
 	if m.screen != screenForm {

@@ -138,8 +138,6 @@ const (
 	// repeating the sentence under the next one would read like a fault and add nothing.
 	envHint = "every role row holds the NAME of an environment variable that holds the secret, " +
 		"never the secret itself"
-	typeHint = "keyring (recommended) keeps the secrets in the system keyring of this machine, nothing to " +
-		"export; env names one environment variable per role, for CI and containers"
 	// credentialProviderHint names the one thing this choice decides, because it is not obvious from the
 	// field itself: the rows below it are the secret roles of the provider selected here.
 	credentialProviderHint = "the system these secrets belong to; it decides which secret roles are asked for below"
@@ -161,8 +159,6 @@ const (
 	undescribedHint   = undescribedMarker + ": this connection shares its provider with another one, and an " +
 		"agent that has to choose between them sees only names and descriptions; add one line on what each " +
 		"route is for"
-	secretHint = "s store in the system keyring (recommended) · p unencrypted file (asks first) · x remove; " +
-		"typing is masked"
 	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
 	// describes a free choice, which is the opposite of what this field does.
 	lockedHint = "read-only; delete this entry and create it again to rename it"
@@ -195,10 +191,6 @@ const (
 	toolsAll      = "all allowed by permissions"
 	toolsSelected = "only selected tools"
 )
-
-// typeLabel is the field that decides what a credential is: which variables it names, or that its secrets
-// live in a store. It is shown and chosen, never assumed.
-const typeLabel = "type"
 
 // providerLabel is the field that names the system an entry belongs to. A service always has one; a
 // credential may, and then it decides which secret roles exist.
@@ -952,7 +944,7 @@ func (m *Model) choiceChanged(previous string) tea.Cmd {
 		return nil
 	}
 	switch m.fields[m.focus].label {
-	case typeLabel:
+	case storageLabel:
 		return m.credentialTypeChosen()
 	case providerLabel:
 		switch m.section {
@@ -1778,8 +1770,8 @@ func (m *Model) credentialProviderChosen() tea.Cmd {
 	return nil
 }
 
-// credentialType is the type the credential form currently shows.
-func (m *Model) credentialType() string { return m.fieldValue(typeLabel) }
+// credentialType is the type the storage row of the credential form currently stands for.
+func (m *Model) credentialType() string { return storageType(m.fieldValue(storageLabel)) }
 
 // credentialTypeChosen switches the role rows to the type that is now selected.
 //
@@ -1833,18 +1825,18 @@ func (m *Model) buildFields(name string) []field {
 		}
 	case sectionCredentials:
 		cred := m.cfg.Credentials[name]
-		credType := cred.Type
-		if credType == "" {
-			// A new credential starts as keyring: that is the type this editor can complete on its own,
-			// while env needs a variable exported in a shell the editor cannot reach.
-			credType = config.CredentialTypeKeyring
+		// A new credential starts in the system keyring: that is the place this editor can complete on its
+		// own, while environment variables need a shell the editor cannot reach.
+		choice := storageKeyring
+		if cred.Type != "" {
+			choice = storageChoice(m.storagePlace(name, cred))
 		}
 		provider := m.credentialProvider(name, cred)
 		fields = append(fields,
 			providerField(m.credentialProviders(provider), provider).withHint(credentialProviderHint),
-			choiceField(typeLabel, config.CredentialTypes(), credType).withHint(typeHint),
+			storageField(choice),
 		)
-		fields = append(fields, m.roleFields(cred, fields[1].value(), credType)...)
+		fields = append(fields, m.roleFields(cred, fields[1].value(), storageType(choice))...)
 	case sectionConnections:
 		conn := m.cfg.Connections[name]
 		// The provider is not stored on a connection: its service already names one. It stands here
@@ -1898,6 +1890,7 @@ func (m *Model) submit() tea.Cmd {
 func (m *Model) save(name string) tea.Cmd {
 	wasNewKeyring := m.section == sectionCredentials && m.editing == "" &&
 		m.credentialType() == config.CredentialTypeKeyring
+	choice := m.fieldValue(storageLabel)
 	candidate := m.cfg.Clone()
 	if err := m.apply(candidate, name); err != nil {
 		m.fail = m.redactor.Apply(err.Error())
@@ -1911,6 +1904,10 @@ func (m *Model) save(name string) tea.Cmd {
 	m.configExists = true
 	if wasNewKeyring {
 		cmd := m.openForm(name)
+		// Nothing is stored yet, so the reopened form cannot tell the unencrypted file from the keyring;
+		// it keeps the place that was chosen.
+		*m.field(storageLabel) = storageField(choice)
+		m.pristine = m.formState()
 		for i := range m.fields {
 			if m.fields[i].kind == fieldSecret {
 				m.focus = i
@@ -1918,8 +1915,12 @@ func (m *Model) save(name string) tea.Cmd {
 			}
 		}
 		m.applyFocus()
+		where := secret.StoreLabel(platform) + " (recommended)"
+		if choice == storagePlaintext {
+			where = "the " + storagePlaintext
+		}
 		m.status = "Credential saved. Add the required provider secrets below: press s on each role to " +
-			"store it in " + secret.StoreLabel(platform) + " (recommended)."
+			"store it in " + where + "."
 		return cmd
 	}
 	cmd := m.returnToList(name)
@@ -2374,7 +2375,7 @@ func (m *Model) buildEditorView(dense bool) string {
 			if m.editing == "" {
 				keys = "enter save credential first · tab move · " + leaveKeys
 			} else {
-				keys = "s store in system keyring · p unencrypted file (asks first) · x remove · " + keys
+				keys = m.secretKeys() + " · " + keys
 			}
 		}
 		if m.wizard != nil {
@@ -2390,13 +2391,14 @@ func (m *Model) buildEditorView(dense bool) string {
 		b.WriteString(m.wrapped(failStyle,
 			fmt.Sprintf("This does not use the system keyring. It writes %s.%s as readable text for your "+
 				"user account into %s.", m.editing, m.secretRole, m.plaintextPath())) + "\n")
-		b.WriteString(m.indented("Choose no if you want the keyring. Unlock or configure "+
-			secret.StoreLabel(platform)+", return here, and press s.") + "\n")
+		b.WriteString(m.indented("Choose no if you want the "+placeKeyring+": choose "+storageKeyring+
+			" in the "+storageLabel+" row, unlock or configure "+secret.StoreLabel(platform)+
+			" if needed, and press s.") + "\n")
 		b.WriteString(m.hint("y continue to masked input · n/esc cancel without writing"))
 	case screenSecret:
 		where := secret.StoreLabel(platform) + " of this machine"
 		if m.secretPlain {
-			where = "the plaintext file " + m.plaintextPath()
+			where = "the " + placePlaintext + " " + m.plaintextPath()
 		}
 		b.WriteString(titleStyle.Render(fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole)) + "\n\n")
 		b.WriteString("  " + m.secretInput.View() + "\n")
@@ -2411,7 +2413,7 @@ func (m *Model) buildEditorView(dense bool) string {
 		if m.confirmRole != "" {
 			b.WriteString(fmt.Sprintf("Remove the stored secret for %s.%s?\n", m.editing, m.confirmRole))
 			b.WriteString(m.indented(
-				"it is removed from the system keyring and from the plaintext file; an environment "+
+				"it is removed from the system keyring and from the unencrypted file; an environment "+
 					"variable is not touched, because it belongs to your shell") + "\n")
 		} else {
 			name, _ := m.selected()
@@ -3162,8 +3164,8 @@ func (m *Model) describe(name string) string {
 		s := m.cfg.Services[name]
 		return fmt.Sprintf("%s  %s  %s", s.Provider, name, s.BaseURL)
 	case sectionCredentials:
-		// The type decides what the credential is, so it is part of the line rather than something the
-		// reader has to open the form to find out.
+		// Where the secrets are kept decides what the credential is, so it is part of the line rather than
+		// something the reader has to open the form to find out.
 		cred := m.cfg.Credentials[name]
 		provider := m.credentialProvider(name, cred)
 		credentialRoles := m.credentialRoles(provider)
@@ -3177,7 +3179,7 @@ func (m *Model) describe(name string) string {
 					m.envSource(cred.Values[role])))
 			}
 		}
-		return strings.TrimSpace(fmt.Sprintf("%s  %s  %s  %s", providerColumn(provider), name, cred.Type,
+		return strings.TrimSpace(fmt.Sprintf("%s  %s  %s  %s", providerColumn(provider), name, m.storagePlace(name, cred),
 			strings.Join(parts, "  ")))
 	case sectionConnections:
 		conn := m.cfg.Connections[name]

@@ -379,7 +379,7 @@ func TestCredentialProviderDecidesItsSecretRoles(t *testing.T) {
 	if m.focus >= len(m.fields) {
 		t.Errorf("focus = %d, want a field that still exists among %d", m.focus, len(m.fields))
 	}
-	for _, label := range []string{"name", providerLabel, typeLabel} {
+	for _, label := range []string{"name", providerLabel, storageLabel} {
 		if m.field(label) == nil {
 			t.Errorf("the switch dropped the %q row: %v", label, labelsOf(m.fields))
 		}
@@ -422,7 +422,7 @@ func TestAConnectionSettlesTheProviderOfACredential(t *testing.T) {
 		t.Errorf("the form starts at %q, want the derived provider", got)
 	}
 	if got := labelsOf(fields); !reflect.DeepEqual(got,
-		[]string{"name", providerLabel, typeLabel, "token-id", "token-secret"}) {
+		[]string{"name", providerLabel, storageLabel, "token-id", "token-secret"}) {
 		t.Errorf("fields = %v, want only the BookStack roles", got)
 	}
 

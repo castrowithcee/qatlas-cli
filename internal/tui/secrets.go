@@ -73,6 +73,68 @@ const (
 	stateOff         = "keyring switched off"
 )
 
+// Where the secrets of a credential are kept. The guided setup and the credential form offer the same row,
+// in the same order and with the same hint, and say it in these words rather than as the type the file
+// stores: the system keyring and the unencrypted file are both type keyring there, environment variables
+// type env.
+const (
+	storageLabel = "secrets"
+
+	placeKeyring   = "system keyring"
+	placeEnv       = "environment variables"
+	placePlaintext = "unencrypted file"
+
+	storageKeyring   = placeKeyring + " (recommended)"
+	storageEnv       = placeEnv
+	storagePlaintext = placePlaintext + " (asks first)"
+)
+
+// storageHint says what each place for new secrets is for. The system keyring is named as this platform
+// calls it, so a user recognises it as something the machine already has rather than something to set up.
+var storageHint = "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
+	"machine, with nothing to set up or export; environment variables suit CI and containers; unencrypted " +
+	"file is the last resort without a keyring and asks first"
+
+// storageField is the row that chooses where the secrets of a credential are kept.
+func storageField(value string) field {
+	return choiceField(storageLabel, []string{storageKeyring, storageEnv, storagePlaintext}, value).
+		withHint(storageHint)
+}
+
+// storageType is the credential type the file stores for a choice of the storage row.
+func storageType(choice string) string {
+	if choice == storageEnv {
+		return config.CredentialTypeEnv
+	}
+	return config.CredentialTypeKeyring
+}
+
+// storagePlace names where the secrets of a configured credential are kept. A keyring credential counts
+// as kept in the unencrypted file once a role of it resolves from there, by the resolver's last answer; the
+// question is never asked here, because that would block the editor on the store.
+func (m *Model) storagePlace(name string, cred config.Credential) string {
+	if cred.Type == config.CredentialTypeEnv {
+		return placeEnv
+	}
+	for _, role := range m.credentialRoles(m.credentialProvider(name, cred)) {
+		if m.sources[secret.StoreKey(name, role)] == secret.SourcePlaintext {
+			return placePlaintext
+		}
+	}
+	return placeKeyring
+}
+
+// storageChoice is the choice of the storage row that stands for a place.
+func storageChoice(place string) string {
+	switch place {
+	case placeEnv:
+		return storageEnv
+	case placePlaintext:
+		return storagePlaintext
+	}
+	return storageKeyring
+}
+
 // platform is the operating system whose keyring the texts name. The names themselves are checked for
 // every platform in the secret package, without reaching any store.
 var platform = runtime.GOOS
@@ -221,7 +283,7 @@ func (m *Model) askSecret(role string, plaintext bool) {
 	m.clearMessages()
 }
 
-// confirmPlaintext separates curiosity about the p key from consent to write an unencrypted secret. The
+// confirmPlaintext separates curiosity about the unencrypted file from consent to write an unencrypted secret. The
 // confirmation itself writes nothing and does not even ask for the value.
 func (m *Model) confirmPlaintext(role string) {
 	m.secretRole = role
@@ -281,7 +343,7 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 func (m *Model) storeSecret(credential, role, value string, plaintext bool) tea.Cmd {
 	where := "system keyring"
 	if plaintext {
-		where = "plaintext file"
+		where = placePlaintext
 	}
 	m.writes++
 	m.busy = fmt.Sprintf("storing the secret for %s.%s in the %s", credential, role, where)
@@ -353,8 +415,8 @@ func (m *Model) explain(err error, credential, role string) string {
 		text += ", then retry " + retry
 	}
 	return fmt.Sprintf("%s. Alternatively export %s. Only if you deliberately accept an unencrypted file, "+
-		"press p; it asks again before writing %s", text, secret.DerivedEnvName(credential, role),
-		m.plaintextPath())
+		"choose %s in the %s row and press s; it asks again before writing %s", text,
+		secret.DerivedEnvName(credential, role), storagePlaintext, storageLabel, m.plaintextPath())
 }
 
 func (m *Model) plaintextPath() string {
@@ -382,7 +444,7 @@ func (m *Model) guardTypeChange() tea.Cmd {
 	if m.cfg.Credentials[m.editing].Type != config.CredentialTypeKeyring {
 		return nil
 	}
-	if m.fieldValue(typeLabel) != config.CredentialTypeEnv {
+	if m.credentialType() != config.CredentialTypeEnv {
 		return nil
 	}
 
@@ -442,8 +504,8 @@ func (m *Model) handlePlaced(msg placedMsg) tea.Cmd {
 	if len(held) > 0 {
 		problems = append(problems,
 			fmt.Sprintf("a secret of %s is still stored (%s)", msg.credential, strings.Join(held, ", ")))
-		ways = append(ways, fmt.Sprintf("switch the type back to %s and remove it with x on the role, or "+
-			"run 'qatlas credential delete %s <role>'", config.CredentialTypeKeyring, msg.credential))
+		ways = append(ways, fmt.Sprintf("switch %s back to %s and remove it with x on the role, or "+
+			"run 'qatlas credential delete %s <role>'", storageLabel, storageKeyring, msg.credential))
 	}
 	if len(unsure) > 0 {
 		// Not knowing is not the same as nothing being there, and only one of the two is safe to act on.
@@ -453,9 +515,9 @@ func (m *Model) handlePlaced(msg placedMsg) tea.Cmd {
 		ways = append(ways, "make that place answerable and try again")
 	}
 
-	m.fail = m.redactor.Apply(fmt.Sprintf("%s; the type stays %s until that is settled, because a copy left "+
-		"behind would have nothing that reads it: %s",
-		strings.Join(problems, "; "), config.CredentialTypeKeyring, strings.Join(ways, "; ")))
+	m.fail = m.redactor.Apply(fmt.Sprintf("%s; the secrets cannot move to %s until that is settled, because "+
+		"a copy left behind would have nothing that reads it: %s",
+		strings.Join(problems, "; "), placeEnv, strings.Join(ways, "; ")))
 	return nil
 }
 
@@ -523,6 +585,9 @@ func (m *Model) secretNextStep(credential, role string) string {
 		return ""
 	}
 	env := secret.DerivedEnvName(credential, role)
+	if source == secret.SourceMissing && m.fieldValue(storageLabel) == storagePlaintext {
+		return "next: press s to store it in the " + placePlaintext + "; it asks first"
+	}
 	switch source {
 	case secret.SourceEnv:
 		// The override stays visible: it wins over the keyring for as long as it is set.
@@ -554,7 +619,7 @@ func (m *Model) secretRowHint(credential, role string, lead bool) string {
 		parts = append(parts, description)
 	}
 	if lead {
-		parts = append(parts, secretHint)
+		parts = append(parts, m.secretKeys()+"; typing is masked")
 	}
 	if checked := m.checked[secret.StoreKey(credential, role)]; len(checked) > 0 {
 		parts = append(parts, "checked: "+strings.Join(checked, ", "))
@@ -565,25 +630,37 @@ func (m *Model) secretRowHint(credential, role string, lead bool) string {
 	return strings.Join(parts, "; ")
 }
 
+// secretKeys names the keys of a secret row. s stores where the storage row says, so the unencrypted file
+// is reached by choosing it there, the same way the guided setup reaches it, and still asks first.
+func (m *Model) secretKeys() string {
+	if m.fieldValue(storageLabel) == storagePlaintext {
+		return "s store in " + storagePlaintext + " · x remove"
+	}
+	return "s store in " + storageKeyring + " · x remove"
+}
+
 // secretRowKey handles the keys of a focused secret row.
 func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	action := key.String()
-	if action != "s" && action != "p" && action != "x" {
+	if action != "s" && action != "x" {
 		return nil
 	}
 	if m.editing == "" {
 		// A secret stored under a name that was never saved would sit in the store with nothing pointing
 		// at it, which is the orphaning this editor exists to avoid.
-		m.fail = "save the credential first, then store its secrets: a keyring credential saves without " +
-			"any value, and its secrets are added afterwards"
+		m.fail = "save the credential first, then store its secrets: a credential kept in the " +
+			placeKeyring + " or an " + placePlaintext + " saves without any value, and its secrets are added " +
+			"afterwards"
 		return nil
 	}
 
 	switch action {
 	case "s":
+		if m.fieldValue(storageLabel) == storagePlaintext {
+			m.confirmPlaintext(role)
+			return nil
+		}
 		m.askSecret(role, false)
-	case "p":
-		m.confirmPlaintext(role)
 	case "x":
 		// Removing a stored secret is irreversible, so it is confirmed like every other deletion here.
 		m.confirmRole = role

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -500,5 +502,197 @@ func TestGuidedSetupTestsWithTheSameTester(t *testing.T) {
 	runTest(t, m)
 	if len(calls) != 2 || calls[1] != "personal" {
 		t.Errorf("the Connections list did not test through the same tester: %v", calls)
+	}
+}
+
+// The guided setup and the credential form ask where the secrets go with one and the same row.
+func TestSetupAndEditorOfferTheSameStorageRow(t *testing.T) {
+	m, _, _, _, _ := newStoreModel(t)
+	walkSetup(t, m, stepCredential)
+	setupRow := *m.field(storageLabel)
+
+	e, _, _, _, _ := newStoreModel(t)
+	openSectionByName(t, e, sectionCredentials)
+	press(t, e, "n")
+	editorRow := e.field(storageLabel)
+	if editorRow == nil {
+		t.Fatalf("the credential form has no %q row: %v", storageLabel, labelsOf(e.fields))
+	}
+
+	want := []string{storageKeyring, storageEnv, storagePlaintext}
+	for what, row := range map[string]field{"setup": setupRow, "editor": *editorRow} {
+		if !reflect.DeepEqual(row.choices, want) || row.value() != storageKeyring || row.hint != storageHint {
+			t.Errorf("the %s row offers %v at %q with hint %q, want %v at %q with the shared hint", what,
+				row.choices, row.value(), row.hint, want, storageKeyring)
+		}
+	}
+}
+
+// rawStorageTerm matches the file's type names where a screen should say where the secrets are kept.
+var rawStorageTerm = regexp.MustCompile(`\benv\b|\btype:? (env|keyring)\b|< ?(env|keyring) ?>|\(type |` +
+	`(^|[^m]) keyring \(recommended\)|\bp unencrypted`)
+
+func assertNoRawStorageTerm(t *testing.T, what, view string) {
+	t.Helper()
+	if raw := rawStorageTerm.FindString(strings.Join(strings.Fields(view), " ")); raw != "" {
+		t.Errorf("%s says %q:\n%s", what, raw, view)
+	}
+}
+
+// Neither way to a credential names the storage by the type the file stores.
+func TestStorageScreensSayWhereNotTheType(t *testing.T) {
+	// The setup of a new credential, under every storage choice.
+	m, _, _, _, _ := newStoreModel(t)
+	walkSetup(t, m, stepCredential)
+	focusField(t, m, storageLabel)
+	for _, choice := range []string{storageKeyring, storageEnv, storagePlaintext} {
+		selectChoice(t, m, choice)
+		assertNoRawStorageTerm(t, "the setup credential step under "+choice, screenOf(m))
+	}
+
+	// The setup reusing a credential, and its summary.
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
+	cfg := newTestConfig(t)
+	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
+	mustNoError(t, cfg.SetCredential("store",
+		config.Credential{Provider: "bookstack", Type: config.CredentialTypeKeyring}))
+	mustNoError(t, cfg.SetCredential("vars", config.Credential{Provider: "bookstack", Type: config.CredentialTypeEnv,
+		Values: map[string]string{"token-id": "WIKI_ID", "token-secret": "WIKI_SECRET"}}))
+	mustNoError(t, store.Save(cfg))
+	for _, credential := range []string{"store", "vars"} {
+		secrets, _ := newResolver(t, dir, nil)
+		m, err := New(store, nil, secrets, nil)
+		if err != nil {
+			t.Fatalf("New() = %v", err)
+		}
+		m.screen = screenNav
+		press(t, m, "c", "enter", "enter")
+		selectChoice(t, m, credential)
+		view := screenOf(m)
+		assertNoRawStorageTerm(t, "the setup reusing "+credential, view)
+		want := map[string]string{"store": placeKeyring, "vars": placeEnv}[credential]
+		if words := strings.Join(strings.Fields(view), " "); !strings.Contains(words, "("+want+") unchanged") {
+			t.Errorf("reusing %s does not say %q:\n%s", credential, want, view)
+		}
+		press(t, m, "enter", "enter", "enter")
+		if m.screen != screenSummary {
+			t.Fatalf("screen = %v, want the summary: %q", m.screen, m.fail)
+		}
+		assertNoRawStorageTerm(t, "the summary reusing "+credential, screenOf(m))
+	}
+
+	// The credential form of a new credential, on its storage row and on a role row, and the list.
+	e, _, _, _, _ := newStoreModel(t)
+	openSectionByName(t, e, sectionCredentials)
+	press(t, e, "n")
+	for _, choice := range []string{storageKeyring, storageEnv, storagePlaintext} {
+		focusField(t, e, storageLabel)
+		selectChoice(t, e, choice)
+		assertNoRawStorageTerm(t, "the credential form under "+choice, screenOf(e))
+		focusRole(t, e, "token-id")
+		assertNoRawStorageTerm(t, "the role row under "+choice, screenOf(e))
+	}
+	addCredential(t, e, "vars", "WIKI_ID", "WIKI_SECRET")
+	addKeyringCredential(t, e, "store")
+	assertNoRawStorageTerm(t, "the saved keyring credential form", screenOf(e))
+	openSectionByName(t, e, sectionCredentials)
+	assertNoRawStorageTerm(t, "the credential list", screenOf(e))
+	if words := strings.Join(strings.Fields(screenOf(e)), " "); !strings.Contains(words, "store "+placeKeyring) ||
+		!strings.Contains(words, "vars "+placeEnv) {
+		t.Errorf("the credential list does not say where the secrets are kept:\n%s", screenOf(e))
+	}
+}
+
+// Every storage choice leaves the same credential and the same secrets behind, whichever way it was made.
+func TestSetupAndEditorStoreAlike(t *testing.T) {
+	type outcome struct {
+		cred    config.Credential
+		sources []secret.Source
+	}
+	read := func(t *testing.T, path string, secrets *secret.Resolver) outcome {
+		t.Helper()
+		saved, err := loadTestConfig(t, path)
+		if err != nil {
+			t.Fatalf("Load() = %v", err)
+		}
+		out := outcome{cred: saved.Credentials["reader"]}
+		for _, role := range []string{"token-id", "token-secret"} {
+			source, _ := secrets.Status("reader", out.cred, role)
+			out.sources = append(out.sources, source)
+		}
+		return out
+	}
+	values := func(choice string) []string {
+		if choice == storageEnv {
+			return []string{"WIKI_ID", "WIKI_SECRET"}
+		}
+		return []string{canaryID, canarySecret}
+	}
+
+	for _, choice := range []string{storageKeyring, storageEnv, storagePlaintext} {
+		t.Run(choice, func(t *testing.T) {
+			// The guided setup.
+			m, _, path, secrets, _ := newStoreModel(t)
+			walkSetup(t, m, stepCredential)
+			press(t, m, "tab")
+			typeText(t, m, "reader")
+			press(t, m, "tab")
+			selectChoice(t, m, choice)
+			for _, value := range values(choice) {
+				press(t, m, "tab")
+				typeText(t, m, value)
+			}
+			press(t, m, "enter")
+			if choice == storagePlaintext {
+				press(t, m, "y")
+			}
+			press(t, m, "enter", "enter")
+			pump(t, m, "enter")
+			if m.fail != "" {
+				t.Fatalf("the setup reported %q", m.fail)
+			}
+			viaSetup := read(t, path, secrets)
+
+			// The credential form.
+			e, _, path, secrets, _ := newStoreModel(t)
+			openSectionByName(t, e, sectionCredentials)
+			press(t, e, "n")
+			typeText(t, e, "reader")
+			focusField(t, e, providerLabel)
+			selectChoice(t, e, "bookstack")
+			focusField(t, e, storageLabel)
+			selectChoice(t, e, choice)
+			if choice == storageEnv {
+				for i, role := range []string{"token-id", "token-secret"} {
+					focusRole(t, e, role)
+					typeText(t, e, values(choice)[i])
+				}
+				pump(t, e, "enter")
+			} else {
+				pump(t, e, "enter")
+				if got := e.fieldValue(storageLabel); got != choice {
+					t.Fatalf("the saved credential reopened on %q, want %q", got, choice)
+				}
+				for i, role := range []string{"token-id", "token-secret"} {
+					setSecret(t, e, role, values(choice)[i], choice == storagePlaintext)
+				}
+			}
+			if e.fail != "" {
+				t.Fatalf("the credential form reported %q", e.fail)
+			}
+			viaEditor := read(t, path, secrets)
+
+			if !reflect.DeepEqual(viaSetup, viaEditor) {
+				t.Errorf("setup left %+v, the credential form %+v", viaSetup, viaEditor)
+			}
+			want := map[string]secret.Source{
+				storageKeyring: secret.SourceStore, storageEnv: secret.SourceMissing,
+				storagePlaintext: secret.SourcePlaintext,
+			}[choice]
+			if viaSetup.cred.Type != storageType(choice) || viaSetup.sources[0] != want {
+				t.Errorf("%s left %+v, want type %s resolving from %s", choice, viaSetup, storageType(choice), want)
+			}
+		})
 	}
 }
