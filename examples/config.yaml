@@ -172,6 +172,12 @@ credentials:
     provider: github
     type: keyring
 
+  # An Actions operator dispatches, re-runs, and cancels workflow runs: classic with repo, or fine-grained with
+  # Actions read and write plus Contents read. An observer only needs Actions read, which a reader can hold.
+  github-operator:
+    provider: github
+    type: keyring
+
 # A connection is what you select with --connection. It binds one service to one credential.
 #
 # description is optional and yours to maintain: one line of at most 200 characters saying what the route
@@ -364,6 +370,29 @@ connections:
     permissions: [read, create, update]
     tools: [github.issues.get, github.issues.update, github.issues.close, github.issues.reopen,
       github.comments.list, github.comments.create]
+
+  # GitHub Actions run on a repository connection in two groups. An observer reads workflows, runs, jobs,
+  # artifact metadata, and the end of job logs; without execute it can neither see nor start an operator tool.
+  ci-observer:
+    service: github
+    credential: github-reader
+    target: repos/octo-org/example
+    description: diagnoses the workflow runs of the example repository
+    permissions: [read]
+    tools: [github.workflows.list, github.workflows.get, github.workflowruns.list, github.workflowruns.get,
+      github.workflowjobs.list, github.workflowjobs.get, github.workflowjobs.log, github.workflowartifacts.list]
+
+  # An operator also dispatches workflows and re-runs or cancels runs. It needs execute, which no planning
+  # permission implies, and every execution needs confirmation in its own invoke request.
+  ci-operator:
+    service: github
+    credential: github-operator
+    target: repos/octo-org/example
+    description: re-runs and dispatches the workflows of the example repository
+    permissions: [read, execute]
+    tools: [github.workflowruns.list, github.workflowruns.get, github.workflowjobs.list, github.workflowjobs.log,
+      github.workflows.dispatch, github.workflowruns.rerun, github.workflowruns.rerunfailed,
+      github.workflowruns.cancel]
 
 # Defaults are useful for read operations. The key is a tool namespace such as bookstack, or a complete
 # tool ID such as bookstack.pages.list when one tool needs its own route. Confirmed Telegram sends and

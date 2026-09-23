@@ -62,12 +62,17 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[15]{effect,id,title}:", "read,github.issues.get,", "read,github.issues.list,",
+		"tools[27]{effect,id,title}:", "read,github.issues.get,", "read,github.issues.list,",
 		"read,github.projectitems.get,", "read,github.projectitems.list,", "read,github.comments.list,",
 		"create,github.issues.create,", "update,github.issues.update,", "update,github.issues.close,",
 		"update,github.issues.reopen,", "create,github.comments.create,", "update,github.projectitems.update,",
 		"create,github.projectitems.add,", "update,github.projectitems.archive,",
 		"create,github.projectdrafts.create,", "create,github.projectissues.create,",
+		"read,github.workflows.list,", "read,github.workflows.get,", "read,github.workflowruns.list,",
+		"read,github.workflowruns.get,", "read,github.workflowjobs.list,", "read,github.workflowjobs.get,",
+		"read,github.workflowjobs.log,", "read,github.workflowartifacts.list,",
+		"execute,github.workflows.dispatch,", "execute,github.workflowruns.rerun,",
+		"execute,github.workflowruns.rerunfailed,", "execute,github.workflowruns.cancel,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -135,6 +140,8 @@ func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 			[]string{"invoke", "github.projectitems.update", "--connection", "roadmap", "--config", path}},
 		{"a change the permissions exclude", `{"title":"x"}`, "unsupported-capability",
 			[]string{"invoke", "github.issues.create", "--connection", "code", "--confirm", "--config", path}},
+		{"an execution the permissions exclude", `{"run_id":1}`, "unsupported-capability",
+			[]string{"invoke", "github.workflowruns.rerun", "--connection", "code", "--confirm", "--config", path}},
 		{"a change outside the tools list", `{"item_id":"PVTI_x1"}`, "unsupported-capability",
 			[]string{"invoke", "github.projectitems.archive", "--connection", "roadmap", "--confirm", "--config", path}},
 		{"a repository outside the targets", `{"repository":"octo-org/other","title":"x"}`, "invalid-request",
@@ -172,8 +179,8 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, toolResultFrom(t, responses[`"search"`]).Structured, &searched)
-	if len(searched.Operations) != 15 || searched.Operations[0].ID != "github.comments.create" ||
-		searched.Operations[14].ID != "github.projectitems.update" {
+	if len(searched.Operations) != 27 || searched.Operations[0].ID != "github.comments.create" ||
+		searched.Operations[26].ID != "github.workflows.list" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 	describedByCLI := runTwentyJSON(t, "", "tool", "github.projectitems.list", "--config", path, "--output", "json")

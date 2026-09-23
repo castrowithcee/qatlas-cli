@@ -1,13 +1,15 @@
-// Package github implements controlled planning access to GitHub.
+// Package github implements controlled planning and GitHub Actions access to GitHub.
 //
 // A connection binds one token to exactly one user or organization project, or to exactly one repository.
 // A project connection lists compact, server-side filtered items of that project page by page, reads the
 // full content of one selected item, and maintains its items and their field values; a repository
 // connection reads, creates, and changes issues of that repository and reads or writes the comments of one
-// issue on explicit request. A project connection may also name repositories: only issues of those are
-// created for or added to its project. Nothing here accepts a free filter expression, a GraphQL document, a
-// route, an owner, or a project from an agent, and a repository argument only selects among the configured
-// ones: every request stays inside the configured targets.
+// issue on explicit request. A repository connection also observes the GitHub Actions of its repository
+// and, only with the execute permission, dispatches, re-runs, or cancels one named workflow or run. A
+// project connection may also name repositories: only issues of those are created for or added to its
+// project. Nothing here accepts a free filter expression, a GraphQL document, a route, an owner, or a
+// project from an agent, and a repository argument only selects among the configured ones: every request
+// stays inside the configured targets.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -277,8 +279,9 @@ var issuesGet = capability.Descriptor{
 	}},
 }
 
-// Register adds GitHub metadata, its read-only connection test, and the bounded planning operations.
-// Only reads are a connection's default: every change needs a permission of its own.
+// Register adds GitHub metadata, its read-only connection test, the bounded planning operations, and the
+// Actions observer and operator tools. Only reads are a connection's default: every change and every
+// execution needs a permission of its own.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
@@ -287,7 +290,9 @@ func Register(reg *capability.Registry) error {
 			Name: roleToken,
 			Description: "GitHub personal access token: classic with read:project plus repo or public_repo, or " +
 				"fine-grained with read access to issues and projects; project changes need project instead of " +
-				"read:project, and issue changes need write access to issues",
+				"read:project, and issue changes need write access to issues; Actions reads need Actions: read " +
+				"on a fine-grained token, and dispatches, re-runs, and cancels need repo on a classic token or " +
+				"Actions: read and write plus Contents: read on a fine-grained one",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project or repository",
@@ -316,12 +321,22 @@ func Register(reg *capability.Registry) error {
 				"drafts and planned issues; archiving stays unticked",
 			Tools: []string{itemsList.ID, itemsGet.ID, itemsUpdate.ID, itemsAdd.ID, draftsCreate.ID,
 				projectIssuesCreate.ID},
+		}, {
+			ID: "actions-observer", Title: "Actions observer",
+			Description: "reads the workflows, runs, jobs, artifact metadata, and the end of job logs of a " +
+				"repository connection and starts nothing",
+			Tools: observerTools,
+		}, {
+			ID: "actions-operator", Title: "Actions operator",
+			Description: "observes the Actions of a repository connection and dispatches workflows, re-runs " +
+				"runs or their failed jobs, and cancels runs; every execution needs its own confirmation",
+			Tools: append(append([]string{}, observerTools...), operatorTools...),
 		}},
 	}, TestConnection); err != nil {
 		return err
 	}
-	return reg.Register(Provider,
-		capability.Operation{Descriptor: itemsList, Handler: capability.Handler(invokeItemsList)},
+	return reg.Register(Provider, append([]capability.Operation{
+		{Descriptor: itemsList, Handler: capability.Handler(invokeItemsList)},
 		capability.Operation{Descriptor: itemsGet, Handler: capability.Handler(invokeItemsGet)},
 		capability.Operation{Descriptor: issuesList, Handler: capability.Handler(invokeIssuesList)},
 		capability.Operation{Descriptor: issuesGet, Handler: capability.Handler(invokeIssuesGet)},
@@ -336,7 +351,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: itemsArchive, Handler: capability.Handler(invokeItemsArchive)},
 		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
-	)
+	}, actionsOperations()...)...)
 }
 
 func invokeItemsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -931,10 +946,7 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 	if err != nil {
 		return providerError(op, "the request could not be built")
 	}
-	req.Header.Set("Authorization", c.auth)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", apiVersion)
-	req.Header.Set("User-Agent", "qatlas-cli")
+	c.authorize(req)
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -965,10 +977,22 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 		}
 		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 	}
+	// A change GitHub answers without a body, such as a workflow dispatch, asks for no answer.
+	if out == nil {
+		return nil
+	}
 	if err := json.Unmarshal(data, out); err != nil {
 		return invalidResponse(op, change)
 	}
 	return nil
+}
+
+// authorize sets the shared authentication, version, and client headers of a GitHub API request.
+func (c *Client) authorize(req *http.Request) {
+	req.Header.Set("Authorization", c.auth)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", apiVersion)
+	req.Header.Set("User-Agent", "qatlas-cli")
 }
 
 // observeRateLimit reads the primary budget headers. When the budget of this token is spent, the next
@@ -1028,6 +1052,9 @@ func (c *Client) classifyStatus(op string, response *http.Response, change bool)
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: "GitHub answered with a redirect, which Qatlas does not follow; the resource may have moved"}
+	case status == http.StatusConflict:
+		return &provider.Error{Class: provider.ClassProviderError, Op: op,
+			Message: "GitHub refused the request in the current state of the resource"}
 	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "GitHub rejected the request as invalid"}
 	case status == http.StatusGatewayTimeout:

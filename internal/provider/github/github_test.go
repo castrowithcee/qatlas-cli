@@ -38,9 +38,9 @@ const (
 
 // recorded is one request the fake GitHub received. body is the decoded REST body of a change.
 type recorded struct {
-	method, path, document, auth, version, accept string
-	variables                                     map[string]any
-	body                                          map[string]any
+	method, path, query, document, auth, version, accept string
+	variables                                            map[string]any
+	body                                                 map[string]any
 }
 
 type fakeItem struct {
@@ -74,7 +74,7 @@ type fakeGitHub struct {
 }
 
 func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	record := recorded{method: r.Method, path: r.URL.Path, auth: r.Header.Get("Authorization"),
+	record := recorded{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery, auth: r.Header.Get("Authorization"),
 		version: r.Header.Get("X-GitHub-Api-Version"), accept: r.Header.Get("Accept")}
 	var payload struct {
 		Query     string         `json:"query"`
@@ -539,7 +539,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		ids = append(ids, descriptor.ID)
 		if descriptor.Risk.Effect != capability.EffectRead || descriptor.Risk.Idempotency != capability.IdempotencySafe ||
 			descriptor.Risk.Confirmation != capability.ConfirmationNone || !descriptor.RequiresExplicitConnection ||
-			descriptor.Risk.DataSensitivity != dataSensitivity {
+			(descriptor.Risk.DataSensitivity != dataSensitivity && descriptor.ID != jobsLog.ID) {
 			t.Errorf("descriptor %s = %+v, want a safe read requiring an explicit connection", descriptor.ID, descriptor.Risk)
 		}
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "comments"} {
@@ -549,8 +549,13 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		}
 	}
 	equalIDs(t, ids, []string{"github.comments.list", "github.issues.get", "github.issues.list",
-		"github.projectitems.get", "github.projectitems.list"})
-	if len(metadata.Tools) != 15 {
+		"github.projectitems.get", "github.projectitems.list", "github.workflowartifacts.list",
+		"github.workflowjobs.get", "github.workflowjobs.list", "github.workflowjobs.log", "github.workflowruns.get",
+		"github.workflowruns.list", "github.workflows.get", "github.workflows.list"})
+	if jobsLog.Risk.DataSensitivity != logSensitivity {
+		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
+	}
+	if len(metadata.Tools) != 27 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }
