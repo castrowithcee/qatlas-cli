@@ -16,7 +16,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
-// Workflow maintenance and Actions administration of a repository connection. These tools are high-risk:
+// Workflow maintenance and Actions administration of a repository. These tools are high-risk:
 // they change what runs in the repository and with which rights, so each of them requires an allow-list
 // and is offered only by a connection whose tools list names it. No profile a new connection starts with
 // selects them.
@@ -74,8 +74,8 @@ var workflowFilesList = capability.Descriptor{
 	ID:      Provider + ".workflowfiles.list",
 	Version: 1,
 	Title:   "List GitHub workflow files",
-	Description: "List the workflow files directly below .github/workflows/ of the repository bound to an explicit " +
-		"connection with their blob SHAs, without their content; offered only where the connection lists it",
+	Description: "List the workflow files directly below .github/workflows/ of " +
+		"a repository an explicit connection allows with their blob SHAs, without their content; offered only where the connection lists it",
 	Tags:                       []string{"github", "actions", "workflows", "files", "list", "maintainer"},
 	Risk:                       guardedRisk(capability.EffectRead, capability.IdempotencySafe, workflowFileSensitivity),
 	Provider:                   Provider,
@@ -98,8 +98,8 @@ var workflowFilesGet = capability.Descriptor{
 	ID:      Provider + ".workflowfiles.get",
 	Version: 1,
 	Title:   "Get a GitHub workflow file",
-	Description: "Read one workflow file directly below .github/workflows/ of the repository bound to an explicit " +
-		"connection with its content and blob SHA; offered only where the connection lists it",
+	Description: "Read one workflow file directly below .github/workflows/ of " +
+		"a repository an explicit connection allows with its content and blob SHA; offered only where the connection lists it",
 	Tags:                       []string{"github", "actions", "workflows", "files", "get", "maintainer"},
 	Risk:                       guardedRisk(capability.EffectRead, capability.IdempotencySafe, workflowFileSensitivity),
 	Provider:                   Provider,
@@ -147,8 +147,8 @@ var workflowFilesCreate = capability.Descriptor{
 	ID:      Provider + ".workflowfiles.create",
 	Version: 1,
 	Title:   "Create a GitHub workflow file",
-	Description: "Commit one new workflow file directly below .github/workflows/ of the repository bound to an " +
-		"explicit connection; fails when the file exists, so a repeated call writes nothing; offered only where " +
+	Description: "Commit one new workflow file directly below .github/workflows/ of " +
+		"a repository an explicit connection allows; fails when the file exists, so a repeated call writes nothing; offered only where " +
 		"the connection lists it",
 	Tags:                       []string{"github", "actions", "workflows", "files", "create", "maintainer"},
 	Risk:                       guardedRisk(capability.EffectCreate, capability.IdempotencyIdempotent, workflowFileSensitivity),
@@ -171,8 +171,8 @@ var workflowFilesUpdate = capability.Descriptor{
 	ID:      Provider + ".workflowfiles.update",
 	Version: 1,
 	Title:   "Update a GitHub workflow file",
-	Description: "Replace the content of one workflow file directly below .github/workflows/ of the repository bound " +
-		"to an explicit connection, only while its blob SHA is still the given one, so a changed file is never " +
+	Description: "Replace the content of one workflow file directly below .github/workflows/ of " +
+		"a repository an explicit connection allows, only while its blob SHA is still the given one, so a changed file is never " +
 		"overwritten and a repeated call writes nothing; offered only where the connection lists it",
 	Tags:                       []string{"github", "actions", "workflows", "files", "update", "maintainer"},
 	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, workflowFileSensitivity),
@@ -206,8 +206,8 @@ var workflowsEnable = capability.Descriptor{
 	ID:      Provider + ".workflows.enable",
 	Version: 1,
 	Title:   "Enable a GitHub Actions workflow",
-	Description: "Enable one workflow with a file below .github/workflows/ of the repository bound to an explicit " +
-		"connection, so GitHub runs it again; offered only where the connection lists it",
+	Description: "Enable one workflow with a file below .github/workflows/ of " +
+		"a repository an explicit connection allows, so GitHub runs it again; offered only where the connection lists it",
 	Tags:                       []string{"github", "actions", "workflows", "enable", "maintainer"},
 	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, workflowFileSensitivity),
 	Provider:                   Provider,
@@ -226,8 +226,8 @@ var workflowsDisable = capability.Descriptor{
 	ID:      Provider + ".workflows.disable",
 	Version: 1,
 	Title:   "Disable a GitHub Actions workflow",
-	Description: "Disable one workflow with a file below .github/workflows/ of the repository bound to an explicit " +
-		"connection, so GitHub no longer runs it; offered only where the connection lists it",
+	Description: "Disable one workflow with a file below .github/workflows/ of " +
+		"a repository an explicit connection allows, so GitHub no longer runs it; offered only where the connection lists it",
 	Tags:                       []string{"github", "actions", "workflows", "disable", "maintainer"},
 	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, workflowFileSensitivity),
 	Provider:                   Provider,
@@ -273,7 +273,7 @@ var actionsPermissionsGet = capability.Descriptor{
 	ID:      Provider + ".actionspermissions.get",
 	Version: 1,
 	Title:   "Get the GitHub Actions permissions of a repository",
-	Description: "Read whether GitHub Actions run in the repository bound to an explicit connection and which " +
+	Description: "Read whether GitHub Actions run in a repository an explicit connection allows and which " +
 		"actions they may use; offered only where the connection lists it",
 	Tags:                       []string{"github", "actions", "settings", "permissions", "get", "admin"},
 	Risk:                       guardedRisk(capability.EffectRead, capability.IdempotencySafe, actionsSettingSensitivity),
@@ -293,7 +293,7 @@ var actionsPermissionsUpdate = capability.Descriptor{
 	ID:      Provider + ".actionspermissions.update",
 	Version: 1,
 	Title:   "Change the GitHub Actions permissions of a repository",
-	Description: "Switch GitHub Actions on or off in the repository bound to an explicit connection or choose which " +
+	Description: "Switch GitHub Actions on or off in a repository an explicit connection allows or choose which " +
 		"actions they may use; a value left out stays as it is; offered only where the connection lists it",
 	Tags:                       []string{"github", "actions", "settings", "permissions", "update", "admin"},
 	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, actionsSettingSensitivity),
@@ -319,8 +319,8 @@ var workflowPermissionsGet = capability.Descriptor{
 	ID:      Provider + ".workflowpermissions.get",
 	Version: 1,
 	Title:   "Get the default GITHUB_TOKEN permissions of a repository",
-	Description: "Read the default rights of the GITHUB_TOKEN of workflows in the repository bound to an explicit " +
-		"connection and whether workflows may approve pull request reviews; offered only where the connection lists it",
+	Description: "Read the default rights of the GITHUB_TOKEN of workflows in " +
+		"a repository an explicit connection allows and whether workflows may approve pull request reviews; offered only where the connection lists it",
 	Tags:                       []string{"github", "actions", "settings", "token", "get", "admin"},
 	Risk:                       guardedRisk(capability.EffectRead, capability.IdempotencySafe, actionsSettingSensitivity),
 	Provider:                   Provider,
@@ -340,8 +340,8 @@ var workflowPermissionsUpdate = capability.Descriptor{
 	ID:      Provider + ".workflowpermissions.update",
 	Version: 1,
 	Title:   "Change the default GITHUB_TOKEN permissions of a repository",
-	Description: "Set the default rights of the GITHUB_TOKEN of workflows in the repository bound to an explicit " +
-		"connection or whether workflows may approve pull request reviews; a value left out stays as it is; offered " +
+	Description: "Set the default rights of the GITHUB_TOKEN of workflows in " +
+		"a repository an explicit connection allows or whether workflows may approve pull request reviews; a value left out stays as it is; offered " +
 		"only where the connection lists it",
 	Tags:                       []string{"github", "actions", "settings", "token", "update", "admin"},
 	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, actionsSettingSensitivity),

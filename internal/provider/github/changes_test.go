@@ -201,7 +201,7 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		if descriptor.Risk.Effect != capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationRequired {
 			t.Errorf("%s changes without confirmation", descriptor.ID)
 		}
-		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "\"project\"", "document"} {
+		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "document"} {
 			if strings.Contains(string(descriptor.InputSchema), forbidden) {
 				t.Errorf("%s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
@@ -213,33 +213,52 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 	}
 }
 
-func TestPlanningTargetListsAreValidated(t *testing.T) {
+func TestTargetListsAreAllowListsOfAnyMix(t *testing.T) {
 	valid := [][]string{
 		{projectTarget, repoTarget},
 		{"repos/octo-org/other", userTarget, repoTarget},
+		{repoTarget, "repos/octo-org/other"},
+		{projectTarget, "orgs/octo-org/projects/8", "users/octocat/projects/*", "repos/octo-org/*"},
 	}
 	for _, values := range valid {
-		bound, err := parseScope(values)
-		if err != nil || bound.target.kind != kindProject || len(bound.repositories) != len(values)-1 {
-			t.Errorf("parseScope(%v) = %+v, %v", values, bound, err)
+		if list, err := parseAllowlist(values); err != nil || len(list) != len(values) {
+			t.Errorf("parseAllowlist(%v) = %+v, %v", values, list, err)
 		}
 	}
 	for _, values := range [][]string{
-		{repoTarget, "repos/octo-org/other"},
-		{projectTarget, "orgs/octo-org/projects/8"},
 		{projectTarget, repoTarget, "repos/Octo-Org/Example"},
 		{projectTarget, "repos/octo-org"},
+		{"repos/*/example"},
+		{"repos/octo-org/ex*"},
+		{"orgs/*/projects/7"},
+		{"orgs/octo-org/projects/1-9"},
+		{"repos/octo-org/*/x"},
+		{"orgs/octo-org/*"},
 	} {
-		if _, err := parseScope(values); err == nil {
-			t.Errorf("parseScope(%v) accepted an unusable target list", values)
+		if _, err := parseAllowlist(values); err == nil {
+			t.Errorf("parseAllowlist(%v) accepted an unusable target list", values)
 		}
 	}
-	bound, _ := parseScope([]string{projectTarget, repoTarget})
-	if repo, err := bound.repository("Octo-Org/EXAMPLE"); err != nil || repo.owner != "octo-org" || repo.repo != "example" {
-		t.Errorf("repository() = %+v, %v; want the configured spelling", repo, err)
+
+	list, _ := parseAllowlist([]string{"repos/octo-org/*", "repos/hubot/example", "users/octocat/projects/*",
+		projectTarget})
+	for raw, want := range map[string]bool{
+		"repos/Octo-Org/anything":   true,
+		"repos/hubot/EXAMPLE":       true,
+		"repos/hubot/other":         false,
+		"repos/octo-org2/example":   false,
+		"users/octocat/projects/12": true,
+		"orgs/octocat/projects/12":  false,
+		"orgs/octo-org/projects/7":  true,
+		"orgs/octo-org/projects/70": false,
+	} {
+		parsed, _ := parseTarget(raw)
+		if list.allows(parsed) != want {
+			t.Errorf("allows(%s) = %v, want %v", raw, !want, want)
+		}
 	}
-	if _, err := bound.repository("octo-org/other"); !isInvalidRequest(err) {
-		t.Errorf("repository(other) = %v, want an invalid request", err)
+	if !(allowlist(nil)).allows(target{kind: kindRepository, owner: "any", repo: "thing"}) {
+		t.Error("an empty allow-list refused a repository; without targets the token decides")
 	}
 
 	reg := registry(t)
@@ -261,13 +280,22 @@ connections:
     credential: gh-reader
     targets: ` + targets + "\n"
 	}
-	if _, err := config.Decode(strings.NewReader(document("[orgs/octo-org/projects/7, repos/octo-org/example]")), reg); err != nil {
-		t.Errorf("a project with its repository was refused: %v", err)
+	// Existing single targets and project-first lists stay valid, and so does any other mix.
+	for _, targets := range []string{"[orgs/octo-org/projects/7, repos/octo-org/example]",
+		"[repos/octo-org/example, repos/octo-org/other]", "[orgs/octo-org/projects/7, users/octocat/projects/1]",
+		"[repos/octo-org/*, orgs/octo-org/projects/*]"} {
+		if _, err := config.Decode(strings.NewReader(document(targets)), reg); err != nil {
+			t.Errorf("targets %s were refused: %v", targets, err)
+		}
 	}
-	for _, targets := range []string{"[repos/octo-org/example, repos/octo-org/other]",
-		"[orgs/octo-org/projects/7, users/octocat/projects/1]"} {
+	if _, err := config.Decode(strings.NewReader(strings.Replace(document("[]"), "    targets: []\n", "", 1)),
+		reg); err != nil {
+		t.Errorf("a connection without targets was refused: %v", err)
+	}
+	for _, targets := range []string{"[repos/octo-org/example, repos/Octo-Org/Example]",
+		"[repos/octo-org/ex*]"} {
 		if _, err := config.Decode(strings.NewReader(document(targets)), reg); err == nil ||
-			!strings.Contains(err.Error(), "connections.planning.targets") {
+			!strings.Contains(err.Error(), "connections.planning.target") {
 			t.Errorf("targets %s: err = %v, want a refused target list", targets, err)
 		}
 	}
@@ -786,11 +814,13 @@ func coreChangeConfig(base string) *config.Config {
 	cfg.Connections["reader"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget}
 	cfg.Connections["listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Targets: planningTargets,
 		Permissions: all, Tools: []string{"github.projectitems.list", "github.projectitems.update"}}
+	cfg.Connections["open"] = config.Connection{Service: "gh", Credential: "gh-reader", Permissions: all}
 	return cfg
 }
 
-// Changes that are unconfirmed, outside the local permissions or tools, outside the connection's targets,
-// or of the other target kind end before a credential is resolved and before GitHub is contacted.
+// Changes that are unconfirmed, outside the local permissions or tools, outside the connection's targets, or
+// without a target the connection can settle end before a credential is resolved and before GitHub is
+// contacted. A tool that touches a project and a repository checks both.
 func TestTheCoreRefusesChangesBeforeIO(t *testing.T) {
 	f := &fakeGitHub{items: roster()}
 	base := serve(t, f)
@@ -815,14 +845,26 @@ func TestTheCoreRefusesChangesBeforeIO(t *testing.T) {
 			&capability.UnsupportedError{}},
 		{"a tools list without the tool", "github.projectitems.archive", "listed", `{"item_id":"PVTI_item00"}`, true,
 			&capability.UnsupportedError{}},
-		{"an issue change on a project", "github.issues.update", "planning", `{"number":42,"title":"x"}`, true,
-			&capability.UnsupportedError{}},
-		{"a comment on a project", "github.comments.list", "planning", `{"number":42}`, true,
-			&capability.UnsupportedError{}},
-		{"a project change on a repository", "github.projectitems.update", "repo",
-			`{"item_id":"PVTI_item00","fields":{"Status":"Todo"}}`, true, &capability.UnsupportedError{}},
-		{"a planned issue on a repository", "github.projectissues.create", "repo",
-			`{"repository":"octo-org/example","title":"x"}`, true, &capability.UnsupportedError{}},
+		{"an issue change outside the targets", "github.issues.update", "planning",
+			`{"number":42,"title":"x","repository":"octo-org/other"}`, true, &application.InvalidRequestError{}},
+		{"a repository pattern as argument", "github.comments.list", "planning",
+			`{"number":42,"repository":"octo-org/*"}`, true, &application.InvalidRequestError{}},
+		{"a project change without a project target", "github.projectitems.update", "repo",
+			`{"item_id":"PVTI_item00","fields":{"Status":"Todo"}}`, true, &application.InvalidRequestError{}},
+		{"a planned issue without a project target", "github.projectissues.create", "repo",
+			`{"repository":"octo-org/example","title":"x"}`, true, &application.InvalidRequestError{}},
+		{"a project outside the targets", "github.projectitems.update", "planning",
+			`{"item_id":"PVTI_item00","fields":{"Status":"Todo"},"project":"orgs/octo-org/projects/8"}`, true,
+			&application.InvalidRequestError{}},
+		{"a project of the other owner kind", "github.projectitems.archive", "planning",
+			`{"item_id":"PVTI_item00","project":"users/octo-org/projects/7"}`, true, &application.InvalidRequestError{}},
+		{"a planned issue in a project outside the targets", "github.projectissues.create", "planning",
+			`{"repository":"octo-org/example","title":"x","project":"orgs/other/projects/1"}`, true,
+			&application.InvalidRequestError{}},
+		{"no repository on an open connection", "github.issues.update", "open", `{"number":42,"title":"x"}`, true,
+			&application.InvalidRequestError{}},
+		{"no project on an open connection", "github.projectdrafts.create", "open", `{"title":"x"}`, true,
+			&application.InvalidRequestError{}},
 		{"a repository outside the targets", "github.projectissues.create", "planning",
 			`{"repository":"octo-org/other","title":"x"}`, true, &application.InvalidRequestError{}},
 		{"an issue outside the targets", "github.projectitems.add", "planning",

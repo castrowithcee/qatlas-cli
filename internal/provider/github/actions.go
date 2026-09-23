@@ -25,10 +25,10 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// GitHub Actions of a repository connection. The observer tools read compact, paged metadata of workflows,
+// GitHub Actions of a repository. The observer tools read compact, paged metadata of workflows,
 // runs, jobs, and artifacts, and one tool reads a bounded excerpt of one job log. The operator tools
 // dispatch one named workflow or re-run or cancel one named run; they are executions, need confirmation,
-// and are sent once. Every route lies below the bound repository, and nothing is stored: a log excerpt
+// and are sent once. Every route lies below the chosen repository, and nothing is stored: a log excerpt
 // passes through memory into the answer only. Artifacts are zip archives, so only their metadata is read.
 
 // logSensitivity classifies a job log: it may carry whatever a workflow printed.
@@ -137,7 +137,7 @@ var workflowsList = capability.Descriptor{
 	ID:      Provider + ".workflows.list",
 	Version: 1,
 	Title:   "List GitHub Actions workflows",
-	Description: "List one bounded batch of the workflows of the repository bound to an explicit connection, " +
+	Description: "List one bounded batch of the workflows of a repository an explicit connection allows, " +
 		"without their files",
 	Tags:                       []string{"github", "actions", "workflows", "list"},
 	Risk:                       readRisk,
@@ -156,7 +156,7 @@ var workflowsGet = capability.Descriptor{
 	ID:                         Provider + ".workflows.get",
 	Version:                    1,
 	Title:                      "Get a GitHub Actions workflow",
-	Description:                "Read one workflow of the repository bound to an explicit connection, without its file",
+	Description:                "Read one workflow of a repository an explicit connection allows, without its file",
 	Tags:                       []string{"github", "actions", "workflows", "get"},
 	Risk:                       readRisk,
 	Provider:                   Provider,
@@ -178,8 +178,8 @@ var runsList = capability.Descriptor{
 	ID:      Provider + ".workflowruns.list",
 	Version: 1,
 	Title:   "List GitHub Actions workflow runs",
-	Description: "List one bounded, filtered batch of compact workflow runs of the repository bound to an explicit " +
-		"connection, newest first",
+	Description: "List one bounded, filtered batch of compact workflow runs of " +
+		"a repository an explicit connection allows, newest first",
 	Tags:                       []string{"github", "actions", "runs", "list"},
 	Risk:                       readRisk,
 	Provider:                   Provider,
@@ -214,7 +214,7 @@ var runsGet = capability.Descriptor{
 	ID:                         Provider + ".workflowruns.get",
 	Version:                    1,
 	Title:                      "Get a GitHub Actions workflow run",
-	Description:                "Read one workflow run of the repository bound to an explicit connection",
+	Description:                "Read one workflow run of a repository an explicit connection allows",
 	Tags:                       []string{"github", "actions", "runs", "get"},
 	Risk:                       readRisk,
 	Provider:                   Provider,
@@ -234,8 +234,8 @@ var jobsList = capability.Descriptor{
 	ID:      Provider + ".workflowjobs.list",
 	Version: 1,
 	Title:   "List GitHub Actions jobs of a run",
-	Description: "List one bounded batch of compact jobs of one workflow run of the repository bound to an " +
-		"explicit connection, without steps or logs",
+	Description: "List one bounded batch of compact jobs of one workflow run of " +
+		"a repository an explicit connection allows, without steps or logs",
 	Tags:                       []string{"github", "actions", "jobs", "list"},
 	Risk:                       readRisk,
 	Provider:                   Provider,
@@ -258,7 +258,7 @@ var jobsGet = capability.Descriptor{
 	ID:      Provider + ".workflowjobs.get",
 	Version: 1,
 	Title:   "Get a GitHub Actions job",
-	Description: "Read one job of a workflow run of the repository bound to an explicit connection with its " +
+	Description: "Read one job of a workflow run of a repository an explicit connection allows with its " +
 		"compact steps, without its log",
 	Tags:                       []string{"github", "actions", "jobs", "get"},
 	Risk:                       readRisk,
@@ -279,7 +279,7 @@ var jobsLog = capability.Descriptor{
 	ID:      Provider + ".workflowjobs.log",
 	Version: 1,
 	Title:   "Read the end of a GitHub Actions job log",
-	Description: "Read the last lines of the log of one job of the repository bound to an explicit connection, " +
+	Description: "Read the last lines of the log of one job of a repository an explicit connection allows, " +
 		"within a hard size limit; the log is never stored",
 	Tags: []string{"github", "actions", "jobs", "logs", "get"},
 	Risk: capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
@@ -312,8 +312,8 @@ var artifactsList = capability.Descriptor{
 	ID:      Provider + ".workflowartifacts.list",
 	Version: 1,
 	Title:   "List GitHub Actions artifacts of a run",
-	Description: "List one bounded batch of artifact metadata of one workflow run of the repository bound to an " +
-		"explicit connection; artifact contents are never downloaded",
+	Description: "List one bounded batch of artifact metadata of one workflow run of " +
+		"a repository an explicit connection allows; artifact contents are never downloaded",
 	Tags:                       []string{"github", "actions", "artifacts", "list"},
 	Risk:                       readRisk,
 	Provider:                   Provider,
@@ -341,7 +341,7 @@ var workflowsDispatch = capability.Descriptor{
 	ID:      Provider + ".workflows.dispatch",
 	Version: 1,
 	Title:   "Dispatch a GitHub Actions workflow",
-	Description: "Start one workflow_dispatch run of one workflow of the repository bound to an explicit connection " +
+	Description: "Start one workflow_dispatch run of one workflow of a repository an explicit connection allows " +
 		"on a branch or tag, with inputs the workflow declares; a repeated call starts a second run",
 	Tags:                       []string{"github", "actions", "workflows", "dispatch", "execute"},
 	Risk:                       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
@@ -373,8 +373,8 @@ var runsRerun = capability.Descriptor{
 	ID:      Provider + ".workflowruns.rerun",
 	Version: 1,
 	Title:   "Re-run a GitHub Actions workflow run",
-	Description: "Re-run every job of one completed workflow run of the repository bound to an explicit " +
-		"connection; a repeated call starts another attempt",
+	Description: "Re-run every job of one completed workflow run of " +
+		"a repository an explicit connection allows; a repeated call starts another attempt",
 	Tags:                       []string{"github", "actions", "runs", "rerun", "execute"},
 	Risk:                       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
 	Provider:                   Provider,
@@ -390,8 +390,8 @@ var runsRerunFailed = capability.Descriptor{
 	ID:      Provider + ".workflowruns.rerunfailed",
 	Version: 1,
 	Title:   "Re-run the failed jobs of a GitHub Actions run",
-	Description: "Re-run the failed jobs and their dependents of one completed workflow run of the repository bound " +
-		"to an explicit connection; a repeated call starts another attempt",
+	Description: "Re-run the failed jobs and their dependents of one completed workflow run of " +
+		"a repository an explicit connection allows; a repeated call starts another attempt",
 	Tags:                       []string{"github", "actions", "runs", "rerun", "execute"},
 	Risk:                       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
 	Provider:                   Provider,
@@ -408,7 +408,7 @@ var runsCancel = capability.Descriptor{
 	ID:      Provider + ".workflowruns.cancel",
 	Version: 1,
 	Title:   "Cancel a GitHub Actions workflow run",
-	Description: "Ask GitHub to cancel one workflow run of the repository bound to an explicit connection that has " +
+	Description: "Ask GitHub to cancel one workflow run of a repository an explicit connection allows that has " +
 		"not completed; jobs end as GitHub cancels them",
 	Tags:                       []string{"github", "actions", "runs", "cancel", "execute"},
 	Risk:                       changeRisk(capability.EffectExecute, capability.IdempotencyIdempotent),
@@ -521,8 +521,8 @@ type actionsArguments struct {
 	inputs        map[string]string
 }
 
-// actionsHandler decodes and checks the arguments and refuses a project connection before a credential is
-// resolved, so a refused request never becomes a provider call.
+// actionsHandler decodes and checks the arguments and the repository before a credential is resolved, so a
+// refused request never becomes a provider call.
 func actionsHandler(id string, check func(*actionsArguments, target) error,
 	call func(context.Context, *Client, *actionsArguments) (any, error)) capability.Handler {
 	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
@@ -531,14 +531,14 @@ func actionsHandler(id string, check func(*actionsArguments, target) error,
 		if err := json.Unmarshal(raw, &arguments); err != nil {
 			return nil, unreadable(id)
 		}
-		bound, err := requireKind(resolved, kindRepository, id)
+		bound, err := selectTarget(ctx, resolved, kindRepository, raw)
 		if err != nil {
 			return nil, err
 		}
 		if err := check(&arguments, bound); err != nil {
 			return nil, err
 		}
-		client, err := Open(resolved, secrets, red)
+		client, err := openAt(resolved, secrets, red, bound)
 		if err != nil {
 			return nil, err
 		}

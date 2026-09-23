@@ -218,7 +218,7 @@ const planningFieldSelection = `fields(first:50){nodes{... on ProjectV2FieldComm
 	`... on ProjectV2IterationField{configuration{iterations{id title} completedIterations{id title}}}}}`
 
 // planningRequest names what one change resolves before it writes: the field model, an item that has to
-// belong to the project, or an issue of a configured repository that is to be added.
+// belong to the project, or an issue of an allowed repository that is to be added.
 type planningRequest struct {
 	fields     bool
 	item       string
@@ -512,16 +512,21 @@ func (c *Client) addItem(ctx context.Context, op, projectID, contentID string) (
 	return added.Add.Item.ID, nil
 }
 
-// AddIssue adds one issue of a repository of the connection to the bound project and then writes the
+// AddIssue adds one issue of a repository the connection allows to the bound project and then writes the
 // given field values. Everything is resolved and checked before the first change.
 func (c *Client) AddIssue(ctx context.Context, repository string, number int, values FieldValues) (*Planning, error) {
+	repo, err := c.allowed.choose(ctx, kindRepository, repository, c.endpoints.web)
+	if err != nil {
+		return nil, err
+	}
+	return c.addIssue(ctx, repo, number, values)
+}
+
+// addIssue is AddIssue for a repository selectTarget has already checked.
+func (c *Client) addIssue(ctx context.Context, repo target, number int, values FieldValues) (*Planning, error) {
 	const op = "add project item"
 	if c.target.kind != kindProject {
 		return nil, providerError(op, "this connection is not bound to a project")
-	}
-	repo, err := c.scope.repository(repository)
-	if err != nil {
-		return nil, err
 	}
 	if err := checkNumber(number); err != nil {
 		return nil, err
@@ -629,19 +634,25 @@ func (c *Client) ArchiveItem(ctx context.Context, itemID string) (*Archived, err
 	return &Archived{ItemID: itemID, Archived: true}, nil
 }
 
-// CreatePlannedIssue opens one issue in a repository the connection names, adds it to the bound project,
+// CreatePlannedIssue opens one issue in a repository the connection allows, adds it to the bound project,
 // and writes the given field values, each step in a request of its own. The project and every field value
 // are resolved before the issue is created. Once the issue exists, the answer reports it, whatever fails
 // afterwards.
 func (c *Client) CreatePlannedIssue(ctx context.Context, repository string, content IssueContent,
 	values FieldValues) (*Planning, error) {
+	repo, err := c.allowed.choose(ctx, kindRepository, repository, c.endpoints.web)
+	if err != nil {
+		return nil, err
+	}
+	return c.createPlannedIssue(ctx, repo, content, values)
+}
+
+// createPlannedIssue is CreatePlannedIssue for a repository selectTarget has already checked.
+func (c *Client) createPlannedIssue(ctx context.Context, repo target, content IssueContent,
+	values FieldValues) (*Planning, error) {
 	const op = "create planned issue"
 	if c.target.kind != kindProject {
 		return nil, providerError(op, "this connection is not bound to a project")
-	}
-	repo, err := c.scope.repository(repository)
-	if err != nil {
-		return nil, err
 	}
 	if err := content.check(true); err != nil {
 		return nil, err

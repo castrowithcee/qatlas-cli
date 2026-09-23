@@ -141,15 +141,18 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	}
 }
 
-// Requests outside the bound target are refused before a secret is read and before GitHub is contacted.
+// Requests outside the connection's targets are refused before a secret is read and before GitHub is contacted.
 func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 	path := githubConfig(t)
 	tests := []struct {
 		name, input, code string
 		args              []string
 	}{
-		{"a project tool on a repository", `{}`, "unsupported-capability",
+		{"a project tool on a connection without a project", `{}`, "invalid-request",
 			[]string{"invoke", "github.projectitems.list", "--connection", "code", "--config", path}},
+		{"a project outside the targets", ``, "invalid-request",
+			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--arg",
+				"project=orgs/octo-org/projects/8", "--config", path}},
 		{"an issue tool outside the tools list", `{}`, "unsupported-capability",
 			[]string{"invoke", "github.issues.list", "--connection", "planning", "--config", path}},
 		{"an owner argument", `{"owner":"other-org"}`, "invalid-request",

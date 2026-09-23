@@ -356,10 +356,13 @@ connections:
     target: Shared/Qatlas
     permissions: [read]
 
-  # A GitHub connection binds exactly one project (users/LOGIN/projects/NUMBER or
-  # orgs/LOGIN/projects/NUMBER) or one repository (repos/OWNER/REPO). Project tools run only on a project
-  # connection and issue tools only on a repository connection, so each lists the tools of its kind.
-  # Work selection starts at the project; the repository connection is the fallback for single issues.
+  # A GitHub connection may list targets, an optional allow-list of repositories (repos/OWNER/REPO),
+  # projects (users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER), and patterns with * as the last
+  # segment (repos/OWNER/*, orgs/LOGIN/projects/*). Without targets it reaches whatever its token reaches.
+  # Every tool takes the repository or project it acts on; the argument may be left out when the targets
+  # allow exactly one of its kind, or, for a repository, when the GitHub remote of the working directory lies
+  # inside them. Which tools a connection offers is decided by permissions and tools alone.
+  # Work selection starts at the project; the issue connection is the fallback for single issues.
   # Reads are the only default: a change needs create or update in permissions and confirmation per call.
   planning:
     service: github
@@ -376,8 +379,9 @@ connections:
     permissions: [read]
     tools: [github.issues.get, github.issues.list]
 
-  # A project may be followed by the repositories it plans in. Only issues of those repositories are added
-  # to the project or created for it; the project stays the one target every project tool acts on.
+  # A project listed with the repositories it plans in: github.projectitems.add and
+  # github.projectissues.create check both targets, and with one project and one repository neither
+  # argument is needed.
   roadmap:
     service: github
     credential: github-planner
@@ -387,7 +391,8 @@ connections:
     tools: [github.projectitems.list, github.projectitems.get, github.projectitems.update,
       github.projectitems.add, github.projectissues.create]
 
-  # Changes of single issues and their comments run on a repository connection.
+  # Changes of single issues and their comments. repos/octo-org/* would allow every repository of the owner;
+  # a call then names its repository, or takes the remote of the working directory.
   roadmap-issues:
     service: github
     credential: github-planner
@@ -396,7 +401,7 @@ connections:
     tools: [github.issues.get, github.issues.update, github.issues.close, github.issues.reopen,
       github.comments.list, github.comments.create]
 
-  # GitHub Actions run on a repository connection in two groups. An observer reads workflows, runs, jobs,
+  # GitHub Actions tools come in two groups. An observer reads workflows, runs, jobs,
   # artifact metadata, and the end of job logs; without execute it can neither see nor start an operator tool.
   ci-observer:
     service: github

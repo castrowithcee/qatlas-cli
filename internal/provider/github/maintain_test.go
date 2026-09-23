@@ -325,16 +325,20 @@ func TestGuardedToolsNeedTheirNameInTheToolsList(t *testing.T) {
 			t.Errorf("%s discovers %d tools, want %d", connection, len(searched.Operations), want)
 		}
 	}
-	// Each group stays with its own list, and a project connection runs neither.
-	for _, tt := range []struct{ id, connection string }{
-		{actionsPermissionsUpdate.ID, "maintainer"}, {workflowFilesUpdate.ID, "admin"},
-		{workflowFilesGet.ID, "project"}, {workflowPermissionsGet.ID, "project"},
+	// Each group stays with its own list, and a connection whose targets name no repository runs neither.
+	for _, tt := range []struct {
+		id, connection string
+		unsupported    bool
+	}{
+		{actionsPermissionsUpdate.ID, "maintainer", true}, {workflowFilesUpdate.ID, "admin", true},
+		{workflowFilesGet.ID, "project", false}, {workflowPermissionsGet.ID, "project", false},
 	} {
 		reads = 0
 		before := len(f.recorded())
 		var unsupported *capability.UnsupportedError
-		if _, err := invoke(t, core, tt.id, tt.connection, validArguments(tt.id), true); !errors.As(err, &unsupported) {
-			t.Errorf("%s on %s = %T %v, want unsupported", tt.id, tt.connection, err, err)
+		_, err := invoke(t, core, tt.id, tt.connection, validArguments(tt.id), true)
+		if tt.unsupported && !errors.As(err, &unsupported) || !tt.unsupported && !isInvalidRequest(err) {
+			t.Errorf("%s on %s = %T %v, want a refusal", tt.id, tt.connection, err, err)
 		}
 		if reads != 0 || len(f.recorded()) != before {
 			t.Errorf("%s on %s reached the credential or GitHub", tt.id, tt.connection)

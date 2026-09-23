@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning and GitHub Actions: targets, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -10,10 +10,11 @@ updated: 2026-09-23
 # GitHub
 
 GitHub is a controlled planning provider, not a replacement for `gh`. It reads and maintains issues,
-comments, and project items of the configured targets, and it observes and, when allowed, operates the
-GitHub Actions of a configured repository. On a connection that names them explicitly, it also maintains the
-workflow files and the Actions settings of that repository. It sees pull requests only as project items, and it never accepts
-a free filter expression, a GraphQL document, a REST route, an owner, or a project from the caller. A `repository` argument only selects one of the repositories the connection names.
+comments, and project items, and it observes and, when allowed, operates the GitHub Actions of a repository.
+On a connection that names them explicitly, it also maintains workflow files and Actions settings. It sees
+pull requests only as project items, and it never accepts a free filter expression, a GraphQL document, or a
+REST route from the caller. A `repository` or `project` argument names exactly one target, and it must lie
+inside the connection's targets when the connection lists any.
 
 ## Configuration
 
@@ -28,38 +29,75 @@ access to issues and to projects. Changes need `project` instead of `read:projec
 and projects for a fine-grained token. User-owned projects need a classic token. The Actions tools have
 their own requirements, listed under [GitHub Actions](#github-actions), and so have the tools of
 [workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration). A
-successful `qatlas connection test` shows only that the token can read the configured project or repository;
-GitHub checks every resource and scope again on each call, so a passing test does not authorize every tool.
+successful `qatlas connection test` shows only that the token can read the first project or repository the
+connection's targets name exactly, or, without such a target, its own user; GitHub checks every resource and
+scope again on each call, so a passing test does not authorize every tool.
 
-A connection names exactly one project or one repository, and a project may be followed by repositories:
+### Targets
 
-| Target | Binds | Tools |
-| --- | --- | --- |
-| `target: users/LOGIN/projects/NUMBER` | one user project | project tools |
-| `target: orgs/LOGIN/projects/NUMBER` | one organization project | project tools |
-| `targets: [orgs/LOGIN/projects/NUMBER, repos/OWNER/REPO, ...]` | one project and the repositories it plans in | project tools, including `github.projectitems.add` and `github.projectissues.create` for those repositories |
-| `target: repos/OWNER/REPO` | one repository | issue, comment, and Actions tools |
+`targets` is an optional allow-list. A connection without it reaches every repository and project its token
+reaches; a connection with it reaches only the listed ones. Entries of every kind can be mixed, in any number
+and order:
 
-Project tools are `github.projectitems.list`, `get`, `update`, `add`, `archive`,
-`github.projectdrafts.create`, and `github.projectissues.create`. Issue and comment tools are
-`github.issues.list`, `get`, `create`, `update`, `close`, `reopen`, `github.comments.list`, and
-`github.comments.create`. The Actions tools are listed under [GitHub Actions](#github-actions). The
-repositories of a project connection never make issue or Actions tools available on it:
-a repository connection stays a connection of its own. A target list with two projects, or with
-repositories but no project, is an invalid configuration.
+| Entry | Allows |
+| --- | --- |
+| `repos/OWNER/REPO` | one repository |
+| `users/LOGIN/projects/NUMBER` | one user project |
+| `orgs/LOGIN/projects/NUMBER` | one organization project |
+| `repos/OWNER/*` | every repository of one owner |
+| `users/LOGIN/projects/*`, `orgs/LOGIN/projects/*` | every project of one user or organization |
 
-A tool of the other target kind is refused as an unsupported capability before a secret is read. Reads are
-a connection's only default: every change needs `create` or `update` in the connection's `permissions`, every
-Actions execution needs `execute`, and
-a connection with a `tools` list offers only the tools it lists, never one added in a later version. The
+`*` is accepted only as the whole last segment; there are no ranges and no other patterns. Owners,
+repositories, and projects are compared without case, like GitHub compares them, and an entry listed twice
+makes the file invalid. The token stays an independent upper bound: the targets never grant what the token
+lacks, and the token never widens the targets, so a call reaches only what both allow. The single
+`target: ...` form and existing lists, such as a project followed by the repositories it plans in, stay valid
+and are read as the same allow-list.
+
+One GitHub connection carries the project, issue, comment, and Actions tools together. Which of them it
+offers is decided by `permissions` and `tools` alone. Reads are a connection's only default: every change
+needs `create` or `update` in the connection's `permissions`, every Actions execution needs `execute`, and a
+connection with a `tools` list offers only the tools it lists, never one added in a later version. The
 workflow maintainer and Actions administrator tools are listed only: a connection without a `tools` list
 never offers them, whatever its permissions.
-Give each connection a `tools` list with the tools of its kind, so discovery offers only the tools it can
-run.
 
-The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and the reads of
-both kinds: `github.projectitems.list`, `github.projectitems.get`, `github.issues.list`, `github.issues.get`,
-and `github.comments.list`; untick those of the other kind. The profile `planning` ticks
+### The target of a call
+
+Every repository tool (issues, comments, Actions, workflow maintenance, and Actions administration) takes
+`repository` as `OWNER/REPO`. Every project tool (`github.projectitems.list`, `get`, `update`, `archive`,
+`github.projectdrafts.create`) takes `project` as `users/LOGIN/projects/NUMBER` or
+`orgs/LOGIN/projects/NUMBER`. `github.projectitems.add` and `github.projectissues.create` touch both, take
+both, and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the
+items of the project, not a target.
+
+An argument may be left out when a default settles it:
+
+- When the targets allow exactly one repository, or exactly one project, and not as a pattern, that one is
+  the default of its kind.
+- Otherwise, `repository` defaults to the GitHub remote of the working directory of the Qatlas process
+  (`origin`, or the only remote when there is no `origin`), when it points to the host of the configured
+  service and lies inside the targets, or the connection has none. A `qatlas mcp` broker uses the directory
+  it was started in.
+
+A default never widens or narrows the targets, and an explicit argument always wins. Every target is checked
+before a secret is read and before GitHub is contacted, and every refusal is an `invalid-request` that names
+the next step without echoing the value:
+
+| Case | Next step the message names |
+| --- | --- |
+| a `repository` or `project` outside the targets | pass one the targets allow, or add it to the targets |
+| no argument, and no default settles it | pass `repository` as `OWNER/REPO` or `project` as `users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER` |
+| the targets name no target of the tool's kind | add one to the targets, or use another connection |
+| a malformed argument, or a pattern as an argument | the argument's form |
+
+A tool that the connection's `permissions` or `tools` exclude stays an unsupported capability, refused before
+a secret is read as well.
+
+### Setup profiles
+
+The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and the reads
+`github.projectitems.list`, `github.projectitems.get`, `github.issues.list`, `github.issues.get`, and
+`github.comments.list`. The profile `planning` ticks
 `[read, create, update]` with the project reads, `github.projectitems.update`, `github.projectitems.add`,
 `github.projectdrafts.create`, and `github.projectissues.create`; archiving stays unticked. The profiles
 `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions). A profile is a
@@ -71,11 +109,14 @@ connections:
   roadmap:
     service: github
     credential: github-planner
-    targets: [orgs/octo-org/projects/7, repos/octo-org/example]
+    targets: [orgs/octo-org/projects/7, repos/octo-org/*]
     permissions: [read, create, update]
     tools: [github.projectitems.list, github.projectitems.get, github.projectitems.update,
-      github.projectissues.create]
+      github.projectissues.create, github.issues.list, github.issues.get]
 ```
+
+`roadmap` defaults `project` to its one project. `repository` comes from the call or from the working
+directory's remote, and only repositories of `octo-org` are accepted.
 
 ## Project-first use
 
@@ -95,10 +136,10 @@ is not `Done`; `status_not: []` lists every status. The filters `status`, `statu
 translated into quoted terms of the project filter syntax and applied by GitHub. Qatlas verifies each
 returned item against the same filters. A `status` value must be an option of the project's Status field.
 
-`github.projectitems.get` reads one item of the bound project with its fields and, for an issue or a draft
+`github.projectitems.get` reads one item of the chosen project with its fields and, for an issue or a draft
 issue, the full body. An item of another project is refused. Bodies and titles are untrusted data.
 
-`github.issues.list` and `github.issues.get` are the reads of a repository connection: issues only, newest
+`github.issues.list` and `github.issues.get` read the issues of the chosen repository: issues only, newest
 first, filtered by `state` (`open` by default), `labels` (any of), and `assignee`, without comments.
 `github.comments.list` reads the comments of one issue, oldest first, and is the only tool that returns
 comments.
@@ -164,14 +205,15 @@ GitHub asks of integrations that write.
 
 GitHub offers no precondition for issue or project changes: an ETag only saves a repeated read, and the last
 write wins. Qatlas therefore addresses items by their current identifier, verifies that the item belongs to
-the bound project before it changes it, and never retries.
+the chosen project before it changes it, and never retries.
 
 ## Cursor contract
 
 Lists take `limit` (1 to 100, default 30) and an opaque `cursor`, and answer `has_more` plus `next_cursor`
 when another batch may follow. A full batch never means the end: read on while `has_more` is true. A cursor
-is bound to the connection's target and to the filters that produced it, and a comment cursor to its issue;
-a cursor from other filters, another issue, or another target is an invalid request. Batches follow the
+is bound to the repository or project of the call and to the filters that produced it, and a comment cursor
+to its issue; a cursor from other filters, another issue, or another repository or project is an invalid
+request. Batches follow the
 project order, so reading every batch reaches each matching item once. A batch may be short, even empty,
 when Qatlas stopped scanning after a bounded number of requests; `has_more` then stays true.
 
@@ -183,10 +225,10 @@ GitHub answers at most 1000 runs of a run list filtered by `status`, `branch`, `
 
 ## GitHub Actions
 
-A repository connection can observe the GitHub Actions of its repository and, separately, operate them.
-The two groups are distinct tools with distinct effects: the observer tools are reads, and the operator
-tools are executions with the effect `execute`. Every route lies below the configured repository; no tool
-accepts an owner, a repository, or a free REST path, and a project connection offers none of them.
+A connection can observe the GitHub Actions of a repository it allows and, separately, operate them. The two
+groups are distinct tools with distinct effects: the observer tools are reads, and the operator tools are
+executions with the effect `execute`. Every route lies below the chosen repository; no tool accepts an owner
+or a free REST path.
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
@@ -210,14 +252,14 @@ runners, deployments, or an organization.
 
 ### Observer and operator
 
-An observer is a repository connection whose `permissions` lack `execute`, or whose `tools` list names no
+An observer is a connection whose `permissions` lack `execute`, or whose `tools` list names no
 operator tool. It neither discovers nor runs an operator tool: `qatlas tools`, `qatlas.search`, and
 `qatlas.describe` do not offer them for it, and an invocation is refused as an unsupported capability before
 a secret is read. Planning permissions (`create`, `update`) never allow an execution; only `execute` does.
 
 The terminal editor offers two setup profiles that are never preselected. `actions-observer` ticks `[read]`
 and the eight observer tools. `actions-operator` ticks `[read, execute]`, the observer tools, and the four
-operator tools. The recommended profile `read` stays without Actions tools. A repository connection without a
+operator tools. The recommended profile `read` stays without Actions tools. A connection without a
 `tools` list offers every read, the observer tools included, but never a listed-only tool; give it a `tools`
 list to narrow that.
 
@@ -335,7 +377,9 @@ every run may do. They are high risk, and Qatlas keeps them behind a boundary of
 - **Never preselected.** No profile a new connection starts with selects them, and the recommended profile
   of a provider may not. The profiles `workflow-maintainer` and `actions-admin` exist only to be chosen on
   purpose; they keep the two groups apart.
-- **One repository.** They run only on a repository connection, and every route lies below that repository.
+- **One repository per call.** Each call acts on one repository inside the connection's targets, and every
+  route lies below that repository. Without targets, such a connection reaches every repository its token can
+  change, so give it targets that name exactly the repositories it may maintain.
 - **Confirmed and sent once.** Every change needs confirmation in its own invoke request, is sent exactly
   once, and is never retried; an unclear outcome says that the change may have been applied. A refused or
   unconfirmed request ends before a secret is read and before GitHub is contacted.

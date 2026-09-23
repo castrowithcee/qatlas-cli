@@ -380,9 +380,11 @@ func serve(t *testing.T, f *fakeGitHub) string {
 	t.Helper()
 	server := httptest.NewTLSServer(f)
 	t.Cleanup(server.Close)
-	previous := transport
+	previous, remotes := transport, workingRemotes
 	transport = server.Client().Transport
-	t.Cleanup(func() { transport = previous })
+	// No test reads the git remotes of the directory it runs in; a test that needs one supplies it.
+	workingRemotes = func(context.Context) map[string][]string { return nil }
+	t.Cleanup(func() { transport, workingRemotes = previous, remotes })
 	t.Cleanup(limiters.Replace(tokenValue, freeLimiter()))
 	return server.URL + "/api/v3"
 }
@@ -526,7 +528,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	}
 	metadata, ok := reg.ProviderMetadata(Provider)
 	if !ok || metadata.Name != "GitHub" || metadata.DefaultBaseURL != "https://api.github.com" ||
-		!metadata.Target.Required || !metadata.Target.Multiple || metadata.Target.Validate == nil ||
+		metadata.Target.Required || !metadata.Target.Multiple || metadata.Target.Validate == nil ||
 		metadata.Target.ValidateSet == nil || len(metadata.SecretRoles) != 1 || metadata.SecretRoles[0].Name != "token" {
 		t.Fatalf("metadata = %+v, %v", metadata, ok)
 	}
@@ -613,14 +615,16 @@ connections:
     credential: gh-reader
 ` + target
 	}
-	for _, target := range []string{"    target: orgs/octo-org/projects/7\n", "    target: users/octocat/projects/1\n",
-		"    target: repos/octo-org/example\n"} {
+	for _, target := range []string{"", "    target: orgs/octo-org/projects/7\n", "    target: users/octocat/projects/1\n",
+		"    target: repos/octo-org/example\n", "    targets: [repos/octo-org/example, repos/octo-org/other]\n",
+		"    targets: [repos/octo-org/*, users/octocat/projects/*, orgs/octo-org/projects/7]\n"} {
 		if _, err := config.Decode(strings.NewReader(document(target)), reg); err != nil {
 			t.Errorf("target %q was refused: %v", target, err)
 		}
 	}
-	for _, target := range []string{"", "    target: octo-org/example\n", "    target: orgs/octo-org/projects/zero\n",
-		"    targets: [repos/octo-org/example, repos/octo-org/other]\n"} {
+	for _, target := range []string{"    target: octo-org/example\n", "    target: orgs/octo-org/projects/zero\n",
+		"    targets: [repos/octo-org/*x]\n", "    targets: [repos/*/example]\n", "    targets: [orgs/octo-org/projects/*/x]\n",
+		"    targets: [repos/octo-org/example, repos/octo-org/EXAMPLE]\n"} {
 		_, err := config.Decode(strings.NewReader(document(target)), reg)
 		if err == nil || !strings.Contains(err.Error(), "connections.planning") {
 			t.Errorf("target %q: err = %v, want a refused connection", target, err)
@@ -630,11 +634,13 @@ connections:
 
 func TestEndpointsFollowGitHubAndEnterpriseServer(t *testing.T) {
 	tests := map[string]endpoints{
-		"https://api.github.com":                   {"https://api.github.com", "https://api.github.com/graphql"},
-		"https://api.github.com/":                  {"https://api.github.com", "https://api.github.com/graphql"},
-		"https://api.octo.ghe.com":                 {"https://api.octo.ghe.com", "https://api.octo.ghe.com/graphql"},
-		"https://ghe.example.invalid/api/v3":       {"https://ghe.example.invalid/api/v3", "https://ghe.example.invalid/api/graphql"},
-		"https://ghe.example.invalid:8443/api/v3/": {"https://ghe.example.invalid:8443/api/v3", "https://ghe.example.invalid:8443/api/graphql"},
+		"https://api.github.com":   {"https://api.github.com", "https://api.github.com/graphql", "github.com"},
+		"https://api.github.com/":  {"https://api.github.com", "https://api.github.com/graphql", "github.com"},
+		"https://api.octo.ghe.com": {"https://api.octo.ghe.com", "https://api.octo.ghe.com/graphql", "octo.ghe.com"},
+		"https://ghe.example.invalid/api/v3": {"https://ghe.example.invalid/api/v3", "https://ghe.example.invalid/api/graphql",
+			"ghe.example.invalid"},
+		"https://ghe.example.invalid:8443/api/v3/": {"https://ghe.example.invalid:8443/api/v3",
+			"https://ghe.example.invalid:8443/api/graphql", "ghe.example.invalid"},
 	}
 	for raw, want := range tests {
 		if got, err := endpointsOf(raw); err != nil || got != want {
@@ -965,8 +971,8 @@ func TestGetIssueReadsOneIssueThroughREST(t *testing.T) {
 	}
 }
 
-// Tools of the other target kind, unknown arguments, and invalid cursors are refused before a credential is
-// resolved or GitHub is contacted.
+// Targets the connection does not allow, unknown arguments, and invalid cursors are refused before a
+// credential is resolved or GitHub is contacted.
 func TestTheCoreRefusesRequestsOutsideTheTargetBeforeIO(t *testing.T) {
 	f := &fakeGitHub{items: roster()}
 	base := serve(t, f)
@@ -977,10 +983,16 @@ func TestTheCoreRefusesRequestsOutsideTheTargetBeforeIO(t *testing.T) {
 	tests := []struct {
 		name, operation, connection, arguments, code string
 	}{
-		{"project tool on a repository", "github.projectitems.list", "repo", `{}`, "unsupported"},
-		{"item on a repository", "github.projectitems.get", "repo", `{"item_id":"PVTI_item00"}`, "unsupported"},
-		{"issue tool on a project", "github.issues.list", "planning", `{}`, "unsupported"},
-		{"issue on a project", "github.issues.get", "planning", `{"number":1}`, "unsupported"},
+		{"project tool on a repository", "github.projectitems.list", "repo", `{}`, "invalid"},
+		{"item on a repository", "github.projectitems.get", "repo", `{"item_id":"PVTI_item00"}`, "invalid"},
+		{"issue tool on a project", "github.issues.list", "planning", `{}`, "invalid"},
+		{"issue on a project", "github.issues.get", "planning", `{"number":1}`, "invalid"},
+		{"a repository outside the targets", "github.issues.get", "repo", `{"number":1,"repository":"octo-org/other"}`,
+			"invalid"},
+		{"a project outside the targets", "github.projectitems.list", "planning",
+			`{"project":"orgs/octo-org/projects/8"}`, "invalid"},
+		{"a malformed project", "github.projectitems.list", "planning", `{"project":"orgs/octo-org/projects/0"}`,
+			"invalid"},
 		{"an owner argument", "github.projectitems.list", "planning", `{"owner":"other-org"}`, "invalid"},
 		{"a project argument", "github.projectitems.get", "planning", `{"item_id":"PVTI_item00","project":8}`, "invalid"},
 		{"a repository argument", "github.issues.get", "repo", `{"number":1,"repo":"other/repo"}`, "invalid"},

@@ -1,16 +1,19 @@
 // Package github implements controlled planning and GitHub Actions access to GitHub.
 //
-// A connection binds one token to exactly one user or organization project, or to exactly one repository.
-// A project connection lists compact, server-side filtered items of that project page by page, reads the
-// full content of one selected item, and maintains its items and their field values; a repository
-// connection reads, creates, and changes issues of that repository and reads or writes the comments of one
-// issue on explicit request. A repository connection also observes the GitHub Actions of its repository
-// and, only with the execute permission, dispatches, re-runs, or cancels one named workflow or run. Only a
-// repository connection whose tools list names them maintains its workflow files below .github/workflows/
-// and its Actions settings. A project connection may also name repositories: only issues of those are
-// created for or added to its project. Nothing here accepts a free filter expression, a GraphQL document, a
-// route, an owner, or a project from an agent, and a repository argument only selects among the configured
-// ones: every request stays inside the configured targets.
+// A connection binds one token to an optional allow-list of targets: repositories (repos/OWNER/REPO),
+// user or organization projects (users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER), and patterns
+// with * as the last segment for every repository or project of one owner. Without targets, a connection
+// reaches whatever its token reaches. Every tool takes the repository or project it acts on as an argument;
+// the argument may be left out when the targets allow exactly one of its kind, and a repository also when
+// the GitHub remote of the working directory lies inside them. The project tools list compact,
+// server-side filtered items of a project page by page, read the full content of one selected item, and
+// maintain its items and their field values; the issue tools read, create, and change issues of a
+// repository and read or write the comments of one issue on explicit request. The Actions tools observe the
+// GitHub Actions of a repository and, only with the execute permission, dispatch, re-run, or cancel one named
+// workflow or run. Only a connection whose tools list names them maintains workflow files below
+// .github/workflows/ and Actions settings. A tool that touches a project and a repository checks both.
+// Nothing here accepts a free filter expression, a GraphQL document, or a route from an agent, and every
+// target is checked against the allow-list before a credential is resolved.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -128,8 +131,8 @@ var itemsList = capability.Descriptor{
 	ID:      Provider + ".projectitems.list",
 	Version: 1,
 	Title:   "List GitHub project items",
-	Description: "List one bounded, server-side filtered batch of compact items of the GitHub project bound to " +
-		"an explicit connection; without a status filter only items whose status is not Done are listed",
+	Description: "List one bounded, server-side filtered batch of compact items of " +
+		"a GitHub project an explicit connection allows; without a status filter only items whose status is not Done are listed",
 	Tags:                       []string{"github", "projects", "items", "list", "planning"},
 	Risk:                       readRisk,
 	Provider:                   Provider,
@@ -151,7 +154,8 @@ var itemsList = capability.Descriptor{
 		{Name: "status_not", Description: "Leave out items whose Status is one of these options; [Done] when " +
 			"neither status nor status_not is given, [] lists every status"},
 		{Name: "type", Description: "Return only items of this content type: issue, pull_request, or draft_issue"},
-		{Name: "repository", Description: "Return only items of this repository, as owner/name"},
+		{Name: "repository", Description: "Return only items whose content lives in this repository, as owner/name; " +
+			"a filter inside the project, not a target"},
 		{Name: "assignee", Description: "Return only items assigned to this login"},
 		{Name: "labels", Description: "Return only items carrying at least one of these labels"},
 		{Name: "limit", Description: "Items per batch, from 1 through 100; 30 when omitted"},
@@ -165,7 +169,7 @@ var itemsList = capability.Descriptor{
 			"batch alone never means the end"},
 	},
 	Examples: []capability.Example{{
-		Description: "List the open roster of the bound project",
+		Description: "List the open roster of the project the connection allows",
 		Arguments:   json.RawMessage(`{"limit":30}`),
 	}, {
 		Description: "List the issues in progress of one repository",
@@ -177,7 +181,7 @@ var itemsGet = capability.Descriptor{
 	ID:      Provider + ".projectitems.get",
 	Version: 1,
 	Title:   "Get a GitHub project item",
-	Description: "Read one item of the GitHub project bound to an explicit connection with its project fields " +
+	Description: "Read one item of a GitHub project an explicit connection allows with its project fields " +
 		"and, for an issue or a draft issue, its full body, without comments",
 	Tags:                       []string{"github", "projects", "items", "get", "planning"},
 	Risk:                       readRisk,
@@ -213,7 +217,7 @@ var issuesList = capability.Descriptor{
 	ID:      Provider + ".issues.list",
 	Version: 1,
 	Title:   "List GitHub issues",
-	Description: "List one bounded batch of compact issues of the repository bound to an explicit connection, " +
+	Description: "List one bounded batch of compact issues of a repository an explicit connection allows, " +
 		"newest first, without bodies, comments, or pull requests",
 	Tags:                       []string{"github", "issues", "list"},
 	Risk:                       readRisk,
@@ -253,7 +257,7 @@ var issuesGet = capability.Descriptor{
 	ID:                         Provider + ".issues.get",
 	Version:                    1,
 	Title:                      "Get a GitHub issue",
-	Description:                "Read one issue of the repository bound to an explicit connection with its full body, without comments",
+	Description:                "Read one issue of a repository an explicit connection allows with its full body, without comments",
 	Tags:                       []string{"github", "issues", "get"},
 	Risk:                       readRisk,
 	Provider:                   Provider,
@@ -266,7 +270,7 @@ var issuesGet = capability.Descriptor{
 		`"created_at":{"type":"string"},"closed_at":{"type":"string"},"body":{"type":"string"}},` +
 		`"required":["number","title","state","assignees","labels","body"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "number", Description: "Issue number in the bound repository", Required: true},
+		{Name: "number", Description: "Issue number in the repository", Required: true},
 	},
 	Fields: []capability.Field{
 		{Name: "number", Description: "Issue number"},
@@ -300,25 +304,23 @@ func Register(reg *capability.Registry) error {
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project or repository",
-			Required: true,
 			Multiple: true,
-			Description: "one users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO; a " +
-				"project may be followed by the repos/OWNER/REPO whose issues its planning tools may use",
+			Description: "optional allow-list of repos/OWNER/REPO, users/LOGIN/projects/NUMBER, and " +
+				"orgs/LOGIN/projects/NUMBER, or repos/OWNER/*, users/LOGIN/projects/*, and orgs/LOGIN/projects/* " +
+				"for all of one owner; without targets a connection reaches whatever its token reaches",
 			Validate: func(raw string) error {
 				_, err := parseTarget(raw)
 				return err
 			},
 			ValidateSet: func(values []string) error {
-				_, err := parseScope(values)
+				_, err := parseAllowlist(values)
 				return err
 			},
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read", Recommended: true,
-			Description: "reads project items, issues, and comments and changes nothing; a project connection " +
-				"runs the project reads and a repository connection the issue and comment reads, so untick " +
-				"those of the other kind",
-			Tools: []string{itemsList.ID, itemsGet.ID, issuesList.ID, issuesGet.ID, commentsList.ID},
+			Description: "reads project items, issues, and comments and changes nothing",
+			Tools:       []string{itemsList.ID, itemsGet.ID, issuesList.ID, issuesGet.ID, commentsList.ID},
 		}, {
 			ID: "planning", Title: "Project planning",
 			Description: "reads the project and changes its items: sets fields, adds issues, and creates " +
@@ -328,22 +330,22 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "actions-observer", Title: "Actions observer",
 			Description: "reads the workflows, runs, jobs, artifact metadata, and the end of job logs of a " +
-				"repository connection and starts nothing",
+				"repository and starts nothing",
 			Tools: observerTools,
 		}, {
 			ID: "actions-operator", Title: "Actions operator",
-			Description: "observes the Actions of a repository connection and dispatches workflows, re-runs " +
+			Description: "observes the Actions of a repository and dispatches workflows, re-runs " +
 				"runs or their failed jobs, and cancels runs; every execution needs its own confirmation",
 			Tools: append(append([]string{}, observerTools...), operatorTools...),
 		}, {
 			ID: "workflow-maintainer", Title: "Workflow maintainer",
-			Description: "high risk: reads, creates, and updates the workflow files of a repository connection " +
+			Description: "high risk: reads, creates, and updates the workflow files of a repository " +
 				"below .github/workflows/ and enables or disables workflows; a connection offers these tools only " +
 				"while its tools list names them, and every change needs its own confirmation",
 			Tools: append([]string{workflowsList.ID, workflowsGet.ID}, maintainerTools...),
 		}, {
 			ID: "actions-admin", Title: "Actions administrator",
-			Description: "high risk: reads and changes whether Actions run in a repository connection, which " +
+			Description: "high risk: reads and changes whether Actions run in a repository, which " +
 				"actions they may use, and the default rights of its GITHUB_TOKEN; a connection offers these tools " +
 				"only while its tools list names them, and every change needs its own confirmation",
 			Tools: append([]string{}, adminTools...),
@@ -351,7 +353,7 @@ func Register(reg *capability.Registry) error {
 	}, TestConnection); err != nil {
 		return err
 	}
-	return reg.Register(Provider, append([]capability.Operation{
+	operations := append([]capability.Operation{
 		{Descriptor: itemsList, Handler: capability.Handler(invokeItemsList)},
 		capability.Operation{Descriptor: itemsGet, Handler: capability.Handler(invokeItemsGet)},
 		capability.Operation{Descriptor: issuesList, Handler: capability.Handler(invokeIssuesList)},
@@ -367,7 +369,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: itemsArchive, Handler: capability.Handler(invokeItemsArchive)},
 		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
-	}, append(actionsOperations(), maintenanceOperations()...)...)...)
+	}, append(actionsOperations(), maintenanceOperations()...)...)
+	for i := range operations {
+		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
+	}
+	return reg.Register(Provider, operations...)
 }
 
 func invokeItemsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -376,17 +382,17 @@ func invokeItemsList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list project items", "the validated arguments could not be read")
 	}
-	bound, err := requireKind(resolved, kindProject, itemsList.ID)
+	bound, err := selectTarget(ctx, resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
-	// The arguments and the cursor are checked before a credential is resolved, so a refused request never
-	// becomes a provider call.
+	// The target, the arguments, and the cursor are checked before a credential is resolved, so a refused
+	// request never becomes a provider call.
 	after, err := options.normalize(bound)
 	if err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -401,10 +407,11 @@ func invokeItemsGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("get project item", "the validated arguments could not be read")
 	}
-	if _, err := requireKind(resolved, kindProject, itemsGet.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	if err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +424,7 @@ func invokeIssuesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list issues", "the validated arguments could not be read")
 	}
-	bound, err := requireKind(resolved, kindRepository, issuesList.ID)
+	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -425,7 +432,7 @@ func invokeIssuesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -440,39 +447,18 @@ func invokeIssuesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("get issue", "the validated arguments could not be read")
 	}
-	if _, err := requireKind(resolved, kindRepository, issuesGet.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	if err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
 	return client.GetIssue(ctx, arguments.Number)
 }
 
-// requireKind refuses a tool on a connection whose target is of the other kind, before any credential is
-// resolved: a repository connection offers no project and a project connection no repository.
-func requireKind(resolved *config.Resolved, kind targetKind, tool string) (target, error) {
-	bound, err := requireScope(resolved, kind, tool)
-	return bound.target, err
-}
-
-// requireScope is requireKind for the tools that also need the repositories of a project connection.
-func requireScope(resolved *config.Resolved, kind targetKind, tool string) (scope, error) {
-	if resolved == nil {
-		return scope{}, providerError("open", "no connection was selected")
-	}
-	bound, err := scopeOf(resolved)
-	if err != nil {
-		return scope{}, providerError("open", err.Error())
-	}
-	if bound.target.kind != kind {
-		return scope{}, &capability.UnsupportedError{Connection: resolved.Name, Capability: tool}
-	}
-	return bound, nil
-}
-
-// targetKind tells a project connection from a repository connection.
+// targetKind tells a project from a repository.
 type targetKind int
 
 const (
@@ -480,7 +466,8 @@ const (
 	kindRepository
 )
 
-// target is the one GitHub object a connection is bound to.
+// target is one GitHub project or repository, or, as a pattern in a connection's targets, every project or
+// every repository of one owner: a pattern has repo "*" or project number 0.
 type target struct {
 	kind   targetKind
 	scope  string // users or orgs for a project
@@ -489,81 +476,29 @@ type target struct {
 	repo   string
 }
 
-// scope is everything one connection binds: its target and, for a project, the repositories whose issues
-// the planning tools may create for or add to that project.
-type scope struct {
-	target       target
-	repositories []target
-}
-
-// repository returns the configured repository an owner/name argument selects. GitHub compares names
-// without case; the configured spelling is used from then on.
-func (s scope) repository(value string) (target, error) {
-	for _, repository := range s.repositories {
-		if strings.EqualFold(repository.owner+"/"+repository.repo, value) {
-			return repository, nil
-		}
-	}
-	return target{}, invalidRequest("repository is not one of the repositories this connection may plan in")
-}
-
-func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := resolved.Targets
-	if len(values) == 0 {
-		values = []string{resolved.Target}
-	}
-	return parseScope(values)
-}
-
-// parseScope reads the target list of one connection: exactly one project or one repository, or one
-// project together with the repositories it may plan in. No other combination is accepted, so a connection
-// always has exactly one target a tool acts on.
-func parseScope(values []string) (scope, error) {
-	if len(values) == 1 {
-		bound, err := parseTarget(values[0])
-		return scope{target: bound}, err
-	}
-	var bound scope
-	seen := map[string]bool{}
-	for _, value := range values {
-		parsed, err := parseTarget(value)
-		if err != nil {
-			return scope{}, err
-		}
-		key := strings.ToLower(parsed.String())
-		if seen[key] {
-			return scope{}, errors.New("the GitHub target list names a target more than once")
-		}
-		seen[key] = true
-		if parsed.kind == kindRepository {
-			bound.repositories = append(bound.repositories, parsed)
-			continue
-		}
-		if bound.target.kind != 0 {
-			return scope{}, errors.New("a GitHub target list may name only one project")
-		}
-		bound.target = parsed
-	}
-	if bound.target.kind != kindProject {
-		return scope{}, errors.New("several GitHub targets must be one project and the repositories it plans in")
-	}
-	return bound, nil
+// pattern reports whether the target stands for every repository or every project of its owner.
+func (t target) pattern() bool {
+	return (t.kind == kindRepository && t.repo == "*") || (t.kind == kindProject && t.number == 0)
 }
 
 func (t target) String() string {
 	if t.kind == kindRepository {
 		return "repos/" + t.owner + "/" + t.repo
 	}
-	return t.scope + "/" + t.owner + "/projects/" + strconv.Itoa(t.number)
+	number := "*"
+	if t.number != 0 {
+		number = strconv.Itoa(t.number)
+	}
+	return t.scope + "/" + t.owner + "/projects/" + number
 }
 
-// parseTarget reads users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO. No other
-// form is accepted, so a target always names exactly one project or one repository. The error never quotes
-// the value.
+// parseTarget reads users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO, or one of
+// them with * as the whole last segment. No other form is accepted, so a target always names one project,
+// one repository, or all of either of one owner. The error never quotes the value.
 func parseTarget(raw string) (target, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
-		return target{}, errors.New("a GitHub connection needs a project or a repository target")
+		return target{}, errors.New("a GitHub target must not be empty")
 	}
 	if len(trimmed) > 256 {
 		return target{}, errors.New("the GitHub target is too long")
@@ -574,19 +509,22 @@ func parseTarget(raw string) (target, error) {
 		if !validLogin(parts[1]) {
 			return target{}, errors.New("the GitHub target does not name a usable owner login")
 		}
+		if parts[3] == "*" {
+			return target{kind: kindProject, scope: parts[0], owner: parts[1]}, nil
+		}
 		number, ok := projectNumber(parts[3])
 		if !ok {
 			return target{}, errors.New("the GitHub target does not name a usable project number")
 		}
 		return target{kind: kindProject, scope: parts[0], owner: parts[1], number: number}, nil
 	case len(parts) == 3 && parts[0] == "repos":
-		if !validLogin(parts[1]) || !validRepoName(parts[2]) {
+		if !validLogin(parts[1]) || (parts[2] != "*" && !validRepoName(parts[2])) {
 			return target{}, errors.New("the GitHub target does not name a usable repository")
 		}
 		return target{kind: kindRepository, owner: parts[1], repo: parts[2]}, nil
 	}
 	return target{}, errors.New("a GitHub target must be users/LOGIN/projects/NUMBER, " +
-		"orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO")
+		"orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO, or one of them with * as its last segment")
 }
 
 func projectNumber(value string) (int, bool) {
@@ -700,10 +638,12 @@ func decodeCursor(binding []byte, cursor string) (string, error) {
 	return string(decoded[cursorBinding:]), nil
 }
 
-// endpoints are the REST root and the GraphQL endpoint of one configured GitHub service.
+// endpoints are the REST root and the GraphQL endpoint of one configured GitHub service, and the web host
+// its repositories are cloned from.
 type endpoints struct {
 	rest    string
 	graphql string
+	web     string
 }
 
 // endpointsOf derives both API endpoints from the configured base URL. GitHub.com and GitHub Enterprise
@@ -729,25 +669,26 @@ func endpointsOf(raw string) (endpoints, error) {
 			return endpoints{}, errors.New("a GitHub service is https://api.github.com or, for GitHub " +
 				"Enterprise Server, https://HOST/api/v3")
 		}
-		return endpoints{rest: origin, graphql: origin + "/graphql"}, nil
+		return endpoints{rest: origin, graphql: origin + "/graphql", web: parsed.Hostname()[len("api."):]}, nil
 	case "/api/v3":
-		return endpoints{rest: origin + "/api/v3", graphql: origin + "/api/graphql"}, nil
+		return endpoints{rest: origin + "/api/v3", graphql: origin + "/api/graphql", web: parsed.Hostname()}, nil
 	}
 	return endpoints{}, errors.New("a GitHub Enterprise Server base URL must end in /api/v3")
 }
 
-// Client binds one GitHub token to the endpoints of one configured service, to the one target of its
-// connection and the repositories that target may plan in, and to the rate limit that token shares.
+// Client binds one GitHub token to the endpoints of one configured service, to the targets its connection
+// allows, to the one target a tool acts on, and to the rate limit that token shares.
 type Client struct {
 	endpoints endpoints
 	target    target
-	scope     scope
+	allowed   allowlist
 	auth      string
 	http      *http.Client
 	limiter   *ratelimit.Limiter
 }
 
-// Open resolves the token of one selected connection and returns a client for its configured target.
+// Open resolves the token of one selected connection and returns a client for the first project or
+// repository its targets name exactly, or for no target when they name none.
 func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
 	return open(resolved, secrets, red, nil)
 }
@@ -759,7 +700,7 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
 	}
-	bound, err := scopeOf(resolved)
+	allowed, err := allowlistOf(resolved)
 	if err != nil {
 		return nil, providerError("open", err.Error())
 	}
@@ -787,8 +728,25 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{endpoints: api, target: bound.target, scope: bound, auth: "Bearer " + value.Secret,
-		http: newHTTPClient(), limiter: lim}, nil
+	client := &Client{endpoints: api, allowed: allowed, auth: "Bearer " + value.Secret, http: newHTTPClient(),
+		limiter: lim}
+	for _, entry := range allowed {
+		if !entry.pattern() {
+			client.target = entry
+			break
+		}
+	}
+	return client, nil
+}
+
+// openAt opens a client for the target a tool acts on, which selectTarget has already checked.
+func openAt(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, bound target) (*Client, error) {
+	client, err := Open(resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	client.target = bound
+	return client, nil
 }
 
 // transport carries every GitHub request. A nil value is Go's default transport; the package's own tests
@@ -805,9 +763,10 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// TestConnection performs the smallest authenticated read of the configured target: the project with its
-// field definitions, or the repository. Success proves that this token can see the target; it does not prove
-// that every tool is authorized, because GitHub checks each resource and scope on every request.
+// TestConnection performs the smallest authenticated read of the first target the connection names exactly:
+// the project with its field definitions, or the repository; without such a target, the user of the token.
+// Success proves that this token can see that target; it does not prove that every tool is authorized,
+// because GitHub checks each resource and scope on every request.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
 	client, err := Open(resolved, secrets, red)
@@ -819,14 +778,15 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 		return "", err
 	}
 	const op = "test connection"
-	if client.target.kind == kindProject {
+	var answer struct{}
+	switch client.target.kind {
+	case kindProject:
 		_, err = client.project(ctx, op)
-	} else {
-		var repository struct {
-			FullName string `json:"full_name"`
-		}
+	case kindRepository:
 		err = client.rest(ctx, op, "/repos/"+url.PathEscape(client.target.owner)+"/"+
-			url.PathEscape(client.target.repo), &repository)
+			url.PathEscape(client.target.repo), &answer)
+	default:
+		err = client.rest(ctx, op, "/user", &answer)
 	}
 	if err != nil {
 		var providerErr *provider.Error

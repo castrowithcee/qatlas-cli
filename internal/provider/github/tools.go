@@ -65,7 +65,7 @@ var issuesCreate = capability.Descriptor{
 	ID:      Provider + ".issues.create",
 	Version: 1,
 	Title:   "Create a GitHub issue",
-	Description: "Open one issue in the repository bound to an explicit connection; a repeated call opens a " +
+	Description: "Open one issue in a repository an explicit connection allows; a repeated call opens a " +
 		"second issue",
 	Tags:                       []string{"github", "issues", "create"},
 	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
@@ -91,8 +91,8 @@ var issuesUpdate = capability.Descriptor{
 	ID:      Provider + ".issues.update",
 	Version: 1,
 	Title:   "Update a GitHub issue",
-	Description: "Replace the title, body, labels, or assignees of one issue of the repository bound to an " +
-		"explicit connection; fields left out stay unchanged",
+	Description: "Replace the title, body, labels, or assignees of one issue of " +
+		"a repository an explicit connection allows; fields left out stay unchanged",
 	Tags:                       []string{"github", "issues", "update"},
 	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:                   Provider,
@@ -101,7 +101,7 @@ var issuesUpdate = capability.Descriptor{
 		issueContentKeys + `},"required":["number"],"additionalProperties":false}`),
 	OutputSchema: issuesGet.OutputSchema,
 	Arguments: append([]capability.Argument{
-		{Name: "number", Description: "Issue number in the bound repository", Required: true},
+		{Name: "number", Description: "Issue number in the repository", Required: true},
 	}, issueContentArguments...),
 	Fields: issuesGet.Fields,
 	Examples: []capability.Example{{
@@ -114,7 +114,7 @@ var issuesClose = capability.Descriptor{
 	ID:                         Provider + ".issues.close",
 	Version:                    1,
 	Title:                      "Close a GitHub issue",
-	Description:                "Close one issue of the repository bound to an explicit connection with a reason",
+	Description:                "Close one issue of a repository an explicit connection allows with a reason",
 	Tags:                       []string{"github", "issues", "close", "update"},
 	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:                   Provider,
@@ -124,7 +124,7 @@ var issuesClose = capability.Descriptor{
 		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: issuesGet.OutputSchema,
 	Arguments: []capability.Argument{
-		{Name: "number", Description: "Issue number in the bound repository", Required: true},
+		{Name: "number", Description: "Issue number in the repository", Required: true},
 		{Name: "state_reason", Description: "completed, not_planned, or duplicate; completed when omitted"},
 	},
 	Fields: issuesGet.Fields,
@@ -138,7 +138,7 @@ var issuesReopen = capability.Descriptor{
 	ID:                         Provider + ".issues.reopen",
 	Version:                    1,
 	Title:                      "Reopen a GitHub issue",
-	Description:                "Open one closed issue of the repository bound to an explicit connection again",
+	Description:                "Open one closed issue of a repository an explicit connection allows again",
 	Tags:                       []string{"github", "issues", "reopen", "update"},
 	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:                   Provider,
@@ -147,7 +147,7 @@ var issuesReopen = capability.Descriptor{
 		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: issuesGet.OutputSchema,
 	Arguments: []capability.Argument{
-		{Name: "number", Description: "Issue number in the bound repository", Required: true},
+		{Name: "number", Description: "Issue number in the repository", Required: true},
 	},
 	Fields: issuesGet.Fields,
 	Examples: []capability.Example{{
@@ -165,8 +165,8 @@ var commentsList = capability.Descriptor{
 	ID:      Provider + ".comments.list",
 	Version: 1,
 	Title:   "List comments of a GitHub issue",
-	Description: "List one bounded batch of comments of one issue of the repository bound to an explicit " +
-		"connection, oldest first",
+	Description: "List one bounded batch of comments of one issue of " +
+		"a repository an explicit connection allows, oldest first",
 	Tags:                       []string{"github", "issues", "comments", "list"},
 	Risk:                       readRisk,
 	Provider:                   Provider,
@@ -179,7 +179,7 @@ var commentsList = capability.Descriptor{
 		commentRequired + `}},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["comments","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "number", Description: "Issue number in the bound repository", Required: true},
+		{Name: "number", Description: "Issue number in the repository", Required: true},
 		{Name: "limit", Description: "Comments per batch, from 1 through 100; 30 when omitted"},
 		{Name: "cursor", Description: "Opaque next_cursor of a previous batch of the same issue; the first " +
 			"batch when omitted"},
@@ -199,7 +199,7 @@ var commentsCreate = capability.Descriptor{
 	ID:      Provider + ".comments.create",
 	Version: 1,
 	Title:   "Comment on a GitHub issue",
-	Description: "Write exactly one comment on one issue of the repository bound to an explicit connection; a " +
+	Description: "Write exactly one comment on one issue of a repository an explicit connection allows; a " +
 		"repeated call writes a second comment",
 	Tags:                       []string{"github", "issues", "comments", "create"},
 	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
@@ -211,7 +211,7 @@ var commentsCreate = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + commentProperties + `},` +
 		commentRequired + `}`),
 	Arguments: []capability.Argument{
-		{Name: "number", Description: "Issue number in the bound repository", Required: true},
+		{Name: "number", Description: "Issue number in the repository", Required: true},
 		{Name: "body", Description: "Comment in Markdown, 1 to 65536 characters; stored as given", Required: true},
 	},
 	Fields: []capability.Field{
@@ -228,8 +228,8 @@ var itemsUpdate = capability.Descriptor{
 	ID:      Provider + ".projectitems.update",
 	Version: 1,
 	Title:   "Update GitHub project item fields",
-	Description: "Set or clear single-select, text, number, date, and iteration fields of one item of the " +
-		"GitHub project bound to an explicit connection, by field and option name",
+	Description: "Set or clear single-select, text, number, date, and iteration fields of one item of " +
+		"a GitHub project an explicit connection allows, by field and option name",
 	Tags:                       []string{"github", "projects", "items", "fields", "update", "planning"},
 	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:                   Provider,
@@ -252,19 +252,19 @@ var itemsAdd = capability.Descriptor{
 	ID:      Provider + ".projectitems.add",
 	Version: 1,
 	Title:   "Add a GitHub issue to the project",
-	Description: "Add one existing issue of a repository the connection names to the GitHub project bound to " +
-		"it, then set field values; an issue already in the project keeps its item",
+	Description: "Add one existing issue of a repository an explicit connection allows to a GitHub project it " +
+		"allows, then set field values; an issue already in the project keeps its item",
 	Tags:                       []string{"github", "projects", "items", "add", "planning"},
 	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
 	Provider:                   Provider,
 	RequiresExplicitConnection: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"repository":` + repoSchema + `,` +
-		`"number":` + numberSchema + `,"fields":` + fieldsSchema + `},"required":["repository","number"],` +
+		`"number":` + numberSchema + `,"fields":` + fieldsSchema + `},"required":["number"],` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(planningOutput),
 	Arguments: []capability.Argument{
-		{Name: "repository", Description: "owner/name of a repository listed in the connection's targets", Required: true},
-		{Name: "number", Description: "Issue number in that repository", Required: true},
+		{Name: "number", Description: "Issue number in the repository", Required: true},
+		repositoryArgument,
 		{Name: "fields", Description: fieldsDescription},
 	},
 	Fields: planningFields,
@@ -278,7 +278,7 @@ var itemsArchive = capability.Descriptor{
 	ID:      Provider + ".projectitems.archive",
 	Version: 1,
 	Title:   "Archive a GitHub project item",
-	Description: "Archive one item of the GitHub project bound to an explicit connection; GitHub keeps it " +
+	Description: "Archive one item of a GitHub project an explicit connection allows; GitHub keeps it " +
 		"restorable",
 	Tags:                       []string{"github", "projects", "items", "archive", "planning"},
 	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
@@ -302,7 +302,7 @@ var draftsCreate = capability.Descriptor{
 	ID:      Provider + ".projectdrafts.create",
 	Version: 1,
 	Title:   "Create a GitHub project draft",
-	Description: "Add one draft issue to the GitHub project bound to an explicit connection, then set field " +
+	Description: "Add one draft issue to a GitHub project an explicit connection allows, then set field " +
 		"values; a repeated call adds a second draft",
 	Tags:                       []string{"github", "projects", "drafts", "create", "planning"},
 	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
@@ -327,23 +327,23 @@ var projectIssuesCreate = capability.Descriptor{
 	ID:      Provider + ".projectissues.create",
 	Version: 1,
 	Title:   "Create a planned GitHub issue",
-	Description: "Open one issue in a repository the connection names, add it to the GitHub project bound to " +
-		"the connection, then set field values; a repeated call opens a second issue",
+	Description: "Open one issue in a repository an explicit connection allows, add it to a GitHub project it " +
+		"allows, then set field values; a repeated call opens a second issue",
 	Tags:                       []string{"github", "projects", "issues", "create", "planning"},
 	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	Provider:                   Provider,
 	RequiresExplicitConnection: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"repository":` + repoSchema + `,` +
-		issueContentKeys + `,"fields":` + fieldsSchema + `},"required":["repository","title"],` +
+		issueContentKeys + `,"fields":` + fieldsSchema + `},"required":["title"],` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(planningOutput),
 	Arguments: []capability.Argument{
-		{Name: "repository", Description: "owner/name of a repository listed in the connection's targets", Required: true},
 		{Name: "title", Description: "Issue title, 1 to 256 characters", Required: true},
 		issueContentArguments[1],
 		{Name: "labels", Description: "Label names to set"},
 		{Name: "assignees", Description: "Assignee logins to set"},
 		{Name: "fields", Description: fieldsDescription},
+		repositoryArgument,
 	},
 	Fields: append([]capability.Field{
 		{Name: "issue", Description: "Number, repository, and URL of the created issue"},
@@ -366,7 +366,8 @@ func invokeIssuesCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &content); err != nil {
 		return nil, unreadable("create issue")
 	}
-	if _, err := requireKind(resolved, kindRepository, issuesCreate.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	if err != nil {
 		return nil, err
 	}
 	// The arguments are checked before a credential is resolved, so a refused change never becomes a
@@ -374,7 +375,7 @@ func invokeIssuesCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := content.check(true); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +391,8 @@ func invokeIssuesUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("update issue")
 	}
-	if _, err := requireKind(resolved, kindRepository, issuesUpdate.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	if err != nil {
 		return nil, err
 	}
 	if err := checkNumber(arguments.Number); err != nil {
@@ -399,7 +401,7 @@ func invokeIssuesUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := arguments.IssueContent.check(false); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -415,13 +417,14 @@ func invokeIssuesClose(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("close issue")
 	}
-	if _, err := requireKind(resolved, kindRepository, issuesClose.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	if err != nil {
 		return nil, err
 	}
 	if err := checkNumber(arguments.Number); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -436,13 +439,14 @@ func invokeIssuesReopen(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("reopen issue")
 	}
-	if _, err := requireKind(resolved, kindRepository, issuesReopen.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	if err != nil {
 		return nil, err
 	}
 	if err := checkNumber(arguments.Number); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +459,7 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, unreadable("list comments")
 	}
-	bound, err := requireKind(resolved, kindRepository, commentsList.ID)
+	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -463,7 +467,7 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +483,8 @@ func invokeCommentsCreate(ctx context.Context, resolved *config.Resolved, secret
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("create comment")
 	}
-	if _, err := requireKind(resolved, kindRepository, commentsCreate.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	if err != nil {
 		return nil, err
 	}
 	if err := checkNumber(arguments.Number); err != nil {
@@ -488,7 +493,7 @@ func invokeCommentsCreate(ctx context.Context, resolved *config.Resolved, secret
 	if err := checkCommentBody(arguments.Body); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +509,8 @@ func invokeItemsUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("update project item")
 	}
-	if _, err := requireKind(resolved, kindProject, itemsUpdate.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	if err != nil {
 		return nil, err
 	}
 	if err := checkItemID(arguments.ItemID); err != nil {
@@ -517,7 +523,7 @@ func invokeItemsUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if len(inputs) == 0 {
 		return nil, invalidRequest("fields must name at least one field")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -527,18 +533,20 @@ func invokeItemsUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 func invokeItemsAdd(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
-		Repository string      `json:"repository"`
-		Number     int         `json:"number"`
-		Fields     FieldValues `json:"fields"`
+		Number int         `json:"number"`
+		Fields FieldValues `json:"fields"`
 	}
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("add project item")
 	}
-	bound, err := requireScope(resolved, kindProject, itemsAdd.ID)
+	// Both targets are checked before a credential is resolved: the project the issue joins and the
+	// repository it lives in.
+	bound, err := selectTarget(ctx, resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := bound.repository(arguments.Repository); err != nil {
+	repo, err := selectTarget(ctx, resolved, kindRepository, raw)
+	if err != nil {
 		return nil, err
 	}
 	if err := checkNumber(arguments.Number); err != nil {
@@ -547,11 +555,11 @@ func invokeItemsAdd(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if _, err := arguments.Fields.inputs(); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
-	return client.AddIssue(ctx, arguments.Repository, arguments.Number, arguments.Fields)
+	return client.addIssue(ctx, repo, arguments.Number, arguments.Fields)
 }
 
 func invokeItemsArchive(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -562,13 +570,14 @@ func invokeItemsArchive(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("archive project item")
 	}
-	if _, err := requireKind(resolved, kindProject, itemsArchive.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	if err != nil {
 		return nil, err
 	}
 	if err := checkItemID(arguments.ItemID); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -585,7 +594,8 @@ func invokeDraftsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("create draft issue")
 	}
-	if _, err := requireKind(resolved, kindProject, draftsCreate.ID); err != nil {
+	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	if err != nil {
 		return nil, err
 	}
 	if err := (IssueContent{Title: &arguments.Title, Body: arguments.Body}).check(true); err != nil {
@@ -594,7 +604,7 @@ func invokeDraftsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if _, err := arguments.Fields.inputs(); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -604,18 +614,18 @@ func invokeDraftsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 func invokeProjectIssuesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
-		Repository string      `json:"repository"`
-		Fields     FieldValues `json:"fields"`
+		Fields FieldValues `json:"fields"`
 		IssueContent
 	}
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("create planned issue")
 	}
-	bound, err := requireScope(resolved, kindProject, projectIssuesCreate.ID)
+	bound, err := selectTarget(ctx, resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := bound.repository(arguments.Repository); err != nil {
+	repo, err := selectTarget(ctx, resolved, kindRepository, raw)
+	if err != nil {
 		return nil, err
 	}
 	if err := arguments.IssueContent.check(true); err != nil {
@@ -624,9 +634,9 @@ func invokeProjectIssuesCreate(ctx context.Context, resolved *config.Resolved, s
 	if _, err := arguments.Fields.inputs(); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := openAt(resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
-	return client.CreatePlannedIssue(ctx, arguments.Repository, arguments.IssueContent, arguments.Fields)
+	return client.createPlannedIssue(ctx, repo, arguments.IssueContent, arguments.Fields)
 }

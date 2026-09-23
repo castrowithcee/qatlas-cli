@@ -307,7 +307,7 @@ func TestActionsProfilesSeparateObserverAndOperator(t *testing.T) {
 }
 
 // A connection without execute, or with a tools list without the operator tools, neither discovers nor runs
-// them; nor does a project connection. Every refusal ends before a secret is read and before GitHub is
+// them; nor does a connection whose targets name no repository. Every refusal ends before a secret is read and before GitHub is
 // contacted, and so do unconfirmed executions and arguments outside the bounds.
 func TestActionsOperatorToolsNeedExecuteAndTheirTools(t *testing.T) {
 	f, _, base := serveActions(t)
@@ -338,8 +338,11 @@ func TestActionsOperatorToolsNeedExecuteAndTheirTools(t *testing.T) {
 		{"observer", "github.workflowruns.cancel", "observer", `{"run_id":5001}`, true, &capability.UnsupportedError{}},
 		{"tools without operators", "github.workflowruns.rerunfailed", "listed", `{"run_id":5000}`, true,
 			&capability.UnsupportedError{}},
-		{"project connection", "github.workflows.dispatch", "project", dispatch, true, &capability.UnsupportedError{}},
-		{"project observer", "github.workflowruns.list", "project", `{}`, false, &capability.UnsupportedError{}},
+		{"project connection", "github.workflows.dispatch", "project", dispatch, true,
+			&application.InvalidRequestError{}},
+		{"project observer", "github.workflowruns.list", "project", `{}`, false, &application.InvalidRequestError{}},
+		{"a repository outside the targets", "github.workflowruns.list", "operator",
+			`{"repository":"octo-org/other"}`, false, &application.InvalidRequestError{}},
 		{"unconfirmed dispatch", "github.workflows.dispatch", "operator", dispatch, false,
 			&application.ConfirmationRequiredError{}},
 		{"unconfirmed cancel", "github.workflowruns.cancel", "operator", `{"run_id":5001}`, false,
