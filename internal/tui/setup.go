@@ -42,7 +42,7 @@ var setupLeads = [setupSteps]string{
 		"one, or add a new one.",
 	"A credential says where the secrets come from; the configuration file never holds a secret. Reuse one " +
 		"of this provider, or add one. Nothing is stored before you save in the last step.",
-	"The connection is what agents and --connection select by name. The target narrows it to a scope inside " +
+	"The connection is what agents and --connection select by name. Its targets narrow it to scopes inside " +
 		"the service; the credential still decides what the provider lets it reach.",
 	"Permissions limit locally what agents may do through this connection. They never grant more than the " +
 		"credential is allowed at the provider, and they do not take away what it is allowed there. A new " +
@@ -180,7 +180,7 @@ func (m *Model) setupPage(step int) []field {
 		}
 		return []field{
 			textField("name", name, false).withHint(setupConnectionNameHint),
-			textField("target", "", false).withHint(m.providerTargetHint(provider)),
+			targetsField(nil).withHint(m.providerTargetHint(provider)),
 			textField("description", "", false).withHint(descriptionHint),
 		}
 	case stepPermissions:
@@ -388,14 +388,7 @@ func (m *Model) setupCandidate(upto int) (*config.Config, setupPlan, error) {
 			return nil, plan, fmt.Errorf("a connection named %q already exists; choose another name",
 				plan.connection)
 		}
-		metadata, _ := cfg.ProviderMetadata(w.provider)
-		target, targets := pageValue(page, "target"), []string(nil)
-		if metadata.Target.Multiple {
-			var err error
-			if target, targets, err = parseTargets(target); err != nil {
-				return nil, plan, err
-			}
-		}
+		target, targets := splitTargets(targetEntries(page))
 		conn := config.Connection{
 			Service: plan.service, Credential: plan.credential,
 			Target: target, Targets: targets, Description: pageValue(page, "description"),
@@ -671,7 +664,7 @@ func (m *Model) summaryRows() []string {
 			cfg.Services[plan.service].BaseURL),
 		fmt.Sprintf("%-12s %s (%s) · %s", "credential", plan.credential, state(plan.newCredential), secrets),
 		fmt.Sprintf("%-12s %s", "connection", plan.connection),
-		fmt.Sprintf("%-12s %s", "target", choiceText(formatTargets(conn))),
+		fmt.Sprintf("%-12s %s", targetsLabel, choiceText(strings.Join(conn.TargetValues(), ", "))),
 		fmt.Sprintf("%-12s %s", "description", choiceText(conn.Description)),
 		fmt.Sprintf("%-12s %s", "permissions", permissions),
 		fmt.Sprintf("%-12s %s", "tools", tools),

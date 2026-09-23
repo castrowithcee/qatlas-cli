@@ -9,7 +9,6 @@ package tui
 
 import (
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
 	"os"
@@ -82,6 +81,8 @@ const (
 	screenHelp
 	// screenUpdate asks before a newer release of qatlas is installed.
 	screenUpdate
+	// screenTargets edits the target list of a connection entry by entry.
+	screenTargets
 )
 
 type fieldKind int
@@ -104,6 +105,10 @@ const (
 	// fieldProvider holds one provider like a choice row, but is chosen in the provider table only, so every
 	// provider row looks and works the same however many providers there are.
 	fieldProvider
+	// fieldTargets is the target list of a connection. Its entries are added, edited, and removed one by one
+	// in a screen of their own, so a target never has to be quoted into one line with the others. The row
+	// shows a short form of them, or every entry while it is expanded.
+	fieldTargets
 )
 
 type field struct {
@@ -126,6 +131,10 @@ type field struct {
 	// hidden takes a row out of the form without dropping what was typed into it: the guided setup shows
 	// the rows of a new entry only while a new entry is chosen, and brings them back unchanged.
 	hidden bool
+	// entries and expanded belong to a target list: its targets in the order they are saved, and whether
+	// the row shows every one of them.
+	entries  []string
+	expanded bool
 }
 
 // Field hints. They name the shape of an entry, never a rule the core owns: the core states the exact
@@ -253,6 +262,10 @@ func (f field) value() string {
 	if f.kind == fieldToolList {
 		return strings.Join(f.marked(), ", ")
 	}
+	if f.kind == fieldTargets {
+		// One target per line, so the value tells every list apart, a target with a comma included.
+		return strings.Join(f.entries, "\n")
+	}
 	if f.kind == fieldMasked {
 		// A secret is taken as typed, like in the masked prompt of a credential.
 		return f.input.Value()
@@ -294,6 +307,13 @@ type Model struct {
 	pickerMarks map[string]bool
 	// providers is the table of the focused provider row while it is open.
 	providers providerTable
+	// targetList holds the entries of the focused target list while its screen is open; the row takes them
+	// over only when they are kept. targetEdit is the entry typed into targetInput: its index, the length of
+	// the list for a new one, or -1 while nothing is typed. targetRemove asks before the selected entry goes.
+	targetList   filterList
+	targetInput  textinput.Model
+	targetEdit   int
+	targetRemove bool
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
 	// confirmation is about the selected entry of the list.
 	confirmRole string
@@ -401,6 +421,8 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
 	m.picker = newFilterList(choiceText)
+	m.targetList = newFilterList(func(target string) string { return target })
+	m.targetInput = textField("", "", false).input
 	// The editor opens on the sidebar, with the first section already shown beside it.
 	m.list.reset(m.entryNames(m.section))
 	return m, nil
@@ -498,6 +520,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateHelp(msg)
 		case screenUpdate:
 			cmd = m.updateUpdateConfirm(msg)
+		case screenTargets:
+			cmd = m.updateTargets(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -869,6 +893,19 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			}
 			return nil
 		}
+	case fieldTargets:
+		// A target list opens like a choice row, and left/right fold it in the form like a tree.
+		switch key.String() {
+		case "enter", " ", "/":
+			m.openTargets()
+			return nil
+		case "right", "l":
+			m.fields[m.focus].expanded = true
+			return nil
+		case "left", "h":
+			m.fields[m.focus].expanded = false
+			return nil
+		}
 	}
 	if m.wizard != nil {
 		switch key.String() {
@@ -912,7 +949,7 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		return m.choiceChanged(previous)
-	case fieldProvider, fieldMultiChoice, fieldToolList:
+	case fieldProvider, fieldMultiChoice, fieldToolList, fieldTargets:
 		// Their values opened above; no other key changes them.
 		return nil
 	case fieldSecret:
@@ -1121,13 +1158,26 @@ func (m *Model) targetHint(service string) string {
 	return m.providerTargetHint(m.cfg.Services[service].Provider)
 }
 
+// providerTargetHint says what one target of the provider is and what the provider allows of the list:
+// whether it may stay empty, and whether it holds more than one entry.
 func (m *Model) providerTargetHint(provider string) string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	hint := metadata.Target.Description
 	if metadata.Target.Required {
-		hint += "; required for " + metadata.Name
+		hint += "; required for " + metadata.Name + ", so an empty list cannot be saved"
+	}
+	if !metadata.Target.Multiple {
+		hint += "; one " + metadata.Target.Label + " at most"
 	}
 	return hint
+}
+
+// emptyTargets says what a connection without targets does for the provider.
+func emptyTargets(metadata config.TargetMetadata) string {
+	if metadata.Required {
+		return "none yet: required, enter adds one"
+	}
+	return "none: the connection reaches whatever its credential reaches"
 }
 
 // connectionProviderChosen narrows the service and credential rows to the provider now selected. A route
@@ -1136,7 +1186,7 @@ func (m *Model) connectionProviderChosen() {
 	provider := m.fieldValue(providerLabel)
 	m.replaceChoices("service", m.providerServices(provider))
 	m.replaceChoices("credential", m.providerCredentials(provider))
-	if target := m.field("target"); target != nil {
+	if target := m.field(targetsLabel); target != nil {
 		target.hint = m.targetHint(m.fieldValue("service"))
 	}
 	m.replacePermissionChoices(provider)
@@ -1394,7 +1444,7 @@ func (m *Model) replaceChoices(label string, choices []string) {
 }
 
 func (m *Model) targetChosen() {
-	if target := m.field("target"); target != nil {
+	if target := m.field(targetsLabel); target != nil {
 		target.hint = m.targetHint(m.fieldValue("service"))
 	}
 }
@@ -1838,11 +1888,6 @@ func (m *Model) buildFields(name string) []field {
 		if provider == "" {
 			provider = m.firstProviderWithService()
 		}
-		metadata, _ := m.cfg.ProviderMetadata(provider)
-		targetValue := conn.Target
-		if metadata.Target.Multiple {
-			targetValue = formatTargets(conn)
-		}
 		permissions := permissionField(m.permissionChoicesFor(provider, conn.Permissions), conn.Permissions)
 		permissions.hint = m.permissionHint(provider)
 		fields = append(fields,
@@ -1850,7 +1895,7 @@ func (m *Model) buildFields(name string) []field {
 			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint),
 			choiceField("credential", m.providerCredentials(provider), conn.Credential).
 				withHint(connectionCredentialHint),
-			textField("target", targetValue, false),
+			targetsField(conn.TargetValues()),
 			// Description and permissions explain the route the fields above define. Only the description
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
@@ -1946,15 +1991,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if err != nil {
 			return err
 		}
-		provider := m.fieldValue(providerLabel)
-		metadata, _ := cfg.ProviderMetadata(provider)
-		target, targets := m.fieldValue("target"), []string(nil)
-		if metadata.Target.Multiple {
-			target, targets, err = parseTargets(target)
-			if err != nil {
-				return err
-			}
-		}
+		target, targets := splitTargets(targetEntries(m.fields))
 		var tools []string
 		if list := m.field(toolListLabel); list != nil && m.fieldValue(toolsLabel) == toolsSelected {
 			tools = list.marked()
@@ -2077,7 +2114,7 @@ func (m *Model) trimFields() {
 	for i := range m.fields {
 		f := &m.fields[i]
 		if f.kind == fieldChoice || f.kind == fieldProvider || f.kind == fieldMultiChoice || f.kind == fieldToolList ||
-			f.kind == fieldMasked {
+			f.kind == fieldMasked || f.kind == fieldTargets {
 			continue
 		}
 		if trimmed := strings.TrimSpace(f.input.Value()); trimmed != f.input.Value() {
@@ -2089,7 +2126,8 @@ func (m *Model) trimFields() {
 func (m *Model) applyFocus() {
 	for i := range m.fields {
 		if i == m.focus && m.fields[i].kind != fieldChoice && m.fields[i].kind != fieldProvider &&
-			m.fields[i].kind != fieldMultiChoice && m.fields[i].kind != fieldToolList && !m.fields[i].readOnly {
+			m.fields[i].kind != fieldMultiChoice && m.fields[i].kind != fieldToolList &&
+			m.fields[i].kind != fieldTargets && !m.fields[i].readOnly {
 			m.fields[i].input.Focus()
 			continue
 		}
@@ -2190,38 +2228,50 @@ func toggleMark(marks map[string]bool, choice string, permissions bool) {
 	}
 }
 
-func formatTargets(connection config.Connection) string {
-	values := connection.TargetValues()
-	if len(values) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	w := csv.NewWriter(&b)
-	_ = w.Write(values)
-	w.Flush()
-	return strings.TrimSuffix(b.String(), "\n")
+// targetsLabel is the row of a connection's target list.
+const targetsLabel = "targets"
+
+// targetsField is the target list row over the targets a connection holds now.
+func targetsField(values []string) field {
+	return field{label: targetsLabel, kind: fieldTargets, entries: values}
 }
 
-func parseTargets(raw string) (string, []string, error) {
-	if strings.TrimSpace(raw) == "" {
-		return "", nil, nil
+// targetEntries are the entries of the target list among fields, or none when there is no such row.
+func targetEntries(fields []field) []string {
+	for _, f := range fields {
+		if f.kind == fieldTargets {
+			return f.entries
+		}
 	}
-	if strings.ContainsAny(raw, "\r\n") {
-		return "", nil, errors.New("the target list must stay on one line")
+	return nil
+}
+
+// splitTargets is how a target list is written: one entry as target, several as targets, and none as
+// neither, so a file that names one target reads as it always did.
+func splitTargets(values []string) (string, []string) {
+	switch len(values) {
+	case 0:
+		return "", nil
+	case 1:
+		return values[0], nil
 	}
-	r := csv.NewReader(strings.NewReader(raw))
-	r.TrimLeadingSpace = true
-	values, err := r.Read()
-	if err != nil {
-		return "", nil, errors.New("the target list must be one CSV row; quote a target that contains a comma")
+	return "", append([]string(nil), values...)
+}
+
+// targetSummary is the short form of a target list: a single target as it is, and otherwise how many there
+// are with the first two of them.
+func targetSummary(values []string) string {
+	switch len(values) {
+	case 0:
+		return ""
+	case 1:
+		return values[0]
 	}
-	for i := range values {
-		values[i] = strings.TrimSpace(values[i])
+	text := fmt.Sprintf("%d targets: %s", len(values), strings.Join(values[:2], ", "))
+	if len(values) > 2 {
+		text += fmt.Sprintf(", +%d", len(values)-2)
 	}
-	if len(values) == 1 {
-		return values[0], nil, nil
-	}
-	return "", values, nil
+	return text
 }
 
 func wrap(i, n int) int {
@@ -2316,6 +2366,8 @@ func (m *Model) buildEditorView(dense bool) string {
 		return m.helpView()
 	case screenUpdate:
 		return m.updateView() + m.notes()
+	case screenTargets:
+		return m.targetsView()
 	}
 	var b strings.Builder
 	switch m.screen {
@@ -2359,6 +2411,8 @@ func (m *Model) buildEditorView(dense bool) string {
 			keys = "enter tick · tab move · " + choiceFormKeys
 		case fieldProvider:
 			keys = "enter choose provider in the table · tab move · " + choiceFormKeys
+		case fieldTargets:
+			keys = "enter edit list · right/left expand/collapse · tab move · " + choiceFormKeys
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
@@ -2660,6 +2714,8 @@ func (m *Model) keepScrollPosition() {
 		m.picker.offset, _ = m.pickerWindow()
 	case screenProviders:
 		m.providers.list.offset, _ = m.providerTableWindow()
+	case screenTargets:
+		m.targetList.offset, _ = m.targetWindow()
 	}
 }
 
@@ -3083,7 +3139,7 @@ func (m *Model) fieldHint(f field) string {
 }
 
 func (m *Model) fieldWarning(f field) string {
-	if f.label != "target" {
+	if f.kind != fieldTargets {
 		return ""
 	}
 	provider := m.cfg.Services[m.fieldValue("service")].Provider
@@ -3094,23 +3150,12 @@ func (m *Model) fieldWarning(f field) string {
 	if !ok || metadata.Target.Wildcard == "" || metadata.Target.WildcardWarning == "" {
 		return ""
 	}
-	for _, value := range parseTargetValuesForWarning(f.value()) {
+	for _, value := range f.entries {
 		if value == metadata.Target.Wildcard {
 			return metadata.Target.WildcardWarning
 		}
 	}
 	return ""
-}
-
-func parseTargetValuesForWarning(raw string) []string {
-	_, values, err := parseTargets(raw)
-	if err != nil {
-		return nil
-	}
-	if values == nil && strings.TrimSpace(raw) != "" {
-		return []string{strings.TrimSpace(raw)}
-	}
-	return values
 }
 
 // testLine keeps the stable class visible and adds the next useful interpretation for a human.
@@ -3176,7 +3221,7 @@ func (m *Model) describe(name string) string {
 	case sectionConnections:
 		conn := m.cfg.Connections[name]
 		detail := fmt.Sprintf("%s  %s / %s", name, conn.Service, conn.Credential)
-		if targets := formatTargets(conn); targets != "" {
+		if targets := targetSummary(conn.TargetValues()); targets != "" {
 			detail += " / " + targets
 		}
 		if m.needsDescription(name) {
@@ -3218,6 +3263,17 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = fmt.Sprintf("none of %d ticked: no tool is offered", len(f.choices))
 	case f.kind == fieldToolList:
 		value = fmt.Sprintf("%d of %d ticked", len(f.marked()), len(f.choices))
+	case f.kind == fieldTargets && len(f.entries) == 0:
+		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+		value = hintStyle.Render("(" + emptyTargets(metadata.Target) + ")")
+	case f.kind == fieldTargets && f.expanded:
+		// Every target stands on a line of its own, under how many there are.
+		value = fmt.Sprintf("%d targets\n%s", len(f.entries), strings.Join(f.entries, "\n"))
+		if len(f.entries) == 1 {
+			value = "1 target\n" + f.entries[0]
+		}
+	case f.kind == fieldTargets:
+		value = targetSummary(f.entries)
 	case f.kind == fieldMultiChoice:
 		parts := make([]string, len(f.choices))
 		for i, choice := range f.choices {

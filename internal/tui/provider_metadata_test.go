@@ -152,8 +152,8 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// The connection form leads with the provider row, so the target is the fifth field.
 	connectionFields := m.buildFields("alerts")
 	if connectionFields[0].label != "name" || connectionFields[1].label != providerLabel ||
-		connectionFields[4].label != "target" {
-		t.Fatalf("connection fields = %v, want name, provider, service, credential, target",
+		connectionFields[4].label != targetsLabel {
+		t.Fatalf("connection fields = %v, want name, provider, service, credential, targets",
 			labelsOf(connectionFields))
 	}
 	if connectionFields[4].value() != "-1001" || !strings.Contains(connectionFields[4].hint, "required for Telegram") {
@@ -290,8 +290,7 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 		t.Fatalf("empty explicit selection = %q, want none", got)
 	}
 
-	target := m.field("target")
-	target.input.SetValue("id:0000, id:0001")
+	m.field(targetsLabel).entries = []string{"id:0000", "id:0001"}
 	candidate := m.cfg.Clone()
 	if err := m.apply(candidate, "all-tables"); err != nil {
 		t.Fatalf("apply allow-list = %v", err)
@@ -505,7 +504,7 @@ func TestTheConnectionFormOffersOneProviderAtATime(t *testing.T) {
 		t.Errorf("service = %q, want the first of the new choices", got)
 	}
 	// The target hint follows the provider, because it is the provider that says what a target is.
-	if hint := m.field("target").hint; !strings.Contains(hint, "required for Telegram") {
+	if hint := m.field(targetsLabel).hint; !strings.Contains(hint, "required for Telegram") {
 		t.Errorf("target hint = %q, want the Telegram rule", hint)
 	}
 

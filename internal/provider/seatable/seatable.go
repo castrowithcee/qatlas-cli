@@ -298,7 +298,7 @@ func Register(reg *capability.Registry) error {
 			Wildcard: "*",
 			WildcardWarning: "All tables in this SeaTable base are exposed to the agent. " +
 				"Use an allow-list when the whole base is not required.",
-			Description: "one table, a comma-separated table allow-list, or * for the whole base; use " +
+			Description: "one or more tables as an allow-list, or * for the whole base; use " +
 				"TABLE, TABLE/VIEW, id:TABLEID, or id:TABLEID/id:VIEWID",
 		},
 		Profiles: []config.ToolProfile{{

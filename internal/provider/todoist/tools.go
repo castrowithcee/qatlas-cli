@@ -338,7 +338,7 @@ func Register(reg *capability.Registry) error {
 			WildcardWarning: "Every project, saved filter, label, and reminder of this Todoist account is exposed " +
 				"to the agent, and a change permission reaches account-wide projects and labels. Use project IDs " +
 				"when the whole account is not required.",
-			Description: "one Todoist project ID, a comma-separated project ID list, or * for the whole account",
+			Description: "one or more Todoist project IDs as an allow-list, or * for the whole account",
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error {
 				_, err := parseScope(values)

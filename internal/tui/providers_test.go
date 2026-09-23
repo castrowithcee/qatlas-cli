@@ -243,7 +243,7 @@ func TestTheProviderTableTakesOnlyTheMarkedProvider(t *testing.T) {
 	if m.fieldValue("service") != "notifications" || m.fieldValue("credential") != "bot" {
 		t.Errorf("selected %q + %q, want notifications + bot", m.fieldValue("service"), m.fieldValue("credential"))
 	}
-	if hint := m.field("target").hint; !strings.Contains(hint, "required for Telegram") {
+	if hint := m.field(targetsLabel).hint; !strings.Contains(hint, "required for Telegram") {
 		t.Errorf("target hint = %q, want the Telegram rule", hint)
 	}
 	if got := m.field("permissions").choices; !reflect.DeepEqual(got, m.permissionChoices("telegram")) {
@@ -432,7 +432,7 @@ func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
 	if view := screenOf(m); !strings.Contains(view, "warning: "+metadata.Target.WildcardWarning[:40]) {
 		t.Fatalf("the account wildcard shows no warning:\n%s", view)
 	}
-	m.field("target").input.SetValue("6XGgm6PHrGgMpCFX, 6Jf8VQXxpwv56VQ7")
+	m.field(targetsLabel).entries = []string{"6XGgm6PHrGgMpCFX", "6Jf8VQXxpwv56VQ7"}
 	if view := screenOf(m); strings.Contains(view, "warning: ") {
 		t.Fatalf("a project list shows a warning:\n%s", view)
 	}
