@@ -76,6 +76,9 @@ const (
 	// fieldSecret is the row of one role of a keyring credential. It holds no value at all: it shows where
 	// the role resolves from and carries the keys that store and remove the secret.
 	fieldSecret
+	// fieldToolList is a set of registered tools, ticked in a searchable picker because a provider may
+	// register more tools than a form row can show.
+	fieldToolList
 )
 
 type field struct {
@@ -127,6 +130,23 @@ const (
 	// lockedHint is what the name of an existing entry says about itself. It replaces the hint that
 	// describes a free choice, which is the opposite of what this field does.
 	lockedHint = "read-only; delete this entry and create it again to rename it"
+	// toolsHint says what each tools mode means, including the two consequences that are easy to miss: a
+	// tool added by a later version joins only the first mode, and an empty selection closes the route.
+	toolsHint = "all allowed by permissions also offers tools a later version adds; only selected tools " +
+		"offers exactly the tools ticked below, and none ticked offers no tool at all"
+	toolListHint = "space or / opens this provider's tools; a tool is offered only when the permissions " +
+		"above allow its effect as well"
+	toolListOffHint = "not used while every tool the permissions allow is offered; choose only selected " +
+		"tools above to pick them"
+)
+
+// The tools modes of a connection. The first one is a connection without a tools list, the second one a
+// list, which may also be empty.
+const (
+	toolsLabel    = "tools"
+	toolListLabel = "tool list"
+	toolsAll      = "all allowed by permissions"
+	toolsSelected = "only selected tools"
 )
 
 // typeLabel is the field that decides what a credential is: which variables it names, or that its secrets
@@ -184,7 +204,22 @@ func (f field) value() string {
 		}
 		return f.choices[f.index]
 	}
+	if f.kind == fieldToolList {
+		return strings.Join(f.marked(), ", ")
+	}
 	return strings.TrimSpace(f.input.Value())
+}
+
+// marked returns the ticked values of a tool list in the order it offers them. It is never nil, so a list
+// with nothing ticked is stored as an explicit empty list rather than as a missing one.
+func (f field) marked() []string {
+	values := []string{}
+	for _, choice := range f.choices {
+		if f.selected[choice] {
+			values = append(values, choice)
+		}
+	}
+	return values
 }
 
 // Model is the whole editor state.
@@ -205,6 +240,9 @@ type Model struct {
 	// picker holds the values of the focused choice row while it is searched. The row itself changes only
 	// when a value is taken.
 	picker filterList
+	// pickerMarks holds the ticks of a tool list while its picker is open, and is nil for a single choice.
+	// The row takes them over only when they are kept.
+	pickerMarks map[string]bool
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
 	// confirmation is about the selected entry of the list.
 	confirmRole string
@@ -575,6 +613,11 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	case fieldSecret:
 		// A secret row holds nothing to type into, so its keys are free for what a secret needs.
 		return m.secretRowKey(current.label, key)
+	case fieldToolList:
+		if key.String() == " " || key.String() == "/" {
+			m.openPicker()
+		}
+		return nil
 	}
 	if current.readOnly {
 		return nil
@@ -601,6 +644,8 @@ func (m *Model) choiceChanged(previous string) tea.Cmd {
 		}
 	case "service":
 		m.targetChosen()
+	case toolsLabel:
+		m.toolsModeChosen()
 	}
 	return nil
 }
@@ -616,6 +661,13 @@ func (m *Model) openPicker() {
 	if len(f.choices) == 0 {
 		return
 	}
+	m.picker.text, m.pickerMarks = choiceText, nil
+	if f.kind == fieldToolList {
+		m.picker.text, m.pickerMarks = m.toolText, map[string]bool{}
+		for choice, marked := range f.selected {
+			m.pickerMarks[choice] = marked
+		}
+	}
 	m.picker.reset(f.choices)
 	m.picker.selectName(f.value())
 	m.picker.startFilter()
@@ -626,6 +678,27 @@ func (m *Model) openPicker() {
 // updatePicker handles the picker. Every printable key belongs to the filter; enter takes the selected
 // value and esc leaves the row as it was.
 func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
+	if m.pickerMarks != nil {
+		// A tool list takes any number of values: space ticks the selected one instead of typing a blank,
+		// which no tool ID contains, and enter keeps every tick at once.
+		switch key.String() {
+		case " ":
+			if choice, ok := m.picker.selected(); ok {
+				m.pickerMarks[choice] = !m.pickerMarks[choice]
+			}
+			return nil
+		case "enter":
+			f := &m.fields[m.focus]
+			f.selected = map[string]bool{}
+			for choice, marked := range m.pickerMarks {
+				if marked {
+					f.selected[choice] = true
+				}
+			}
+			m.screen = screenForm
+			return nil
+		}
+	}
 	switch key.String() {
 	case "ctrl+c":
 		return m.quit()
@@ -750,6 +823,84 @@ func (m *Model) connectionProviderChosen() {
 		target.hint = m.targetHint(m.fieldValue("service"))
 	}
 	m.replacePermissionChoices(provider)
+	if list := m.field(toolListLabel); list != nil {
+		// Tool IDs carry their provider, so no tick survives a change of provider.
+		list.choices, list.selected = m.toolChoices(provider, nil), map[string]bool{}
+	}
+}
+
+// toolsModeChosen opens the tool list for ticking only while only selected tools are offered; otherwise the
+// row is stepped over, and keeps its ticks for when that mode is chosen again.
+func (m *Model) toolsModeChosen() {
+	list := m.field(toolListLabel)
+	if list == nil {
+		return
+	}
+	list.readOnly = m.fieldValue(toolsLabel) != toolsSelected
+	list.hint = toolListHint
+	if list.readOnly {
+		list.hint = toolListOffHint
+	}
+}
+
+// toolChoices are the tools one provider registered, in ID order, followed by any listed tool that is not
+// among them, so an entry is shown rather than silently dropped. The editor keeps no list of its own.
+func (m *Model) toolChoices(provider string, current []string) []string {
+	metadata, _ := m.cfg.ProviderMetadata(provider)
+	var choices []string
+	known := map[string]bool{}
+	for _, tool := range metadata.Tools {
+		choices = append(choices, tool.ID)
+		known[tool.ID] = true
+	}
+	for _, tool := range current {
+		if !known[tool] {
+			choices = append(choices, tool)
+			known[tool] = true
+		}
+	}
+	return choices
+}
+
+// toolText is how one tool reads in the picker: its ID and effect, and whether the permissions of the form
+// allow that effect at all. The same text is what the filter searches.
+func (m *Model) toolText(id string) string {
+	metadata, _ := m.cfg.ProviderMetadata(m.fieldValue(providerLabel))
+	for _, tool := range metadata.Tools {
+		if tool.ID != id {
+			continue
+		}
+		text := id + "  " + string(tool.Effect)
+		if !m.permittedEffects(metadata)[tool.Effect] {
+			text += "  (not permitted)"
+		}
+		return text
+	}
+	return id + "  (not registered)"
+}
+
+// permittedEffects are the effects the permissions row of the form allows right now.
+func (m *Model) permittedEffects(metadata config.ProviderMetadata) map[config.Permission]bool {
+	permissions, err := config.ParsePermissions(m.fieldValue("permissions"))
+	if err != nil {
+		return nil
+	}
+	if permissions == nil {
+		permissions = defaultPermissions(metadata)
+	}
+	permitted := map[config.Permission]bool{}
+	for _, permission := range permissions {
+		permitted[permission] = true
+	}
+	return permitted
+}
+
+// defaultPermissions are what a connection without a permissions list allows.
+func defaultPermissions(metadata config.ProviderMetadata) []config.Permission {
+	if len(metadata.DefaultPermissions) > 0 {
+		return metadata.DefaultPermissions
+	}
+	return []config.Permission{config.PermissionRead}
 }
 
 // replaceChoices puts a new set of options on one choice row, keeping the current value when it is still
@@ -777,12 +928,10 @@ func (m *Model) targetChosen() {
 
 func (m *Model) permissionHint(provider string) string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
-	defaults := make([]string, len(metadata.DefaultPermissions))
-	for i, permission := range metadata.DefaultPermissions {
+	permissions := defaultPermissions(metadata)
+	defaults := make([]string, len(permissions))
+	for i, permission := range permissions {
 		defaults[i] = string(permission)
-	}
-	if len(defaults) == 0 {
-		defaults = []string{"read"}
 	}
 	return "space toggles the local agent permissions offered by this provider; default currently means " +
 		strings.Join(defaults, ", ") + "; selecting none denies every operation"
@@ -1197,6 +1346,21 @@ func (m *Model) buildFields(name string) []field {
 		}
 		permissions := permissionField(m.permissionChoicesFor(provider, conn.Permissions), conn.Permissions)
 		permissions.hint = m.permissionHint(provider)
+		// A connection without a tools list offers every tool its permissions allow, and a new one starts
+		// that way too, so the editor writes a list only when one is chosen here.
+		mode := toolsAll
+		if conn.Tools != nil {
+			mode = toolsSelected
+		}
+		tools := field{label: toolListLabel, kind: fieldToolList,
+			choices: m.toolChoices(provider, conn.Tools), selected: map[string]bool{}}
+		for _, tool := range conn.Tools {
+			tools.selected[tool] = true
+		}
+		tools.readOnly, tools.hint = conn.Tools == nil, toolListOffHint
+		if conn.Tools != nil {
+			tools.hint = toolListHint
+		}
 		fields = append(fields,
 			choiceField(providerLabel, m.connectionProviders(), provider).withHint(connectionProviderHint),
 			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint),
@@ -1207,6 +1371,8 @@ func (m *Model) buildFields(name string) []field {
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
 			permissions,
+			choiceField(toolsLabel, []string{toolsAll, toolsSelected}, mode).withHint(toolsHint),
+			tools,
 		)
 		fields[4].hint = m.targetHint(fields[2].value())
 	case sectionDefaults:
@@ -1296,6 +1462,10 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 				return err
 			}
 		}
+		var tools []string
+		if list := m.field(toolListLabel); list != nil && m.fieldValue(toolsLabel) == toolsSelected {
+			tools = list.marked()
+		}
 		return cfg.SetConnection(name, config.Connection{
 			Service:     m.fieldValue("service"),
 			Credential:  m.fieldValue("credential"),
@@ -1303,6 +1473,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Targets:     targets,
 			Description: m.fieldValue("description"),
 			Permissions: permissions,
+			Tools:       tools,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))
@@ -1403,7 +1574,7 @@ func (m *Model) firstEditable() int {
 func (m *Model) trimFields() {
 	for i := range m.fields {
 		f := &m.fields[i]
-		if f.kind == fieldChoice || f.kind == fieldMultiChoice {
+		if f.kind == fieldChoice || f.kind == fieldMultiChoice || f.kind == fieldToolList {
 			continue
 		}
 		if trimmed := strings.TrimSpace(f.input.Value()); trimmed != f.input.Value() {
@@ -1414,8 +1585,8 @@ func (m *Model) trimFields() {
 
 func (m *Model) applyFocus() {
 	for i := range m.fields {
-		if i == m.focus && m.fields[i].kind != fieldChoice &&
-			m.fields[i].kind != fieldMultiChoice && !m.fields[i].readOnly {
+		if i == m.focus && m.fields[i].kind != fieldChoice && m.fields[i].kind != fieldMultiChoice &&
+			m.fields[i].kind != fieldToolList && !m.fields[i].readOnly {
 			m.fields[i].input.Focus()
 			continue
 		}
@@ -1643,6 +1814,9 @@ func (m *Model) buildEditorView(dense bool) string {
 		if m.fields[m.focus].kind == fieldMultiChoice {
 			keys = "left/right choose · space toggle · " + keys
 		}
+		if m.fields[m.focus].kind == fieldToolList {
+			keys = "space or / pick tools · tab move · enter save · esc cancel"
+		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
 				keys = "enter save credential first · tab move · esc cancel"
@@ -1835,17 +2009,36 @@ func (m *Model) pickerFrame() (string, string) {
 	head.WriteString(m.wrapped(titleStyle, fmt.Sprintf("Choose %s  %d/%d (%d total)",
 		f.label, min(m.picker.cursor+1, shown), shown, total)) + "\n")
 	head.WriteString(m.filterLine(&m.picker) + "\n")
-	head.WriteString(m.wrapped(hintStyle, "current: "+choiceText(f.value())) + "\n")
+	keys := "type to filter · up/down move · enter choose · esc cancel"
+	if m.pickerMarks != nil {
+		ticked := 0
+		for _, choice := range m.picker.all {
+			if m.pickerMarks[choice] {
+				ticked++
+			}
+		}
+		head.WriteString(m.wrapped(hintStyle, fmt.Sprintf("ticked: %d of %d", ticked, total)) + "\n")
+		keys = "type to filter · up/down move · space tick · enter keep · esc cancel"
+	} else {
+		head.WriteString(m.wrapped(hintStyle, "current: "+choiceText(f.value())) + "\n")
+	}
 	if shown == 0 {
 		head.WriteString(m.wrapped(hintStyle,
 			fmt.Sprintf("No value matches %q. esc keeps the current one.", m.picker.query())) + "\n")
 	}
-	return head.String(), m.hint("type to filter · up/down move · enter choose · esc cancel") + m.notes()
+	return head.String(), m.hint(keys) + m.notes()
 }
 
 // pickerRow draws the shown value at index i of the picker and marks the value the row holds now.
 func (m *Model) pickerRow(i int) string {
 	choice := m.picker.matches[i]
+	if m.pickerMarks != nil {
+		mark := "[ ] "
+		if m.pickerMarks[choice] {
+			mark = "[x] "
+		}
+		return m.row(i == m.picker.cursor, mark+m.toolText(choice))
+	}
 	text := choiceText(choice)
 	if choice == m.fields[m.focus].value() {
 		text += "  (current)"
@@ -2433,6 +2626,12 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = "(nothing to choose)"
 	case f.kind == fieldChoice:
 		value = "< " + value + " >"
+	case f.kind == fieldToolList && f.readOnly:
+		value = hintStyle.Render("(every tool the permissions allow)")
+	case f.kind == fieldToolList && len(f.marked()) == 0:
+		value = fmt.Sprintf("none of %d ticked: no tool is offered", len(f.choices))
+	case f.kind == fieldToolList:
+		value = fmt.Sprintf("%d of %d ticked", len(f.marked()), len(f.choices))
 	case f.kind == fieldMultiChoice:
 		parts := make([]string, len(f.choices))
 		for i, choice := range f.choices {

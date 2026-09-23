@@ -340,3 +340,37 @@ func withOutputSchema(d Descriptor, schema json.RawMessage) Descriptor {
 }
 func withArguments(d Descriptor, arguments []Argument) Descriptor { d.Arguments = arguments; return d }
 func withFields(d Descriptor, fields []Field) Descriptor          { d.Fields = fields; return d }
+
+// The configuration view of a provider's tools follows the registered operations: every ID once, sorted,
+// with its effect, and a later registration shows up in the next answer rather than in an older copy.
+func TestProviderMetadataListsTheRegisteredTools(t *testing.T) {
+	reg := NewRegistry()
+	if err := reg.RegisterProvider(config.ProviderMetadata{ID: "fakewiki", Name: "Fake wiki"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Register("fakewiki", operation(pagesList)); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := reg.ProviderMetadata("fakewiki")
+	create := pagesGet
+	create.ID, create.Title, create.Risk.Effect = "fakewiki.pages.create", "Create a page", EffectCreate
+	if err := reg.Register("fakewiki", operation(pagesGet), operation(create)); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := reg.ProviderMetadata("fakewiki")
+	want := []config.ToolMetadata{
+		{ID: "fakewiki.pages.create", Title: "Create a page", Effect: config.PermissionCreate},
+		{ID: "fakewiki.pages.get", Effect: config.PermissionRead},
+		{ID: "fakewiki.pages.list", Effect: config.PermissionRead},
+	}
+	if !reflect.DeepEqual(after.Tools, want) {
+		t.Fatalf("tools = %+v, want %+v", after.Tools, want)
+	}
+	if len(before.Tools) != 1 || before.Tools[0].ID != "fakewiki.pages.list" {
+		t.Fatalf("an earlier answer changed with the registry: %+v", before.Tools)
+	}
+	after.Tools[0].ID = "mutated"
+	if again, _ := reg.ProviderMetadata("fakewiki"); again.Tools[0].ID != "fakewiki.pages.create" {
+		t.Fatal("a caller mutated the registry's tool list")
+	}
+}

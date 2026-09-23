@@ -566,7 +566,7 @@ func (c *Core) connectionNamesWithAnyOperation(providerID string) []string {
 }
 
 func (c *Core) connectionAllows(name string, descriptor capability.Descriptor) bool {
-	return c.config.ConnectionAllows(name, string(descriptor.Risk.Effect))
+	return c.config.ConnectionAllows(name, descriptor.ID, string(descriptor.Risk.Effect))
 }
 
 func (c *Core) connectionRef(name string) ConnectionRef {

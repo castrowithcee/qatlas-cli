@@ -30,6 +30,11 @@ var testProviders ProviderCatalog = testProviderCatalog{
 			{Name: "token-secret", Description: "BookStack token secret: the value labeled Token Secret when you create the same API token"},
 		},
 		Target: TargetMetadata{Label: "target"},
+		Tools: []ToolMetadata{
+			{ID: "bookstack.pages.create", Effect: PermissionCreate},
+			{ID: "bookstack.pages.get", Effect: PermissionRead},
+			{ID: "bookstack.pages.list", Effect: PermissionRead},
+		},
 	},
 	"lexware": {
 		ID: "lexware", Name: "Lexware Office", DefaultBaseURL: "https://api.lexware.io",
@@ -63,6 +68,7 @@ var testProviders ProviderCatalog = testProviderCatalog{
 		ID: "telegram", Name: "Telegram", DefaultBaseURL: "https://api.telegram.org",
 		SecretRoles: []SecretRole{{Name: "bot-token", Description: "Telegram bot token"}},
 		Target:      TargetMetadata{Label: "chat ID", Required: true},
+		Tools:       []ToolMetadata{{ID: "telegram.messages.send", Effect: PermissionCreate}},
 	},
 }
 

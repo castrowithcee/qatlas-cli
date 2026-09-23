@@ -26,7 +26,13 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"In a form, left/right step through the values of a choice row. / on a choice row opens a\n" +
 			"searchable picker that marks the current value and filters as you type, ignoring case; up/down,\n" +
 			"pgup/pgdown and home/end move, enter takes the selected value, and esc leaves the row unchanged.\n" +
-			"The form points to / on rows with many values.",
+			"The form points to / on rows with many values.\n\n" +
+			"A connection's tools row decides between every tool its permissions allow, which is how a\n" +
+			"connection without a tools list behaves and how a new one starts, and only selected tools.\n" +
+			"In the second mode space or / on the tool list opens the tools the chosen provider registers,\n" +
+			"with their effect; space ticks the selected tool, typing filters, enter keeps the ticks and\n" +
+			"esc drops them. Nothing ticked stores an explicit empty list, which offers no tool at all. A\n" +
+			"change of provider clears the ticks, because tool IDs belong to their provider.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if opts.Agent {

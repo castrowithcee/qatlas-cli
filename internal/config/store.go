@@ -60,6 +60,10 @@ func (c *Config) Clone() *Config {
 		if conn.Permissions != nil && copied.Permissions == nil {
 			copied.Permissions = []Permission{}
 		}
+		copied.Tools = append([]string(nil), conn.Tools...)
+		if conn.Tools != nil && copied.Tools == nil {
+			copied.Tools = []string{}
+		}
 		out.Connections[name] = copied
 	}
 	if c.Defaults.Connections != nil {

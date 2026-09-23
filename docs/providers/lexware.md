@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-09-12
+updated: 2026-09-23
 ---
 
 # Lexware Office
@@ -16,3 +16,5 @@ or finalize it immediately (`create`), always with confirmation.
 Lexware's public invoice API does not expose update or delete endpoints. Finalized invoices are no longer
 editable, so Qatlas does not invent uniform CRUD operations. The credential provides `api-key`; local
 connection permissions may restrict that key but never extend its Lexware contract or organization rights.
+An optional `tools` list narrows a connection further to named tools, for example
+`[lexware.invoices.get]`, and never admits an effect `permissions` excludes.

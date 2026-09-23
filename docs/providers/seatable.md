@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-09-13
+updated: 2026-09-23
 ---
 
 # SeaTable
@@ -32,4 +32,6 @@ mutation to another table.
 
 The credential provides `api-token`. Use provider permission `r` for read-only connections and `rw` when
 writes are intended. The local `permissions` list is a separate ceiling and cannot turn an `r` token into a
-writer. Qatlas exchanges the API token for a short-lived base token in memory.
+writer. An optional `tools` list narrows a connection further to named tools, for example
+`[seatable.rows.list]`; it never admits an effect `permissions` excludes and never widens the table scope.
+Qatlas exchanges the API token for a short-lived base token in memory.

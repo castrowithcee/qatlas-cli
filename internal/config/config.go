@@ -63,6 +63,11 @@ type Credential struct {
 // Connection binds exactly one service to exactly one credential. Target is an optional provider-specific
 // scope inside that service.
 //
+// Permissions and Tools are two independent local allow-lists, and an operation is offered only when both
+// admit it. Permissions admits operation effects. Tools, when present, admits individual provider-qualified
+// operation IDs of this connection's provider; missing keeps every operation the permissions admit, and an
+// explicit empty list admits none. A tool registered later is never added to an existing list.
+//
 // Description is optional prose the user maintains. A name like "personal" or "crm-internal" is a stable
 // selector, not an explanation, so this one line says what the route is for and lets a reader tell two
 // routes of one provider apart. Discovery publishes it verbatim and nothing is ever sent to a provider,
@@ -74,11 +79,12 @@ type Connection struct {
 	Targets     []string     `yaml:"targets,omitempty"`
 	Description string       `yaml:"description,omitempty"`
 	Permissions []Permission `yaml:"permissions,omitempty"`
+	Tools       []string     `yaml:"tools,omitempty"`
 }
 
-// MarshalYAML preserves the semantic difference between a missing permissions field (provider
-// compatibility default) and an explicit empty list (deny all). A plain omitempty slice cannot represent
-// both states when a configuration is saved through the TUI.
+// MarshalYAML preserves the semantic difference between a missing permissions or tools field (provider
+// compatibility default, or every tool the permissions admit) and an explicit empty list (deny all). A plain
+// omitempty slice cannot represent both states when a configuration is saved through the TUI.
 func (c Connection) MarshalYAML() (any, error) {
 	type wire struct {
 		Service     string        `yaml:"service"`
@@ -87,14 +93,20 @@ func (c Connection) MarshalYAML() (any, error) {
 		Targets     []string      `yaml:"targets,omitempty"`
 		Description string        `yaml:"description,omitempty"`
 		Permissions *[]Permission `yaml:"permissions,omitempty"`
+		Tools       *[]string     `yaml:"tools,omitempty"`
 	}
 	var permissions *[]Permission
 	if c.Permissions != nil {
 		copy := append(make([]Permission, 0, len(c.Permissions)), c.Permissions...)
 		permissions = &copy
 	}
+	var tools *[]string
+	if c.Tools != nil {
+		copy := append(make([]string, 0, len(c.Tools)), c.Tools...)
+		tools = &copy
+	}
 	return wire{Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
-		Description: c.Description, Permissions: permissions}, nil
+		Description: c.Description, Permissions: permissions, Tools: tools}, nil
 }
 
 // Defaults holds the connection chosen for a domain when no connection is given explicitly.
@@ -376,7 +388,7 @@ func (c *Config) Validate() error {
 			seenPermissions[permission] = true
 		}
 		if ok {
-			metadata, _ := providers.ProviderMetadata(service.Provider)
+			metadata, known := providers.ProviderMetadata(service.Provider)
 			targets := conn.TargetValues()
 			if metadata.Target.Required && len(targets) == 0 {
 				report("connections.%s.target: provider %q requires %s", name, service.Provider,
@@ -405,6 +417,9 @@ func (c *Config) Validate() error {
 				report("connections.%s.targets: wildcard %q must be the only target", name,
 					metadata.Target.Wildcard)
 			}
+			if known && conn.Tools != nil {
+				c.validateTools(name, service.Provider, metadata, report)
+			}
 		}
 	}
 
@@ -417,6 +432,47 @@ func (c *Config) Validate() error {
 	}
 
 	return errors.Join(problems...)
+}
+
+// validateTools checks the tools allow-list of one connection against the tools its provider registered.
+// Every entry must be a registered tool of that provider, listed once, whose effect the connection's
+// permissions admit: an entry the permissions exclude could never be offered, so it is refused rather than
+// kept as a line that reads like a grant. Only registered IDs are quoted; an unknown entry is named by its
+// position, because free text in a configuration file is where a pasted secret ends up.
+func (c *Config) validateTools(name, provider string, metadata ProviderMetadata, report func(string, ...any)) {
+	effects := map[string]Permission{}
+	for _, tool := range metadata.Tools {
+		effects[tool.ID] = tool.Effect
+	}
+	owners := map[string]string{}
+	for _, other := range c.providerCatalog().ProviderMetadataAll() {
+		for _, tool := range other.Tools {
+			owners[tool.ID] = other.ID
+		}
+	}
+	permitted := map[Permission]bool{}
+	for _, permission := range c.ConnectionPermissions(name) {
+		permitted[permission] = true
+	}
+	seen := map[string]bool{}
+	for i, tool := range c.Connections[name].Tools {
+		effect, registered := effects[tool]
+		switch {
+		case registered && seen[tool]:
+			report("connections.%s.tools: tool %q is listed more than once", name, tool)
+		case registered && !permitted[effect]:
+			report("connections.%s.tools: tool %q has effect %s, which the connection's permissions do not "+
+				"allow", name, tool, effect)
+		case registered:
+		case owners[tool] != "":
+			report("connections.%s.tools: tool %q belongs to provider %q, not to %q", name, tool,
+				owners[tool], provider)
+		default:
+			report("connections.%s.tools: entry %d is not a registered tool of provider %q", name, i+1,
+				provider)
+		}
+		seen[tool] = true
+	}
 }
 
 // TargetValues returns the configured target boundary in declaration order. Existing single-target
@@ -540,8 +596,14 @@ func (c *Config) ConnectionPermissions(name string) []Permission {
 	return []Permission{PermissionRead}
 }
 
-// ConnectionAllows reports whether the local configuration exposes one operation effect on a connection.
-func (c *Config) ConnectionAllows(name, effect string) bool {
+// ConnectionAllows reports whether the local configuration exposes one operation on a connection: its
+// effect must be among the connection's permissions and, when the connection lists tools, its ID among
+// them. Every discovery and invoke path asks this one question, so none of them can offer what another
+// refuses.
+func (c *Config) ConnectionAllows(name, tool, effect string) bool {
+	if conn, ok := c.Connections[name]; !ok || (conn.Tools != nil && !contains(conn.Tools, tool)) {
+		return false
+	}
 	for _, permission := range c.ConnectionPermissions(name) {
 		if string(permission) == effect {
 			return true

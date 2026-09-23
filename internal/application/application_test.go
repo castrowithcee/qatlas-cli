@@ -96,6 +96,139 @@ func TestConnectionPermissionsFilterDiscoveryAndDirectInvoke(t *testing.T) {
 	}
 }
 
+// A connection's tools list narrows what its permissions admit, and every path answers the same: search,
+// its pages, the tool index, describe, route selection and invoke. Two connections over one service and one
+// credential keep separate lists, and an operation registered after the list was written is not in it.
+func TestConnectionToolsFilterEveryPathTheSameWay(t *testing.T) {
+	var handlerCalls, secretReads int
+	handler := capability.Handler(func(_ context.Context, resolved *config.Resolved, resolver *secret.Resolver,
+		_ *redact.Redactor, _ json.RawMessage) (any, error) {
+		handlerCalls++
+		if _, err := resolver.Resolve(resolved.Credential, resolved.Secrets, "token"); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, nil
+	})
+	get := testDescriptor("fake.pages.get", capability.EffectRead, capability.ConfirmationNone)
+	list := testDescriptor("fake.pages.list", capability.EffectRead, capability.ConfirmationNone)
+	registry := capability.NewRegistry()
+	if err := registry.Register("fake",
+		capability.Operation{Descriptor: get, Handler: handler},
+		capability.Operation{Descriptor: list, Handler: handler},
+	); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.New()
+	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["shared"] = config.Credential{
+		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
+	}
+	read := []config.Permission{config.PermissionRead}
+	cfg.Connections["getter"] = config.Connection{
+		Service: "service", Credential: "shared", Permissions: read, Tools: []string{"fake.pages.get"},
+	}
+	cfg.Connections["lister"] = config.Connection{
+		Service: "service", Credential: "shared", Permissions: read, Tools: []string{"fake.pages.list"},
+	}
+	cfg.Connections["closed"] = config.Connection{
+		Service: "service", Credential: "shared", Permissions: read, Tools: []string{},
+	}
+	cfg.Connections["open"] = config.Connection{Service: "service", Credential: "shared", Permissions: read}
+	resolver := secret.NewWith(func(string) string { secretReads++; return "test-token" }, nil, nil, nil)
+	core := New(registry, cfg, resolver, nil)
+
+	searched, err := core.Search(SearchRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes := map[string][]string{}
+	for _, hit := range searched.Operations {
+		routes[hit.ID] = hit.Connections
+	}
+	if want := map[string][]string{
+		"fake.pages.get": {"getter", "open"}, "fake.pages.list": {"lister", "open"},
+	}; !reflect.DeepEqual(routes, want) {
+		t.Fatalf("search routes = %v, want %v", routes, want)
+	}
+	for connection, want := range map[string][]string{
+		"getter": {"fake.pages.get"}, "lister": {"fake.pages.list"}, "closed": nil,
+		"open": {"fake.pages.get", "fake.pages.list"},
+	} {
+		var paged []string
+		for _, page := range searchAll(t, core, SearchRequest{Connection: connection, Limit: 1}) {
+			for _, hit := range page.Operations {
+				paged = append(paged, hit.ID)
+			}
+		}
+		tools, err := core.Tools(SearchRequest{Connection: connection})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var indexed []string
+		for _, tool := range tools.Tools {
+			indexed = append(indexed, tool.ID)
+		}
+		if !reflect.DeepEqual(paged, want) || !reflect.DeepEqual(indexed, want) {
+			t.Errorf("%s: search pages = %v, tools = %v, want %v", connection, paged, indexed, want)
+		}
+	}
+	described, err := core.Describe(DescribeRequest{Operation: "fake.pages.list"})
+	if err != nil || !reflect.DeepEqual(described.Connections, []ConnectionRef{{Name: "lister"}, {Name: "open"}}) {
+		t.Fatalf("Describe(list) = %+v, %v", described.Connections, err)
+	}
+	var unsupported *capability.UnsupportedError
+	if _, err := core.Describe(DescribeRequest{Operation: "fake.pages.list", Connection: "getter"}); !errors.As(err, &unsupported) {
+		t.Fatalf("Describe(list, getter) = %T %v, want *capability.UnsupportedError", err, err)
+	}
+	for _, connection := range []string{"getter", "closed"} {
+		_, err := core.Invoke(context.Background(), InvokeRequest{
+			Operation: "fake.pages.list", Connection: connection, Arguments: json.RawMessage(`{"id":"1"}`),
+		})
+		if !errors.As(err, &unsupported) {
+			t.Fatalf("Invoke(list, %s) = %T %v, want *capability.UnsupportedError", connection, err, err)
+		}
+	}
+	// Without an explicit connection the route is chosen among the connections that offer the tool only.
+	_, err = core.Invoke(context.Background(), InvokeRequest{
+		Operation: "fake.pages.list", Arguments: json.RawMessage(`{"id":"1"}`),
+	})
+	var ambiguous *ConnectionAmbiguousError
+	if !errors.As(err, &ambiguous) || !reflect.DeepEqual(ambiguous.Connections, []string{"lister", "open"}) {
+		t.Fatalf("Invoke(list) = %T %v, want a choice between lister and open", err, err)
+	}
+	cfg.Defaults.Connections["fake"] = "getter"
+	_, err = core.Invoke(context.Background(), InvokeRequest{
+		Operation: "fake.pages.list", Arguments: json.RawMessage(`{"id":"1"}`),
+	})
+	if !errors.As(err, &unsupported) {
+		t.Fatalf("Invoke(list) over a default without the tool = %T %v", err, err)
+	}
+	delete(cfg.Defaults.Connections, "fake")
+	if handlerCalls != 0 || secretReads != 0 {
+		t.Fatalf("refused requests reached the provider: handler calls=%d secret reads=%d", handlerCalls, secretReads)
+	}
+	if _, err := core.Invoke(context.Background(), InvokeRequest{
+		Operation: "fake.pages.get", Connection: "getter", Arguments: json.RawMessage(`{"id":"1"}`),
+	}); err != nil || handlerCalls != 1 {
+		t.Fatalf("Invoke(get, getter) = %v, handler calls=%d", err, handlerCalls)
+	}
+
+	search := testDescriptor("fake.pages.search", capability.EffectRead, capability.ConfirmationNone)
+	if err := registry.Register("fake", capability.Operation{Descriptor: search, Handler: handler}); err != nil {
+		t.Fatal(err)
+	}
+	described, err = core.Describe(DescribeRequest{Operation: "fake.pages.search"})
+	if err != nil || !reflect.DeepEqual(described.Connections, []ConnectionRef{{Name: "open"}}) {
+		t.Fatalf("Describe(new tool) = %+v, %v; only the connection without a tools list may offer it",
+			described.Connections, err)
+	}
+	if _, err := core.Invoke(context.Background(), InvokeRequest{
+		Operation: "fake.pages.search", Connection: "getter", Arguments: json.RawMessage(`{"id":"1"}`),
+	}); !errors.As(err, &unsupported) || handlerCalls != 1 {
+		t.Fatalf("Invoke(new tool, getter) = %T %v, handler calls=%d", err, err, handlerCalls)
+	}
+}
+
 // Search stays bounded for the request-bound agent surface, while Tools answers the complete catalog the
 // CLI publishes. Both apply the same filters to the same data, but Tools publishes only what choosing a
 // tool needs: the ID, the title, and the effect.

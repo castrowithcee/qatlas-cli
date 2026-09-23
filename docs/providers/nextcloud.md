@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-09-12
+updated: 2026-09-23
 ---
 
 # Nextcloud
@@ -16,4 +16,6 @@ recursive folder deletion; parent folders must already exist.
 
 Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the configured
 root. Connection permissions independently hide and block operations, while the identity's WebDAV rights
-remain the provider-side ceiling. File content is carried as base64 and never written to audit records.
+remain the provider-side ceiling. An optional `tools` list narrows a connection further to named tools, for
+example `[nextcloud.files.list, nextcloud.files.stat]` for metadata without file content, and never admits
+an effect `permissions` excludes. File content is carried as base64 and never written to audit records.

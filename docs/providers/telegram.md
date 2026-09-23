@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-09-12
+updated: 2026-09-23
 ---
 
 # Telegram
@@ -14,5 +14,7 @@ delete (`delete`) messages in that chat. The chat ID never comes from invocation
 operation requires confirmation. Telegram's own edit and delete restrictions still apply.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
-they do not broaden the bot's provider-side rights. Mutations are never retried after an ambiguous network
+they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
+to named tools, for example `[telegram.messages.send]` for a chat that may receive but never lose messages,
+and never admits an effect `permissions` excludes. Mutations are never retried after an ambiguous network
 result, preventing duplicate sends or unplanned repeated changes.

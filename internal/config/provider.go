@@ -73,13 +73,23 @@ type TargetMetadata struct {
 	WildcardWarning string
 }
 
-// ProviderMetadata is the configuration contract of one compiled provider.
+// ToolMetadata is the configuration view of one registered operation: the ID a connection's tools list
+// names, a title for editors, and the effect the connection's permissions must allow as well.
+type ToolMetadata struct {
+	ID     string
+	Title  string
+	Effect Permission
+}
+
+// ProviderMetadata is the configuration contract of one compiled provider. SupportedPermissions and Tools
+// are derived from the registered operations, sorted by effect order and by ID, and never declared by hand.
 type ProviderMetadata struct {
 	ID                   string
 	Name                 string
 	DefaultBaseURL       string
 	DefaultPermissions   []Permission
 	SupportedPermissions []Permission
+	Tools                []ToolMetadata
 	SecretRoles          []SecretRole
 	Target               TargetMetadata
 }

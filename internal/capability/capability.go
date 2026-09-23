@@ -221,6 +221,7 @@ func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 	metadata.SecretRoles = append([]config.SecretRole(nil), metadata.SecretRoles...)
 	metadata.DefaultPermissions = append([]config.Permission(nil), metadata.DefaultPermissions...)
 	metadata.SupportedPermissions = append([]config.Permission(nil), metadata.SupportedPermissions...)
+	metadata.Tools = append([]config.ToolMetadata(nil), metadata.Tools...)
 	return metadata
 }
 
@@ -294,6 +295,14 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 		if seenEffects[permission] {
 			metadata.SupportedPermissions = append(metadata.SupportedPermissions, permission)
 		}
+	}
+	// The tool list is what configuration validates a connection's tools against and what an editor
+	// offers, so both follow the registered operations instead of a list of their own.
+	metadata.Tools = metadata.Tools[:0]
+	for _, descriptor := range sorted(r.byProvider[provider]) {
+		metadata.Tools = append(metadata.Tools, config.ToolMetadata{
+			ID: descriptor.ID, Title: descriptor.Title, Effect: config.Permission(descriptor.Risk.Effect),
+		})
 	}
 	r.metadata[provider] = metadata
 	return nil

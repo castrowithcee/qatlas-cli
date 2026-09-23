@@ -167,6 +167,15 @@ credentials:
 # compatibility default preserves only operations that existed before connection permissions were added.
 # An explicit YAML list `permissions: []` disables the connection without deleting it; the TUI spells
 # this value `none` and uses an empty field for the compatibility default.
+#
+# tools is an optional second allow-list of complete tool IDs of this connection's provider, as listed by
+# 'qatlas tools <provider>'. A tool is offered only when both lists admit it: tools never grants an effect
+# that permissions excludes, and it never widens what the provider credential or the target allows. When
+# tools is omitted, every tool whose effect permissions allows is offered, including tools a later version
+# adds. A listed connection offers exactly the listed tools, and a tool added later joins only when you add
+# it. `tools: []` offers no tool at all. Every entry must be a registered tool of the connection's provider,
+# listed once, with an effect that permissions allows; anything else makes the file invalid. Each connection
+# keeps its own lists, even when it shares the provider, the service, or the credential with another one.
 connections:
   wiki:
     service: wiki-primary
@@ -174,12 +183,14 @@ connections:
     description: the live team wiki, everyone reads this one
     permissions: [read, create, update, delete]
 
-  # The same service with a different key, for example a more restricted account.
+  # The same service with a different key, for example a more restricted account. Its tools list offers
+  # reading single pages and listing them, but no other read tool the provider adds later.
   wiki-audit:
     service: wiki-primary
     credential: wiki-auditor
     description: the same instance read with the restricted audit account
     permissions: [read]
+    tools: [bookstack.pages.get, bookstack.pages.list]
 
   # A different service reusing the same credential, optionally scoped with target.
   archive:

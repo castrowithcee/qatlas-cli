@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-09-12
+updated: 2026-09-23
 ---
 
 # BookStack
@@ -15,4 +15,7 @@ Create requires exactly one `book_id` or `chapter_id`; all mutations require con
 
 Credentials provide `token-id` and `token-secret`. The connection's `permissions` list is an independent
 local ceiling: it may hide and block operations even when the BookStack token could perform them, but it
-cannot grant rights the token lacks. Page content is bounded to 1 MiB and treated as untrusted data.
+cannot grant rights the token lacks. An optional `tools` list narrows a connection further to named tools,
+for example `[bookstack.pages.get]` for a route that reads a known page but cannot list pages; it never
+admits an effect `permissions` excludes. Page content is bounded to 1 MiB and
+treated as untrusted data.

@@ -29,6 +29,10 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Short: "Check that the configuration file is complete and consistent",
 		Long: "Validate reads the configuration file and reports every schema and reference problem it\n" +
 			"finds. It contacts no provider and reads no secret values. Success is silent.\n\n" +
+			"A connection's optional tools list names complete tool IDs of its provider, as 'qatlas tools\n" +
+			"<provider>' lists them. Every entry must be a tool this build registers for that provider,\n" +
+			"listed once, with an effect the connection's permissions allow. An unknown entry is reported\n" +
+			"by its position, never quoted.\n\n" +
 			"With --secrets it additionally resolves the secrets of every connection and reports which\n" +
 			"source delivers each of them, so an environment variable that overrides the credential store\n" +
 			"is visible instead of silent. It prints where a secret comes from, never what it is, and it\n" +
