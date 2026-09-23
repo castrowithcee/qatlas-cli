@@ -166,7 +166,7 @@ const (
 	// tool added by a later version joins only the first mode, and an empty selection closes the route.
 	toolsHint = "all allowed by permissions also offers tools a later version adds, but never a tool marked " +
 		"listed only; only selected tools offers exactly the tools ticked below, and none ticked offers no tool at all"
-	toolListHint = "space or / opens this provider's tools; a tool is offered only when the permissions " +
+	toolListHint = "enter opens this provider's tools to tick; a tool is offered only when the permissions " +
 		"above allow its effect as well"
 	toolListOffHint = "not used while every tool the permissions allow is offered; choose only selected " +
 		"tools above to pick them"
@@ -289,8 +289,8 @@ type Model struct {
 	// picker holds the values of the focused choice row while it is searched. The row itself changes only
 	// when a value is taken.
 	picker filterList
-	// pickerMarks holds the ticks of a tool list while its picker is open, and is nil for a single choice.
-	// The row takes them over only when they are kept.
+	// pickerMarks holds the ticks of a tool list or the permissions while their picker is open, and is nil
+	// for a single choice. The row takes them over only when they are kept.
 	pickerMarks map[string]bool
 	// providers is the table of the focused provider row while it is open.
 	providers providerTable
@@ -848,11 +848,25 @@ func (m *Model) saveAndLeave() tea.Cmd {
 }
 
 func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
-	if m.fields[m.focus].kind == fieldProvider {
-		// A provider row is chosen in its table only; enter opens it rather than saving past it.
+	if key.String() == "ctrl+s" {
+		// ctrl+s saves, or goes on to the next setup step, from any row, since enter on a choice row opens it.
+		if m.wizard != nil {
+			m.setupNext()
+			return nil
+		}
+		return m.submit()
+	}
+	switch m.fields[m.focus].kind {
+	case fieldProvider, fieldChoice, fieldMultiChoice, fieldToolList:
+		// Every choice row opens its values on enter, space, and /, the way a provider row opens its table,
+		// rather than saving past it or going on to the next setup step.
 		switch key.String() {
 		case "enter", " ", "/":
-			m.openProviderTable()
+			if m.fields[m.focus].kind == fieldProvider {
+				m.openProviderTable()
+			} else {
+				m.openPicker()
+			}
 			return nil
 		}
 	}
@@ -887,42 +901,23 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	current := &m.fields[m.focus]
 	switch current.kind {
 	case fieldChoice:
+		// left/right step through the values in place, a quick way on a row of few values.
 		previous := current.value()
 		switch key.String() {
 		case "left", "h":
 			current.index = wrap(current.index-1, len(current.choices))
 		case "right", "l":
 			current.index = wrap(current.index+1, len(current.choices))
-		case "/":
-			m.openPicker()
-			return nil
 		default:
 			return nil
 		}
 		return m.choiceChanged(previous)
-	case fieldMultiChoice:
-		switch key.String() {
-		case "left", "h":
-			current.index = wrap(current.index-1, len(current.choices))
-		case "right", "l":
-			current.index = wrap(current.index+1, len(current.choices))
-		case " ":
-			current.toggleChoice()
-		default:
-			return nil
-		}
-		return nil
-	case fieldProvider:
-		// Its table opened above; no other key changes a provider row.
+	case fieldProvider, fieldMultiChoice, fieldToolList:
+		// Their values opened above; no other key changes them.
 		return nil
 	case fieldSecret:
 		// A secret row holds nothing to type into, so its keys are free for what a secret needs.
 		return m.secretRowKey(current.label, key)
-	case fieldToolList:
-		if key.String() == " " || key.String() == "/" {
-			m.openPicker()
-		}
-		return nil
 	}
 	if current.readOnly {
 		return nil
@@ -963,11 +958,6 @@ func (m *Model) choiceChanged(previous string) tea.Cmd {
 	return nil
 }
 
-// pickerThreshold is the number of values from which the form points out the picker of a choice row. Fewer
-// values are quicker to step through with left/right; the picker opens on any choice row all the same. A
-// provider row has no such threshold: it is always chosen in its table.
-const pickerThreshold = 8
-
 // openPicker opens the searchable list of the focused choice row, on its current value, with the filter
 // ready for typing.
 func (m *Model) openPicker() {
@@ -976,11 +966,14 @@ func (m *Model) openPicker() {
 		return
 	}
 	m.picker.text, m.pickerMarks = choiceText, nil
-	if f.kind == fieldToolList {
-		m.picker.text, m.pickerMarks = m.toolText, map[string]bool{}
+	if f.kind == fieldToolList || f.kind == fieldMultiChoice {
+		m.pickerMarks = map[string]bool{}
 		for choice, marked := range f.selected {
 			m.pickerMarks[choice] = marked
 		}
+	}
+	if f.kind == fieldToolList {
+		m.picker.text = m.toolText
 	}
 	m.picker.reset(f.choices)
 	m.picker.selectName(f.value())
@@ -993,12 +986,12 @@ func (m *Model) openPicker() {
 // value and esc leaves the row as it was.
 func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 	if m.pickerMarks != nil {
-		// A tool list takes any number of values: space ticks the selected one instead of typing a blank,
-		// which no tool ID contains, and enter keeps every tick at once.
+		// A tool list or the permissions take any number of values: space ticks the selected one instead of
+		// typing a blank, which no tool ID or permission contains, and enter keeps every tick at once.
 		switch key.String() {
 		case " ":
 			if choice, ok := m.picker.selected(); ok {
-				m.pickerMarks[choice] = !m.pickerMarks[choice]
+				toggleMark(m.pickerMarks, choice, m.fields[m.focus].kind == fieldMultiChoice)
 			}
 			return nil
 		case "enter":
@@ -1413,7 +1406,7 @@ func (m *Model) permissionHint(provider string) string {
 	for i, permission := range permissions {
 		defaults[i] = string(permission)
 	}
-	return "space toggles the local agent permissions offered by this provider; default currently means " +
+	return "enter opens the local agent permissions offered by this provider to tick; default currently means " +
 		strings.Join(defaults, ", ") + "; selecting none denies every operation"
 }
 
@@ -1461,7 +1454,6 @@ func (m *Model) replacePermissionChoices(provider string) {
 			}
 		}
 	}
-	f.index = 0
 	f.hint = m.permissionHint(provider)
 }
 
@@ -2060,8 +2052,8 @@ func (m *Model) moveFocus(by int) {
 
 // firstEditable is where a form opens. A form whose first field is locked opens on the first field that
 // takes input, so the user starts where typing has an effect. A provider row is passed over while another
-// row takes input: enter on it opens the provider table, and a form opened to change something else must
-// still save with enter.
+// row takes input: it decides what every other row offers, and a form opened to change something else
+// should not start on it.
 func (m *Model) firstEditable() int {
 	first := -1
 	for i := range m.fields {
@@ -2177,23 +2169,24 @@ func permissionField(choices []string, permissions []config.Permission) field {
 	return f
 }
 
-func (f *field) toggleChoice() {
-	if f.index < 0 || f.index >= len(f.choices) {
-		return
-	}
-	choice := f.choices[f.index]
-	if choice == "default" {
-		if f.selected["default"] {
-			f.selected = map[string]bool{}
-		} else {
-			f.selected = map[string]bool{"default": true}
+// toggleMark ticks or unticks one value of a set of ticks. In the permissions, default stands for the
+// provider's own set, so ticking it drops every explicit permission and ticking one of those drops default.
+func toggleMark(marks map[string]bool, choice string, permissions bool) {
+	if permissions && choice == "default" {
+		wasDefault := marks["default"]
+		clear(marks)
+		if !wasDefault {
+			marks["default"] = true
 		}
 		return
 	}
-	delete(f.selected, "default")
-	f.selected[choice] = !f.selected[choice]
-	if !f.selected[choice] {
-		delete(f.selected, choice)
+	if permissions {
+		delete(marks, "default")
+	}
+	if marks[choice] {
+		delete(marks, choice)
+	} else {
+		marks[choice] = true
 	}
 }
 
@@ -2358,18 +2351,14 @@ func (m *Model) buildEditorView(dense bool) string {
 				b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 			}
 		}
-		keys := "tab move · left/right choose · " + formKeys
-		if f := m.fields[m.focus]; f.kind == fieldChoice && len(f.choices) >= pickerThreshold {
-			keys = "/ search · " + keys
-		}
-		if m.fields[m.focus].kind == fieldMultiChoice {
-			keys = "left/right choose · space toggle · tab move · " + formKeys
-		}
-		if m.fields[m.focus].kind == fieldToolList {
-			keys = "space or / pick tools · tab move · " + formKeys
-		}
-		if m.fields[m.focus].kind == fieldProvider {
-			keys = "enter choose provider in the table · tab move · " + leaveKeys
+		keys := "tab move · " + formKeys
+		switch m.fields[m.focus].kind {
+		case fieldChoice:
+			keys = "enter choose · left/right switch · tab move · " + choiceFormKeys
+		case fieldMultiChoice, fieldToolList:
+			keys = "enter tick · tab move · " + choiceFormKeys
+		case fieldProvider:
+			keys = "enter choose provider in the table · tab move · " + choiceFormKeys
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
@@ -2379,7 +2368,8 @@ func (m *Model) buildEditorView(dense bool) string {
 			}
 		}
 		if m.wizard != nil {
-			keys = strings.Replace(keys, formKeys, setupKeys(m.wizard.step), 1)
+			keys = strings.Replace(keys, formKeys, setupKeys(m.wizard.step, "enter"), 1)
+			keys = strings.Replace(keys, choiceFormKeys, setupKeys(m.wizard.step, "ctrl+s"), 1)
 		}
 		b.WriteString(m.hint(keys))
 	case screenPlaintextConfirm:
@@ -2438,10 +2428,12 @@ func (m *Model) buildEditorView(dense bool) string {
 
 // formKeys ends the key line of every form: how it is saved and, in leaveKeys, the two ways out of it, both
 // of which ask before unsaved input is lost. A section key in a form carries alt, because the digits are
-// text there.
+// text there. On a choice row enter opens the values, so choiceFormKeys names ctrl+s, which saves from
+// every row.
 const (
-	leaveKeys = "esc leave · alt+1-4 section"
-	formKeys  = "enter save · " + leaveKeys
+	leaveKeys      = "esc leave · alt+1-4 section"
+	formKeys       = "enter save · " + leaveKeys
+	choiceFormKeys = "ctrl+s save · " + leaveKeys
 )
 
 // leaveView is the leave question. It names what would be lost and where the user was going, and offers
@@ -2641,7 +2633,7 @@ func (m *Model) pickerRow(i int) string {
 		if m.pickerMarks[choice] {
 			mark = "[x] "
 		}
-		return m.row(i == m.picker.cursor, mark+m.toolText(choice))
+		return m.row(i == m.picker.cursor, mark+m.picker.text(choice))
 	}
 	text := choiceText(choice)
 	if choice == m.fields[m.focus].value() {
@@ -3234,9 +3226,6 @@ func (m *Model) renderField(f field, focused bool) string {
 				mark = "x"
 			}
 			parts[i] = "[" + mark + "] " + choice
-			if focused && i == f.index {
-				parts[i] = "<" + parts[i] + ">"
-			}
 		}
 		// A box is never split from its value: the row breaks between the values only.
 		var lines []string

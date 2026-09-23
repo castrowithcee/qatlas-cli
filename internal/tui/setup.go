@@ -560,11 +560,11 @@ func (m *Model) setupError(err error) string {
 	return err.Error() + "; the configuration was not changed"
 }
 
-func setupKeys(step int) string {
+func setupKeys(step int, next string) string {
 	if step == stepProvider {
-		return "enter next · esc cancel setup"
+		return next + " next · esc cancel setup"
 	}
-	return "enter next · ctrl+b back · esc cancel setup · alt+1-4 section"
+	return next + " next · ctrl+b back · esc cancel setup · alt+1-4 section"
 }
 
 // setupHeading is the title of the current step and what it decides.

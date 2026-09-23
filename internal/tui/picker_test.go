@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -53,7 +54,7 @@ func countingPress(t *testing.T, m *Model, keys ...string) int {
 }
 
 // Any one of many values is reached by typing a part of it, not by stepping through all values before it,
-// and the choice is saved like one made with left/right.
+// and the choice is saved like one made with left/right. The key line names enter on the row whatever its size.
 func TestThePickerReachesOneOfManyConnectionsDirectly(t *testing.T) {
 	m, _, path := newModel(t)
 	names := numberedConnections(60)
@@ -63,7 +64,7 @@ func TestThePickerReachesOneOfManyConnectionsDirectly(t *testing.T) {
 	if got := m.fieldValue("connection"); got != names[0] {
 		t.Fatalf("connection = %q, want the first value %q", got, names[0])
 	}
-	if view := screenOf(m); !strings.Contains(view, "/ search") {
+	if view := screenOf(m); !strings.Contains(view, "enter choose") {
 		t.Errorf("a row of %d values does not point out the picker:\n%s", len(names), view)
 	}
 
@@ -94,7 +95,7 @@ func TestThePickerReachesOneOfManyConnectionsDirectly(t *testing.T) {
 		t.Fatalf("connection = %q, want conn-047", got)
 	}
 
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("saving reported %q", m.fail)
 	}
@@ -184,8 +185,8 @@ func TestThePickerCancelsCompletelyAndTakesOnlyAShownValue(t *testing.T) {
 	}
 }
 
-// A small row keeps its direct way: left/right changes it in place, no dialog opens, and the form does not
-// point to a picker it does not need. A provider row is the exception: it is always chosen in its table.
+// A small row keeps its direct way: left/right changes it in place, no dialog opens, and the key line names
+// it next to enter. A provider row is the exception: it is always chosen in its table.
 func TestASmallChoiceKeepsLeftAndRight(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
@@ -205,8 +206,8 @@ func TestASmallChoiceKeepsLeftAndRight(t *testing.T) {
 	if got := m.credentialType(); got != before {
 		t.Errorf("left moved to %q, want back to %q", got, before)
 	}
-	if view := screenOf(m); strings.Contains(view, "/ search") {
-		t.Errorf("a row of %d values points to the picker:\n%s", len(m.fields[m.focus].choices), view)
+	if view := screenOf(m); !strings.Contains(view, "enter choose · left/right switch") {
+		t.Errorf("the key line does not name both ways:\n%s", view)
 	}
 }
 
@@ -258,5 +259,147 @@ func TestThePickerFitsASmallTerminal(t *testing.T) {
 	}
 	if got := m.fieldValue("connection"); got != names[0] {
 		t.Errorf("connection = %q, want %q unchanged", got, names[0])
+	}
+}
+
+// Enter, space, and / open the values of every kind of choice row in every editor, the way enter opens the
+// provider table, and none of them saves the form; esc returns to the row unchanged.
+func TestEveryChoiceRowOpensOnEnterSpaceAndSlash(t *testing.T) {
+	reg := wikiRegistry(t)
+	rows := []struct {
+		section section
+		label   string
+	}{
+		{sectionServices, providerLabel},
+		{sectionCredentials, providerLabel},
+		{sectionCredentials, storageLabel},
+		{sectionConnections, providerLabel},
+		{sectionConnections, "service"},
+		{sectionConnections, "credential"},
+		{sectionConnections, profileLabel},
+		{sectionConnections, "permissions"},
+		{sectionConnections, toolsLabel},
+		{sectionConnections, toolListLabel},
+		{sectionDefaults, "connection"},
+	}
+	for _, row := range rows {
+		for _, key := range []string{"enter", " ", "/"} {
+			m, path := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
+			openSectionByName(t, m, row.section)
+			press(t, m, "n")
+			typeText(t, m, "fresh")
+			focusField(t, m, row.label)
+			before, err := os.ReadFile(path)
+			mustNoError(t, err)
+			value := m.fieldValue(row.label)
+
+			pump(t, m, key)
+			want := screenPicker
+			if row.label == providerLabel {
+				want = screenProviders
+			}
+			if m.screen != want {
+				t.Fatalf("%q on %v %s opened screen %v, want %v", key, row.section, row.label, m.screen, want)
+			}
+			if after, err := os.ReadFile(path); err != nil || string(after) != string(before) || m.fail != "" {
+				t.Fatalf("%q on %v %s wrote the file or failed: %v %q", key, row.section, row.label, err, m.fail)
+			}
+			press(t, m, "esc")
+			if m.screen != screenForm || m.fields[m.focus].label != row.label || m.fieldValue(row.label) != value {
+				t.Fatalf("esc after %q on %v %s left screen %v on %q with %q", key, row.section, row.label,
+					m.screen, m.fields[m.focus].label, m.fieldValue(row.label))
+			}
+		}
+	}
+}
+
+// ctrl+s saves from a choice row, where enter opens the values instead.
+func TestCtrlSSavesFromAChoiceRow(t *testing.T) {
+	reg := wikiRegistry(t)
+	m, path := toolsModel(t, reg, nil)
+	openSectionByName(t, m, sectionConnections)
+	press(t, m, "n")
+	typeText(t, m, "fresh")
+	focusField(t, m, "permissions")
+	if view := screenOf(m); !strings.Contains(view, "enter tick · tab move · ctrl+s save") {
+		t.Errorf("the key line of a multiselect row does not name its keys:\n%s", view)
+	}
+	pump(t, m, "ctrl+s")
+	if m.fail != "" {
+		t.Fatalf("ctrl+s reported %q", m.fail)
+	}
+	if got := savedConnection(t, path, reg, "fresh"); got.Service != "wiki" {
+		t.Fatalf("ctrl+s saved %+v, want the new connection", got)
+	}
+}
+
+// The permissions are ticked in the same picker as the tools: space ticks, enter keeps, esc drops, and
+// default stays exclusive of the explicit permissions.
+func TestThePermissionsAreTickedInThePicker(t *testing.T) {
+	reg := wikiRegistry(t)
+	m, _ := toolsModel(t, reg, nil)
+	openSectionByName(t, m, sectionConnections)
+	press(t, m, "n")
+	focusField(t, m, "permissions")
+	if got := m.fieldValue("permissions"); got != "read" {
+		t.Fatalf("permissions = %q, want the recommended read", got)
+	}
+	press(t, m, "enter")
+	if view := screenOf(m); !strings.Contains(view, "[x] read") || !strings.Contains(view, "space tick · enter keep") {
+		t.Fatalf("the permissions picker does not show its ticks and keys:\n%s", view)
+	}
+	typeText(t, m, "create")
+	press(t, m, " ", "esc")
+	if got := m.fieldValue("permissions"); got != "read" {
+		t.Fatalf("esc kept a tick: %q", got)
+	}
+
+	press(t, m, "enter")
+	typeText(t, m, "create")
+	press(t, m, " ", "enter")
+	if got := m.fieldValue("permissions"); got != "read, create" {
+		t.Fatalf("permissions = %q, want read, create", got)
+	}
+	press(t, m, "/")
+	typeText(t, m, "default")
+	press(t, m, " ", "enter")
+	if got := m.fieldValue("permissions"); got != "" {
+		t.Fatalf("default kept explicit permissions: %q", got)
+	}
+	press(t, m, " ")
+	typeText(t, m, "read")
+	press(t, m, " ", "enter")
+	if got := m.fieldValue("permissions"); got != "read" {
+		t.Fatalf("an explicit permission kept default: %q", got)
+	}
+}
+
+// In the guided setup enter, space, and / open a choice row and stay on the step; ctrl+s goes on from it.
+func TestAChoiceRowDoesNotAdvanceTheSetup(t *testing.T) {
+	m, _, _, _, _ := newStoreModel(t)
+	walkSetup(t, m, stepService)
+	if got := m.fields[m.focus].label; got != "service" {
+		t.Fatalf("the service step opened on %q", got)
+	}
+	for _, key := range []string{"enter", " ", "/"} {
+		press(t, m, key)
+		if m.screen != screenPicker || m.wizard.step != stepService {
+			t.Fatalf("%q on the service row opened screen %v at step %d", key, m.screen, m.wizard.step)
+		}
+		press(t, m, "esc")
+		if m.screen != screenForm || m.wizard.step != stepService {
+			t.Fatalf("esc in the picker left screen %v at step %d", m.screen, m.wizard.step)
+		}
+	}
+	if view := screenOf(m); !strings.Contains(view, "enter choose · left/right switch · tab move · ctrl+s next") {
+		t.Errorf("the key line does not name ctrl+s next:\n%s", view)
+	}
+	press(t, m, "tab")
+	typeText(t, m, "wiki")
+	press(t, m, "tab")
+	typeText(t, m, "https://wiki.example.invalid")
+	press(t, m, "shift+tab", "shift+tab", "ctrl+s")
+	if m.wizard.step != stepCredential || m.fail != "" {
+		t.Fatalf("ctrl+s on the service row went to step %d, error %q", m.wizard.step, m.fail)
 	}
 }

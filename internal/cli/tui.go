@@ -34,7 +34,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"only ever steps back one level: it clears a filter, cancels a running test, closes a picker, a\n" +
 			"table, or a question, or leaves a form.\n\n" +
 			"A form with unsaved changes is never left silently. esc or a section key first asks: s saves\n" +
-			"through the same checks as enter and goes on only when the save succeeds, d discards the changes\n" +
+			"through the same checks as ctrl+s and goes on only when the save succeeds, d discards the changes\n" +
 			"and goes on, and esc keeps editing with every input intact. An unchanged form closes at once. An\n" +
 			"unfinished guided setup can only be kept or discarded, since it saves from its summary only.\n\n" +
 			"Focus and state read without colour. The active section is marked > while the sidebar has the\n" +
@@ -78,16 +78,20 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"home/end move; enter takes the selected provider and updates the rows that depend on it, and esc\n" +
 			"leaves the provider and every row that depends on it unchanged. In the guided setup, enter goes\n" +
 			"on to the next step and esc cancels the setup, asking first once a provider was chosen. A form\n" +
-			"does not open on a provider row while another row takes input, so enter on an opened entry still\n" +
-			"saves it.\n\n" +
-			"In a form, left/right step through the values of every other choice row. / on such a row opens\n" +
-			"a searchable picker that marks the current value and filters as you type, ignoring case; up/down,\n" +
-			"pgup/pgdown and home/end move, enter takes the selected value, and esc leaves the row unchanged.\n" +
-			"The form points to / on rows with many values.\n\n" +
+			"does not open on a provider row while another row takes input.\n\n" +
+			"Every other choice row opens the same way: enter, space, or / on the row opens a searchable\n" +
+			"picker that filters as you type, ignoring case; up/down, pgup/pgdown and home/end move, and esc\n" +
+			"leaves the row unchanged. On a row that holds one value, such as service, credential, secrets,\n" +
+			"profile, tools, or the connection of a default, the picker marks the current value and enter\n" +
+			"takes the selected one; left/right also step through the values in place. On a row that holds\n" +
+			"several values, the permissions and the tool list, space ticks the selected value, enter keeps\n" +
+			"the ticks, and esc drops them. default in the permissions stands for the provider's own set, so\n" +
+			"ticking it drops the explicit permissions and ticking one of those drops default.\n\n" +
+			"enter on a text row saves the form, or goes on to the next step of the guided setup; ctrl+s does\n" +
+			"the same from every row, choice rows included. The summary of the guided setup saves with enter.\n\n" +
 			"A connection's tools row decides between every tool its permissions allow, which is how a\n" +
-			"connection without a tools list behaves, and only selected tools. In the second mode space or /\n" +
-			"on the tool list opens the tools the chosen provider registers, with their effect; space ticks\n" +
-			"the selected tool, typing filters, enter keeps the ticks and esc drops them. Nothing ticked\n" +
+			"connection without a tools list behaves, and only selected tools. In the second mode the tool\n" +
+			"list opens the tools the chosen provider registers, with their effect, to tick. Nothing ticked\n" +
 			"stores an explicit empty list, which offers no tool at all. A tool marked listed only, such as\n" +
 			"a high-risk administration tool, is offered only while it is ticked in the second mode; the first\n" +
 			"mode never offers it. A change of provider clears the ticks, because tool IDs belong to their\n" +

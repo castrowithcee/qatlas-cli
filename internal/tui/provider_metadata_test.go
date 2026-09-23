@@ -271,22 +271,21 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 		!reflect.DeepEqual(permissions.choices, wantChoices) || !permissions.selected["default"] {
 		t.Fatalf("permissions = %+v, want selectable SeaTable effects and the compatibility default", permissions)
 	}
-	permissions.toggleChoice()
+	toggleMark(permissions.selected, "default", true)
 	if got := permissions.value(); got != "none" {
 		t.Fatalf("cleared default = %q, want none", got)
 	}
-	permissions.toggleChoice()
+	toggleMark(permissions.selected, "default", true)
 	view := screenOf(m)
 	if !strings.Contains(view, "warning: All tables in this SeaTable base are exposed to the agent") {
 		t.Fatalf("wildcard view has no warning:\n%s", view)
 	}
 
-	permissions.index = indexOf(t, permissions.choices, "create")
-	permissions.toggleChoice()
+	toggleMark(permissions.selected, "create", true)
 	if got := permissions.value(); got != "create" {
 		t.Fatalf("permissions after toggle = %q", got)
 	}
-	permissions.toggleChoice()
+	toggleMark(permissions.selected, "create", true)
 	if got := permissions.value(); got != "none" {
 		t.Fatalf("empty explicit selection = %q, want none", got)
 	}

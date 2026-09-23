@@ -118,7 +118,7 @@ func TestKeyringSetupHappensEntirelyInTheEditor(t *testing.T) {
 	typeText(t, m, "knowledge")
 	press(t, m, "tab")
 	selectChoice(t, m, "wiki")
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("the editor reported %q", m.fail)
 	}
@@ -268,7 +268,7 @@ func TestTypeChangeIsRefusedWhileASecretIsStored(t *testing.T) {
 	editEntry(t, m, "reader")
 	focusField(t, m, storageLabel)
 	selectChoice(t, m, storageEnv)
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 
 	if !strings.Contains(m.fail, "token-secret") || !strings.Contains(m.fail, "still stored") {
 		t.Fatalf("error = %q, want it to name the stored role", m.fail)
@@ -633,7 +633,7 @@ func TestSlowStoreDoesNotBlockTheEditor(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	selectChoice(t, m, storageKeyring)
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("creating the credential reported %q", m.fail)
 	}
@@ -697,7 +697,7 @@ func TestSlowStatusQueryDoesNotBlockTheEditor(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	selectChoice(t, m, storageKeyring)
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 
 	// Opening the list asks the store where every keyring role resolves from.
 	m.screen = screenNav

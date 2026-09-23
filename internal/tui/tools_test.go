@@ -101,7 +101,7 @@ func TestAConnectionWithoutToolsIsSavedWithoutTools(t *testing.T) {
 	if !m.field(toolListLabel).readOnly {
 		t.Fatal("the tool list takes focus although every permitted tool is offered")
 	}
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}
@@ -166,7 +166,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	if got := m.fieldValue(toolListLabel); got != "bookstack.pages.get" {
 		t.Fatalf("tool list = %q, want bookstack.pages.get", got)
 	}
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}
@@ -183,7 +183,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	if !strings.Contains(screenOf(m), "none of 5 ticked: no tool is offered") {
 		t.Fatalf("an empty selection does not say that it closes the route:\n%s", screenOf(m))
 	}
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if got := savedTools(t, path, reg, "wiki"); got == nil || len(got) != 0 {
 		t.Fatalf("saved tools = %#v, want the explicit empty list", got)
 	}
@@ -191,7 +191,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	openEntryForm(t, m, sectionConnections, "wiki")
 	focusField(t, m, toolsLabel)
 	selectChoice(t, m, toolsAll)
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if got := savedTools(t, path, reg, "wiki"); got != nil {
 		t.Fatalf("saved tools = %#v, want no tools list", got)
 	}
@@ -208,7 +208,7 @@ func TestAToolTheFormPermissionsExcludeIsRefused(t *testing.T) {
 	press(t, m, "/")
 	typeText(t, m, "delete")
 	press(t, m, " ", "enter")
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if !strings.Contains(m.fail, `tool "bookstack.pages.delete" has effect delete`) {
 		t.Fatalf("fail = %q, want the refused effect", m.fail)
 	}
@@ -276,7 +276,7 @@ func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 	if got := m.fieldValue(toolListLabel); got != "fake.object42.list, fake.object59.list" {
 		t.Fatalf("tool list = %q", got)
 	}
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}

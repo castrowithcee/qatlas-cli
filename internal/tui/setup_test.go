@@ -51,7 +51,7 @@ func walkSetup(t *testing.T, m *Model, until int) {
 			typeText(t, m, "team wiki, read only")
 			press(t, m, "enter")
 		},
-		func() { press(t, m, "enter") },
+		func() { press(t, m, "ctrl+s") },
 	}
 	for step := 0; step < until; step++ {
 		steps[step]()
@@ -120,7 +120,7 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 	}
 	press(t, m, "enter")
 	record()
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 	record()
 	if m.screen != screenSummary {
 		t.Fatalf("screen = %v, want the summary", m.screen)
@@ -186,7 +186,7 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 	if m.fieldValue("service") != "wiki" || !m.field("name").hidden {
 		t.Fatalf("service step does not offer the configured service first: %q", m.fieldValue("service"))
 	}
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 	if m.fieldValue("credential") != "reader" {
 		t.Fatalf("credential step does not offer the configured credential first: %q",
 			m.fieldValue("credential"))
@@ -196,7 +196,7 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 			t.Errorf("row %q of a new credential is shown while one is reused", f.label)
 		}
 	}
-	press(t, m, "enter", "enter", "enter")
+	press(t, m, "ctrl+s", "enter", "ctrl+s")
 	if !strings.Contains(screenOf(m), "reader (existing, unchanged)") {
 		t.Errorf("summary does not say the credential is reused:\n%s", screenOf(m))
 	}
@@ -339,7 +339,7 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 		m.fieldValue("name") != "archive" || m.fieldValue("base url") != "https://archive.example.invalid" {
 		t.Fatalf("going back lost the service step: step %d name %q", m.wizard.step, m.fieldValue("name"))
 	}
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 	if m.wizard.step != stepCredential || m.fieldValue("name") != "reader" || m.fieldValue("token-id") != canaryID {
 		t.Fatalf("coming forward lost the credential step")
 	}
@@ -414,7 +414,7 @@ func TestGuidedSetupOtherSecretSources(t *testing.T) {
 		typeText(t, m, "WIKI_ID")
 		press(t, m, "tab")
 		typeText(t, m, "WIKI_SECRET")
-		press(t, m, "enter", "enter", "enter")
+		press(t, m, "enter", "enter", "ctrl+s")
 		pump(t, m, "enter")
 		if m.fail != "" {
 			t.Fatalf("save failed: %q", m.fail)
@@ -453,7 +453,7 @@ func TestGuidedSetupOtherSecretSources(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(filepath.Dir(path), secret.FileName)); err == nil {
 			t.Fatal("the unencrypted file was written before the setup was saved")
 		}
-		press(t, m, "enter", "enter")
+		press(t, m, "enter", "ctrl+s")
 		if !strings.Contains(screenOf(m), "unencrypted") {
 			t.Errorf("summary does not warn about the unencrypted file:\n%s", screenOf(m))
 		}
@@ -567,7 +567,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 			t.Fatalf("New() = %v", err)
 		}
 		m.screen = screenNav
-		press(t, m, "c", "enter", "enter")
+		press(t, m, "c", "enter", "ctrl+s")
 		selectChoice(t, m, credential)
 		view := screenOf(m)
 		assertNoRawStorageTerm(t, "the setup reusing "+credential, view)
@@ -575,7 +575,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 		if words := strings.Join(strings.Fields(view), " "); !strings.Contains(words, "("+want+") unchanged") {
 			t.Errorf("reusing %s does not say %q:\n%s", credential, want, view)
 		}
-		press(t, m, "enter", "enter", "enter")
+		press(t, m, "ctrl+s", "enter", "ctrl+s")
 		if m.screen != screenSummary {
 			t.Fatalf("screen = %v, want the summary: %q", m.screen, m.fail)
 		}
@@ -647,7 +647,7 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 			if choice == storagePlaintext {
 				press(t, m, "y")
 			}
-			press(t, m, "enter", "enter")
+			press(t, m, "enter", "ctrl+s")
 			pump(t, m, "enter")
 			if m.fail != "" {
 				t.Fatalf("the setup reported %q", m.fail)
@@ -670,7 +670,7 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 				}
 				pump(t, e, "enter")
 			} else {
-				pump(t, e, "enter")
+				pump(t, e, "ctrl+s")
 				if got := e.fieldValue(storageLabel); got != choice {
 					t.Fatalf("the saved credential reopened on %q, want %q", got, choice)
 				}

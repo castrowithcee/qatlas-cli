@@ -189,7 +189,7 @@ func addCredential(t *testing.T, m *Model, name string, envNames ...string) {
 		press(t, m, "tab")
 		typeText(t, m, env)
 	}
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 }
 
 // addKeyringCredential creates a credential whose secrets live in the credential store. It names nothing:
@@ -202,7 +202,7 @@ func addKeyringCredential(t *testing.T, m *Model, name string) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	selectChoice(t, m, storageKeyring)
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("creating the keyring credential reported %q", m.fail)
 	}
@@ -221,7 +221,7 @@ func addConnection(t *testing.T, m *Model, name, service, credential string) {
 	selectChoice(t, m, service)
 	press(t, m, "tab")
 	selectChoice(t, m, credential)
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 }
 
 func selectChoice(t *testing.T, m *Model, want string) {
@@ -277,7 +277,7 @@ func TestFullConfigurationFlow(t *testing.T) {
 	typeText(t, m, "knowledge")
 	press(t, m, "tab")
 	selectChoice(t, m, "wiki")
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
@@ -1710,7 +1710,7 @@ func TestALockedFieldDoesNotSwallowTheOpeningFocus(t *testing.T) {
 	typeText(t, m, "wiki.example.invalid")
 	press(t, m, "tab")
 	selectChoice(t, m, "wiki")
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
 	}
@@ -1888,11 +1888,11 @@ func TestNamingTheProviderKeepsTheRestOfTheCredential(t *testing.T) {
 	m, store, path := newModel(t)
 
 	addKeyringCredential(t, m, "bookstack-personal")
-	// The name of an existing entry is read-only and enter on the provider row opens its table, so the form
-	// opens on the type row, where enter saves.
+	// The name of an existing entry is read-only and the provider row is passed over, so the form opens on
+	// the secrets row.
 	editEntry(t, m, "bookstack-personal")
 	if got := m.fields[m.focus].label; got != storageLabel {
-		t.Fatalf("the form opened on %q, want the type row", got)
+		t.Fatalf("the form opened on %q, want the secrets row", got)
 	}
 	focusField(t, m, providerLabel)
 	selectChoice(t, m, "bookstack")
@@ -1900,7 +1900,7 @@ func TestNamingTheProviderKeepsTheRestOfTheCredential(t *testing.T) {
 		t.Fatalf("type after choosing the provider = %q, want the keyring it was created as", got)
 	}
 	press(t, m, "tab")
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("saving reported %q", m.fail)
 	}

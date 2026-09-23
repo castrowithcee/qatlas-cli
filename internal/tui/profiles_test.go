@@ -20,12 +20,18 @@ import (
 // toggleTool ticks or unticks one tool of the form through the tool picker, the way a person does.
 func toggleTool(t *testing.T, m *Model, id string) {
 	t.Helper()
-	focusField(t, m, toolListLabel)
+	tick(t, m, toolListLabel, id)
+}
+
+// tick ticks or unticks one value of a multiselect row in its picker, found by typing it.
+func tick(t *testing.T, m *Model, label, value string) {
+	t.Helper()
+	focusField(t, m, label)
 	press(t, m, "/")
-	typeText(t, m, id)
+	typeText(t, m, value)
 	press(t, m, " ", "enter")
 	if m.screen != screenForm {
-		t.Fatalf("the tool picker did not close: screen %v", m.screen)
+		t.Fatalf("the %s picker did not close: screen %v", label, m.screen)
 	}
 }
 
@@ -87,19 +93,15 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 	if got := m.fieldValue(profileLabel); got != profileCustom {
 		t.Fatalf("profile = %q after a change by hand, want %q", got, profileCustom)
 	}
-	focusField(t, m, "permissions")
 	for _, permission := range []string{"create", "update", "delete"} {
-		for m.field("permissions").choices[m.field("permissions").index] != permission {
-			press(t, m, "right")
-		}
-		press(t, m, " ")
+		tick(t, m, "permissions", permission)
 	}
 	var every []string
 	for _, descriptor := range reg.Provider("bookstack") {
 		toggleTool(t, m, descriptor.ID)
 		every = append(every, descriptor.ID)
 	}
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}
@@ -219,7 +221,7 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 			m.fieldValue("permissions"))
 	}
 	press(t, m, "right", "y")
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	saved := savedConnection(t, path, reg, "all")
 	if !reflect.DeepEqual(saved.Tools, []string{"bookstack.pages.get", "bookstack.pages.list"}) ||
 		config.FormatPermissions(saved.Permissions) != "read" {
@@ -253,7 +255,7 @@ func TestALaterToolJoinsNoSavedConnection(t *testing.T) {
 		list.selected["bookstack.books.list"] {
 		t.Fatalf("the later tool is not offered unticked: %v %v", list.choices, list.selected)
 	}
-	pump(t, m, "enter")
+	pump(t, m, "ctrl+s")
 	if got := savedTools(t, path, reg, "wiki"); !reflect.DeepEqual(got, []string{"bookstack.pages.list"}) {
 		t.Fatalf("saved tools = %#v, want the listed tool only", got)
 	}
@@ -285,7 +287,7 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 	if m.fieldValue(profileLabel) != profileCustom {
 		t.Fatalf("profile = %q after a change by hand", m.fieldValue(profileLabel))
 	}
-	press(t, m, "enter")
+	press(t, m, "ctrl+s")
 	if m.screen != screenSummary {
 		t.Fatalf("screen = %v, error %q, want the summary", m.screen, m.fail)
 	}
