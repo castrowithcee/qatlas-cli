@@ -428,7 +428,8 @@ func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
 	if view := m.View(); strings.Contains(view, "warning: ") {
 		t.Fatalf("a project list shows a warning:\n%s", view)
 	}
-	if got := m.permissionChoices("todoist"); !reflect.DeepEqual(got, []string{"default", "read"}) {
-		t.Errorf("todoist permissions = %v, want reads only", got)
+	if got := m.permissionChoices("todoist"); !reflect.DeepEqual(got, []string{"default", "read", "create", "update",
+		"delete"}) {
+		t.Errorf("todoist permissions = %v, want reads and the task and comment changes", got)
 	}
 }

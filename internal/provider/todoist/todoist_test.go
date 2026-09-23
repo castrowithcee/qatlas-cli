@@ -41,6 +41,8 @@ const (
 type recorded struct {
 	method, path, auth string
 	query, form        url.Values
+	// body, contentType, and requestID are those of a change.
+	body, contentType, requestID string
 }
 
 // fakeTodoist answers the API v1 routes this provider uses. Like a server whose filtering is broader than
@@ -59,11 +61,16 @@ func (f *fakeTodoist) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		data, _ := io.ReadAll(r.Body)
 		record.form, _ = url.ParseQuery(string(data))
+		record.body = string(data)
 	}
+	record.contentType, record.requestID = r.Header.Get("Content-Type"), r.Header.Get("X-Request-Id")
 	f.mu.Lock()
 	f.requests = append(f.requests, record)
 	f.mu.Unlock()
 	if f.failure != nil && f.failure(w, r) {
+		return
+	}
+	if serveChange(w, r, record) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -233,6 +240,12 @@ func coreConfig() *config.Config {
 			"one":     {Service: "td", Credential: "td-reader", Target: ownProject},
 			"multi":   {Service: "td", Credential: "td-reader", Targets: []string{ownProject, otherProject}},
 			"account": {Service: "td", Credential: "td-reader", Target: wildcard},
+			"writer":  {Service: "td", Credential: "td-reader", Target: ownProject, Permissions: changePermissions},
+			"multiwriter": {Service: "td", Credential: "td-reader", Targets: []string{ownProject, otherProject},
+				Permissions: changePermissions},
+			"accountwriter": {Service: "td", Credential: "td-reader", Target: wildcard, Permissions: changePermissions},
+			"limited": {Service: "td", Credential: "td-reader", Target: ownProject, Permissions: changePermissions,
+				Tools: []string{"todoist.tasks.get", "todoist.tasks.create"}},
 		},
 	}
 }
@@ -273,7 +286,7 @@ func isInvalidRequest(err error) bool {
 	return errors.As(err, &invalid)
 }
 
-func TestRegisterPublishesReadOnlyMetadataAndTools(t *testing.T) {
+func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	reg := registry(t)
 	metadata, ok := reg.ProviderMetadata(Provider)
 	if !ok || metadata.Name != "Todoist" || metadata.DefaultBaseURL != "https://api.todoist.com/api/v1" ||
@@ -281,22 +294,45 @@ func TestRegisterPublishesReadOnlyMetadataAndTools(t *testing.T) {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	if !reflect.DeepEqual(metadata.DefaultPermissions, []config.Permission{config.PermissionRead}) ||
-		!reflect.DeepEqual(metadata.SupportedPermissions, []config.Permission{config.PermissionRead}) {
-		t.Errorf("permissions = %v / %v, want reads only", metadata.DefaultPermissions, metadata.SupportedPermissions)
+		!reflect.DeepEqual(metadata.SupportedPermissions, []config.Permission{config.PermissionRead,
+			config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}) {
+		t.Errorf("permissions = %v / %v, want reads by default and no execute", metadata.DefaultPermissions,
+			metadata.SupportedPermissions)
 	}
 	target := metadata.Target
 	if !target.Required || !target.Multiple || target.Wildcard != "*" || target.WildcardWarning == "" {
 		t.Errorf("target = %+v, want a required project list with an explicit, warned wildcard", target)
 	}
-	want := []string{"todoist.comments.list", "todoist.completedtasks.list", "todoist.filters.list",
-		"todoist.labels.list", "todoist.projects.get", "todoist.projects.list", "todoist.reminders.list",
-		"todoist.sections.get", "todoist.sections.list", "todoist.tasks.filter", "todoist.tasks.get",
-		"todoist.tasks.list"}
+	want := []string{"todoist.comments.create", "todoist.comments.delete", "todoist.comments.list",
+		"todoist.comments.update", "todoist.completedtasks.list", "todoist.filters.list", "todoist.labels.list",
+		"todoist.projects.get", "todoist.projects.list", "todoist.reminders.list", "todoist.sections.get",
+		"todoist.sections.list", "todoist.tasks.close", "todoist.tasks.create", "todoist.tasks.delete",
+		"todoist.tasks.filter", "todoist.tasks.get", "todoist.tasks.list", "todoist.tasks.move",
+		"todoist.tasks.reopen", "todoist.tasks.update"}
+	// Every change needs confirmation; a create and a close are not safe to repeat.
+	changes := map[string]capability.Risk{
+		"todoist.tasks.create":    changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"todoist.tasks.update":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.tasks.move":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.tasks.close":     changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
+		"todoist.tasks.reopen":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.tasks.delete":    changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"todoist.comments.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"todoist.comments.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"todoist.comments.delete": changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+	}
 	var got []string
 	for _, descriptor := range reg.Provider(Provider) {
 		got = append(got, descriptor.ID)
-		if descriptor.Risk.Effect != capability.EffectRead || !descriptor.RequiresExplicitConnection {
-			t.Errorf("%s risk = %+v, want an explicit-connection read", descriptor.ID, descriptor.Risk)
+		wantRisk, change := changes[descriptor.ID]
+		if !change {
+			wantRisk = readRisk
+		}
+		if descriptor.Risk != wantRisk || !descriptor.RequiresExplicitConnection || descriptor.RequiresToolAllowList {
+			t.Errorf("%s risk = %+v, want %+v on an explicit connection", descriptor.ID, descriptor.Risk, wantRisk)
+		}
+		if change && wantRisk.Confirmation != capability.ConfirmationRequired {
+			t.Errorf("%s needs no confirmation", descriptor.ID)
 		}
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -305,6 +341,13 @@ func TestRegisterPublishesReadOnlyMetadataAndTools(t *testing.T) {
 	profile, ok := metadata.RecommendedProfile()
 	if !ok || profile.ID != "read" || contains(profile.Tools, filtersList.ID) {
 		t.Errorf("recommended profile = %+v, want the project reads without saved filters", profile)
+	}
+	for _, profile := range metadata.Profiles {
+		for _, id := range profile.Tools {
+			if _, change := changes[id]; change && (profile.Recommended || strings.HasSuffix(id, ".delete")) {
+				t.Errorf("profile %s ticks %s, want changes only in a chosen profile and no delete", profile.ID, id)
+			}
+		}
 	}
 }
 

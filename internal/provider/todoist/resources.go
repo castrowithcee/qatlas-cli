@@ -416,17 +416,25 @@ func (c *Client) listSections(ctx context.Context, call listCall, projectID stri
 	return result, nil
 }
 
-func (c *Client) getSection(ctx context.Context, id string) (*Section, error) {
-	const op = "get section"
+// readSection reads one section and refuses it when it belongs to a project outside the connection.
+func (c *Client) readSection(ctx context.Context, op, id string) (rawSection, error) {
 	var raw rawSection
 	if err := c.get(ctx, op, "/sections/"+url.PathEscape(id), nil, &raw); err != nil {
-		return nil, err
+		return rawSection{}, err
 	}
 	if raw.ID == "" {
-		return nil, invalidResponse(op)
+		return rawSection{}, invalidResponse(op)
 	}
 	if raw.IsDeleted || !c.scope.allows(raw.ProjectID) {
-		return nil, outsideScope("section")
+		return rawSection{}, outsideScope("section")
+	}
+	return raw, nil
+}
+
+func (c *Client) getSection(ctx context.Context, id string) (*Section, error) {
+	raw, err := c.readSection(ctx, "get section", id)
+	if err != nil {
+		return nil, err
 	}
 	section := sectionOf(raw)
 	return &section, nil
@@ -494,7 +502,7 @@ func (c *Client) listTasks(ctx context.Context, call listCall, window dueWindow,
 	return result, nil
 }
 
-// readTask reads one active task and refuses it when it belongs to a project outside the connection.
+// readTask reads one task and refuses it when it belongs to a project outside the connection.
 func (c *Client) readTask(ctx context.Context, op, id string) (rawTask, error) {
 	var raw rawTask
 	if err := c.get(ctx, op, "/tasks/"+url.PathEscape(id), nil, &raw); err != nil {
@@ -546,14 +554,18 @@ func (c *Client) listComments(ctx context.Context, call listCall, taskID, projec
 			(projectID != "" && (parentTask != "" || (raw.ProjectID != "" && raw.ProjectID != projectID))) {
 			continue
 		}
-		comment := Comment{ID: raw.ID, Content: raw.Content, PostedAt: text(raw.PostedAt), PostedBy: text(raw.PostedUID)}
-		if raw.Attachment != nil {
-			comment.Attachment = &Attachment{FileName: raw.Attachment.FileName, FileType: raw.Attachment.FileType,
-				ResourceType: raw.Attachment.ResourceType}
-		}
-		result.Comments = append(result.Comments, comment)
+		result.Comments = append(result.Comments, commentOf(raw))
 	}
 	return result, nil
+}
+
+func commentOf(raw rawComment) Comment {
+	comment := Comment{ID: raw.ID, Content: raw.Content, PostedAt: text(raw.PostedAt), PostedBy: text(raw.PostedUID)}
+	if raw.Attachment != nil {
+		comment.Attachment = &Attachment{FileName: raw.Attachment.FileName, FileType: raw.Attachment.FileType,
+			ResourceType: raw.Attachment.ResourceType}
+	}
+	return comment
 }
 
 // listReminders reads one page of reminders. A project connection always names a task, which is read

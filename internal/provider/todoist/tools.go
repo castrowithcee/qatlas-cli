@@ -3,6 +3,7 @@ package todoist
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/url"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -308,8 +309,8 @@ var filtersList = descriptor("filters", "list", "List Todoist saved filters",
 var projectTools = []string{projectsList.ID, projectsGet.ID, sectionsList.ID, sectionsGet.ID, labelsList.ID,
 	tasksList.ID, tasksFilter.ID, tasksGet.ID, completedList.ID, commentsList.ID, remindersList.ID}
 
-// Register adds Todoist metadata, its read-only connection test, and the read operations. Reads are the
-// only effect this provider registers.
+// Register adds Todoist metadata, its read-only connection test, the read operations, and the confirmed
+// task and comment changes. A new connection starts with reads only.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Todoist", DefaultBaseURL: apiRoot,
@@ -343,6 +344,12 @@ func Register(reg *capability.Registry) error {
 			Description: "reads everything the project profile reads plus the saved filters; for a * account " +
 				"connection, and changes nothing",
 			Tools: append(append([]string{}, projectTools...), filtersList.ID),
+		}, {
+			ID: "tasks", Title: "Manage tasks",
+			Description: "reads what the read profile reads and creates, updates, moves, closes, and reopens " +
+				"tasks and creates and updates comments of the connection's projects; every change needs its own " +
+				"confirmation, and the deletes stay unticked",
+			Tools: append(append([]string{}, projectTools...), changeTools...),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -360,6 +367,18 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: commentsList, Handler: handle("list comments", prepareCommentsList)},
 		capability.Operation{Descriptor: remindersList, Handler: handle("list reminders", prepareRemindersList)},
 		capability.Operation{Descriptor: filtersList, Handler: capability.Handler(invokeFiltersList)},
+		capability.Operation{Descriptor: tasksCreate, Handler: handle("create task", prepareTasksCreate)},
+		capability.Operation{Descriptor: tasksUpdate, Handler: handle("update task", prepareTasksUpdate)},
+		capability.Operation{Descriptor: tasksMove, Handler: handle("move task", prepareTasksMove)},
+		capability.Operation{Descriptor: tasksClose,
+			Handler: handle("close task", prepareTaskState("close task", http.MethodPost, "/close", "closed"))},
+		capability.Operation{Descriptor: tasksReopen,
+			Handler: handle("reopen task", prepareTaskState("reopen task", http.MethodPost, "/reopen", "reopened"))},
+		capability.Operation{Descriptor: tasksDelete,
+			Handler: handle("delete task", prepareTaskState("delete task", http.MethodDelete, "", "deleted"))},
+		capability.Operation{Descriptor: commentsCreate, Handler: handle("create comment", prepareCommentsCreate)},
+		capability.Operation{Descriptor: commentsUpdate, Handler: handle("update comment", prepareCommentsUpdate)},
+		capability.Operation{Descriptor: commentsDelete, Handler: handle("delete comment", prepareCommentsDelete)},
 	)
 }
 

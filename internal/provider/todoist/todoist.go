@@ -1,5 +1,6 @@
-// Package todoist implements controlled, read-only access to one personal Todoist account through the
-// official Todoist API v1.
+// Package todoist implements controlled access to one personal Todoist account through the official Todoist
+// API v1: reads of its projects, sections, labels, tasks, comments, reminders, and saved filters, and
+// confirmed changes of its tasks and comments.
 //
 // A connection binds one personal API token either to an explicit set of projects or, after a deliberate
 // choice, to the whole account through the * wildcard. A project connection answers only with tasks,
@@ -15,13 +16,19 @@
 // Task contents, descriptions, comments, and names arrive from the provider and are treated as untrusted
 // data: they are normalised into a stable Qatlas shape, passed through the output encoders, and never
 // rendered, executed, or stored.
+//
+// A change is sent once and never repeated. On a project connection it first reads the task or comment it
+// concerns and every task, section, or project it names, so nothing outside the connection's projects is
+// changed, moved into, or attached to.
 package todoist
 
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -405,7 +412,23 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
-	return c.do(ctx, op, http.MethodGet, endpoint, nil, "", out)
+	return c.do(ctx, op, http.MethodGet, endpoint, nil, "", out, false)
+}
+
+// change sends one change below the API root, once, with a JSON body when body is not nil, and decodes
+// the answer into out when Todoist sends one. Every change carries a fresh X-Request-Id, which Todoist uses
+// to recognise a duplicate delivery of the same request; Qatlas itself never repeats it.
+func (c *Client) change(ctx context.Context, op, method, path string, body any, out any) error {
+	var payload []byte
+	contentType := ""
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return providerError(op, "the request could not be built")
+		}
+		payload, contentType = encoded, "application/json"
+	}
+	return c.do(ctx, op, method, apiRoot+path, payload, contentType, out, true)
 }
 
 // syncRead performs one read-only request of the Sync endpoint for the named resource types. It carries no
@@ -417,12 +440,18 @@ func (c *Client) syncRead(ctx context.Context, op string, resourceTypes []string
 	}
 	form := url.Values{"sync_token": {"*"}, "resource_types": {string(types)}}
 	return c.do(ctx, op, http.MethodPost, apiRoot+"/sync", []byte(form.Encode()),
-		"application/x-www-form-urlencoded", out)
+		"application/x-www-form-urlencoded", out, false)
 }
 
-// do sends one request with the shared authentication and size rules and decodes the answer.
+// uncertain is appended to a failure of a change whose request may have reached Todoist: the change may
+// have been applied although no confirmation arrived. Qatlas never repeats such a request by itself.
+const uncertain = "; the change may have been applied, read the current state before repeating it"
+
+// do sends one request with the shared authentication and size rules and decodes the answer. A change is
+// never repeated: every failure after its request may have reached Todoist says so, and a change Todoist
+// answers without a body, such as a close or a delete, decodes nothing.
 func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []byte, contentType string,
-	out any) error {
+	out any, change bool) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return &provider.Error{Class: provider.ClassTimeout, Op: op,
 			Message: "the request ended while it waited for the Todoist rate limit"}
@@ -441,25 +470,56 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
+	if change {
+		id, err := newRequestID()
+		if err != nil {
+			return providerError(op, "the request could not be built")
+		}
+		req.Header.Set("X-Request-Id", id)
+	}
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return provider.Transport(op, "Todoist", err)
+		failure := provider.Transport(op, "Todoist", err)
+		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
+			failure.Cause == provider.CauseUnknown) {
+			failure.Message += uncertain
+		}
+		return failure
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return c.statusError(op, response)
+		failure := c.statusError(op, response, change)
+		if change && response.StatusCode >= 500 {
+			failure.Message += uncertain
+		}
+		return failure
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil || len(data) > maxResponseBytes {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-			Message: "the Todoist response could not be read within the size limit"}
+		message := "the Todoist response could not be read within the size limit"
+		if change {
+			message += uncertain
+		}
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
+	}
+	if change && (out == nil || len(bytes.TrimSpace(data)) == 0) {
+		return nil
 	}
 	if err := json.Unmarshal(data, out); err != nil {
-		return invalidResponse(op)
+		return invalidChange(op, change)
 	}
 	return nil
+}
+
+// newRequestID returns a random identifier of one change request.
+func newRequestID() (string, error) {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(value[:]), nil
 }
 
 // errorJSON is the part of a Todoist error body this provider inspects. It is read for classification only
@@ -478,12 +538,13 @@ const (
 	notFoundMessage   = "Todoist does not hold this resource or does not show it to this token"
 	planMessage       = "the Todoist plan of this account does not include this feature"
 	permissionMessage = "this Todoist token may not read this resource"
+	changeDenied      = "this Todoist token may not change this resource"
 )
 
 // statusError maps an HTTP status to a stable class. A refusal because of the account's plan stays a
 // permission failure with a message of its own, apart from a rejected token, a rate limit, and a missing
 // resource.
-func (c *Client) statusError(op string, response *http.Response) *provider.Error {
+func (c *Client) statusError(op string, response *http.Response, change bool) *provider.Error {
 	status := response.StatusCode
 	snippet, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 	var detail errorJSON
@@ -505,6 +566,8 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: notFoundMessage}
 	case status >= 400 && status < 500 && planLimited(detail):
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: planMessage}
+	case status == http.StatusForbidden && change:
+		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: changeDenied}
 	case status == http.StatusForbidden:
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: permissionMessage}
 	case status >= 300 && status < 400:
@@ -556,7 +619,16 @@ func capHold(hold time.Duration) time.Duration {
 }
 
 func invalidResponse(op string) *provider.Error {
-	return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Todoist returned an invalid response"}
+	return invalidChange(op, false)
+}
+
+// invalidChange is invalidResponse for a request that may have changed something.
+func invalidChange(op string, change bool) *provider.Error {
+	message := "Todoist returned an invalid response"
+	if change {
+		message += uncertain
+	}
+	return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 }
 
 func providerError(op, message string) error {
