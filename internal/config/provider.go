@@ -81,10 +81,15 @@ type TargetMetadata struct {
 
 // ToolMetadata is the configuration view of one registered operation: the ID a connection's tools list
 // names, a title for editors, and the effect the connection's permissions must allow as well.
+//
+// RequiresToolAllowList marks a tool whose effect alone must never expose it: a connection offers it only
+// when its tools list names it, and a connection without a tools list never does. It keeps a high-risk tool
+// out of every connection that was written for other work, whatever permissions that connection holds.
 type ToolMetadata struct {
-	ID     string
-	Title  string
-	Effect Permission
+	ID                    string
+	Title                 string
+	Effect                Permission
+	RequiresToolAllowList bool
 }
 
 // ToolProfile is a named starting selection of a provider's tools for setting up a new connection. It is

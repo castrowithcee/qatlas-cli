@@ -62,8 +62,9 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"namespace, keeping only the tools whose ID, title, description, or tags contain every term.\n\n" +
 			"--connection keeps only the tools that connection offers. A connection offers a tool when its\n" +
 			"permissions allow the tool's effect and, if the connection has a tools list, that list names\n" +
-			"the tool; without a tools list every tool of an allowed effect is offered, and 'tools: []'\n" +
-			"offers none. Each connection is judged on its own lists, even when it shares the provider,\n" +
+			"the tool; without a tools list every tool of an allowed effect is offered, except a high-risk\n" +
+			"tool whose contract says requires_tool_allow_list, which only a list that names it offers, and\n" +
+			"'tools: []' offers none. Each connection is judged on its own lists, even when it shares the provider,\n" +
 			"the service, or the credential with another one. Describe, invoke and the MCP broker apply\n" +
 			"the same rule, and invoke refuses before any secret is read or any provider is contacted.\n\n" +
 			"Everything else about a tool, including its schemas and which connections can run it, is one\n" +

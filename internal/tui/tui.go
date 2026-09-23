@@ -140,8 +140,8 @@ const (
 	lockedHint = "read-only; delete this entry and create it again to rename it"
 	// toolsHint says what each tools mode means, including the two consequences that are easy to miss: a
 	// tool added by a later version joins only the first mode, and an empty selection closes the route.
-	toolsHint = "all allowed by permissions also offers tools a later version adds; only selected tools " +
-		"offers exactly the tools ticked below, and none ticked offers no tool at all"
+	toolsHint = "all allowed by permissions also offers tools a later version adds, but never a tool marked " +
+		"listed only; only selected tools offers exactly the tools ticked below, and none ticked offers no tool at all"
 	toolListHint = "space or / opens this provider's tools; a tool is offered only when the permissions " +
 		"above allow its effect as well"
 	toolListOffHint = "not used while every tool the permissions allow is offered; choose only selected " +
@@ -936,8 +936,9 @@ func (m *Model) toolChoices(provider string, current []string) []string {
 	return choices
 }
 
-// toolText is how one tool reads in the picker: its ID and effect, and whether the permissions of the form
-// allow that effect at all. The same text is what the filter searches.
+// toolText is how one tool reads in the picker: its ID and effect, whether it is offered only when ticked
+// here, and whether the permissions of the form allow that effect at all. The same text is what the filter
+// searches.
 func (m *Model) toolText(id string) string {
 	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 	for _, tool := range metadata.Tools {
@@ -945,6 +946,9 @@ func (m *Model) toolText(id string) string {
 			continue
 		}
 		text := id + "  " + string(tool.Effect)
+		if tool.RequiresToolAllowList {
+			text += "  (listed only)"
+		}
 		if !m.permittedEffects(metadata)[tool.Effect] {
 			text += "  (not permitted)"
 		}

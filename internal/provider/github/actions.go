@@ -504,6 +504,17 @@ type actionsArguments struct {
 	Limit       int            `json:"limit"`
 	Cursor      string         `json:"cursor"`
 
+	// The arguments of the maintainer and administrator tools. A boolean is a pointer, so a value left out
+	// stays apart from false.
+	Path                       string `json:"path"`
+	Content                    string `json:"content"`
+	SHA                        string `json:"sha"`
+	Message                    string `json:"message"`
+	Enabled                    *bool  `json:"enabled"`
+	AllowedActions             string `json:"allowed_actions"`
+	DefaultWorkflowPermissions string `json:"default_workflow_permissions"`
+	CanApprove                 *bool  `json:"can_approve_pull_request_reviews"`
+
 	list          string
 	page, perPage int
 	binding       []byte

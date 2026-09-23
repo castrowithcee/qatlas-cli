@@ -65,8 +65,9 @@ type Credential struct {
 //
 // Permissions and Tools are two independent local allow-lists, and an operation is offered only when both
 // admit it. Permissions admits operation effects. Tools, when present, admits individual provider-qualified
-// operation IDs of this connection's provider; missing keeps every operation the permissions admit, and an
-// explicit empty list admits none. A tool registered later is never added to an existing list.
+// operation IDs of this connection's provider; missing keeps every operation the permissions admit, except
+// those that require an allow-list, and an explicit empty list admits none. A tool registered later is never
+// added to an existing list.
 //
 // Description is optional prose the user maintains. A name like "personal" or "crm-internal" is a stable
 // selector, not an explanation, so this one line says what the route is for and lets a reader tell two
@@ -611,14 +612,20 @@ func (c *Config) ConnectionPermissions(name string) []Permission {
 
 // ConnectionAllows reports whether the local configuration exposes one operation on a connection: its
 // effect must be among the connection's permissions and, when the connection lists tools, its ID among
-// them. Every discovery and invoke path asks this one question, so none of them can offer what another
-// refuses.
-func (c *Config) ConnectionAllows(name, tool, effect string) bool {
-	if conn, ok := c.Connections[name]; !ok || (conn.Tools != nil && !contains(conn.Tools, tool)) {
+// them. A tool that requires an allow-list is exposed only by a connection whose tools list names it. Every
+// discovery and invoke path asks this one question, so none of them can offer what another refuses.
+func (c *Config) ConnectionAllows(name string, tool ToolMetadata) bool {
+	conn, ok := c.Connections[name]
+	switch {
+	case !ok:
+		return false
+	case conn.Tools == nil && tool.RequiresToolAllowList:
+		return false
+	case conn.Tools != nil && !contains(conn.Tools, tool.ID):
 		return false
 	}
 	for _, permission := range c.ConnectionPermissions(name) {
-		if string(permission) == effect {
+		if permission == tool.Effect {
 			return true
 		}
 	}

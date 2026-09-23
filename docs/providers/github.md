@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning and GitHub Actions: targets, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning and GitHub Actions: targets, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -11,7 +11,8 @@ updated: 2026-09-23
 
 GitHub is a controlled planning provider, not a replacement for `gh`. It reads and maintains issues,
 comments, and project items of the configured targets, and it observes and, when allowed, operates the
-GitHub Actions of a configured repository. It sees pull requests only as project items, and it never accepts
+GitHub Actions of a configured repository. On a connection that names them explicitly, it also maintains the
+workflow files and the Actions settings of that repository. It sees pull requests only as project items, and it never accepts
 a free filter expression, a GraphQL document, a REST route, an owner, or a project from the caller. A `repository` argument only selects one of the repositories the connection names.
 
 ## Configuration
@@ -25,9 +26,10 @@ The credential provides `token`, a personal access token. A read-only setup uses
 `read:project` plus `repo` (or `public_repo` for public repositories only), or a fine-grained token with read
 access to issues and to projects. Changes need `project` instead of `read:project`, or write access to issues
 and projects for a fine-grained token. User-owned projects need a classic token. The Actions tools have
-their own requirements, listed under [GitHub Actions](#github-actions). A successful
-`qatlas connection test` shows only that the token can read the configured project or repository; GitHub
-checks every resource and scope again on each call, so a passing test does not authorize every tool.
+their own requirements, listed under [GitHub Actions](#github-actions), and so have the tools of
+[workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration). A
+successful `qatlas connection test` shows only that the token can read the configured project or repository;
+GitHub checks every resource and scope again on each call, so a passing test does not authorize every tool.
 
 A connection names exactly one project or one repository, and a project may be followed by repositories:
 
@@ -49,7 +51,9 @@ repositories but no project, is an invalid configuration.
 A tool of the other target kind is refused as an unsupported capability before a secret is read. Reads are
 a connection's only default: every change needs `create` or `update` in the connection's `permissions`, every
 Actions execution needs `execute`, and
-a connection with a `tools` list offers only the tools it lists, never one added in a later version.
+a connection with a `tools` list offers only the tools it lists, never one added in a later version. The
+workflow maintainer and Actions administrator tools are listed only: a connection without a `tools` list
+never offers them, whatever its permissions.
 Give each connection a `tools` list with the tools of its kind, so discovery offers only the tools it can
 run.
 
@@ -199,8 +203,10 @@ accepts an owner, a repository, or a free REST path, and a project connection of
 | `github.workflowruns.rerunfailed` | execute | non-idempotent | required | re-runs the failed jobs of a completed run and their dependents |
 | `github.workflowruns.cancel` | execute | idempotent | required | asks GitHub to cancel a run that has not completed |
 
-No tool force-cancels a run, approves a deployment, deletes a log, changes a workflow file, or administers
-secrets, environments, runners, or repository settings.
+No observer or operator tool changes a workflow file or a setting; that is the listed-only group under
+[workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration). No tool
+force-cancels a run, approves a deployment, deletes a log, or administers secrets, variables, environments,
+runners, deployments, or an organization.
 
 ### Observer and operator
 
@@ -212,7 +218,8 @@ a secret is read. Planning permissions (`create`, `update`) never allow an execu
 The terminal editor offers two setup profiles that are never preselected. `actions-observer` ticks `[read]`
 and the eight observer tools. `actions-operator` ticks `[read, execute]`, the observer tools, and the four
 operator tools. The recommended profile `read` stays without Actions tools. A repository connection without a
-`tools` list offers every read, the observer tools included; give it a `tools` list to narrow that.
+`tools` list offers every read, the observer tools included, but never a listed-only tool; give it a `tools`
+list to narrow that.
 
 ```yaml
 connections:
@@ -309,4 +316,127 @@ claims what the configured token holds.
 | re-runs and cancel | `repo` | Actions: read and write |
 
 A repository or organization policy may forbid an execution although the token would allow it. A classic
-token needs the `workflow` scope only to change workflow files, which Qatlas never does.
+token needs the `workflow` scope only to change workflow files, which only the listed-only
+`github.workflowfiles.create` and `github.workflowfiles.update` do.
+
+## Workflow maintenance and Actions administration
+
+Two more groups of repository tools change what runs in a repository and with which rights: the workflow
+maintainer writes workflow files, which decide what code runs with the repository's secrets, and the Actions
+administrator decides whether Actions run at all, which actions they may use, and what the `GITHUB_TOKEN` of
+every run may do. They are high risk, and Qatlas keeps them behind a boundary of their own:
+
+- **Listed only.** A connection offers such a tool only when its `tools` list names it and its `permissions`
+  allow the tool's effect. A connection without a `tools` list never offers one, whatever its permissions: a
+  planning connection with `create` and `update`, an operator with `execute`, or a connection with every
+  permission neither discovers nor runs them. `qatlas tools`, `qatlas tool`, `qatlas.search`,
+  `qatlas.describe`, route selection, and invoke apply the same rule, and the tool contract shows
+  `requires_tool_allow_list: true`. The terminal editor marks these tools `(listed only)`.
+- **Never preselected.** No profile a new connection starts with selects them, and the recommended profile
+  of a provider may not. The profiles `workflow-maintainer` and `actions-admin` exist only to be chosen on
+  purpose; they keep the two groups apart.
+- **One repository.** They run only on a repository connection, and every route lies below that repository.
+- **Confirmed and sent once.** Every change needs confirmation in its own invoke request, is sent exactly
+  once, and is never retried; an unclear outcome says that the change may have been applied. A refused or
+  unconfirmed request ends before a secret is read and before GitHub is contacted.
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.workflowfiles.list` | read | safe | none | lists the workflow files with path, blob SHA, and size, without content |
+| `github.workflowfiles.get` | read | safe | none | reads one workflow file with its content and blob SHA |
+| `github.workflowfiles.create` | create | idempotent | required | commits one new workflow file; fails when the file exists |
+| `github.workflowfiles.update` | update | idempotent | required | replaces one workflow file while it still has the given blob SHA |
+| `github.workflows.enable` | update | idempotent | required | enables one workflow |
+| `github.workflows.disable` | update | idempotent | required | disables one workflow |
+| `github.actionspermissions.get` | read | safe | none | reads `enabled` and `allowed_actions` |
+| `github.actionspermissions.update` | update | idempotent | required | changes `enabled` or `allowed_actions` |
+| `github.workflowpermissions.get` | read | safe | none | reads `default_workflow_permissions` and `can_approve_pull_request_reviews` |
+| `github.workflowpermissions.update` | update | idempotent | required | changes either of them |
+
+The reads are listed only as well: a workflow file and the Actions settings are part of what this group
+maintains, and the observer tools already read what diagnosing a run needs. A create and an update are
+idempotent because a repetition writes nothing: GitHub refuses a create of an existing file and an update
+whose blob SHA the file no longer has.
+
+### Paths, blob SHAs, and content
+
+A `path` is `.github/workflows/NAME.yml` or `.github/workflows/NAME.yaml`, where `NAME` has 1 to 100
+letters, digits, `.`, `_`, or `-`, does not start with `.`, and holds no `..`. Nothing else is accepted: no
+subdirectory, no other directory, no absolute or relative prefix, no percent-encoding, no whitespace, and no
+character outside ASCII, so a lookalike slash or dot cannot lead elsewhere. The path is checked before a
+secret is read. No tool deletes or renames a file or writes any other path.
+
+`github.workflowfiles.update` needs `sha`, the blob SHA `github.workflowfiles.get` or
+`github.workflowfiles.list` reported. GitHub writes the file only while it still has that blob; otherwise
+nothing is written, and the refusal says so: read the file again and apply the change to its current
+content. `github.workflowfiles.create` takes no `sha` and never replaces an existing file.
+
+`content` is the complete new file as text: 1 byte to 512 KiB of valid UTF-8 without control characters
+other than tab, line feed, and carriage return. `message` is the commit message, 1 to 1000 characters
+without control characters other than tab and line breaks. `branch` names the branch to commit to and is the
+default branch when omitted; reads take `ref`, a branch or tag. Qatlas does not generate, repair, or
+interpret workflows; GitHub decides whether a file is a valid workflow. `github.workflowfiles.get` refuses a
+file larger than 512 KiB or one that is not text, and returns the content as untrusted data only on that
+explicit read.
+
+A change answers with metadata only: `path`, `branch`, `previous_sha` (for an update), the new blob `sha`,
+`size`, `commit_sha`, and `commit_url`. It never echoes the content or the commit message, and the audit
+event of a change names only the request, tool, connection, confirmation, result, and time.
+
+`github.workflows.enable` and `github.workflows.disable` take `workflow`, an identifier or a file name such
+as `ci.yml`, accept only a workflow whose file lies below `.github/workflows/`, and answer `previous_state`
+and `state`.
+
+```sh
+qatlas invoke github.workflowfiles.get --connection ci-maintainer --arg path=.github/workflows/ci.yml
+echo '{"path":".github/workflows/ci.yml","sha":"3d21ec53a331a6f037a91c368710b99387d012c1",
+  "content":"name: CI\non: [push, pull_request]\njobs: {}\n","message":"ci: also run on pull requests"}' |
+  qatlas invoke github.workflowfiles.update --connection ci-maintainer --confirm
+```
+
+### Actions settings
+
+`github.actionspermissions.update` takes `enabled` and `allowed_actions` (`all`, `local_only`, or
+`selected`); `selected` keeps the selection of allowed actions maintained in the repository settings, which
+Qatlas does not change: that pattern list is a separate, wider surface. `github.workflowpermissions.update`
+takes `default_workflow_permissions` (`read` or `write`) and `can_approve_pull_request_reviews`. At least one
+value is required, and a value left out stays as it is: GitHub replaces a setting as a whole, so Qatlas
+reads it first and sends it with the requested values in one change. `allowed_actions` applies only while
+Actions are enabled and is refused for disabled Actions unless `enabled: true` comes with it. The answer
+holds `before` and `after`.
+An organization or enterprise policy may fix a value; GitHub's refusal is reported, and nothing is changed or
+retried.
+
+### Credential
+
+Give these connections a credential of their own, used by no other connection, ideally a fine-grained token
+limited to the one repository with only the permissions of the tools the connection lists. GitHub decides on
+every request and documents the requirements per endpoint; a refusal names what the request needs and never
+claims what the token holds. A branch protection or repository rule may refuse a file change although the
+token would allow it.
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.workflowfiles.list`, `get` | `repo` for a private repository | Contents: read |
+| `github.workflowfiles.create`, `update` | `repo` and `workflow` | Contents: read and write, and Workflows: read and write |
+| `github.workflows.enable`, `disable` | `repo` | Actions: read and write |
+| `github.actionspermissions.get`, `github.workflowpermissions.get` | `repo`, as a repository administrator | Administration: read |
+| `github.actionspermissions.update`, `github.workflowpermissions.update` | `repo`, as a repository administrator | Administration: read and write |
+
+```yaml
+connections:
+  ci-maintainer:
+    service: github
+    credential: github-maintainer
+    target: repos/octo-org/example
+    permissions: [read, create, update]
+    tools: [github.workflows.list, github.workflows.get, github.workflowfiles.list, github.workflowfiles.get,
+      github.workflowfiles.create, github.workflowfiles.update, github.workflows.enable, github.workflows.disable]
+  ci-admin:
+    service: github
+    credential: github-maintainer
+    target: repos/octo-org/example
+    permissions: [read, update]
+    tools: [github.actionspermissions.get, github.actionspermissions.update, github.workflowpermissions.get,
+      github.workflowpermissions.update]
+```

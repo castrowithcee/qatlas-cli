@@ -76,6 +76,9 @@ type Example struct {
 
 // Descriptor is the versioned contract of one provider operation, for example bookstack.pages.list.
 // Schemas use JSON Schema's object form. Every configured connection of Provider shares the descriptor.
+//
+// RequiresToolAllowList marks a high-risk operation that no connection offers because of its permissions
+// alone: only a connection whose tools list names it does, see config.ToolMetadata.
 type Descriptor struct {
 	ID                         string          `json:"id"`
 	Version                    int             `json:"version"`
@@ -85,6 +88,7 @@ type Descriptor struct {
 	Risk                       Risk            `json:"risk"`
 	Provider                   string          `json:"provider"`
 	RequiresExplicitConnection bool            `json:"requires_explicit_connection"`
+	RequiresToolAllowList      bool            `json:"requires_tool_allow_list"`
 	InputSchema                json.RawMessage `json:"input_schema"`
 	OutputSchema               json.RawMessage `json:"output_schema"`
 	Arguments                  []Argument      `json:"arguments"`
@@ -233,7 +237,7 @@ func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 // runs once all providers and operations are registered, because a profile may only name tools that exist.
 // A provider with tools declares exactly one recommended profile; every profile has a unique ID, a title,
 // and at least one tool; it lists only tools of its own provider, each once; and a recommended profile
-// selects a change only with a stated reason.
+// selects a change only with a stated reason and never a tool that requires an allow-list.
 func (r *Registry) ValidateProfiles() error {
 	owners := map[string]string{}
 	for provider, descriptors := range r.byProvider {
@@ -246,8 +250,10 @@ func (r *Registry) ValidateProfiles() error {
 			return fmt.Errorf("provider %q declares no tool profile", metadata.ID)
 		}
 		effects := map[string]config.Permission{}
+		explicit := map[string]bool{}
 		for _, tool := range metadata.Tools {
 			effects[tool.ID] = tool.Effect
+			explicit[tool.ID] = tool.RequiresToolAllowList
 		}
 		recommended := 0
 		seen := map[string]bool{}
@@ -276,6 +282,9 @@ func (r *Registry) ValidateProfiles() error {
 						profile.ID, id, owners[id])
 				case !registered:
 					return fmt.Errorf("provider %q profile %q lists unregistered tool %q", metadata.ID, profile.ID, id)
+				case profile.Recommended && explicit[id]:
+					return fmt.Errorf("provider %q recommended profile %q selects tool %q, which a connection "+
+						"offers only when its tools list names it", metadata.ID, profile.ID, id)
 				case profile.Recommended && effect != config.PermissionRead &&
 					strings.TrimSpace(profile.MutationReason) == "":
 					return fmt.Errorf("provider %q recommended profile %q selects %s tool %q without a reason why "+
@@ -369,12 +378,17 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 	// offers, so both follow the registered operations instead of a list of their own.
 	metadata.Tools = metadata.Tools[:0]
 	for _, descriptor := range sorted(r.byProvider[provider]) {
-		metadata.Tools = append(metadata.Tools, config.ToolMetadata{
-			ID: descriptor.ID, Title: descriptor.Title, Effect: config.Permission(descriptor.Risk.Effect),
-		})
+		metadata.Tools = append(metadata.Tools, descriptor.Tool())
 	}
 	r.metadata[provider] = metadata
 	return nil
+}
+
+// Tool is the configuration view of the operation: what a connection's permissions and tools list are
+// checked against.
+func (d Descriptor) Tool() config.ToolMetadata {
+	return config.ToolMetadata{ID: d.ID, Title: d.Title, Effect: config.Permission(d.Risk.Effect),
+		RequiresToolAllowList: d.RequiresToolAllowList}
 }
 
 // Provider returns the descriptors of one provider type, sorted by ID. The result is a copy, so a

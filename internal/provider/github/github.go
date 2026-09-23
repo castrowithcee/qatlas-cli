@@ -5,11 +5,12 @@
 // full content of one selected item, and maintains its items and their field values; a repository
 // connection reads, creates, and changes issues of that repository and reads or writes the comments of one
 // issue on explicit request. A repository connection also observes the GitHub Actions of its repository
-// and, only with the execute permission, dispatches, re-runs, or cancels one named workflow or run. A
-// project connection may also name repositories: only issues of those are created for or added to its
-// project. Nothing here accepts a free filter expression, a GraphQL document, a route, an owner, or a
-// project from an agent, and a repository argument only selects among the configured ones: every request
-// stays inside the configured targets.
+// and, only with the execute permission, dispatches, re-runs, or cancels one named workflow or run. Only a
+// repository connection whose tools list names them maintains its workflow files below .github/workflows/
+// and its Actions settings. A project connection may also name repositories: only issues of those are
+// created for or added to its project. Nothing here accepts a free filter expression, a GraphQL document, a
+// route, an owner, or a project from an agent, and a repository argument only selects among the configured
+// ones: every request stays inside the configured targets.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -279,9 +280,10 @@ var issuesGet = capability.Descriptor{
 	}},
 }
 
-// Register adds GitHub metadata, its read-only connection test, the bounded planning operations, and the
-// Actions observer and operator tools. Only reads are a connection's default: every change and every
-// execution needs a permission of its own.
+// Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the
+// Actions observer and operator tools, and the listed-only workflow maintainer and Actions administrator
+// tools. Only reads are a connection's default: every change and every execution needs a permission of its
+// own, and a listed-only tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
@@ -292,7 +294,9 @@ func Register(reg *capability.Registry) error {
 				"fine-grained with read access to issues and projects; project changes need project instead of " +
 				"read:project, and issue changes need write access to issues; Actions reads need Actions: read " +
 				"on a fine-grained token, and dispatches, re-runs, and cancels need repo on a classic token or " +
-				"Actions: read and write plus Contents: read on a fine-grained one",
+				"Actions: read and write plus Contents: read on a fine-grained one; the listed-only workflow file " +
+				"changes need repo and workflow, or Contents and Workflows: read and write, and the Actions " +
+				"settings Administration: read and write; keep those in a credential of their own",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project or repository",
@@ -331,6 +335,18 @@ func Register(reg *capability.Registry) error {
 			Description: "observes the Actions of a repository connection and dispatches workflows, re-runs " +
 				"runs or their failed jobs, and cancels runs; every execution needs its own confirmation",
 			Tools: append(append([]string{}, observerTools...), operatorTools...),
+		}, {
+			ID: "workflow-maintainer", Title: "Workflow maintainer",
+			Description: "high risk: reads, creates, and updates the workflow files of a repository connection " +
+				"below .github/workflows/ and enables or disables workflows; a connection offers these tools only " +
+				"while its tools list names them, and every change needs its own confirmation",
+			Tools: append([]string{workflowsList.ID, workflowsGet.ID}, maintainerTools...),
+		}, {
+			ID: "actions-admin", Title: "Actions administrator",
+			Description: "high risk: reads and changes whether Actions run in a repository connection, which " +
+				"actions they may use, and the default rights of its GITHUB_TOKEN; a connection offers these tools " +
+				"only while its tools list names them, and every change needs its own confirmation",
+			Tools: append([]string{}, adminTools...),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -351,7 +367,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: itemsArchive, Handler: capability.Handler(invokeItemsArchive)},
 		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
-	}, actionsOperations()...)...)
+	}, append(actionsOperations(), maintenanceOperations()...)...)...)
 }
 
 func invokeItemsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -1025,6 +1041,13 @@ func (c *Client) statusError(op string, response *http.Response, change bool) er
 	return err
 }
 
+// Messages of the refusals a tool may rename to say what the refusal means for its own request.
+const (
+	notFoundMessage = "GitHub does not hold this resource or does not show it to this token"
+	conflictMessage = "GitHub refused the request in the current state of the resource"
+	rejectedMessage = "GitHub rejected the request as invalid"
+)
+
 func (c *Client) classifyStatus(op string, response *http.Response, change bool) *provider.Error {
 	status := response.StatusCode
 	snippet, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
@@ -1047,16 +1070,14 @@ func (c *Client) classifyStatus(op string, response *http.Response, change bool)
 	case status == http.StatusForbidden:
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: permissionMessage(change)}
 	case status == http.StatusNotFound:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "GitHub does not hold this resource or does not show it to this token"}
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: notFoundMessage}
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: "GitHub answered with a redirect, which Qatlas does not follow; the resource may have moved"}
 	case status == http.StatusConflict:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "GitHub refused the request in the current state of the resource"}
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: conflictMessage}
 	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "GitHub rejected the request as invalid"}
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: rejectedMessage}
 	case status == http.StatusGatewayTimeout:
 		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "GitHub did not answer in time"}
 	}

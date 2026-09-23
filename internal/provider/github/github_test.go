@@ -539,7 +539,8 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		ids = append(ids, descriptor.ID)
 		if descriptor.Risk.Effect != capability.EffectRead || descriptor.Risk.Idempotency != capability.IdempotencySafe ||
 			descriptor.Risk.Confirmation != capability.ConfirmationNone || !descriptor.RequiresExplicitConnection ||
-			(descriptor.Risk.DataSensitivity != dataSensitivity && descriptor.ID != jobsLog.ID) {
+			(descriptor.Risk.DataSensitivity != dataSensitivity && descriptor.ID != jobsLog.ID &&
+				!descriptor.RequiresToolAllowList) {
 			t.Errorf("descriptor %s = %+v, want a safe read requiring an explicit connection", descriptor.ID, descriptor.Risk)
 		}
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "comments"} {
@@ -548,14 +549,15 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			}
 		}
 	}
-	equalIDs(t, ids, []string{"github.comments.list", "github.issues.get", "github.issues.list",
-		"github.projectitems.get", "github.projectitems.list", "github.workflowartifacts.list",
-		"github.workflowjobs.get", "github.workflowjobs.list", "github.workflowjobs.log", "github.workflowruns.get",
+	equalIDs(t, ids, []string{"github.actionspermissions.get", "github.comments.list", "github.issues.get",
+		"github.issues.list", "github.projectitems.get", "github.projectitems.list", "github.workflowartifacts.list",
+		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
+		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
 		"github.workflowruns.list", "github.workflows.get", "github.workflows.list"})
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 27 {
+	if len(metadata.Tools) != 37 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

@@ -884,3 +884,100 @@ func errorAs(err error, target any) bool {
 		return false
 	}
 }
+
+// A tool that requires an allow-list is offered only by a connection whose tools list names it. A connection
+// without a list, whatever its permissions, neither finds it through search, the tool index, the provider
+// summary or describe, nor becomes its route, nor runs it; a secret is never read for a refusal.
+func TestToolsRequiringAnAllowListAreOfferedOnlyWhereListed(t *testing.T) {
+	var handlerCalls, secretReads int
+	handler := capability.Handler(func(_ context.Context, resolved *config.Resolved, resolver *secret.Resolver,
+		_ *redact.Redactor, _ json.RawMessage) (any, error) {
+		handlerCalls++
+		if _, err := resolver.Resolve(resolved.Credential, resolved.Secrets, "token"); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, nil
+	})
+	get := testDescriptor("fake.pages.get", capability.EffectRead, capability.ConfirmationNone)
+	guarded := testDescriptor("fake.settings.update", capability.EffectUpdate, capability.ConfirmationRequired)
+	guarded.RequiresToolAllowList = true
+	registry := capability.NewRegistry()
+	if err := registry.Register("fake",
+		capability.Operation{Descriptor: get, Handler: handler},
+		capability.Operation{Descriptor: guarded, Handler: handler},
+	); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.New()
+	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["shared"] = config.Credential{
+		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
+	}
+	every := config.Permissions()
+	cfg.Connections["open"] = config.Connection{Service: "service", Credential: "shared", Permissions: every}
+	cfg.Connections["reader"] = config.Connection{Service: "service", Credential: "shared",
+		Permissions: every, Tools: []string{get.ID}}
+	cfg.Connections["admin"] = config.Connection{Service: "service", Credential: "shared",
+		Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
+		Tools:       []string{get.ID, guarded.ID}}
+	resolver := secret.NewWith(func(string) string { secretReads++; return "test-token" }, nil, nil, nil)
+	core := New(registry, cfg, resolver, nil)
+
+	for connection, want := range map[string][]string{
+		"open": {get.ID}, "reader": {get.ID}, "admin": {get.ID, guarded.ID},
+	} {
+		searched, err := core.Search(SearchRequest{Connection: connection})
+		if err != nil {
+			t.Fatal(err)
+		}
+		tools, err := core.Tools(SearchRequest{Connection: connection})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var found, indexed []string
+		for _, hit := range searched.Operations {
+			found = append(found, hit.ID)
+		}
+		for _, tool := range tools.Tools {
+			indexed = append(indexed, tool.ID)
+		}
+		if !reflect.DeepEqual(found, want) || !reflect.DeepEqual(indexed, want) {
+			t.Errorf("%s: search = %v, tools = %v, want %v", connection, found, indexed, want)
+		}
+	}
+	described, err := core.Describe(DescribeRequest{Operation: guarded.ID})
+	if err != nil || !reflect.DeepEqual(described.Connections, []ConnectionRef{{Name: "admin"}}) ||
+		!described.Operation.RequiresToolAllowList {
+		t.Fatalf("Describe(guarded) = %+v, %v; only the listing connection may offer it", described, err)
+	}
+	var unsupported *capability.UnsupportedError
+	for _, connection := range []string{"open", "reader"} {
+		if _, err := core.Describe(DescribeRequest{Operation: guarded.ID, Connection: connection}); !errors.As(err, &unsupported) {
+			t.Errorf("Describe(guarded, %s) = %T %v, want *capability.UnsupportedError", connection, err, err)
+		}
+		_, err := core.Invoke(context.Background(), InvokeRequest{Operation: guarded.ID, Connection: connection,
+			Confirmed: true, Arguments: json.RawMessage(`{"id":"1"}`)})
+		if !errors.As(err, &unsupported) {
+			t.Errorf("Invoke(guarded, %s) = %T %v, want *capability.UnsupportedError", connection, err, err)
+		}
+	}
+	// A default that does not list the tool is no route for it either.
+	cfg.Defaults.Connections["fake"] = "open"
+	if _, err := core.Invoke(context.Background(), InvokeRequest{Operation: guarded.ID, Confirmed: true,
+		Arguments: json.RawMessage(`{"id":"1"}`)}); !errors.As(err, &unsupported) {
+		t.Errorf("Invoke(guarded) over an unlisting default = %T %v", err, err)
+	}
+	delete(cfg.Defaults.Connections, "fake")
+	if handlerCalls != 0 || secretReads != 0 {
+		t.Fatalf("refused requests reached the provider: handler calls=%d secret reads=%d", handlerCalls, secretReads)
+	}
+	// Without an explicit connection the one listing connection is the route.
+	response, err := core.Invoke(context.Background(), InvokeRequest{Operation: guarded.ID, Confirmed: true,
+		Arguments: json.RawMessage(`{"id":"1"}`)})
+	if err != nil || response.Connection != "admin" || handlerCalls != 1 {
+		t.Fatalf("Invoke(guarded) = %+v, %v, handler calls=%d; want the listing connection", response, err, handlerCalls)
+	}
+	if got := core.Providers().Providers[0].Connections; got != 3 {
+		t.Errorf("provider summary counts %d connections, want 3", got)
+	}
+}

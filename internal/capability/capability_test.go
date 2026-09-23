@@ -478,3 +478,53 @@ func TestProfilesNameConcreteToolsOnly(t *testing.T) {
 		t.Fatal("a caller mutated the registry's profile")
 	}
 }
+
+// A tool that requires an allow-list carries that mark into the configuration view, may stand in a profile
+// a user chooses on purpose, and is refused in the recommended profile, reads included.
+func TestToolsRequiringAnAllowListStayOutOfTheRecommendedProfile(t *testing.T) {
+	guardedRead := withID(pagesGet, "fakewiki.settings.get")
+	guardedRead.RequiresToolAllowList = true
+	guardedChange := withEffect(withID(pagesGet, "fakewiki.settings.update"), EffectUpdate)
+	guardedChange.RequiresToolAllowList = true
+	build := func(profiles []config.ToolProfile) *Registry {
+		reg := NewRegistry()
+		if err := reg.RegisterProvider(config.ProviderMetadata{ID: "fakewiki", Name: "Fake wiki", Profiles: profiles},
+			nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := reg.Register("fakewiki", operation(pagesList), operation(guardedRead),
+			operation(guardedChange)); err != nil {
+			t.Fatal(err)
+		}
+		return reg
+	}
+	read := config.ToolProfile{ID: "read", Title: "Read", Recommended: true, Tools: []string{pagesList.ID}}
+	admin := config.ToolProfile{ID: "admin", Title: "Settings", Tools: []string{guardedRead.ID, guardedChange.ID}}
+
+	reg := build([]config.ToolProfile{read, admin})
+	if err := reg.ValidateProfiles(); err != nil {
+		t.Fatalf("a chosen profile with guarded tools was refused: %v", err)
+	}
+	metadata, _ := reg.ProviderMetadata("fakewiki")
+	marked := map[string]bool{}
+	for _, tool := range metadata.Tools {
+		marked[tool.ID] = tool.RequiresToolAllowList
+	}
+	if want := map[string]bool{pagesList.ID: false, guardedRead.ID: true, guardedChange.ID: true}; !reflect.DeepEqual(marked, want) {
+		t.Errorf("tools = %+v, want the mark on the guarded tools only", metadata.Tools)
+	}
+	if got := guardedChange.Tool(); !got.RequiresToolAllowList || got.Effect != config.PermissionUpdate ||
+		got.ID != guardedChange.ID {
+		t.Errorf("Tool() = %+v", got)
+	}
+
+	for _, guarded := range []string{guardedRead.ID, guardedChange.ID} {
+		recommended := read
+		recommended.Tools = []string{pagesList.ID, guarded}
+		recommended.MutationReason = "stated for the test"
+		err := build([]config.ToolProfile{recommended}).ValidateProfiles()
+		if err == nil || !strings.Contains(err.Error(), "only when its tools list names it") {
+			t.Errorf("recommended profile with %s = %v, want a refusal", guarded, err)
+		}
+	}
+}

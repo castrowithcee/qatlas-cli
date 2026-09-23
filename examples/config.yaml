@@ -178,6 +178,15 @@ credentials:
     provider: github
     type: keyring
 
+  # Workflow maintenance and Actions administration are high risk: give them a credential of their own,
+  # ideally a fine-grained token limited to the one repository. Changing workflow files needs repo and
+  # workflow on a classic token, or Contents and Workflows read and write on a fine-grained one; enabling or
+  # disabling workflows needs Actions read and write; the Actions settings need Administration read and write
+  # (a classic token of a repository administrator with repo). Grant only what the connection lists.
+  github-maintainer:
+    provider: github
+    type: keyring
+
 # A connection is what you select with --connection. It binds one service to one credential.
 #
 # description is optional and yours to maintain: one line of at most 200 characters saying what the route
@@ -196,8 +205,9 @@ credentials:
 # 'qatlas tools <provider>'. A tool is offered only when both lists admit it: tools never grants an effect
 # that permissions excludes, and it never widens what the provider credential or the target allows. When
 # tools is omitted, every tool whose effect permissions allows is offered, including tools a later version
-# adds. A listed connection offers exactly the listed tools, and a tool added later joins only when you add
-# it. `tools: []` offers no tool at all. Every entry must be a registered tool of the connection's provider,
+# adds, except high-risk tools marked as listed only: those are offered only by a connection whose tools
+# list names them, whatever its permissions. A listed connection offers exactly the listed tools, and a tool
+# added later joins only when you add it. `tools: []` offers no tool at all. Every entry must be a registered tool of the connection's provider,
 # listed once, with an effect that permissions allows; anything else makes the file invalid. Each connection
 # keeps its own lists, even when it shares the provider, the service, or the credential with another one.
 #
@@ -393,6 +403,30 @@ connections:
     tools: [github.workflowruns.list, github.workflowruns.get, github.workflowjobs.list, github.workflowjobs.log,
       github.workflows.dispatch, github.workflowruns.rerun, github.workflowruns.rerunfailed,
       github.workflowruns.cancel]
+
+  # A workflow maintainer reads, creates, and updates files directly below .github/workflows/ and enables or
+  # disables workflows. These tools are listed only: no connection offers them unless its tools list names
+  # them, so neither a planner with create and update nor an operator with execute gains them. An update
+  # names the blob SHA it replaces, and every change needs confirmation in its own invoke request.
+  ci-maintainer:
+    service: github
+    credential: github-maintainer
+    target: repos/octo-org/example
+    description: maintains the workflow files of the example repository
+    permissions: [read, create, update]
+    tools: [github.workflows.list, github.workflows.get, github.workflowfiles.list, github.workflowfiles.get,
+      github.workflowfiles.create, github.workflowfiles.update, github.workflows.enable, github.workflows.disable]
+
+  # An Actions administrator reads and changes whether Actions run, which actions they may use, and the
+  # default rights of the GITHUB_TOKEN. Its tools are listed only as well.
+  ci-admin:
+    service: github
+    credential: github-maintainer
+    target: repos/octo-org/example
+    description: administers the Actions settings of the example repository
+    permissions: [read, update]
+    tools: [github.actionspermissions.get, github.actionspermissions.update, github.workflowpermissions.get,
+      github.workflowpermissions.update]
 
 # Defaults are useful for read operations. The key is a tool namespace such as bookstack, or a complete
 # tool ID such as bookstack.pages.list when one tool needs its own route. Confirmed Telegram sends and

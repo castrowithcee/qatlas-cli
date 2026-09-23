@@ -18,8 +18,10 @@ func TestConnectionPermissionsAreIndependentFromCredentials(t *testing.T) {
 	if got := cfg.ConnectionPermissions("wiki"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("permissions = %v, want %v", got, want)
 	}
-	if !cfg.ConnectionAllows("wiki", "bookstack.pages.list", "read") || !cfg.ConnectionAllows("wiki", "bookstack.pages.list", "update") ||
-		cfg.ConnectionAllows("wiki", "bookstack.pages.list", "create") || cfg.ConnectionAllows("wiki", "bookstack.pages.list", "delete") {
+	allows := func(effect Permission) bool {
+		return cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: effect})
+	}
+	if !allows(PermissionRead) || !allows(PermissionUpdate) || allows(PermissionCreate) || allows(PermissionDelete) {
 		t.Fatal("connection permission check does not match the explicit local allow-list")
 	}
 }
@@ -145,8 +147,8 @@ func TestConnectionToolsNarrowThePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !missing.ConnectionAllows("wiki", "bookstack.pages.list", "read") ||
-		!missing.ConnectionAllows("wiki", "bookstack.pages.get", "read") {
+	if !missing.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) ||
+		!missing.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}) {
 		t.Fatal("a connection without tools no longer offers every tool its permissions admit")
 	}
 
@@ -155,18 +157,18 @@ func TestConnectionToolsNarrowThePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !listed.ConnectionAllows("wiki", "bookstack.pages.list", "read") {
+	if !listed.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) {
 		t.Fatal("a listed tool is refused")
 	}
 	for _, tool := range []struct{ id, effect string }{
 		{"bookstack.pages.get", "read"}, {"bookstack.pages.create", "create"}, {"bookstack.pages.search", "read"},
 	} {
-		if listed.ConnectionAllows("wiki", tool.id, tool.effect) {
+		if listed.ConnectionAllows("wiki", ToolMetadata{ID: tool.id, Effect: Permission(tool.effect)}) {
 			t.Errorf("%s is offered although the tools list does not name it", tool.id)
 		}
 	}
 	// The tools list never widens the permissions: a listed tool still needs its effect.
-	if listed.ConnectionAllows("wiki", "bookstack.pages.list", "delete") {
+	if listed.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "delete"}) {
 		t.Error("a listed tool is offered for an effect the permissions exclude")
 	}
 
@@ -174,7 +176,7 @@ func TestConnectionToolsNarrowThePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if empty.ConnectionAllows("wiki", "bookstack.pages.list", "read") {
+	if empty.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) {
 		t.Fatal("an explicit empty tools list does not deny every tool")
 	}
 }
@@ -265,12 +267,54 @@ defaults:`, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cfg.ConnectionAllows("wiki", "bookstack.pages.list", "read") ||
-		cfg.ConnectionAllows("wiki", "bookstack.pages.get", "read") {
+	if !cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) ||
+		cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}) {
 		t.Error("wiki does not offer exactly its own tool")
 	}
-	if !cfg.ConnectionAllows("wiki-reader", "bookstack.pages.get", "read") ||
-		cfg.ConnectionAllows("wiki-reader", "bookstack.pages.list", "read") {
+	if !cfg.ConnectionAllows("wiki-reader", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}) ||
+		cfg.ConnectionAllows("wiki-reader", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) {
 		t.Error("wiki-reader does not offer exactly its own tool")
+	}
+}
+
+// A tool that requires an allow-list is offered only by a connection whose tools list names it: neither a
+// missing list nor any permission exposes it, a list that names it still needs its effect, and an ordinary
+// tool keeps its behaviour on the same connection.
+func TestToolsRequiringAnAllowListNeedTheirName(t *testing.T) {
+	guarded := ToolMetadata{ID: "bookstack.pages.create", Effect: PermissionCreate, RequiresToolAllowList: true}
+	ordinary := ToolMetadata{ID: "bookstack.pages.list", Effect: PermissionRead}
+	for _, tc := range []struct {
+		name, lines           string
+		guarded, ordinaryWant bool
+	}{
+		{"no tools list", "    permissions: [read, create, update, delete, execute]\n", false, true},
+		{"a list without it", "    permissions: [read, create]\n    tools: [bookstack.pages.list]\n", false, true},
+		{"a list naming it", "    permissions: [read, create]\n    tools: [bookstack.pages.create]\n", true, false},
+		{"an empty list", "    permissions: [read, create]\n    tools: []\n", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := Decode(strings.NewReader(withTools(tc.lines)), testProviders)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := cfg.ConnectionAllows("wiki", guarded); got != tc.guarded {
+				t.Errorf("guarded tool offered = %t, want %t", got, tc.guarded)
+			}
+			if got := cfg.ConnectionAllows("wiki", ordinary); got != tc.ordinaryWant {
+				t.Errorf("ordinary tool offered = %t, want %t", got, tc.ordinaryWant)
+			}
+		})
+	}
+	// Naming the tool is not enough when the permissions exclude its effect. Validation refuses such a list,
+	// so the check is made on a configuration changed after decoding.
+	cfg, err := Decode(strings.NewReader(minimal), testProviders)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn := cfg.Connections["wiki"]
+	conn.Permissions, conn.Tools = []Permission{PermissionRead}, []string{guarded.ID}
+	cfg.Connections["wiki"] = conn
+	if cfg.ConnectionAllows("wiki", guarded) {
+		t.Error("a listed tool is offered although the permissions exclude its effect")
 	}
 }

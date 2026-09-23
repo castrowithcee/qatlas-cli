@@ -15,6 +15,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/telegram"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -282,5 +283,35 @@ func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 	if got := savedTools(t, path, reg, "route"); !reflect.DeepEqual(got,
 		[]string{"fake.object42.list", "fake.object59.list"}) {
 		t.Fatalf("saved tools = %#v", got)
+	}
+}
+
+// The picker marks a tool that a connection offers only while it is ticked, so choosing every permitted tool
+// is never mistaken for choosing it.
+func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
+	reg := capability.NewRegistry()
+	if err := github.Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := toolsModel(t, reg, map[string]config.Connection{"repo": {Service: "wiki", Credential: "reader",
+		Target: "repos/octo-org/example"}})
+	openEntryForm(t, m, sectionConnections, "repo")
+	focusField(t, m, toolsLabel)
+	selectChoice(t, m, toolsSelected)
+	focusField(t, m, toolListLabel)
+	press(t, m, " ")
+	typeText(t, m, "workflowfiles")
+	view := m.View()
+	for _, want := range []string{"github.workflowfiles.get  read  (listed only)",
+		"github.workflowfiles.update  update  (listed only)  (not permitted)"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("picker lacks %q:\n%s", want, view)
+		}
+	}
+	press(t, m, "esc")
+	press(t, m, " ")
+	typeText(t, m, "issues.list")
+	if view := m.View(); !strings.Contains(view, "github.issues.list  read") || strings.Contains(view, "(listed only)") {
+		t.Fatalf("an ordinary tool is marked:\n%s", view)
 	}
 }

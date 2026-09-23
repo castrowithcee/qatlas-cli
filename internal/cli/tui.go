@@ -42,8 +42,10 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"connection without a tools list behaves, and only selected tools. In the second mode space or /\n" +
 			"on the tool list opens the tools the chosen provider registers, with their effect; space ticks\n" +
 			"the selected tool, typing filters, enter keeps the ticks and esc drops them. Nothing ticked\n" +
-			"stores an explicit empty list, which offers no tool at all. A change of provider clears the\n" +
-			"ticks, because tool IDs belong to their provider.\n\n" +
+			"stores an explicit empty list, which offers no tool at all. A tool marked listed only, such as\n" +
+			"a high-risk administration tool, is offered only while it is ticked in the second mode; the first\n" +
+			"mode never offers it. A change of provider clears the ticks, because tool IDs belong to their\n" +
+			"provider.\n\n" +
 			"A new connection, in its form and in the guided setup, starts on the provider's recommended\n" +
 			"setup profile: a named starting selection that ticks the permissions its tools need, only\n" +
 			"selected tools, and exactly the tools it names, all visible and each changeable before saving.\n" +
