@@ -39,7 +39,16 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 	return &cobra.Command{
 		Use:   "mcp",
 		Short: "Serve the fixed agent tools over MCP stdio",
-		Args:  noArgs,
+		Long: "The server offers the fixed broker tools qatlas.search, qatlas.describe, and qatlas.invoke\n" +
+			"over MCP stdio, one JSON-RPC message per line.\n\n" +
+			"qatlas.search answers from the local configuration alone: no provider is contacted and no\n" +
+			"secret is read. It filters by query, provider, connection, and effect and returns at most limit\n" +
+			"operations in stable ID order; an omitted, non-positive, or larger limit becomes 50. The response\n" +
+			"carries operations, has_more, which is true exactly when another match follows, and next_cursor,\n" +
+			"which is present only then. Passing next_cursor back as cursor with the same filters returns the\n" +
+			"following page; a request without cursor returns the first. A cursor that is malformed or belongs\n" +
+			"to other filters fails with invalid-request.",
+		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			server := newMCPServer(opts, registry, c.OutOrStdout(), c.ErrOrStderr())
 			return server.serve(c.Context(), c.InOrStdin())
@@ -458,8 +467,11 @@ type mcpTool struct {
 func mcpTools() []mcpTool {
 	return []mcpTool{
 		{
-			Name: "qatlas.search", Description: "Search the configured operation catalog",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"limit":{"type":"integer"}},"additionalProperties":false}`),
+			Name: "qatlas.search",
+			Description: "Search the configured operation catalog. Returns at most limit operations in stable " +
+				"ID order; has_more is true exactly when another match follows, and next_cursor, passed back " +
+				"as cursor with the same filters, returns the following page.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},
 		{
 			Name: "qatlas.describe", Description: "Describe one versioned operation contract",

@@ -2,8 +2,11 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,7 +24,11 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-const maxSearchResults = 50
+const (
+	maxSearchResults = 50
+	// searchCursorBinding is the length of the filter fingerprint a search cursor carries.
+	searchCursorBinding = 12
+)
 
 // Core owns the configured, provider-independent operations surface.
 type Core struct {
@@ -51,12 +58,15 @@ func (c *Core) SetPolicy(policy Policy) { c.policy = policy }
 func (c *Core) SetAudit(writer io.Writer) { c.audit = writer }
 
 // SearchRequest filters the local operation catalog. Limit is capped even when omitted or non-positive.
+// Cursor continues a previous page: it is the opaque next_cursor of a response to the same filters, and
+// an omitted or empty cursor selects the first page.
 type SearchRequest struct {
 	Query      string            `json:"query,omitempty"`
 	Provider   string            `json:"provider,omitempty"`
 	Connection string            `json:"connection,omitempty"`
 	Effect     capability.Effect `json:"effect,omitempty"`
 	Limit      int               `json:"limit,omitempty"`
+	Cursor     string            `json:"cursor,omitempty"`
 }
 
 // SearchHit is the bounded discovery view of one descriptor.
@@ -71,21 +81,36 @@ type SearchHit struct {
 	Connections []string          `json:"connections"`
 }
 
-// SearchResponse is the payload inside the CLI envelope.
+// SearchResponse is the payload inside the CLI envelope. HasMore is true exactly when another match
+// follows this page; NextCursor is then the cursor of the following page and absent otherwise.
 type SearchResponse struct {
 	Operations []SearchHit `json:"operations"`
+	HasMore    bool        `json:"has_more"`
+	NextCursor string      `json:"next_cursor,omitempty"`
 }
 
 // Search performs deterministic local discovery and never resolves credentials or calls a provider. Its
-// response stays bounded: an omitted, non-positive, or oversized limit becomes maxSearchResults.
+// response stays bounded: an omitted, non-positive, or oversized limit becomes maxSearchResults. Pages
+// follow the stable ID order of the registry, and a cursor continues after the last ID of its page, so
+// reading every page yields each match exactly once.
 func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
 	limit := request.Limit
 	if limit <= 0 || limit > maxSearchResults {
 		limit = maxSearchResults
 	}
-	descriptors, err := c.catalog(request, limit)
+	after, err := searchCursorAfter(request)
 	if err != nil {
 		return SearchResponse{}, err
+	}
+	// One extra match decides has_more without a second pass and without publishing that match.
+	descriptors, err := c.catalog(request, after, limit+1)
+	if err != nil {
+		return SearchResponse{}, err
+	}
+	response := SearchResponse{HasMore: len(descriptors) > limit}
+	if response.HasMore {
+		descriptors = descriptors[:limit]
+		response.NextCursor = searchCursor(request, descriptors[limit-1].ID)
 	}
 	hits := make([]SearchHit, 0, len(descriptors))
 	for _, descriptor := range descriptors {
@@ -100,7 +125,40 @@ func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
 			Connections: c.connectionNamesFor(descriptor),
 		})
 	}
-	return SearchResponse{Operations: hits}, nil
+	response.Operations = hits
+	return response, nil
+}
+
+// searchCursor encodes the continuation after the operation ID last. It binds the cursor to the filters of
+// its request, so a cursor can never continue a different search.
+func searchCursor(request SearchRequest, last string) string {
+	return base64.RawURLEncoding.EncodeToString(append(searchFingerprint(request), last...))
+}
+
+// searchCursorAfter returns the operation ID a request continues after, or the empty string for the first
+// page. A cursor that is malformed or belongs to other filters is an invalid request.
+func searchCursorAfter(request SearchRequest) (string, error) {
+	if request.Cursor == "" {
+		return "", nil
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(request.Cursor)
+	if err != nil || len(decoded) <= searchCursorBinding ||
+		!bytes.Equal(decoded[:searchCursorBinding], searchFingerprint(request)) {
+		return "", &InvalidRequestError{Message: "cursor is not a next_cursor of this search"}
+	}
+	return string(decoded[searchCursorBinding:]), nil
+}
+
+// searchFingerprint identifies the filters of a search. The query is normalized the way catalog matches
+// it, so spellings that select the same operations share their cursors. Limit is not part of it: a
+// continuation stays exact whatever page size the next request asks for.
+func searchFingerprint(request SearchRequest) []byte {
+	filters, _ := json.Marshal([]string{
+		strings.Join(strings.Fields(strings.ToLower(request.Query)), " "),
+		request.Provider, request.Connection, string(request.Effect),
+	})
+	sum := sha256.Sum256(filters)
+	return sum[:searchCursorBinding]
 }
 
 // ProviderSummary is one namespace of the tool catalog: how many tools it offers and how many configured
@@ -159,7 +217,7 @@ type ToolsResponse struct {
 // The catalog view answers what this installation offers, so a truncated answer would read as a complete
 // one; the bounded Search response stays the contract of the request-bound agent surface.
 func (c *Core) Tools(request SearchRequest) (ToolsResponse, error) {
-	descriptors, err := c.catalog(request, 0)
+	descriptors, err := c.catalog(request, "", 0)
 	if err != nil {
 		return ToolsResponse{}, err
 	}
@@ -174,10 +232,11 @@ func (c *Core) Tools(request SearchRequest) (ToolsResponse, error) {
 	return ToolsResponse{Tools: tools}, nil
 }
 
-// catalog filters the registry deterministically and returns the matching descriptors in registry order.
-// Both discovery views project this one result, so the compact index and the bounded search answer cannot
-// disagree about which tools exist. A limit of zero or less returns every match.
-func (c *Core) catalog(request SearchRequest, limit int) ([]capability.Descriptor, error) {
+// catalog filters the registry deterministically and returns the matching descriptors in registry order,
+// which is sorted by ID. Both discovery views project this one result, so the compact index and the
+// bounded search answer cannot disagree about which tools exist. A non-empty after skips every descriptor
+// up to and including that ID. A limit of zero or less returns every match.
+func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capability.Descriptor, error) {
 	if request.Effect != "" && !validEffect(request.Effect) {
 		return nil, &InvalidRequestError{Message: fmt.Sprintf("unknown effect %q", request.Effect)}
 	}
@@ -194,6 +253,9 @@ func (c *Core) catalog(request SearchRequest, limit int) ([]capability.Descripto
 	terms := strings.Fields(strings.ToLower(request.Query))
 	matches := make([]capability.Descriptor, 0)
 	for _, descriptor := range c.registry.All() {
+		if after != "" && descriptor.ID <= after {
+			continue
+		}
 		if request.Provider != "" && descriptor.Provider != request.Provider {
 			continue
 		}

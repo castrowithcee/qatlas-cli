@@ -45,26 +45,7 @@ func TestMCPCommandServesStdio(t *testing.T) {
 
 func TestMCPDiscoveryAndFixedTools(t *testing.T) {
 	registry := fakeRegistry(t)
-	for i := 0; i < 100; i++ {
-		descriptor := capability.Descriptor{
-			ID: fmt.Sprintf("bookstack.synthetic%d.get", i), Version: 1,
-			Description: "Synthetic operation", Provider: "bookstack",
-			Risk: capability.Risk{
-				Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
-				Confirmation: capability.ConfirmationNone, DataSensitivity: "test",
-			},
-			InputSchema: json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`),
-		}
-		if err := registry.Register("bookstack", capability.Operation{
-			Descriptor: descriptor,
-			Handler: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
-				json.RawMessage) (any, error) {
-				return map[string]any{}, nil
-			},
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
+	addSyntheticOperations(t, registry, 100)
 
 	input := `{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{` + mcpTestMeta + `}}` + "\n" +
 		`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{` + mcpTestMeta + `}}` + "\n"
@@ -97,6 +78,13 @@ func TestMCPDiscoveryAndFixedTools(t *testing.T) {
 		if tool.Name != want[i] || len(tool.InputSchema) == 0 {
 			t.Errorf("tool %d = %+v, want %q with schema", i, tool, want[i])
 		}
+	}
+	var searchSchema struct {
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	decodeRaw(t, listed.Tools[0].InputSchema, &searchSchema)
+	if _, ok := searchSchema.Properties["cursor"]; !ok {
+		t.Errorf("qatlas.search schema = %s, want a cursor property", listed.Tools[0].InputSchema)
 	}
 }
 
@@ -183,6 +171,108 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 		}
 		if !reflect.DeepEqual(textValue, structuredValue) {
 			t.Errorf("text and structured content differ: %#v != %#v", textValue, structuredValue)
+		}
+	}
+}
+
+// qatlas.search pages through the same catalog the tool CLI lists in one answer. Following next_cursor
+// from the first page names every tool of the namespace once, in the order of the CLI index, and a cursor
+// that does not continue this search fails as an invalid request.
+func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	path := writeConfig(t, validConfig)
+	registry := fakeRegistry(t)
+	addSyntheticOperations(t, registry, 2*50+3)
+
+	var stdout, stderr bytes.Buffer
+	options := &Options{Redactor: &redact.Redactor{}}
+	code := run(newRootCommand(options, registry), options,
+		[]string{"tools", "bookstack", "--config", path, "--output", "json"}, &stdout, &stderr)
+	if code != exitOK || stderr.Len() != 0 {
+		t.Fatalf("tools exit=%d stderr=%q", code, stderr.String())
+	}
+	indexed := toolSummaries(t, stdout.String())
+
+	search := func(arguments string) mcpToolResult {
+		t.Helper()
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
+			`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
+		responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
+		if stderr != "" {
+			t.Fatalf("stderr = %q", stderr)
+		}
+		return toolResultFrom(t, responses["1"])
+	}
+	var searched []application.SearchHit
+	var firstCursor string
+	arguments := `{"provider":"bookstack"}`
+	for pages := 1; ; pages++ {
+		result := search(arguments)
+		if result.IsError {
+			t.Fatalf("search returned an error: %s", result.Content[0].Text)
+		}
+		var page application.SearchResponse
+		decodeRaw(t, result.Structured, &page)
+		searched = append(searched, page.Operations...)
+		if (page.NextCursor != "") != page.HasMore {
+			t.Fatalf("page %d: has_more=%t next_cursor=%q", pages, page.HasMore, page.NextCursor)
+		}
+		if !page.HasMore {
+			if pages != 3 {
+				t.Fatalf("read %d pages, want 3", pages)
+			}
+			break
+		}
+		if firstCursor == "" {
+			firstCursor = page.NextCursor
+		}
+		arguments = `{"provider":"bookstack","cursor":"` + page.NextCursor + `"}`
+	}
+	if len(searched) != len(indexed) {
+		t.Fatalf("search pages name %d tools, the CLI index %d", len(searched), len(indexed))
+	}
+	for i, tool := range indexed {
+		hit := searched[i]
+		if tool.ID != hit.ID || tool.Title != hit.Title || tool.Effect != hit.Effect {
+			t.Errorf("index[%d] = %+v, search = %+v", i, tool, hit)
+		}
+	}
+
+	for _, arguments := range []string{
+		`{"provider":"bookstack","effect":"read","cursor":"` + firstCursor + `"}`,
+		`{"cursor":"` + firstCursor + `"}`,
+		`{"provider":"bookstack","cursor":"not a cursor"}`,
+	} {
+		result := search(arguments)
+		if !result.IsError || !strings.HasPrefix(result.Content[0].Text, string(output.CodeInvalidRequest)+": ") {
+			t.Errorf("search %s = %+v, want an invalid-request tool error", arguments, result)
+		}
+	}
+}
+
+// addSyntheticOperations registers count read operations in the BookStack namespace.
+func addSyntheticOperations(t *testing.T, registry *capability.Registry, count int) {
+	t.Helper()
+	for i := 0; i < count; i++ {
+		descriptor := capability.Descriptor{
+			ID: fmt.Sprintf("bookstack.synthetic%d.get", i), Version: 1,
+			Description: "Synthetic operation", Provider: "bookstack",
+			Risk: capability.Risk{
+				Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
+				Confirmation: capability.ConfirmationNone, DataSensitivity: "test",
+			},
+			InputSchema: json.RawMessage(`{"type":"object"}`), OutputSchema: json.RawMessage(`{"type":"object"}`),
+		}
+		if err := registry.Register("bookstack", capability.Operation{
+			Descriptor: descriptor,
+			Handler: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+				json.RawMessage) (any, error) {
+				return map[string]any{}, nil
+			},
+		}); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

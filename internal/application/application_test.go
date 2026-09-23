@@ -3,8 +3,10 @@ package application
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -98,47 +100,23 @@ func TestConnectionPermissionsFilterDiscoveryAndDirectInvoke(t *testing.T) {
 // CLI publishes. Both apply the same filters to the same data, but Tools publishes only what choosing a
 // tool needs: the ID, the title, and the effect.
 func TestToolsReturnTheCompleteCatalogAndSearchStaysBounded(t *testing.T) {
-	registry := capability.NewRegistry()
-	if err := registry.RegisterProvider(config.ProviderMetadata{ID: "fake", Name: "Fake"}, nil); err != nil {
-		t.Fatal(err)
-	}
-	operations := make([]capability.Operation, maxSearchResults+7)
-	for i := range operations {
-		operations[i] = capability.Operation{
-			Descriptor: capability.Descriptor{
-				ID: "fake.object" + strconv.Itoa(i) + ".list", Version: 1, Provider: "fake",
-				Description: "List objects", Tags: []string{"listing"},
-				Risk: capability.Risk{
-					Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
-					Confirmation: capability.ConfirmationNone, DataSensitivity: "test",
-				},
-				InputSchema:  json.RawMessage(`{"type":"object"}`),
-				OutputSchema: json.RawMessage(`{"type":"array"}`),
-			},
-			Handler: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
-				json.RawMessage) (any, error) {
-				return []any{}, nil
-			},
-		}
-	}
-	if err := registry.Register("fake", operations...); err != nil {
-		t.Fatal(err)
-	}
-	core := New(registry, &config.Config{}, nil, &redact.Redactor{})
+	const operations = maxSearchResults + 7
+	core, _ := listingCore(t, operations)
 
 	searched, err := core.Search(SearchRequest{})
 	if err != nil {
 		t.Fatalf("Search() = %v", err)
 	}
-	if len(searched.Operations) != maxSearchResults {
-		t.Errorf("Search() = %d operations, want the bounded %d", len(searched.Operations), maxSearchResults)
+	if len(searched.Operations) != maxSearchResults || !searched.HasMore || searched.NextCursor == "" {
+		t.Errorf("Search() = %d operations, has_more=%t, next_cursor=%q, want the bounded %d with a "+
+			"continuation", len(searched.Operations), searched.HasMore, searched.NextCursor, maxSearchResults)
 	}
 	listed, err := core.Tools(SearchRequest{})
 	if err != nil {
 		t.Fatalf("Tools() = %v", err)
 	}
-	if len(listed.Tools) != len(operations) {
-		t.Errorf("Tools() = %d tools, want %d", len(listed.Tools), len(operations))
+	if len(listed.Tools) != operations {
+		t.Errorf("Tools() = %d tools, want %d", len(listed.Tools), operations)
 	}
 	for i, tool := range listed.Tools[:maxSearchResults] {
 		if tool.ID != searched.Operations[i].ID {
@@ -156,6 +134,160 @@ func TestToolsReturnTheCompleteCatalogAndSearchStaysBounded(t *testing.T) {
 	}
 	if _, err := core.Tools(SearchRequest{Effect: "invented"}); err == nil {
 		t.Error("Tools(unknown effect) = nil error")
+	}
+}
+
+// A bounded search never reads as complete: has_more is true exactly when another match follows, and the
+// cursors walk every match once, in the order of the complete catalog, whatever the page size.
+func TestSearchPagesReadEveryMatchExactlyOnce(t *testing.T) {
+	for _, tt := range []struct{ operations, limit int }{
+		{0, 0}, {1, 0}, {maxSearchResults - 1, 0}, {maxSearchResults, 0}, {maxSearchResults + 1, 0},
+		{2*maxSearchResults + 3, 0}, {7, 3}, {6, 3}, {5, maxSearchResults + 10},
+	} {
+		t.Run(fmt.Sprintf("%d operations limit %d", tt.operations, tt.limit), func(t *testing.T) {
+			core, calls := listingCore(t, tt.operations)
+			request := SearchRequest{Query: "listing", Limit: tt.limit}
+			first := searchAll(t, core, request)
+			if again := searchAll(t, core, request); !reflect.DeepEqual(first, again) {
+				t.Fatalf("repeated run differs:\n%+v\n%+v", first, again)
+			}
+			pageSize := tt.limit
+			if pageSize <= 0 || pageSize > maxSearchResults {
+				pageSize = maxSearchResults
+			}
+			ids := []string{}
+			for i, page := range first {
+				last := i == len(first)-1
+				if page.HasMore == last || (page.NextCursor != "") != page.HasMore {
+					t.Errorf("page %d: has_more=%t next_cursor=%q, last page=%t", i, page.HasMore,
+						page.NextCursor, last)
+				}
+				if !last && len(page.Operations) != pageSize {
+					t.Errorf("page %d holds %d operations, want %d", i, len(page.Operations), pageSize)
+				}
+				for _, hit := range page.Operations {
+					ids = append(ids, hit.ID)
+				}
+			}
+			listed, err := core.Tools(SearchRequest{Query: "listing"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := make([]string, 0, len(listed.Tools))
+			for _, tool := range listed.Tools {
+				want = append(want, tool.ID)
+			}
+			if len(ids) != tt.operations || !reflect.DeepEqual(ids, want) {
+				t.Errorf("pages name %d operations %v, want the %d of the catalog %v", len(ids), ids,
+					len(want), want)
+			}
+			if *calls != 0 {
+				t.Errorf("handlers called = %d, want 0", *calls)
+			}
+		})
+	}
+}
+
+// A cursor continues only the search that produced it. Another filter, a changed cursor, or text that
+// never was a cursor is an invalid request; equivalent query spellings and another page size are not.
+func TestSearchCursorIsBoundToItsFilters(t *testing.T) {
+	core, _ := testCore(t, []string{"archive", "primary"}, nil, true)
+	request := SearchRequest{Query: "page", Provider: "fake", Connection: "primary", Limit: 1}
+	first, err := core.Search(request)
+	if err != nil || !first.HasMore || first.NextCursor == "" {
+		t.Fatalf("Search() = %+v, %v", first, err)
+	}
+
+	continued := request
+	continued.Cursor, continued.Query, continued.Limit = first.NextCursor, "  PAGE ", 5
+	next, err := core.Search(continued)
+	if err != nil || next.HasMore || next.NextCursor != "" || len(next.Operations) != 1 ||
+		next.Operations[0].ID == first.Operations[0].ID {
+		t.Fatalf("Search(continued) = %+v, %v", next, err)
+	}
+
+	decoded, err := base64.RawURLEncoding.DecodeString(first.NextCursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded[0] ^= 0xff
+	for name, mutate := range map[string]func(*SearchRequest){
+		"query":        func(r *SearchRequest) { r.Query = "read" },
+		"provider":     func(r *SearchRequest) { r.Provider = "" },
+		"connection":   func(r *SearchRequest) { r.Connection = "archive" },
+		"effect":       func(r *SearchRequest) { r.Effect = capability.EffectRead },
+		"not base64":   func(r *SearchRequest) { r.Cursor = "not a cursor!" },
+		"too short":    func(r *SearchRequest) { r.Cursor = base64.RawURLEncoding.EncodeToString([]byte("short")) },
+		"tampered":     func(r *SearchRequest) { r.Cursor = base64.RawURLEncoding.EncodeToString(decoded) },
+		"padded":       func(r *SearchRequest) { r.Cursor += "=" },
+		"binding only": func(r *SearchRequest) { r.Cursor = r.Cursor[:16] },
+	} {
+		t.Run(name, func(t *testing.T) {
+			rejected := request
+			rejected.Cursor = first.NextCursor
+			mutate(&rejected)
+			var invalid *InvalidRequestError
+			if got, err := core.Search(rejected); !errors.As(err, &invalid) {
+				t.Fatalf("Search() = %+v, %v, want an invalid request", got, err)
+			}
+		})
+	}
+}
+
+// listingCore registers count read operations that all match the query "listing" and counts every
+// handler call, so a test can prove that discovery never reaches a provider.
+func listingCore(t *testing.T, count int) (*Core, *int) {
+	t.Helper()
+	registry := capability.NewRegistry()
+	if err := registry.RegisterProvider(config.ProviderMetadata{ID: "fake", Name: "Fake"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	calls := new(int)
+	operations := make([]capability.Operation, count)
+	for i := range operations {
+		operations[i] = capability.Operation{
+			Descriptor: capability.Descriptor{
+				ID: "fake.object" + strconv.Itoa(i) + ".list", Version: 1, Provider: "fake",
+				Description: "List objects", Tags: []string{"listing"},
+				Risk: capability.Risk{
+					Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
+					Confirmation: capability.ConfirmationNone, DataSensitivity: "test",
+				},
+				InputSchema:  json.RawMessage(`{"type":"object"}`),
+				OutputSchema: json.RawMessage(`{"type":"array"}`),
+			},
+			Handler: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+				json.RawMessage) (any, error) {
+				*calls++
+				return []any{}, nil
+			},
+		}
+	}
+	if count > 0 {
+		if err := registry.Register("fake", operations...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return New(registry, &config.Config{}, nil, &redact.Redactor{}), calls
+}
+
+// searchAll follows next_cursor from the first page to the last and returns every page it read.
+func searchAll(t *testing.T, core *Core, request SearchRequest) []SearchResponse {
+	t.Helper()
+	var pages []SearchResponse
+	for {
+		page, err := core.Search(request)
+		if err != nil {
+			t.Fatalf("Search(%+v) = %v", request, err)
+		}
+		pages = append(pages, page)
+		if !page.HasMore {
+			return pages
+		}
+		if len(pages) > 100 {
+			t.Fatal("search pages do not end")
+		}
+		request.Cursor = page.NextCursor
 	}
 }
 

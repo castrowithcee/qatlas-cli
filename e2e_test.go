@@ -826,6 +826,11 @@ defaults: {}
 				t.Errorf("index[%d] = %#v, want the id, title and effect of %v", i, entry, hit["id"])
 			}
 		}
+		// A search that fits one page says so: nothing follows and there is no continuation.
+		if page, _ := mcpData(t, responses["search"]).(map[string]any); page["has_more"] != false ||
+			page["next_cursor"] != nil {
+			t.Errorf("search page = %#v, want has_more false without next_cursor", page)
+		}
 	})
 
 	t.Run("ambiguous BookStack selection stops locally", func(t *testing.T) {
