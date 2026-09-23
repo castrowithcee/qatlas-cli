@@ -159,8 +159,8 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	if connectionFields[4].value() != "-1001" || !strings.Contains(connectionFields[4].hint, "required for Telegram") {
 		t.Fatalf("target field = value %q, hint %q", connectionFields[4].value(), connectionFields[4].hint)
 	}
-	if got := m.dashboardEntry(sectionConnections, "operations"); !strings.Contains(got, "-1002") {
-		t.Fatalf("dashboard entry = %q, want distinct target", got)
+	if got := m.describe("operations"); !strings.Contains(got, "-1002") {
+		t.Fatalf("list entry = %q, want distinct target", got)
 	}
 	lexwareFields := m.buildFields("books-primary")
 	if strings.Contains(lexwareFields[4].hint, "required") ||
@@ -168,13 +168,13 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 		t.Fatalf("Lexware target hint = %q, want an optional target", lexwareFields[4].hint)
 	}
 	for _, name := range []string{"books-primary", "books-audit"} {
-		if got := m.dashboardEntry(sectionConnections, name); !strings.Contains(got, name+" · lexware-main + accounting") {
-			t.Fatalf("Lexware dashboard entry = %q, want named connection %q", got, name)
+		if got := m.describe(name); !strings.Contains(got, name+"  lexware-main / accounting") {
+			t.Fatalf("Lexware list entry = %q, want named connection %q", got, name)
 		}
 	}
 	for _, name := range []string{"wiki-primary", "wiki-audit"} {
-		if got := m.dashboardEntry(sectionConnections, name); !strings.Contains(got, name+" · wiki-main + reader") {
-			t.Fatalf("BookStack dashboard entry = %q, want named connection %q", got, name)
+		if got := m.describe(name); !strings.Contains(got, name+"  wiki-main / reader") {
+			t.Fatalf("BookStack list entry = %q, want named connection %q", got, name)
 		}
 	}
 
@@ -186,11 +186,11 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 		t.Fatalf("Twenty target hint = %q, want an optional target", twentyFields[4].hint)
 	}
 	for name, want := range map[string]string{
-		"crm":          "crm · crm-cloud + crm-cloud-reader",
-		"crm-internal": "crm-internal · crm-selfhosted + crm-selfhosted-reader",
+		"crm":          "crm  crm-cloud / crm-cloud-reader",
+		"crm-internal": "crm-internal  crm-selfhosted / crm-selfhosted-reader",
 	} {
-		if got := m.dashboardEntry(sectionConnections, name); !strings.Contains(got, want) {
-			t.Fatalf("Twenty dashboard entry = %q, want %q", got, want)
+		if got := m.describe(name); !strings.Contains(got, want) {
+			t.Fatalf("Twenty list entry = %q, want %q", got, want)
 		}
 	}
 
@@ -205,16 +205,16 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 			seatableFields[4].value(), seatableFields[4].hint)
 	}
 	for name, want := range map[string]string{
-		"sales-rows":       "sales-rows · tables-cloud + sales-base-reader",
-		"sales-rows-audit": "sales-rows-audit · tables-cloud + sales-base-auditor",
-		"onprem-rows":      "onprem-rows · tables-onprem + onprem-base-reader",
+		"sales-rows":       "sales-rows  tables-cloud / sales-base-reader",
+		"sales-rows-audit": "sales-rows-audit  tables-cloud / sales-base-auditor",
+		"onprem-rows":      "onprem-rows  tables-onprem / onprem-base-reader",
 	} {
-		if got := m.dashboardEntry(sectionConnections, name); !strings.Contains(got, want) {
-			t.Fatalf("SeaTable dashboard entry = %q, want %q", got, want)
+		if got := m.describe(name); !strings.Contains(got, want) {
+			t.Fatalf("SeaTable list entry = %q, want %q", got, want)
 		}
 	}
-	if got := m.dashboardEntry(sectionConnections, "sales-rows-audit"); !strings.Contains(got, "Kunden/Aktive") {
-		t.Fatalf("SeaTable dashboard entry = %q, want the configured table and view", got)
+	if got := m.describe("sales-rows-audit"); !strings.Contains(got, "Kunden/Aktive") {
+		t.Fatalf("SeaTable list entry = %q, want the configured table and view", got)
 	}
 
 	// A Nextcloud connection names its instance, the identity it reads as, and the fixed root folder below
@@ -228,16 +228,16 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 			nextcloudFields[4].value(), nextcloudFields[4].hint)
 	}
 	for name, want := range map[string]string{
-		"files-reports": "files-reports · cloud-main + cloud-reader",
-		"files-audit":   "files-audit · cloud-main + cloud-auditor",
-		"files-partner": "files-partner · cloud-partner + partner-reader",
+		"files-reports": "files-reports  cloud-main / cloud-reader",
+		"files-audit":   "files-audit  cloud-main / cloud-auditor",
+		"files-partner": "files-partner  cloud-partner / partner-reader",
 	} {
-		if got := m.dashboardEntry(sectionConnections, name); !strings.Contains(got, want) {
-			t.Fatalf("Nextcloud dashboard entry = %q, want %q", got, want)
+		if got := m.describe(name); !strings.Contains(got, want) {
+			t.Fatalf("Nextcloud list entry = %q, want %q", got, want)
 		}
 	}
-	if got := m.dashboardEntry(sectionConnections, "files-partner"); !strings.Contains(got, "Shared/Qatlas") {
-		t.Fatalf("Nextcloud dashboard entry = %q, want the fixed root folder", got)
+	if got := m.describe("files-partner"); !strings.Contains(got, "Shared/Qatlas") {
+		t.Fatalf("Nextcloud list entry = %q, want the fixed root folder", got)
 	}
 }
 
@@ -276,7 +276,7 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 		t.Fatalf("cleared default = %q, want none", got)
 	}
 	permissions.toggleChoice()
-	view := m.View()
+	view := screenOf(m)
 	if !strings.Contains(view, "warning: All tables in this SeaTable base are exposed to the agent") {
 		t.Fatalf("wildcard view has no warning:\n%s", view)
 	}

@@ -74,7 +74,7 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 			t.Errorf("the profile row does not say %q: %q", want, hint)
 		}
 	}
-	if view := m.View(); !strings.Contains(view, "profile      < read >") {
+	if view := screenOf(m); !strings.Contains(view, "profile      < read >") {
 		t.Errorf("the profile row is not shown:\n%s", view)
 	}
 
@@ -157,7 +157,7 @@ func TestSwitchingProfilesAsksOnceTheTicksWereChanged(t *testing.T) {
 	if m.screen != screenConfirm {
 		t.Fatalf("a change by hand was replaced without asking: screen %v", m.screen)
 	}
-	view := m.View()
+	view := strings.Join(strings.Fields(screenOf(m)), " ")
 	for _, want := range []string{"Replace the permission and tool ticks with profile send?",
 		"ticks permissions create and tools telegram.messages.send"} {
 		if !strings.Contains(view, want) {
@@ -290,8 +290,8 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 		t.Fatalf("screen = %v, error %q, want the summary", m.screen, m.fail)
 	}
 	for _, want := range []string{"permissions  read", "tools        bookstack.pages.get"} {
-		if !strings.Contains(m.View(), want) {
-			t.Fatalf("summary lacks %q:\n%s", want, m.View())
+		if !strings.Contains(screenOf(m), want) {
+			t.Fatalf("summary lacks %q:\n%s", want, screenOf(m))
 		}
 	}
 	pump(t, m, "enter")

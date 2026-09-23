@@ -63,7 +63,7 @@ func TestThePickerReachesOneOfManyConnectionsDirectly(t *testing.T) {
 	if got := m.fieldValue("connection"); got != names[0] {
 		t.Fatalf("connection = %q, want the first value %q", got, names[0])
 	}
-	if view := m.View(); !strings.Contains(view, "/ search") {
+	if view := screenOf(m); !strings.Contains(view, "/ search") {
 		t.Errorf("a row of %d values does not point out the picker:\n%s", len(names), view)
 	}
 
@@ -71,7 +71,7 @@ func TestThePickerReachesOneOfManyConnectionsDirectly(t *testing.T) {
 	if m.screen != screenPicker {
 		t.Fatalf("/ on a choice row opened screen %v, want the picker", m.screen)
 	}
-	view := m.View()
+	view := screenOf(m)
 	for _, want := range []string{"Choose connection", "1/60 (60 total)", "current: conn-000", "conn-000  (current)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the picker does not show %q:\n%s", want, view)
@@ -79,7 +79,7 @@ func TestThePickerReachesOneOfManyConnectionsDirectly(t *testing.T) {
 	}
 	typeText(t, m, "047")
 	keys += 3
-	view = m.View()
+	view = screenOf(m)
 	if !strings.Contains(view, "1/1 (60 total)") || !strings.Contains(view, "> conn-047") {
 		t.Errorf("the filtered picker does not select conn-047:\n%s", view)
 	}
@@ -120,7 +120,7 @@ func TestThePickerFilterIgnoresCaseAndIsDeterministic(t *testing.T) {
 		if got := m.picker.matches; !reflect.DeepEqual(got, want) {
 			t.Errorf("filter %q shows %v, want %v", query, got, want)
 		}
-		view := m.View()
+		view := screenOf(m)
 		if !strings.Contains(view, "Wiki-Main") || !strings.Contains(view, "wiki-archive") ||
 			strings.Contains(view, "chat") || strings.Contains(view, "conn-000") {
 			t.Errorf("filter %q draws the wrong values:\n%s", query, view)
@@ -158,7 +158,7 @@ func TestThePickerCancelsCompletelyAndTakesOnlyAShownValue(t *testing.T) {
 	// No match: enter keeps the picker open and changes nothing.
 	press(t, m, "/")
 	typeText(t, m, "nothing-like-this")
-	if view := m.View(); !strings.Contains(view, "No value matches") || !strings.Contains(view, "0/0 (60 total)") {
+	if view := screenOf(m); !strings.Contains(view, "No value matches") || !strings.Contains(view, "0/0 (60 total)") {
 		t.Errorf("the empty picker does not say so:\n%s", view)
 	}
 	press(t, m, "enter")
@@ -174,7 +174,7 @@ func TestThePickerCancelsCompletelyAndTakesOnlyAShownValue(t *testing.T) {
 	press(t, m, "/")
 	typeText(t, m, "conn-04")
 	press(t, m, "home", "down", "down")
-	view := m.View()
+	view := screenOf(m)
 	if !strings.Contains(view, "> conn-042") || strings.Contains(view, "conn-050") {
 		t.Fatalf("the picker does not show the selection among the matches:\n%s", view)
 	}
@@ -205,7 +205,7 @@ func TestASmallChoiceKeepsLeftAndRight(t *testing.T) {
 	if got := m.credentialType(); got != before {
 		t.Errorf("left moved to %q, want back to %q", got, before)
 	}
-	if view := m.View(); strings.Contains(view, "/ search") {
+	if view := screenOf(m); strings.Contains(view, "/ search") {
 		t.Errorf("a row of %d values points to the picker:\n%s", len(m.fields[m.focus].choices), view)
 	}
 }
@@ -221,14 +221,14 @@ func TestThePickerFitsASmallTerminal(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	openDefaultForm(t, m)
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
-	if view := m.View(); strings.Contains(view, "Resize terminal") {
+	if view := screenOf(m); strings.Contains(view, "Resize terminal") {
 		t.Fatalf("the form does not fit 40x12:\n%s", view)
 	}
 	press(t, m, "/")
 
 	check := func(want string) {
 		t.Helper()
-		view := m.View()
+		view := screenOf(m)
 		if strings.Contains(view, "Resize terminal") {
 			t.Fatalf("the picker was replaced by the resize notice:\n%s", view)
 		}

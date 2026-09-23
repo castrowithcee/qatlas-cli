@@ -91,7 +91,7 @@ func TestEveryProviderRowOpensTheSameTable(t *testing.T) {
 				total := n
 				switch form {
 				case "setup":
-					m.screen = screenMenu
+					m.screen = screenNav
 					press(t, m, "c")
 				default:
 					openProviderRow(t, m, map[string]section{
@@ -103,7 +103,7 @@ func TestEveryProviderRowOpensTheSameTable(t *testing.T) {
 						total++
 					}
 					before := m.fieldValue(providerLabel)
-					view := m.View()
+					view := screenOf(m)
 					if !strings.Contains(view, "provider     [ ") || strings.Contains(view, "provider     < ") ||
 						!strings.Contains(view, fmt.Sprintf("enter opens the table of all %d providers", n)) {
 						t.Fatalf("the provider row does not show that it opens a table:\n%s", view)
@@ -120,7 +120,7 @@ func TestEveryProviderRowOpensTheSameTable(t *testing.T) {
 				if got := len(m.providers.list.all); got != total {
 					t.Fatalf("the table offers %d providers, want %d", got, total)
 				}
-				view := m.View()
+				view := screenOf(m)
 				for _, want := range []string{"hoose provider", fmt.Sprintf("1/%d (%d total)", total, total),
 					"search: ", "NAME", "ID", "current: ", "> (*) "} {
 					if !strings.Contains(view, want) {
@@ -171,7 +171,7 @@ func TestTheProviderTableSearchesNameAndIDIgnoringCase(t *testing.T) {
 			if got := m.providers.list.matches; !reflect.DeepEqual(got, c.want) {
 				t.Errorf("search %q shows %v, want %v", c.query, got, c.want)
 			}
-			if view := m.View(); !strings.Contains(view, fmt.Sprintf("1/%d (%d total)", len(c.want), c.n)) {
+			if view := screenOf(m); !strings.Contains(view, fmt.Sprintf("1/%d (%d total)", len(c.want), c.n)) {
 				t.Errorf("search %q does not count its matches:\n%s", c.query, view)
 			}
 			press(t, m, "esc")
@@ -213,7 +213,7 @@ func TestTheProviderTableTakesOnlyTheMarkedProvider(t *testing.T) {
 
 	press(t, m, "enter")
 	typeText(t, m, "nothing-like-this")
-	if view := m.View(); !strings.Contains(view, "No provider matches") || !strings.Contains(view, "0/0 (2 total)") {
+	if view := screenOf(m); !strings.Contains(view, "No provider matches") || !strings.Contains(view, "0/0 (2 total)") {
 		t.Errorf("the empty table does not say so:\n%s", view)
 	}
 	press(t, m, "enter")
@@ -226,7 +226,7 @@ func TestTheProviderTableTakesOnlyTheMarkedProvider(t *testing.T) {
 	}
 
 	press(t, m, "enter", "home", "down")
-	if view := m.View(); !strings.Contains(view, "> ( ) Telegram") || !strings.Contains(view, "(*) BookStack") {
+	if view := screenOf(m); !strings.Contains(view, "> ( ) Telegram") || !strings.Contains(view, "(*) BookStack") {
 		t.Fatalf("the table does not mark the selection and the current provider apart:\n%s", view)
 	}
 	press(t, m, "enter")
@@ -255,7 +255,7 @@ func TestTheProviderTableTakesOnlyTheMarkedProvider(t *testing.T) {
 			t.Errorf("the tool list still holds %q of another provider", tool)
 		}
 	}
-	if view := m.View(); !strings.Contains(view, "[ Telegram (telegram) ▾ ]") {
+	if view := screenOf(m); !strings.Contains(view, "[ Telegram (telegram) ▾ ]") {
 		t.Errorf("the provider row does not show the taken provider:\n%s", view)
 	}
 }
@@ -298,7 +298,7 @@ func TestTheProviderTableFitsASmallTerminal(t *testing.T) {
 
 	check := func(want string) {
 		t.Helper()
-		view := m.View()
+		view := screenOf(m)
 		if strings.Contains(view, "Resize terminal") {
 			t.Fatalf("the table was replaced by the resize notice:\n%s", view)
 		}
@@ -347,12 +347,15 @@ func TestGuidedSetupChoosesItsProviderInTheTable(t *testing.T) {
 	if m.screen != screenProviders {
 		t.Fatalf("c opened screen %v, want the provider table", m.screen)
 	}
-	view := m.View()
+	view := screenOf(m)
 	for _, want := range []string{"Setup step 1 of 6 · choose provider  1/8 (8 total)", "search: ", "NAME",
-		"> (*) BookStack", "( ) Telegram", "telegram", "enter choose and continue"} {
+		"> (*) BookStack", "( ) Telegram", "telegram"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the setup table does not show %q:\n%s", want, view)
 		}
+	}
+	if !strings.Contains(strings.Join(strings.Fields(view), " "), "enter choose and continue") {
+		t.Errorf("the setup table does not say that enter goes on:\n%s", view)
 	}
 
 	typeText(t, m, "TELE")
@@ -365,11 +368,16 @@ func TestGuidedSetupChoosesItsProviderInTheTable(t *testing.T) {
 	}
 
 	press(t, m, "ctrl+b")
-	if m.screen != screenProviders || !strings.Contains(m.View(), "> (*) Telegram") {
-		t.Fatalf("going back does not show the table on telegram: screen %v\n%s", m.screen, m.View())
+	if m.screen != screenProviders || !strings.Contains(screenOf(m), "> (*) Telegram") {
+		t.Fatalf("going back does not show the table on telegram: screen %v\n%s", m.screen, screenOf(m))
 	}
+	// A provider was taken, so leaving asks before it drops the setup.
 	press(t, m, "esc")
-	if m.wizard != nil || m.screen != screenMenu {
+	if m.screen != screenLeave {
+		t.Fatalf("esc did not ask before cancelling the setup: screen %v", m.screen)
+	}
+	press(t, m, "d")
+	if m.wizard != nil || m.screen != screenList {
 		t.Fatalf("esc did not cancel the setup: screen %v", m.screen)
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -408,7 +416,7 @@ func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
 	openProviderRow(t, m, sectionServices)
 	press(t, m, "enter")
 	typeText(t, m, "todoist")
-	if view := m.View(); !strings.Contains(view, "Todoist") || !strings.Contains(view, " todoist") ||
+	if view := screenOf(m); !strings.Contains(view, "Todoist") || !strings.Contains(view, " todoist") ||
 		!strings.Contains(view, "1/1 (8 total)") {
 		t.Fatalf("the table does not show Todoist with its ID:\n%s", view)
 	}
@@ -421,11 +429,11 @@ func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
 	m.cfg.Connections["tasks"] = config.Connection{Service: "svc-todoist", Credential: "cred-todoist", Target: "*"}
 	m.section, m.screen, m.editing = sectionConnections, screenForm, "tasks"
 	m.fields = m.buildFields("tasks")
-	if view := m.View(); !strings.Contains(view, "warning: "+metadata.Target.WildcardWarning[:40]) {
+	if view := screenOf(m); !strings.Contains(view, "warning: "+metadata.Target.WildcardWarning[:40]) {
 		t.Fatalf("the account wildcard shows no warning:\n%s", view)
 	}
 	m.field("target").input.SetValue("6XGgm6PHrGgMpCFX, 6Jf8VQXxpwv56VQ7")
-	if view := m.View(); strings.Contains(view, "warning: ") {
+	if view := screenOf(m); strings.Contains(view, "warning: ") {
 		t.Fatalf("a project list shows a warning:\n%s", view)
 	}
 	if got := m.permissionChoices("todoist"); !reflect.DeepEqual(got, []string{"default", "read", "create", "update",

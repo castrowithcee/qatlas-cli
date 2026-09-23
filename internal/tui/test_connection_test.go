@@ -72,7 +72,7 @@ func TestConnectionTestClasses(t *testing.T) {
 			if m.testClass != want {
 				t.Errorf("class = %q, want %q", m.testClass, want)
 			}
-			view := m.View()
+			view := screenOf(m)
 			words := strings.Join(strings.Fields(view), " ")
 			if !strings.Contains(view, string(want)) {
 				t.Errorf("view = %q, want it to show %q", view, want)
@@ -127,8 +127,8 @@ func TestConnectionTestDoesNotBlock(t *testing.T) {
 	if !m.testing {
 		t.Fatal("the editor does not report a running test")
 	}
-	if !strings.Contains(m.View(), "testing wiki") {
-		t.Errorf("view = %q, want the running state", m.View())
+	if !strings.Contains(screenOf(m), "testing wiki") {
+		t.Errorf("view = %q, want the running state", screenOf(m))
 	}
 
 	// The event loop stays responsive while the test is in flight.
@@ -210,8 +210,8 @@ func TestConnectionTestRedactsUnexpectedErrors(t *testing.T) {
 	if !strings.Contains(m.fail, redact.Marker) {
 		t.Errorf("error = %q, want the redaction marker", m.fail)
 	}
-	if strings.Contains(m.View(), canary) {
-		t.Errorf("the screen shows the secret:\n%s", m.View())
+	if strings.Contains(screenOf(m), canary) {
+		t.Errorf("the screen shows the secret:\n%s", screenOf(m))
 	}
 	if m.testClass != "" {
 		t.Errorf("class = %q, want none after a failure", m.testClass)
@@ -229,7 +229,7 @@ func TestConnectionTestExplainsAMissingKeyringSecretInEditorTerms(t *testing.T) 
 
 	runTest(t, m)
 
-	view := m.View()
+	view := screenOf(m)
 	words := strings.Join(strings.Fields(view), " ")
 	for _, want := range []string{
 		"Connection test could not run",
@@ -330,7 +330,7 @@ func TestConnectionTestResultDoesNotLeakBetweenScreens(t *testing.T) {
 
 	openSectionByName(t, m, sectionServices)
 
-	if m.testClass != "" || strings.Contains(m.View(), string(provider.ClassAuth)) {
-		t.Errorf("the result survived the section change: %q\n%s", m.testClass, m.View())
+	if m.testClass != "" || strings.Contains(screenOf(m), string(provider.ClassAuth)) {
+		t.Errorf("the result survived the section change: %q\n%s", m.testClass, screenOf(m))
 	}
 }

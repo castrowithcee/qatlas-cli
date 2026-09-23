@@ -96,7 +96,7 @@ func TestKeyringSetupHappensEntirelyInTheEditor(t *testing.T) {
 	editEntry(t, m, "reader")
 	setSecret(t, m, "token-id", canaryTokenID, false)
 	setSecret(t, m, "token-secret", canaryTokenSecret, false)
-	rendered.WriteString(m.View())
+	rendered.WriteString(screenOf(m))
 	if m.fail != "" {
 		t.Fatalf("storing reported %q", m.fail)
 	}
@@ -145,13 +145,13 @@ func TestKeyringSetupHappensEntirelyInTheEditor(t *testing.T) {
 	// Every screen the editor can show, plus the file it wrote.
 	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections, sectionDefaults} {
 		openSectionByName(t, m, s)
-		rendered.WriteString(m.View())
+		rendered.WriteString(screenOf(m))
 		press(t, m, "n")
-		rendered.WriteString(m.View())
+		rendered.WriteString(screenOf(m))
 		press(t, m, "esc")
 	}
 	editEntry(t, m, "reader")
-	rendered.WriteString(m.View())
+	rendered.WriteString(screenOf(m))
 
 	for _, canary := range []string{canaryTokenID, canaryTokenSecret} {
 		if strings.Contains(rendered.String(), canary) {
@@ -186,10 +186,10 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 	}
 
 	openSectionByName(t, m, sectionCredentials)
-	if view := m.View(); !strings.Contains(view, config.CredentialTypeKeyring) {
+	if view := screenOf(m); !strings.Contains(view, config.CredentialTypeKeyring) {
 		t.Errorf("the list does not show the credential type:\n%s", view)
 	}
-	if view := m.View(); !strings.Contains(view, stateStored) {
+	if view := screenOf(m); !strings.Contains(view, stateStored) {
 		t.Errorf("the list does not show where the roles resolve from:\n%s", view)
 	}
 
@@ -203,7 +203,7 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 			t.Errorf("role %q is drawn as a variable name, not as a stored secret", role)
 		}
 	}
-	if view := m.View(); strings.Contains(view, envHint) {
+	if view := screenOf(m); strings.Contains(view, envHint) {
 		t.Errorf("the keyring form offers variable names:\n%s", view)
 	}
 
@@ -328,7 +328,7 @@ func TestTypedSecretIsMaskedAndLeavesTheModel(t *testing.T) {
 	press(t, m, "s")
 	typeText(t, m, canary)
 
-	view := m.View()
+	view := screenOf(m)
 	if strings.Contains(view, canary) {
 		t.Errorf("the prompt shows the typed secret:\n%s", view)
 	}
@@ -349,7 +349,7 @@ func TestTypedSecretIsMaskedAndLeavesTheModel(t *testing.T) {
 			t.Errorf("a form field holds the typed secret: %q", f.input.Value())
 		}
 	}
-	for _, s := range []string{m.status, m.fail, m.busy, m.probing, m.View()} {
+	for _, s := range []string{m.status, m.fail, m.busy, m.probing, screenOf(m)} {
 		if strings.Contains(s, canary) {
 			t.Errorf("the editor kept the typed secret: %q", s)
 		}
@@ -403,8 +403,8 @@ func TestPlaintextIsTheNamedWayOutWithoutAStore(t *testing.T) {
 	if !strings.Contains(m.fail, secret.DerivedEnvName("reader", "token-id")) {
 		t.Errorf("error = %q, want it to name the variable", m.fail)
 	}
-	if strings.Contains(m.View(), canary) {
-		t.Errorf("the failed write shows the secret:\n%s", m.View())
+	if strings.Contains(screenOf(m), canary) {
+		t.Errorf("the failed write shows the secret:\n%s", screenOf(m))
 	}
 
 	// The fallback is reached by asking for it, never by falling back silently.
@@ -416,7 +416,7 @@ func TestPlaintextIsTheNamedWayOutWithoutAStore(t *testing.T) {
 	if source != secret.SourcePlaintext {
 		t.Errorf("the role resolves from %q (%v), want the plaintext file", source, checked)
 	}
-	if view := m.View(); !strings.Contains(view, string(secret.SourcePlaintext)) {
+	if view := screenOf(m); !strings.Contains(view, string(secret.SourcePlaintext)) {
 		t.Errorf("the form does not say the fallback delivers:\n%s", view)
 	}
 }
@@ -431,7 +431,7 @@ func TestPlaintextNeedsAWarningAndConfirmationBeforeInput(t *testing.T) {
 	if m.screen != screenPlaintextConfirm {
 		t.Fatalf("screen = %v, want plaintext confirmation", m.screen)
 	}
-	view := strings.Join(strings.Fields(m.View()), " ")
+	view := strings.Join(strings.Fields(screenOf(m)), " ")
 	for _, want := range []string{
 		"does not use the system keyring",
 		"readable text",
@@ -439,7 +439,7 @@ func TestPlaintextNeedsAWarningAndConfirmationBeforeInput(t *testing.T) {
 		"cancel without writing",
 	} {
 		if !strings.Contains(view, want) {
-			t.Errorf("confirmation does not contain %q:\n%s", want, m.View())
+			t.Errorf("confirmation does not contain %q:\n%s", want, screenOf(m))
 		}
 	}
 	press(t, m, "n")
@@ -480,7 +480,7 @@ func TestRemovingAStoredSecret(t *testing.T) {
 	if source != secret.SourceMissing {
 		t.Errorf("the secret survived the removal: %q", source)
 	}
-	if view := m.View(); !strings.Contains(view, stateEmpty) {
+	if view := screenOf(m); !strings.Contains(view, stateEmpty) {
 		t.Errorf("the form still claims a source:\n%s", view)
 	}
 }
@@ -527,7 +527,7 @@ func TestKeyringRowsTellEveryStateApart(t *testing.T) {
 			}
 
 			editEntry(t, m, "reader")
-			view := m.View()
+			view := screenOf(m)
 			words := strings.Join(strings.Fields(view), " ")
 			if !strings.Contains(words, "token-id ("+tt.state+")") {
 				t.Errorf("the row does not say %q:\n%s", tt.state, view)
@@ -643,8 +643,8 @@ func TestSlowStoreDoesNotBlockTheEditor(t *testing.T) {
 	if m.busy == "" {
 		t.Error("the editor does not report the write it is waiting for")
 	}
-	if !strings.Contains(m.View(), "storing the secret") {
-		t.Errorf("view = %q, want the running write", m.View())
+	if !strings.Contains(screenOf(m), "storing the secret") {
+		t.Errorf("view = %q, want the running write", screenOf(m))
 	}
 
 	// The event loop stays responsive while the store is thinking.
@@ -690,8 +690,8 @@ func TestSlowStatusQueryDoesNotBlockTheEditor(t *testing.T) {
 	press(t, m, "enter")
 
 	// Opening the list asks the store where every keyring role resolves from.
-	m.screen, m.cursor = screenMenu, int(sectionCredentials)
-	_, cmd := m.Update(keyMsg("enter"))
+	m.screen = screenNav
+	_, cmd := m.Update(keyMsg("2"))
 	if cmd == nil {
 		t.Fatal("opening the credentials list asked the store nothing")
 	}
@@ -701,7 +701,7 @@ func TestSlowStatusQueryDoesNotBlockTheEditor(t *testing.T) {
 	if m.probing == "" {
 		t.Error("the editor does not report the query it is waiting for")
 	}
-	if view := m.View(); !strings.Contains(view, sourcePending) {
+	if view := screenOf(m); !strings.Contains(view, sourcePending) {
 		t.Errorf("view = %q, want the pending rows", view)
 	}
 
@@ -741,11 +741,11 @@ func TestLongMessagesStayReadable(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 80})
 		// Leaving a screen clears its message, so the failure is produced again at every width.
 		setSecret(t, m, "token-id", "canary-wrapped-9e21", false)
-		views := map[string]string{"form": m.View()}
+		views := map[string]string{"form": screenOf(m)}
 		press(t, m, "esc")
-		views["list"] = m.View()
+		views["list"] = screenOf(m)
 		press(t, m, "esc")
-		views["menu"] = m.View()
+		views["sidebar"] = screenOf(m)
 		editEntry(t, m, "reader")
 
 		for name, view := range views {

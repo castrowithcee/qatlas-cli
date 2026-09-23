@@ -144,7 +144,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	if m.screen != screenPicker {
 		t.Fatalf("space on the tool list opened screen %v, want the picker", m.screen)
 	}
-	view := m.View()
+	view := screenOf(m)
 	for _, want := range []string{"ticked: 0 of 5", "[ ] bookstack.pages.list  read",
 		"[ ] bookstack.pages.delete  delete  (not permitted)"} {
 		if !strings.Contains(view, want) {
@@ -153,8 +153,8 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	}
 	typeText(t, m, "list")
 	press(t, m, " ")
-	if !strings.Contains(m.View(), "[x] bookstack.pages.list") {
-		t.Fatalf("space did not tick the shown tool:\n%s", m.View())
+	if !strings.Contains(screenOf(m), "[x] bookstack.pages.list") {
+		t.Fatalf("space did not tick the shown tool:\n%s", screenOf(m))
 	}
 	press(t, m, "esc")
 	if got := m.fieldValue(toolListLabel); got != "" {
@@ -180,8 +180,8 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	}
 	focusField(t, m, toolListLabel)
 	press(t, m, " ", " ", "enter")
-	if !strings.Contains(m.View(), "none of 5 ticked: no tool is offered") {
-		t.Fatalf("an empty selection does not say that it closes the route:\n%s", m.View())
+	if !strings.Contains(screenOf(m), "none of 5 ticked: no tool is offered") {
+		t.Fatalf("an empty selection does not say that it closes the route:\n%s", screenOf(m))
 	}
 	pump(t, m, "enter")
 	if got := savedTools(t, path, reg, "wiki"); got == nil || len(got) != 0 {
@@ -253,7 +253,7 @@ func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
 	check := func(want string) {
 		t.Helper()
-		view := m.View()
+		view := screenOf(m)
 		if strings.Contains(view, "Resize terminal") {
 			t.Fatalf("the picker was replaced by the resize notice:\n%s", view)
 		}
@@ -301,7 +301,7 @@ func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
 	focusField(t, m, toolListLabel)
 	press(t, m, " ")
 	typeText(t, m, "workflowfiles")
-	view := m.View()
+	view := screenOf(m)
 	for _, want := range []string{"github.workflowfiles.get  read  (listed only)",
 		"github.workflowfiles.update  update  (listed only)  (not permitted)"} {
 		if !strings.Contains(view, want) {
@@ -311,7 +311,7 @@ func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
 	press(t, m, "esc")
 	press(t, m, " ")
 	typeText(t, m, "issues.list")
-	if view := m.View(); !strings.Contains(view, "github.issues.list  read") || strings.Contains(view, "(listed only)") {
+	if view := screenOf(m); !strings.Contains(view, "github.issues.list  read") || strings.Contains(view, "(listed only)") {
 		t.Fatalf("an ordinary tool is marked:\n%s", view)
 	}
 }

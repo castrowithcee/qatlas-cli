@@ -52,10 +52,18 @@ func (s section) title() string {
 	return [...]string{"Services", "Credentials", "Connections", "Defaults"}[s]
 }
 
+// entry is what one entry of the section is called.
+func (s section) entry() string {
+	return [...]string{"service", "credential", "connection", "default"}[s]
+}
+
 type screen int
 
 const (
-	screenMenu screen = iota
+	// screenNav is the sidebar in focus: the arrows choose the active section, whose list the workspace
+	// shows beside it.
+	screenNav screen = iota
+	// screenList is the list of the active section in focus.
 	screenList
 	screenForm
 	screenConfirm
@@ -67,6 +75,8 @@ const (
 	screenSummary
 	// screenProviders is the table of a provider row, over the form it was opened from.
 	screenProviders
+	// screenLeave asks what happens to the unsaved input of a form before it is left: save, discard, or stay.
+	screenLeave
 )
 
 type fieldKind int
@@ -198,15 +208,22 @@ func providerColumn(provider string) string {
 	return provider
 }
 
-// The defaults bridge the first frame until the terminal reports its real size. From then on both
-// dimensions decide which dashboard can fit.
+// The defaults bridge the first frame until the terminal reports its real size, which it does before a
+// person can press a key; they are generous so that frame is not squeezed. From then on the width decides
+// whether the sections stand in a sidebar beside the workspace or in one line above it.
 const (
-	defaultWidth  = 80
+	defaultWidth  = 120
 	defaultHeight = 100
 	minimumWidth  = 40
 	minimumHeight = 12
-	wideWidth     = 80
-	wideHeight    = 18
+	// sidebarMinWidth is the narrowest terminal that keeps the sidebar; below it the sections stack above
+	// the workspace in one navigation line.
+	sidebarMinWidth = 80
+	// sidebarWidth is the outer width of the sidebar, frame included.
+	sidebarWidth = 22
+	// frameCells is what the frame of the workspace takes from each dimension: a border line on both
+	// sides, and a blank column inside each vertical border.
+	frameCells = 4
 )
 
 func (f field) withHint(hint string) field {
@@ -263,12 +280,11 @@ type Model struct {
 	store *config.Store
 	cfg   *config.Config
 
-	screen  screen
+	screen screen
+	// section is the active section: the one the sidebar marks and whose entries, with their filter,
+	// selection and scroll position, list holds.
 	section section
-	// cursor is the section focused on the dashboard. The entries of the open section, with their filter,
-	// selection and scroll position, are list.
-	cursor int
-	list   filterList
+	list    filterList
 
 	editing string
 	fields  []field
@@ -287,6 +303,12 @@ type Model struct {
 	// pendingProfile names the profile the confirmation would apply to the permission and tool ticks of the
 	// form. Empty means the confirmation is about something else.
 	pendingProfile string
+	// pristine is what the open form held when it was opened, so leaving it can tell whether anything
+	// would be lost. leaveTo is the section the leave question is about, or -1 for the list of the form's
+	// own section; leaveFrom is the screen it returns to when the user stays.
+	pristine  string
+	leaveTo   int
+	leaveFrom screen
 
 	status string
 	fail   string
@@ -294,9 +316,13 @@ type Model struct {
 	// working while either runs.
 	busy    string
 	probing string
-	// width is what the terminal reported. Messages are wrapped into it instead of being cut off.
-	width  int
-	height int
+	// termWidth and termHeight are what the terminal reported. width and height are the room of the
+	// workspace inside the frame; every screen lays itself out in them, and messages are wrapped into
+	// width instead of being cut off.
+	termWidth  int
+	termHeight int
+	width      int
+	height     int
 	// configExists distinguishes a loaded file from a new in-memory configuration. The default directory
 	// is deliberately created only by the first successful save, and the editor must say so instead of
 	// claiming that a file which does not exist was loaded.
@@ -355,13 +381,16 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	}
 	m := &Model{
 		store: store, cfg: cfg, tester: tester, redactor: redactor,
-		secrets: secrets,
-		sources: map[string]secret.Source{},
-		checked: map[string][]string{},
-		width:   defaultWidth, height: defaultHeight, configExists: configExists,
+		secrets:   secrets,
+		sources:   map[string]secret.Source{},
+		checked:   map[string][]string{},
+		termWidth: defaultWidth, termHeight: defaultHeight, configExists: configExists,
 	}
+	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
 	m.picker = newFilterList(choiceText)
+	// The editor opens on the sidebar, with the first section already shown beside it.
+	m.list.reset(m.entryNames(m.section))
 	return m, nil
 }
 
@@ -373,7 +402,7 @@ func asNotFound(err error, target **config.NotFoundError) bool {
 	return ok
 }
 
-// Init resolves credential locations for the dashboard. It asks only for source metadata; secret values
+// Init resolves credential locations for the credential list. It asks only for source metadata; secret values
 // never enter the model.
 func (m *Model) Init() tea.Cmd { return m.refreshSources(m.keyringQueries()) }
 
@@ -396,17 +425,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// A zero dimension is also how focused tests report only the dimension they exercise. Real size
 		// messages carry both; keep the last known value until a non-zero replacement arrives.
 		if msg.Width != 0 {
-			m.width = max(msg.Width, 1)
+			m.termWidth = max(msg.Width, 1)
 		}
 		if msg.Height != 0 {
-			m.height = max(msg.Height, 1)
+			m.termHeight = max(msg.Height, 1)
 		}
+		m.layoutWorkspace()
 		return m, nil
 	case tea.KeyMsg:
 		if m.activeScreenTooSmall() {
 			switch msg.String() {
-			case "q", "ctrl+c":
+			case "ctrl+c":
 				return m, m.quit()
+			case "q":
+				// q is a letter in a form, so it quits only where nothing typed can be lost.
+				if m.screen == screenNav || m.screen == screenList {
+					return m, m.quit()
+				}
 			case "esc":
 				// Leaving is what makes this a notice instead of a trap: a screen too large for the
 				// terminal must not be the only way out of the editor.
@@ -414,10 +449,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if s, ok := altSectionShortcut(msg.String()); ok && m.canSwitchSection() {
+			return m, m.switchSection(s)
+		}
 		var cmd tea.Cmd
 		switch m.screen {
-		case screenMenu:
-			cmd = m.updateMenu(msg)
+		case screenNav:
+			cmd = m.updateNav(msg)
 		case screenList:
 			cmd = m.updateList(msg)
 		case screenForm:
@@ -434,6 +472,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateProviderTable(msg)
 		case screenSummary:
 			cmd = m.updateSummary(msg)
+		case screenLeave:
+			cmd = m.updateLeave(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -444,49 +484,40 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m *Model) updateMenu(key tea.KeyMsg) tea.Cmd {
+// updateNav handles the sidebar in focus. Moving through it changes the active section at once, so the
+// workspace beside it always shows the section the marker stands on.
+func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
 	}
 	switch key.String() {
-	case "q", "esc", "ctrl+c":
+	case "q", "ctrl+c":
 		return m.quit()
-	case "shift+tab":
-		m.cursor = wrap(m.cursor-1, int(sectionCount))
-	case "tab":
-		m.cursor = wrap(m.cursor+1, int(sectionCount))
-	case "up", "k":
-		m.moveDashboardFocus(0, -1)
+	case "up", "k", "shift+tab":
+		return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
 	case "down", "j":
-		m.moveDashboardFocus(0, 1)
-	case "left", "h":
-		m.moveDashboardFocus(-1, 0)
-	case "right", "l":
-		m.moveDashboardFocus(1, 0)
-	case "enter":
-		return m.openSection(section(m.cursor))
+		return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
+	case "enter", "right", "l", "tab":
+		m.screen = screenList
+		m.clearMessages()
 	case "c":
 		m.startSetup()
 	case "n":
-		cmd := m.openSection(section(m.cursor))
 		if reason := m.newEntryBlocked(); reason != "" {
+			m.status = ""
 			m.fail = reason
-			return cmd
+			return nil
 		}
-		return tea.Batch(cmd, m.openForm(""))
+		return m.openForm("")
 	}
 	return nil
 }
 
-func (m *Model) moveDashboardFocus(horizontal, vertical int) {
-	if m.dashboardLayout() != dashboardWide {
-		m.cursor = wrap(m.cursor+horizontal+vertical, int(sectionCount))
-		return
-	}
-	row, column := m.cursor/2, m.cursor%2
-	row = wrap(row+vertical, 2)
-	column = wrap(column+horizontal, 2)
-	m.cursor = row*2 + column
+// previewSection makes s the active section while the sidebar keeps the focus.
+func (m *Model) previewSection(s section) tea.Cmd {
+	cmd := m.openSection(s)
+	m.screen = screenNav
+	return cmd
 }
 
 func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
@@ -497,7 +528,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		return m.openSection(s)
 	}
 	switch key.String() {
-	case "esc", "q":
+	case "esc":
 		if m.testing {
 			// Cancelling the test returns to the editor with the configuration untouched.
 			m.stopTest()
@@ -509,9 +540,12 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			m.list.clearFilter()
 			return nil
 		}
-		m.screen, m.cursor = screenMenu, int(m.section)
-		m.clearMessages()
-	case "ctrl+c":
+		m.focusNav()
+	case "left", "h", "tab", "shift+tab":
+		m.focusNav()
+	case "c":
+		m.startSetup()
+	case "q", "ctrl+c":
 		return m.quit()
 	case "/":
 		m.list.startFilter()
@@ -590,44 +624,189 @@ func (m *Model) newEntryBlockedFor(s section) string {
 		}
 		if len(missing) > 0 {
 			return "Create " + strings.Join(missing, " and ") +
-				" before adding a connection. Press esc to return to setup."
+				" before adding a connection. Press 1 or 2 to open that section, or c for the guided setup."
 		}
 	case sectionDefaults:
 		if len(m.cfg.Connections) == 0 {
-			return "Create a connection before choosing a default. Press esc to return to setup."
+			return "Create a connection before choosing a default. Press 3 to open Connections, or c for " +
+				"the guided setup."
 		}
 	}
 	return ""
 }
 
-// leaveScreen steps back one screen without saving anything. It is what the resize notice offers besides
-// quitting, so a screen that does not fit is never the end of the session.
+// leaveScreen steps back one level without saving anything. It is what the resize notice offers besides
+// quitting, so a screen that does not fit is never the end of the session; a form with unsaved input asks
+// first, like every other way out of it.
 func (m *Model) leaveScreen() tea.Cmd {
 	switch m.screen {
-	case screenMenu:
+	case screenNav:
 		return nil
 	case screenList:
-		m.screen, m.cursor = screenMenu, int(m.section)
-		m.clearMessages()
+		m.focusNav()
 		return nil
-	case screenPicker:
-		// The picker steps back to its form, which keeps everything typed into it.
-		m.screen = screenForm
+	case screenLeave:
+		// Staying is the answer that loses nothing.
+		m.screen = m.leaveFrom
 		return nil
+	case screenForm, screenSummary:
+		return m.requestLeave(-1)
 	case screenProviders:
-		if m.wizard == nil {
-			m.screen = screenForm
-			return nil
-		}
-		return m.leaveSetup()
-	default:
 		if m.wizard != nil {
 			return m.leaveSetup()
 		}
-		cmd := m.returnToList("")
-		m.status = "Cancelled"
+	case screenConfirm:
+		if m.confirmRole == "" && m.pendingProfile == "" {
+			// The delete question stands over the list.
+			m.screen = screenList
+			m.status = "Cancelled"
+			return nil
+		}
+	}
+	// A picker, table, prompt or question over a form steps back to the form, which keeps everything typed
+	// into it; nothing it was about is written.
+	m.secretInput.Reset()
+	m.confirmRole, m.pendingProfile = "", ""
+	m.screen = screenForm
+	return nil
+}
+
+// focusNav hands the focus to the sidebar. The workspace keeps showing the list of the active section.
+func (m *Model) focusNav() {
+	m.screen = screenNav
+	m.clearMessages()
+}
+
+// canSwitchSection reports whether a direct section key applies now. It does on the sidebar, the list, a
+// form and the summary of the guided setup; a picker, table, prompt or confirmation is closed first, so a
+// key meant for it never jumps away from what it is about.
+func (m *Model) canSwitchSection() bool {
+	switch m.screen {
+	case screenNav, screenList, screenForm:
+		return true
+	case screenSummary:
+		return m.wizard != nil && !m.wizard.saving
+	}
+	return false
+}
+
+// switchSection opens s from wherever a section key applies. Input that was not saved is never dropped
+// or saved on the way: the leave question comes first.
+func (m *Model) switchSection(s section) tea.Cmd {
+	if m.screen == screenForm || m.screen == screenSummary {
+		return m.requestLeave(int(s))
+	}
+	return m.openSection(s)
+}
+
+// requestLeave leaves the open form, or the guided setup, for the section to, or for the list of its own
+// section when to is -1. Without unsaved input it leaves at once; otherwise it asks.
+func (m *Model) requestLeave(to int) tea.Cmd {
+	if m.wizard != nil && m.wizard.saving {
+		// The save in flight decides; leaving now would leave its outcome without a place to show.
+		return nil
+	}
+	if m.wizard != nil && m.wizard.saved != "" {
+		cmd := m.finishSetup()
+		if to >= 0 {
+			return m.openSection(section(to))
+		}
 		return cmd
 	}
+	if !m.dirty() {
+		return m.abandon(to)
+	}
+	m.leaveTo, m.leaveFrom = to, m.screen
+	m.screen = screenLeave
+	m.clearMessages()
+	return nil
+}
+
+// abandon goes where a leave question pointed, dropping the form or the guided setup with everything
+// typed into it. Nothing of it was written.
+func (m *Model) abandon(to int) tea.Cmd {
+	setup := m.wizard != nil
+	m.wizard, m.fields = nil, nil
+	var cmd tea.Cmd
+	if to >= 0 {
+		cmd = m.openSection(section(to))
+	} else {
+		cmd = m.returnToList("")
+	}
+	if setup {
+		m.status = "Setup cancelled; nothing was written"
+	}
+	return cmd
+}
+
+// dirty reports whether leaving now would lose input. A guided setup with a chosen provider always holds
+// some; a form does when any row differs from what it opened with.
+func (m *Model) dirty() bool {
+	if m.wizard != nil {
+		return m.wizard.provider != ""
+	}
+	return m.screen == screenForm && m.formState() != m.pristine
+}
+
+// formState is what the rows of the form hold, in a form that compares whole. It holds a typed secret only
+// in the guided setup, and only for the comparison; it is never drawn or stored.
+func (m *Model) formState() string {
+	var b strings.Builder
+	for _, f := range m.fields {
+		b.WriteString(f.label + "\x00" + f.value() + "\x00")
+	}
+	return b.String()
+}
+
+// updateLeave answers the leave question. s saves through the same path as enter and then goes on, d
+// drops the input and goes on, and esc returns to the form unchanged. Nothing else answers it, not even
+// y or n, whose meaning would be a guess, so a stray key neither saves nor discards.
+func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
+	switch key.String() {
+	case "ctrl+c":
+		return m.quit()
+	case "esc":
+		m.screen = m.leaveFrom
+		m.status = "Still editing; nothing was saved or discarded"
+	case "d":
+		setup := m.wizard != nil
+		cmd := m.abandon(m.leaveTo)
+		if !setup {
+			m.status = "Changes discarded; nothing was written"
+		}
+		return cmd
+	case "s":
+		if m.wizard != nil {
+			// The guided setup saves only from its summary, after every step has been checked.
+			return nil
+		}
+		return m.saveAndLeave()
+	}
+	return nil
+}
+
+// saveAndLeave saves the form like enter does and leaves it only when the save went through. A refused
+// save keeps the form open with every input and the reason.
+func (m *Model) saveAndLeave() tea.Cmd {
+	m.screen = m.leaveFrom
+	m.trimFields()
+	if cmd := m.guardTypeChange(); cmd != nil {
+		// This save has to ask the credential stores first and completes, or explains itself, when they
+		// answered; the form stays open until then.
+		return cmd
+	}
+	name := m.fields[0].value()
+	cmd := m.save(name)
+	if m.fail != "" {
+		return cmd
+	}
+	if m.leaveTo >= 0 {
+		cmd = m.openSection(section(m.leaveTo))
+	} else {
+		cmd = m.returnToList(name)
+	}
+	m.status = "Saved " + name
+	return cmd
 }
 
 func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
@@ -642,7 +821,7 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	if m.wizard != nil {
 		switch key.String() {
 		case "esc":
-			return m.leaveSetup()
+			return m.requestLeave(-1)
 		case "enter":
 			m.setupNext()
 			return nil
@@ -653,10 +832,8 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	}
 	switch key.String() {
 	case "esc":
-		// Cancelling discards the form; nothing was written.
-		cmd := m.returnToList("")
-		m.status = "Cancelled"
-		return cmd
+		// Leaving a form never drops input silently: an unchanged form closes, a changed one asks first.
+		return m.requestLeave(-1)
 	case "ctrl+c":
 		return m.quit()
 	case "tab", "down":
@@ -1458,6 +1635,7 @@ func (m *Model) openForm(name string) tea.Cmd {
 	}
 	m.focus = m.firstEditable()
 	m.applyFocus()
+	m.pristine = m.formState()
 	if m.section == sectionCredentials && m.credentialType() == config.CredentialTypeKeyring {
 		return m.refreshSources(m.editedQuery())
 	}
@@ -2020,30 +2198,57 @@ func sectionShortcut(key string) (section, bool) {
 	return section(key[0] - '1'), true
 }
 
+// altSectionShortcut is the section key that works in a form too, where the digits alone are text.
+func altSectionShortcut(key string) (section, bool) {
+	if !strings.HasPrefix(key, "alt+") {
+		return 0, false
+	}
+	return sectionShortcut(strings.TrimPrefix(key, "alt+"))
+}
+
+// The colours are few and taken from the terminal's own palette, so they follow its theme. None of them
+// carries meaning on its own: focus has its marker and its border, a result its "[ok]", "[failed]",
+// "warning:" or "error:" prefix, and a terminal without colour, or with NO_COLOR set, loses nothing.
 var (
+	accent       = lipgloss.Color("6")
 	titleStyle   = lipgloss.NewStyle().Bold(true)
-	activeStyle  = lipgloss.NewStyle().Bold(true)
+	activeStyle  = lipgloss.NewStyle().Bold(true).Foreground(accent)
 	hintStyle    = lipgloss.NewStyle().Faint(true)
-	failStyle    = lipgloss.NewStyle().Bold(true)
+	okStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("2"))
+	failStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("1"))
 	warningStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3"))
+	focusBorder  = lipgloss.NewStyle().Foreground(accent)
+	quietBorder  = lipgloss.NewStyle().Faint(true)
 )
 
-// View renders the current screen.
+// View renders the frame: the configuration path, the sections, and the workspace with the current screen.
 func (m *Model) View() string {
 	if m.quitting {
 		return ""
 	}
-	if m.activeScreenTooSmall() {
+	if m.terminalTooSmall() {
+		if m.screen == screenLeave {
+			return m.boundTo(m.leaveView(), m.termWidth, m.termHeight)
+		}
 		return m.resizeView()
 	}
-	if m.screen == screenMenu {
-		return m.dashboardView()
-	}
+	return m.frame(m.workspaceView())
+}
+
+// workspaceView is the current screen, or, when it cannot fit the workspace, what it needs and the way out
+// of it. The sections and the path stay on screen either way.
+func (m *Model) workspaceView() string {
 	view := m.editorView()
-	if !m.viewFits(view) {
-		return m.resizeView()
+	if m.screen == screenLeave || m.viewFits(view) {
+		return view
 	}
-	return view
+	width, height := lipgloss.Width(view), lipgloss.Height(view)
+	way := "esc leave, asking first if anything changed"
+	if m.screen == screenNav || m.screen == screenList {
+		way = "q quit"
+	}
+	return m.boundView(wrapCells(fmt.Sprintf("Resize terminal. Need %dx%d. %s.",
+		width+m.termWidth-m.width, height+m.termHeight-m.height, way), m.width))
 }
 
 // editorView renders the current screen at the density its terminal allows. A form whose hints do not fit
@@ -2061,7 +2266,7 @@ func (m *Model) editorView() string {
 
 func (m *Model) buildEditorView(dense bool) string {
 	switch m.screen {
-	case screenList:
+	case screenNav, screenList:
 		return m.listView()
 	case screenPicker:
 		return m.pickerView()
@@ -2069,16 +2274,9 @@ func (m *Model) buildEditorView(dense bool) string {
 		return m.providerTableView()
 	}
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("Qatlas setup") + "\n")
-	path := "Config: " + m.store.Path()
-	if !m.configExists {
-		path += " (created on first save)"
-	}
-	b.WriteString(m.wrapped(hintStyle, path) + "\n\n")
-
 	switch m.screen {
 	case screenForm:
-		what := "New " + strings.ToLower(m.section.title())
+		what := "New " + m.section.entry()
 		if m.editing != "" {
 			what = "Edit " + m.editing
 		}
@@ -2098,7 +2296,7 @@ func (m *Model) buildEditorView(dense bool) string {
 			if i > 0 && !dense {
 				b.WriteString("\n")
 			}
-			b.WriteString(line(i == m.focus, m.renderField(f, i == m.focus)) + "\n")
+			b.WriteString(m.formRow(i == m.focus, f.label, m.renderField(f, i == m.focus)) + "\n")
 			if dense && i != m.focus {
 				continue
 			}
@@ -2109,28 +2307,28 @@ func (m *Model) buildEditorView(dense bool) string {
 				b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 			}
 		}
-		keys := "tab move · left/right choose · enter save · esc cancel"
+		keys := "tab move · left/right choose · " + formKeys
 		if f := m.fields[m.focus]; f.kind == fieldChoice && len(f.choices) >= pickerThreshold {
 			keys = "/ search · " + keys
 		}
 		if m.fields[m.focus].kind == fieldMultiChoice {
-			keys = "left/right choose · space toggle · " + keys
+			keys = "left/right choose · space toggle · tab move · " + formKeys
 		}
 		if m.fields[m.focus].kind == fieldToolList {
-			keys = "space or / pick tools · tab move · enter save · esc cancel"
+			keys = "space or / pick tools · tab move · " + formKeys
 		}
 		if m.fields[m.focus].kind == fieldProvider {
-			keys = "enter choose provider in the table · tab move · esc cancel"
+			keys = "enter choose provider in the table · tab move · " + leaveKeys
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
-				keys = "enter save credential first · tab move · esc cancel"
+				keys = "enter save credential first · tab move · " + leaveKeys
 			} else {
 				keys = "s store in system keyring · p unencrypted file (asks first) · x remove · " + keys
 			}
 		}
 		if m.wizard != nil {
-			keys = strings.Replace(keys, "enter save · esc cancel", setupKeys(m.wizard.step), 1)
+			keys = strings.Replace(keys, formKeys, setupKeys(m.wizard.step), 1)
 		}
 		b.WriteString(m.hint(keys))
 	case screenPlaintextConfirm:
@@ -2178,10 +2376,41 @@ func (m *Model) buildEditorView(dense bool) string {
 		b.WriteString(m.hint("y remove · n keep"))
 	case screenSummary:
 		b.WriteString(m.summaryView())
+	case screenLeave:
+		b.WriteString(m.leaveView())
 	}
 
 	b.WriteString(m.notes())
 	return b.String()
+}
+
+// formKeys ends the key line of every form: how it is saved and, in leaveKeys, the two ways out of it, both
+// of which ask before unsaved input is lost. A section key in a form carries alt, because the digits are
+// text there.
+const (
+	leaveKeys = "esc leave · alt+1-4 section"
+	formKeys  = "enter save · " + leaveKeys
+)
+
+// leaveView is the leave question. It names what would be lost and where the user was going, and offers
+// exactly the answers that apply; they come right under the warning, so even a tiny terminal shows them.
+func (m *Model) leaveView() string {
+	what := "New " + m.section.entry()
+	if m.editing != "" {
+		what = m.editing
+	}
+	where := "the " + m.section.title() + " list"
+	if m.leaveTo >= 0 {
+		where = section(m.leaveTo).title()
+	}
+	warning, keys := "warning: unsaved changes in "+what, "s save and go on · d discard · esc keep editing"
+	why := "Leaving for " + where + " would lose them."
+	if m.wizard != nil {
+		warning, keys = "warning: the guided setup is not saved", "d discard setup · esc keep editing"
+		why = "Leaving for " + where + " drops every step, typed secrets included. Nothing was written yet."
+	}
+	return m.wrapped(warningStyle, warning) + "\n" + m.wrapped(hintStyle, keys) + "\n\n" +
+		m.wrapped(lipgloss.NewStyle(), why)
 }
 
 // notes are the lines under every editor screen: what is still running, and what the last action did.
@@ -2218,13 +2447,6 @@ func (m *Model) listView() string {
 // that are left, so a list of any length fits the terminal and only the rows scroll.
 func (m *Model) listFrame() (string, string) {
 	var head strings.Builder
-	head.WriteString(titleStyle.Render("Qatlas setup") + "\n")
-	path := "Config: " + m.store.Path()
-	if !m.configExists {
-		path += " (created on first save)"
-	}
-	head.WriteString(m.wrapped(hintStyle, path) + "\n\n")
-
 	title := titleStyle.Render(m.section.title())
 	total, shown := len(m.list.all), len(m.list.matches)
 	filtered := m.list.editing || m.list.query() != ""
@@ -2250,15 +2472,17 @@ func (m *Model) listFrame() (string, string) {
 
 	var keys string
 	switch {
+	case m.screen == screenNav:
+		keys = "up/down section · enter open list · 1-4 open · n new · c guided setup · q quit"
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · enter edit · d delete · t test · esc back"
+		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-4 or left sections · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · d delete · esc back"
+		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-4 or left sections · q quit"
 	}
-	if !m.list.editing && m.list.query() != "" {
-		keys = strings.TrimSuffix(keys, "esc back") + "esc clear filter"
+	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
+		keys += " · esc clear filter"
 	}
 	foot := m.hint(keys)
 	if m.section == sectionConnections {
@@ -2287,9 +2511,10 @@ func (m *Model) searchLine(l *filterList, label string) string {
 	return prefix + in.View()
 }
 
-// listRow draws the shown entry at index i of the list.
+// listRow draws the shown entry at index i of the list. The selection carries the focus marker only while
+// the list has the focus, so the screen never shows two.
 func (m *Model) listRow(i int) string {
-	return m.row(i == m.list.cursor, m.describe(m.list.matches[i]))
+	return m.row(i == m.list.cursor && m.screen != screenNav, m.describe(m.list.matches[i]))
 }
 
 // listWindow is the range of shown entries whose rows fit between the frame of the list screen.
@@ -2384,7 +2609,7 @@ func (m *Model) keepScrollPosition() {
 		return
 	}
 	switch m.screen {
-	case screenList:
+	case screenNav, screenList:
 		m.list.offset, _ = m.listWindow()
 	case screenPicker:
 		m.picker.offset, _ = m.pickerWindow()
@@ -2393,23 +2618,17 @@ func (m *Model) keepScrollPosition() {
 	}
 }
 
-type dashboardLayout int
-
-const (
-	dashboardCompact dashboardLayout = iota
-	dashboardStacked
-	dashboardWide
-)
-
 func (m *Model) terminalTooSmall() bool {
-	return m.width > 0 && m.height > 0 && (m.width < minimumWidth || m.height < minimumHeight)
+	return m.termWidth < minimumWidth || m.termHeight < minimumHeight
 }
 
+// activeScreenTooSmall reports whether the current screen cannot be used at this size. The leave question
+// is always answerable: it is the one screen whose keys protect unsaved input.
 func (m *Model) activeScreenTooSmall() bool {
-	if m.terminalTooSmall() {
-		return true
+	if m.screen == screenLeave {
+		return false
 	}
-	return m.screen != screenMenu && !m.viewFits(m.editorView())
+	return m.terminalTooSmall() || !m.viewFits(m.editorView())
 }
 
 func (m *Model) viewFits(view string) bool {
@@ -2427,246 +2646,145 @@ func (m *Model) viewFits(view string) bool {
 	return true
 }
 
-func (m *Model) dashboardLayout() dashboardLayout {
-	switch {
-	case m.width >= wideWidth && m.height >= wideHeight:
-		return dashboardWide
-	case m.width >= 60 && m.height >= 22:
-		return dashboardStacked
-	default:
-		return dashboardCompact
-	}
-}
-
-// resizeView is deliberately useful even at one cell by one row: q remains visible, while additional
-// room reveals the requested size. Rendering it does not change the screen, focus, form, or test state, so
-// resizing back resumes exactly where the user was.
+// resizeView is deliberately useful even at one cell by one row: the way out remains visible, while
+// additional room reveals the requested size. Rendering it does not change the screen, focus, form, or
+// test state, so resizing back resumes exactly where the user was.
 func (m *Model) resizeView() string {
-	width, height := minimumWidth, minimumHeight
-	if m.screen != screenMenu && !m.terminalTooSmall() {
-		view := m.editorView()
-		lines := strings.Split(view, "\n")
-		height = max(height, len(lines))
-		for _, line := range lines {
-			width = max(width, lipgloss.Width(line))
-		}
+	way := "q quit"
+	if m.screen != screenNav && m.screen != screenList {
+		way = "esc leave"
 	}
-	lines := []string{"q", "Resize terminal", fmt.Sprintf("Need %dx%d", width, height)}
-	if m.width >= 6 {
-		lines[0] = "q quit"
-	}
-	return m.boundView(strings.Join(lines, "\n"))
+	lines := []string{way, "Resize terminal", fmt.Sprintf("Need %dx%d", minimumWidth, minimumHeight)}
+	return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
 }
 
-func (m *Model) dashboardView() string {
-	var b strings.Builder
-	b.WriteString(m.clipLine("Qatlas setup"))
-	b.WriteByte('\n')
+// sidebarLayout reports whether the sections stand in a sidebar beside the workspace.
+func (m *Model) sidebarLayout() bool { return m.termWidth >= sidebarMinWidth }
 
-	layout := m.dashboardLayout()
-	if layout == dashboardCompact {
-		b.WriteString(wrapCells(m.dashboardPath(), m.width))
-		b.WriteByte('\n')
-		for s := section(0); s < sectionCount; s++ {
-			marker := "  "
-			if int(s) == m.cursor {
-				marker = "> "
-			}
-			b.WriteString(m.clipLine(fmt.Sprintf("%s%d. %-13s %d", marker, int(s)+1, s.title(),
-				len(m.entryNames(s)))))
-			b.WriteByte('\n')
-		}
-		b.WriteString(wrapCells("Next: "+m.nextStep(), m.width))
-		b.WriteByte('\n')
-		b.WriteString(m.clipLine("c setup · arrows · enter · n · 1-4 · q"))
-	} else {
-		path := m.dashboardPath()
-		b.WriteString(wrapCells(path, m.width))
-		b.WriteByte('\n')
-		b.WriteString(wrapCells(setupEntry, m.width))
-		b.WriteByte('\n')
-		b.WriteString(wrapCells("Next: "+m.nextStep(), m.width))
-		b.WriteByte('\n')
-		rows := m.dashboardRows(layout, path)
-
-		if layout == dashboardWide {
-			left := (m.width - 1) / 2
-			right := m.width - left - 1
-			for row := 0; row < 2; row++ {
-				if row > 0 {
-					b.WriteByte('\n')
-				}
-				b.WriteString(joinCards(m.dashboardCard(section(row*2), left, rows),
-					m.dashboardCard(section(row*2+1), right, rows)))
-				b.WriteByte('\n')
-			}
-		} else {
-			for s := section(0); s < sectionCount; s++ {
-				b.WriteString(m.dashboardCard(s, m.width, rows))
-				b.WriteByte('\n')
-			}
-		}
-		help := "c setup · arrows/hjkl/tab · enter · n · 1-4 · q"
-		if layout == dashboardWide {
-			help = "c guided setup · arrows/hjkl/tab move · enter open · n new · 1-4 open · q quit"
-		}
-		b.WriteString(m.clipLine(help))
+// layoutWorkspace derives the room of the workspace from the terminal. Above it stands one line with the
+// configuration path; beside it the sidebar with its frame, or above it one navigation line and a rule.
+func (m *Model) layoutWorkspace() {
+	if m.sidebarLayout() {
+		m.width = max(m.termWidth-sidebarWidth-1-frameCells, 1)
+		m.height = max(m.termHeight-1-2, 1)
+		return
 	}
-
-	for _, note := range []string{m.busy, m.probing} {
-		if note != "" {
-			b.WriteByte('\n')
-			b.WriteString(wrapCells(note+" ...", m.width))
-		}
-	}
-	if m.fail != "" {
-		b.WriteByte('\n')
-		b.WriteString(wrapCells("error: "+m.fail, m.width))
-	} else if m.status != "" {
-		b.WriteByte('\n')
-		b.WriteString(wrapCells(m.status, m.width))
-	}
-	return m.boundView(strings.TrimSuffix(b.String(), "\n"))
+	m.width = max(m.termWidth, 1)
+	m.height = max(m.termHeight-3, 1)
 }
 
-func (m *Model) dashboardPath() string {
-	path := "Config: " + m.store.Path()
+// frame puts the workspace into the editor's frame.
+func (m *Model) frame(workspace string) string {
+	lines := []string{m.pathLine()}
+	content := strings.Split(workspace, "\n")
+	if !m.sidebarLayout() {
+		lines = append(lines, m.navLine(), quietBorder.Render(strings.Repeat("─", m.termWidth)))
+		lines = append(lines, content...)
+		return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
+	}
+	title := m.section.title()
+	if m.wizard != nil {
+		title = "Guided setup"
+	}
+	left := box("Sections", m.sidebarLines(), sidebarWidth-frameCells, m.height, m.screen == screenNav)
+	right := box(title, content, m.width, m.height, m.screen != screenNav)
+	for i := range left {
+		lines = append(lines, left[i]+" "+right[i])
+	}
+	return strings.Join(lines, "\n")
+}
+
+// pathLine names the configuration file the editor works on. A path too long for the line keeps its end,
+// the part that tells files apart.
+func (m *Model) pathLine() string {
+	suffix := ""
 	if !m.configExists {
-		path += " (created on first save)"
+		suffix = " (created on first save)"
 	}
-	return path
+	title := "Qatlas setup  "
+	if m.termWidth < 60 {
+		title = ""
+	}
+	room := m.termWidth - lipgloss.Width(title+"Config: "+suffix)
+	return titleStyle.Render(title) + hintStyle.Render("Config: "+truncateLeft(m.store.Path(), room)+suffix)
 }
 
-func (m *Model) dashboardRows(layout dashboardLayout, path string) int {
-	headerRows := 1 + len(strings.Split(wrapCells(path, m.width), "\n")) +
-		len(strings.Split(wrapCells(setupEntry, m.width), "\n")) +
-		len(strings.Split(wrapCells("Next: "+m.nextStep(), m.width), "\n")) + 1
-	if layout == dashboardWide {
-		headerRows++ // the blank line between the two card rows
-	}
-	for _, note := range []string{m.busy, m.probing} {
-		if note != "" {
-			headerRows += len(strings.Split(wrapCells(note+" ...", m.width), "\n"))
-		}
-	}
-	if m.fail != "" {
-		headerRows += len(strings.Split(wrapCells("error: "+m.fail, m.width), "\n"))
-	} else if m.status != "" {
-		headerRows += len(strings.Split(wrapCells(m.status, m.width), "\n"))
-	}
-
-	groups := 4
-	if layout == dashboardWide {
-		groups = 2
-	}
-	available := max((m.height-headerRows)/groups-2, 1) // top and bottom border use two rows
-	needed := 1
+// sidebarLines are the rows of the sidebar: the sections with their entry counts, the guided setup, quitting,
+// and the next step while there is room. The active section is marked "> " while the sidebar has the focus
+// and "* " while the workspace has it; the marker, not the colour, is what says so.
+func (m *Model) sidebarLines() []string {
+	inner := sidebarWidth - frameCells
+	var lines []string
 	for s := section(0); s < sectionCount; s++ {
-		needed = max(needed, len(m.dashboardDetails(s)))
+		text := fmt.Sprintf("%d %-11s%3d", int(s)+1, s.title(), len(m.entryNames(s)))
+		switch {
+		case s != m.section || m.wizard != nil:
+			lines = append(lines, "  "+text)
+		case m.screen == screenNav:
+			lines = append(lines, activeStyle.Render("> "+text))
+		default:
+			lines = append(lines, titleStyle.Render("* "+text))
+		}
 	}
-	return min(available, max(needed, 2))
-}
-
-// dashboardCard is a small table: its top border identifies the section and count; following rows are
-// actual configured entries or the concrete prerequisite for creating one. Its fixed dimensions make two
-// cards safe to join without relying on terminal-side wrapping.
-func (m *Model) dashboardCard(s section, width, rows int) string {
-	width = max(width, 4)
-	inner := width - 4
-	bottom := "╰" + strings.Repeat("─", width-2) + "╯"
-	marker := "  "
-	if int(s) == m.cursor {
-		marker = "> "
+	setup := "  c guided setup"
+	if m.wizard != nil {
+		setup = activeStyle.Render("> c guided setup")
 	}
-	label := truncateCells(fmt.Sprintf("%s%d. %s · %d · %s ", marker, int(s)+1, s.title(),
-		len(m.entryNames(s)), dashboardPurpose(s)), width-2)
-	top := "╭" + label + strings.Repeat("─", max(width-2-lipgloss.Width(label), 0)) + "╮"
-	lines := make([]string, 0, rows)
-	details := m.dashboardDetails(s)
-	if len(details) > rows {
-		lines = append(lines, details[:rows-1]...)
-		lines = append(lines, fmt.Sprintf("+%d more", len(details)-rows+1))
-	} else {
-		lines = append(lines, details...)
-	}
-	for len(lines) < rows {
+	lines = append(lines, "", setup, "  q quit")
+	if next := render(hintStyle, inner, "next: "+m.nextStep()); len(lines)+1+strings.Count(next, "\n")+1 <= m.height {
 		lines = append(lines, "")
+		lines = append(lines, strings.Split(next, "\n")...)
 	}
-
-	rendered := make([]string, 0, len(lines)+2)
-	rendered = append(rendered, top)
-	for _, line := range lines {
-		rendered = append(rendered, "│ "+padLine(truncateCells(line, inner), inner)+" │")
-	}
-	rendered = append(rendered, bottom)
-	return strings.Join(rendered, "\n")
+	return lines
 }
 
-func dashboardPurpose(s section) string {
-	return [...]string{"server URLs", "secret sources", "service + credential", "optional choices"}[s]
+// navLine is the navigation of a narrow terminal: every section in one line, the active one in brackets,
+// and "> " in front while it has the focus. A terminal too narrow for the names keeps the active name and
+// the numbers of the others.
+func (m *Model) navLine() string {
+	focus := "  "
+	if m.screen == screenNav {
+		focus = "> "
+	}
+	full, short := []string{}, []string{}
+	for s := section(0); s < sectionCount; s++ {
+		name := fmt.Sprintf("%d %s", int(s)+1, s.title())
+		if s == m.section && m.wizard == nil {
+			full, short = append(full, "["+name+"]"), append(short, "["+name+"]")
+			continue
+		}
+		full, short = append(full, " "+name+" "), append(short, fmt.Sprint(int(s)+1))
+	}
+	if m.wizard != nil {
+		full, short = append(full, "[c setup]"), append(short, "[c setup]")
+	}
+	line := focus + strings.Join(full, " ")
+	if lipgloss.Width(line) > m.termWidth {
+		line = focus + strings.Join(short, " ")
+	}
+	return activeStyle.Render(clipCells(line, m.termWidth))
 }
 
-func (m *Model) dashboardDetails(s section) []string {
-	names := m.entryNames(s)
-	if len(names) == 0 {
-		if reason := m.newEntryBlockedFor(s); reason != "" {
-			return []string{strings.TrimSuffix(strings.Split(reason, ".")[0], ".")}
-		}
-		if s == sectionDefaults {
-			return []string{"Optional; commands can use --connection"}
-		}
-		return []string{"No entries; press n to create one"}
+// box draws a frame of inner width by rows around lines, with its title in the top border. The frame with
+// the focus is drawn double, the other one single, so focus reads without colour as well.
+func box(title string, lines []string, inner, rows int, focused bool) []string {
+	style, h, v, corners := quietBorder, "─", "│", [4]string{"╭", "╮", "╰", "╯"}
+	if focused {
+		style, h, v, corners = focusBorder, "═", "║", [4]string{"╔", "╗", "╚", "╝"}
 	}
-	details := make([]string, 0, len(names))
-	for _, name := range names {
-		details = append(details, m.dashboardEntry(s, name))
+	label := truncateCells(" "+title+" ", inner+1)
+	out := []string{style.Render(corners[0]+h) + titleStyle.Render(label) +
+		style.Render(strings.Repeat(h, max(inner+1-lipgloss.Width(label), 0))+corners[1])}
+	for i := 0; i < rows; i++ {
+		text := ""
+		if i < len(lines) {
+			text = lines[i]
+		}
+		out = append(out, style.Render(v)+" "+padLine(text, inner)+" "+style.Render(v))
 	}
-	return details
+	return append(out, style.Render(corners[2]+strings.Repeat(h, inner+2)+corners[3]))
 }
 
-// dashboardEntry contains configuration and resolver status only. In particular it never requests or
-// renders a secret value.
-func (m *Model) dashboardEntry(s section, name string) string {
-	switch s {
-	case sectionServices:
-		service := m.cfg.Services[name]
-		return fmt.Sprintf("%s · %s · %s", service.Provider, name, service.BaseURL)
-	case sectionCredentials:
-		cred := m.cfg.Credentials[name]
-		provider := m.credentialProvider(name, cred)
-		credentialRoles := m.credentialRoles(provider)
-		roles := make([]string, 0, len(credentialRoles))
-		for _, role := range credentialRoles {
-			source := sourceUnnamed
-			if cred.Type == config.CredentialTypeKeyring {
-				source = m.storedSource(name, role)
-			} else if envName := cred.Values[role]; envName != "" {
-				source = m.envSource(envName)
-			}
-			roles = append(roles, role+"="+source)
-		}
-		return fmt.Sprintf("%s · %s · %s · %s", providerColumn(provider), name, cred.Type,
-			strings.Join(roles, ", "))
-	case sectionConnections:
-		connection := m.cfg.Connections[name]
-		detail := fmt.Sprintf("%s · %s + %s", name, connection.Service, connection.Credential)
-		if targets := formatTargets(connection); targets != "" {
-			detail += " → " + targets
-		}
-		if m.needsDescription(name) {
-			detail += " · " + undescribedMarker
-		}
-		return detail
-	case sectionDefaults:
-		return fmt.Sprintf("%s → %s", name, m.cfg.Defaults.Connections[name])
-	default:
-		return name
-	}
-}
-
-// needsDescription reports whether a connection has no description although another connection leads to the
-// same provider. Without a unique default an agent has to choose between such routes, and it sees their
-// names and descriptions only.
 func (m *Model) needsDescription(name string) bool {
 	connection := m.cfg.Connections[name]
 	provider := m.cfg.Services[connection.Service].Provider
@@ -2681,26 +2799,40 @@ func (m *Model) needsDescription(name string) bool {
 	return false
 }
 
-func joinCards(left, right string) string {
-	leftLines, rightLines := strings.Split(left, "\n"), strings.Split(right, "\n")
-	lines := make([]string, min(len(leftLines), len(rightLines)))
+// boundView cuts plain text to the workspace.
+func (m *Model) boundView(view string) string { return m.boundTo(view, m.width, m.height) }
+
+// boundTo cuts view to width by height. Lines that already fit keep their styling; only a line that does
+// not fit is cut, which the callers keep to plain text.
+func (m *Model) boundTo(view string, width, height int) string {
+	width, height = max(width, 1), max(height, 1)
+	lines := strings.Split(view, "\n")
+	if len(lines) > height {
+		lines = lines[:height]
+	}
 	for i := range lines {
-		lines[i] = leftLines[i] + " " + rightLines[i]
+		if lipgloss.Width(lines[i]) > width {
+			lines[i] = clipCells(lines[i], width)
+		}
 	}
 	return strings.Join(lines, "\n")
 }
 
-func (m *Model) clipLine(line string) string { return clipCells(line, max(m.width, 1)) }
-
-func (m *Model) boundView(view string) string {
-	lines := strings.Split(view, "\n")
-	if m.height > 0 && len(lines) > m.height {
-		lines = lines[:m.height]
+// truncateLeft keeps the end of text within width and marks the cut at its start.
+func truncateLeft(text string, width int) string {
+	if lipgloss.Width(text) <= width {
+		return text
 	}
-	for i := range lines {
-		lines[i] = m.clipLine(lines[i])
+	if width <= 1 {
+		return clipCells("…", max(width, 0))
 	}
-	return strings.Join(lines, "\n")
+	runes := []rune(text)
+	for i := range runes {
+		if tail := string(runes[i:]); lipgloss.Width(tail) <= width-1 {
+			return "…" + tail
+		}
+	}
+	return "…"
 }
 
 func clipCells(text string, width int) string {
@@ -2793,7 +2925,26 @@ func (m *Model) emptyHelp() string {
 // messages, the ones that explain the most, that get truncated. Wrapping keeps all of it on screen and
 // needs nothing but the width the terminal already reports.
 func (m *Model) wrapped(style lipgloss.Style, text string) string {
-	return style.Width(m.usable(0)).Render(text)
+	return render(style, m.usable(0), text)
+}
+
+// render wraps text into width and styles it line by line. A line that fits is left exactly as it is,
+// including a trailing blank that may be the cursor of an input. A line that does not is wrapped, and its
+// pieces lose their trailing blanks: Lip Gloss pads them and keeps the space at a wrap point, which can make
+// a piece one cell wider than asked for and push the frame out of line.
+func render(style lipgloss.Style, width int, text string) string {
+	width = max(width, 1)
+	var out []string
+	for _, line := range strings.Split(text, "\n") {
+		if lipgloss.Width(line) <= width {
+			out = append(out, style.Render(line))
+			continue
+		}
+		for _, piece := range strings.Split(lipgloss.NewStyle().Width(width).Render(line), "\n") {
+			out = append(out, style.Render(strings.TrimRight(piece, " ")))
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 // usable is the room left for text after a prefix of n cells.
@@ -2833,7 +2984,7 @@ func (m *Model) indented(text string) string {
 
 func (m *Model) indentedWith(style lipgloss.Style, text string) string {
 	indent, width := m.fit("    ")
-	lines := strings.Split(style.Width(width).Render(text), "\n")
+	lines := strings.Split(render(style, width, text), "\n")
 	for i, l := range lines {
 		lines[i] = indent + l
 	}
@@ -2910,8 +3061,8 @@ func (m *Model) testLine() string {
 	case m.testing:
 		return "\n" + m.wrapped(hintStyle, fmt.Sprintf("testing %s ... (esc cancels)", m.testName))
 	case m.testClass == provider.ClassOK:
-		return "\n" + m.wrapped(activeStyle,
-			fmt.Sprintf("%s: ok - %s accepted the connection", m.testName, providerName))
+		return "\n" + m.wrapped(okStyle,
+			fmt.Sprintf("[ok] %s: ok - %s accepted the connection", m.testName, providerName))
 	case m.testClass != "":
 		explanation := map[provider.Class]string{
 			provider.ClassUnreachable:     "the server did not answer; check the base URL and network",
@@ -2927,7 +3078,7 @@ func (m *Model) testLine() string {
 			explanation = "BookStack rejected the token or its user lacks permission"
 		}
 		return "\n" + m.wrapped(failStyle,
-			fmt.Sprintf("%s: %s - %s", m.testName, m.testClass, explanation))
+			fmt.Sprintf("[failed] %s: %s - %s", m.testName, m.testClass, explanation))
 	}
 	return ""
 }
@@ -3015,7 +3166,16 @@ func (m *Model) renderField(f field, focused bool) string {
 				parts[i] = "<" + parts[i] + ">"
 			}
 		}
-		value = strings.Join(parts, "  ")
+		// A box is never split from its value: the row breaks between the values only.
+		var lines []string
+		for _, part := range parts {
+			if last := len(lines) - 1; last >= 0 && lipgloss.Width(lines[last]+"  "+part) <= m.usable(formIndent) {
+				lines[last] += "  " + part
+				continue
+			}
+			lines = append(lines, part)
+		}
+		value = strings.Join(lines, "\n")
 	case focused && !f.readOnly:
 		value = f.input.View()
 		if f.kind == fieldEnvName && f.value() != "" {
@@ -3026,14 +3186,27 @@ func (m *Model) renderField(f field, focused bool) string {
 	case value == "":
 		value = hintStyle.Render("(empty)")
 	}
-	return fmt.Sprintf("%-12s %s", f.label, value)
+	return value
 }
 
-func line(active bool, text string) string {
+// formIndent is where the value of a form row starts: the focus marker and the label column.
+const formIndent = 15
+
+// formRow draws one form row: the focus marker, the label, and the value, which continues under itself
+// when it does not fit instead of pushing past the right edge.
+func (m *Model) formRow(active bool, label, value string) string {
+	marker, style := "  ", lipgloss.NewStyle()
 	if active {
-		return activeStyle.Render("> " + text)
+		marker, style = "> ", activeStyle
 	}
-	return "  " + text
+	head := fmt.Sprintf("%s%-12s ", marker, label)
+	indent, width := m.fit(strings.Repeat(" ", lipgloss.Width(head)))
+	lines := strings.Split(render(style, width, value), "\n")
+	lines[0] = style.Render(head) + lines[0]
+	for i := 1; i < len(lines); i++ {
+		lines[i] = indent + lines[i]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // row draws one line of a list. A line that does not fit is continued under its own entry instead of being
@@ -3049,7 +3222,7 @@ func (m *Model) row(active bool, text string) string {
 	if active {
 		style = activeStyle
 	}
-	lines := strings.Split(style.Width(width).Render(text), "\n")
+	lines := strings.Split(render(style, width, text), "\n")
 	for i, l := range lines {
 		prefix := blank
 		if i == 0 {

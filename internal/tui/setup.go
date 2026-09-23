@@ -52,9 +52,7 @@ var setupLeads = [setupSteps]string{
 }
 
 const (
-	// setupEntry is the line that offers the guided setup on the dashboard.
-	setupEntry = "c  Set up a connection: guided from provider to a tested connection"
-	savedLead  = "The connection is saved. t runs the same connection test as the Connections list; " +
+	savedLead = "The connection is saved. t runs the same connection test as the Connections list; " +
 		"enter opens the Connections list."
 
 	// The choices that add an entry instead of reusing one. A name cannot start with a parenthesis, so
@@ -304,22 +302,10 @@ func (m *Model) setupBack() {
 	m.setupShow(w.step - 1)
 }
 
-// leaveSetup is esc: it cancels a setup that is not saved yet, and closes one that is.
-func (m *Model) leaveSetup() tea.Cmd {
-	w := m.wizard
-	switch {
-	case w.saving:
-		return nil
-	case w.saved != "":
-		return m.finishSetup()
-	}
-	// Dropping the setup drops every typed secret with it; nothing reached the file or a store.
-	m.wizard, m.fields = nil, nil
-	m.screen = screenMenu
-	m.clearMessages()
-	m.status = "Setup cancelled; nothing was written"
-	return nil
-}
+// leaveSetup is esc: it closes a saved setup, and cancels one that is not saved yet, asking first once a
+// provider was chosen. Dropping the setup drops every typed secret with it; nothing reached the file or a
+// store.
+func (m *Model) leaveSetup() tea.Cmd { return m.requestLeave(-1) }
 
 // finishSetup ends a saved setup on the Connections list, with the new connection selected.
 func (m *Model) finishSetup() tea.Cmd {
@@ -589,7 +575,7 @@ func setupKeys(step int) string {
 	if step == stepProvider {
 		return "enter next · esc cancel setup"
 	}
-	return "enter next · ctrl+b back · esc cancel setup"
+	return "enter next · ctrl+b back · esc cancel setup · alt+1-4 section"
 }
 
 // setupHeading is the title of the current step and what it decides.
@@ -632,7 +618,7 @@ func (m *Model) summaryView() string {
 		b.WriteString(m.indentedWith(warningStyle, "warning: the secrets are written unencrypted into "+
 			m.plaintextPath()) + "\n")
 	}
-	keys := "enter save · ctrl+b back · esc cancel setup"
+	keys := "enter save · ctrl+b back · esc cancel setup · alt+1-4 section"
 	switch {
 	case w.saving:
 		keys = "ctrl+c quit"

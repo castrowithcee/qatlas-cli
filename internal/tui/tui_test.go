@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
@@ -149,10 +151,10 @@ func clearField(t *testing.T, m *Model) {
 	}
 }
 
-// openSectionByName navigates from the menu to a section.
+// openSectionByName navigates from the sidebar to a section.
 func openSectionByName(t *testing.T, m *Model, s section) {
 	t.Helper()
-	m.screen, m.cursor = screenMenu, 0
+	m.screen = screenNav
 	pump(t, m, string(rune('1'+s)))
 	if m.section != s {
 		t.Fatalf("section = %v, want %v", m.section, s)
@@ -307,34 +309,54 @@ func TestFullConfigurationFlow(t *testing.T) {
 func TestNavigation(t *testing.T) {
 	m, _, _ := newModel(t)
 
-	t.Run("the grid wraps in each direction", func(t *testing.T) {
-		m.screen, m.cursor = screenMenu, 0
-		press(t, m, "up")
-		if m.cursor != int(sectionConnections) {
-			t.Errorf("cursor = %d, want Connections", m.cursor)
-		}
-		press(t, m, "down")
-		if m.cursor != 0 {
-			t.Errorf("cursor = %d, want 0", m.cursor)
-		}
-		press(t, m, "left")
-		if m.cursor != int(sectionCredentials) {
-			t.Errorf("cursor = %d, want Credentials", m.cursor)
-		}
-		press(t, m, "right")
-		if m.cursor != 0 {
-			t.Errorf("cursor = %d, want 0", m.cursor)
+	t.Run("the editor opens on the sidebar with Services shown beside it", func(t *testing.T) {
+		if m.screen != screenNav || m.section != sectionServices {
+			t.Fatalf("start = screen %v section %v, want the sidebar on Services", m.screen, m.section)
 		}
 	})
 
-	t.Run("escape returns from a list to the menu", func(t *testing.T) {
-		openSectionByName(t, m, sectionConnections)
-		press(t, m, "esc")
-		if m.screen != screenMenu {
-			t.Errorf("screen = %v, want the menu", m.screen)
+	t.Run("the sidebar wraps in both directions and shows each section at once", func(t *testing.T) {
+		m.screen, m.section = screenNav, sectionServices
+		press(t, m, "up")
+		if m.section != sectionDefaults || m.screen != screenNav {
+			t.Errorf("up = section %v screen %v, want Defaults on the sidebar", m.section, m.screen)
 		}
-		if m.cursor != int(sectionConnections) {
-			t.Errorf("cursor = %d, want the section it came from", m.cursor)
+		press(t, m, "down")
+		if m.section != sectionServices {
+			t.Errorf("down = section %v, want Services", m.section)
+		}
+		for _, key := range []string{"j", "k", "shift+tab"} {
+			before := m.section
+			press(t, m, key)
+			if m.section == before || m.screen != screenNav {
+				t.Errorf("%q did not move the sidebar: section %v screen %v", key, m.section, m.screen)
+			}
+		}
+	})
+
+	t.Run("enter, right and tab hand the focus to the list and back", func(t *testing.T) {
+		for _, key := range []string{"enter", "right", "l", "tab"} {
+			m.screen, m.section = screenNav, sectionCredentials
+			press(t, m, key)
+			if m.screen != screenList || m.section != sectionCredentials {
+				t.Errorf("%q = screen %v section %v, want the Credentials list", key, m.screen, m.section)
+			}
+		}
+		for _, key := range []string{"left", "h", "tab", "shift+tab", "esc"} {
+			m.screen = screenList
+			press(t, m, key)
+			if m.screen != screenNav || m.section != sectionCredentials {
+				t.Errorf("%q from the list = screen %v section %v, want the sidebar on Credentials",
+					key, m.screen, m.section)
+			}
+		}
+	})
+
+	t.Run("escape on the sidebar neither quits nor moves", func(t *testing.T) {
+		m.screen, m.section = screenNav, sectionConnections
+		press(t, m, "esc", "esc")
+		if m.quitting || m.screen != screenNav || m.section != sectionConnections {
+			t.Errorf("esc on the sidebar = quitting %v screen %v section %v", m.quitting, m.screen, m.section)
 		}
 	})
 
@@ -353,7 +375,10 @@ func TestNavigation(t *testing.T) {
 	})
 }
 
-func TestDashboardLayoutsFitTheirTerminal(t *testing.T) {
+// sectionLabels are how the sidebar names the four sections.
+var sectionLabels = []string{"1 Services", "2 Credentials", "3 Connections", "4 Defaults"}
+
+func TestLayoutsFitTheirTerminal(t *testing.T) {
 	m, _, _ := newEnvModel(t, map[string]string{
 		"WIKI_ID":     canaryID,
 		"WIKI_SECRET": canarySecret,
@@ -361,157 +386,429 @@ func TestDashboardLayoutsFitTheirTerminal(t *testing.T) {
 	addService(t, m, "wiki", "https://wiki.example.invalid")
 	addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
 	addConnection(t, m, "personal", "wiki", "reader")
-	m.screen, m.cursor = screenMenu, int(sectionCredentials)
+	openSectionByName(t, m, sectionServices)
 
 	tests := []struct {
-		name         string
-		width        int
-		height       int
-		cardTopLines int
+		name          string
+		width, height int
+		sidebar       bool
+		nav           []string
 	}{
-		{name: "wide two by two", width: 100, height: 24, cardTopLines: 2},
-		{name: "narrow single column", width: 60, height: 24, cardTopLines: 4},
-		{name: "compact overview", width: 40, height: 12, cardTopLines: 0},
+		{name: "sidebar beside the workspace", width: 100, height: 28, sidebar: true, nav: sectionLabels},
+		{name: "sidebar in a standard terminal", width: 80, height: 24, sidebar: true, nav: sectionLabels},
+		{name: "one navigation line above the workspace", width: 60, height: 24,
+			nav: []string{"[1 Services]", "2 Credentials", "3 Connections", "4 Defaults"}},
+		{name: "compact navigation line", width: 40, height: 12, nav: []string{"[1 Services] 2 3 4"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m.Update(tea.WindowSizeMsg{Width: tt.width, Height: tt.height})
 			view := m.View()
 			assertViewFits(t, view, tt.width, tt.height)
-			for _, want := range []string{"1. Services", "2. Credentials", "3. Connections", "4. Defaults"} {
+			if got := len(strings.Split(view, "\n")); tt.sidebar && got != tt.height {
+				t.Errorf("the frame has %d lines, want the full height %d", got, tt.height)
+			}
+			for _, want := range append([]string{"Services  1/1", "wiki"}, tt.nav...) {
 				if !strings.Contains(view, want) {
-					t.Errorf("dashboard does not contain %q:\n%s", want, view)
+					t.Errorf("view does not contain %q:\n%s", want, view)
 				}
 			}
-			cardTopLines := 0
-			for _, line := range strings.Split(view, "\n") {
-				if strings.Contains(line, "╭") {
-					cardTopLines++
+			lines := strings.Split(view, "\n")
+			if tt.sidebar {
+				// The sidebar and the workspace share the lines: the row of a section is also a row of the
+				// workspace frame.
+				shared := false
+				for _, line := range lines {
+					if strings.Contains(line, "2 Credentials") && strings.Count(line, "║") == 2 {
+						shared = true
+					}
 				}
-			}
-			if cardTopLines != tt.cardTopLines {
-				t.Errorf("card top lines = %d, want %d:\n%s", cardTopLines, tt.cardTopLines, view)
+				if !shared {
+					t.Errorf("no line holds both the sidebar and the workspace:\n%s", view)
+				}
+			} else if !strings.Contains(lines[1], tt.nav[0]) || !strings.Contains(lines[2], "─") {
+				t.Errorf("the navigation line does not stand above a rule and the workspace:\n%s", view)
 			}
 			for _, secretValue := range []string{canaryID, canarySecret} {
 				if strings.Contains(view, secretValue) {
-					t.Errorf("dashboard exposed a secret value %q:\n%s", secretValue, view)
-				}
-			}
-			if tt.width == 40 {
-				compact := strings.Join(strings.Fields(view), "")
-				path := strings.Join(strings.Fields(m.dashboardPath()), "")
-				if !strings.Contains(compact, path) {
-					t.Errorf("compact dashboard lost the config path %q:\n%s", m.dashboardPath(), view)
-				}
-				if !strings.Contains(compact, "Next:openConnectionsandpressttotest;Defaultsareoptional") {
-					t.Errorf("compact dashboard truncated the next step:\n%s", view)
+					t.Errorf("view exposed a secret value %q:\n%s", secretValue, view)
 				}
 			}
 		})
 	}
+}
 
-	// The wide cards contain actual configuration rows, not only navigation labels and counts.
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
-	view := m.View()
-	// The provider leads both state rows, so a card reads down its systems before their names. The
-	// credential names no provider, but the connection binds it to a BookStack service, so the card says
-	// what that already settles.
-	for _, want := range []string{"bookstack · wiki", "bookstack · reader · env", "personal · wiki + reader"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("dashboard does not contain state row %q:\n%s", want, view)
-		}
-	}
-	for _, want := range []string{"server URLs", "secret sources", "service + credential", "optional choices"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("dashboard card does not explain its purpose %q:\n%s", want, view)
-		}
-	}
+// Every section is one key away from the list and from an unchanged form; none of it goes through escape.
+func TestDirectSectionKeys(t *testing.T) {
+	m, _, _ := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
+	addService(t, m, "wiki", "https://wiki.example.invalid")
+	openSectionByName(t, m, sectionServices)
 
-	// A card stays fixed-size when it has more entries than rows: one real entry remains visible, the
-	// rest is explicit, and a long cell ends visibly instead of bleeding into its neighbour.
-	m.cfg.Services["archive"] = config.Service{Provider: "bookstack", BaseURL: "https://a-very-long-archive-host.example.invalid"}
-	m.cfg.Services["backup"] = config.Service{Provider: "bookstack", BaseURL: "https://backup.example.invalid"}
-	m.cfg.Services["copy"] = config.Service{Provider: "bookstack", BaseURL: "https://copy.example.invalid"}
-	for _, name := range []string{"copy-1", "copy-2", "copy-3", "copy-4"} {
-		m.cfg.Services[name] = config.Service{Provider: "bookstack", BaseURL: "https://" + name + ".example.invalid"}
-	}
-	view = m.View()
-	// The line that offers the guided setup takes one row from each card.
-	for _, want := range []string{"bookstack · archive", "+3 more", "…"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("overflowing dashboard card does not contain %q:\n%s", want, view)
+	for _, want := range []section{sectionCredentials, sectionConnections, sectionDefaults, sectionServices} {
+		press(t, m, string(rune('1'+want)))
+		if m.screen != screenList || m.section != want {
+			t.Fatalf("%d from the list = screen %v section %v", want+1, m.screen, m.section)
 		}
 	}
 
-	for _, name := range []string{"copy-5"} {
-		m.cfg.Services[name] = config.Service{Provider: "bookstack", BaseURL: "https://" + name + ".example.invalid"}
+	// In a form the digits are text; alt with a digit is the section key there.
+	press(t, m, "n")
+	typeText(t, m, "2")
+	if m.section != sectionServices || m.fieldValue("name") != "2" {
+		t.Fatalf("a digit escaped the form: section %v name %q", m.section, m.fieldValue("name"))
 	}
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 18})
-	short := m.View()
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
-	tall := m.View()
-	assertViewFits(t, short, 100, 18)
-	assertViewFits(t, tall, 100, 40)
-	if !strings.Contains(short, "more") || strings.Contains(tall, "more") {
-		t.Errorf("dashboard rows did not grow with available height:\nshort:\n%s\n\ntall:\n%s", short, tall)
+	press(t, m, "tab")
+	clearField(t, m)
+	press(t, m, "shift+tab")
+	clearField(t, m)
+
+	// An unchanged form, new or opened, is left at once.
+	for _, want := range []section{sectionCredentials, sectionConnections, sectionDefaults} {
+		openSectionByName(t, m, sectionServices)
+		press(t, m, "enter")
+		if m.screen != screenForm || m.editing != "wiki" {
+			t.Fatalf("enter did not open wiki: screen %v", m.screen)
+		}
+		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune('1' + want)}, Alt: true})
+		if m.screen != screenList || m.section != want {
+			t.Errorf("alt+%d from an unchanged form = screen %v section %v", want+1, m.screen, m.section)
+		}
 	}
-	if len(strings.Split(tall, "\n")) <= len(strings.Split(short, "\n")) {
-		t.Errorf("taller dashboard did not expose more table rows")
+
+	// The sidebar answers the digits as well, and n there opens the form of the section it stands on.
+	m.screen = screenNav
+	press(t, m, "3")
+	if m.screen != screenList || m.section != sectionConnections {
+		t.Fatalf("3 on the sidebar = screen %v section %v", m.screen, m.section)
+	}
+	press(t, m, "n")
+	if m.screen != screenList || !strings.Contains(m.fail, "Create a credential before adding a connection") {
+		t.Errorf("new without prerequisites: screen %v error %q", m.screen, m.fail)
+	}
+
+	// The guided setup is one key away from the list and from the sidebar, and a setup without a provider
+	// yet closes with one escape.
+	for _, from := range []screen{screenList, screenNav} {
+		m.screen = from
+		press(t, m, "c")
+		if m.wizard == nil || m.screen != screenProviders {
+			t.Fatalf("c from screen %v opened screen %v, want the setup's provider table", from, m.screen)
+		}
+		press(t, m, "esc")
+		if m.wizard != nil || m.screen != screenList || m.section != sectionConnections {
+			t.Fatalf("esc from a fresh setup = screen %v section %v", m.screen, m.section)
+		}
 	}
 }
 
-func TestDashboardNavigationAndDirectSectionKeys(t *testing.T) {
-	m, _, _ := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
-	press(t, m, "down")
-	if m.cursor != int(sectionConnections) {
-		t.Fatalf("down in the 2x2 grid focused section %v, want Connections", section(m.cursor))
-	}
-	press(t, m, "right")
-	if m.cursor != int(sectionDefaults) {
-		t.Fatalf("right in the 2x2 grid focused section %v, want Defaults", section(m.cursor))
-	}
-	m.cursor = 0
-
-	for _, key := range []string{"right", "down", "left", "up", "l", "j", "h", "k", "tab", "shift+tab"} {
-		before := m.cursor
-		press(t, m, key)
-		if m.cursor == before {
-			t.Errorf("%q did not move dashboard focus", key)
+// A new setup runs from Services over Credentials to Connections with section keys only: no dashboard and
+// no escape in between.
+func TestRebuildWithoutADashboard(t *testing.T) {
+	m, store, _ := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
+	screens := map[screen]bool{}
+	step := func(keys ...string) {
+		t.Helper()
+		for _, key := range keys {
+			if key == "esc" {
+				t.Fatal("the walk pressed escape")
+			}
+			pump(t, m, key)
+			screens[m.screen] = true
 		}
 	}
 
-	press(t, m, "3")
+	step("n")
+	typeText(t, m, "wiki")
+	step("tab", "tab")
+	typeText(t, m, "https://wiki.example.invalid")
+	step("enter", "2", "n")
+	typeText(t, m, "reader")
+	step("tab", "tab")
+	selectChoice(t, m, config.CredentialTypeEnv)
+	step("tab")
+	typeText(t, m, "WIKI_ID")
+	step("tab")
+	typeText(t, m, "WIKI_SECRET")
+	step("enter", "3", "n")
+	typeText(t, m, "wiki")
+	step("enter")
+
+	if m.fail != "" {
+		t.Fatalf("editor reported %q", m.fail)
+	}
 	if m.screen != screenList || m.section != sectionConnections {
-		t.Fatalf("3 opened screen %v section %v, want Connections list", m.screen, m.section)
+		t.Fatalf("the walk ended on screen %v section %v", m.screen, m.section)
 	}
-	press(t, m, "1")
-	if m.screen != screenList || m.section != sectionServices {
-		t.Fatalf("1 from a list opened screen %v section %v, want Services list", m.screen, m.section)
+	if screens[screenNav] {
+		t.Error("the walk passed through the sidebar although only section keys were pressed")
+	}
+	saved, err := store.Load()
+	if err != nil || len(saved.Services) != 1 || len(saved.Credentials) != 1 || len(saved.Connections) != 1 {
+		t.Fatalf("saved configuration = %+v, %v", saved, err)
+	}
+	if view := m.View(); !strings.Contains(view, "wiki  wiki / reader") ||
+		!strings.Contains(view, "1 Services     1") {
+		t.Errorf("the workspace or the sidebar does not show the result:\n%s", view)
+	}
+}
+
+// Unsaved input is neither lost nor saved behind the user's back when a form is left.
+func TestLeavingAChangedFormAsksFirst(t *testing.T) {
+	startForm := func(t *testing.T) (*Model, string) {
+		t.Helper()
+		m, _, path := newModel(t)
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
+		openSectionByName(t, m, sectionServices)
+		press(t, m, "n")
+		typeText(t, m, "wiki")
+		press(t, m, "tab", "tab")
+		typeText(t, m, "https://wiki.example.invalid")
+		return m, path
+	}
+	altKey := func(s section) tea.KeyMsg {
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune('1' + s)}, Alt: true}
 	}
 
-	press(t, m, "n")
-	if m.screen != screenForm {
-		t.Fatalf("n from Services did not use the existing new form: screen %v", m.screen)
+	t.Run("stay keeps every input and writes nothing", func(t *testing.T) {
+		m, path := startForm(t)
+		m.Update(altKey(sectionCredentials))
+		if m.screen != screenLeave {
+			t.Fatalf("alt+2 on a changed form = screen %v, want the leave question", m.screen)
+		}
+		view := m.View()
+		for _, want := range []string{"warning: unsaved changes", "s save and go on", "d discard", "esc keep editing"} {
+			if !strings.Contains(view, want) {
+				t.Errorf("the leave question does not say %q:\n%s", want, view)
+			}
+		}
+		// Keys that are no answer change nothing.
+		press(t, m, "enter", "x", "2", "q", "n", "y")
+		if m.screen != screenLeave || m.quitting {
+			t.Fatalf("a stray key answered the question: screen %v quitting %v", m.screen, m.quitting)
+		}
+		press(t, m, "esc")
+		if m.screen != screenForm || m.section != sectionServices || m.fieldValue("name") != "wiki" ||
+			m.fieldValue("base url") != "https://wiki.example.invalid" {
+			t.Fatalf("staying lost the form: screen %v section %v name %q", m.screen, m.section,
+				m.fieldValue("name"))
+		}
+		if _, err := os.Stat(path); err == nil {
+			t.Error("staying wrote the file")
+		}
+	})
+
+	t.Run("discard drops the input and goes on", func(t *testing.T) {
+		m, path := startForm(t)
+		m.Update(altKey(sectionConnections))
+		press(t, m, "d")
+		if m.screen != screenList || m.section != sectionConnections {
+			t.Fatalf("discard = screen %v section %v, want Connections", m.screen, m.section)
+		}
+		if _, ok := m.cfg.Services["wiki"]; ok {
+			t.Error("the discarded entry reached the model")
+		}
+		if _, err := os.Stat(path); err == nil {
+			t.Error("discarding wrote the file")
+		}
+		if !strings.Contains(m.status, "discarded") {
+			t.Errorf("status = %q, want it to say the changes were discarded", m.status)
+		}
+	})
+
+	t.Run("save writes through the core and goes on", func(t *testing.T) {
+		m, _ := startForm(t)
+		m.Update(altKey(sectionCredentials))
+		pump(t, m, "s")
+		if m.fail != "" || m.screen != screenList || m.section != sectionCredentials {
+			t.Fatalf("save = screen %v section %v error %q", m.screen, m.section, m.fail)
+		}
+		if _, ok := m.cfg.Services["wiki"]; !ok || !strings.Contains(m.status, "Saved wiki") {
+			t.Errorf("the service was not saved: status %q", m.status)
+		}
+	})
+
+	t.Run("a refused save stays in the form", func(t *testing.T) {
+		m, path := startForm(t)
+		press(t, m, "shift+tab", "shift+tab")
+		clearField(t, m)
+		m.Update(altKey(sectionCredentials))
+		pump(t, m, "s")
+		if m.screen != screenForm || m.section != sectionServices || m.fail == "" {
+			t.Fatalf("a refused save = screen %v section %v error %q", m.screen, m.section, m.fail)
+		}
+		if m.fieldValue("base url") != "https://wiki.example.invalid" {
+			t.Errorf("the refused save lost the input")
+		}
+		if _, err := os.Stat(path); err == nil {
+			t.Error("a refused save wrote the file")
+		}
+	})
+
+	t.Run("escape asks the same question", func(t *testing.T) {
+		m, _ := startForm(t)
+		press(t, m, "esc")
+		if m.screen != screenLeave || m.leaveTo != -1 {
+			t.Fatalf("esc on a changed form = screen %v", m.screen)
+		}
+		if view := m.View(); !strings.Contains(view, "the Services list") {
+			t.Errorf("the question does not say where escape leads:\n%s", view)
+		}
+		press(t, m, "d")
+		if m.screen != screenList || m.section != sectionServices {
+			t.Errorf("discard after esc = screen %v section %v", m.screen, m.section)
+		}
+	})
+
+	t.Run("an unfinished guided setup can only be kept or dropped", func(t *testing.T) {
+		m, _, path := newModel(t)
+		m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
+		walkSetup(t, m, 1)
+		m.Update(altKey(sectionCredentials))
+		if m.screen != screenLeave {
+			t.Fatalf("alt+2 in the setup = screen %v, want the leave question", m.screen)
+		}
+		if view := m.View(); strings.Contains(view, "s save") || !strings.Contains(view, "d discard setup") {
+			t.Errorf("the setup question offers the wrong answers:\n%s", view)
+		}
+		press(t, m, "s")
+		if m.screen != screenLeave {
+			t.Fatalf("s answered the setup question: screen %v", m.screen)
+		}
+		press(t, m, "esc")
+		if m.wizard == nil || m.screen != screenForm {
+			t.Fatalf("staying dropped the setup: screen %v", m.screen)
+		}
+		m.Update(altKey(sectionCredentials))
+		press(t, m, "d")
+		if m.wizard != nil || m.screen != screenList || m.section != sectionCredentials {
+			t.Fatalf("discard = wizard %v screen %v section %v", m.wizard != nil, m.screen, m.section)
+		}
+		if _, err := os.Stat(path); err == nil {
+			t.Error("dropping the setup wrote the file")
+		}
+	})
+}
+
+// Colour only supports what markers, prefixes and borders already say.
+func TestTheScreenReadsWithoutColour(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+
+	m, _, _ := newModel(t)
+	m.tester = func(context.Context, string) (provider.Class, error) { return provider.ClassOK, nil }
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
+	addService(t, m, "wiki", "https://wiki.example.invalid")
+	addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
+	addConnection(t, m, "wiki", "wiki", "reader")
+	openSectionByName(t, m, sectionConnections)
+
+	colour := before
+	colour = 2 // termenv.ANSI
+	lipgloss.SetColorProfile(colour)
+	if view := m.View(); !strings.Contains(view, "\x1b[") {
+		t.Fatalf("a colour terminal got no colour:\n%s", view)
 	}
-	typeText(t, m, "2")
-	if m.section != sectionServices || m.fieldValue("name") != "2" {
-		t.Errorf("a numeric key escaped the form: section %v name %q", m.section, m.fieldValue("name"))
+	colour = 3 // termenv.Ascii
+	lipgloss.SetColorProfile(colour)
+
+	view := m.View()
+	if strings.Contains(view, "\x1b") {
+		t.Fatalf("a terminal without colour got escape sequences:\n%q", view)
+	}
+	for _, want := range []string{"* 3 Connections", "> wiki", "╔", "╭"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the list in focus does not show %q:\n%s", want, view)
+		}
+	}
+	press(t, m, "left")
+	view = m.View()
+	if !strings.Contains(view, "> 3 Connections") || strings.Contains(view, "> wiki") ||
+		strings.Count(view, "> ") != 1 {
+		t.Errorf("the sidebar in focus is not the one marked line:\n%s", view)
 	}
 
-	press(t, m, "esc", "esc", "3")
-	if m.section != sectionConnections || m.screen != screenList {
-		t.Fatalf("3 did not open Connections from the dashboard")
+	press(t, m, "enter")
+	pump(t, m, "t")
+	if view := m.View(); !strings.Contains(view, "[ok] wiki") {
+		t.Errorf("success has no marker:\n%s", view)
 	}
-	press(t, m, "n")
-	if m.screen != screenList || !strings.Contains(m.fail, "Create a service and a credential") {
-		t.Errorf("dashboard/list new did not preserve prerequisite flow: screen %v error %q", m.screen, m.fail)
+	m.testClass = provider.ClassAuth
+	if view := m.View(); !strings.Contains(view, "[failed] wiki: auth") {
+		t.Errorf("a failed test has no marker:\n%s", view)
+	}
+	m.fail = "something went wrong"
+	if view := m.View(); !strings.Contains(view, "error: something went wrong") {
+		t.Errorf("an error has no prefix:\n%s", view)
+	}
+	m.clearMessages()
+	press(t, m, "enter")
+	focusField(t, m, "description")
+	typeText(t, m, "x")
+	press(t, m, "esc")
+	if view := m.View(); !strings.Contains(view, "warning: unsaved changes") {
+		t.Errorf("the warning has no prefix:\n%s", view)
+	}
+}
+
+// Resizing changes the layout, never the state: the section, the selection, the filter and typed input
+// survive every size, including one that cannot hold the screen.
+func TestResizePreservesState(t *testing.T) {
+	m, _, _ := newModel(t)
+	for _, name := range []string{"alpha", "archive", "beta", "wiki"} {
+		m.cfg.Services[name] = config.Service{Provider: "bookstack", BaseURL: "https://" + name + ".example.invalid"}
+	}
+	openSectionByName(t, m, sectionServices)
+	press(t, m, "/")
+	typeText(t, m, "a")
+	press(t, m, "enter", "down")
+	selected := selectedName(t, m)
+
+	for _, size := range []struct{ width, height int }{{100, 28}, {60, 24}, {40, 12}, {20, 5}, {80, 24}} {
+		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+		assertViewFits(t, m.View(), max(size.width, minimumWidth), max(size.height, minimumHeight))
+		if m.screen != screenList || m.section != sectionServices || m.list.query() != "a" ||
+			selectedName(t, m) != selected {
+			t.Fatalf("%dx%d changed the list: screen %v section %v filter %q selected %q", size.width,
+				size.height, m.screen, m.section, m.list.query(), selectedName(t, m))
+		}
+		if size.width >= minimumWidth && !strings.Contains(m.View(), "filter: a") {
+			t.Errorf("%dx%d does not show the filter:\n%s", size.width, size.height, m.View())
+		}
+	}
+
+	press(t, m, "enter")
+	press(t, m, "tab", "tab")
+	typeText(t, m, "/draft")
+	focus, url := m.focus, m.fieldValue("base url")
+	for _, size := range []struct{ width, height int }{{60, 24}, {40, 12}, {20, 5}, {100, 28}} {
+		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+		view := m.View()
+		assertViewFits(t, view, max(size.width, minimumWidth), max(size.height, minimumHeight))
+		if m.activeScreenTooSmall() {
+			// A screen that cannot be shown takes no keys that change it.
+			press(t, m, "tab", "n", "1")
+			if !strings.Contains(view, "Resize terminal") {
+				t.Errorf("%dx%d is too small for the form but shows no notice:\n%s", size.width, size.height, view)
+			}
+		} else if !strings.Contains(view, "/draft") {
+			t.Errorf("%dx%d does not show the typed input:\n%s", size.width, size.height, view)
+		}
+		if m.screen != screenForm {
+			t.Fatalf("%dx%d left the form: screen %v", size.width, size.height, m.screen)
+		}
+	}
+	if m.focus != focus || m.fieldValue("base url") != url || m.section != sectionServices {
+		t.Errorf("resizing changed the form: focus %d url %q section %v", m.focus, m.fieldValue("base url"),
+			m.section)
 	}
 }
 
 func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 	m, _, _ := newModel(t)
-	m.screen, m.cursor = screenMenu, int(sectionDefaults)
+	openSectionByName(t, m, sectionDefaults)
+	press(t, m, "left")
 
 	for _, size := range []struct{ width, height int }{
 		{39, 12}, {40, 11}, {12, 4}, {1, 1}, {0, 0}, {-4, -2},
@@ -519,47 +816,57 @@ func TestTinyTerminalIsBoundedAndResizePreservesState(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
 		view := m.View()
 		width, height := max(size.width, 1), max(size.height, 1)
+		if size.width == 0 {
+			width, height = 12, 4 // a zero dimension keeps the last one
+		}
 		assertViewFits(t, view, width, height)
 		if !strings.Contains(view, "q") {
 			t.Errorf("%dx%d resize view has no visible q key: %q", size.width, size.height, view)
 		}
 		press(t, m, "1", "n", "enter")
-		if m.screen != screenMenu || m.cursor != int(sectionDefaults) {
-			t.Fatalf("%dx%d changed hidden state to screen %v cursor %d", size.width, size.height,
-				m.screen, m.cursor)
+		if m.screen != screenNav || m.section != sectionDefaults {
+			t.Fatalf("%dx%d changed hidden state to screen %v section %v", size.width, size.height,
+				m.screen, m.section)
 		}
 	}
 
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 24})
-	if m.screen != screenMenu || m.cursor != int(sectionDefaults) {
-		t.Fatalf("resize lost dashboard state: screen %v cursor %d", m.screen, m.cursor)
+	if m.screen != screenNav || m.section != sectionDefaults {
+		t.Fatalf("resize lost the sidebar state: screen %v section %v", m.screen, m.section)
 	}
-	if !strings.Contains(m.View(), "> 4. Defaults") {
-		t.Errorf("restored dashboard lost focus:\n%s", m.View())
+	if nav := strings.Split(m.View(), "\n")[1]; !strings.HasPrefix(nav, "> ") || !strings.Contains(nav, "[4 Defaults]") {
+		t.Errorf("restored navigation lost focus:\n%s", m.View())
 	}
 
-	// The resize overlay is not a new editor screen. A half-completed form remains intact behind it.
+	// The notice is not a new editor screen. A half-completed form remains intact behind it.
 	form, _, _ := newModel(t)
 	press(t, form, "1", "n")
 	typeText(t, form, "draft-service")
 	press(t, form, "tab")
 	focus := form.focus
-	form.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
-	if view := form.View(); !strings.Contains(view, "Resize terminal") {
-		t.Errorf("40x12 form did not degrade to the bounded resize view:\n%s", view)
-	} else {
-		assertViewFits(t, view, 40, 12)
-	}
 	form.Update(tea.WindowSizeMsg{Width: 20, Height: 5})
-	press(t, form, "tab", "n", "1")
+	if view := form.View(); !strings.Contains(view, "esc leave") {
+		t.Errorf("a tiny form view does not offer its way out:\n%s", view)
+	}
+	press(t, form, "tab", "n", "1", "q")
 	form.Update(tea.WindowSizeMsg{Width: 80, Height: 100})
-	if form.screen != screenForm || form.focus != focus || form.fieldValue("name") != "draft-service" {
-		t.Errorf("resize changed form state: screen %v focus %d name %q", form.screen, form.focus,
-			form.fieldValue("name"))
+	if form.quitting || form.screen != screenForm || form.focus != focus || form.fieldValue("name") != "draft-service" {
+		t.Errorf("resize changed form state: quitting %v screen %v focus %d name %q", form.quitting, form.screen,
+			form.focus, form.fieldValue("name"))
 	}
 	if strings.Contains(form.View(), "Resize terminal") {
-		t.Errorf("restored form still shows the resize overlay:\n%s", form.View())
+		t.Errorf("restored form still shows the resize notice:\n%s", form.View())
 	}
+}
+
+// screenOf is the workspace as the user reads it, without the frame of the sidebar and the workspace
+// around it, so a test can read a wrapped sentence without reading around the borders. The frame itself is
+// tested on its own, through View.
+func screenOf(m *Model) string {
+	if m.quitting || m.terminalTooSmall() {
+		return m.View()
+	}
+	return m.workspaceView()
 }
 
 func assertViewFits(t *testing.T, view string, width, height int) {
@@ -587,7 +894,8 @@ func TestCancelWritesNothing(t *testing.T) {
 	openSectionByName(t, m, sectionServices)
 	press(t, m, "n")
 	typeText(t, m, "discarded")
-	press(t, m, "esc")
+	// Leaving a changed form asks; discarding is the explicit answer.
+	press(t, m, "esc", "d")
 
 	after, err := os.ReadFile(path)
 	if err != nil {
@@ -599,7 +907,7 @@ func TestCancelWritesNothing(t *testing.T) {
 	if _, ok := m.cfg.Services["discarded"]; ok {
 		t.Error("the cancelled entry reached the model")
 	}
-	if m.status != "Cancelled" {
+	if m.status != "Changes discarded; nothing was written" {
 		t.Errorf("status = %q", m.status)
 	}
 }
@@ -781,15 +1089,15 @@ func TestNoSecretValues(t *testing.T) {
 	var rendered strings.Builder
 	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections, sectionDefaults} {
 		openSectionByName(t, m, s)
-		rendered.WriteString(m.View())
+		rendered.WriteString(screenOf(m))
 		press(t, m, "n")
-		rendered.WriteString(m.View())
+		rendered.WriteString(screenOf(m))
 		press(t, m, "esc")
 	}
 	openSectionByName(t, m, sectionCredentials)
-	rendered.WriteString(m.View())
+	rendered.WriteString(screenOf(m))
 	press(t, m, "enter")
-	rendered.WriteString(m.View())
+	rendered.WriteString(screenOf(m))
 
 	for _, canary := range []string{canaryID, canarySecret} {
 		if strings.Contains(rendered.String(), canary) {
@@ -839,11 +1147,11 @@ func TestPastedSecretIsRefusedWithoutEchoingIt(t *testing.T) {
 	var rendered strings.Builder
 	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections, sectionDefaults} {
 		openSectionByName(t, m, s)
-		rendered.WriteString(m.View())
+		rendered.WriteString(screenOf(m))
 		press(t, m, "n")
-		rendered.WriteString(m.View())
+		rendered.WriteString(screenOf(m))
 		press(t, m, "esc")
-		rendered.WriteString(m.View())
+		rendered.WriteString(screenOf(m))
 	}
 	if strings.Contains(rendered.String(), pasted) {
 		t.Errorf("the pasted secret reached a screen:\n%s", rendered.String())
@@ -892,7 +1200,7 @@ func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 	if got := m.fields[m.focus].label; got != "base url" {
 		t.Fatalf("focused field = %q, want the base url", got)
 	}
-	atEnd := m.View()
+	atEnd := screenOf(m)
 	if !strings.Contains(atEnd, url) {
 		t.Fatalf("the typed value is missing from the form:\n%s", atEnd)
 	}
@@ -905,7 +1213,7 @@ func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 	if got, want := m.fields[m.focus].input.Position(), len(url)-3; got != want {
 		t.Fatalf("cursor position = %d, want %d", got, want)
 	}
-	inTheMiddle := m.View()
+	inTheMiddle := screenOf(m)
 	if inTheMiddle == atEnd {
 		t.Errorf("the form is identical wherever the cursor stands:\n%s", inTheMiddle)
 	}
@@ -931,7 +1239,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	selectChoice(t, m, config.CredentialTypeEnv)
-	view := m.View()
+	view := screenOf(m)
 	words := strings.Join(strings.Fields(view), " ")
 	for _, want := range []string{"the NAME of an environment variable", "never the secret"} {
 		if !strings.Contains(words, want) {
@@ -961,7 +1269,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 
 	openSectionByName(t, m, sectionServices)
 	press(t, m, "n")
-	view = m.View()
+	view = screenOf(m)
 	for _, want := range []string{nameHint, baseURLHint} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the service form does not show %q:\n%s", want, view)
@@ -977,7 +1285,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	addConnection(t, m, "wiki", "wiki", "reader")
 	openSectionByName(t, m, sectionDefaults)
 	press(t, m, "n")
-	if view := m.View(); !strings.Contains(view, domainHint) {
+	if view := screenOf(m); !strings.Contains(view, domainHint) {
 		t.Errorf("the domain field has no hint:\n%s", view)
 	}
 }
@@ -1036,10 +1344,10 @@ func TestConnectionDescriptionIsEditedThroughTheForm(t *testing.T) {
 	}
 
 	openEntryForm(t, m, sectionConnections, "wiki")
-	view := strings.Join(strings.Fields(m.View()), " ")
+	view := strings.Join(strings.Fields(screenOf(m)), " ")
 	for _, want := range []string{"description", "discovery publishes it", "never carry a secret"} {
 		if !strings.Contains(view, want) {
-			t.Errorf("the connection form does not say %q:\n%s", want, m.View())
+			t.Errorf("the connection form does not say %q:\n%s", want, screenOf(m))
 		}
 	}
 }
@@ -1084,10 +1392,10 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 	listed := func() string {
 		t.Helper()
 		openSectionByName(t, m, sectionConnections)
-		return strings.Join(strings.Fields(m.View()), " ")
+		return strings.Join(strings.Fields(screenOf(m)), " ")
 	}
 	if view := listed(); strings.Contains(view, undescribedMarker) {
-		t.Fatalf("a single connection is marked:\n%s", m.View())
+		t.Fatalf("a single connection is marked:\n%s", screenOf(m))
 	}
 
 	addConnection(t, m, "wiki-2", "wiki", "reader")
@@ -1098,12 +1406,12 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 	for _, want := range []string{"wiki wiki / reader " + undescribedMarker,
 		"wiki-2 wiki / reader " + undescribedMarker, "sees only names and descriptions"} {
 		if !strings.Contains(view, want) {
-			t.Errorf("the list does not say %q:\n%s", want, m.View())
+			t.Errorf("the list does not say %q:\n%s", want, screenOf(m))
 		}
 	}
 	for _, name := range []string{"wiki", "wiki-2"} {
-		if got := m.dashboardEntry(sectionConnections, name); !strings.HasSuffix(got, undescribedMarker) {
-			t.Errorf("dashboard entry = %q, want it marked", got)
+		if got := m.describe(name); !strings.HasSuffix(got, undescribedMarker) {
+			t.Errorf("list entry = %q, want it marked", got)
 		}
 	}
 	if saved, err := store.Load(); err != nil || len(saved.Connections) != 2 {
@@ -1140,7 +1448,7 @@ func TestSpacesAtTheEdgesAreTrimmedVisibly(t *testing.T) {
 	if got := m.fields[0].input.Value(); got != "wiki" {
 		t.Errorf("the field still holds %q after leaving it", got)
 	}
-	if view := m.View(); strings.Contains(view, "  wiki  ") {
+	if view := screenOf(m); strings.Contains(view, "  wiki  ") {
 		t.Errorf("the form still shows spaces the store would drop:\n%s", view)
 	}
 
@@ -1187,15 +1495,16 @@ func TestStartsWithoutAConfigurationFile(t *testing.T) {
 	if _, err := os.Stat(path); err == nil {
 		t.Error("a file was created before anything was saved")
 	}
+	m.Update(tea.WindowSizeMsg{Width: 200, Height: 30})
 	view := m.View()
 	for _, want := range []string{
 		"created on first save",
-		"Set up a connection",
-		"Next: press c to set up a connection",
-		"1. Services",
-		"2. Credentials",
-		"3. Connections",
-		"4. Defaults",
+		"c guided setup",
+		"next: press c to",
+		"1 Services",
+		"2 Credentials",
+		"3 Connections",
+		"4 Defaults",
 		"Config:",
 	} {
 		if !strings.Contains(view, want) {
@@ -1214,8 +1523,8 @@ func TestDependentSectionsExplainWhatMustBeCreatedFirst(t *testing.T) {
 	m, _, _ := newModel(t)
 
 	openSectionByName(t, m, sectionConnections)
-	view := m.View()
-	for _, want := range []string{"Create a service and a credential", "Press esc"} {
+	view := screenOf(m)
+	for _, want := range []string{"Create a service and a credential", "Press 1 or 2", "c for the guided setup"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("empty Connections does not contain %q:\n%s", want, view)
 		}
@@ -1229,7 +1538,7 @@ func TestDependentSectionsExplainWhatMustBeCreatedFirst(t *testing.T) {
 	}
 
 	openSectionByName(t, m, sectionDefaults)
-	if view := m.View(); !strings.Contains(view, "Create a connection") ||
+	if view := screenOf(m); !strings.Contains(view, "Create a connection") ||
 		!strings.Contains(view, "Defaults are optional") {
 		t.Errorf("empty Defaults does not explain its prerequisite:\n%s", view)
 	}
@@ -1246,7 +1555,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 	selectChoice(t, m, config.CredentialTypeKeyring)
 	press(t, m, "tab")
 
-	before := m.View()
+	before := strings.Join(strings.Fields(screenOf(m)), " ")
 	if !strings.Contains(before, "enter save credential first") {
 		t.Errorf("new credential does not explain the first save:\n%s", before)
 	}
@@ -1261,7 +1570,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 	if m.fields[m.focus].kind != fieldSecret {
 		t.Fatalf("focused field kind = %v, want a secret role", m.fields[m.focus].kind)
 	}
-	view := strings.Join(strings.Fields(m.View()), " ")
+	view := strings.Join(strings.Fields(screenOf(m)), " ")
 	for _, want := range []string{"Credential saved", "press s on each role", "system keyring", "(recommended)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("continued credential form does not contain %q:\n%s", want, view)
@@ -1278,7 +1587,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 // formLines is the view without the padding the styles add, so a test can look at the shape of the form
 // rather than at the cells that fill it out.
 func formLines(m *Model) []string {
-	lines := strings.Split(m.View(), "\n")
+	lines := strings.Split(screenOf(m), "\n")
 	for i, l := range lines {
 		lines[i] = strings.TrimRight(l, " ")
 	}
@@ -1335,7 +1644,7 @@ func TestALockedNameSaysSoAndTakesNoEditingFocus(t *testing.T) {
 	openSectionByName(t, m, sectionServices)
 	press(t, m, "enter")
 
-	view := m.View()
+	view := screenOf(m)
 	if !strings.Contains(view, "read-only") || !strings.Contains(view, "create it again to rename") {
 		t.Errorf("the locked field does not say that it is locked:\n%s", view)
 	}
@@ -1483,8 +1792,8 @@ func TestNoHintStandsTwice(t *testing.T) {
 	press(t, m, "tab")
 	selectChoice(t, m, config.CredentialTypeEnv)
 	assertNoRepeatedHint(t, m, "the env credential form")
-	if got := strings.Count(m.View(), "the NAME of an environment"); got != 1 {
-		t.Errorf("the env sentence stands %d times, want once:\n%s", got, m.View())
+	if got := strings.Count(screenOf(m), "the NAME of an environment"); got != 1 {
+		t.Errorf("the env sentence stands %d times, want once:\n%s", got, screenOf(m))
 	}
 
 	// The keyring rows build their hint themselves, out of the keys and the stages the resolver checked.
@@ -1496,7 +1805,7 @@ func TestNoHintStandsTwice(t *testing.T) {
 	}
 	assertNoRepeatedHint(t, m, "the keyring credential form")
 
-	view := m.View()
+	view := screenOf(m)
 	words := strings.Join(strings.Fields(view), " ")
 	if got := strings.Count(words, "p unencrypted file (asks first)"); got != 1 {
 		t.Errorf("the secret keys stand %d times, want once:\n%s", got, view)
@@ -1513,12 +1822,12 @@ func assertNoRepeatedHint(t *testing.T, m *Model, what string) {
 	seen := map[string]bool{}
 	for _, block := range blocks {
 		if seen[block] {
-			t.Errorf("%s says the same hint twice: %q\n%s", what, block, m.View())
+			t.Errorf("%s says the same hint twice: %q\n%s", what, block, screenOf(m))
 		}
 		seen[block] = true
 	}
 	if len(blocks) == 0 {
-		t.Errorf("%s shows no hint at all:\n%s", what, m.View())
+		t.Errorf("%s shows no hint at all:\n%s", what, screenOf(m))
 	}
 }
 
@@ -1529,11 +1838,11 @@ func TestATallFormStaysUsableInASmallTerminal(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 80})
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "n")
-	full := strings.Count(m.View(), "\n")
+	full := strings.Count(screenOf(m), "\n")
 
 	// The same form in a terminal that cannot hold it: it is still the form, only denser.
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
-	view := m.View()
+	view := screenOf(m)
 	if strings.Contains(view, "Resize terminal") {
 		t.Fatalf("the form gave up instead of tightening:\n%s", view)
 	}
@@ -1556,16 +1865,16 @@ func TestATallFormStaysUsableInASmallTerminal(t *testing.T) {
 
 	// A terminal too small even for that shows the notice, and esc leaves it.
 	m.Update(tea.WindowSizeMsg{Width: 20, Height: 6})
-	if !strings.Contains(m.View(), "Resize terminal") {
-		t.Fatalf("a 20x6 terminal did not show the resize notice:\n%s", m.View())
+	if !strings.Contains(screenOf(m), "Resize terminal") {
+		t.Fatalf("a 20x6 terminal did not show the resize notice:\n%s", screenOf(m))
 	}
 	press(t, m, "esc")
 	if m.screen != screenList {
 		t.Errorf("screen after esc = %v, want the list the form was opened from", m.screen)
 	}
 	press(t, m, "esc")
-	if m.screen != screenMenu {
-		t.Errorf("screen after the second esc = %v, want the menu", m.screen)
+	if m.screen != screenNav {
+		t.Errorf("screen after the second esc = %v, want the sidebar", m.screen)
 	}
 	if m.quitting {
 		t.Error("leaving the notice quit the editor")

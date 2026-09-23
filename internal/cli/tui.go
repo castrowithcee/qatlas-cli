@@ -17,20 +17,40 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Set up connections and edit the configuration in a terminal interface",
-		Long: "The editor opens on a dashboard whose primary entry, c, sets up a connection step by step:\n" +
-			"provider, service, credential, scope, permissions, and a summary that saves the connection and\n" +
-			"can test it right away. Each step offers only what the chosen provider defines, and offers the\n" +
-			"configured services and credentials of that provider first, so they are reused instead of\n" +
-			"duplicated; the same checks as every other save refuse a step before the next one opens, and a\n" +
-			"refused step keeps its input. A new credential keeps its secrets in the system keyring\n" +
-			"(recommended), names environment variables, or, after an explicit confirmation, writes them to\n" +
-			"an unencrypted file. Secrets are typed masked and never shown. Nothing is written before the\n" +
-			"summary is saved: esc cancels at any step, ctrl+b goes back one step, and should the\n" +
-			"configuration fail to save, the secrets just stored are removed again.\n\n" +
-			"The four sections of the dashboard remain for direct editing. The editor manages services,\n" +
-			"credentials, connections, and domain defaults, can test a selected connection, and stores the\n" +
-			"secrets of a keyring credential in a masked field. It never displays a stored secret back:\n" +
-			"what it shows is which source delivers a role.\n\n" +
+		Long: "The editor is one screen: a sidebar with the four sections 1 Services, 2 Credentials,\n" +
+			"3 Connections, and 4 Defaults, and beside it a workspace with the list, form, or setup step of\n" +
+			"the active section. From 80 columns the sidebar stands on the left; a narrower terminal shows the\n" +
+			"sections in one navigation line above the workspace. Below 40x12 the editor asks for a larger\n" +
+			"terminal and keeps everything as it was until it gets one.\n\n" +
+			"The editor opens with the focus on the sidebar. up/down (or j/k) choose a section and show its\n" +
+			"list at once; enter, right, or tab move the focus into the list, and left, tab, or esc move it\n" +
+			"back. 1-4 open a section directly from the sidebar or a list; in a form, where digits are text,\n" +
+			"alt+1-4 do the same. In a list, / filters, n adds, enter edits, d deletes, t tests the selected\n" +
+			"connection, c starts the guided setup, and q quits; ctrl+c quits anywhere without saving. esc\n" +
+			"only ever steps back one level: it clears a filter, cancels a running test, closes a picker, a\n" +
+			"table, or a question, or leaves a form.\n\n" +
+			"A form with unsaved changes is never left silently. esc or a section key first asks: s saves\n" +
+			"through the same checks as enter and goes on only when the save succeeds, d discards the changes\n" +
+			"and goes on, and esc keeps editing with every input intact. An unchanged form closes at once. An\n" +
+			"unfinished guided setup can only be kept or discarded, since it saves from its summary only.\n\n" +
+			"Focus and state read without colour. The active section is marked > while the sidebar has the\n" +
+			"focus and * while the workspace has it, the pane with the focus has a double border, and the\n" +
+			"selected entry or field is marked >. A connection test reports [ok] or [failed], other messages\n" +
+			"say warning: or error:. Colour only supports these marks; NO_COLOR turns it off.\n\n" +
+			"c sets up a connection step by step in the workspace: provider, service, credential, scope,\n" +
+			"permissions, and a summary that saves the connection and can test it right away. Each step offers\n" +
+			"only what the chosen provider defines, and offers the configured services and credentials of that\n" +
+			"provider first, so they are reused instead of duplicated; the same checks as every other save\n" +
+			"refuse a step before the next one opens, and a refused step keeps its input. A new credential\n" +
+			"keeps its secrets in the system keyring (recommended), names environment variables, or, after an\n" +
+			"explicit confirmation, writes them to an unencrypted file. Secrets are typed masked and never\n" +
+			"shown. Nothing is written before the summary is saved: esc cancels, asking first once a provider\n" +
+			"is chosen, ctrl+b goes back one step, and should the configuration fail to save, the secrets just\n" +
+			"stored are removed again.\n\n" +
+			"The sections remain for direct editing. The editor manages services, credentials, connections,\n" +
+			"and domain defaults, can test a selected connection, and stores the secrets of a keyring\n" +
+			"credential in a masked field. It never displays a stored secret back: what it shows is which\n" +
+			"source delivers a role.\n\n" +
 			"The system keyring is the recommended local place for secrets: the credential store the\n" +
 			"operating system already provides, Secret Service on Linux (for example GNOME Keyring or\n" +
 			"KWallet), the macOS Keychain, or the Windows Credential Manager. It needs no setup and no\n" +
@@ -51,8 +71,9 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"selection, and the total. Typing filters by name and ID, ignoring case; up/down, pgup/pgdown and\n" +
 			"home/end move; enter takes the selected provider and updates the rows that depend on it, and esc\n" +
 			"leaves the provider and every row that depends on it unchanged. In the guided setup, enter goes\n" +
-			"on to the next step and esc cancels the setup. A form does not open on a provider row while\n" +
-			"another row takes input, so enter on an opened entry still saves it.\n\n" +
+			"on to the next step and esc cancels the setup, asking first once a provider was chosen. A form\n" +
+			"does not open on a provider row while another row takes input, so enter on an opened entry still\n" +
+			"saves it.\n\n" +
 			"In a form, left/right step through the values of every other choice row. / on such a row opens\n" +
 			"a searchable picker that marks the current value and filters as you type, ignoring case; up/down,\n" +
 			"pgup/pgdown and home/end move, enter takes the selected value, and esc leaves the row unchanged.\n" +

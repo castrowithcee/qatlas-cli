@@ -59,7 +59,7 @@ func TestALongListScrollsInsideTheTerminal(t *testing.T) {
 
 			check := func(want string, position int) {
 				t.Helper()
-				view := m.View()
+				view := screenOf(m)
 				if strings.Contains(view, "Resize terminal") {
 					t.Fatalf("the list was replaced by the resize notice:\n%s", view)
 				}
@@ -112,7 +112,7 @@ func TestFilterIgnoresCaseAndLeavesTheConfigurationAlone(t *testing.T) {
 
 	press(t, m, "/")
 	typeText(t, m, "WIKI")
-	view := m.View()
+	view := screenOf(m)
 	for _, want := range []string{"Wiki-Primary", "wiki-archive", "1/2 (103 total)", "filter: WIKI"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the filtered list does not show %q:\n%s", want, view)
@@ -127,7 +127,7 @@ func TestFilterIgnoresCaseAndLeavesTheConfigurationAlone(t *testing.T) {
 	if got := selectedName(t, m); got != "wiki-archive" {
 		t.Errorf("selected %q, want wiki-archive", got)
 	}
-	if view := m.View(); !strings.Contains(view, "2/2 (103 total)") {
+	if view := screenOf(m); !strings.Contains(view, "2/2 (103 total)") {
 		t.Errorf("the position is not shown:\n%s", view)
 	}
 
@@ -182,7 +182,7 @@ func TestActionsFollowTheFilteredSelection(t *testing.T) {
 	}
 
 	press(t, m, "d")
-	if view := m.View(); !strings.Contains(view, `Delete "wiki-b"?`) {
+	if view := screenOf(m); !strings.Contains(view, `Delete "wiki-b"?`) {
 		t.Fatalf("the confirmation is not about the selected entry:\n%s", view)
 	}
 	press(t, m, "y")
@@ -229,7 +229,7 @@ func TestConnectionTestFollowsTheFilteredSelection(t *testing.T) {
 	if len(tested) != 1 || tested[0] != "gamma" {
 		t.Fatalf("tested %v, want only gamma", tested)
 	}
-	if view := m.View(); !strings.Contains(view, "gamma: ok") {
+	if view := screenOf(m); !strings.Contains(view, "gamma: ok") {
 		t.Errorf("the result is not reported for gamma:\n%s", view)
 	}
 }
@@ -254,7 +254,7 @@ func TestResizeKeepsTheFilterAndTheSelection(t *testing.T) {
 			t.Fatalf("%dx%d: selected %q with filter %q, want %q with svc-1",
 				size.width, size.height, got, m.list.query(), want)
 		}
-		view := m.View()
+		view := screenOf(m)
 		assertViewFits(t, view, size.width, size.height)
 		if !m.terminalTooSmall() && !strings.Contains(view, want) {
 			t.Errorf("%dx%d: the selection is not on screen:\n%s", size.width, size.height, view)
@@ -267,7 +267,7 @@ func TestResizeKeepsTheFilterAndTheSelection(t *testing.T) {
 func TestEmptyListNoMatchesAndEscape(t *testing.T) {
 	m, _, _ := newModel(t)
 	openSectionByName(t, m, sectionServices)
-	if view := m.View(); !strings.Contains(view, "No services yet") || strings.Contains(view, "matches") {
+	if view := screenOf(m); !strings.Contains(view, "No services yet") || strings.Contains(view, "matches") {
 		t.Errorf("the empty list does not say that it is empty:\n%s", view)
 	}
 
@@ -275,7 +275,7 @@ func TestEmptyListNoMatchesAndEscape(t *testing.T) {
 	openSectionByName(t, m, sectionServices)
 	press(t, m, "/")
 	typeText(t, m, "zzz")
-	view := m.View()
+	view := screenOf(m)
 	for _, want := range []string{`No entry matches "zzz"`, "esc to clear", "0/0 (2 total)"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("a filter without matches does not say %q:\n%s", want, view)
@@ -304,7 +304,7 @@ func TestEmptyListNoMatchesAndEscape(t *testing.T) {
 	if got := selectedName(t, m); got != "wiki" {
 		t.Fatalf("selected %q, want wiki", got)
 	}
-	if view := m.View(); !strings.Contains(view, "esc clear filter") {
+	if view := screenOf(m); !strings.Contains(view, "esc clear filter") {
 		t.Errorf("the keys do not say that escape clears the filter:\n%s", view)
 	}
 	press(t, m, "esc")
@@ -313,8 +313,8 @@ func TestEmptyListNoMatchesAndEscape(t *testing.T) {
 			selectedName(t, m))
 	}
 	press(t, m, "esc")
-	if m.screen != screenMenu || m.cursor != int(sectionServices) {
-		t.Fatalf("the second escape: screen %v cursor %d, want the menu on Services", m.screen, m.cursor)
+	if m.screen != screenNav || m.section != sectionServices {
+		t.Fatalf("the second escape: screen %v section %v, want the sidebar on Services", m.screen, m.section)
 	}
 
 	// Opening a section again starts without the filter.

@@ -19,7 +19,7 @@ import (
 // person does: a new service, a new keyring credential with both secrets typed, a connection named personal.
 func walkSetup(t *testing.T, m *Model, until int) {
 	t.Helper()
-	m.screen = screenMenu
+	m.screen = screenNav
 	press(t, m, "c")
 	if m.wizard == nil || m.screen != screenProviders {
 		t.Fatalf("c did not open the guided setup on its provider table: screen %v, error %q", m.screen, m.fail)
@@ -86,7 +86,7 @@ func assertNoCanary(t *testing.T, what, text string) {
 func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 	m, store, path, _, mem := newStoreModel(t)
 	var views strings.Builder
-	record := func() { views.WriteString(m.View() + "\n") }
+	record := func() { views.WriteString(screenOf(m) + "\n") }
 
 	record()
 	walkSetup(t, m, stepCredential)
@@ -99,8 +99,8 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 		t.Errorf("the recommended storage is not preselected: %q", m.fieldValue(storageLabel))
 	}
 	// The keyring is named as this platform calls it, so it reads as something the machine already has.
-	if words := strings.Join(strings.Fields(m.View()), " "); !strings.Contains(words, secret.StoreLabel(platform)) {
-		t.Errorf("the storage row does not name the platform keyring %q:\n%s", secret.StoreLabel(platform), m.View())
+	if words := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(words, secret.StoreLabel(platform)) {
+		t.Errorf("the storage row does not name the platform keyring %q:\n%s", secret.StoreLabel(platform), screenOf(m))
 	}
 	press(t, m, "tab")
 	typeText(t, m, canaryID)
@@ -123,7 +123,7 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 	if m.screen != screenSummary {
 		t.Fatalf("screen = %v, want the summary", m.screen)
 	}
-	summary := m.View()
+	summary := screenOf(m)
 	for _, want := range []string{"wiki (new)", "reader (new) · system keyring: token-id, token-secret",
 		"default: read"} {
 		if !strings.Contains(summary, want) {
@@ -179,7 +179,7 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 	addService(t, m, "wiki", "https://wiki.example.invalid")
 	addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
 
-	m.screen = screenMenu
+	m.screen = screenNav
 	press(t, m, "c", "enter")
 	if m.fieldValue("service") != "wiki" || !m.field("name").hidden {
 		t.Fatalf("service step does not offer the configured service first: %q", m.fieldValue("service"))
@@ -195,8 +195,8 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 		}
 	}
 	press(t, m, "enter", "enter", "enter")
-	if !strings.Contains(m.View(), "reader (existing, unchanged)") {
-		t.Errorf("summary does not say the credential is reused:\n%s", m.View())
+	if !strings.Contains(screenOf(m), "reader (existing, unchanged)") {
+		t.Errorf("summary does not say the credential is reused:\n%s", screenOf(m))
 	}
 	pump(t, m, "enter")
 	if m.fail != "" {
@@ -223,7 +223,14 @@ func TestCancellingTheGuidedSetupWritesNothing(t *testing.T) {
 			m, _, path, _, mem := newStoreModel(t)
 			walkSetup(t, m, step)
 			press(t, m, "esc")
-			if m.wizard != nil || m.screen != screenMenu {
+			if step > stepProvider {
+				// Once a provider is chosen the setup holds input, and leaving it asks first.
+				if m.screen != screenLeave || m.wizard == nil {
+					t.Fatalf("esc did not ask before dropping the setup: screen %v", m.screen)
+				}
+				press(t, m, "d")
+			}
+			if m.wizard != nil || m.screen != screenList {
 				t.Fatalf("esc did not leave the setup: screen %v", m.screen)
 			}
 			if _, err := os.Stat(path); err == nil {
@@ -248,10 +255,20 @@ func TestCancellingTheGuidedSetupWritesNothing(t *testing.T) {
 		if m.screen != screenPlaintextConfirm {
 			t.Fatalf("an unencrypted file was chosen without asking: screen %v", m.screen)
 		}
-		assertNoCanary(t, "the confirmation", m.View())
+		assertNoCanary(t, "the confirmation", screenOf(m))
 		m.Update(tea.WindowSizeMsg{Width: 20, Height: 5})
+		// The first escape closes the question and keeps the step; the next one asks before it drops the
+		// setup.
 		press(t, m, "esc")
-		if m.wizard != nil || m.screen != screenMenu {
+		if m.screen != screenForm || m.wizard == nil || m.wizard.step != stepCredential {
+			t.Fatalf("esc from a question too small did not return to its step: screen %v", m.screen)
+		}
+		press(t, m, "esc")
+		if view := m.View(); m.screen != screenLeave || !strings.Contains(view, "d discard setup") {
+			t.Fatalf("esc from a screen too small did not ask: screen %v\n%s", m.screen, view)
+		}
+		press(t, m, "d")
+		if m.wizard != nil || m.screen != screenList {
 			t.Fatalf("esc from a screen too small did not leave the setup: screen %v", m.screen)
 		}
 		if _, err := os.Stat(path); err == nil {
@@ -270,7 +287,7 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 
-	m.screen = screenMenu
+	m.screen = screenNav
 	press(t, m, "c", "enter")
 	selectChoice(t, m, newService)
 	press(t, m, "tab")
@@ -309,7 +326,7 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 		t.Fatalf("a missing secret was accepted: step %d, error %q", m.wizard.step, m.fail)
 	}
 	assertNoCanary(t, "the error", m.fail)
-	assertNoCanary(t, "the refused step", m.View())
+	assertNoCanary(t, "the refused step", screenOf(m))
 	if m.fieldValue("name") != "reader" || m.fieldValue("token-id") != canaryID {
 		t.Error("the refused credential step lost its input")
 	}
@@ -435,8 +452,8 @@ func TestGuidedSetupOtherSecretSources(t *testing.T) {
 			t.Fatal("the unencrypted file was written before the setup was saved")
 		}
 		press(t, m, "enter", "enter")
-		if !strings.Contains(m.View(), "unencrypted") {
-			t.Errorf("summary does not warn about the unencrypted file:\n%s", m.View())
+		if !strings.Contains(screenOf(m), "unencrypted") {
+			t.Errorf("summary does not warn about the unencrypted file:\n%s", screenOf(m))
 		}
 		pump(t, m, "enter")
 		if m.fail != "" {
@@ -475,7 +492,7 @@ func TestGuidedSetupTestsWithTheSameTester(t *testing.T) {
 	if len(calls) != 1 || calls[0] != "personal" {
 		t.Fatalf("tester calls = %v", calls)
 	}
-	if view := m.View(); !strings.Contains(view, "personal: auth") {
+	if view := screenOf(m); !strings.Contains(view, "personal: auth") {
 		t.Errorf("summary does not show the test result:\n%s", view)
 	}
 
