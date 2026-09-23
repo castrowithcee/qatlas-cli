@@ -225,6 +225,10 @@ func addConnection(t *testing.T, m *Model, name, service, credential string) {
 func selectChoice(t *testing.T, m *Model, want string) {
 	t.Helper()
 	f := &m.fields[m.focus]
+	if f.kind == fieldProvider {
+		chooseProvider(t, m, want)
+		return
+	}
 	for i := 0; i < len(f.choices)+1; i++ {
 		if f.value() == want {
 			return
@@ -232,6 +236,25 @@ func selectChoice(t *testing.T, m *Model, want string) {
 		press(t, m, "right")
 	}
 	t.Fatalf("choice %q not reachable in %v", want, f.choices)
+}
+
+// chooseProvider opens the table of the focused provider row and takes the wanted provider by moving down
+// to it, the way a person without a search term does.
+func chooseProvider(t *testing.T, m *Model, want string) {
+	t.Helper()
+	press(t, m, "enter")
+	if m.screen != screenProviders {
+		t.Fatalf("enter on the provider row opened screen %v, want the provider table", m.screen)
+	}
+	press(t, m, "home")
+	for range m.providers.list.matches {
+		if id, _ := m.providers.list.selected(); id == want {
+			press(t, m, "enter")
+			return
+		}
+		press(t, m, "down")
+	}
+	t.Fatalf("provider %q not in the table %v", want, m.providers.list.matches)
 }
 
 // The whole MVP configuration flow works through key events alone.
@@ -1498,12 +1521,18 @@ func TestNamingTheProviderKeepsTheRestOfTheCredential(t *testing.T) {
 	m, store, path := newModel(t)
 
 	addKeyringCredential(t, m, "bookstack-personal")
-	// The name of an existing entry is read-only, so the form opens on the provider row.
+	// The name of an existing entry is read-only and enter on the provider row opens its table, so the form
+	// opens on the type row, where enter saves.
 	editEntry(t, m, "bookstack-personal")
+	if got := m.fields[m.focus].label; got != typeLabel {
+		t.Fatalf("the form opened on %q, want the type row", got)
+	}
+	focusField(t, m, providerLabel)
 	selectChoice(t, m, "bookstack")
 	if got := m.credentialType(); got != config.CredentialTypeKeyring {
 		t.Fatalf("type after choosing the provider = %q, want the keyring it was created as", got)
 	}
+	press(t, m, "tab")
 	pump(t, m, "enter")
 	if m.fail != "" {
 		t.Fatalf("saving reported %q", m.fail)

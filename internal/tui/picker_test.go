@@ -2,18 +2,13 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/telegram"
-	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
 // seedConnections stores one service, one credential and the named connections over them, so a test can
@@ -110,46 +105,6 @@ func TestThePickerReachesOneOfManyConnectionsDirectly(t *testing.T) {
 	}
 }
 
-// The provider row of a credential lists what the core compiled, however many that is, and a provider taken
-// from the picker brings its own secret roles along exactly like one stepped to with left/right.
-func TestThePickerReachesOneOfManyProviders(t *testing.T) {
-	reg := capability.NewRegistry()
-	for i := 0; i < 55; i++ {
-		id := fmt.Sprintf("p%03d", i)
-		mustNoError(t, reg.RegisterProvider(config.ProviderMetadata{
-			ID: id, Name: fmt.Sprintf("Provider %03d", i),
-			SecretRoles: []config.SecretRole{{Name: id + "-token", Description: "token"}},
-		}, nil))
-	}
-	store := config.NewStore(filepath.Join(t.TempDir(), "config.yaml"), reg)
-	m, err := New(store, nil, nil, &redact.Redactor{})
-	mustNoError(t, err)
-	// A credential without a provider asks for the roles of all 55, so the form needs a tall terminal.
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 200})
-	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
-	focusField(t, m, providerLabel)
-	if got := len(m.fields[m.focus].choices); got != 56 {
-		t.Fatalf("provider choices = %d, want the 55 compiled ones and the empty one", got)
-	}
-
-	press(t, m, "/")
-	typeText(t, m, "P042")
-	press(t, m, "enter")
-	if got := m.fieldValue(providerLabel); got != "p042" {
-		t.Fatalf("provider = %q, want p042", got)
-	}
-	var roles []string
-	for _, f := range m.fields {
-		if f.kind == fieldEnvName || f.kind == fieldSecret {
-			roles = append(roles, f.label)
-		}
-	}
-	if !reflect.DeepEqual(roles, []string{"p042-token"}) {
-		t.Errorf("roles = %v, want only the role of p042", roles)
-	}
-}
-
 // The filter ignores case, keeps the order of the row and gives the same answer every time.
 func TestThePickerFilterIgnoresCaseAndIsDeterministic(t *testing.T) {
 	m, _, _ := newModel(t)
@@ -229,50 +184,8 @@ func TestThePickerCancelsCompletelyAndTakesOnlyAShownValue(t *testing.T) {
 	}
 }
 
-// Choosing another provider through the picker narrows the service and credential rows the same way
-// left/right does: no service or credential of the previous provider stays selected.
-func TestAProviderFromThePickerLeavesNoForeignServiceOrCredential(t *testing.T) {
-	reg := capability.NewRegistry()
-	for _, register := range []func(*capability.Registry) error{bookstack.Register, telegram.Register} {
-		mustNoError(t, register(reg))
-	}
-	store := config.NewStore(filepath.Join(t.TempDir(), "config.yaml"), reg)
-	m, err := New(store, nil, nil, &redact.Redactor{})
-	mustNoError(t, err)
-	m.cfg.Services["wiki"] = config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}
-	m.cfg.Services["notifications"] = config.Service{Provider: "telegram", BaseURL: "https://api.telegram.org"}
-	m.cfg.Credentials["wiki-reader"] = config.Credential{Provider: "bookstack", Type: config.CredentialTypeKeyring}
-	m.cfg.Credentials["bot"] = config.Credential{Provider: "telegram", Type: config.CredentialTypeKeyring}
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
-	focusField(t, m, providerLabel)
-	if m.fieldValue("service") != "wiki" || m.fieldValue("credential") != "wiki-reader" {
-		t.Fatalf("the form did not start on BookStack: %q + %q", m.fieldValue("service"), m.fieldValue("credential"))
-	}
-
-	press(t, m, "/")
-	typeText(t, m, "TELE")
-	press(t, m, "enter")
-	if got := m.fieldValue(providerLabel); got != "telegram" {
-		t.Fatalf("provider = %q, want telegram", got)
-	}
-	if got := m.field("service").choices; !reflect.DeepEqual(got, []string{"notifications"}) {
-		t.Errorf("services = %v, want only the Telegram service", got)
-	}
-	if got := m.field("credential").choices; !reflect.DeepEqual(got, []string{"bot"}) {
-		t.Errorf("credentials = %v, want only the Telegram credential", got)
-	}
-	if m.fieldValue("service") != "notifications" || m.fieldValue("credential") != "bot" {
-		t.Errorf("selected %q + %q, want notifications + bot", m.fieldValue("service"), m.fieldValue("credential"))
-	}
-	if hint := m.field("target").hint; !strings.Contains(hint, "required for Telegram") {
-		t.Errorf("target hint = %q, want the Telegram rule", hint)
-	}
-}
-
 // A small row keeps its direct way: left/right changes it in place, no dialog opens, and the form does not
-// point to a picker it does not need.
+// point to a picker it does not need. A provider row is the exception: it is always chosen in its table.
 func TestASmallChoiceKeepsLeftAndRight(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})

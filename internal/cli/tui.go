@@ -34,8 +34,17 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +
-			"In a form, left/right step through the values of a choice row. / on a choice row opens a\n" +
-			"searchable picker that marks the current value and filters as you type, ignoring case; up/down,\n" +
+			"Every provider row, in the forms of services, credentials, and connections and as the first step\n" +
+			"of the guided setup, is chosen in the same provider table, however many providers there are:\n" +
+			"enter, space, or / on the row opens it. The table lists every provider the row offers with its\n" +
+			"name and ID, marks the current one, and always shows the search line, the position of the\n" +
+			"selection, and the total. Typing filters by name and ID, ignoring case; up/down, pgup/pgdown and\n" +
+			"home/end move; enter takes the selected provider and updates the rows that depend on it, and esc\n" +
+			"leaves the provider and every row that depends on it unchanged. In the guided setup, enter goes\n" +
+			"on to the next step and esc cancels the setup. A form does not open on a provider row while\n" +
+			"another row takes input, so enter on an opened entry still saves it.\n\n" +
+			"In a form, left/right step through the values of every other choice row. / on such a row opens\n" +
+			"a searchable picker that marks the current value and filters as you type, ignoring case; up/down,\n" +
 			"pgup/pgdown and home/end move, enter takes the selected value, and esc leaves the row unchanged.\n" +
 			"The form points to / on rows with many values.\n\n" +
 			"A connection's tools row decides between every tool its permissions allow, which is how a\n" +

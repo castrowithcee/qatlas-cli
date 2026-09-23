@@ -21,8 +21,8 @@ func walkSetup(t *testing.T, m *Model, until int) {
 	t.Helper()
 	m.screen = screenMenu
 	press(t, m, "c")
-	if m.wizard == nil || m.screen != screenForm {
-		t.Fatalf("c did not open the guided setup: screen %v, error %q", m.screen, m.fail)
+	if m.wizard == nil || m.screen != screenProviders {
+		t.Fatalf("c did not open the guided setup on its provider table: screen %v, error %q", m.screen, m.fail)
 	}
 	steps := []func(){
 		func() { press(t, m, "enter") },

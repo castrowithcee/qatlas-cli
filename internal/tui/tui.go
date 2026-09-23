@@ -65,6 +65,8 @@ const (
 	screenPicker
 	// screenSummary is the last step of the guided setup: what will be saved, and after saving, the test.
 	screenSummary
+	// screenProviders is the table of a provider row, over the form it was opened from.
+	screenProviders
 )
 
 type fieldKind int
@@ -84,6 +86,9 @@ const (
 	// fieldMasked takes a secret value in the guided setup. It is typed masked and drawn without its value;
 	// the value leaves the editor only towards the credential store, when the setup is saved.
 	fieldMasked
+	// fieldProvider holds one provider like a choice row, but is chosen in the provider table only, so every
+	// provider row looks and works the same however many providers there are.
+	fieldProvider
 )
 
 type field struct {
@@ -217,7 +222,7 @@ func (f field) value() string {
 		}
 		return strings.Join(values, ", ")
 	}
-	if f.kind == fieldChoice {
+	if f.kind == fieldChoice || f.kind == fieldProvider {
 		if f.index < 0 || f.index >= len(f.choices) {
 			return ""
 		}
@@ -266,6 +271,8 @@ type Model struct {
 	// pickerMarks holds the ticks of a tool list while its picker is open, and is nil for a single choice.
 	// The row takes them over only when they are kept.
 	pickerMarks map[string]bool
+	// providers is the table of the focused provider row while it is open.
+	providers providerTable
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
 	// confirmation is about the selected entry of the list.
 	confirmRole string
@@ -415,6 +422,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateSecret(msg)
 		case screenPicker:
 			cmd = m.updatePicker(msg)
+		case screenProviders:
+			cmd = m.updateProviderTable(msg)
 		case screenSummary:
 			cmd = m.updateSummary(msg)
 		}
@@ -597,6 +606,12 @@ func (m *Model) leaveScreen() tea.Cmd {
 		// The picker steps back to its form, which keeps everything typed into it.
 		m.screen = screenForm
 		return nil
+	case screenProviders:
+		if m.wizard == nil {
+			m.screen = screenForm
+			return nil
+		}
+		return m.leaveSetup()
 	default:
 		if m.wizard != nil {
 			return m.leaveSetup()
@@ -608,6 +623,14 @@ func (m *Model) leaveScreen() tea.Cmd {
 }
 
 func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
+	if m.fields[m.focus].kind == fieldProvider {
+		// A provider row is chosen in its table only; enter opens it rather than saving past it.
+		switch key.String() {
+		case "enter", " ", "/":
+			m.openProviderTable()
+			return nil
+		}
+	}
 	if m.wizard != nil {
 		switch key.String() {
 		case "esc":
@@ -666,6 +689,9 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		return nil
+	case fieldProvider:
+		// Its table opened above; no other key changes a provider row.
+		return nil
 	case fieldSecret:
 		// A secret row holds nothing to type into, so its keys are free for what a secret needs.
 		return m.secretRowKey(current.label, key)
@@ -714,8 +740,9 @@ func (m *Model) choiceChanged(previous string) tea.Cmd {
 	return nil
 }
 
-// pickerThreshold is the number of values from which the form points out the picker. Fewer values are
-// quicker to step through with left/right; the picker opens on any choice row all the same.
+// pickerThreshold is the number of values from which the form points out the picker of a choice row. Fewer
+// values are quicker to step through with left/right; the picker opens on any choice row all the same. A
+// provider row has no such threshold: it is always chosen in its table.
 const pickerThreshold = 8
 
 // openPicker opens the searchable list of the focused choice row, on its current value, with the filter
@@ -775,17 +802,7 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.screen = screenForm
-		f := &m.fields[m.focus]
-		previous := f.value()
-		if choice == previous {
-			return nil
-		}
-		for i, c := range f.choices {
-			if c == choice {
-				f.index = i
-			}
-		}
-		return m.choiceChanged(previous)
+		return m.choose(choice)
 	case "up":
 		m.picker.move(-1)
 	case "down":
@@ -797,6 +814,22 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 		return m.picker.updateFilter(key)
 	}
 	return nil
+}
+
+// choose puts one of its values on the focused choice or provider row and brings the rows that depend on it
+// in line. Taking the value the row already holds changes nothing.
+func (m *Model) choose(choice string) tea.Cmd {
+	f := &m.fields[m.focus]
+	previous := f.value()
+	if choice == previous {
+		return nil
+	}
+	for i, c := range f.choices {
+		if c == choice {
+			f.index = i
+		}
+	}
+	return m.choiceChanged(previous)
 }
 
 // choiceText is how one value of a choice row reads. The empty value, which a credential offers while it
@@ -1559,7 +1592,7 @@ func (m *Model) buildFields(name string) []field {
 	case sectionServices:
 		s := m.cfg.Services[name]
 		fields = append(fields,
-			choiceField("provider", m.cfg.Providers(), s.Provider),
+			providerField(m.cfg.Providers(), s.Provider),
 			textField("base url", s.BaseURL, false).withHint(baseURLHint),
 		)
 		if name == "" {
@@ -1576,8 +1609,7 @@ func (m *Model) buildFields(name string) []field {
 		}
 		provider := m.credentialProvider(name, cred)
 		fields = append(fields,
-			choiceField(providerLabel, m.credentialProviders(provider), provider).
-				withHint(credentialProviderHint),
+			providerField(m.credentialProviders(provider), provider).withHint(credentialProviderHint),
 			choiceField(typeLabel, config.CredentialTypes(), credType).withHint(typeHint),
 		)
 		fields = append(fields, m.roleFields(cred, fields[1].value(), credType)...)
@@ -1598,7 +1630,7 @@ func (m *Model) buildFields(name string) []field {
 		permissions := permissionField(m.permissionChoicesFor(provider, conn.Permissions), conn.Permissions)
 		permissions.hint = m.permissionHint(provider)
 		fields = append(fields,
-			choiceField(providerLabel, m.connectionProviders(), provider).withHint(connectionProviderHint),
+			providerField(m.connectionProviders(), provider).withHint(connectionProviderHint),
 			choiceField("service", m.providerServices(provider), conn.Service).withHint(connectionServiceHint),
 			choiceField("credential", m.providerCredentials(provider), conn.Credential).
 				withHint(connectionCredentialHint),
@@ -1794,14 +1826,23 @@ func (m *Model) moveFocus(by int) {
 }
 
 // firstEditable is where a form opens. A form whose first field is locked opens on the first field that
-// takes input, so the user starts where typing has an effect.
+// takes input, so the user starts where typing has an effect. A provider row is passed over while another
+// row takes input: enter on it opens the provider table, and a form opened to change something else must
+// still save with enter.
 func (m *Model) firstEditable() int {
+	first := -1
 	for i := range m.fields {
-		if !m.fields[i].readOnly && !m.fields[i].hidden {
+		if m.fields[i].readOnly || m.fields[i].hidden {
+			continue
+		}
+		if m.fields[i].kind != fieldProvider {
 			return i
 		}
+		if first < 0 {
+			first = i
+		}
 	}
-	return 0
+	return max(first, 0)
 }
 
 // trimFields makes the shown text the text that will be stored. value() ignores spaces at both edges, so a
@@ -1810,7 +1851,8 @@ func (m *Model) firstEditable() int {
 func (m *Model) trimFields() {
 	for i := range m.fields {
 		f := &m.fields[i]
-		if f.kind == fieldChoice || f.kind == fieldMultiChoice || f.kind == fieldToolList || f.kind == fieldMasked {
+		if f.kind == fieldChoice || f.kind == fieldProvider || f.kind == fieldMultiChoice || f.kind == fieldToolList ||
+			f.kind == fieldMasked {
 			continue
 		}
 		if trimmed := strings.TrimSpace(f.input.Value()); trimmed != f.input.Value() {
@@ -1821,8 +1863,8 @@ func (m *Model) trimFields() {
 
 func (m *Model) applyFocus() {
 	for i := range m.fields {
-		if i == m.focus && m.fields[i].kind != fieldChoice && m.fields[i].kind != fieldMultiChoice &&
-			m.fields[i].kind != fieldToolList && !m.fields[i].readOnly {
+		if i == m.focus && m.fields[i].kind != fieldChoice && m.fields[i].kind != fieldProvider &&
+			m.fields[i].kind != fieldMultiChoice && m.fields[i].kind != fieldToolList && !m.fields[i].readOnly {
 			m.fields[i].input.Focus()
 			continue
 		}
@@ -1880,6 +1922,13 @@ func choiceField(label string, choices []string, value string) field {
 			f.index = i
 		}
 	}
+	return f
+}
+
+// providerField is the provider row of a form, chosen in the provider table.
+func providerField(choices []string, value string) field {
+	f := choiceField(providerLabel, choices, value)
+	f.kind = fieldProvider
 	return f
 }
 
@@ -2008,6 +2057,8 @@ func (m *Model) buildEditorView(dense bool) string {
 		return m.listView()
 	case screenPicker:
 		return m.pickerView()
+	case screenProviders:
+		return m.providerTableView()
 	}
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Qatlas setup") + "\n")
@@ -2059,6 +2110,9 @@ func (m *Model) buildEditorView(dense bool) string {
 		}
 		if m.fields[m.focus].kind == fieldToolList {
 			keys = "space or / pick tools · tab move · enter save · esc cancel"
+		}
+		if m.fields[m.focus].kind == fieldProvider {
+			keys = "enter choose provider in the table · tab move · esc cancel"
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
@@ -2207,8 +2261,11 @@ func (m *Model) listFrame() (string, string) {
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.
-func (m *Model) filterLine(l *filterList) string {
-	prefix, width := m.fit("filter: ")
+func (m *Model) filterLine(l *filterList) string { return m.searchLine(l, "filter: ") }
+
+// searchLine shows the filter of l behind the given label.
+func (m *Model) searchLine(l *filterList, label string) string {
+	prefix, width := m.fit(label)
 	if !l.editing {
 		return prefix + truncateCells(l.query(), width)
 	}
@@ -2318,6 +2375,8 @@ func (m *Model) keepScrollPosition() {
 		m.list.offset, _ = m.listWindow()
 	case screenPicker:
 		m.picker.offset, _ = m.pickerWindow()
+	case screenProviders:
+		m.providers.list.offset, _ = m.providerTableWindow()
 	}
 }
 
@@ -2765,6 +2824,9 @@ func (m *Model) fieldHint(f field) string {
 		}
 		return m.secretRowHint(m.editing, f.label, f.roleLead)
 	}
+	if f.kind == fieldProvider {
+		return providerHint(f)
+	}
 	if f.kind == fieldToolList && !f.readOnly && len(f.marked()) > 0 {
 		// The ticks are what is saved, so they stand in full under the row that holds them.
 		return f.hint + "; ticked: " + strings.Join(f.marked(), ", ")
@@ -2893,6 +2955,8 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = "(entered, masked)"
 	case f.kind == fieldMasked:
 		value = hintStyle.Render("(empty)")
+	case f.kind == fieldProvider:
+		value = m.providerValue(f)
 	case f.kind == fieldChoice && len(f.choices) == 0:
 		value = "(nothing to choose)"
 	case f.kind == fieldChoice:

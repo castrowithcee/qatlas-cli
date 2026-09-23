@@ -144,6 +144,10 @@ func (m *Model) setupShow(step int) {
 	m.setupRefresh()
 	m.focus = m.firstEditable()
 	m.applyFocus()
+	if step == stepProvider {
+		// The provider step is its table: every provider is shown with the search before anything is chosen.
+		m.openProviderTable()
+	}
 }
 
 // setupPage builds the rows of one step for the chosen provider.
@@ -152,7 +156,7 @@ func (m *Model) setupPage(step int) []field {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
 	switch step {
 	case stepProvider:
-		return []field{choiceField(providerLabel, m.cfg.Providers(), provider).withHint(setupProviderHint)}
+		return []field{providerField(m.cfg.Providers(), provider).withHint(setupProviderHint)}
 	case stepService:
 		// A configured service comes first, so reusing one is what enter does without further choice.
 		services := append(m.providerServices(provider), newService)
