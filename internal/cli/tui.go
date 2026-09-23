@@ -10,10 +10,14 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 	"github.com/castrowithcee/qatlas-cli/internal/tui"
 )
 
-func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
+// noUpdateCheck is the environment variable that keeps the editor from looking for a newer release.
+const noUpdateCheck = "QATLAS_NO_UPDATE_CHECK"
+
+func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Set up connections and edit the configuration in a terminal interface",
@@ -96,7 +100,16 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"connection. A saved connection opens and saves as it is; a profile is never applied to it on its\n" +
 			"own. A profile is a starting selection, not a role: the configuration keeps only permissions\n" +
 			"and the concrete tool IDs, so a tool a later version adds joins no saved connection, and no\n" +
-			"local tick narrows what the credential itself may do at the provider.",
+			"local tick narrows what the credential itself may do at the provider.\n\n" +
+			"? on the sidebar or in a list shows the help topics start, agents, and configuration, the same\n" +
+			"text as 'qatlas help start' and the others. left/right switch the topic, up/down and pgup/pgdown\n" +
+			"scroll, and esc closes the help.\n\n" +
+			"At start the editor asks GitHub in the background, for at most five seconds, whether a newer\n" +
+			"stable release exists, and names it in the top line, for example Update available v0.4.0 →\n" +
+			"v0.5.0 · u update. u on the sidebar or in a list asks first and then installs it the way\n" +
+			"'qatlas update' does; the editor keeps running the old version until it is restarted. A failed\n" +
+			"check stays silent. A dev build never checks, and a non-empty QATLAS_NO_UPDATE_CHECK turns\n" +
+			"the check off.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if opts.Agent {
@@ -113,8 +126,8 @@ func newTUICommand(opts *Options, reg *capability.Registry) *cobra.Command {
 				return err
 			}
 			store := config.NewStore(path, reg)
-			return classifyUserError(tui.Run(
-				store, connectionTester(store, opts, reg), secrets, opts.Redactor, os.Stdin, os.Stdout))
+			return classifyUserError(tui.Run(store, connectionTester(store, opts, reg), secrets, opts.Redactor,
+				tuiUpdater(opts, buildVersion), os.Stdin, os.Stdout))
 		},
 	}
 }
@@ -136,4 +149,16 @@ func connectionTester(store *config.Store, opts *Options, reg *capability.Regist
 		}
 		return reg.TestConnection(ctx, resolved, secrets, opts.Redactor)
 	}
+}
+
+// tuiUpdater returns what the editor checks for a newer release with, or nil where it must not check: in a
+// dev build, which has no release to compare with, and when QATLAS_NO_UPDATE_CHECK is set.
+func tuiUpdater(opts *Options, buildVersion string) tui.Updater {
+	if buildVersion == "" || buildVersion == "dev" || os.Getenv(noUpdateCheck) != "" {
+		return nil
+	}
+	if opts.Updater != nil {
+		return opts.Updater
+	}
+	return selfupdate.New(buildVersion)
 }

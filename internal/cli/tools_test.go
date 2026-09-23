@@ -500,6 +500,10 @@ func syntheticRegistry(t *testing.T, count int) *capability.Registry {
 func commandNames(cmd *cobra.Command) []string {
 	names := make([]string, 0, len(cmd.Commands()))
 	for _, sub := range cmd.Commands() {
+		if sub.IsAdditionalHelpTopicCommand() {
+			// A help topic is text, not a command; the help topic tests cover it.
+			continue
+		}
 		names = append(names, sub.Name())
 		for _, child := range sub.Commands() {
 			names = append(names, sub.Name()+" "+child.Name())

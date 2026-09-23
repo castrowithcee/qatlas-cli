@@ -14,6 +14,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -171,9 +172,16 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		newToolCommand(opts, reg),
 		newInvokeCommand(opts, reg),
 		newMCPCommand(opts, reg),
-		newTUICommand(opts, reg),
+		newTUICommand(opts, reg, version),
 		newUpdateCommand(opts, version),
 	)
+	// A command without a run function is a help topic: 'qatlas help <topic>' prints its text, and the
+	// root help lists it under the additional help topics.
+	for _, topic := range helptopics.All() {
+		cmd.AddCommand(&cobra.Command{
+			Use: topic.Name, Short: topic.Short, Long: helptopics.Wrap(topic.Text, 80),
+		})
+	}
 
 	return cmd
 }

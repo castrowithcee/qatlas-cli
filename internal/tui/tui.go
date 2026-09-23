@@ -25,6 +25,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 )
 
 // Tester checks one configured connection and reports the stable outcome class. The editor holds no
@@ -77,6 +78,10 @@ const (
 	screenProviders
 	// screenLeave asks what happens to the unsaved input of a form before it is left: save, discard, or stay.
 	screenLeave
+	// screenHelp shows the help topics over the sidebar or the list it was opened from.
+	screenHelp
+	// screenUpdate asks before a newer release of qatlas is installed.
+	screenUpdate
 )
 
 type fieldKind int
@@ -356,6 +361,21 @@ type Model struct {
 	// wizard is the guided setup while it runs, and nil otherwise.
 	wizard *setup
 
+	// helpTopic is the topic the help screen shows, scrolled to helpOffset; helpFrom is the screen it
+	// returns to.
+	helpTopic  int
+	helpOffset int
+	helpFrom   screen
+
+	// Self-update state. release is a newer stable release the check at start found; updated names the
+	// version installed since, which takes effect only after a restart. updateFrom is the screen the update
+	// question returns to.
+	updater    Updater
+	release    selfupdate.Result
+	updating   bool
+	updated    string
+	updateFrom screen
+
 	quitting bool
 }
 
@@ -403,8 +423,10 @@ func asNotFound(err error, target **config.NotFoundError) bool {
 }
 
 // Init resolves credential locations for the credential list. It asks only for source metadata; secret values
-// never enter the model.
-func (m *Model) Init() tea.Cmd { return m.refreshSources(m.keyringQueries()) }
+// never enter the model. It also starts the check for a newer release, which never blocks the editor.
+func (m *Model) Init() tea.Cmd {
+	return tea.Batch(m.refreshSources(m.keyringQueries()), m.checkUpdate())
+}
 
 // Update handles one event. It is the whole editor logic and needs no terminal.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -421,6 +443,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleWritten(msg)
 	case setupSavedMsg:
 		return m, m.setupSaved(msg)
+	case updateCheckedMsg:
+		m.updateChecked(msg)
+		return m, nil
+	case updateDoneMsg:
+		m.updateDone(msg)
+		return m, nil
 	case tea.WindowSizeMsg:
 		// A zero dimension is also how focused tests report only the dimension they exercise. Real size
 		// messages carry both; keep the last known value until a non-zero replacement arrives.
@@ -474,6 +502,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateSummary(msg)
 		case screenLeave:
 			cmd = m.updateLeave(msg)
+		case screenHelp:
+			cmd = m.updateHelp(msg)
+		case screenUpdate:
+			cmd = m.updateUpdateConfirm(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -502,6 +534,10 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 		m.clearMessages()
 	case "c":
 		m.startSetup()
+	case "?":
+		m.openHelp()
+	case "u":
+		m.askUpdate()
 	case "n":
 		if reason := m.newEntryBlocked(); reason != "" {
 			m.status = ""
@@ -545,6 +581,10 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		m.focusNav()
 	case "c":
 		m.startSetup()
+	case "?":
+		m.openHelp()
+	case "u":
+		m.askUpdate()
 	case "q", "ctrl+c":
 		return m.quit()
 	case "/":
@@ -648,6 +688,12 @@ func (m *Model) leaveScreen() tea.Cmd {
 	case screenLeave:
 		// Staying is the answer that loses nothing.
 		m.screen = m.leaveFrom
+		return nil
+	case screenHelp:
+		m.screen = m.helpFrom
+		return nil
+	case screenUpdate:
+		m.screen = m.updateFrom
 		return nil
 	case screenForm, screenSummary:
 		return m.requestLeave(-1)
@@ -2272,6 +2318,10 @@ func (m *Model) buildEditorView(dense bool) string {
 		return m.pickerView()
 	case screenProviders:
 		return m.providerTableView()
+	case screenHelp:
+		return m.helpView()
+	case screenUpdate:
+		return m.updateView() + m.notes()
 	}
 	var b strings.Builder
 	switch m.screen {
@@ -2473,13 +2523,14 @@ func (m *Model) listFrame() (string, string) {
 	var keys string
 	switch {
 	case m.screen == screenNav:
-		keys = "up/down section · enter open list · 1-4 open · n new · c guided setup · q quit"
+		keys = "up/down section · enter open list · 1-4 open · n new · c setup · ? help · q quit"
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-4 or left sections · q quit"
+		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-4 or left sections · " +
+			"? help · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-4 or left sections · q quit"
+		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-4 or left sections · ? help · q quit"
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
@@ -2683,7 +2734,12 @@ func (m *Model) frame(workspace string) string {
 		return m.boundTo(strings.Join(lines, "\n"), m.termWidth, m.termHeight)
 	}
 	title := m.section.title()
-	if m.wizard != nil {
+	switch {
+	case m.screen == screenHelp:
+		title = "Help"
+	case m.screen == screenUpdate:
+		title = "Update"
+	case m.wizard != nil:
 		title = "Guided setup"
 	}
 	left := box("Sections", m.sidebarLines(), sidebarWidth-frameCells, m.height, m.screen == screenNav)
@@ -2695,7 +2751,8 @@ func (m *Model) frame(workspace string) string {
 }
 
 // pathLine names the configuration file the editor works on. A path too long for the line keeps its end,
-// the part that tells files apart.
+// the part that tells files apart. A newer release stands between the title and the path, in the longest
+// form that still leaves the path some room.
 func (m *Model) pathLine() string {
 	suffix := ""
 	if !m.configExists {
@@ -2705,13 +2762,26 @@ func (m *Model) pathLine() string {
 	if m.termWidth < 60 {
 		title = ""
 	}
-	room := m.termWidth - lipgloss.Width(title+"Config: "+suffix)
-	return titleStyle.Render(title) + hintStyle.Render("Config: "+truncateLeft(m.store.Path(), room)+suffix)
+	banner := m.updateBanner(m.termWidth - lipgloss.Width(title) - 2 - pathRoom)
+	if banner != "" {
+		banner += "  "
+	}
+	rest := m.termWidth - lipgloss.Width(title+banner)
+	label := "Config: "
+	if banner != "" && lipgloss.Width(label+suffix)+pathRoom > rest {
+		// Beside the banner a narrow line keeps the end of the path and drops its label.
+		label, suffix = "", ""
+	}
+	path := truncateLeft(m.store.Path(), rest-lipgloss.Width(label+suffix))
+	return titleStyle.Render(title) + okStyle.Render(banner) + hintStyle.Render(label+path+suffix)
 }
 
-// sidebarLines are the rows of the sidebar: the sections with their entry counts, the guided setup, quitting,
-// and the next step while there is room. The active section is marked "> " while the sidebar has the focus
-// and "* " while the workspace has it; the marker, not the colour, is what says so.
+// pathRoom is what the banner of a newer release leaves the path at least.
+const pathRoom = 12
+
+// sidebarLines are the rows of the sidebar: the sections with their entry counts, the guided setup, the help,
+// quitting, and the next step while there is room. The active section is marked "> " while the sidebar has
+// the focus and "* " while the workspace has it; the marker, not the colour, is what says so.
 func (m *Model) sidebarLines() []string {
 	inner := sidebarWidth - frameCells
 	var lines []string
@@ -2730,7 +2800,7 @@ func (m *Model) sidebarLines() []string {
 	if m.wizard != nil {
 		setup = activeStyle.Render("> c guided setup")
 	}
-	lines = append(lines, "", setup, "  q quit")
+	lines = append(lines, "", setup, "  ? help", "  q quit")
 	if next := render(hintStyle, inner, "next: "+m.nextStep()); len(lines)+1+strings.Count(next, "\n")+1 <= m.height {
 		lines = append(lines, "")
 		lines = append(lines, strings.Split(next, "\n")...)
@@ -3237,12 +3307,15 @@ func (m *Model) row(active bool, text string) string {
 // being cut off at its right edge.
 func (m *Model) hint(text string) string { return "\n" + m.wrapped(hintStyle, text) }
 
-// Run starts the editor on the given terminal streams.
-func Run(store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor, in, out *os.File) error {
+// Run starts the editor on the given terminal streams. The updater may be nil, in which case the editor does
+// not look for a newer release.
+func Run(store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor, updater Updater,
+	in, out *os.File) error {
 	model, err := New(store, tester, secrets, redactor)
 	if err != nil {
 		return err
 	}
+	model.updater = updater
 	_, err = tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(out)).Run()
 	return err
 }
