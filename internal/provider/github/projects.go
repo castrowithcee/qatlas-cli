@@ -279,8 +279,18 @@ type fieldJSON struct {
 	Name     string `json:"name"`
 	DataType string `json:"dataType"`
 	Options  []struct {
+		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"options"`
+	Configuration *struct {
+		Iterations          []iterationJSON `json:"iterations"`
+		CompletedIterations []iterationJSON `json:"completedIterations"`
+	} `json:"configuration"`
+}
+
+type iterationJSON struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 type projectJSON struct {

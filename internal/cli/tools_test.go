@@ -172,7 +172,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	for _, want := range []string{
 		// BookStack has exactly one configured connection, Telegram one, and every other compiled
 		// provider none. An unconfigured namespace stays visible with zero.
-		"1,bookstack,5", "1,telegram,3", "0,github,4", "0,lexware,3", "0,nextcloud,6", "0,seatable,7", "0,twentycrm,5",
+		"1,bookstack,5", "1,telegram,3", "0,github,15", "0,lexware,3", "0,nextcloud,6", "0,seatable,7", "0,twentycrm,5",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -296,7 +296,11 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		}},
 		{"namespace seatable", []string{"seatable"}, []string{"seatable.columns.list", "seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.update", "seatable.tables.list"}},
 		{"namespace github", []string{"github"}, []string{
-			"github.issues.get", "github.issues.list", "github.projectitems.get", "github.projectitems.list",
+			"github.comments.create", "github.comments.list", "github.issues.close", "github.issues.create",
+			"github.issues.get", "github.issues.list", "github.issues.reopen", "github.issues.update",
+			"github.projectdrafts.create", "github.projectissues.create", "github.projectitems.add",
+			"github.projectitems.archive", "github.projectitems.get", "github.projectitems.list",
+			"github.projectitems.update",
 		}},
 		{"namespace nextcloud", []string{"nextcloud"}, []string{
 			"nextcloud.files.create", "nextcloud.files.delete", "nextcloud.files.get", "nextcloud.files.list", "nextcloud.files.stat", "nextcloud.files.update",

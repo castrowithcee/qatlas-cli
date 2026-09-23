@@ -3,9 +3,11 @@ package github
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
@@ -194,6 +196,7 @@ type restIssueJSON struct {
 	Milestone *struct {
 		Title string `json:"title"`
 	} `json:"milestone"`
+	NodeID      string    `json:"node_id"`
 	HTMLURL     string    `json:"html_url"`
 	CreatedAt   string    `json:"created_at"`
 	UpdatedAt   string    `json:"updated_at"`
@@ -208,22 +211,51 @@ func (c *Client) GetIssue(ctx context.Context, number int) (*Issue, error) {
 	if c.target.kind != kindRepository {
 		return nil, providerError(op, "this connection is not bound to a repository")
 	}
-	if number < 1 || number > 1000000000 {
-		return nil, invalidRequest("number must be a positive issue number")
-	}
-	path := fmt.Sprintf("/repos/%s/%s/issues/%s", url.PathEscape(c.target.owner), url.PathEscape(c.target.repo),
-		strconv.Itoa(number))
-	var raw restIssueJSON
-	if err := c.rest(ctx, op, path, &raw); err != nil {
+	return c.readIssue(ctx, op, number)
+}
+
+// readIssue reads one issue of the bound repository and refuses a pull request. Every change of an
+// existing issue and every new comment reads the issue this way first, because the REST issue routes
+// would change a pull request of the same number just as well.
+func (c *Client) readIssue(ctx context.Context, op string, number int) (*Issue, error) {
+	if err := checkNumber(number); err != nil {
 		return nil, err
 	}
-	if raw.Number != number {
-		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-			Message: "GitHub answered with a different issue than the requested one"}
+	var raw restIssueJSON
+	if err := c.rest(ctx, op, issuePath(c.target, number), &raw); err != nil {
+		return nil, err
+	}
+	return issueOf(op, raw, number, false)
+}
+
+func checkNumber(number int) error {
+	if number < 1 || number > 1000000000 {
+		return invalidRequest("number must be a positive issue number")
+	}
+	return nil
+}
+
+func issuesPath(repository target) string {
+	return fmt.Sprintf("/repos/%s/%s/issues", url.PathEscape(repository.owner), url.PathEscape(repository.repo))
+}
+
+func issuePath(repository target, number int) string {
+	return issuesPath(repository) + "/" + strconv.Itoa(number)
+}
+
+// issueOf normalises one REST issue. number is the issue that was asked for, or zero for a new one. A
+// change already happened when its answer is checked, so a failure then says that its outcome is open.
+func issueOf(op string, raw restIssueJSON, number int, change bool) (*Issue, error) {
+	if raw.Number < 1 || (number != 0 && raw.Number != number) {
+		message := "GitHub answered with a different issue than the requested one"
+		if change {
+			message += uncertain
+		}
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 	}
 	if raw.PullRequest != nil {
 		return nil, &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "this number belongs to a pull request; this tool reads issues only"}
+			Message: "this number belongs to a pull request; these tools handle issues only"}
 	}
 	issue := &Issue{Number: raw.Number, Title: raw.Title, State: raw.State, Assignees: []string{}, Labels: []string{},
 		URL: raw.HTMLURL, CreatedAt: raw.CreatedAt, UpdatedAt: raw.UpdatedAt}
@@ -249,4 +281,157 @@ func (c *Client) GetIssue(ctx context.Context, number int) (*Issue, error) {
 		issue.Labels = append(issue.Labels, label.Name)
 	}
 	return issue, nil
+}
+
+// Bounds of the issue content Qatlas writes. GitHub allows 256 characters in a title and 65536 in a body;
+// the list bounds keep one request small.
+const (
+	maxTitleLength = 256
+	maxBodyLength  = 65536
+	maxLabels      = 20
+	maxLabelLength = 50
+	maxAssignees   = 10
+)
+
+// IssueContent is the content of a new issue, or the part of an existing issue a change replaces. A nil
+// field stays as it is; Labels and Assignees replace the whole set, and an empty list removes every entry.
+type IssueContent struct {
+	Title     *string   `json:"title"`
+	Body      *string   `json:"body"`
+	Labels    *[]string `json:"labels"`
+	Assignees *[]string `json:"assignees"`
+}
+
+// check applies the bounds of the issue content. A new issue needs a title; a change needs at least one
+// field.
+func (content IssueContent) check(create bool) error {
+	switch {
+	case create && content.Title == nil:
+		return invalidRequest("title is required")
+	case !create && content.Title == nil && content.Body == nil && content.Labels == nil && content.Assignees == nil:
+		return invalidRequest("name at least one of title, body, labels, or assignees to change")
+	}
+	if content.Title != nil {
+		if length := utf8.RuneCountInString(*content.Title); strings.TrimSpace(*content.Title) == "" ||
+			length > maxTitleLength {
+			return invalidRequest(fmt.Sprintf("title must hold 1 to %d characters", maxTitleLength))
+		}
+	}
+	if content.Body != nil && utf8.RuneCountInString(*content.Body) > maxBodyLength {
+		return invalidRequest(fmt.Sprintf("body must hold at most %d characters", maxBodyLength))
+	}
+	if content.Labels != nil {
+		if len(*content.Labels) > maxLabels {
+			return invalidRequest(fmt.Sprintf("labels accepts at most %d values", maxLabels))
+		}
+		for _, label := range *content.Labels {
+			if strings.TrimSpace(label) == "" || utf8.RuneCountInString(label) > maxLabelLength {
+				return invalidRequest(fmt.Sprintf("a label must hold 1 to %d characters", maxLabelLength))
+			}
+		}
+	}
+	if content.Assignees != nil {
+		if len(*content.Assignees) > maxAssignees {
+			return invalidRequest(fmt.Sprintf("assignees accepts at most %d values", maxAssignees))
+		}
+		for _, login := range *content.Assignees {
+			if !validLogin(login) {
+				return invalidRequest("assignees must be GitHub logins")
+			}
+		}
+	}
+	return nil
+}
+
+// payload is the REST body of the content: only the named fields travel.
+func (content IssueContent) payload() map[string]any {
+	payload := map[string]any{}
+	if content.Title != nil {
+		payload["title"] = *content.Title
+	}
+	if content.Body != nil {
+		payload["body"] = *content.Body
+	}
+	if content.Labels != nil {
+		payload["labels"] = append([]string{}, *content.Labels...)
+	}
+	if content.Assignees != nil {
+		payload["assignees"] = append([]string{}, *content.Assignees...)
+	}
+	return payload
+}
+
+// CreateIssue opens one issue in the bound repository with exactly one request, which is never repeated.
+func (c *Client) CreateIssue(ctx context.Context, content IssueContent) (*Issue, error) {
+	if c.target.kind != kindRepository {
+		return nil, providerError("create issue", "this connection is not bound to a repository")
+	}
+	issue, _, err := c.createIssue(ctx, c.target, content)
+	return issue, err
+}
+
+// createIssue opens one issue in a repository of the connection and returns it with its node identifier.
+func (c *Client) createIssue(ctx context.Context, repository target, content IssueContent) (*Issue, string, error) {
+	const op = "create issue"
+	if err := content.check(true); err != nil {
+		return nil, "", err
+	}
+	var raw restIssueJSON
+	if err := c.restChange(ctx, op, http.MethodPost, issuesPath(repository), content.payload(), &raw); err != nil {
+		return nil, "", err
+	}
+	issue, err := issueOf(op, raw, 0, true)
+	if err != nil {
+		return nil, "", err
+	}
+	if raw.NodeID == "" {
+		return nil, "", invalidResponse(op, true)
+	}
+	return issue, raw.NodeID, nil
+}
+
+// UpdateIssue replaces the named content of one issue of the bound repository. GitHub offers no
+// precondition for an issue change, so the last change wins; the issue is read first only to refuse a
+// pull request of the same number.
+func (c *Client) UpdateIssue(ctx context.Context, number int, content IssueContent) (*Issue, error) {
+	if err := content.check(false); err != nil {
+		return nil, err
+	}
+	return c.changeIssue(ctx, "update issue", number, content.payload())
+}
+
+// stateReasons are the reasons GitHub records for closing an issue.
+var stateReasons = []string{"completed", "not_planned", "duplicate"}
+
+// CloseIssue closes one issue of the bound repository with a reason; closing a closed issue records the
+// reason again.
+func (c *Client) CloseIssue(ctx context.Context, number int, reason string) (*Issue, error) {
+	if reason == "" {
+		reason = "completed"
+	}
+	if !containsFold(stateReasons, reason) {
+		return nil, invalidRequest("state_reason must be completed, not_planned, or duplicate")
+	}
+	return c.changeIssue(ctx, "close issue", number,
+		map[string]any{"state": "closed", "state_reason": strings.ToLower(reason)})
+}
+
+// ReopenIssue opens one closed issue of the bound repository again.
+func (c *Client) ReopenIssue(ctx context.Context, number int) (*Issue, error) {
+	return c.changeIssue(ctx, "reopen issue", number, map[string]any{"state": "open", "state_reason": "reopened"})
+}
+
+// changeIssue reads the issue to refuse a pull request, then sends the change once.
+func (c *Client) changeIssue(ctx context.Context, op string, number int, payload map[string]any) (*Issue, error) {
+	if c.target.kind != kindRepository {
+		return nil, providerError(op, "this connection is not bound to a repository")
+	}
+	if _, err := c.readIssue(ctx, op, number); err != nil {
+		return nil, err
+	}
+	var raw restIssueJSON
+	if err := c.restChange(ctx, op, http.MethodPatch, issuePath(c.target, number), payload, &raw); err != nil {
+		return nil, err
+	}
+	return issueOf(op, raw, number, true)
 }

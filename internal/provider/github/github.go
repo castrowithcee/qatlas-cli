@@ -1,10 +1,17 @@
-// Package github implements controlled, read-only planning access to GitHub.
+// Package github implements controlled planning access to GitHub.
 //
 // A connection binds one token to exactly one user or organization project, or to exactly one repository.
-// A project connection lists compact, server-side filtered items of that project page by page and reads the
-// full content of one selected item; a repository connection lists and reads issues of that repository as a
-// targeted fallback. Nothing here writes, reads comments, or accepts a free filter expression, an owner, a
-// repository, or a project from an agent: every request stays inside the configured target.
+// A project connection lists compact, server-side filtered items of that project page by page, reads the
+// full content of one selected item, and maintains its items and their field values; a repository
+// connection reads, creates, and changes issues of that repository and reads or writes the comments of one
+// issue on explicit request. A project connection may also name repositories: only issues of those are
+// created for or added to its project. Nothing here accepts a free filter expression, a GraphQL document, a
+// route, an owner, or a project from an agent, and a repository argument only selects among the configured
+// ones: every request stays inside the configured targets.
+//
+// A change is sent at most once. Several field values of one item are written in small, serial batches of
+// aliased mutations after the project, its fields, and their options were resolved once, and the answer
+// names what was written, what failed, and what may have happened without a confirmation.
 //
 // Issue titles, bodies, labels, and field values arrive from the provider and are treated as untrusted
 // data: they are normalised into a stable Qatlas shape, passed through the output encoders, and never
@@ -71,6 +78,10 @@ const minInterval = 200 * time.Millisecond
 
 // maxHold bounds how long a reported rate-limit reset may delay the next request of this process.
 const maxHold = time.Minute
+
+// mutationInterval spaces a request after a change of the same token, as GitHub asks of integrations that
+// write.
+const mutationInterval = time.Second
 
 // limiters holds the rate-limit budget of every token this process has used.
 var limiters = ratelimit.NewRegistry(minInterval)
@@ -267,6 +278,7 @@ var issuesGet = capability.Descriptor{
 }
 
 // Register adds GitHub metadata, its read-only connection test, and the bounded planning operations.
+// Only reads are a connection's default: every change needs a permission of its own.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
@@ -274,15 +286,21 @@ func Register(reg *capability.Registry) error {
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
 			Description: "GitHub personal access token: classic with read:project plus repo or public_repo, or " +
-				"fine-grained with read access to issues and projects; Qatlas only reads",
+				"fine-grained with read access to issues and projects; project changes need project instead of " +
+				"read:project, and issue changes need write access to issues",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project or repository",
 			Required: true,
-			Description: "exactly one users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER, or " +
-				"repos/OWNER/REPO; project tools need a project, issue tools a repository",
+			Multiple: true,
+			Description: "one users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO; a " +
+				"project may be followed by the repos/OWNER/REPO whose issues its planning tools may use",
 			Validate: func(raw string) error {
 				_, err := parseTarget(raw)
+				return err
+			},
+			ValidateSet: func(values []string) error {
+				_, err := parseScope(values)
 				return err
 			},
 		},
@@ -294,6 +312,17 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: itemsGet, Handler: capability.Handler(invokeItemsGet)},
 		capability.Operation{Descriptor: issuesList, Handler: capability.Handler(invokeIssuesList)},
 		capability.Operation{Descriptor: issuesGet, Handler: capability.Handler(invokeIssuesGet)},
+		capability.Operation{Descriptor: issuesCreate, Handler: capability.Handler(invokeIssuesCreate)},
+		capability.Operation{Descriptor: issuesUpdate, Handler: capability.Handler(invokeIssuesUpdate)},
+		capability.Operation{Descriptor: issuesClose, Handler: capability.Handler(invokeIssuesClose)},
+		capability.Operation{Descriptor: issuesReopen, Handler: capability.Handler(invokeIssuesReopen)},
+		capability.Operation{Descriptor: commentsList, Handler: capability.Handler(invokeCommentsList)},
+		capability.Operation{Descriptor: commentsCreate, Handler: capability.Handler(invokeCommentsCreate)},
+		capability.Operation{Descriptor: itemsUpdate, Handler: capability.Handler(invokeItemsUpdate)},
+		capability.Operation{Descriptor: itemsAdd, Handler: capability.Handler(invokeItemsAdd)},
+		capability.Operation{Descriptor: itemsArchive, Handler: capability.Handler(invokeItemsArchive)},
+		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
+		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
 	)
 }
 
@@ -380,15 +409,21 @@ func invokeIssuesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 // requireKind refuses a tool on a connection whose target is of the other kind, before any credential is
 // resolved: a repository connection offers no project and a project connection no repository.
 func requireKind(resolved *config.Resolved, kind targetKind, tool string) (target, error) {
+	bound, err := requireScope(resolved, kind, tool)
+	return bound.target, err
+}
+
+// requireScope is requireKind for the tools that also need the repositories of a project connection.
+func requireScope(resolved *config.Resolved, kind targetKind, tool string) (scope, error) {
 	if resolved == nil {
-		return target{}, providerError("open", "no connection was selected")
+		return scope{}, providerError("open", "no connection was selected")
 	}
-	bound, err := parseTarget(resolved.Target)
+	bound, err := scopeOf(resolved)
 	if err != nil {
-		return target{}, providerError("open", err.Error())
+		return scope{}, providerError("open", err.Error())
 	}
-	if bound.kind != kind {
-		return target{}, &capability.UnsupportedError{Connection: resolved.Name, Capability: tool}
+	if bound.target.kind != kind {
+		return scope{}, &capability.UnsupportedError{Connection: resolved.Name, Capability: tool}
 	}
 	return bound, nil
 }
@@ -408,6 +443,67 @@ type target struct {
 	owner  string
 	number int
 	repo   string
+}
+
+// scope is everything one connection binds: its target and, for a project, the repositories whose issues
+// the planning tools may create for or add to that project.
+type scope struct {
+	target       target
+	repositories []target
+}
+
+// repository returns the configured repository an owner/name argument selects. GitHub compares names
+// without case; the configured spelling is used from then on.
+func (s scope) repository(value string) (target, error) {
+	for _, repository := range s.repositories {
+		if strings.EqualFold(repository.owner+"/"+repository.repo, value) {
+			return repository, nil
+		}
+	}
+	return target{}, invalidRequest("repository is not one of the repositories this connection may plan in")
+}
+
+func scopeOf(resolved *config.Resolved) (scope, error) {
+	values := resolved.Targets
+	if len(values) == 0 {
+		values = []string{resolved.Target}
+	}
+	return parseScope(values)
+}
+
+// parseScope reads the target list of one connection: exactly one project or one repository, or one
+// project together with the repositories it may plan in. No other combination is accepted, so a connection
+// always has exactly one target a tool acts on.
+func parseScope(values []string) (scope, error) {
+	if len(values) == 1 {
+		bound, err := parseTarget(values[0])
+		return scope{target: bound}, err
+	}
+	var bound scope
+	seen := map[string]bool{}
+	for _, value := range values {
+		parsed, err := parseTarget(value)
+		if err != nil {
+			return scope{}, err
+		}
+		key := strings.ToLower(parsed.String())
+		if seen[key] {
+			return scope{}, errors.New("the GitHub target list names a target more than once")
+		}
+		seen[key] = true
+		if parsed.kind == kindRepository {
+			bound.repositories = append(bound.repositories, parsed)
+			continue
+		}
+		if bound.target.kind != 0 {
+			return scope{}, errors.New("a GitHub target list may name only one project")
+		}
+		bound.target = parsed
+	}
+	if bound.target.kind != kindProject {
+		return scope{}, errors.New("several GitHub targets must be one project and the repositories it plans in")
+	}
+	return bound, nil
 }
 
 func (t target) String() string {
@@ -597,10 +693,11 @@ func endpointsOf(raw string) (endpoints, error) {
 }
 
 // Client binds one GitHub token to the endpoints of one configured service, to the one target of its
-// connection, and to the rate limit that token shares.
+// connection and the repositories that target may plan in, and to the rate limit that token shares.
 type Client struct {
 	endpoints endpoints
 	target    target
+	scope     scope
 	auth      string
 	http      *http.Client
 	limiter   *ratelimit.Limiter
@@ -618,7 +715,7 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
 	}
-	bound, err := parseTarget(resolved.Target)
+	bound, err := scopeOf(resolved)
 	if err != nil {
 		return nil, providerError("open", err.Error())
 	}
@@ -646,8 +743,8 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{endpoints: api, target: bound, auth: "Bearer " + value.Secret, http: newHTTPClient(),
-		limiter: lim}, nil
+	return &Client{endpoints: api, target: bound.target, scope: bound, auth: "Bearer " + value.Secret,
+		http: newHTTPClient(), limiter: lim}, nil
 }
 
 // transport carries every GitHub request. A nil value is Go's default transport; the package's own tests
@@ -698,44 +795,66 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 }
 
 // graphQLError is the part of a GraphQL error this provider inspects. The message is read for
-// classification only and never copied, because GitHub echoes requested names into it.
+// classification only and never copied, because GitHub echoes requested names into it. Path names the
+// aliased mutation of a batch the error belongs to.
 type graphQLError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+	Path    []any  `json:"path"`
+}
+
+// graphQLEnvelope is the answer of one GraphQL request before its data is read.
+type graphQLEnvelope struct {
+	Data   json.RawMessage `json:"data"`
+	Errors []graphQLError  `json:"errors"`
 }
 
 // graphql performs one bounded GraphQL query. GitHub answers many failures with HTTP 200 and an errors
 // list, so errors are classified even when data is present: a partial answer is never passed on.
 func (c *Client) graphql(ctx context.Context, op, query string, variables map[string]any, out any) error {
-	payload, err := json.Marshal(map[string]any{"query": query, "variables": variables})
+	return c.graphqlRequest(ctx, op, query, variables, out, false)
+}
+
+// mutate performs one GraphQL mutation that must succeed as a whole. It is sent once and never repeated.
+func (c *Client) mutate(ctx context.Context, op, document string, variables map[string]any, out any) error {
+	return c.graphqlRequest(ctx, op, document, variables, out, true)
+}
+
+func (c *Client) graphqlRequest(ctx context.Context, op, document string, variables map[string]any, out any,
+	change bool) error {
+	envelope, err := c.post(ctx, op, document, variables, change)
 	if err != nil {
-		return providerError(op, "the request could not be built")
-	}
-	var envelope struct {
-		Data   json.RawMessage `json:"data"`
-		Errors []graphQLError  `json:"errors"`
-	}
-	if err := c.do(ctx, op, http.MethodPost, c.endpoints.graphql, payload, &envelope); err != nil {
 		return err
 	}
 	if len(envelope.Errors) > 0 {
-		return c.graphQLFailure(op, envelope.Errors)
+		return graphQLFailure(op, envelope.Errors, change)
 	}
 	if len(envelope.Data) == 0 || string(envelope.Data) == "null" || json.Unmarshal(envelope.Data, out) != nil {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "GitHub returned an invalid response"}
+		return invalidResponse(op, change)
 	}
 	return nil
 }
 
-func (c *Client) graphQLFailure(op string, errs []graphQLError) error {
+// post sends one GraphQL document and returns the undecoded answer.
+func (c *Client) post(ctx context.Context, op, document string, variables map[string]any,
+	change bool) (graphQLEnvelope, error) {
+	var envelope graphQLEnvelope
+	payload, err := json.Marshal(map[string]any{"query": document, "variables": variables})
+	if err != nil {
+		return envelope, providerError(op, "the request could not be built")
+	}
+	err = c.do(ctx, op, http.MethodPost, c.endpoints.graphql, payload, &envelope, change)
+	return envelope, err
+}
+
+func graphQLFailure(op string, errs []graphQLError, change bool) *provider.Error {
 	for _, e := range errs {
 		message := strings.ToLower(e.Message)
 		switch {
 		case e.Type == "RATE_LIMITED" || strings.Contains(message, "rate limit"):
 			return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "GitHub rate-limited the operation"}
 		case e.Type == "FORBIDDEN" || e.Type == "INSUFFICIENT_SCOPES":
-			return &provider.Error{Class: provider.ClassPermission, Op: op,
-				Message: "this GitHub token may not read this resource; check its scopes or permissions"}
+			return &provider.Error{Class: provider.ClassPermission, Op: op, Message: permissionMessage(change)}
 		case e.Type == "NOT_FOUND":
 			return &provider.Error{Class: provider.ClassProviderError, Op: op,
 				Message: "GitHub does not hold this resource or does not show it to this token"}
@@ -744,16 +863,49 @@ func (c *Client) graphQLFailure(op string, errs []graphQLError) error {
 				Message: "this GitHub server does not support filtered project item queries"}
 		}
 	}
+	if change {
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "GitHub rejected the change"}
+	}
 	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "GitHub rejected the query"}
+}
+
+func permissionMessage(change bool) string {
+	if change {
+		return "this GitHub token may not change this resource; check its scopes or permissions"
+	}
+	return "this GitHub token may not read this resource; check its scopes or permissions"
+}
+
+// uncertain is appended to a failure of a change whose request may have reached GitHub: the change may
+// have been applied although no confirmation arrived. Qatlas never repeats such a request by itself.
+const uncertain = "; the change may have been applied, read the current state before repeating it"
+
+func invalidResponse(op string, change bool) *provider.Error {
+	message := "GitHub returned an invalid response"
+	if change {
+		message += uncertain
+	}
+	return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 }
 
 // rest performs one bounded REST read below the configured REST root.
 func (c *Client) rest(ctx context.Context, op, path string, out any) error {
-	return c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out)
+	return c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false)
 }
 
-// do sends one request with the shared authentication, version, and size rules and decodes the answer.
-func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []byte, out any) error {
+// restChange sends one REST change below the configured REST root, once, and decodes the answer.
+func (c *Client) restChange(ctx context.Context, op, method, path string, body any, out any) error {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return providerError(op, "the request could not be built")
+	}
+	return c.do(ctx, op, method, c.endpoints.rest+path, payload, out, true)
+}
+
+// do sends one request with the shared authentication, version, and size rules and decodes the answer. A
+// change is never repeated: every failure after its request may have reached GitHub says so, and the next
+// request of this token waits mutationInterval.
+func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []byte, out any, change bool) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return &provider.Error{Class: provider.ClassTimeout, Op: op,
 			Message: "the request ended while it waited for the GitHub rate limit"}
@@ -775,22 +927,33 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 	}
 
 	response, err := c.http.Do(req)
+	if change {
+		defer c.limiter.HoldFor(mutationInterval)
+	}
 	if err != nil {
-		return provider.Transport(op, "GitHub", err)
+		failure := provider.Transport(op, "GitHub", err)
+		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
+			failure.Cause == provider.CauseUnknown) {
+			failure.Message += uncertain
+		}
+		return failure
 	}
 	defer response.Body.Close()
 	c.observeRateLimit(response.Header)
 
-	if response.StatusCode != http.StatusOK {
-		return c.statusError(op, response)
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		return c.statusError(op, response, change)
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil || len(data) > maxResponseBytes {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-			Message: "the GitHub response could not be read within the size limit"}
+		message := "the GitHub response could not be read within the size limit"
+		if change {
+			message += uncertain
+		}
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 	}
 	if err := json.Unmarshal(data, out); err != nil {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "GitHub returned an invalid response"}
+		return invalidResponse(op, change)
 	}
 	return nil
 }
@@ -816,8 +979,16 @@ func capHold(hold time.Duration) time.Duration {
 }
 
 // statusError maps an HTTP status to a stable class. The provider message is read only to recognise a
-// secondary rate limit and is never copied.
-func (c *Client) statusError(op string, response *http.Response) error {
+// secondary rate limit and is never copied. A server error after a change leaves its outcome open.
+func (c *Client) statusError(op string, response *http.Response, change bool) error {
+	err := c.classifyStatus(op, response, change)
+	if change && response.StatusCode >= 500 {
+		err.Message += uncertain
+	}
+	return err
+}
+
+func (c *Client) classifyStatus(op string, response *http.Response, change bool) *provider.Error {
 	status := response.StatusCode
 	snippet, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 	retry := retryAfter(response.Header)
@@ -837,8 +1008,7 @@ func (c *Client) statusError(op string, response *http.Response) error {
 		}
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: message}
 	case status == http.StatusForbidden:
-		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this GitHub token may not read this resource; check its scopes or permissions"}
+		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: permissionMessage(change)}
 	case status == http.StatusNotFound:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: "GitHub does not hold this resource or does not show it to this token"}

@@ -65,7 +65,9 @@ type SecretRole struct {
 
 // TargetMetadata describes the non-secret target bound to a connection. Validate, when set, checks the
 // form of one configured target so a malformed value fails configuration validation instead of the first
-// call. Its error must not quote the value.
+// call. ValidateSet, when set, checks the targets of one connection together once each of them passed
+// Validate, so a provider can refuse a combination its connections cannot form. Neither error may quote a
+// value.
 type TargetMetadata struct {
 	Label           string
 	Description     string
@@ -74,6 +76,7 @@ type TargetMetadata struct {
 	Wildcard        string
 	WildcardWarning string
 	Validate        func(string) error
+	ValidateSet     func([]string) error
 }
 
 // ToolMetadata is the configuration view of one registered operation: the ID a connection's tools list

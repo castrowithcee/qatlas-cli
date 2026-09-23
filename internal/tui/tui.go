@@ -1696,13 +1696,13 @@ func parseTargets(raw string) (string, []string, error) {
 		return "", nil, nil
 	}
 	if strings.ContainsAny(raw, "\r\n") {
-		return "", nil, errors.New("the table allow-list must stay on one line")
+		return "", nil, errors.New("the target list must stay on one line")
 	}
 	r := csv.NewReader(strings.NewReader(raw))
 	r.TrimLeadingSpace = true
 	values, err := r.Read()
 	if err != nil {
-		return "", nil, errors.New("the table allow-list must be one CSV row; quote a table name that contains a comma")
+		return "", nil, errors.New("the target list must be one CSV row; quote a target that contains a comma")
 	}
 	for i := range values {
 		values[i] = strings.TrimSpace(values[i])

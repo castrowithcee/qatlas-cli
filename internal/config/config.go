@@ -402,10 +402,12 @@ func (c *Config) Validate() error {
 					service.Provider, metadata.Target.Label)
 			}
 			seenTargets := map[string]bool{}
+			formsValid := true
 			for _, target := range targets {
 				target = strings.TrimSpace(target)
 				if target == "" {
 					report("connections.%s.targets: targets must not be empty", name)
+					formsValid = false
 					continue
 				}
 				if seenTargets[target] {
@@ -414,9 +416,15 @@ func (c *Config) Validate() error {
 				if metadata.Target.Validate != nil {
 					if err := metadata.Target.Validate(target); err != nil {
 						report("connections.%s.target: %v", name, err)
+						formsValid = false
 					}
 				}
 				seenTargets[target] = true
+			}
+			if metadata.Target.ValidateSet != nil && formsValid && len(targets) > 0 {
+				if err := metadata.Target.ValidateSet(targets); err != nil {
+					report("connections.%s.targets: %v", name, err)
+				}
 			}
 			if metadata.Target.Wildcard != "" && seenTargets[metadata.Target.Wildcard] && len(targets) != 1 {
 				report("connections.%s.targets: wildcard %q must be the only target", name,

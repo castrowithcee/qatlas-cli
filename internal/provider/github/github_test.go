@@ -36,10 +36,11 @@ const (
 	bodyCanary    = "issue-body-canary-5e1f"
 )
 
-// recorded is one request the fake GitHub received.
+// recorded is one request the fake GitHub received. body is the decoded REST body of a change.
 type recorded struct {
 	method, path, document, auth, version, accept string
 	variables                                     map[string]any
+	body                                          map[string]any
 }
 
 type fakeItem struct {
@@ -66,6 +67,10 @@ type fakeGitHub struct {
 	noStatus    bool
 	ignoreQuery bool
 	failure     func(http.ResponseWriter, *http.Request) bool
+	// failField makes every change of the field with this identifier fail inside its batch.
+	failField string
+	// comments is the number of comments issue 42 holds.
+	comments int
 }
 
 func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -75,9 +80,10 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Query     string         `json:"query"`
 		Variables map[string]any `json:"variables"`
 	}
-	if r.Method == http.MethodPost {
+	if r.Method != http.MethodGet {
 		data, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(data, &payload)
+		_ = json.Unmarshal(data, &record.body)
 		record.document, record.variables = payload.Query, payload.Variables
 	}
 	f.mu.Lock()
@@ -91,6 +97,30 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.URL.Path == "/api/graphql":
 		f.graphql(w, payload.Query, payload.Variables)
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/issues"):
+		repository := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v3/repos/"), "/issues")
+		title, _ := json.Marshal(record.body["title"])
+		body, _ := json.Marshal(record.body["body"])
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, `{"number":101,"node_id":"I_created","title":%s,"state":"open","body":%s,`+
+			`"user":{"login":"octocat"},"assignees":[],"labels":[],"html_url":"https://github.com/%s/issues/101"}`,
+			title, body, repository)
+	case r.Method == http.MethodPatch && r.URL.Path == "/api/v3/repos/octo-org/example/issues/42":
+		state, reason := "open", "null"
+		if value, ok := record.body["state"].(string); ok {
+			state = value
+		}
+		if value, ok := record.body["state_reason"].(string); ok {
+			reason = `"` + value + `"`
+		}
+		fmt.Fprintf(w, `{"number":42,"node_id":"I_42","title":"Crash on start","state":%q,"state_reason":%s,`+
+			`"body":"%s","assignees":[],"labels":[],"html_url":"https://github.com/octo-org/example/issues/42"}`,
+			state, reason, bodyCanary)
+	case r.Method == http.MethodPost && r.URL.Path == "/api/v3/repos/octo-org/example/issues/42/comments":
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, `{"id":9,"node_id":"IC_new","user":{"login":"octocat"},"body":%q,`+
+			`"created_at":"2026-01-03T00:00:00Z","updated_at":"2026-01-03T00:00:00Z",`+
+			`"html_url":"https://github.com/octo-org/example/issues/42#issuecomment-9"}`, record.body["body"])
 	case r.URL.Path == "/api/v3/repos/octo-org/example":
 		fmt.Fprint(w, `{"full_name":"octo-org/example"}`)
 	case r.URL.Path == "/api/v3/repos/octo-org/example/issues/42":
@@ -109,6 +139,12 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables map[string]any) {
 	switch {
+	case strings.HasPrefix(document, "mutation"):
+		f.mutation(w, document, variables)
+	case strings.Contains(document, "comments(first"):
+		f.commentsPage(w, variables)
+	case strings.Contains(document, "$repoOwner"):
+		f.issueLookup(w, variables)
 	case strings.Contains(document, "items(first"):
 		f.itemsPage(w, variables)
 	case strings.Contains(document, "item:node"):
@@ -129,15 +165,21 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 
 func (f *fakeGitHub) projectJSON() string {
 	status := `{"id":"F_status","name":"Status","dataType":"SINGLE_SELECT",` +
-		`"options":[{"name":"Todo"},{"name":"In progress"},{"name":"Done"}]},`
+		`"options":[{"id":"O_todo","name":"Todo"},{"id":"O_progress","name":"In progress"},{"id":"O_done","name":"Done"}]},`
 	if f.noStatus {
 		status = ""
 	}
+	extra := ""
+	for i := 1; i <= 6; i++ {
+		extra += fmt.Sprintf(`,{"id":"F_t%d","name":"T%d","dataType":"TEXT"}`, i, i)
+	}
 	return `{"id":"` + projectID + `","fields":{"nodes":[{"id":"F_title","name":"Title","dataType":"TITLE"},` + status +
-		`{"id":"F_prio","name":"Priority","dataType":"SINGLE_SELECT","options":[{"name":"P1"}]},` +
+		`{"id":"F_prio","name":"Priority","dataType":"SINGLE_SELECT","options":[{"id":"O_p1","name":"P1"}]},` +
 		`{"id":"F_est","name":"Estimate","dataType":"NUMBER"},{"id":"F_due","name":"Due","dataType":"DATE"},` +
-		`{"id":"F_sprint","name":"Sprint","dataType":"ITERATION"},{"id":"F_note","name":"Note","dataType":"TEXT"},` +
-		`{"id":"F_assignees","name":"Assignees","dataType":"ASSIGNEES"}]}}`
+		`{"id":"F_sprint","name":"Sprint","dataType":"ITERATION","configuration":{"iterations":` +
+		`[{"id":"I_s5","title":"Sprint 5"}],"completedIterations":[{"id":"I_s4","title":"Sprint 4"}]}},` +
+		`{"id":"F_note","name":"Note","dataType":"TEXT"},` +
+		`{"id":"F_assignees","name":"Assignees","dataType":"ASSIGNEES"}` + extra + `]}}`
 }
 
 func itemNodeJSON(item fakeItem, project string, withBody bool) string {
@@ -345,7 +387,10 @@ func serve(t *testing.T, f *fakeGitHub) string {
 	return server.URL + "/api/v3"
 }
 
-func freeLimiter() *ratelimit.Limiter { return ratelimit.New(0, time.Now, ratelimit.Sleep) }
+// freeLimiter spaces nothing and never sleeps, so the spacing after a change costs a test no time.
+func freeLimiter() *ratelimit.Limiter {
+	return ratelimit.New(0, time.Now, func(context.Context, time.Duration) error { return nil })
+}
 
 func resolvedConnection(name, base, target string) *config.Resolved {
 	return &config.Resolved{
@@ -474,20 +519,23 @@ func isInvalidRequest(err error) bool {
 	return errors.As(err, &invalid)
 }
 
-func TestRegisterPublishesMetadataAndFourReadOperations(t *testing.T) {
+func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
 		t.Fatalf("Register() = %v", err)
 	}
 	metadata, ok := reg.ProviderMetadata(Provider)
 	if !ok || metadata.Name != "GitHub" || metadata.DefaultBaseURL != "https://api.github.com" ||
-		!metadata.Target.Required || metadata.Target.Multiple || metadata.Target.Validate == nil ||
-		len(metadata.SecretRoles) != 1 || metadata.SecretRoles[0].Name != "token" {
+		!metadata.Target.Required || !metadata.Target.Multiple || metadata.Target.Validate == nil ||
+		metadata.Target.ValidateSet == nil || len(metadata.SecretRoles) != 1 || metadata.SecretRoles[0].Name != "token" {
 		t.Fatalf("metadata = %+v, %v", metadata, ok)
 	}
 	operations := reg.Provider(Provider)
 	ids := []string{}
 	for _, descriptor := range operations {
+		if descriptor.Risk.Effect != capability.EffectRead {
+			continue
+		}
 		ids = append(ids, descriptor.ID)
 		if descriptor.Risk.Effect != capability.EffectRead || descriptor.Risk.Idempotency != capability.IdempotencySafe ||
 			descriptor.Risk.Confirmation != capability.ConfirmationNone || !descriptor.RequiresExplicitConnection ||
@@ -500,10 +548,10 @@ func TestRegisterPublishesMetadataAndFourReadOperations(t *testing.T) {
 			}
 		}
 	}
-	equalIDs(t, ids, []string{"github.issues.get", "github.issues.list", "github.projectitems.get",
-		"github.projectitems.list"})
-	if len(metadata.Tools) != 4 {
-		t.Errorf("tools = %+v, want the four operations offered to connection allow-lists", metadata.Tools)
+	equalIDs(t, ids, []string{"github.comments.list", "github.issues.get", "github.issues.list",
+		"github.projectitems.get", "github.projectitems.list"})
+	if len(metadata.Tools) != 15 {
+		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }
 

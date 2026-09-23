@@ -10,9 +10,10 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
-// githubConfig binds one GitHub token to an organization project and to a repository. No GitHub API is
-// contacted here: every request in this file is answered locally or refused before provider I/O. The
-// command helpers of the Twenty tests are provider-neutral and reused.
+// githubConfig binds one GitHub token to an organization project, to a repository, and to the same project
+// with the repository it may plan in and the permission to change both. No GitHub API is contacted here:
+// every request in this file is answered locally or refused before provider I/O. The command helpers of
+// the Twenty tests are provider-neutral and reused.
 func githubConfig(t *testing.T) string {
 	t.Helper()
 	t.Setenv("QATLAS_CONFIG", "")
@@ -40,12 +41,18 @@ connections:
     credential: gh-reader
     target: repos/octo-org/example
     permissions: [read]
+  roadmap:
+    service: gh
+    credential: gh-reader
+    targets: [orgs/octo-org/projects/7, repos/octo-org/example]
+    permissions: [read, create, update]
+    tools: [github.projectitems.list, github.projectitems.update, github.projectissues.create]
 defaults: {}
 `)
 }
 
-// The GitHub namespace publishes the four read tools; a project connection limited by its tools list offers
-// only the project tools.
+// The GitHub namespace publishes the read tools and the changes; a project connection limited by its tools
+// list offers only the project tools, and only a connection whose permissions allow a change offers it.
 func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	path := githubConfig(t)
 	var reads atomic.Int32
@@ -55,8 +62,12 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[4]{effect,id,title}:", "read,github.issues.get,", "read,github.issues.list,",
-		"read,github.projectitems.get,", "read,github.projectitems.list,",
+		"tools[15]{effect,id,title}:", "read,github.issues.get,", "read,github.issues.list,",
+		"read,github.projectitems.get,", "read,github.projectitems.list,", "read,github.comments.list,",
+		"create,github.issues.create,", "update,github.issues.update,", "update,github.issues.close,",
+		"update,github.issues.reopen,", "create,github.comments.create,", "update,github.projectitems.update,",
+		"create,github.projectitems.add,", "update,github.projectitems.archive,",
+		"create,github.projectdrafts.create,", "create,github.projectissues.create,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -83,12 +94,21 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 			t.Errorf("input schema lacks %q: %s", want, described.Tool.InputSchema)
 		}
 	}
-	if len(described.Connections) != 2 {
-		t.Errorf("connections = %+v, want the project and the repository connection", described.Connections)
+	if len(described.Connections) != 3 {
+		t.Errorf("connections = %+v, want every connection that allows it", described.Connections)
 	}
 	issues := runTwentyJSON(t, "", "tool", "github.issues.list", "--config", path)
 	if !strings.Contains(string(issues), `"name":"code"`) || strings.Contains(string(issues), `"name":"planning"`) {
 		t.Errorf("issue tool connections = %s, want only the repository connection", issues)
+	}
+	planned := runTwentyJSON(t, "", "tool", "github.projectissues.create", "--config", path)
+	if !strings.Contains(string(planned), `"name":"roadmap"`) || strings.Contains(string(planned), `"name":"code"`) ||
+		!strings.Contains(string(planned), `"confirmation":"required"`) ||
+		!strings.Contains(string(planned), `"idempotency":"non_idempotent"`) {
+		t.Errorf("planned issue tool = %s, want only the connection that may change the project", planned)
+	}
+	if reads.Load() != 0 {
+		t.Errorf("secret lookups = %d, want 0", reads.Load())
 	}
 }
 
@@ -111,6 +131,14 @@ func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--config", path}},
 		{"no explicit connection", `{"number":1}`, "connection-selection",
 			[]string{"invoke", "github.issues.get", "--config", path}},
+		{"an unconfirmed change", `{"item_id":"PVTI_x1","fields":{"Status":"Done"}}`, "confirmation-required",
+			[]string{"invoke", "github.projectitems.update", "--connection", "roadmap", "--config", path}},
+		{"a change the permissions exclude", `{"title":"x"}`, "unsupported-capability",
+			[]string{"invoke", "github.issues.create", "--connection", "code", "--confirm", "--config", path}},
+		{"a change outside the tools list", `{"item_id":"PVTI_x1"}`, "unsupported-capability",
+			[]string{"invoke", "github.projectitems.archive", "--connection", "roadmap", "--confirm", "--config", path}},
+		{"a repository outside the targets", `{"repository":"octo-org/other","title":"x"}`, "invalid-request",
+			[]string{"invoke", "github.projectissues.create", "--connection", "roadmap", "--confirm", "--config", path}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -144,8 +172,8 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, toolResultFrom(t, responses[`"search"`]).Structured, &searched)
-	if len(searched.Operations) != 4 || searched.Operations[0].ID != "github.issues.get" ||
-		searched.Operations[3].ID != "github.projectitems.list" {
+	if len(searched.Operations) != 15 || searched.Operations[0].ID != "github.comments.create" ||
+		searched.Operations[14].ID != "github.projectitems.update" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 	describedByCLI := runTwentyJSON(t, "", "tool", "github.projectitems.list", "--config", path, "--output", "json")

@@ -68,17 +68,35 @@ var testProviders ProviderCatalog = testProviderCatalog{
 	"github": {
 		ID: "github", Name: "GitHub", DefaultBaseURL: "https://api.github.com",
 		SecretRoles: []SecretRole{{Name: "token", Description: "GitHub personal access token"}},
-		Target: TargetMetadata{Label: "project or repository", Required: true, Validate: func(target string) error {
-			if strings.HasPrefix(target, "repos/") || strings.HasPrefix(target, "orgs/") {
+		Target: TargetMetadata{Label: "project or repository", Required: true, Multiple: true,
+			Validate: func(target string) error {
+				if strings.HasPrefix(target, "repos/") || strings.HasPrefix(target, "orgs/") {
+					return nil
+				}
+				return errors.New("a GitHub target must name a project or a repository")
+			},
+			ValidateSet: func(targets []string) error {
+				if len(targets) > 1 && !strings.HasPrefix(targets[0], "orgs/") {
+					return errors.New("several GitHub targets must start with one project")
+				}
 				return nil
-			}
-			return errors.New("a GitHub target must name a project or a repository")
-		}},
+			}},
 		Tools: []ToolMetadata{
+			{ID: "github.comments.create", Effect: PermissionCreate},
+			{ID: "github.comments.list", Effect: PermissionRead},
+			{ID: "github.issues.close", Effect: PermissionUpdate},
+			{ID: "github.issues.create", Effect: PermissionCreate},
 			{ID: "github.issues.get", Effect: PermissionRead},
 			{ID: "github.issues.list", Effect: PermissionRead},
+			{ID: "github.issues.reopen", Effect: PermissionUpdate},
+			{ID: "github.issues.update", Effect: PermissionUpdate},
+			{ID: "github.projectdrafts.create", Effect: PermissionCreate},
+			{ID: "github.projectissues.create", Effect: PermissionCreate},
+			{ID: "github.projectitems.add", Effect: PermissionCreate},
+			{ID: "github.projectitems.archive", Effect: PermissionUpdate},
 			{ID: "github.projectitems.get", Effect: PermissionRead},
 			{ID: "github.projectitems.list", Effect: PermissionRead},
+			{ID: "github.projectitems.update", Effect: PermissionUpdate},
 		},
 	},
 	"telegram": {
@@ -147,6 +165,39 @@ defaults: {}
 	if err == nil || !strings.Contains(err.Error(), "connections.route.target: a GitHub target must name") ||
 		strings.Contains(err.Error(), canary) {
 		t.Fatalf("malformed target error = %v", err)
+	}
+}
+
+// A provider that validates its target list as a whole sees it only once every target has a valid form, and
+// its refusal names the list without quoting it.
+func TestProviderTargetSetValidation(t *testing.T) {
+	const prefix = `version: 1
+services:
+  main: {provider: github, base_url: https://api.github.com}
+credentials:
+  reader: {type: keyring}
+connections:
+  route:
+    service: main
+    credential: reader
+    targets: TARGETS
+defaults: {}
+`
+	if _, err := Decode(strings.NewReader(strings.Replace(prefix, "TARGETS", "[orgs/octo-org/projects/7, "+
+		"repos/octo-org/example]", 1)), testProviders); err != nil {
+		t.Fatalf("valid target list = %v", err)
+	}
+	_, err := Decode(strings.NewReader(strings.Replace(prefix, "TARGETS", "[repos/octo-org/canary-set-3f1a, "+
+		"orgs/octo-org/projects/7]", 1)), testProviders)
+	if err == nil || !strings.Contains(err.Error(), "connections.route.targets: several GitHub targets") ||
+		strings.Contains(err.Error(), "canary-set-3f1a") {
+		t.Fatalf("refused target list error = %v", err)
+	}
+	_, err = Decode(strings.NewReader(strings.Replace(prefix, "TARGETS", "[orgs/octo-org/projects/7, bad]", 1)),
+		testProviders)
+	if err == nil || strings.Contains(err.Error(), "several GitHub targets") ||
+		!strings.Contains(err.Error(), "must name a project or a repository") {
+		t.Fatalf("malformed target list error = %v, want only the form refusal", err)
 	}
 }
 

@@ -160,9 +160,15 @@ credentials:
     provider: nextcloud
     type: keyring
 
-  # GitHub needs the single role token. Qatlas only reads, so give it a read-only token: classic with
-  # read:project plus repo (or public_repo), or fine-grained with read access to issues and projects.
+  # GitHub needs the single role token. A reader gets a read-only token: classic with read:project plus
+  # repo (or public_repo), or fine-grained with read access to issues and projects.
   github-reader:
+    provider: github
+    type: keyring
+
+  # A planner changes issues and project items: classic with project plus repo, or fine-grained with write
+  # access to issues and projects.
+  github-planner:
     provider: github
     type: keyring
 
@@ -318,6 +324,7 @@ connections:
   # orgs/LOGIN/projects/NUMBER) or one repository (repos/OWNER/REPO). Project tools run only on a project
   # connection and issue tools only on a repository connection, so each lists the tools of its kind.
   # Work selection starts at the project; the repository connection is the fallback for single issues.
+  # Reads are the only default: a change needs create or update in permissions and confirmation per call.
   planning:
     service: github
     credential: github-reader
@@ -333,9 +340,29 @@ connections:
     permissions: [read]
     tools: [github.issues.get, github.issues.list]
 
+  # A project may be followed by the repositories it plans in. Only issues of those repositories are added
+  # to the project or created for it; the project stays the one target every project tool acts on.
+  roadmap:
+    service: github
+    credential: github-planner
+    targets: [orgs/octo-org/projects/7, repos/octo-org/example]
+    description: maintains the planning project and creates its issues
+    permissions: [read, create, update]
+    tools: [github.projectitems.list, github.projectitems.get, github.projectitems.update,
+      github.projectitems.add, github.projectissues.create]
+
+  # Changes of single issues and their comments run on a repository connection.
+  roadmap-issues:
+    service: github
+    credential: github-planner
+    target: repos/octo-org/example
+    permissions: [read, create, update]
+    tools: [github.issues.get, github.issues.update, github.issues.close, github.issues.reopen,
+      github.comments.list, github.comments.create]
+
 # Defaults are useful for read operations. The key is a tool namespace such as bookstack, or a complete
 # tool ID such as bookstack.pages.list when one tool needs its own route. Confirmed Telegram sends and
-# the Lexware, Twenty CRM, SeaTable, Nextcloud and GitHub reads deliberately ignore defaults and require
+# the Lexware, Twenty CRM, SeaTable, Nextcloud and GitHub tools deliberately ignore defaults and require
 # the connection in the exact invoke request.
 defaults:
   connections:
