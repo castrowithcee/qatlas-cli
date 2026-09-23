@@ -12,7 +12,8 @@ import (
 )
 
 // defaultRegistry wires every provider implementation this build ships. Registration is static, so a
-// failure here is a programming error rather than a runtime condition; TestDefaultRegistry proves it.
+// failure here is a programming error rather than a runtime condition; TestDefaultRegistry proves it. Every
+// provider wired here also runs through the shared conformance checks of TestProviderConformance.
 func defaultRegistry() *capability.Registry {
 	reg := capability.NewRegistry()
 	if err := bookstack.Register(reg); err != nil {
