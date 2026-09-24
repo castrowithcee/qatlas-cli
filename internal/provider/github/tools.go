@@ -28,7 +28,7 @@ const (
 	assigneesSchema  = `{"type":"array","maxItems":10,"items":{"type":"string","maxLength":100,"pattern":"` + loginPattern + `"}}`
 	numberSchema     = `{"type":"integer","minimum":1,"maximum":1000000000}`
 	fieldsSchema     = `{"type":"object","maxProperties":20}`
-	repoSchema       = `{"type":"string","maxLength":201,"pattern":"` + repositoryPattern + `"}`
+	repoSchema       = `{"type":"string","maxLength":201,"pattern":"` + repositoryPattern + `","x-form":"OWNER/REPO"}`
 	itemIDSchema     = `{"type":"string","minLength":4,"maxLength":200,"pattern":"` + nodeIDPattern + `"}`
 	issueContentKeys = `"title":` + titleSchema + `,"body":` + bodySchema + `,"labels":` + labelsSchema + `,` +
 		`"assignees":` + assigneesSchema

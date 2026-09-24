@@ -182,6 +182,16 @@ type ProvidersResponse struct {
 	Providers []ProviderSummary `json:"providers"`
 }
 
+// ProviderIDs returns the ID of every provider the registry knows, sorted.
+func ProviderIDs(registry *capability.Registry) []string {
+	all := registry.ProviderMetadataAll()
+	ids := make([]string, len(all))
+	for i, metadata := range all {
+		ids[i] = metadata.ID
+	}
+	return ids
+}
+
 // Providers answers the first step of discovery: which namespaces exist at all. It stays one line per
 // provider however large the catalog grows, so a reader picks a namespace before paying for its tools.
 func (c *Core) Providers() ProvidersResponse {
@@ -329,6 +339,14 @@ func (c *Core) Tools(request SearchRequest) (ToolsResponse, error) {
 func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capability.Descriptor, error) {
 	if request.Effect != "" && !validEffect(request.Effect) {
 		return nil, &InvalidRequestError{Message: fmt.Sprintf("unknown effect %q", request.Effect)}
+	}
+
+	if request.Provider != "" {
+		if _, ok := c.registry.ProviderMetadata(request.Provider); !ok {
+			return nil, &InvalidRequestError{Message: fmt.Sprintf("unknown provider %q", request.Provider) +
+				DidYouMean(Suggest(request.Provider, ProviderIDs(c.registry))) +
+				"; leave the provider out to search every provider"}
+		}
 	}
 
 	var selectedProvider string
@@ -551,7 +569,15 @@ func (c *Core) operation(id string, version int) (capability.Descriptor, capabil
 		return capability.Descriptor{}, nil, &InvalidRequestError{Message: "operation must not be empty"}
 	}
 	descriptor, handler, ok := c.registry.Lookup(id)
-	if !ok || (version != 0 && descriptor.Version != version) {
+	if !ok {
+		all := c.registry.All()
+		ids := make([]string, len(all))
+		for i, known := range all {
+			ids[i] = known.ID
+		}
+		return capability.Descriptor{}, nil, &UnknownOperationError{Operation: id, Suggestion: Suggest(id, ids)}
+	}
+	if version != 0 && descriptor.Version != version {
 		return capability.Descriptor{}, nil, &UnknownOperationError{Operation: id, Version: version}
 	}
 	return descriptor, handler, nil
@@ -614,7 +640,11 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 func (c *Core) connection(name string) (*config.Resolved, error) {
 	connection, ok := c.config.Connections[name]
 	if !ok {
-		return nil, &capability.UnknownConnectionError{Name: name}
+		names := make([]string, 0, len(c.config.Connections))
+		for known := range c.config.Connections {
+			names = append(names, known)
+		}
+		return nil, &capability.UnknownConnectionError{Name: name, Suggestion: Suggest(name, names)}
 	}
 	service := c.config.Services[connection.Service]
 	return &config.Resolved{

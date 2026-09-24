@@ -13,7 +13,8 @@ import (
 // to a project takes both. Discovery says when an argument may be left out.
 const (
 	projectPattern = `^(users|orgs)/[A-Za-z0-9][A-Za-z0-9_-]{0,99}/projects/[1-9][0-9]{0,8}$`
-	projectSchema  = `{"type":"string","maxLength":120,"pattern":"` + projectPattern + `"}`
+	projectSchema  = `{"type":"string","maxLength":120,"pattern":"` + projectPattern + `",` +
+		`"x-form":"users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER"}`
 )
 
 var repositoryArgument = capability.Argument{Name: "repository", Description: "Repository as OWNER/REPO; " +

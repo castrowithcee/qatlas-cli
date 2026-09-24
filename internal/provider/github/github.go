@@ -139,7 +139,7 @@ var itemsList = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"status":` + filterListSchema + `,"status_not":` + filterListSchema + `,` +
 		`"type":{"type":"string","enum":["issue","pull_request","draft_issue"]},` +
-		`"repository":{"type":"string","maxLength":201,"pattern":"` + repositoryPattern + `"},` +
+		`"repository":` + repoSchema + `,` +
 		`"assignee":{"type":"string","maxLength":100,"pattern":"` + loginPattern + `"},` +
 		`"labels":` + filterListSchema + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
@@ -1031,8 +1031,39 @@ func (c *Client) restSubject(request *http.Request) subject {
 				s.what = "issue #" + strconv.Itoa(number)
 			}
 		}
+		if what := actionsSubject(parts[2]); what != "" {
+			s.what = what
+		}
 	}
 	return s
+}
+
+// actionsSubject names the workflow run, job, or workflow an Actions path below a repository addresses:
+// actions/runs/ID, actions/jobs/ID, or actions/workflows/ID-or-file, with or without a further segment. It
+// names only an identifier or a file name of the characters the input schema allows, and is empty otherwise.
+func actionsSubject(path string) string {
+	rest, ok := strings.CutPrefix(path, "actions/")
+	if !ok {
+		return ""
+	}
+	kind, rest, _ := strings.Cut(rest, "/")
+	value, _, _ := strings.Cut(rest, "/")
+	value, err := url.PathUnescape(value)
+	if err != nil {
+		return ""
+	}
+	id, err := strconv.ParseInt(value, 10, 64)
+	numeric := err == nil && id > 0
+	switch {
+	case kind == "runs" && numeric:
+		return "workflow run " + value
+	case kind == "jobs" && numeric:
+		return "workflow job " + value
+	case kind == "workflows" && (numeric || validRepoName(value) &&
+		(strings.HasSuffix(value, ".yml") || strings.HasSuffix(value, ".yaml"))):
+		return "workflow " + value
+	}
+	return ""
 }
 
 // uncertain is appended to a failure of a change whose request may have reached GitHub: the change may

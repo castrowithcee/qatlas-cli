@@ -878,3 +878,65 @@ func TestMCPAndCLITransportDiagnosisParity(t *testing.T) {
 		}
 	}
 }
+
+// A misspelled tool, connection, or provider is refused with the closest configured or registered name, in
+// the same words on the command line and over MCP. A name that resembles nothing gets no suggestion.
+func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	registry, path := mcpTestRegistry(t, func(context.Context, *config.Resolved, *secret.Resolver,
+		*redact.Redactor, json.RawMessage) (any, error) {
+		return map[string]any{}, nil
+	})
+	cli := func(args ...string) string {
+		t.Helper()
+		var stdout, stderr bytes.Buffer
+		redactor := &redact.Redactor{}
+		opts := &Options{Input: strings.NewReader(""), Redactor: redactor,
+			Secrets: secret.NewWith(nil, nil, nil, redactor)}
+		code := run(newRootCommand(opts, registry), opts, append(args, "--config", path), &stdout, &stderr)
+		if code != exitUsage || stdout.Len() != 0 {
+			t.Fatalf("%v: exit=%d stdout=%q stderr=%q", args, code, stdout.String(), stderr.String())
+		}
+		first, _, _ := strings.Cut(stderr.String(), "\n")
+		return first
+	}
+	mcp := func(tool, arguments string) string {
+		t.Helper()
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
+			`,"name":"` + tool + `","arguments":` + arguments + `}}` + "\n"
+		responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
+		result := toolResultFrom(t, responses["1"])
+		if !result.IsError {
+			t.Fatalf("%s %s = %+v, want a tool error", tool, arguments, result)
+		}
+		return result.Content[0].Text
+	}
+
+	for _, tt := range []struct{ cli, mcp, want string }{
+		{cli("describe", "fake.page.get"), mcp("qatlas.describe", `{"operation":"fake.page.get"}`),
+			`unknown-operation: unknown tool "fake.page.get" (did you mean "fake.pages.get"?)`},
+		{cli("invoke", "fake.pages.get", "--connection", "primry"),
+			mcp("qatlas.invoke", `{"operation":"fake.pages.get","connection":"primry"}`),
+			`unknown-connection: unknown connection "primry" (did you mean "primary"?)`},
+		{cli("describe", "zzz.unrelated.tool"), mcp("qatlas.describe", `{"operation":"zzz.unrelated.tool"}`),
+			`unknown-operation: unknown tool "zzz.unrelated.tool"`},
+	} {
+		if tt.cli != "qatlas: "+tt.want || tt.mcp != tt.want {
+			t.Errorf("CLI = %q, MCP = %q, want %q", tt.cli, tt.mcp, tt.want)
+		}
+	}
+
+	if got, want := cli("tools", "fak"), `qatlas: usage: unknown tool namespace "fak" (did you mean "fake"?); `+
+		`run 'qatlas providers' to list the namespaces`; got != want {
+		t.Errorf("CLI tools = %q, want %q", got, want)
+	}
+	if got, want := cli("connections", "fak"), `qatlas: usage: unknown provider "fak" (did you mean "fake"?); `+
+		`run 'qatlas providers' to list the providers`; got != want {
+		t.Errorf("CLI connections = %q, want %q", got, want)
+	}
+	if got, want := mcp("qatlas.search", `{"provider":"fak"}`), `invalid-request: unknown provider "fak" `+
+		`(did you mean "fake"?); leave the provider out to search every provider`; got != want {
+		t.Errorf("MCP search = %q, want %q", got, want)
+	}
+}

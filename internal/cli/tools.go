@@ -26,9 +26,11 @@ func newProvidersCommand(opts *Options, registry *capability.Registry) *cobra.Co
 		Use:   "providers",
 		Short: "List the tool namespaces this installation offers",
 		Long: "Providers lists every namespace of the tool catalog with the number of tools it offers and the\n" +
-			"number of configured connections that can run them. A provider without a connection stays\n" +
-			"listed with zero. It is answered from the local configuration alone: no provider is contacted\n" +
-			"and no secret is read.\n\n" +
+			"number of configured connections that can run them. A connection counts when it offers at\n" +
+			"least one tool of the provider, so one whose permissions allow none of its tools, or whose\n" +
+			"tools list is empty ('tools: []'), is left out of the count and still listed by 'qatlas\n" +
+			"connections'. A provider without such a connection stays listed with zero. It is answered from\n" +
+			"the local configuration alone: no provider is contacted and no secret is read.\n\n" +
 			"The connections themselves, with what each one may do, are one 'qatlas connections' away, and\n" +
 			"the tools of one namespace one 'qatlas tools <provider>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
@@ -77,8 +79,9 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			var provider string
 			if len(args) == 1 {
 				if _, ok := registry.ProviderMetadata(args[0]); !ok {
-					return &UsageError{fmt.Errorf(
-						"unknown provider %q; run 'qatlas providers' to list the providers", args[0])}
+					return &UsageError{fmt.Errorf("unknown provider %q%s; run 'qatlas providers' to list the "+
+						"providers", args[0], application.DidYouMean(application.Suggest(args[0],
+						application.ProviderIDs(registry))))}
 				}
 				provider = args[0]
 			}
@@ -146,8 +149,9 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			request := application.SearchRequest{Query: query, Connection: opts.Connection, All: all}
 			if len(args) == 1 {
 				if _, ok := registry.ProviderMetadata(args[0]); !ok {
-					return &UsageError{fmt.Errorf(
-						"unknown tool namespace %q; run 'qatlas providers' to list the namespaces", args[0])}
+					return &UsageError{fmt.Errorf("unknown tool namespace %q%s; run 'qatlas providers' to list "+
+						"the namespaces", args[0], application.DidYouMean(application.Suggest(args[0],
+						application.ProviderIDs(registry))))}
 				}
 				request.Provider = args[0]
 			}
@@ -233,10 +237,12 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			"The arguments come either from --arg name=value, repeated once per argument, or from stdin as\n" +
 			"exactly one JSON object; giving both is an error, and giving neither invokes the tool without\n" +
 			"arguments. --arg reads its type from the input schema, so a numeric argument needs no quoting\n" +
-			"and no JSON; an argument that is itself a list or an object belongs on stdin.\n\n" +
+			"and no JSON, while an argument that is itself a list or an object is written as JSON, for\n" +
+			"example --arg 'labels=[\"bug\"]'.\n\n" +
 			"--connection selects the route when the configuration leaves more than one possibility, and\n" +
 			"--confirm carries the confirmation a mutating tool requires for this request.\n\n" +
-			"The result is written to stdout as JSON. Diagnostics and the audit event of a confirmed\n" +
+			"The result is written to stdout as JSON, the only format invoke writes: --output json is\n" +
+			"accepted and any other --output is refused. Diagnostics and the audit event of a confirmed\n" +
 			"mutation go to stderr. A connection-ambiguous diagnostic is followed by one JSON line with\n" +
 			"code, message, operation, and connections: every candidate route with its name and its\n" +
 			"description, which is empty where none is maintained. Nothing is chosen for you; pass one of\n" +
@@ -245,6 +251,9 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			"and reason, the same reason 'qatlas tools --all' names.",
 		Args: exactlyOneArg("tool ID"),
 		RunE: func(c *cobra.Command, args []string) error {
+			if err := checkInvokeFormat(c, opts); err != nil {
+				return err
+			}
 			arguments, err := invokeArguments(c, registry, args[0], flagArgs)
 			if err != nil {
 				return &UsageError{err}
@@ -298,9 +307,8 @@ func invokeArguments(c *cobra.Command, registry *capability.Registry, id string,
 }
 
 // discoveryFormat resolves the output format of the discovery commands. TOON is the default because these
-// commands exist for agents; an explicit --output json is the interoperable alternative. The three scalar
-// formats cannot render a nested tool contract, so asking for one is a usage error rather than a partial
-// answer.
+// commands exist for agents; an explicit --output json is the interoperable alternative. The scalar formats
+// cannot render nested discovery data, so asking for one is a usage error rather than a partial answer.
 func discoveryFormat(c *cobra.Command, opts *Options) (output.Format, error) {
 	if !c.Flags().Changed("output") {
 		return output.FormatTOON, nil
@@ -309,8 +317,19 @@ func discoveryFormat(c *cobra.Command, opts *Options) (output.Format, error) {
 	case output.FormatTOON, output.FormatJSON:
 		return opts.Format, nil
 	}
-	return "", &UsageError{fmt.Errorf("--output %s cannot render a tool contract, want %s or %s",
-		opts.Format, output.FormatTOON, output.FormatJSON)}
+	return "", &UsageError{fmt.Errorf("'%s' writes %s or %s, not %s; omit --output for %s or pass --output %s",
+		c.CommandPath(), output.FormatTOON, output.FormatJSON, opts.Format, output.FormatTOON, output.FormatJSON)}
+}
+
+// checkInvokeFormat refuses an output format invoke does not write. A tool result is nested JSON of any
+// shape, which the scalar formats cannot render, so invoke writes JSON only. --agent alone stays valid: it
+// asks for machine-readable output, which the JSON result already is.
+func checkInvokeFormat(c *cobra.Command, opts *Options) error {
+	if !c.Flags().Changed("output") || opts.Format == output.FormatJSON {
+		return nil
+	}
+	return &UsageError{fmt.Errorf("'%s' writes its result as %s, not %s; omit --output or pass --output %s",
+		c.CommandPath(), output.FormatJSON, opts.Format, output.FormatJSON)}
 }
 
 // emitDocument writes one discovery document. Both formats render the same normalized JSON value, so the

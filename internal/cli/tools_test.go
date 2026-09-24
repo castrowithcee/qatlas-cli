@@ -216,6 +216,40 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		}
 	})
 
+	t.Run("a connection that offers no tool is listed but not counted, as the help says", func(t *testing.T) {
+		empty := writeConfig(t, `version: 1
+services:
+  telegram:
+    provider: telegram
+    base_url: https://telegram.example.invalid
+credentials:
+  bot:
+    type: env
+    values:
+      bot-token: TOOLS_BOT_TOKEN
+connections:
+  alerts:
+    service: telegram
+    credential: bot
+    target: "-1009900112233"
+    tools: []
+defaults: {}
+`)
+		code, stdout, stderr := runTools(t, nil, "providers", "--config", empty)
+		if code != exitOK || stderr != "" || !strings.Contains(stdout, "0,telegram,3") {
+			t.Errorf("providers: exit=%d stdout=%q stderr=%q, want telegram counted with zero", code, stdout, stderr)
+		}
+		code, stdout, stderr = runTools(t, nil, "connections", "telegram", "--config", empty)
+		if code != exitOK || stderr != "" || !strings.Contains(stdout, "alerts") {
+			t.Errorf("connections: exit=%d stdout=%q stderr=%q, want alerts listed", code, stdout, stderr)
+		}
+		_, help, _ := runTools(t, nil, "providers", "--help")
+		if !strings.Contains(help, "A connection counts when it offers at\nleast one tool of the provider") ||
+			!strings.Contains(help, "('tools: []')") {
+			t.Errorf("providers help does not explain the count:\n%s", help)
+		}
+	})
+
 	t.Run("an argument is a usage error", func(t *testing.T) {
 		code, _, stderr := runTools(t, nil, "providers", "bookstack", "--config", cfg)
 		if code != exitUsage || stderr == "" {
@@ -397,7 +431,8 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 
 	t.Run("an unknown namespace is a usage error", func(t *testing.T) {
 		code, stdout, stderr := runTools(t, nil, "tools", "bookstck", "--config", cfg)
-		if code != exitUsage || stdout != "" || !strings.Contains(stderr, `unknown tool namespace "bookstck"`) {
+		if code != exitUsage || stdout != "" ||
+			!strings.Contains(stderr, `unknown tool namespace "bookstck" (did you mean "bookstack"?)`) {
 			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 	})
@@ -480,12 +515,19 @@ func TestToolDescribesOneCompleteContract(t *testing.T) {
 		}
 	})
 
-	t.Run("a scalar format cannot render a contract", func(t *testing.T) {
-		code, stdout, stderr := runTools(t, nil, "describe", "bookstack.pages.list", "--config", cfg,
-			"--output", "table")
-		if code != exitUsage || stdout != "" ||
-			!strings.Contains(stderr, "--output table cannot render a tool contract") {
-			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+	t.Run("a scalar format is refused naming the command and its formats", func(t *testing.T) {
+		for _, args := range [][]string{
+			{"describe", "bookstack.pages.list"}, {"providers"}, {"connections"}, {"tools", "bookstack"},
+		} {
+			for _, format := range []string{"table", "compact"} {
+				code, stdout, stderr := runTools(t, nil, append(args, "--config", cfg, "--output", format)...)
+				want := "qatlas: usage: 'qatlas " + args[0] + "' writes toon or json, not " + format +
+					"; omit --output for toon or pass --output json\n"
+				if code != exitUsage || stdout != "" || stderr != want {
+					t.Errorf("%v --output %s: exit=%d stdout=%q stderr=%q, want %q", args, format, code,
+						stdout, stderr, want)
+				}
+			}
 		}
 	})
 }

@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -306,6 +307,19 @@ func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 			!strings.Contains(err.Error(), tt.want) {
 			t.Errorf("%s of an absent repository = %v (class %q), want not-found with %q", tt.operation,
 				err, classOf(err), tt.want)
+		}
+	}
+
+	// A target of the wrong form is refused before any request, with the form it must have.
+	for _, tt := range []struct{ operation, arguments, want string }{
+		{"github.issues.list", `{"repository":"nodash"}`, "$.repository does not have the required form OWNER/REPO"},
+		{"github.projectitems.list", `{"project":"octocat/3"}`, "$.project does not have the required form " +
+			"users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER"},
+	} {
+		var invalid *application.InvalidRequestError
+		if _, err := invoke(t, core, tt.operation, "open", tt.arguments, false); !errors.As(err, &invalid) ||
+			err.Error() != tt.want {
+			t.Errorf("%s with a malformed target = %v, want invalid-request %q", tt.operation, err, tt.want)
 		}
 	}
 

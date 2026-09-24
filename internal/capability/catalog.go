@@ -6,10 +6,17 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
 
-// UnknownConnectionError reports a connection that is not configured.
-type UnknownConnectionError struct{ Name string }
+// UnknownConnectionError reports a connection that is not configured. Suggestion is the configured name the
+// unknown one most likely misspells, or empty.
+type UnknownConnectionError struct {
+	Name       string
+	Suggestion string
+}
 
 func (e *UnknownConnectionError) Error() string {
+	if e.Suggestion != "" {
+		return fmt.Sprintf("unknown connection %q (did you mean %q?)", e.Name, e.Suggestion)
+	}
 	return fmt.Sprintf("unknown connection %q", e.Name)
 }
 

@@ -145,6 +145,12 @@ func validateAt(schema map[string]json.RawMessage, value any, path string) error
 				return fmt.Errorf("schema at %s has an invalid pattern", path)
 			}
 			if !expression.MatchString(value) {
+				// A pattern is no help to read, so a schema may name the form in words under x-form. It is
+				// the schema's own text, never the rejected value.
+				var form string
+				if raw := schema["x-form"]; len(raw) > 0 && json.Unmarshal(raw, &form) == nil && form != "" {
+					return fmt.Errorf("%s does not have the required form %s", path, form)
+				}
 				return fmt.Errorf("%s does not have the required form", path)
 			}
 		}

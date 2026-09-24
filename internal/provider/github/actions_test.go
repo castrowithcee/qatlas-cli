@@ -537,9 +537,17 @@ func TestActionsMetadataIsCompact(t *testing.T) {
 			}
 		}
 	}
-	if _, err := invoke(t, core, "github.workflowruns.get", "observer", `{"run_id":42}`, false); classOf(err) !=
-		provider.ClassNotFound || !strings.Contains(err.Error(), "in repository octo-org/example") {
-		t.Errorf("an unknown run = %v, want not-found naming the repository", err)
+	for _, tt := range []struct{ operation, arguments, want string }{
+		{"github.workflowruns.get", `{"run_id":42}`, "workflow run 42 in repository octo-org/example"},
+		{"github.workflowjobs.get", `{"job_id":43}`, "workflow job 43 in repository octo-org/example"},
+		{"github.workflowjobs.log", `{"job_id":44}`, "workflow job 44 in repository octo-org/example"},
+		{"github.workflows.get", `{"workflow":"missing.yml"}`, "workflow missing.yml in repository octo-org/example"},
+		{"github.workflows.get", `{"workflow":"45"}`, "workflow 45 in repository octo-org/example"},
+	} {
+		if _, err := invoke(t, core, tt.operation, "observer", tt.arguments, false); classOf(err) !=
+			provider.ClassNotFound || !strings.Contains(err.Error(), "GitHub does not hold "+tt.want) {
+			t.Errorf("%s of an unknown ID = %v, want not-found naming %s", tt.operation, err, tt.want)
+		}
 	}
 }
 

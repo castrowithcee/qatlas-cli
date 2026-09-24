@@ -585,7 +585,9 @@ func TestInputSchemaErrorsAreDeterministic(t *testing.T) {
 func TestSchemaBoundsAndPatternsAreEnforced(t *testing.T) {
 	schema := json.RawMessage(`{"type":"object","properties":{` +
 		`"size":{"type":"integer","minimum":1,"maximum":100},` +
-		`"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}},"additionalProperties":false}`)
+		`"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},` +
+		`"day":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$","x-form":"YYYY-MM-DD"}},` +
+		`"additionalProperties":false}`)
 
 	tests := []struct {
 		name      string
@@ -598,6 +600,7 @@ func TestSchemaBoundsAndPatternsAreEnforced(t *testing.T) {
 		{"below the minimum", `{"size":0}`, "$.size must be at least 1"},
 		{"pattern mismatch", `{"date":"14.05.2026"}`, "$.date does not have the required form"},
 		{"empty string", `{"date":""}`, "$.date does not have the required form"},
+		{"pattern mismatch with a form", `{"day":"14.05.2026"}`, "$.day does not have the required form YYYY-MM-DD"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1166,5 +1169,24 @@ func TestConnectionsListTheRoutesWithoutTheirEndpoints(t *testing.T) {
 	}
 	if got := core.Connections("absent").Connections; got == nil || len(got) != 0 {
 		t.Errorf("Connections(absent) = %#v, want an empty list", got)
+	}
+}
+
+// A suggestion is the closest name within a third of the typed one, ignoring case, and the first of equally
+// close names in sorted order; a name that is not that close gets none.
+func TestSuggestNamesOnlyALikelyTypo(t *testing.T) {
+	candidates := []string{"github", "bookstack", "telegram", "gitlab"}
+	for _, tt := range []struct{ name, want string }{
+		{"gitub", "github"},
+		{"GitHub", "github"},
+		{"bookstck", "bookstack"},
+		{"gitxxb", "github"},
+		{"git", ""},
+		{"nextcloud", ""},
+		{"github", ""},
+	} {
+		if got := Suggest(tt.name, candidates); got != tt.want {
+			t.Errorf("Suggest(%q) = %q, want %q", tt.name, got, tt.want)
+		}
 	}
 }

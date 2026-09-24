@@ -61,6 +61,62 @@ func TestOversizedInvokeStopsBeforeHandler(t *testing.T) {
 	}
 }
 
+// Invoke writes its result as JSON only: --output json and --agent are accepted, any other format is
+// refused before the arguments are read or a provider is called, instead of being ignored.
+func TestInvokeRefusesAnOutputFormatItDoesNotWrite(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	cfg := writeConfig(t, validConfig)
+
+	calls := 0
+	descriptor := capability.Descriptor{
+		ID: "bookstack.pages.get", Version: 1, Description: "Read one page", Provider: "bookstack",
+		Risk: capability.Risk{
+			Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
+			Confirmation: capability.ConfirmationNone, DataSensitivity: "test",
+		},
+		InputSchema:  json.RawMessage(`{"type":"object"}`),
+		OutputSchema: json.RawMessage(`{"type":"object"}`),
+	}
+	handler := capability.Handler(func(context.Context, *config.Resolved, *secret.Resolver,
+		*redact.Redactor, json.RawMessage) (any, error) {
+		calls++
+		return map[string]any{"id": 1}, nil
+	})
+	registry := capability.NewRegistry()
+	registerBookstackTestMetadata(t, registry)
+	if err := registry.Register("bookstack", capability.Operation{Descriptor: descriptor, Handler: handler}); err != nil {
+		t.Fatal(err)
+	}
+	invoke := func(flags ...string) (int, string, string) {
+		var stdout, stderr bytes.Buffer
+		redactor := &redact.Redactor{}
+		opts := &Options{Input: strings.NewReader(""), Redactor: redactor,
+			Secrets: secret.NewWith(nil, nil, nil, redactor)}
+		code := run(newRootCommand(opts, registry), opts,
+			append([]string{"invoke", "bookstack.pages.get", "--config", cfg}, flags...), &stdout, &stderr)
+		return code, stdout.String(), stderr.String()
+	}
+
+	for _, format := range []string{"table", "compact", "toon"} {
+		code, stdout, stderr := invoke("--output", format)
+		want := "qatlas: usage: 'qatlas invoke' writes its result as json, not " + format +
+			"; omit --output or pass --output json\n"
+		if code != exitUsage || stdout != "" || stderr != want {
+			t.Errorf("--output %s: exit=%d stdout=%q stderr=%q, want %q", format, code, stdout, stderr, want)
+		}
+	}
+	if calls != 0 {
+		t.Fatalf("handler calls = %d, want 0", calls)
+	}
+	for _, flags := range [][]string{nil, {"--output", "json"}, {"--agent"}} {
+		code, stdout, stderr := invoke(flags...)
+		if code != exitOK || !strings.HasSuffix(stdout, `"result":{"id":1}}}`+"\n") || stderr != "" {
+			t.Errorf("%v: exit=%d stdout=%q stderr=%q", flags, code, stdout, stderr)
+		}
+	}
+}
+
 func TestInvokeWithoutMatchingConnectionIsASelectionError(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")

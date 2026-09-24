@@ -179,8 +179,11 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	f.StringVar(&opts.Config, "config", "", "path to the configuration file")
 	f.StringVar(&opts.Connection, "connection", "", "name of the connection to use")
 	f.BoolVar(&opts.Agent, "agent", false, "agent mode: machine-readable output without prose or color")
-	f.StringVar(&opts.Output, "output", string(output.FormatTable),
-		"output format: table, json, compact, or toon; discovery commands default to toon")
+	// The default depends on the command, so the flag carries none of its own; resolveFormat and the
+	// commands with a narrower choice apply it.
+	f.StringVar(&opts.Output, "output", "",
+		"output format: table (default), json, compact, or toon; providers, connections, tools, and describe "+
+			"write toon (default) or json; invoke writes json")
 
 	cmd.AddCommand(
 		newConfigCommand(opts, reg),
