@@ -14,8 +14,10 @@
 // template; the field schema tools read, create, and change the fields of a project with their options and
 // iterations and, only on a connection whose tools list names them, remove options, iterations, and fields;
 // the view tools read, create, and change the views of a project and, only on a connection whose tools list
-// names it, delete one; the issue tools
-// read, create, and change issues of a repository and read or write the comments of one issue on explicit
+// names it, delete one; the status update tools read, post, and change the status updates of a project and,
+// listed only, delete one; the access tools read the teams it is linked to and, listed only, change the roles
+// of its collaborators and link it to teams of its organization; the automation tools read its built-in workflows and, listed only, delete one;
+// the issue tools read, create, and change issues of a repository and read or write the comments of one issue on explicit
 // request. The Actions tools observe the GitHub Actions of a repository and, only with the execute permission,
 // dispatch, re-run, or cancel one named workflow or run. Only a connection whose tools list names them
 // maintains workflow files below .github/workflows/ and Actions settings. A tool that touches a project and a
@@ -42,6 +44,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -293,7 +296,7 @@ var issuesGet = capability.Descriptor{
 }
 
 // Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the item and
-// draft tools, the project lifecycle, field schema, and view tools, the Actions observer and operator tools, and the listed-only
+// draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, and the listed-only
 // workflow maintainer and Actions administrator tools. Only reads are a connection's default: every change
 // and every execution needs a permission of its own, and a listed-only tool also its name in the
 // connection's tools list.
@@ -359,12 +362,14 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "projects", Title: "Project lifecycle",
 			Description: "lists projects and repositories, creates, updates, closes, reopens, and copies " +
-				"projects, links or unlinks their repositories, marks or unmarks them as templates, and reads, " +
-				"creates, and changes their fields and views; every change needs its own confirmation, and deleting " +
-				"stays unticked",
+				"projects, links or unlinks their repositories, marks or unmarks them as templates, reads, " +
+				"creates, and changes their fields and views, posts and edits status updates, and reads their " +
+				"teams and automations; every change needs its own confirmation, and deleting and changing access stay " +
+				"unticked",
 			Tools: []string{projectsList.ID, repositoriesList.ID, projectsCreate.ID, projectsUpdate.ID,
 				projectsCopy.ID, projectsLink.ID, projectsUnlink.ID, templatesMark.ID, templatesUnmark.ID,
-				fieldsList.ID, fieldsCreate.ID, fieldsUpdate.ID, viewsList.ID, viewsCreate.ID, viewsUpdate.ID},
+				fieldsList.ID, fieldsCreate.ID, fieldsUpdate.ID, viewsList.ID, viewsCreate.ID, viewsUpdate.ID,
+				statusList.ID, statusCreate.ID, statusUpdate.ID, teamsList.ID, projectWorkflowsList.ID},
 		}, {
 			ID: "actions-observer", Title: "Actions observer",
 			Description: "reads the workflows, runs, jobs, artifact metadata, and the end of job logs of a " +
@@ -409,8 +414,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: itemsArchive, Handler: capability.Handler(invokeItemsArchive)},
 		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
-	}, append(append(append(append(append(itemOperations(), lifecycleOperations()...), fieldOperations()...),
-		viewOperations()...), actionsOperations()...), maintenanceOperations()...)...)
+	}, slices.Concat(itemOperations(), lifecycleOperations(), fieldOperations(), viewOperations(),
+		statusOperations(), accessOperations(), automationOperations(), actionsOperations(),
+		maintenanceOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1021,17 +1027,26 @@ func notFound(op string, s subject) *provider.Error {
 }
 
 // graphQLSubject names what a GraphQL error refers to by the aliases of its path: owner is the project of the
-// bound target, repository a repository or an issue inside it, item and after a project item, assigneeN a
-// user to assign, and anything else a resource inside the bound target. A repository tool binds the repository and asks for an issue as number;
+// bound target and teamN below it a team of its organization, repository a repository or an issue inside it,
+// item and after a project item, statusUpdate a status update, assigneeN a user to assign, and anything else a
+// resource inside the bound target. A repository tool binds the repository and asks for an issue as number;
 // a project tool that plans an issue sends its repository as repoOwner and repoName and the issue as issue.
 func (c *Client) graphQLSubject(path []any, variables map[string]any) subject {
 	switch pathSegment(path, 0) {
 	case "owner":
+		// A team is named by its slug, which Qatlas checked before it was sent.
+		if segment := pathSegment(path, 1); strings.HasPrefix(segment, "team") {
+			if slug, _ := variables[segment].(string); validLogin(slug) {
+				return subject{what: "team " + slug + " of " + c.target.scope + "/" + c.target.owner}
+			}
+		}
 		return subject{in: c.target}
 	case "item":
 		return subject{in: c.target, what: "this item"}
 	case "after":
 		return subject{in: c.target, what: "the item after_id names"}
+	case "statusUpdate":
+		return subject{in: c.target, what: "this status update"}
 	case "repository":
 		s, number := subject{in: c.target}, variables["number"]
 		if c.target.kind != kindRepository {

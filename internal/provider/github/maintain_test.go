@@ -202,9 +202,9 @@ func validArguments(id string) string {
 	}[id]
 }
 
-// Exactly the maintainer and administrator tools and the tools with the effect delete require an allow-list,
-// no profile a new connection starts with selects them, their own profiles are chosen on purpose only, and no
-// profile selects a delete.
+// Exactly the maintainer and administrator tools, the tools with the effect delete, and the tools that change
+// access require an allow-list, no profile a new connection starts with selects them, their own profiles are
+// chosen on purpose only, and no profile selects a delete or an access change.
 func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 	reg := registry(t)
 	if err := reg.ValidateProfiles(); err != nil {
@@ -214,8 +214,10 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 	for _, id := range guardedTools {
 		guarded[id] = true
 	}
+	// The deletes and the tools that change who reaches a project.
 	deletes := map[string]bool{projectsDelete.ID: true, fieldsDelete.ID: true, fieldOptionsDelete.ID: true,
-		iterationsReplace.ID: true, viewsDelete.ID: true, itemsDelete.ID: true}
+		iterationsReplace.ID: true, viewsDelete.ID: true, itemsDelete.ID: true, statusDelete.ID: true,
+		projectWorkflowsDelete.ID: true, collaboratorsUpdate.ID: true, teamsLink.ID: true, teamsUnlink.ID: true}
 	for _, descriptor := range reg.Provider(Provider) {
 		if descriptor.RequiresToolAllowList != (guarded[descriptor.ID] || deletes[descriptor.ID]) {
 			t.Errorf("%s requires an allow-list = %t", descriptor.ID, descriptor.RequiresToolAllowList)
@@ -229,7 +231,7 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 		}
 	}
 	if marked != len(guardedTools)+len(deletes) || len(guardedTools) != 10 {
-		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools and the six deletes", marked)
+		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools, the eight deletes, and the three access tools", marked)
 	}
 	profiles := map[string]config.ToolProfile{}
 	for _, profile := range metadata.Profiles {

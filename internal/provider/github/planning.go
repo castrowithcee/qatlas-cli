@@ -271,26 +271,31 @@ const fieldNodeSelection = `... on ProjectV2FieldCommon{id name dataType} ` +
 // option and iteration. GitHub holds at most 50 fields per project, so one page reads them all.
 const planningFieldSelection = `fields(first:100){nodes{` + fieldNodeSelection + `}}`
 
-// planningRequest names what one change resolves before it writes: the field model, the views, an item that
-// has to belong to the project and, when draft is set, has to be a draft issue, a second item after that has
-// to belong to it as well, a repository the connection allows with one of its issues when number is set, and
-// the users that assignees names.
+// planningRequest names what one change resolves before it writes: the field model, the views, the
+// workflows, an item that has to belong to the project and, when draft is set, has to be a draft issue, a
+// second item after that has to belong to it as well, a status update that has to belong to it, a repository
+// the connection allows with one of its issues when number is set, the users that assignees names, and the
+// teams of the project's organization that teams names.
 type planningRequest struct {
-	fields     bool
-	views      bool
-	item       string
-	draft      bool
-	after      string
-	repository target
-	number     int
-	assignees  []string
+	fields       bool
+	views        bool
+	workflows    bool
+	item         string
+	draft        bool
+	after        string
+	statusUpdate string
+	repository   target
+	number       int
+	assignees    []string
+	teams        []string
 }
 
 // planningNodes are the nodes a change resolved beside the project: the issue, the repository, the draft
-// issue of the item, and the users in the order of the request's assignees.
+// issue of the item, the users in the order of the request's assignees, and the teams in the order of its
+// teams.
 type planningNodes struct {
 	issue, repository, draft string
-	assignees                []string
+	assignees, teams         []string
 }
 
 type planningItemJSON struct {
@@ -305,8 +310,14 @@ type planningItemJSON struct {
 
 type planningJSON struct {
 	ownerJSON
-	Item       *planningItemJSON `json:"item"`
-	After      *planningItemJSON `json:"after"`
+	Item         *planningItemJSON `json:"item"`
+	After        *planningItemJSON `json:"after"`
+	StatusUpdate *struct {
+		ID      string `json:"id"`
+		Project *struct {
+			ID string `json:"id"`
+		} `json:"project"`
+	} `json:"statusUpdate"`
 	Repository *struct {
 		ID    string `json:"id"`
 		Issue *struct {
@@ -321,7 +332,8 @@ func (item *planningItemJSON) belongs(id string, info *projectInfo) bool {
 }
 
 // resolve reads everything one change needs in exactly one query: the project and, as requested, its field
-// model, its views, the items it must hold, a repository or one of its issues, and the users to assign.
+// model, its views, its workflows, the items and the status update it must hold, a repository or one of its
+// issues, the users to assign, and the teams of its organization.
 func (c *Client) resolve(ctx context.Context, op string, request planningRequest) (*projectInfo, planningNodes, error) {
 	var nodes planningNodes
 	declarations := "$owner:String!,$number:Int!"
@@ -332,8 +344,20 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 	if request.views {
 		selection += " " + viewsSelection
 	}
-	body := `owner:` + c.target.ownerField() + `(login:$owner){projectV2(number:$number){` + selection + `}}`
+	if request.workflows {
+		selection += " " + workflowsSelection
+	}
 	variables := c.projectVariables()
+	// A team is resolved inside the organization that owns the project, so it can be no team of another one.
+	teams := ""
+	for i, slug := range request.teams {
+		alias := "team" + strconv.Itoa(i)
+		declarations += ",$" + alias + ":String!"
+		teams += " " + alias + ":team(slug:$" + alias + "){id}"
+		variables[alias] = slug
+	}
+	body := `owner:` + c.target.ownerField() + `(login:$owner){projectV2(number:$number){` + selection + `}` +
+		teams + `}`
 	if request.item != "" {
 		content := ""
 		if request.draft {
@@ -347,6 +371,11 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 		declarations += ",$after:ID!"
 		body += ` after:node(id:$after){... on ProjectV2Item{id project{id}}}`
 		variables["after"] = request.after
+	}
+	if request.statusUpdate != "" {
+		declarations += ",$statusUpdate:ID!"
+		body += ` statusUpdate:node(id:$statusUpdate){... on ProjectV2StatusUpdate{id project{id}}}`
+		variables["statusUpdate"] = request.statusUpdate
 	}
 	if request.repository.kind == kindRepository {
 		inner := "id"
@@ -399,6 +428,22 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 			return nil, nodes, notFound(op, subject{what: "user " + login})
 		}
 		nodes.assignees = append(nodes.assignees, user.ID)
+	}
+	if request.statusUpdate != "" && (answer.StatusUpdate == nil || answer.StatusUpdate.ID != request.statusUpdate ||
+		answer.StatusUpdate.Project == nil || answer.StatusUpdate.Project.ID != info.id) {
+		return nil, nodes, notFound(op, subject{in: c.target, what: "this status update"})
+	}
+	var owner map[string]json.RawMessage
+	_ = json.Unmarshal(aliases["owner"], &owner)
+	for i, slug := range request.teams {
+		var team struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(owner["team"+strconv.Itoa(i)], &team) != nil || team.ID == "" {
+			return nil, nodes, notFound(op, subject{what: "team " + slug + " of " + c.target.scope + "/" +
+				c.target.owner})
+		}
+		nodes.teams = append(nodes.teams, team.ID)
 	}
 	if request.repository.kind != kindRepository {
 		return info, nodes, nil

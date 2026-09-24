@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -11,8 +11,9 @@ updated: 2026-09-25
 
 GitHub is a controlled planning provider, not a replacement for `gh`. It lists the projects and repositories
 of a user or an organization, creates, changes, copies, and deletes projects, links them to repositories, and
-marks them as templates, reads and maintains the fields of a project with their options and iterations and
-its views, reads and maintains issues,
+marks them as templates, reads and maintains the fields of a project with their options and iterations,
+its views, and its status updates, changes its collaborators and teams, reads and deletes its built-in
+automations, reads and maintains issues,
 comments, project items, and draft issues, and it observes and, when allowed, operates the
 GitHub Actions of a repository.
 On a connection that names them explicitly, it also maintains workflow files and Actions settings. It sees
@@ -68,8 +69,9 @@ offers is decided by `permissions` and `tools` alone. Reads are a connection's o
 needs `create` or `update` in the connection's `permissions`, every Actions execution needs `execute`, and a
 connection with a `tools` list offers only the tools it lists, never one added in a later version.
 `github.projects.delete`, `github.projectfields.delete`, `github.projectfieldoptions.delete`,
-`github.projectiterations.replace`, `github.projectviews.delete`, and `github.projectitems.delete` need
-`delete`. They and the workflow
+`github.projectiterations.replace`, `github.projectviews.delete`, `github.projectitems.delete`,
+`github.projectstatus.delete`, and `github.projectworkflows.delete` need `delete`. They, the
+[access tools](#project-collaborators-and-teams) that change who reaches a project, and the workflow
 maintainer and Actions administrator tools are listed only: a connection without a `tools` list never offers
 them, whatever its permissions.
 
@@ -78,7 +80,8 @@ them, whatever its permissions.
 Every repository tool (issues, comments, Actions, workflow maintenance, and Actions administration) takes
 `repository` as `OWNER/REPO`. Every project tool (`github.projectitems.list`, `get`, `update`, `archive`,
 `unarchive`, `move`, `delete`, `github.projectdrafts.create`, `update`, `github.projects.update`, `delete`,
-and the [field schema tools](#project-fields)) takes `project` as
+the [field schema tools](#project-fields), and the tools of views, status updates, collaborators, teams, and
+automations) takes `project` as
 `users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`. `github.projectitems.add`,
 `github.projectissues.create`, `github.projectdrafts.convert`, `github.projects.link`, and
 `github.projects.unlink` touch both, take both, and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the items of
@@ -159,9 +162,12 @@ The terminal editor starts a new connection on the setup profile `read`, which t
 and restoring stay unticked. The profile
 `projects` ticks `[read, create, update]` with the owner lists, the
 [project lifecycle](#project-lifecycle) tools except `github.projects.delete`, the template tools,
-`github.projectfields.list`, `create`, and `update` of the [project fields](#project-fields), and
-`github.projectviews.list`, `create`, and `update` of the [project views](#project-views); no profile ticks a
-tool with the effect `delete`. The
+`github.projectfields.list`, `create`, and `update` of the [project fields](#project-fields),
+`github.projectviews.list`, `create`, and `update` of the [project views](#project-views),
+`github.projectstatus.list`, `create`, and `update` of the [status updates](#project-status-updates),
+`github.projectteams.list` of the [teams](#project-collaborators-and-teams), and
+`github.projectworkflows.list` of the [automations](#project-automations); no profile ticks a tool with the
+effect `delete` or one that changes access. The
 profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions). A profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -424,6 +430,112 @@ widths, slices, and sums are neither read nor set. Change them in GitHub itself.
 
 The view tools need `project` on a classic token, or Projects read and write access of the organization on a
 fine-grained token; the projects of a user need a classic token.
+
+## Project status updates
+
+The status update tools read the status updates of a project and post, change, and delete them. A status
+update is addressed by `status_update_id`, the `id` the list names; it is resolved together with the project in
+one query and must belong to it before the one change is sent. Each change needs confirmation in its own
+invoke request, is sent exactly once, and follows the rules under
+[unclear outcomes](#unclear-outcomes-and-conflicts).
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.projectstatus.list` | read | safe | lists the status updates, newest first, in batches |
+| `github.projectstatus.create` | create | non-idempotent | posts one status update with `status`, `start_date`, `target_date`, and `body` |
+| `github.projectstatus.update` | update | idempotent | changes `status`, `start_date`, `target_date`, or `body`; left-out settings stay |
+| `github.projectstatus.delete` | delete | idempotent | deletes one status update; listed only |
+
+`github.projectstatus.list` follows the [cursor contract](#cursor-contract) with a cursor bound to the project.
+Each status update has `id`, `status` (`inactive`, `on_track`, `at_risk`, `off_track`, `complete`, or empty
+without one), `start_date` and `target_date` (`YYYY-MM-DD` or empty), `body`, `author`, `created_at`, and
+`updated_at`. Bodies are untrusted data.
+
+```sh
+echo '{"project":"orgs/octo-org/projects/7","status":"at_risk","target_date":"2026-12-18",
+  "body":"The migration slips by one sprint."}' | qatlas invoke github.projectstatus.create --connection projects --confirm
+echo '{"project":"orgs/octo-org/projects/7","status_update_id":"PVTSU_...","status":"on_track","target_date":""}' |
+  qatlas invoke github.projectstatus.update --connection projects --confirm
+```
+
+A create needs at least one setting; GitHub posts a status update without a status or dates as well. In an
+update, `""` removes a date and empties `body`. GitHub does not check that the target date follows the start
+date. A status update of another project, or one GitHub does not show, is `not-found` before any change; a
+repeated delete ends that way. The tools need `project` on a classic token, or Projects read and write access
+of the organization on a fine-grained token; the projects of a user need a classic token.
+
+## Project collaborators and teams
+
+The access tools read the teams a project is linked to and change who reaches it. The changes are listed
+only: a connection offers them only while its `tools` list names them, and no setup profile ticks them. Each
+change needs confirmation in its own invoke request, is sent exactly once, and follows the rules under
+[unclear outcomes](#unclear-outcomes-and-conflicts).
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.projectteams.list` | read | safe | lists the teams the project is linked to, in name order, in batches |
+| `github.projectcollaborators.update` | update | idempotent | grants users or teams a role, changes it, or removes their direct access; listed only |
+| `github.projects.linkteam` | update | idempotent | links a project of an organization to one of its teams, which GitHub grants read access; listed only |
+| `github.projects.unlinkteam` | update | idempotent | removes that link and the read access it granted; listed only |
+
+`github.projectteams.list` follows the [cursor contract](#cursor-contract) with a cursor bound to the project.
+Each entry has `team`, the slug `github.projects.linkteam` takes, and `name`, which is untrusted data. A
+project of a user is linked to no team and lists none. GitHub shows teams only to a token that may read the
+organizations, even for a project of a user: without `read:org` on a classic token, or Members read access on a
+fine-grained one, the list ends with `permission`, and the message names that scope.
+
+`collaborators` names at most 20 entries, each with either `user` (a login) or `team` (the slug of a team of the
+organization that owns the project) and `role`: `none` removes the direct access, `reader` views, `writer`
+edits, and `admin` also manages the project's settings. Collaborators left out stay unchanged. The answer
+repeats the roles GitHub accepted. Every user and team is resolved with the project in one query first: an
+unknown login or a team the organization lacks is `not-found` before any change. A team is looked up inside the
+project's organization only, so a team of another organization can never be named.
+
+```sh
+echo '{"project":"orgs/octo-org/projects/7","collaborators":[{"team":"design","role":"writer"},
+  {"user":"octocat","role":"none"}]}' | qatlas invoke github.projectcollaborators.update --connection project-access --confirm
+echo '{"project":"orgs/octo-org/projects/7","team":"design"}' |
+  qatlas invoke github.projects.linkteam --connection project-access --confirm
+```
+
+Teams belong to an organization, so Qatlas refuses a team for a `users/LOGIN/projects/NUMBER` project, in
+`github.projectcollaborators.update` and in the team links, with `invalid-request` before a secret is read.
+GitHub's API reads neither the collaborators of a project nor their roles, so there is no tool that lists them;
+check them in GitHub itself. Changing collaborators needs the rights of a project administrator and `project`
+on a classic token, or Projects read and write access of the organization on a fine-grained token; resolving a
+team may also need `read:org` on a classic token, or Members read access on a fine-grained one. Inviting people
+by email, managing the teams themselves, and the settings of an organization are out of scope.
+
+## Project automations
+
+The automation tools read the built-in workflows of a project, such as `Item closed` or `Auto-archive items`,
+and delete one. A workflow is addressed by `workflow`, its number in the project, and resolved with the project
+in one query before the change is sent.
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.projectworkflows.list` | read | safe | lists every workflow with `number`, `name`, and `enabled`, in number order |
+| `github.projectworkflows.delete` | delete | unknown | deletes one workflow; listed only |
+
+A new project starts with GitHub's default workflows. GitHub's API neither creates, enables, disables, nor
+configures a workflow, and a deleted workflow cannot be created again through it: change them in GitHub
+itself. A workflow number the project lacks is refused before any change and names the project's workflow
+numbers; a repeated delete ends that way. Its idempotency stays `unknown`, because a delete addresses the
+workflow by number. `github.projectworkflows.delete` needs `delete` in the connection's `permissions` and its
+name in the connection's `tools`, and the tools need the same token as the [status updates](#project-status-updates).
+
+```yaml
+connections:
+  project-access:
+    service: github
+    credential: github-planner
+    targets: [orgs/octo-org/projects/7]
+    permissions: [read, create, update, delete]
+    tools: [github.projectstatus.list, github.projectstatus.delete, github.projectteams.list,
+      github.projectcollaborators.update,
+      github.projects.linkteam, github.projects.unlinkteam, github.projectworkflows.list,
+      github.projectworkflows.delete]
+```
 
 ## Project-first use
 

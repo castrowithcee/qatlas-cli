@@ -77,6 +77,8 @@ type fakeGitHub struct {
 	ownerProjects []int
 	// views replaces the views of project 7 when it is set.
 	views string
+	// noTeams refuses the team list like GitHub does for a token without read:org.
+	noTeams bool
 }
 
 func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +151,8 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 	case f.fieldSchema(w, document, variables):
 	case f.viewChange(w, document, variables):
 	case f.itemChange(w, document, variables):
+	case f.statusChange(w, document, variables):
+	case f.accessChange(w, document, variables):
 	case strings.Contains(document, "projectsV2(first") || strings.Contains(document, "repositories(first"):
 		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
@@ -201,7 +205,7 @@ func (f *fakeGitHub) projectJSON() string {
 		`"completedIterations":[{"id":"I_s4","title":"Sprint 4","startDate":"2026-09-07","duration":14}]}},` +
 		`{"id":"F_note","name":"Note","dataType":"TEXT"},` +
 		`{"id":"F_assignees","name":"Assignees","dataType":"ASSIGNEES"}` + extra + `]},"views":{"nodes":[` +
-		f.viewsJSON() + `]}}`
+		f.viewsJSON() + `]},"workflows":{"nodes":[` + fakeWorkflows + `]}}`
 }
 
 func itemNodeJSON(item fakeItem, project string, withBody bool) string {
@@ -635,14 +639,15 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	}
 	equalIDs(t, ids, []string{"github.actionspermissions.get", "github.comments.list", "github.issues.get",
 		"github.issues.list", "github.projectfields.list", "github.projectitems.get", "github.projectitems.list", "github.projects.list",
-		"github.projectviews.list", "github.repositories.list", "github.workflowartifacts.list",
+		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
+		"github.repositories.list", "github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
 		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
 		"github.workflowruns.list", "github.workflows.get", "github.workflows.list"})
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 62 {
+	if len(metadata.Tools) != 72 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }
