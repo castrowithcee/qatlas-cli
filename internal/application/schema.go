@@ -12,7 +12,10 @@ import (
 	"unicode/utf8"
 )
 
-func validateJSON(schema, raw json.RawMessage) error {
+// ValidateJSON checks raw against a JSON schema and names the first violation by its path, such as
+// "$.foo is not allowed". A field the schema does not allow is named before a missing required one, since
+// it is often the misspelling of that field.
+func ValidateJSON(schema, raw json.RawMessage) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	var value any
@@ -67,17 +70,6 @@ func validateAt(schema map[string]json.RawMessage, value any, path string) error
 
 	switch value := value.(type) {
 	case map[string]any:
-		var required []string
-		if raw := schema["required"]; len(raw) > 0 {
-			if err := json.Unmarshal(raw, &required); err != nil {
-				return fmt.Errorf("schema at %s has invalid required fields", path)
-			}
-		}
-		for _, name := range required {
-			if _, ok := value[name]; !ok {
-				return fmt.Errorf("%s.%s is required", path, name)
-			}
-		}
 		properties := map[string]json.RawMessage{}
 		if raw := schema["properties"]; len(raw) > 0 {
 			if err := json.Unmarshal(raw, &properties); err != nil {
@@ -94,12 +86,25 @@ func validateAt(schema map[string]json.RawMessage, value any, path string) error
 		}
 		sort.Strings(names)
 		for _, name := range names {
+			if _, ok := properties[name]; !ok && !additional {
+				return fmt.Errorf("%s.%s is not allowed", path, name)
+			}
+		}
+		var required []string
+		if raw := schema["required"]; len(raw) > 0 {
+			if err := json.Unmarshal(raw, &required); err != nil {
+				return fmt.Errorf("schema at %s has invalid required fields", path)
+			}
+		}
+		for _, name := range required {
+			if _, ok := value[name]; !ok {
+				return fmt.Errorf("%s.%s is required", path, name)
+			}
+		}
+		for _, name := range names {
 			child := value[name]
 			raw, ok := properties[name]
 			if !ok {
-				if !additional {
-					return fmt.Errorf("%s.%s is not allowed", path, name)
-				}
 				continue
 			}
 			var childSchema map[string]json.RawMessage

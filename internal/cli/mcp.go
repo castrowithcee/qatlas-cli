@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +35,14 @@ const (
 	mcpUnsupportedVersion = -32022
 )
 
+// mcpLegacyVersions are the handshake-based protocol versions an initialize request negotiates, newest
+// first. Older ones lack structuredContent, which carries the machine-readable part of a refusal.
+var mcpLegacyVersions = []string{"2025-11-25", "2025-06-18"}
+
+// mcpVersionHint names every way to reach this server, for diagnostics a client may only be able to show.
+var mcpVersionHint = "this server speaks MCP " + mcpProtocolVersion + " with per-request params._meta, or MCP " +
+	strings.Join(mcpLegacyVersions, " or ") + " after an initialize request"
+
 var errMCPMessageTooLarge = errors.New("MCP message exceeds size limit")
 
 func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command {
@@ -41,9 +50,14 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 		Use:   "mcp",
 		Short: "Serve the fixed agent tools over MCP stdio",
 		Long: "The server offers the fixed MCP tools qatlas.search, qatlas.describe, and qatlas.invoke\n" +
-			"over MCP 2026-07-28 stdio, one JSON-RPC message per line. server/discover returns the guide\n" +
-			"'qatlas agents' prints as its instructions, so a client that only speaks MCP reads the same guide.\n" +
-			"qatlas.describe and qatlas.invoke take the tool ID as operation.\n\n" +
+			"over stdio, one JSON-RPC message per line. It speaks MCP 2026-07-28, where every request\n" +
+			"declares io.modelcontextprotocol/protocolVersion and io.modelcontextprotocol/clientCapabilities\n" +
+			"in params._meta, and MCP 2025-11-25 and 2025-06-18, which an initialize request negotiates\n" +
+			"once for the process; initialize answers any other version with 2025-11-25. server/discover and\n" +
+			"the initialize result return the guide 'qatlas agents' prints as their instructions, so a\n" +
+			"client that only speaks MCP reads the same guide. qatlas.describe and qatlas.invoke take the\n" +
+			"tool ID as operation. Arguments outside a tool's input schema fail with invalid-request naming\n" +
+			"the field, such as '$.tool is not allowed'.\n\n" +
 			"qatlas.search answers from the local configuration alone: no provider is contacted and no\n" +
 			"secret is read. Like 'qatlas tools' it returns only the tools a configured connection offers,\n" +
 			"or with connection the tools that connection offers; all set to true adds the others, each\n" +
@@ -57,7 +71,9 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"A qatlas.invoke refused with connection-ambiguous carries structuredContent with code,\n" +
 			"message, operation, and connections: every candidate route with its name and its description,\n" +
 			"which is empty where none is maintained. Nothing is chosen for the caller; the next request\n" +
-			"names one of them as connection. A request refused with unsupported-capability carries\n" +
+			"names one of them as connection. A qatlas.invoke refused with connection-selection carries\n" +
+			"the same structuredContent; connections names the routes that offer the tool, and is empty\n" +
+			"when none does. A request refused with unsupported-capability carries\n" +
 			"structuredContent with code, message, operation, connection, and reason.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
@@ -73,6 +89,10 @@ type mcpServer struct {
 	stdout   io.Writer
 	stderr   io.Writer
 	timeout  time.Duration
+
+	// legacy is the protocol version an initialize request negotiated, or empty. It is only touched by
+	// the reading loop.
+	legacy string
 
 	coreMu   sync.Mutex
 	outMu    sync.Mutex
@@ -170,27 +190,34 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 		return
 	}
 	if message.Method == "initialize" {
-		s.writeResponse(mcpErrorResponse(message.ID, mcpUnsupportedVersion,
-			"This server supports MCP 2026-07-28 per-request metadata", map[string]any{
-				"supported": []string{mcpProtocolVersion}, "requested": legacyProtocolVersion(message.Params),
-			}))
+		s.writeResponse(s.initialize(message))
 		return
 	}
 
-	requested, err := requestProtocolVersion(message.Params)
-	if err != nil {
-		s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
-		return
-	}
-	if requested != mcpProtocolVersion {
-		s.writeResponse(mcpErrorResponse(message.ID, mcpUnsupportedVersion,
-			"Unsupported protocol version", map[string]any{
-				"supported": []string{mcpProtocolVersion}, "requested": requested,
-			}))
-		return
+	// After initialize, a request without a declared protocol version belongs to the negotiated legacy
+	// session; one that declares a version is served per request, as if no session existed.
+	if s.legacy == "" || declaresProtocolVersion(message.Params) {
+		requested, err := requestProtocolVersion(message.Params)
+		if err != nil {
+			s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
+			return
+		}
+		if requested != mcpProtocolVersion {
+			s.writeResponse(mcpErrorResponse(message.ID, mcpUnsupportedVersion,
+				"Unsupported protocol version", map[string]any{
+					"supported": []string{mcpProtocolVersion}, "requested": requested,
+				}))
+			return
+		}
 	}
 
 	switch message.Method {
+	case "ping":
+		if err := onlyParams(message.Params, "_meta"); err != nil {
+			s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
+			return
+		}
+		s.writeResponse(mcpResultResponse(message.ID, map[string]any{}))
 	case "server/discover":
 		if err := onlyParams(message.Params, "_meta"); err != nil {
 			s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
@@ -267,6 +294,41 @@ func validMCPID(raw json.RawMessage) json.RawMessage {
 	return nil
 }
 
+// initialize negotiates a legacy protocol version for the rest of the process: the requested one when this
+// server speaks it, otherwise the newest it speaks, which the client may decline by disconnecting.
+func (s *mcpServer) initialize(message mcpMessage) mcpResponse {
+	var params struct {
+		ProtocolVersion json.RawMessage `json:"protocolVersion"`
+	}
+	var requested string
+	if json.Unmarshal(message.Params, &params) != nil ||
+		json.Unmarshal(params.ProtocolVersion, &requested) != nil || requested == "" {
+		return mcpErrorResponse(message.ID, mcpInvalidParams,
+			"params.protocolVersion must be a non-empty string; "+mcpVersionHint, nil)
+	}
+	s.legacy = mcpLegacyVersions[0]
+	for _, known := range mcpLegacyVersions {
+		if requested == known {
+			s.legacy = known
+		}
+	}
+	return mcpResultResponse(message.ID, map[string]any{
+		"protocolVersion": s.legacy,
+		"capabilities":    map[string]any{"tools": map[string]any{}},
+		"serverInfo":      map[string]string{"name": "qatlas", "version": version},
+		"instructions":    helptopics.Agents().Text,
+	})
+}
+
+func declaresProtocolVersion(raw json.RawMessage) bool {
+	var params struct {
+		Meta map[string]json.RawMessage `json:"_meta"`
+	}
+	_ = json.Unmarshal(raw, &params)
+	_, ok := params.Meta["io.modelcontextprotocol/protocolVersion"]
+	return ok
+}
+
 func requestProtocolVersion(raw json.RawMessage) (string, error) {
 	var params map[string]json.RawMessage
 	if json.Unmarshal(raw, &params) != nil {
@@ -274,15 +336,17 @@ func requestProtocolVersion(raw json.RawMessage) (string, error) {
 	}
 	var meta map[string]json.RawMessage
 	if json.Unmarshal(params["_meta"], &meta) != nil || meta == nil {
-		return "", errors.New("params._meta must be an object")
+		return "", errors.New(`params._meta must be an object declaring "io.modelcontextprotocol/protocolVersion" ` +
+			`and "io.modelcontextprotocol/clientCapabilities"; ` + mcpVersionHint)
 	}
 	var protocol string
 	if json.Unmarshal(meta["io.modelcontextprotocol/protocolVersion"], &protocol) != nil || protocol == "" {
-		return "", errors.New("params._meta must declare the protocol version")
+		return "", errors.New(`params._meta["io.modelcontextprotocol/protocolVersion"] must be a non-empty ` +
+			`string; ` + mcpVersionHint)
 	}
 	var capabilities map[string]json.RawMessage
 	if json.Unmarshal(meta["io.modelcontextprotocol/clientCapabilities"], &capabilities) != nil || capabilities == nil {
-		return "", errors.New("params._meta must declare client capabilities")
+		return "", errors.New(`params._meta["io.modelcontextprotocol/clientCapabilities"] must be an object`)
 	}
 	if info, ok := meta["io.modelcontextprotocol/clientInfo"]; ok {
 		var client struct {
@@ -290,18 +354,11 @@ func requestProtocolVersion(raw json.RawMessage) (string, error) {
 			Version string `json:"version"`
 		}
 		if json.Unmarshal(info, &client) != nil || client.Name == "" || client.Version == "" {
-			return "", errors.New("params._meta client info is invalid")
+			return "", errors.New(`params._meta["io.modelcontextprotocol/clientInfo"] must be an object with ` +
+				`a non-empty name and version`)
 		}
 	}
 	return protocol, nil
-}
-
-func legacyProtocolVersion(raw json.RawMessage) string {
-	var params struct {
-		ProtocolVersion string `json:"protocolVersion"`
-	}
-	_ = json.Unmarshal(raw, &params)
-	return params.ProtocolVersion
 }
 
 func onlyParams(raw json.RawMessage, allowed ...string) error {
@@ -393,6 +450,14 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage) {
 
 func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessage) (any, []byte, error) {
 	var audit bytes.Buffer
+	// The published input schema is the contract; checking it first names the offending field.
+	for _, tool := range mcpTools() {
+		if tool.Name == name {
+			if err := application.ValidateJSON(tool.InputSchema, raw); err != nil {
+				return nil, nil, &application.InvalidRequestError{Message: err.Error()}
+			}
+		}
+	}
 	s.coreMu.Lock()
 	core, err := applicationCore(s.opts, s.registry, name == "qatlas.invoke")
 	s.coreMu.Unlock()

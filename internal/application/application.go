@@ -492,7 +492,7 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	if len(request.Arguments) == 0 {
 		request.Arguments = json.RawMessage(`{}`)
 	}
-	if err := validateJSON(descriptor.InputSchema, request.Arguments); err != nil {
+	if err := ValidateJSON(descriptor.InputSchema, request.Arguments); err != nil {
 		return InvokeResponse{}, &InvalidRequestError{Message: err.Error()}
 	}
 
@@ -618,7 +618,9 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 		return resolved, nil
 	}
 	if descriptor.RequiresExplicitConnection {
-		return nil, &ConnectionSelectionError{Operation: descriptor.ID, ExplicitRequired: true}
+		return nil, &ConnectionSelectionError{
+			Operation: descriptor.ID, ExplicitRequired: true, Connections: c.connectionRefs(descriptor),
+		}
 	}
 
 	defaults := map[string]bool{}

@@ -648,7 +648,7 @@ func TestInputSchemaErrorsAreDeterministic(t *testing.T) {
 
 	const want = "$.a must be integer"
 	for i := 0; i < 100; i++ {
-		err := validateJSON(schema, arguments)
+		err := ValidateJSON(schema, arguments)
 		if err == nil || err.Error() != want {
 			t.Fatalf("run %d error = %v, want %q", i+1, err, want)
 		}
@@ -679,12 +679,12 @@ func TestSchemaBoundsAndPatternsAreEnforced(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validateJSON(schema, json.RawMessage(tt.arguments))
+			err := ValidateJSON(schema, json.RawMessage(tt.arguments))
 			switch {
 			case tt.want == "" && err != nil:
-				t.Fatalf("validateJSON() = %v, want no error", err)
+				t.Fatalf("ValidateJSON() = %v, want no error", err)
 			case tt.want != "" && (err == nil || err.Error() != tt.want):
-				t.Fatalf("validateJSON() = %v, want %q", err, tt.want)
+				t.Fatalf("ValidateJSON() = %v, want %q", err, tt.want)
 			}
 		})
 	}

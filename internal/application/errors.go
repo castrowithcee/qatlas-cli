@@ -98,9 +98,12 @@ func (e *ConnectionAmbiguousError) Error() string {
 // ConnectionSelectionError reports a registered operation for which no connection can be selected.
 // ExplicitRequired distinguishes an operation contract that deliberately refuses defaults and the
 // single-connection fallback. Agent requests carry that connection in JSON rather than a CLI flag.
+// Connections holds every route that offers the operation, each with the description its owner maintains,
+// so the caller can name one; it is empty when no configured connection offers it.
 type ConnectionSelectionError struct {
 	Operation        string
 	ExplicitRequired bool
+	Connections      []ConnectionRef
 }
 
 func (e *ConnectionSelectionError) Error() string {

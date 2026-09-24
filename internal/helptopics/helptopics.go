@@ -154,7 +154,7 @@ Exit code 2 is a problem of the request or the configuration:
 - invalid-request: the arguments do not satisfy the input schema, or the request is malformed.
 - config-missing: there is no configuration file; a person creates one with 'qatlas tui'.
 - config-invalid: the configuration, or a file beside it, is not usable; only a person fixes it.
-- connection-selection: no connection could be chosen for the tool; pass --connection.
+- connection-selection: no connection could be chosen for the tool; when the tool requires an explicit connection, one JSON line follows that lists the connections offering it, choose one and pass it with --connection.
 - unknown-connection: the named connection is not configured; 'qatlas connections <provider>' lists them.
 - connection-ambiguous: several connections offer the tool; one JSON line follows that lists the candidates, choose one and pass it with --connection.
 - unknown-operation: no tool has this ID or version; find it with 'qatlas tools <provider>'.
@@ -176,7 +176,7 @@ Exit code 1 is a runtime or provider failure:
 - provider-error: the provider answered with something unusable.
 - runtime: anything else failed.
 
-MCP: 'qatlas mcp' serves the same catalog over stdio as three fixed MCP tools, with the same connections, rules, and error codes. qatlas.search finds tools like 'qatlas tools' and names the connections that offer each one; all set to true adds the others with their reason. qatlas.describe returns one contract like 'qatlas describe', and qatlas.invoke runs one like 'qatlas invoke', with confirm for --confirm. qatlas.describe and qatlas.invoke take the tool ID as operation and a connection name as connection; qatlas.invoke takes the arguments object as arguments. A failed call is a tool result with isError and structuredContent carrying the code. The server hands this guide to its client as instructions. Add the command "qatlas mcp" as a stdio server to the agent's client.
+MCP: 'qatlas mcp' serves the same catalog over stdio as three fixed MCP tools, with the same connections, rules, and error codes. qatlas.search finds tools like 'qatlas tools' and names the connections that offer each one; all set to true adds the others with their reason. qatlas.describe returns one contract like 'qatlas describe', and qatlas.invoke runs one like 'qatlas invoke', with confirm for --confirm. qatlas.describe and qatlas.invoke take the tool ID as operation and a connection name as connection; qatlas.invoke takes the arguments object as arguments. A failed call is a tool result with isError and structuredContent carrying the code. The server hands this guide to its client as instructions. Add the command "qatlas mcp" as a stdio server to the agent's client; it speaks MCP 2026-07-28 with the protocol version and client capabilities in the _meta of every request, and MCP 2025-11-25 and 2025-06-18 after an initialize request.
 
 Tell the agent which connections it may use and what each one is for, and whether it may change data. Never hand it a token, password, or key: qatlas reads the secrets itself.
 

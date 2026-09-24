@@ -183,6 +183,199 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 	}
 }
 
+// A client of a handshake-based protocol version opens with initialize and then speaks without per-request
+// metadata. It gets the requested version when the server speaks it and the newest one otherwise, the same
+// guide as instructions, and the same fixed tools; a request that declares a version is still served per
+// request.
+func TestMCPInitializeNegotiatesLegacyVersions(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	path := writeConfig(t, validConfig)
+	registry := fakeRegistry(t)
+	initialize := func(id int, params string) string {
+		return fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"initialize","params":%s}`, id, params)
+	}
+
+	for _, tt := range []struct{ requested, want string }{
+		{"2025-06-18", "2025-06-18"},
+		{"2025-11-25", "2025-11-25"},
+		{"1900-01-01", "2025-11-25"},
+		{mcpProtocolVersion, "2025-11-25"},
+	} {
+		input := strings.Join([]string{
+			`{"jsonrpc":"2.0","id":0,"method":"tools/list","params":{}}`,
+			initialize(1, `{"protocolVersion":"`+tt.requested+`","capabilities":{},"clientInfo":{"name":"c","version":"1"}}`),
+			`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
+			`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`,
+			`{"jsonrpc":"2.0","id":3,"method":"ping"}`,
+			`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"_meta":{"progressToken":1},"name":"qatlas.search","arguments":{"query":"page"}}}`,
+			`{"jsonrpc":"2.0","id":5,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"1900-01-01","io.modelcontextprotocol/clientCapabilities":{}}}}`,
+		}, "\n") + "\n"
+		responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
+		if stderr != "" || len(responses) != 6 {
+			t.Fatalf("%s: responses = %v, stderr = %q", tt.requested, responses, stderr)
+		}
+		if refused := responses["0"].Error; refused == nil || refused.Code != mcpInvalidParams ||
+			!strings.Contains(refused.Message, "initialize") {
+			t.Errorf("%s: request before initialize = %+v", tt.requested, responses["0"])
+		}
+		var result struct {
+			ProtocolVersion string                     `json:"protocolVersion"`
+			Capabilities    map[string]json.RawMessage `json:"capabilities"`
+			ServerInfo      struct{ Name string }      `json:"serverInfo"`
+			Instructions    string                     `json:"instructions"`
+		}
+		decodeRaw(t, responses["1"].Result, &result)
+		if _, ok := result.Capabilities["tools"]; result.ProtocolVersion != tt.want || !ok ||
+			result.ServerInfo.Name != "qatlas" || result.Instructions != topicText(t, "agents") {
+			t.Errorf("%s: initialize = %s, want version %s", tt.requested, responses["1"].Result, tt.want)
+		}
+		var listed struct{ Tools []mcpTool }
+		decodeRaw(t, responses["2"].Result, &listed)
+		if len(listed.Tools) != 3 {
+			t.Errorf("%s: tools/list = %s", tt.requested, responses["2"].Result)
+		}
+		if responses["3"].Error != nil || string(responses["3"].Result) != "{}" {
+			t.Errorf("%s: ping = %+v", tt.requested, responses["3"])
+		}
+		if search := toolResultFrom(t, responses["4"]); search.IsError {
+			t.Errorf("%s: search = %+v", tt.requested, search)
+		}
+		if refused := responses["5"].Error; refused == nil || refused.Code != mcpUnsupportedVersion {
+			t.Errorf("%s: declared version after initialize = %+v", tt.requested, responses["5"])
+		}
+	}
+
+	responses, _ := runMCP(t, registry, initialize(1, `{"capabilities":{}}`)+"\n")
+	if refused := responses["1"].Error; refused == nil || refused.Code != mcpInvalidParams ||
+		!strings.Contains(refused.Message, "params.protocolVersion") ||
+		!strings.Contains(refused.Message, mcpProtocolVersion) || !strings.Contains(refused.Message, "2025-06-18") {
+		t.Fatalf("initialize without a version = %+v", responses["1"])
+	}
+}
+
+// A request without the per-request metadata names the exact _meta key it lacks and every protocol version
+// the server speaks.
+func TestMCPMetadataErrorsNameTheKey(t *testing.T) {
+	for _, tt := range []struct{ meta, want string }{
+		{``, `params._meta must be an object declaring "io.modelcontextprotocol/protocolVersion" and ` +
+			`"io.modelcontextprotocol/clientCapabilities"; this server speaks MCP 2026-07-28 with per-request ` +
+			`params._meta, or MCP 2025-11-25 or 2025-06-18 after an initialize request`},
+		{`"_meta":{"io.modelcontextprotocol/clientCapabilities":{}}`,
+			`params._meta["io.modelcontextprotocol/protocolVersion"] must be a non-empty string; this server ` +
+				`speaks MCP 2026-07-28 with per-request params._meta, or MCP 2025-11-25 or 2025-06-18 after an ` +
+				`initialize request`},
+		{`"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}`,
+			`params._meta["io.modelcontextprotocol/clientCapabilities"] must be an object`},
+		{`"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{},"io.modelcontextprotocol/clientInfo":{}}`,
+			`params._meta["io.modelcontextprotocol/clientInfo"] must be an object with a non-empty name and version`},
+	} {
+		responses, _ := runMCP(t, fakeRegistry(t),
+			`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{`+tt.meta+`}}`+"\n")
+		if refused := responses["1"].Error; refused == nil || refused.Code != mcpInvalidParams || refused.Message != tt.want {
+			t.Errorf("meta %s: response = %+v, want %q", tt.meta, responses["1"], tt.want)
+		}
+	}
+}
+
+// A broker argument outside the published input schema names the field, so a caller that sends tool
+// instead of operation learns which name is wrong.
+func TestMCPBrokerArgumentErrorsNameTheField(t *testing.T) {
+	for _, tt := range []struct{ tool, arguments, want string }{
+		{"qatlas.describe", `{"tool":"bookstack.pages.get"}`, "invalid-request: $.tool is not allowed"},
+		{"qatlas.invoke", `{"operation":"bookstack.pages.get","version":"1"}`, "invalid-request: $.version must be integer"},
+		{"qatlas.invoke", `{"connection":"wiki"}`, "invalid-request: $.operation is required"},
+		{"qatlas.search", `{"effect":"write"}`, "invalid-request: $.effect is not an allowed value"},
+	} {
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"` + tt.tool +
+			`","arguments":` + tt.arguments + `}}` + "\n"
+		responses, _ := runMCP(t, fakeRegistry(t), input)
+		if result := toolResultFrom(t, responses["1"]); !result.IsError || result.Content[0].Text != tt.want {
+			t.Errorf("%s %s = %+v, want %q", tt.tool, tt.arguments, result, tt.want)
+		}
+	}
+}
+
+// A tool that requires an explicit connection is refused without one over the tool CLI and the MCP broker
+// alike, and both name the routes that offer it as the same detail.
+func TestConnectionSelectionNamesCandidatesOverCLIAndMCP(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	registry := capability.NewRegistry()
+	if err := registry.RegisterProvider(config.ProviderMetadata{ID: "fake", Name: "Fake"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.Register("fake", capability.Operation{
+		Descriptor: capability.Descriptor{
+			ID: "fake.pages.get", Version: 1, Description: "Read a fake page", Provider: "fake",
+			RequiresExplicitConnection: true,
+			Risk: capability.Risk{
+				Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
+				Confirmation: capability.ConfirmationNone, DataSensitivity: "test",
+			},
+			InputSchema:  json.RawMessage(`{"type":"object","additionalProperties":false}`),
+			OutputSchema: json.RawMessage(`{"type":"object"}`),
+		},
+		Handler: func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+			json.RawMessage) (any, error) {
+			return map[string]any{}, nil
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	path := writeConfig(t, `version: 1
+services:
+  fake:
+    provider: fake
+    base_url: https://example.invalid
+credentials:
+  reader:
+    type: keyring
+connections:
+  primary:
+    service: fake
+    credential: reader
+    description: team pages
+  secondary:
+    service: fake
+    credential: reader
+defaults: {}
+`)
+
+	var stdout, stderr bytes.Buffer
+	options := &Options{Input: strings.NewReader("{}"), Redactor: &redact.Redactor{}}
+	code := run(newRootCommand(options, registry), options,
+		[]string{"invoke", "fake.pages.get", "--config", path}, &stdout, &stderr)
+	lines := strings.Split(stderr.String(), "\n")
+	if code != exitUsage || len(lines) < 2 || !strings.HasPrefix(lines[0], "qatlas: connection-selection: ") {
+		t.Fatalf("exit=%d stderr=%q", code, stderr.String())
+	}
+
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
+		`,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","arguments":{}}}}` + "\n"
+	responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
+	invoke := toolResultFrom(t, responses["1"])
+	if !invoke.IsError || !strings.HasPrefix(invoke.Content[0].Text, "connection-selection: ") {
+		t.Fatalf("invoke = %+v", invoke)
+	}
+	if !jsonEqual([]byte(lines[1]), invoke.Structured) {
+		t.Fatalf("CLI detail = %s, MCP detail = %s", lines[1], invoke.Structured)
+	}
+	var detail struct {
+		Code        string                      `json:"code"`
+		Operation   string                      `json:"operation"`
+		Connections []application.ConnectionRef `json:"connections"`
+	}
+	decodeRaw(t, invoke.Structured, &detail)
+	want := []application.ConnectionRef{{Name: "primary", Description: "team pages"}, {Name: "secondary"}}
+	if detail.Code != string(output.CodeConnectionSelection) || detail.Operation != "fake.pages.get" ||
+		!reflect.DeepEqual(detail.Connections, want) {
+		t.Fatalf("detail = %+v, want the candidates %+v", detail, want)
+	}
+}
+
 // ambiguousConfig offers bookstack.pages.list over three routes with similar names: one described, one
 // without a description, and one whose description contains a value the redactor knows. The service,
 // credential, environment variables and target are canaries that no diagnostic may carry.

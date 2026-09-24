@@ -80,9 +80,10 @@ func codeFor(err error) output.Code {
 }
 
 // errorDetail is the machine-readable form of a diagnostic whose code alone does not say how to go on. For
-// connection-ambiguous it names every route an explicit connection may choose, each with the description
-// its owner maintains and an empty one where there is none, so a caller picks a route without parsing the
-// message. Names and descriptions are all it publishes of a route: never a service, credential, target, or
+// connection-ambiguous and connection-selection it names every route an explicit connection may choose,
+// each with the description its owner maintains and an empty one where there is none, so a caller picks a
+// route without parsing the message. connection-selection names none when no connection offers the tool.
+// Names and descriptions are all it publishes of a route: never a service, credential, target, or
 // secret source.
 type errorDetail struct {
 	Code        output.Code                 `json:"code"`
@@ -113,19 +114,29 @@ func errorDetailFor(err error, redactor *redact.Redactor) any {
 			Reason: unsupported.Reason,
 		}
 	}
-	var ambiguous *application.ConnectionAmbiguousError
-	if !errors.As(err, &ambiguous) {
+	var (
+		ambiguous *application.ConnectionAmbiguousError
+		selection *application.ConnectionSelectionError
+		code      output.Code
+		operation string
+		refs      []application.ConnectionRef
+	)
+	switch {
+	case errors.As(err, &ambiguous):
+		code, operation, refs = output.CodeConnectionAmbiguous, ambiguous.Operation, ambiguous.Connections
+	case errors.As(err, &selection):
+		code, operation, refs = output.CodeConnectionSelection, selection.Operation, selection.Connections
+	default:
 		return nil
 	}
-	connections := make([]application.ConnectionRef, len(ambiguous.Connections))
-	for i, connection := range ambiguous.Connections {
+	connections := make([]application.ConnectionRef, len(refs))
+	for i, connection := range refs {
 		connections[i] = application.ConnectionRef{
 			Name: redactor.Apply(connection.Name), Description: redactor.Apply(connection.Description),
 		}
 	}
 	return &errorDetail{
-		Code: output.CodeConnectionAmbiguous, Message: redactor.Error(err),
-		Operation: redactor.Apply(ambiguous.Operation), Connections: connections,
+		Code: code, Message: redactor.Error(err), Operation: redactor.Apply(operation), Connections: connections,
 	}
 }
 
