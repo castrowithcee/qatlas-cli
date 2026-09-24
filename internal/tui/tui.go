@@ -713,6 +713,11 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return nil
 	case screenForm, screenSummary:
 		return m.requestLeave(-1)
+	case screenTargets:
+		// A typed target or a remove question is dropped as esc drops it; a changed list still asks.
+		m.targetEdit, m.targetRemove = -1, false
+		m.targetInput.Blur()
+		return m.leaveTargets()
 	case screenProviders:
 		if m.wizard != nil {
 			return m.leaveSetup()
@@ -824,6 +829,9 @@ func (m *Model) formState() string {
 // drops the input and goes on, and esc returns to the form unchanged. Nothing else answers it, not even
 // y or n, whose meaning would be a guess, so a stray key neither saves nor discards.
 func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
+	if m.leaveFrom == screenTargets {
+		return m.answerTargetsLeave(key)
+	}
 	switch key.String() {
 	case "ctrl+c":
 		return m.quit()
@@ -2506,6 +2514,11 @@ func (m *Model) leaveView() string {
 	if m.wizard != nil {
 		warning, keys = "warning: the guided setup is not saved", "d discard setup · esc keep editing"
 		why = "Leaving for " + where + " drops every step, typed secrets included. Nothing was written yet."
+	}
+	if m.leaveFrom == screenTargets {
+		warning = "warning: the target list changed"
+		keys = "k keep the list · d discard changes · esc keep editing"
+		why = "Closing the list without keeping it would lose the changes. Nothing was written yet."
 	}
 	return m.wrapped(warningStyle, warning) + "\n" + m.wrapped(hintStyle, keys) + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), why)

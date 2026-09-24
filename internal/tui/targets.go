@@ -11,10 +11,12 @@ import (
 )
 
 // The target list of a connection is edited in a screen of its own, opened from its row like a picker: a
-// is add, enter edits the selected target, x or d removes it after asking, ctrl+s keeps the list and esc
-// leaves the row as it was. Each target is typed on its own, so none has to be quoted into a line with the
-// others. A target is checked by the provider when it is taken; the list as a whole is checked by the core
-// when the form is saved, like every other rule.
+// is add, enter edits the selected target, and x or d removes it after asking. ctrl+s keeps the list and
+// saves the form in one step, from every state of the screen, the typed target included; in the guided
+// setup it goes on to the next step instead, which saves only from its summary. esc closes an unchanged
+// list at once and asks about a changed one, so no change is dropped silently. Each target is typed on its
+// own, so none has to be quoted into a line with the others. A target is checked by the provider when it
+// is taken; the list as a whole is checked by the core when the form is saved, like every other rule.
 
 // targetMetadata is what the provider of the form says about its targets.
 func (m *Model) targetMetadata() config.TargetMetadata {
@@ -34,8 +36,22 @@ func (m *Model) openTargets() {
 // updateTargets handles the target list screen: the typed target first, then the remove question, then
 // the list itself.
 func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
-	if key.String() == "ctrl+c" {
+	switch key.String() {
+	case "ctrl+c":
 		return m.quit()
+	case "ctrl+s":
+		// ctrl+s saves from every state of the list, the way it does from every row of the form. A typed
+		// target is taken first; one the provider refuses stays typed with the reason, and nothing is saved.
+		if m.targetEdit >= 0 {
+			m.takeTarget()
+			if m.targetEdit >= 0 {
+				return nil
+			}
+		}
+		// A remove question left unanswered keeps its target.
+		m.targetRemove = false
+		m.keepTargets()
+		return m.updateForm(key)
 	}
 	if m.targetEdit >= 0 {
 		switch key.String() {
@@ -65,17 +81,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	target, selected := m.targetList.selected()
 	switch key.String() {
 	case "esc":
-		f := &m.fields[m.focus]
-		m.screen = screenForm
-		m.clearMessages()
-		if !slices.Equal(m.targetList.all, f.entries) {
-			m.status = "Target changes cancelled; the list is as it was"
-		}
-	case "ctrl+s":
-		f := &m.fields[m.focus]
-		f.entries = append([]string(nil), m.targetList.all...)
-		m.screen = screenForm
-		m.clearMessages()
+		return m.leaveTargets()
 	case "a":
 		metadata := m.targetMetadata()
 		if !metadata.Multiple && len(m.targetList.all) > 0 {
@@ -104,6 +110,46 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	case "pgup", "pgdown", "home", "end":
 		start, end := m.targetWindow()
 		m.targetList.page(key.String(), start, end)
+	}
+	return nil
+}
+
+// keepTargets hands the list over to its row and returns to the form. Nothing is written yet.
+func (m *Model) keepTargets() {
+	m.fields[m.focus].entries = append([]string(nil), m.targetList.all...)
+	m.screen = screenForm
+	m.clearMessages()
+}
+
+// leaveTargets closes the list without keeping it. An unchanged list closes at once; a changed one asks
+// first, like a changed form does.
+func (m *Model) leaveTargets() tea.Cmd {
+	m.clearMessages()
+	if slices.Equal(m.targetList.all, m.fields[m.focus].entries) {
+		m.screen = screenForm
+		return nil
+	}
+	m.leaveTo, m.leaveFrom = -1, screenTargets
+	m.screen = screenLeave
+	return nil
+}
+
+// answerTargetsLeave answers the question a changed list asks before it closes: k keeps the list in its
+// row, d drops the changes, and esc returns to the list unchanged. No other key answers it.
+func (m *Model) answerTargetsLeave(key tea.KeyMsg) tea.Cmd {
+	switch key.String() {
+	case "ctrl+c":
+		return m.quit()
+	case "esc":
+		m.screen = screenTargets
+		m.status = "Still editing the targets; nothing was kept or discarded"
+	case "k":
+		m.keepTargets()
+		m.status = "Target list kept in the form; nothing was written yet"
+	case "d":
+		m.screen = screenForm
+		m.clearMessages()
+		m.status = "Target changes discarded; the list is as it was"
 	}
 	return nil
 }
@@ -162,7 +208,7 @@ func (m *Model) removeTarget() {
 	i := m.targetList.cursor
 	entries := append(append([]string(nil), m.targetList.all[:i]...), m.targetList.all[i+1:]...)
 	m.targetList.setItems(entries)
-	m.status = "Removed " + target + "; ctrl+s keeps the list"
+	m.status = "Removed " + target
 }
 
 // targetsView draws the target list screen: its frame, and between them as many targets as fit.
@@ -196,7 +242,12 @@ func (m *Model) targetFrame() (string, string) {
 	}
 
 	var foot strings.Builder
-	keys := "a add · enter edit · x remove · up/down move · ctrl+s keep · esc cancel"
+	save := "ctrl+s save"
+	if m.wizard != nil {
+		// The guided setup saves only from its summary.
+		save = "ctrl+s next step"
+	}
+	keys := "a add · enter edit · x remove · up/down move · " + save + " · esc close"
 	switch {
 	case m.targetEdit >= 0:
 		label := "new: "
@@ -207,7 +258,7 @@ func (m *Model) targetFrame() (string, string) {
 		in := m.targetInput
 		in.Width = max(width-1, 1)
 		foot.WriteString("\n" + prefix + in.View() + "\n")
-		keys = "enter take · esc cancel entry"
+		keys = "enter take · " + save + " · esc cancel entry"
 	case m.targetRemove:
 		target, _ := m.targetList.selected()
 		foot.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove %q from the list?", target)) + "\n")

@@ -88,11 +88,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"the ticks, and esc drops them. default in the permissions stands for the provider's own set, so\n" +
 			"ticking it drops the explicit permissions and ticking one of those drops default.\n\n" +
 			"The targets row of a connection, in its form and in the scope step of the guided setup alike,\n" +
-			"holds a list. enter, space, or / opens it: a adds a target, enter edits the selected one, x or d\n" +
-			"removes it after asking, ctrl+s keeps the list, and esc leaves the row unchanged. Each target is\n" +
-			"typed on its own, checked by the provider when it is taken, and refused when the list holds it\n" +
-			"already. In the form, right unfolds the row to show every target and left folds it again to their\n" +
-			"number and the first two. The row says what an empty list means for the provider: a GitHub\n" +
+			"holds a list. enter, space, or / opens it: a adds a target, enter edits the selected one, and x or\n" +
+			"d removes it after asking. ctrl+s keeps the list and saves the connection in one step, taking a\n" +
+			"target that is still being typed first; in the guided setup it goes on to the next step instead,\n" +
+			"since the setup saves only from its summary. esc closes an unchanged list; after a change it asks\n" +
+			"first: k keeps the list in the row, d discards the changes, and esc returns to the list. Each\n" +
+			"target is typed on its own, checked by the provider when it is taken, and refused when the list\n" +
+			"holds it already. In the form, right unfolds the row to show every target and left folds it again\n" +
+			"to their number and the first two. The row says what an empty list means for the provider: a GitHub\n" +
 			"connection without targets reaches whatever its credential reaches, while SeaTable or Telegram\n" +
 			"cannot be saved without one, and Telegram takes one chat only. One target is saved as target,\n" +
 			"several as targets.\n\n" +
