@@ -4,8 +4,7 @@
 // user or organization projects (users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER), and patterns
 // with * as the last segment for every repository or project of one owner. Without targets, a connection
 // reaches whatever its token reaches. Every tool takes the repository or project it acts on as an argument;
-// the argument may be left out when the targets allow exactly one of its kind, and a repository also when
-// the GitHub remote of the working directory lies inside them. The project tools list compact,
+// the argument may be left out when the targets allow exactly one of its kind. The project tools list compact,
 // server-side filtered items of a project page by page, read the full content of one selected item, and
 // maintain its items and their field values; the issue tools read, create, and change issues of a
 // repository and read or write the comments of one issue on explicit request. The Actions tools observe the
@@ -382,7 +381,7 @@ func invokeItemsList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list project items", "the validated arguments could not be read")
 	}
-	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	bound, err := selectTarget(resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +406,7 @@ func invokeItemsGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("get project item", "the validated arguments could not be read")
 	}
-	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	bound, err := selectTarget(resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +423,7 @@ func invokeIssuesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list issues", "the validated arguments could not be read")
 	}
-	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	bound, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +446,7 @@ func invokeIssuesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("get issue", "the validated arguments could not be read")
 	}
-	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	bound, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -671,12 +670,10 @@ func decodeCursor(binding []byte, cursor string) (string, error) {
 	return string(decoded[cursorBinding:]), nil
 }
 
-// endpoints are the REST root and the GraphQL endpoint of one configured GitHub service, and the web host
-// its repositories are cloned from.
+// endpoints are the REST root and the GraphQL endpoint of one configured GitHub service.
 type endpoints struct {
 	rest    string
 	graphql string
-	web     string
 }
 
 // endpointsOf derives both API endpoints from the configured base URL. GitHub.com and GitHub Enterprise
@@ -702,9 +699,9 @@ func endpointsOf(raw string) (endpoints, error) {
 			return endpoints{}, errors.New("a GitHub service is https://api.github.com or, for GitHub " +
 				"Enterprise Server, https://HOST/api/v3")
 		}
-		return endpoints{rest: origin, graphql: origin + "/graphql", web: parsed.Hostname()[len("api."):]}, nil
+		return endpoints{rest: origin, graphql: origin + "/graphql"}, nil
 	case "/api/v3":
-		return endpoints{rest: origin + "/api/v3", graphql: origin + "/api/graphql", web: parsed.Hostname()}, nil
+		return endpoints{rest: origin + "/api/v3", graphql: origin + "/api/graphql"}, nil
 	}
 	return endpoints{}, errors.New("a GitHub Enterprise Server base URL must end in /api/v3")
 }

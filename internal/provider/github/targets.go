@@ -1,13 +1,9 @@
 package github
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
-	"net/url"
-	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -21,8 +17,7 @@ const (
 )
 
 var repositoryArgument = capability.Argument{Name: "repository", Description: "Repository as OWNER/REPO; " +
-	"optional when the connection's targets allow exactly one repository, or when the GitHub remote of the " +
-	"working directory (origin, or its only remote) lies inside them; must lie inside the targets when the " +
+	"optional when the connection's targets allow exactly one repository; must lie inside the targets when the " +
 	"connection lists any"}
 
 var projectArgument = capability.Argument{Name: "project", Description: "Project as users/LOGIN/projects/NUMBER " +
@@ -152,10 +147,10 @@ func (a allowlist) names(kind targetKind) bool {
 }
 
 // choose returns the target a tool acts on. An explicit argument wins and must lie inside the list. Without
-// one, the only target of its kind the list allows is the default and, for a repository, then the GitHub
-// remote of the working directory on the service's host when the list allows it. A default never widens or
-// narrows the list. Every refusal is an invalid request that names the next step and never quotes the value.
-func (a allowlist) choose(ctx context.Context, kind targetKind, value, host string) (target, error) {
+// one, the only target of its kind the list allows is the default; nothing else, such as the working
+// directory, ever becomes one. A default never widens or narrows the list. Every refusal is an invalid
+// request that names the next step and never quotes the value.
+func (a allowlist) choose(kind targetKind, value string) (target, error) {
 	name, form := "repository", "OWNER/REPO"
 	if kind == kindProject {
 		name, form = "project", "users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER"
@@ -179,11 +174,6 @@ func (a allowlist) choose(ctx context.Context, kind targetKind, value, host stri
 	}
 	if only, ok := a.only(kind); ok {
 		return only, nil
-	}
-	if kind == kindRepository {
-		if remote, ok := workingRepository(ctx, host); ok && a.allows(remote) {
-			return remote, nil
-		}
 	}
 	if len(a) > 0 && !a.names(kind) {
 		return target{}, invalidRequest("the targets of this connection allow no " + name + "; add one to its " +
@@ -210,8 +200,7 @@ func parseArgument(kind targetKind, value string) (target, error) {
 // selectTarget reads the repository or project argument of a tool and resolves the target it acts on
 // against the connection's targets. It runs before a credential is resolved, so a refused target never
 // becomes a secret read or a provider call.
-func selectTarget(ctx context.Context, resolved *config.Resolved, kind targetKind, raw json.RawMessage) (target,
-	error) {
+func selectTarget(resolved *config.Resolved, kind targetKind, raw json.RawMessage) (target, error) {
 	if resolved == nil {
 		return target{}, providerError("open", "no connection was selected")
 	}
@@ -230,87 +219,5 @@ func selectTarget(ctx context.Context, resolved *config.Resolved, kind targetKin
 	if kind == kindProject {
 		value = arguments.Project
 	}
-	return allowed.choose(ctx, kind, value, webHost(resolved))
-}
-
-// webHost returns the host the repositories of the configured service are cloned from, or nothing for an
-// unusable service, which then fails on its own.
-func webHost(resolved *config.Resolved) string {
-	base := resolved.BaseURL
-	if strings.TrimSpace(base) == "" {
-		base = defaultBaseURL
-	}
-	api, err := endpointsOf(base)
-	if err != nil {
-		return ""
-	}
-	return api.web
-}
-
-// remoteTimeout bounds the local git call that finds the remote of the working directory.
-const remoteTimeout = 5 * time.Second
-
-// workingRemotes returns the remote URLs of the git repository around the working directory of this
-// process, by remote name. It only reads local git configuration; the package's own tests replace it.
-var workingRemotes = func(ctx context.Context) map[string][]string {
-	ctx, cancel := context.WithTimeout(ctx, remoteTimeout)
-	defer cancel()
-	output, err := exec.CommandContext(ctx, "git", "config", "--get-regexp", `^remote\..+\.url$`).Output()
-	if err != nil {
-		return nil
-	}
-	remotes := map[string][]string{}
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-		key, value, ok := strings.Cut(line, " ")
-		name, isURL := strings.CutSuffix(strings.TrimPrefix(key, "remote."), ".url")
-		if ok && isURL {
-			remotes[name] = append(remotes[name], value)
-		}
-	}
-	return remotes
-}
-
-// workingRepository returns the repository of the GitHub remote of the working directory: origin, or the only
-// remote when there is no origin. The remote must live on host, the web host of the configured service, so
-// a remote of another GitHub instance never becomes a target. Nothing of the URL is ever reported.
-func workingRepository(ctx context.Context, host string) (target, bool) {
-	if host == "" {
-		return target{}, false
-	}
-	remotes := workingRemotes(ctx)
-	urls, ok := remotes["origin"]
-	if !ok && len(remotes) == 1 {
-		for _, only := range remotes {
-			urls = only
-		}
-	}
-	if len(urls) != 1 {
-		return target{}, false
-	}
-	remoteHost, path, ok := splitRemote(urls[0])
-	if !ok || !strings.EqualFold(remoteHost, host) {
-		return target{}, false
-	}
-	repository, err := parseArgument(kindRepository, strings.TrimSuffix(strings.Trim(path, "/"), ".git"))
-	return repository, err == nil
-}
-
-// splitRemote reads the host and the path of a git remote URL: scheme://[user@]host[:port]/path or the scp
-// form [user@]host:path.
-func splitRemote(raw string) (string, string, bool) {
-	if strings.Contains(raw, "://") {
-		parsed, err := url.Parse(raw)
-		if err != nil {
-			return "", "", false
-		}
-		return parsed.Hostname(), parsed.Path, true
-	}
-	head, path, ok := strings.Cut(raw, ":")
-	if !ok || strings.Contains(head, "/") {
-		return "", "", false
-	}
-	if _, host, found := strings.Cut(head, "@"); found {
-		head = host
-	}
-	return head, path, true
+	return allowed.choose(kind, value)
 }

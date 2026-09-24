@@ -359,9 +359,9 @@ connections:
   # A GitHub connection may list targets, an optional allow-list of repositories (repos/OWNER/REPO),
   # projects (users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER), and patterns with * as the last
   # segment (repos/OWNER/*, orgs/LOGIN/projects/*). Without targets it reaches whatever its token reaches.
-  # Every tool takes the repository or project it acts on; the argument may be left out when the targets
-  # allow exactly one of its kind, or, for a repository, when the GitHub remote of the working directory lies
-  # inside them. Which tools a connection offers is decided by permissions and tools alone.
+  # Every tool takes the repository or project it acts on; the argument may be left out only when the
+  # targets allow exactly one of its kind. Which tools a connection offers is decided by permissions and
+  # tools alone.
   # Work selection starts at the project; the issue connection is the fallback for single issues.
   # Reads are the only default: a change needs create or update in permissions and confirmation per call.
   planning:
@@ -392,7 +392,7 @@ connections:
       github.projectitems.add, github.projectissues.create]
 
   # Changes of single issues and their comments. repos/octo-org/* would allow every repository of the owner;
-  # a call then names its repository, or takes the remote of the working directory.
+  # a call then names its repository.
   roadmap-issues:
     service: github
     credential: github-planner

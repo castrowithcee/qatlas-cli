@@ -518,7 +518,7 @@ func (c *Client) addItem(ctx context.Context, op, projectID, contentID string) (
 // AddIssue adds one issue of a repository the connection allows to the bound project and then writes the
 // given field values. Everything is resolved and checked before the first change.
 func (c *Client) AddIssue(ctx context.Context, repository string, number int, values FieldValues) (*Planning, error) {
-	repo, err := c.allowed.choose(ctx, kindRepository, repository, c.endpoints.web)
+	repo, err := c.allowed.choose(kindRepository, repository)
 	if err != nil {
 		return nil, err
 	}
@@ -643,7 +643,7 @@ func (c *Client) ArchiveItem(ctx context.Context, itemID string) (*Archived, err
 // afterwards.
 func (c *Client) CreatePlannedIssue(ctx context.Context, repository string, content IssueContent,
 	values FieldValues) (*Planning, error) {
-	repo, err := c.allowed.choose(ctx, kindRepository, repository, c.endpoints.web)
+	repo, err := c.allowed.choose(kindRepository, repository)
 	if err != nil {
 		return nil, err
 	}

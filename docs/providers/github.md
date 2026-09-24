@@ -70,14 +70,10 @@ Every repository tool (issues, comments, Actions, workflow maintenance, and Acti
 both, and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the
 items of the project, not a target.
 
-An argument may be left out when a default settles it:
-
-- When the targets allow exactly one repository, or exactly one project, and not as a pattern, that one is
-  the default of its kind.
-- Otherwise, `repository` defaults to the GitHub remote of the working directory of the Qatlas process
-  (`origin`, or the only remote when there is no `origin`), when it points to the host of the configured
-  service and lies inside the targets, or the connection has none. A `qatlas mcp` broker uses the directory
-  it was started in.
+An argument may be left out only when the targets allow exactly one repository, or exactly one project, and
+not as a pattern: that one is the default of its kind. Nothing else chooses a target; in particular, the git
+remote of the working directory never does, for `qatlas invoke` and a `qatlas mcp` broker alike. A connection
+without targets, or with a pattern, therefore needs `repository` as `OWNER/REPO` on every repository call.
 
 A default never widens or narrows the targets, and an explicit argument always wins. Every target is checked
 before a secret is read and before GitHub is contacted, and every refusal is an `invalid-request` that names
@@ -153,8 +149,8 @@ connections:
       github.projectissues.create, github.issues.list, github.issues.get]
 ```
 
-`roadmap` defaults `project` to its one project. `repository` comes from the call or from the working
-directory's remote, and only repositories of `octo-org` are accepted.
+`roadmap` defaults `project` to its one project. `repository` comes from the call, and only repositories of
+`octo-org` are accepted.
 
 ## Project-first use
 

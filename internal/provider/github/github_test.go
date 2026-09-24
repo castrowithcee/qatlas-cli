@@ -382,11 +382,9 @@ func serve(t *testing.T, f *fakeGitHub) string {
 	t.Helper()
 	server := httptest.NewTLSServer(f)
 	t.Cleanup(server.Close)
-	previous, remotes := transport, workingRemotes
+	previous := transport
 	transport = server.Client().Transport
-	// No test reads the git remotes of the directory it runs in; a test that needs one supplies it.
-	workingRemotes = func(context.Context) map[string][]string { return nil }
-	t.Cleanup(func() { transport, workingRemotes = previous, remotes })
+	t.Cleanup(func() { transport = previous })
 	t.Cleanup(limiters.Replace(tokenValue, freeLimiter()))
 	return server.URL + "/api/v3"
 }
@@ -636,13 +634,13 @@ connections:
 
 func TestEndpointsFollowGitHubAndEnterpriseServer(t *testing.T) {
 	tests := map[string]endpoints{
-		"https://api.github.com":   {"https://api.github.com", "https://api.github.com/graphql", "github.com"},
-		"https://api.github.com/":  {"https://api.github.com", "https://api.github.com/graphql", "github.com"},
-		"https://api.octo.ghe.com": {"https://api.octo.ghe.com", "https://api.octo.ghe.com/graphql", "octo.ghe.com"},
-		"https://ghe.example.invalid/api/v3": {"https://ghe.example.invalid/api/v3", "https://ghe.example.invalid/api/graphql",
-			"ghe.example.invalid"},
+		"https://api.github.com":   {"https://api.github.com", "https://api.github.com/graphql"},
+		"https://api.github.com/":  {"https://api.github.com", "https://api.github.com/graphql"},
+		"https://api.octo.ghe.com": {"https://api.octo.ghe.com", "https://api.octo.ghe.com/graphql"},
+		"https://ghe.example.invalid/api/v3": {"https://ghe.example.invalid/api/v3",
+			"https://ghe.example.invalid/api/graphql"},
 		"https://ghe.example.invalid:8443/api/v3/": {"https://ghe.example.invalid:8443/api/v3",
-			"https://ghe.example.invalid:8443/api/graphql", "ghe.example.invalid"},
+			"https://ghe.example.invalid:8443/api/graphql"},
 	}
 	for raw, want := range tests {
 		if got, err := endpointsOf(raw); err != nil || got != want {

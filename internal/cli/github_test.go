@@ -2,12 +2,15 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
 // githubConfig binds one GitHub token to an organization project, to a repository, and to the same project
@@ -260,4 +263,75 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	describe := toolResultFrom(t, responses[`"describe"`])
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
+}
+
+// Without a repository argument and without exactly one repository in the targets, a GitHub call is the
+// same invalid request over the CLI and MCP, even inside a git repository whose origin lies inside the
+// targets. It is refused before a secret is read, so GitHub is never contacted.
+func TestGitHubRepositoryNeverComesFromTheWorkingDirectory(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	path := writeConfig(t, `version: 1
+services:
+  gh:
+    provider: github
+    base_url: https://api.github.com
+credentials:
+  reader:
+    type: env
+    values:
+      token: GITHUB_READER_TOKEN
+connections:
+  open:
+    service: gh
+    credential: reader
+  owner:
+    service: gh
+    credential: reader
+    targets: [repos/octo-org/*]
+defaults: {}
+`)
+	dir := t.TempDir()
+	for _, sub := range []string{"objects", "refs"} {
+		if err := os.MkdirAll(filepath.Join(dir, ".git", sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, content := range map[string]string{
+		"HEAD":   "ref: refs/heads/main\n",
+		"config": "[remote \"origin\"]\n\turl = https://github.com/octo-org/example.git\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, ".git", name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(dir)
+
+	const want = "invalid-request: repository is required because the connection's targets do not name " +
+		"exactly one; pass repository as OWNER/REPO"
+	for _, connection := range []string{"open", "owner"} {
+		var reads atomic.Int32
+		code, stdout, stderr := runTwentyCLI(t, &reads, `{"number":42}`,
+			"invoke", "github.issues.get", "--connection", connection, "--config", path)
+		if code != exitUsage || stdout != "" || strings.TrimSpace(stderr) != "qatlas: "+want {
+			t.Errorf("CLI on %s: exit=%d stdout=%q stderr=%q, want exit %d and %q", connection, code, stdout,
+				stderr, exitUsage, want)
+		}
+
+		redactor := &redact.Redactor{}
+		options := &Options{Config: path, Redactor: redactor, Secrets: secret.NewWith(func(string) string {
+			reads.Add(1)
+			return ""
+		}, nil, nil, redactor)}
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke",` +
+			`"arguments":{"operation":"github.issues.get","connection":"` + connection + `","arguments":{"number":42}}}}` +
+			"\n"
+		responses, _ := runMCPWithOptions(t, defaultRegistry(), input, options)
+		if result := toolResultFrom(t, responses["1"]); !result.IsError || result.Content[0].Text != want {
+			t.Errorf("MCP on %s = %+v, want the error %q", connection, result, want)
+		}
+		if reads.Load() != 0 {
+			t.Errorf("%s: secret lookups = %d, want none before the request was refused", connection, reads.Load())
+		}
+	}
 }

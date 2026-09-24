@@ -531,7 +531,7 @@ func actionsHandler(id string, check func(*actionsArguments, target) error,
 		if err := json.Unmarshal(raw, &arguments); err != nil {
 			return nil, unreadable(id)
 		}
-		bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+		bound, err := selectTarget(resolved, kindRepository, raw)
 		if err != nil {
 			return nil, err
 		}

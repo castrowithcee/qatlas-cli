@@ -366,7 +366,7 @@ func invokeIssuesCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &content); err != nil {
 		return nil, unreadable("create issue")
 	}
-	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	bound, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +391,7 @@ func invokeIssuesUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("update issue")
 	}
-	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	bound, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +417,7 @@ func invokeIssuesClose(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("close issue")
 	}
-	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	bound, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -439,7 +439,7 @@ func invokeIssuesReopen(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("reopen issue")
 	}
-	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	bound, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +459,7 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, unreadable("list comments")
 	}
-	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	bound, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -483,7 +483,7 @@ func invokeCommentsCreate(ctx context.Context, resolved *config.Resolved, secret
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("create comment")
 	}
-	bound, err := selectTarget(ctx, resolved, kindRepository, raw)
+	bound, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +509,7 @@ func invokeItemsUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("update project item")
 	}
-	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	bound, err := selectTarget(resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -541,11 +541,11 @@ func invokeItemsAdd(ctx context.Context, resolved *config.Resolved, secrets *sec
 	}
 	// Both targets are checked before a credential is resolved: the project the issue joins and the
 	// repository it lives in.
-	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	bound, err := selectTarget(resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := selectTarget(ctx, resolved, kindRepository, raw)
+	repo, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +570,7 @@ func invokeItemsArchive(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("archive project item")
 	}
-	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	bound, err := selectTarget(resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -594,7 +594,7 @@ func invokeDraftsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("create draft issue")
 	}
-	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	bound, err := selectTarget(resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -620,11 +620,11 @@ func invokeProjectIssuesCreate(ctx context.Context, resolved *config.Resolved, s
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, unreadable("create planned issue")
 	}
-	bound, err := selectTarget(ctx, resolved, kindProject, raw)
+	bound, err := selectTarget(resolved, kindProject, raw)
 	if err != nil {
 		return nil, err
 	}
-	repo, err := selectTarget(ctx, resolved, kindRepository, raw)
+	repo, err := selectTarget(resolved, kindRepository, raw)
 	if err != nil {
 		return nil, err
 	}

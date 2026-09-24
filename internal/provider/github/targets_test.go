@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -29,21 +31,34 @@ func targetsConfig(base string) *config.Config {
 	return cfg
 }
 
-// remotes makes the working directory a git repository with these remotes for the rest of the test.
-func remotes(t *testing.T, byName map[string][]string) {
+// inRepository runs the rest of the test inside a git repository whose origin points to url.
+func inRepository(t *testing.T, url string) {
 	t.Helper()
-	previous := workingRemotes
-	workingRemotes = func(context.Context) map[string][]string { return byName }
-	t.Cleanup(func() { workingRemotes = previous })
+	dir := t.TempDir()
+	for _, sub := range []string{"objects", "refs"} {
+		if err := os.MkdirAll(filepath.Join(dir, ".git", sub), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, content := range map[string]string{
+		"HEAD":   "ref: refs/heads/main\n",
+		"config": "[remote \"origin\"]\n\turl = " + url + "\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, ".git", name), []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Chdir(dir)
 }
 
-// A target argument may be left out when the targets allow exactly one of its kind, and a repository also
-// when the GitHub remote of the working directory lies inside them on the configured host. An explicit
-// argument wins, and a default never widens the targets.
+// A target argument may be left out only when the targets allow exactly one of its kind. An explicit
+// argument wins, a default never widens the targets, and the git remote of the working directory never
+// chooses a target.
 func TestTargetDefaultsNeverWidenTheTargets(t *testing.T) {
 	f := &fakeGitHub{}
 	base := serve(t, f)
 	host := strings.Split(strings.TrimPrefix(base, "https://"), ":")[0]
+	inRepository(t, "https://"+host+"/octo-org/example.git")
 	reads := 0
 	red := &redact.Redactor{}
 	core := application.New(registry(t), targetsConfig(base), resolver(red, &reads), red)
@@ -60,35 +75,21 @@ func TestTargetDefaultsNeverWidenTheTargets(t *testing.T) {
 	if path, err := issue("single", `{"number":42}`); err != nil || path != want {
 		t.Errorf("the only repository = %q, %v; want the default", path, err)
 	}
-
-	for name, byName := range map[string]map[string][]string{
-		"an https origin":             {"origin": {"https://" + host + "/octo-org/example.git"}, "fork": {"x"}},
-		"an ssh origin":               {"origin": {"ssh://git@" + host + ":22/octo-org/example"}},
-		"the only remote in scp form": {"upstream": {"git@" + host + ":octo-org/example.git"}},
-	} {
-		remotes(t, byName)
-		if path, err := issue("open", `{"number":42}`); err != nil || path != want {
-			t.Errorf("%s = %q, %v; want the remote as default", name, path, err)
+	for _, connection := range []string{"open", "owner"} {
+		if path, err := issue(connection, `{"number":42,"repository":"octo-org/example"}`); err != nil ||
+			path != want {
+			t.Errorf("an explicit repository on %s = %q, %v; want it to win", connection, path, err)
 		}
 	}
 
-	remotes(t, map[string][]string{"origin": {"git@" + host + ":octo-org/other.git"}})
-	if path, err := issue("owner", `{"number":42,"repository":"octo-org/example"}`); err != nil || path != want {
-		t.Errorf("an explicit repository = %q, %v; want it to win over the remote", path, err)
-	}
-
-	for name, byName := range map[string]map[string][]string{
-		"a remote outside the targets": {"origin": {"https://" + host + "/other-org/example.git"}},
-		"a remote of another host":     {"origin": {"https://github.com/octo-org/example.git"}},
-		"two remotes without origin":   {"a": {"git@" + host + ":octo-org/example"}, "b": {"git@" + host + ":octo-org/x"}},
-		"an origin with two urls":      {"origin": {"git@" + host + ":octo-org/example", "git@" + host + ":octo-org/x"}},
-		"a remote with a deeper path":  {"origin": {"https://" + host + "/octo-org/example/extra"}},
-		"no git repository":            nil,
+	for name, connection := range map[string]string{
+		"no targets":                       "open",
+		"a pattern the remote lies inside": "owner",
+		"a project beside such a pattern":  "mixed",
 	} {
-		remotes(t, byName)
 		reads = 0
 		before := len(f.recorded())
-		if _, err := issue("owner", `{"number":42}`); !isInvalidRequest(err) ||
+		if _, err := issue(connection, `{"number":42}`); !isInvalidRequest(err) ||
 			!strings.Contains(err.Error(), "pass repository as OWNER/REPO") {
 			t.Errorf("%s = %v, want repository to be required", name, err)
 		}
@@ -196,7 +197,8 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 			for _, argument := range descriptor.Arguments {
 				if argument.Name == name {
 					found = !argument.Required && strings.Contains(argument.Description, "optional when") &&
-						strings.Contains(argument.Description, "inside the targets")
+						strings.Contains(argument.Description, "inside the targets") &&
+						!strings.Contains(argument.Description, "remote")
 				}
 			}
 			if !found {
@@ -234,26 +236,6 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 	}
 }
 
-func TestRemotesAreReadWithoutGuessing(t *testing.T) {
-	for raw, want := range map[string][2]string{
-		"https://github.com/octo-org/example.git":         {"github.com", "/octo-org/example.git"},
-		"https://user:secret@github.com/octo-org/example": {"github.com", "/octo-org/example"},
-		"ssh://git@github.com:22/octo-org/example.git":    {"github.com", "/octo-org/example.git"},
-		"git@github.com:octo-org/example.git":             {"github.com", "octo-org/example.git"},
-		"github.com:octo-org/example":                     {"github.com", "octo-org/example"},
-	} {
-		host, path, ok := splitRemote(raw)
-		if !ok || host != want[0] || path != want[1] {
-			t.Errorf("splitRemote(%q) = %q, %q, %v", raw, host, path, ok)
-		}
-	}
-	for _, raw := range []string{"/srv/git/example.git", "./example", "file:///srv/git/example.git"} {
-		if host, _, ok := splitRemote(raw); ok && host != "" {
-			t.Errorf("splitRemote(%q) = %q, want no host", raw, host)
-		}
-	}
-}
-
 // A connection without an exact target tests the token with the smallest read there is: its user.
 func TestTestConnectionWithoutAnExactTargetReadsTheUser(t *testing.T) {
 	f := &fakeGitHub{}
@@ -283,7 +265,6 @@ func TestTestConnectionWithoutAnExactTargetReadsTheUser(t *testing.T) {
 func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 	f := &fakeGitHub{items: roster()}
 	base := serve(t, f)
-	host := strings.Split(strings.TrimPrefix(base, "https://"), ":")[0]
 	red := &redact.Redactor{}
 	core := application.New(registry(t), targetsConfig(base), resolver(red, nil), red)
 	named := func(result json.RawMessage, name string) string {
@@ -305,26 +286,25 @@ func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 	if err != nil || named(result, "project") != projectTarget || named(result, "repository") != "octo-org/example" {
 		t.Errorf("an added issue = %s, %v; want both targets named in the result", result, err)
 	}
-	remotes(t, map[string][]string{"origin": {"git@" + host + ":octo-org/example.git"}})
-	result, err = invoke(t, core, "github.issues.get", "open", `{"number":42}`, false)
+	result, err = invoke(t, core, "github.issues.get", "open", `{"number":42,"repository":"octo-org/example"}`, false)
 	if err != nil || named(result, "repository") != "octo-org/example" {
-		t.Errorf("the remote = %s, %v; want it named in the result", result, err)
+		t.Errorf("an explicit repository = %s, %v; want it named in the result", result, err)
 	}
 
 	const repositoryHint = "; check the name, and that the token can see it (classic: scope repo for a private " +
 		"repository; fine-grained: access to this repository)"
-	remotes(t, map[string][]string{"origin": {"https://" + host + "/octo-org/absent.git"}})
 	for _, tt := range []struct{ operation, arguments, want string }{
-		{"github.issues.list", `{}`, "list issues: GitHub does not hold repository octo-org/absent or does not " +
-			"show it to this token" + repositoryHint},
-		{"github.issues.get", `{"number":42}`, "get issue: GitHub does not hold issue #42 in repository " +
-			"octo-org/absent or does not show it to this token; check the arguments, and that the token can see " +
-			"the repository"},
-		{"github.workflows.list", `{}`, "GitHub does not hold this resource in repository octo-org/absent"},
+		{"github.issues.list", `{"repository":"octo-org/absent"}`, "list issues: GitHub does not hold repository " +
+			"octo-org/absent or does not show it to this token" + repositoryHint},
+		{"github.issues.get", `{"repository":"octo-org/absent","number":42}`, "get issue: GitHub does not hold " +
+			"issue #42 in repository octo-org/absent or does not show it to this token; check the arguments, and " +
+			"that the token can see the repository"},
+		{"github.workflows.list", `{"repository":"octo-org/absent"}`, "GitHub does not hold this resource in " +
+			"repository octo-org/absent"},
 	} {
 		if _, err := invoke(t, core, tt.operation, "open", tt.arguments, false); classOf(err) != provider.ClassNotFound ||
 			!strings.Contains(err.Error(), tt.want) {
-			t.Errorf("%s of the remote's absent repository = %v (class %q), want not-found with %q", tt.operation,
+			t.Errorf("%s of an absent repository = %v (class %q), want not-found with %q", tt.operation,
 				err, classOf(err), tt.want)
 		}
 	}
