@@ -202,9 +202,9 @@ func validArguments(id string) string {
 	}[id]
 }
 
-// Exactly the maintainer and administrator tools and the project delete require an allow-list, no profile a
-// new connection starts with selects them, their own profiles are chosen on purpose only, and no profile
-// selects the project delete.
+// Exactly the maintainer and administrator tools and the tools with the effect delete require an allow-list,
+// no profile a new connection starts with selects them, their own profiles are chosen on purpose only, and no
+// profile selects a delete.
 func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 	reg := registry(t)
 	if err := reg.ValidateProfiles(); err != nil {
@@ -214,8 +214,10 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 	for _, id := range guardedTools {
 		guarded[id] = true
 	}
+	deletes := map[string]bool{projectsDelete.ID: true, fieldsDelete.ID: true, fieldOptionsDelete.ID: true,
+		iterationsReplace.ID: true}
 	for _, descriptor := range reg.Provider(Provider) {
-		if descriptor.RequiresToolAllowList != (guarded[descriptor.ID] || descriptor.ID == projectsDelete.ID) {
+		if descriptor.RequiresToolAllowList != (guarded[descriptor.ID] || deletes[descriptor.ID]) {
 			t.Errorf("%s requires an allow-list = %t", descriptor.ID, descriptor.RequiresToolAllowList)
 		}
 	}
@@ -226,8 +228,8 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 			marked++
 		}
 	}
-	if marked != len(guardedTools)+1 || len(guardedTools) != 10 {
-		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools and the project delete", marked)
+	if marked != len(guardedTools)+len(deletes) || len(guardedTools) != 10 {
+		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools and the four deletes", marked)
 	}
 	profiles := map[string]config.ToolProfile{}
 	for _, profile := range metadata.Profiles {
@@ -238,7 +240,7 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 			if standard && guarded[id] {
 				t.Errorf("standard profile %s selects %s", profile.ID, id)
 			}
-			if id == projectsDelete.ID {
+			if deletes[id] {
 				t.Errorf("profile %s selects %s", profile.ID, id)
 			}
 		}

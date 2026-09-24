@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle, the project field schema, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -11,7 +11,8 @@ updated: 2026-09-24
 
 GitHub is a controlled planning provider, not a replacement for `gh`. It lists the projects and repositories
 of a user or an organization, creates, changes, copies, and deletes projects and links them to repositories,
-reads and maintains issues, comments, and project items, and it observes and, when allowed, operates the
+reads and maintains the fields of a project with their options and iterations, reads and maintains issues,
+comments, and project items, and it observes and, when allowed, operates the
 GitHub Actions of a repository.
 On a connection that names them explicitly, it also maintains workflow files and Actions settings. It sees
 pull requests only as project items, and it never accepts a free filter expression, a GraphQL document, or a
@@ -65,14 +66,16 @@ One GitHub connection carries the project, issue, comment, and Actions tools tog
 offers is decided by `permissions` and `tools` alone. Reads are a connection's only default: every change
 needs `create` or `update` in the connection's `permissions`, every Actions execution needs `execute`, and a
 connection with a `tools` list offers only the tools it lists, never one added in a later version.
-`github.projects.delete` needs `delete`. It and the workflow maintainer and Actions administrator tools are
-listed only: a connection without a `tools` list never offers them, whatever its permissions.
+`github.projects.delete`, `github.projectfields.delete`, `github.projectfieldoptions.delete`, and
+`github.projectiterations.replace` need `delete`. They and the workflow maintainer and Actions administrator
+tools are listed only: a connection without a `tools` list never offers them, whatever its permissions.
 
 ### The target of a call
 
 Every repository tool (issues, comments, Actions, workflow maintenance, and Actions administration) takes
 `repository` as `OWNER/REPO`. Every project tool (`github.projectitems.list`, `get`, `update`, `archive`,
-`github.projectdrafts.create`, `github.projects.update`, `delete`) takes `project` as
+`github.projectdrafts.create`, `github.projects.update`, `delete`, and the
+[field schema tools](#project-fields)) takes `project` as
 `users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`. `github.projectitems.add`,
 `github.projectissues.create`, `github.projects.link`, and `github.projects.unlink` touch both, take both,
 and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the items of
@@ -150,8 +153,10 @@ The terminal editor starts a new connection on the setup profile `read`, which t
 `[read, create, update]` with the owner lists, the project reads, `github.projectitems.update`,
 `github.projectitems.add`,
 `github.projectdrafts.create`, and `github.projectissues.create`; archiving stays unticked. The profile
-`projects` ticks `[read, create, update]` with the owner lists and the
-[project lifecycle](#project-lifecycle) tools except `github.projects.delete`, which no profile ticks. The
+`projects` ticks `[read, create, update]` with the owner lists, the
+[project lifecycle](#project-lifecycle) tools except `github.projects.delete`, and `github.projectfields.list`,
+`create`, and `update` of the [project fields](#project-fields); no profile ticks a tool with the effect
+`delete`. The
 profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions). A profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -259,7 +264,95 @@ The lifecycle tools need `project` on a classic token, or Projects read and writ
 on a fine-grained token; the projects of a user need a classic token. A link or an unlink also needs a token
 that can see the repository. Deleting a project needs the rights of a project administrator. GitHub offers no
 API to create, change, or delete the views of a project, so Qatlas has no view tool; a copy takes the views of
-its source along. No lifecycle tool deletes a field, an option, or an item.
+its source along. No lifecycle tool deletes a field, an option, or an item; the fields have
+[tools of their own](#project-fields).
+
+## Project fields
+
+The field schema tools read the fields of a project and create, change, and delete them. Fields, options, and
+iterations are named, never identified: names are compared without case, and every name is resolved against
+the project's fields in one query before the one change is sent. Each change needs confirmation in its own
+invoke request, is sent exactly once, and follows the rules under
+[unclear outcomes](#unclear-outcomes-and-conflicts).
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.projectfields.list` | read | safe | lists every field with its type, options, and iterations |
+| `github.projectfields.create` | create | non-idempotent | creates one text, number, date, single-select, multi-select, or iteration field |
+| `github.projectfields.update` | update | idempotent | renames a field, or adds, renames, recolors, describes, or reorders its options; every value stays |
+| `github.projectfieldoptions.delete` | delete | unknown | removes named options; every item loses a removed option; listed only |
+| `github.projectiterations.replace` | delete | non-idempotent | changes the iteration settings and adds, changes, or removes iterations; every item loses its value of the field; listed only |
+| `github.projectfields.delete` | delete | unknown | deletes a field that is not built in, with its values; listed only |
+
+`github.projectfields.list` answers `fields` in project order. Each field has `name`, `type` (`text`,
+`number`, `date`, `single_select`, `multi_select`, `iteration`, or the type of a built-in field such as
+`title`, `assignees`, `labels`, or `linked_pull_requests`), and `built_in`. A select field lists its
+`options` with `name`, `color`, and `description`; an iteration field has `iteration` with `duration` in
+days, `start_day` (such as `monday`), and `iterations` in start order, each with `title`, `start_date`,
+`duration`, and `state` (`completed`, `current`, or `planned`). Built-in fields cannot be created or deleted.
+The `Status` field every project has is built in as well: GitHub neither deletes nor renames it, but its
+options are maintained like those of any single-select field. Names and descriptions are untrusted data.
+
+```sh
+qatlas invoke github.projectfields.list --connection projects --arg project=orgs/octo-org/projects/7
+echo '{"project":"orgs/octo-org/projects/7","name":"Priority","type":"single_select",
+  "options":[{"name":"P1","color":"red"},{"name":"P2","color":"yellow"},{"name":"P3"}]}' |
+  qatlas invoke github.projectfields.create --connection projects --confirm
+echo '{"project":"orgs/octo-org/projects/7","name":"Sprint","type":"iteration","iteration":{"start_date":"2026-10-05",
+  "duration":14,"iterations":[{"title":"Sprint 1","start_date":"2026-10-05"},{"title":"Sprint 2","start_date":"2026-10-19"}]}}' |
+  qatlas invoke github.projectfields.create --connection projects --confirm
+echo '{"project":"orgs/octo-org/projects/7","field":"Status","options":[{"name":"Review","color":"purple"}],
+  "order":["Todo","In progress","Review","Done"]}' | qatlas invoke github.projectfields.update --connection projects --confirm
+```
+
+`github.projectfields.create` takes `name`, unique in the project, and `type`. A select field needs
+`options`, at most 50, each with `name` and optionally `color` (`gray`, `blue`, `green`, `yellow`, `orange`,
+`red`, `pink`, or `purple`; `gray` when omitted) and `description` (empty when omitted). An iteration field
+needs `iteration` with `start_date` (`YYYY-MM-DD`) and `duration` (1 to 365 days), and takes `iterations`,
+each with `title`, `start_date`, and optionally `duration`, which defaults to the field's; without
+`iterations` the field starts empty. A name the project already holds is refused before the change; a
+repeated create is refused that way, so it never makes a second field of one name.
+
+`github.projectfields.update` addresses the field by `field` and changes `name`, `options`, or `order`.
+An entry of `options` names an option: `new_name`, `color`, and `description` change an existing one, and a
+name the field lacks adds an option at the end. `order` names every option after these changes exactly once,
+in the new order. GitHub replaces the options of a field as a whole, so Qatlas sends every option the field
+keeps together with its identifier: renamed, recolored, and reordered options keep the values items hold. An
+option left out of `options` stays as it is.
+
+The value-losing changes are separate tools with the effect `delete`, offered only by a connection whose
+`permissions` include `delete` and whose `tools` list names them:
+
+- `github.projectfieldoptions.delete` removes the named `options` of a select field. Every item that holds a
+  removed option loses it; at least one option stays, and deleting the field removes the last one.
+- `github.projectiterations.replace` changes the iterations of an iteration field. `start_date` and
+  `duration` change the settings; an entry of `iterations` names an iteration by `title` and changes its
+  `new_title`, `start_date`, or `duration`, or adds it when the field lacks the title, which then needs
+  `start_date`; `remove` names iterations to remove. Iterations left out stay, completed ones included.
+  GitHub takes iterations without identifiers and recreates every iteration of the field with such a change,
+  so every item loses its value of this field, whichever iterations the change names; set the values again
+  afterwards. Renaming an iteration field through `github.projectfields.update` keeps its values.
+- `github.projectfields.delete` deletes a field that is not built in, with its value on every item.
+
+A field, option, or iteration the project lacks, an option or iteration named twice, and an `order` that
+leaves an option out are refused before any change and name what the field holds. A repeated removal or
+delete is refused that way once the name is gone; its idempotency stays `unknown`, because a name may be
+taken again in between.
+
+```yaml
+connections:
+  project-admin:
+    service: github
+    credential: github-planner
+    targets: [orgs/octo-org/projects/7]
+    permissions: [read, create, update, delete]
+    tools: [github.projectfields.list, github.projectfields.create, github.projectfields.update,
+      github.projectfieldoptions.delete, github.projectiterations.replace, github.projectfields.delete]
+```
+
+The field tools need `project` on a classic token, or Projects read and write access of the organization on a
+fine-grained token; the projects of a user need a classic token. The issue fields an organization defines for
+its issues (`createProjectV2IssueField`) are not supported.
 
 ## Project-first use
 
@@ -272,7 +365,8 @@ qatlas invoke github.projectitems.get --connection planning --arg item_id=PVTI_.
 ```
 
 `github.projectitems.list` returns compact items: identifier, type, title, number, repository, state, Status,
-the other single-select, text, number, date, and iteration values by field name, assignees, labels, and URL.
+the other single-select, multi-select, text, number, date, and iteration values by field name, a multi-select
+value as the list of its option names, assignees, labels, and URL.
 It never returns bodies or comments. Without `status` and `status_not` it lists at most 30 items whose Status
 is not `Done`; `status_not: []` lists every status. The filters `status`, `status_not`, `type`
 (`issue`, `pull_request`, `draft_issue`), `repository` (`owner/name`), `assignee`, and `labels` (any of) are
@@ -312,12 +406,15 @@ every entry. Before an existing issue changes or gets a comment, Qatlas reads it
 request of the same number. Bodies and comments are stored exactly as given and never interpreted.
 
 Project field values are named, not identified: `fields` maps field names to an option name of a
-single-select field, an iteration title (current, planned, or completed), a date as `YYYY-MM-DD`, a text, a
-number, or `null` to clear the field. Names are compared without case. Title, assignees, labels, and other
-built-in fields are not set through `fields`. At most 20 values are accepted per request.
+single-select field, a list of option names of a multi-select field, an iteration title (current, planned, or
+completed), a date as `YYYY-MM-DD`, a text, a number, or `null` to clear the field. A multi-select list
+replaces the selected options, names at most 50 of them, and clears the field when it is empty (`[]`). Names
+are compared without case. Title, assignees, labels, and other built-in fields are not set through `fields`.
+At most 20 values are accepted per request. The fields a project holds and their options are listed under
+[project fields](#project-fields).
 
 ```sh
-echo '{"item_id":"PVTI_...","fields":{"Status":"In progress","Estimate":3}}' |
+echo '{"item_id":"PVTI_...","fields":{"Status":"In progress","Estimate":3,"Areas":["API","Docs"]}}' |
   qatlas invoke github.projectitems.update --connection roadmap --confirm
 echo '{"repository":"octo-org/example","title":"Crash on start","fields":{"Status":"Todo"}}' |
   qatlas invoke github.projectissues.create --connection roadmap --confirm

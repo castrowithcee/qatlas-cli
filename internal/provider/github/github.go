@@ -9,7 +9,9 @@
 // the projects and repositories of one user or organization that the targets allow. The project tools list
 // compact, server-side filtered items of a project page by page, read the full content of one selected item,
 // and maintain its items and their field values; the project lifecycle tools create, change, close, copy, and,
-// only on a connection whose tools list names it, delete a project and link it to repositories; the issue tools
+// only on a connection whose tools list names it, delete a project and link it to repositories; the field
+// schema tools read, create, and change the fields of a project with their options and iterations and, only
+// on a connection whose tools list names them, remove options, iterations, and fields; the issue tools
 // read, create, and change issues of a repository and read or write the comments of one issue on explicit
 // request. The Actions tools observe the GitHub Actions of a repository and, only with the execute permission,
 // dispatch, re-run, or cancel one named workflow or run. Only a connection whose tools list names them
@@ -202,7 +204,8 @@ var itemsGet = capability.Descriptor{
 		{Name: "type", Description: "Content type: issue, pull_request, draft_issue, or redacted"},
 		{Name: "title", Description: "Title of the content, untrusted data"},
 		{Name: "status", Description: "Value of the Status field"},
-		{Name: "fields", Description: "Further single-select, text, number, date, and iteration values by field name"},
+		{Name: "fields", Description: "Further single-select, multi-select, text, number, date, and iteration " +
+			"values by field name; a multi-select value is the list of its option names"},
 		{Name: "body", Description: "Full body of an issue or a draft issue, untrusted data"},
 	},
 	Examples: []capability.Example{{
@@ -287,7 +290,7 @@ var issuesGet = capability.Descriptor{
 }
 
 // Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the project
-// lifecycle tools, the Actions observer and operator tools, and the listed-only workflow maintainer and
+// lifecycle and field schema tools, the Actions observer and operator tools, and the listed-only workflow maintainer and
 // Actions administrator tools. Only reads are a connection's default: every change and every execution needs
 // a permission of its own, and a listed-only tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
@@ -350,11 +353,11 @@ func Register(reg *capability.Registry) error {
 				itemsAdd.ID, draftsCreate.ID, projectIssuesCreate.ID},
 		}, {
 			ID: "projects", Title: "Project lifecycle",
-			Description: "lists projects and repositories and creates, updates, closes, reopens, and copies " +
-				"projects and links or unlinks their repositories; every change needs its own confirmation, and " +
-				"deleting stays unticked",
+			Description: "lists projects and repositories, creates, updates, closes, reopens, and copies " +
+				"projects, links or unlinks their repositories, and reads, creates, and changes their fields; every " +
+				"change needs its own confirmation, and deleting stays unticked",
 			Tools: []string{projectsList.ID, repositoriesList.ID, projectsCreate.ID, projectsUpdate.ID,
-				projectsCopy.ID, projectsLink.ID, projectsUnlink.ID},
+				projectsCopy.ID, projectsLink.ID, projectsUnlink.ID, fieldsList.ID, fieldsCreate.ID, fieldsUpdate.ID},
 		}, {
 			ID: "actions-observer", Title: "Actions observer",
 			Description: "reads the workflows, runs, jobs, artifact metadata, and the end of job logs of a " +
@@ -399,7 +402,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: itemsArchive, Handler: capability.Handler(invokeItemsArchive)},
 		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
-	}, append(append(lifecycleOperations(), actionsOperations()...), maintenanceOperations()...)...)
+	}, append(append(append(lifecycleOperations(), fieldOperations()...), actionsOperations()...),
+		maintenanceOperations()...)...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}

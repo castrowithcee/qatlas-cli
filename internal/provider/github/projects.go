@@ -240,7 +240,8 @@ const itemFragment = `fragment itemFields on ProjectV2Item{id type ` +
 	`... on ProjectV2ItemFieldTextValue{text ` + fieldRef + `} ` +
 	`... on ProjectV2ItemFieldNumberValue{number ` + fieldRef + `} ` +
 	`... on ProjectV2ItemFieldDateValue{date ` + fieldRef + `} ` +
-	`... on ProjectV2ItemFieldIterationValue{title ` + fieldRef + `}}} ` +
+	`... on ProjectV2ItemFieldIterationValue{title ` + fieldRef + `} ` +
+	`... on ProjectV2ItemFieldMultiSelectValue{options{name} ` + fieldRef + `}}} ` +
 	`content{__typename ` +
 	`... on Issue{number title issueState:state url repository{nameWithOwner} ` + peopleAndLabels + `} ` +
 	`... on PullRequest{number title pullRequestState:state url repository{nameWithOwner} ` + peopleAndLabels + `} ` +
@@ -274,23 +275,42 @@ func (c *Client) projectVariables() map[string]any {
 	return map[string]any{"owner": c.target.owner, "number": c.target.number}
 }
 
+// fieldJSON is one field of a project. GitHub names the options of a multi-select field differently from
+// those of a single-select field; merge makes both Options.
 type fieldJSON struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	DataType string `json:"dataType"`
-	Options  []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"options"`
-	Configuration *struct {
-		Iterations          []iterationJSON `json:"iterations"`
-		CompletedIterations []iterationJSON `json:"completedIterations"`
-	} `json:"configuration"`
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	DataType      string                 `json:"dataType"`
+	Options       []optionJSON           `json:"options"`
+	MultiOptions  []optionJSON           `json:"multiSelectOptions"`
+	Configuration *iterationSettingsJSON `json:"configuration"`
+}
+
+func (field *fieldJSON) merge() {
+	if field.DataType == "MULTI_SELECT" {
+		field.Options, field.MultiOptions = field.MultiOptions, nil
+	}
+}
+
+type optionJSON struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Description string `json:"description"`
+}
+
+type iterationSettingsJSON struct {
+	Duration            int             `json:"duration"`
+	StartDay            int             `json:"startDay"`
+	Iterations          []iterationJSON `json:"iterations"`
+	CompletedIterations []iterationJSON `json:"completedIterations"`
 }
 
 type iterationJSON struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	StartDate string `json:"startDate"`
+	Duration  int    `json:"duration"`
 }
 
 type projectJSON struct {
@@ -310,6 +330,7 @@ type ownerJSON struct {
 type projectInfo struct {
 	id            string
 	fields        map[string]fieldJSON
+	ordered       []fieldJSON
 	statusID      string
 	statusOptions []string
 }
@@ -334,7 +355,9 @@ func projectInfoOf(op string, project target, owner ownerJSON) (*projectInfo, er
 		if field.ID == "" {
 			continue
 		}
+		field.merge()
 		info.fields[field.ID] = field
+		info.ordered = append(info.ordered, field)
 		if field.DataType == "SINGLE_SELECT" && strings.EqualFold(field.Name, statusFieldName) && info.statusID == "" {
 			info.statusID = field.ID
 			for _, option := range field.Options {
@@ -374,7 +397,11 @@ type fieldValueJSON struct {
 	Number *float64 `json:"number"`
 	Date   *string  `json:"date"`
 	Title  *string  `json:"title"`
-	Field  struct {
+	// Options are the selected options of a multi-select value.
+	Options []struct {
+		Name string `json:"name"`
+	} `json:"options"`
+	Field struct {
 		ID string `json:"id"`
 	} `json:"field"`
 }
@@ -411,8 +438,9 @@ var itemTypes = map[string]string{
 }
 
 // normalize reduces one GitHub item to the compact Qatlas view. Field values are named through the field
-// model resolved for this request; only single-select, text, number, date, and iteration values are kept,
-// and the Status value becomes its own property.
+// model resolved for this request; only single-select, multi-select, text, number, date, and iteration
+// values are kept, a multi-select value as the list of its option names, and the Status value becomes its
+// own property.
 func (info *projectInfo) normalize(raw itemJSON) normalizedItem {
 	kind, ok := itemTypes[raw.Type]
 	if !ok {
@@ -441,6 +469,12 @@ func (info *projectInfo) normalize(raw itemJSON) normalizedItem {
 			item.Fields[field.Name] = *value.Date
 		case field.DataType == "ITERATION" && value.Title != nil:
 			item.Fields[field.Name] = *value.Title
+		case field.DataType == "MULTI_SELECT" && value.Options != nil:
+			names := make([]string, len(value.Options))
+			for i, option := range value.Options {
+				names[i] = option.Name
+			}
+			item.Fields[field.Name] = names
 		}
 	}
 	content := raw.Content

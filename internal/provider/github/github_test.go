@@ -144,6 +144,7 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables map[string]any) {
 	switch {
 	case f.lifecycle(w, document, variables):
+	case f.fieldSchema(w, document, variables):
 	case strings.Contains(document, "projectsV2(first") || strings.Contains(document, "repositories(first"):
 		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
@@ -172,8 +173,10 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 }
 
 func (f *fakeGitHub) projectJSON() string {
-	status := `{"id":"F_status","name":"Status","dataType":"SINGLE_SELECT",` +
-		`"options":[{"id":"O_todo","name":"Todo"},{"id":"O_progress","name":"In progress"},{"id":"O_done","name":"Done"}]},`
+	status := `{"id":"F_status","name":"Status","dataType":"SINGLE_SELECT","options":[` +
+		`{"id":"O_todo","name":"Todo","color":"GREEN","description":"Not started"},` +
+		`{"id":"O_progress","name":"In progress","color":"YELLOW","description":""},` +
+		`{"id":"O_done","name":"Done","color":"PURPLE","description":""}]},`
 	if f.noStatus {
 		status = ""
 	}
@@ -182,10 +185,16 @@ func (f *fakeGitHub) projectJSON() string {
 		extra += fmt.Sprintf(`,{"id":"F_t%d","name":"T%d","dataType":"TEXT"}`, i, i)
 	}
 	return `{"id":"` + projectID + `","fields":{"nodes":[{"id":"F_title","name":"Title","dataType":"TITLE"},` + status +
-		`{"id":"F_prio","name":"Priority","dataType":"SINGLE_SELECT","options":[{"id":"O_p1","name":"P1"}]},` +
+		`{"id":"F_prio","name":"Priority","dataType":"SINGLE_SELECT","options":[{"id":"O_p1","name":"P1",` +
+		`"color":"RED","description":"Urgent"}]},` +
+		`{"id":"F_tags","name":"Tags","dataType":"MULTI_SELECT","multiSelectOptions":[` +
+		`{"id":"M_ui","name":"UI","color":"BLUE","description":"Interface"},` +
+		`{"id":"M_api","name":"API","color":"GRAY","description":""}]},` +
 		`{"id":"F_est","name":"Estimate","dataType":"NUMBER"},{"id":"F_due","name":"Due","dataType":"DATE"},` +
-		`{"id":"F_sprint","name":"Sprint","dataType":"ITERATION","configuration":{"iterations":` +
-		`[{"id":"I_s5","title":"Sprint 5"}],"completedIterations":[{"id":"I_s4","title":"Sprint 4"}]}},` +
+		`{"id":"F_sprint","name":"Sprint","dataType":"ITERATION","configuration":{"duration":14,"startDay":1,` +
+		`"iterations":[{"id":"I_s5","title":"Sprint 5","startDate":"2026-09-21","duration":14},` +
+		`{"id":"I_s6","title":"Sprint 6","startDate":"2026-10-05","duration":14}],` +
+		`"completedIterations":[{"id":"I_s4","title":"Sprint 4","startDate":"2026-09-07","duration":14}]}},` +
 		`{"id":"F_note","name":"Note","dataType":"TEXT"},` +
 		`{"id":"F_assignees","name":"Assignees","dataType":"ASSIGNEES"}` + extra + `]}}`
 }
@@ -194,7 +203,8 @@ func itemNodeJSON(item fakeItem, project string, withBody bool) string {
 	values := []string{`{"text":"` + item.title + `","field":{"id":"F_title"}}`,
 		`{"name":"P1","field":{"id":"F_prio"}}`, `{"number":3,"field":{"id":"F_est"}}`,
 		`{"date":"2026-10-01","field":{"id":"F_due"}}`, `{"title":"Sprint 4","field":{"id":"F_sprint"}}`,
-		`{"text":"short note","field":{"id":"F_note"}}`, `{}`}
+		`{"text":"short note","field":{"id":"F_note"}}`, `{"options":[{"name":"UI"},{"name":"API"}],"field":{"id":"F_tags"}}`,
+		`{}`}
 	if item.status != "" {
 		values = append(values, `{"name":"`+item.status+`","field":{"id":"F_status"}}`)
 	}
@@ -580,7 +590,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		}
 	}
 	equalIDs(t, ids, []string{"github.actionspermissions.get", "github.comments.list", "github.issues.get",
-		"github.issues.list", "github.projectitems.get", "github.projectitems.list", "github.projects.list",
+		"github.issues.list", "github.projectfields.list", "github.projectitems.get", "github.projectitems.list", "github.projects.list",
 		"github.repositories.list", "github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
 		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
@@ -588,7 +598,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 45 {
+	if len(metadata.Tools) != 51 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }
@@ -730,7 +740,8 @@ func TestDefaultRosterIsBoundedFilteredAndGapless(t *testing.T) {
 	if item.ID != "PVTI_item00" || item.Type != "issue" || item.Status != "In progress" ||
 		item.Repository != "octo-org/other" || item.State != "open" || item.Number != 1 ||
 		item.Fields["Priority"] != "P1" || item.Fields["Estimate"] != float64(3) || item.Fields["Due"] != "2026-10-01" ||
-		item.Fields["Sprint"] != "Sprint 4" || item.Fields["Note"] != "short note" || item.Body != nil {
+		item.Fields["Sprint"] != "Sprint 4" || item.Fields["Note"] != "short note" ||
+		fmt.Sprint(item.Fields["Tags"]) != "[UI API]" || item.Body != nil {
 		t.Errorf("item = %+v", item)
 	}
 	for _, absent := range []string{"Title", "Status", "Assignees"} {

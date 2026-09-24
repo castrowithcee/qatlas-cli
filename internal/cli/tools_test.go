@@ -180,7 +180,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none.
 		"1,Self-hosted documentation platform for team knowledge,company handbook,bookstack,5",
 		"1,Cloud-based instant messaging service,\"\",telegram,3",
-		",\"\",github,45", ",\"\",lexware,3", ",\"\",nextcloud,6", ",\"\",seatable,7", ",\"\",todoist,39",
+		",\"\",github,51", ",\"\",lexware,3", ",\"\",nextcloud,6", ",\"\",seatable,7", ",\"\",todoist,39",
 		",\"\",twentycrm,5", "0,Code hosting and software collaboration platform,",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -375,9 +375,11 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.actionspermissions.get", "github.actionspermissions.update",
 			"github.comments.create", "github.comments.list", "github.issues.close", "github.issues.create",
 			"github.issues.get", "github.issues.list", "github.issues.reopen", "github.issues.update",
-			"github.projectdrafts.create", "github.projectissues.create", "github.projectitems.add",
+			"github.projectdrafts.create", "github.projectfieldoptions.delete", "github.projectfields.create",
+			"github.projectfields.delete", "github.projectfields.list", "github.projectfields.update",
+			"github.projectissues.create", "github.projectitems.add",
 			"github.projectitems.archive", "github.projectitems.get", "github.projectitems.list",
-			"github.projectitems.update", "github.projects.copy", "github.projects.create",
+			"github.projectitems.update", "github.projectiterations.replace", "github.projects.copy", "github.projects.create",
 			"github.projects.delete", "github.projects.link", "github.projects.list", "github.projects.unlink",
 			"github.projects.update", "github.repositories.list",
 			"github.workflowartifacts.list", "github.workflowfiles.create",

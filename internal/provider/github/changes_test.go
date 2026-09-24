@@ -143,25 +143,33 @@ func results(planning *Planning) string {
 func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 	reg := registry(t)
 	want := map[string]capability.Risk{
-		"github.issues.create":            changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-		"github.issues.update":            changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"github.issues.close":             changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"github.issues.reopen":            changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"github.comments.list":            readRisk,
-		"github.comments.create":          changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-		"github.projectitems.update":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"github.projectitems.add":         changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
-		"github.projectitems.archive":     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"github.projectdrafts.create":     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-		"github.projectissues.create":     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-		"github.projectitems.list":        readRisk,
-		"github.projects.list":            readRisk,
-		"github.projects.create":          changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-		"github.projects.update":          changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"github.projects.delete":          changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
-		"github.projects.copy":            changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-		"github.projects.link":            changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		"github.projects.unlink":          changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.issues.create":        changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.issues.update":        changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.issues.close":         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.issues.reopen":        changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.comments.list":        readRisk,
+		"github.comments.create":      changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.projectitems.update":  changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projectitems.add":     changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+		"github.projectitems.archive": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projectdrafts.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.projectissues.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.projectitems.list":    readRisk,
+		"github.projects.list":        readRisk,
+		"github.projects.create":      changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.projects.update":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projects.delete":      changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+		"github.projects.copy":        changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.projects.link":        changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projects.unlink":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projectfields.list":   readRisk,
+		"github.projectfields.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.projectfields.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projectfields.delete": changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+		"github.projectfieldoptions.delete": changeRisk(capability.EffectDelete,
+			capability.IdempotencyUnknown),
+		"github.projectiterations.replace": changeRisk(capability.EffectDelete,
+			capability.IdempotencyNonIdempotent),
 		"github.repositories.list":        readRisk,
 		"github.projectitems.get":         readRisk,
 		"github.issues.list":              readRisk,
@@ -466,7 +474,8 @@ func TestFieldChangesResolveOnceAndWriteInBatches(t *testing.T) {
 		t.Fatalf("requests = %d queries, %d mutations, %v REST; want one resolution and two batches",
 			len(queries), len(mutations), rest)
 	}
-	if !strings.Contains(queries[0].document, "options{id name}") || queries[0].variables["item"] != "PVTI_item00" {
+	if !strings.Contains(queries[0].document, "options{id name color description}") ||
+		queries[0].variables["item"] != "PVTI_item00" {
 		t.Errorf("resolution = %s", queries[0].document)
 	}
 	first, second := mutations[0], mutations[1]

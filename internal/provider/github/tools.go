@@ -41,8 +41,9 @@ var issueContentArguments = []capability.Argument{
 	{Name: "assignees", Description: "Assignee logins; replaces every assignee of the issue, [] removes them all"},
 }
 
-const fieldsDescription = "Project field values by field name: an option name of a single-select field, an " +
-	"iteration title, a date as YYYY-MM-DD, a text, a number, or null to clear the field; at most 20"
+const fieldsDescription = "Project field values by field name: an option name of a single-select field, a " +
+	"list of option names of a multi-select field, an iteration title, a date as YYYY-MM-DD, a text, a number, " +
+	"or null to clear the field, which [] does for a multi-select field as well; at most 20"
 
 const planningOutput = `{"type":"object","properties":{"item_id":{"type":"string"},` +
 	`"issue":{"type":"object","properties":{"number":{"type":"integer"},"repository":{"type":"string"},` +
@@ -228,7 +229,7 @@ var itemsUpdate = capability.Descriptor{
 	ID:      Provider + ".projectitems.update",
 	Version: 1,
 	Title:   "Update GitHub project item fields",
-	Description: "Set or clear single-select, text, number, date, and iteration fields of one item of " +
+	Description: "Set or clear single-select, multi-select, text, number, date, and iteration fields of one item of " +
 		"a GitHub project an explicit connection allows, by field and option name",
 	Tags:                       []string{"github", "projects", "items", "fields", "update", "planning"},
 	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),

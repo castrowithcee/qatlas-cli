@@ -66,7 +66,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[17]{connections,effect,id,title}:\n", "  code,read,github.issues.get,",
+		"tools[18]{connections,effect,id,title}:\n", "  code,read,github.issues.get,",
 		"  code planning roadmap,read,github.projectitems.list,", "  roadmap,update,github.projectitems.update,",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -106,7 +106,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[45]{connections,effect,id,reason,title}:", "read,github.issues.get,", "read,github.issues.list,",
+		"tools[51]{connections,effect,id,reason,title}:", "read,github.issues.get,", "read,github.issues.list,",
 		"read,github.projectitems.get,", "read,github.projectitems.list,", "read,github.comments.list,",
 		"create,github.issues.create,", "update,github.issues.update,", "update,github.issues.close,",
 		"update,github.issues.reopen,", "create,github.comments.create,", "update,github.projectitems.update,",
@@ -114,6 +114,9 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		"create,github.projectdrafts.create,", "create,github.projectissues.create,",
 		"create,github.projects.create,", "update,github.projects.update,", "delete,github.projects.delete,",
 		"create,github.projects.copy,", "update,github.projects.link,", "update,github.projects.unlink,",
+		"read,github.projectfields.list,", "create,github.projectfields.create,",
+		"update,github.projectfields.update,", "delete,github.projectfields.delete,",
+		"delete,github.projectfieldoptions.delete,", "delete,github.projectiterations.replace,",
 		"read,github.workflows.list,", "read,github.workflows.get,", "read,github.workflowruns.list,",
 		"read,github.workflowruns.get,", "read,github.workflowjobs.list,", "read,github.workflowjobs.get,",
 		"read,github.workflowjobs.log,", "read,github.workflowartifacts.list,",
@@ -257,8 +260,8 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, toolResultFrom(t, responses[`"search"`]).Structured, &searched)
-	if len(searched.Operations) != 17 || searched.Operations[0].ID != "github.comments.list" ||
-		searched.Operations[16].ID != "github.workflows.list" {
+	if len(searched.Operations) != 18 || searched.Operations[0].ID != "github.comments.list" ||
+		searched.Operations[17].ID != "github.workflows.list" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 	describedByCLI := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--config", path, "--output", "json")

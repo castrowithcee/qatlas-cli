@@ -34,11 +34,13 @@ const (
 )
 
 // FieldValues names project fields and the value each should take: an option name of a single-select
-// field, an iteration title, a date as YYYY-MM-DD, a text, a number, or null to clear the field. Names and
-// option names are compared without case.
+// field, a list of option names of a multi-select field, an iteration title, a date as YYYY-MM-DD, a text, a
+// number, or null to clear the field; an empty list clears a multi-select field as well. Names and option
+// names are compared without case.
 type FieldValues map[string]json.RawMessage
 
-// fieldInput is one checked field value: nil clears the field, otherwise a string or a float64.
+// fieldInput is one checked field value: nil clears the field, otherwise a string, a float64, or a list of
+// option names.
 type fieldInput struct {
 	name  string
 	value any
@@ -91,11 +93,24 @@ func fieldValue(raw json.RawMessage) (any, error) {
 	decoder.UseNumber()
 	var value any
 	if decoder.Decode(&value) != nil {
-		return nil, invalidRequest("a field value must be a string, a number, or null")
+		return nil, invalidRequest("a field value must be a string, a number, a list of option names, or null")
 	}
 	switch value := value.(type) {
 	case nil:
 		return nil, nil
+	case []any:
+		if len(value) > maxOptions {
+			return nil, invalidRequest(fmt.Sprintf("a list value names at most %d options", maxOptions))
+		}
+		names := make([]string, len(value))
+		for i, entry := range value {
+			name, ok := entry.(string)
+			if !ok || name == "" || utf8.RuneCountInString(name) > maxTextLength {
+				return nil, invalidRequest("a list value must hold option names")
+			}
+			names[i] = name
+		}
+		return names, nil
 	case string:
 		if utf8.RuneCountInString(value) > maxTextLength {
 			return nil, invalidRequest(fmt.Sprintf("a field value must hold at most %d characters", maxTextLength))
@@ -108,7 +123,7 @@ func fieldValue(raw json.RawMessage) (any, error) {
 		}
 		return number, nil
 	}
-	return nil, invalidRequest("a field value must be a string, a number, or null")
+	return nil, invalidRequest("a field value must be a string, a number, a list of option names, or null")
 }
 
 // fieldChange is one resolved change: the field and the GraphQL value it takes, or nil to clear it.
@@ -119,7 +134,8 @@ type fieldChange struct {
 }
 
 // settable are the field types whose values the planning tools write.
-var settable = map[string]bool{"SINGLE_SELECT": true, "TEXT": true, "NUMBER": true, "DATE": true, "ITERATION": true}
+var settable = map[string]bool{"SINGLE_SELECT": true, "MULTI_SELECT": true, "TEXT": true, "NUMBER": true,
+	"DATE": true, "ITERATION": true}
 
 // resolve binds checked field values to the field model of the project. Every value is resolved before
 // the first change is sent, so an unknown field or option never leaves a change half done.
@@ -136,6 +152,7 @@ func (info *projectInfo) resolve(inputs []fieldInput) ([]fieldChange, error) {
 		}
 		change := fieldChange{name: field.Name, id: field.ID}
 		if input.value != nil {
+			// An empty list of a multi-select field resolves to no value and clears the field.
 			value, err := fieldValueOf(field, input.value)
 			if err != nil {
 				return nil, err
@@ -175,6 +192,8 @@ func fieldValueOf(field fieldJSON, value any) (map[string]any, error) {
 			names[i] = option.Name
 		}
 		return nil, invalidRequest("field " + field.Name + " takes one of its options: " + strings.Join(names, ", "))
+	case "MULTI_SELECT":
+		return multiSelectValue(field, value)
 	}
 	// An iteration is named by its title, whether it is current, planned, or completed.
 	names := []string{}
@@ -191,6 +210,35 @@ func fieldValueOf(field fieldJSON, value any) (map[string]any, error) {
 	return nil, invalidRequest("field " + field.Name + " takes one of its iterations: " + strings.Join(names, ", "))
 }
 
+// multiSelectValue resolves a list of option names; an empty list resolves to no value, which clears the
+// field. A name listed twice selects its option once.
+func multiSelectValue(field fieldJSON, value any) (map[string]any, error) {
+	names := make([]string, len(field.Options))
+	for i, option := range field.Options {
+		names[i] = option.Name
+	}
+	list, ok := value.([]string)
+	if !ok {
+		return nil, invalidRequest("field " + field.Name + " takes a list of its options: " + strings.Join(names, ", "))
+	}
+	if len(list) == 0 {
+		return nil, nil
+	}
+	ids := []string{}
+	for _, name := range list {
+		i := indexFold(names, name)
+		if i < 0 || field.Options[i].ID == "" {
+			return nil, invalidRequest("field " + field.Name + " takes a list of its options: " +
+				strings.Join(names, ", "))
+		}
+		if !containsFold(ids, field.Options[i].ID) {
+			ids = append(ids, field.Options[i].ID)
+		}
+	}
+	return map[string]any{"multiSelectOptionIds": ids}, nil
+}
+
+// field finds a field of the project by name, compared without case.
 func (info *projectInfo) field(name string) (fieldJSON, bool) {
 	for _, field := range info.fields {
 		if strings.EqualFold(field.Name, name) {
@@ -211,11 +259,17 @@ func (info *projectInfo) settableNames() []string {
 	return names
 }
 
+// fieldNodeSelection is the whole schema of one field: its name and type, the identifier, color, and
+// description of every option, and the settings and every iteration of an iteration field.
+const fieldNodeSelection = `... on ProjectV2FieldCommon{id name dataType} ` +
+	`... on ProjectV2SingleSelectField{options{id name color description}} ` +
+	`... on ProjectV2MultiSelectField{multiSelectOptions{id name color description}} ` +
+	`... on ProjectV2IterationField{configuration{duration startDay ` +
+	`iterations{id title startDate duration} completedIterations{id title startDate duration}}}`
+
 // planningFieldSelection is the field model a change needs: besides the names, the identifiers of every
-// option and iteration.
-const planningFieldSelection = `fields(first:50){nodes{... on ProjectV2FieldCommon{id name dataType} ` +
-	`... on ProjectV2SingleSelectField{options{id name}} ` +
-	`... on ProjectV2IterationField{configuration{iterations{id title} completedIterations{id title}}}}}`
+// option and iteration. GitHub holds at most 50 fields per project, so one page reads them all.
+const planningFieldSelection = `fields(first:100){nodes{` + fieldNodeSelection + `}}`
 
 // planningRequest names what one change resolves before it writes: the field model, an item that has to
 // belong to the project, or an issue of an allowed repository that is to be added.
