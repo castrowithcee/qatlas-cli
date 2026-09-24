@@ -29,12 +29,25 @@ var projectArgument = capability.Argument{Name: "project", Description: "Project
 	"or orgs/LOGIN/projects/NUMBER; optional when the connection's targets allow exactly one project; must lie " +
 	"inside the targets when the connection lists any"}
 
+var repositoryField = capability.Field{Name: "repository", Description: "Repository the tool acted on, as " +
+	"OWNER/REPO; the one a default chose when the argument was left out"}
+
+var projectField = capability.Field{Name: "project", Description: "Project the tool acted on, as " +
+	"users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER; the one a default chose when the argument was " +
+	"left out"}
+
 // withTargetArgument adds the target argument of its kind to one tool: project to the project tools,
-// repository to every other tool.
+// repository to every other tool. Every result names the target the tool acted on in a field of the same
+// name; the project tools that add or create an issue also name its repository, which they take as well.
 func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	name, schema, argument := "repository", repoSchema, repositoryArgument
+	fields := []capability.Field{repositoryField}
 	if strings.HasPrefix(d.ID, Provider+".project") {
 		name, schema, argument = "project", projectSchema, projectArgument
+		fields = []capability.Field{projectField}
+		if d.ID == itemsAdd.ID || d.ID == projectIssuesCreate.ID {
+			fields = append(fields, repositoryField)
+		}
 	}
 	var input, properties map[string]json.RawMessage
 	if json.Unmarshal(d.InputSchema, &input) != nil || json.Unmarshal(input["properties"], &properties) != nil {
@@ -45,6 +58,21 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	input["properties"], _ = json.Marshal(properties)
 	d.InputSchema, _ = json.Marshal(input)
 	d.Arguments = append(append([]capability.Argument(nil), d.Arguments...), argument)
+
+	var output, results map[string]json.RawMessage
+	var required []string
+	if json.Unmarshal(d.OutputSchema, &output) != nil || json.Unmarshal(output["properties"], &results) != nil ||
+		(output["required"] != nil && json.Unmarshal(output["required"], &required) != nil) {
+		return d
+	}
+	for _, field := range fields {
+		results[field.Name] = json.RawMessage(`{"type":"string"}`)
+		required = append(required, field.Name)
+	}
+	output["properties"], _ = json.Marshal(results)
+	output["required"], _ = json.Marshal(required)
+	d.OutputSchema, _ = json.Marshal(output)
+	d.Fields = append(append([]capability.Field(nil), d.Fields...), fields...)
 	return d
 }
 

@@ -17,13 +17,16 @@ import (
 // Class is the stable outcome of a connection test. Callers branch on it instead of on message text.
 type Class string
 
-// Stable provider outcome classes used by connection tests and operations.
+// Stable provider outcome classes used by connection tests and operations. ClassNotFound is a resource the
+// provider does not hold or does not show to this credential: providers that hide what a credential may not
+// see answer both the same way, so the class never claims which of the two it is.
 const (
 	ClassOK              Class = "ok"
 	ClassUnreachable     Class = "unreachable"
 	ClassTLS             Class = "tls"
 	ClassAuth            Class = "auth"
 	ClassPermission      Class = "permission"
+	ClassNotFound        Class = "not-found"
 	ClassTimeout         Class = "timeout"
 	ClassRateLimited     Class = "rate-limited"
 	ClassInvalidResponse Class = "invalid-provider-response"

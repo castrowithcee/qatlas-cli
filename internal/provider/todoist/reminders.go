@@ -170,7 +170,7 @@ func (c *Client) readReminder(ctx context.Context, op, id string) (rawReminder, 
 		return rawReminder{}, "", invalidResponse(op)
 	}
 	if raw.IsDeleted {
-		return rawReminder{}, "", &provider.Error{Class: provider.ClassProviderError, Op: op, Message: notFoundMessage}
+		return rawReminder{}, "", &provider.Error{Class: provider.ClassNotFound, Op: op, Message: notFoundMessage}
 	}
 	task := parentTask(raw)
 	if c.scope.all {

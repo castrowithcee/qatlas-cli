@@ -131,8 +131,7 @@ func (c *Client) listIssues(ctx context.Context, options IssueListOptions, after
 		return nil, err
 	}
 	if page.Repository == nil || page.Repository.Issues == nil {
-		return nil, &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "GitHub does not hold this repository or does not show it to this token"}
+		return nil, notFound(op, subject{in: c.target})
 	}
 	result := &IssueList{Issues: make([]IssueSummary, 0, len(page.Repository.Issues.Nodes))}
 	for _, node := range page.Repository.Issues.Nodes {

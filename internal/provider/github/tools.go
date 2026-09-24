@@ -379,7 +379,7 @@ func invokeIssuesCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return client.CreateIssue(ctx, content)
+	return bound.locate(client.CreateIssue(ctx, content))
 }
 
 func invokeIssuesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -405,7 +405,7 @@ func invokeIssuesUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return client.UpdateIssue(ctx, arguments.Number, arguments.IssueContent)
+	return bound.locate(client.UpdateIssue(ctx, arguments.Number, arguments.IssueContent))
 }
 
 func invokeIssuesClose(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -428,7 +428,7 @@ func invokeIssuesClose(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
-	return client.CloseIssue(ctx, arguments.Number, arguments.StateReason)
+	return bound.locate(client.CloseIssue(ctx, arguments.Number, arguments.StateReason))
 }
 
 func invokeIssuesReopen(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -450,7 +450,7 @@ func invokeIssuesReopen(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return client.ReopenIssue(ctx, arguments.Number)
+	return bound.locate(client.ReopenIssue(ctx, arguments.Number))
 }
 
 func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -471,7 +471,7 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return client.listComments(ctx, options, after)
+	return bound.locate(client.listComments(ctx, options, after))
 }
 
 func invokeCommentsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -497,7 +497,7 @@ func invokeCommentsCreate(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	return client.CreateComment(ctx, arguments.Number, arguments.Body)
+	return bound.locate(client.CreateComment(ctx, arguments.Number, arguments.Body))
 }
 
 func invokeItemsUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -527,7 +527,7 @@ func invokeItemsUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
-	return client.UpdateItemFields(ctx, arguments.ItemID, arguments.Fields)
+	return bound.locate(client.UpdateItemFields(ctx, arguments.ItemID, arguments.Fields))
 }
 
 func invokeItemsAdd(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -559,7 +559,7 @@ func invokeItemsAdd(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	return client.addIssue(ctx, repo, arguments.Number, arguments.Fields)
+	return bound.locate(repo.locate(client.addIssue(ctx, repo, arguments.Number, arguments.Fields)))
 }
 
 func invokeItemsArchive(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -581,7 +581,7 @@ func invokeItemsArchive(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return client.ArchiveItem(ctx, arguments.ItemID)
+	return bound.locate(client.ArchiveItem(ctx, arguments.ItemID))
 }
 
 func invokeDraftsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -608,7 +608,7 @@ func invokeDraftsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return client.CreateDraft(ctx, arguments.Title, arguments.Body, arguments.Fields)
+	return bound.locate(client.CreateDraft(ctx, arguments.Title, arguments.Body, arguments.Fields))
 }
 
 func invokeProjectIssuesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -638,5 +638,5 @@ func invokeProjectIssuesCreate(ctx context.Context, resolved *config.Resolved, s
 	if err != nil {
 		return nil, err
 	}
-	return client.createPlannedIssue(ctx, repo, arguments.IssueContent, arguments.Fields)
+	return bound.locate(repo.locate(client.createPlannedIssue(ctx, repo, arguments.IssueContent, arguments.Fields)))
 }

@@ -410,7 +410,13 @@ func listingCore(t *testing.T, count int) (*Core, *int) {
 			t.Fatal(err)
 		}
 	}
-	return New(registry, &config.Config{}, nil, &redact.Redactor{}), calls
+	// One connection with the default read permission offers every listing tool, so the catalog is the
+	// complete registry.
+	cfg := &config.Config{
+		Services:    map[string]config.Service{"svc": {Provider: "fake"}},
+		Connections: map[string]config.Connection{"reader": {Service: "svc"}},
+	}
+	return New(registry, cfg, nil, &redact.Redactor{}), calls
 }
 
 // searchAll follows next_cursor from the first page to the last and returns every page it read.
@@ -1001,5 +1007,164 @@ func TestToolsRequiringAnAllowListAreOfferedOnlyWhereListed(t *testing.T) {
 	}
 	if got := core.Providers().Providers[0].Connections; got != 3 {
 		t.Errorf("provider summary counts %d connections, want 3", got)
+	}
+}
+
+// The catalog keeps only offered tools by default, and a request for all of them names why each of the
+// others is not offered: the same refusal an explicit route receives from describe and invoke.
+func TestCatalogNamesWhyAToolIsNotOffered(t *testing.T) {
+	handler := capability.Handler(func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+		json.RawMessage) (any, error) {
+		return map[string]any{"ok": true}, nil
+	})
+	get := testDescriptor("fake.pages.get", capability.EffectRead, capability.ConfirmationNone)
+	remove := testDescriptor("fake.pages.delete", capability.EffectDelete, capability.ConfirmationNone)
+	guarded := testDescriptor("fake.pages.guarded", capability.EffectRead, capability.ConfirmationNone)
+	guarded.RequiresToolAllowList = true
+	foreign := testDescriptor("other.pages.get", capability.EffectRead, capability.ConfirmationNone)
+	foreign.Provider = "other"
+	registry := capability.NewRegistry()
+	for _, descriptor := range []capability.Descriptor{get, remove, guarded, foreign} {
+		if err := registry.Register(descriptor.Provider,
+			capability.Operation{Descriptor: descriptor, Handler: handler}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := config.New()
+	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["shared"] = config.Credential{
+		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
+	}
+	cfg.Connections["reader"] = config.Connection{
+		Service: "service", Credential: "shared", Permissions: []config.Permission{config.PermissionRead},
+	}
+	core := New(registry, cfg, nil, nil)
+
+	reasons := func(request SearchRequest) map[string]string {
+		t.Helper()
+		listed, err := core.Tools(request)
+		if err != nil {
+			t.Fatalf("Tools(%+v) = %v", request, err)
+		}
+		got := map[string]string{}
+		for _, tool := range listed.Tools {
+			reason := "-"
+			if tool.Reason != nil {
+				reason = string(*tool.Reason)
+			}
+			got[tool.ID] = tool.Connections + "|" + reason
+		}
+		// The bounded search answers the same question with the same reasons.
+		searched, err := core.Search(request)
+		if err != nil || len(searched.Operations) != len(listed.Tools) {
+			t.Fatalf("Search(%+v) = %+v, %v", request, searched, err)
+		}
+		for i, hit := range searched.Operations {
+			want := ""
+			if listed.Tools[i].Reason != nil {
+				want = string(*listed.Tools[i].Reason)
+			}
+			if hit.ID != listed.Tools[i].ID || string(hit.Reason) != want ||
+				strings.Join(hit.Connections, " ") != listed.Tools[i].Connections {
+				t.Errorf("Search(%+v)[%d] = %+v, want the entry %+v", request, i, hit, listed.Tools[i])
+			}
+		}
+		return got
+	}
+
+	if got, want := reasons(SearchRequest{}), map[string]string{"fake.pages.get": "reader|-"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("default catalog = %v, want %v", got, want)
+	}
+	all := map[string]string{
+		"fake.pages.get":     "reader|",
+		"fake.pages.delete":  "|effect-not-permitted",
+		"fake.pages.guarded": "|requires-tool-allow-list",
+		"other.pages.get":    "|no-connection",
+	}
+	if got := reasons(SearchRequest{All: true}); !reflect.DeepEqual(got, all) {
+		t.Errorf("complete catalog = %v, want %v", got, all)
+	}
+
+	// A second connection that comes closer decides the reason: its tools list only lacks the tool.
+	cfg.Connections["lister"] = config.Connection{
+		Service: "service", Credential: "shared", Tools: []string{"fake.pages.get"},
+		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+	}
+	all["fake.pages.get"] = "lister reader|"
+	all["fake.pages.delete"] = "|not-in-tools-list"
+	all["fake.pages.guarded"] = "|not-in-tools-list"
+	if got := reasons(SearchRequest{All: true}); !reflect.DeepEqual(got, all) {
+		t.Errorf("complete catalog of two connections = %v, want %v", got, all)
+	}
+	// With a connection the reason is that connection's own, and the other provider stays out of it.
+	own := map[string]string{
+		"fake.pages.get":     "lister reader|",
+		"fake.pages.delete":  "|effect-not-permitted",
+		"fake.pages.guarded": "|requires-tool-allow-list",
+	}
+	if got := reasons(SearchRequest{Connection: "reader", All: true}); !reflect.DeepEqual(got, own) {
+		t.Errorf("catalog of reader = %v, want %v", got, own)
+	}
+
+	for _, tt := range []struct {
+		operation, connection string
+		want                  config.Refusal
+	}{
+		{"fake.pages.delete", "reader", config.RefusalEffect},
+		{"fake.pages.guarded", "reader", config.RefusalToolAllowList},
+		{"fake.pages.delete", "lister", config.RefusalToolsList},
+		{"other.pages.get", "reader", config.RefusalOtherProvider},
+	} {
+		var unsupported *capability.UnsupportedError
+		_, err := core.Invoke(context.Background(), InvokeRequest{
+			Operation: tt.operation, Connection: tt.connection, Arguments: json.RawMessage(`{"id":"1"}`),
+		})
+		if !errors.As(err, &unsupported) || unsupported.Reason != tt.want ||
+			!strings.Contains(err.Error(), "("+string(tt.want)+")") ||
+			!strings.Contains(err.Error(), "'qatlas describe "+tt.operation+"'") {
+			t.Errorf("Invoke(%s, %s) = %v, want unsupported with %s", tt.operation, tt.connection, err, tt.want)
+		}
+		_, err = core.Describe(DescribeRequest{Operation: tt.operation, Connection: tt.connection})
+		if !errors.As(err, &unsupported) || unsupported.Reason != tt.want {
+			t.Errorf("Describe(%s, %s) = %v, want unsupported with %s", tt.operation, tt.connection, err, tt.want)
+		}
+	}
+}
+
+// The connection listing publishes names, providers, descriptions, permitted effects, and the tools mode,
+// and nothing about where a route leads or what it authenticates with.
+func TestConnectionsListTheRoutesWithoutTheirEndpoints(t *testing.T) {
+	cfg := config.New()
+	cfg.Services["wiki"] = config.Service{Provider: "fake", BaseURL: "https://wiki.example.invalid"}
+	cfg.Services["chat"] = config.Service{Provider: "chat", BaseURL: "https://chat.example.invalid"}
+	cfg.Credentials["shared"] = config.Credential{
+		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
+	}
+	cfg.Connections["writer"] = config.Connection{
+		Service: "wiki", Credential: "shared", Description: "writes pages", Target: "team-space",
+		Permissions: []config.Permission{config.PermissionDelete, config.PermissionRead},
+		Tools:       []string{"fake.pages.get"},
+	}
+	cfg.Connections["reader"] = config.Connection{Service: "wiki", Credential: "shared"}
+	cfg.Connections["closed"] = config.Connection{Service: "wiki", Credential: "shared", Tools: []string{}}
+	cfg.Connections["alerts"] = config.Connection{
+		Service: "chat", Credential: "shared", Permissions: []config.Permission{},
+	}
+	core := New(capability.NewRegistry(), cfg, nil, nil)
+
+	want := []ConnectionSummary{
+		{Name: "alerts", Provider: "chat", Permissions: "", Tools: ToolsAllPermitted},
+		{Name: "closed", Provider: "fake", Permissions: "read", Tools: ToolsNone},
+		{Name: "reader", Provider: "fake", Permissions: "read", Tools: ToolsAllPermitted},
+		{Name: "writer", Provider: "fake", Description: "writes pages", Permissions: "read delete", Tools: ToolsListed},
+	}
+	if got := core.Connections("").Connections; !reflect.DeepEqual(got, want) {
+		t.Errorf("Connections() = %+v, want %+v", got, want)
+	}
+	if got := core.Connections("chat").Connections; !reflect.DeepEqual(got, want[:1]) {
+		t.Errorf("Connections(chat) = %+v, want %+v", got, want[:1])
+	}
+	if got := core.Connections("absent").Connections; got == nil || len(got) != 0 {
+		t.Errorf("Connections(absent) = %#v, want an empty list", got)
 	}
 }

@@ -622,7 +622,7 @@ func TestTheSectionMoveReadsItsCommandResult(t *testing.T) {
 			provider.ClassPermission, planMessage, false},
 		{"a forbidden move", `{"error_tag":"FORBIDDEN","error":"` + contentCanary + `","http_code":403}`,
 			provider.ClassPermission, changeDenied, false},
-		{"a missing section", `{"error_tag":"NOT_FOUND","http_code":404}`, provider.ClassProviderError,
+		{"a missing section", `{"error_tag":"NOT_FOUND","http_code":404}`, provider.ClassNotFound,
 			notFoundMessage, false},
 		{"an invalid move", `{"error_tag":"INVALID_ARGUMENT_VALUE","error":"` + contentCanary + `","http_code":400}`,
 			provider.ClassProviderError, "invalid", false},
@@ -705,8 +705,8 @@ func TestRemindersGetStaysOnTheConnectionsTasks(t *testing.T) {
 	if len(requests) != 2 || requests[0].path != "/api/v1/reminders/remOne" || requests[1].path != "/api/v1/tasks/taskDue" {
 		t.Errorf("requests = %+v, want the reminder and its task", requests)
 	}
-	if _, err := env.invoke("todoist.reminders.get", "one", `{"reminder_id":"remMissing"}`); classOf(err) != provider.ClassProviderError {
-		t.Errorf("missing reminder = %v, want a provider error", err)
+	if _, err := env.invoke("todoist.reminders.get", "one", `{"reminder_id":"remMissing"}`); classOf(err) != provider.ClassNotFound {
+		t.Errorf("missing reminder = %v, want not-found", err)
 	}
 }
 

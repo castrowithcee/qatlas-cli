@@ -323,10 +323,11 @@ func (p *projectInfo) option(value string) (string, bool) {
 	return "", false
 }
 
-func projectInfoOf(op string, owner ownerJSON) (*projectInfo, error) {
+// projectInfoOf reads the field model of the project an owner query answered. An owner or project GitHub
+// left out is one it does not hold or does not show to this token.
+func projectInfoOf(op string, project target, owner ownerJSON) (*projectInfo, error) {
 	if owner.Owner == nil || owner.Owner.ProjectV2 == nil || owner.Owner.ProjectV2.ID == "" {
-		return nil, &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "GitHub does not hold this project or does not show it to this token"}
+		return nil, notFound(op, subject{in: project})
 	}
 	info := &projectInfo{id: owner.Owner.ProjectV2.ID, fields: map[string]fieldJSON{}}
 	for _, field := range owner.Owner.ProjectV2.Fields.Nodes {
@@ -350,7 +351,7 @@ func (c *Client) project(ctx context.Context, op string) (*projectInfo, error) {
 	if err := c.graphql(ctx, op, c.projectQuery(), c.projectVariables(), &owner); err != nil {
 		return nil, err
 	}
-	return projectInfoOf(op, owner)
+	return projectInfoOf(op, c.target, owner)
 }
 
 type countedLogins struct {
@@ -577,13 +578,12 @@ func (c *Client) GetItem(ctx context.Context, id string) (*Item, error) {
 	if err := c.graphql(ctx, op, c.itemQuery(), variables, &detail); err != nil {
 		return nil, err
 	}
-	info, err := projectInfoOf(op, detail.ownerJSON)
+	info, err := projectInfoOf(op, c.target, detail.ownerJSON)
 	if err != nil {
 		return nil, err
 	}
 	if detail.Item == nil || detail.Item.ID != id || detail.Item.Project == nil || detail.Item.Project.ID != info.id {
-		return nil, &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "the project of this connection holds no such item"}
+		return nil, notFound(op, subject{in: c.target, what: "this item"})
 	}
 	item := info.normalize(*detail.Item).Item
 	if content := detail.Item.Content; content != nil && content.Body != nil &&

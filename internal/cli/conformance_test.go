@@ -88,19 +88,22 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 		t.Errorf("CLI providers = %+v, want %+v", namespaces.Providers, wantNamespaces)
 	}
 
+	// Without a connection nothing is offered, so the default catalog is empty and the complete one names
+	// every tool with the same reason on both surfaces.
+	noConnection := config.RefusalNoConnection
 	for _, metadata := range reg.ProviderMetadataAll() {
 		want := []application.ToolSummary{}
 		for _, descriptor := range reg.Provider(metadata.ID) {
 			want = append(want, application.ToolSummary{
-				ID: descriptor.ID, Title: descriptor.Title, Effect: descriptor.Risk.Effect,
+				ID: descriptor.ID, Title: descriptor.Title, Effect: descriptor.Risk.Effect, Reason: &noConnection,
 			})
 		}
-		if indexed := toolSummaries(t, string(cliJSON("tools", metadata.ID))); !reflect.DeepEqual(indexed, want) {
+		if indexed := toolSummaries(t, string(cliJSON("tools", metadata.ID, "--all"))); !reflect.DeepEqual(indexed, want) {
 			t.Errorf("CLI tools %s = %+v, want %+v", metadata.ID, indexed, want)
 		}
 
 		searched := []application.ToolSummary{}
-		arguments := `{"provider":"` + metadata.ID + `"}`
+		arguments := `{"provider":"` + metadata.ID + `","all":true}`
 		for {
 			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
 				`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
@@ -112,12 +115,16 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 			var page application.SearchResponse
 			decodeRaw(t, result.Structured, &page)
 			for _, hit := range page.Operations {
-				searched = append(searched, application.ToolSummary{ID: hit.ID, Title: hit.Title, Effect: hit.Effect})
+				reason := hit.Reason
+				searched = append(searched, application.ToolSummary{
+					ID: hit.ID, Title: hit.Title, Effect: hit.Effect, Connections: strings.Join(hit.Connections, " "),
+					Reason: &reason,
+				})
 			}
 			if !page.HasMore {
 				break
 			}
-			arguments = `{"provider":"` + metadata.ID + `","cursor":"` + page.NextCursor + `"}`
+			arguments = `{"provider":"` + metadata.ID + `","all":true,"cursor":"` + page.NextCursor + `"}`
 		}
 		if !reflect.DeepEqual(searched, want) {
 			t.Errorf("MCP search %s = %+v, want %+v", metadata.ID, searched, want)
@@ -136,7 +143,7 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 		if stderr != "" {
 			t.Fatalf("MCP describe %s stderr = %q", descriptor.ID, stderr)
 		}
-		byCLI := jsonMember(t, cliJSON("tool", descriptor.ID), "tool")
+		byCLI := jsonMember(t, cliJSON("describe", descriptor.ID), "tool")
 		byMCP := jsonMember(t, toolResultFrom(t, described["1"]).Structured, "operation")
 		if !jsonEqual(byCLI, registered) || !jsonEqual(byMCP, registered) {
 			t.Errorf("%s: CLI tool = %s, MCP describe = %s, registered = %s", descriptor.ID, byCLI, byMCP,

@@ -266,19 +266,22 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 	if err := c.graphql(ctx, op, `query(`+declarations+`){`+body+`}`, variables, &answer); err != nil {
 		return nil, "", err
 	}
-	info, err := projectInfoOf(op, answer.ownerJSON)
+	info, err := projectInfoOf(op, c.target, answer.ownerJSON)
 	if err != nil {
 		return nil, "", err
 	}
 	if request.item != "" && (answer.Item == nil || answer.Item.ID != request.item || answer.Item.Project == nil ||
 		answer.Item.Project.ID != info.id) {
-		return nil, "", providerError(op, "the project of this connection holds no such item")
+		return nil, "", notFound(op, subject{in: c.target, what: "this item"})
 	}
 	if request.number == 0 {
 		return info, "", nil
 	}
-	if answer.Repository == nil || answer.Repository.Issue == nil || answer.Repository.Issue.ID == "" {
-		return nil, "", providerError(op, "GitHub does not hold this issue or does not show it to this token")
+	if answer.Repository == nil {
+		return nil, "", notFound(op, subject{in: request.repository})
+	}
+	if answer.Repository.Issue == nil || answer.Repository.Issue.ID == "" {
+		return nil, "", notFound(op, subject{in: request.repository, what: "issue #" + strconv.Itoa(request.number)})
 	}
 	return info, answer.Repository.Issue.ID, nil
 }
@@ -368,7 +371,7 @@ func (c *Client) applyFields(ctx context.Context, op, projectID, itemID string, 
 			}
 			var failure *provider.Error
 			if errs := errorsAt(envelope.Errors, alias); len(errs) > 0 {
-				failure = graphQLFailure(op, errs, true)
+				failure = c.graphQLFailure(op, errs, variables, true)
 				results[start+i].Result = resultFailed
 			} else {
 				failure = invalidResponse(op, true)

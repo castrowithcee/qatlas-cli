@@ -610,26 +610,56 @@ func (c *Config) ConnectionPermissions(name string) []Permission {
 	return []Permission{PermissionRead}
 }
 
-// ConnectionAllows reports whether the local configuration exposes one operation on a connection: its
-// effect must be among the connection's permissions and, when the connection lists tools, its ID among
-// them. A tool that requires an allow-list is exposed only by a connection whose tools list names it. Every
-// discovery and invoke path asks this one question, so none of them can offer what another refuses.
-func (c *Config) ConnectionAllows(name string, tool ToolMetadata) bool {
+// Refusal names why a connection does not offer a tool. The values are stable: discovery publishes them
+// and an unsupported-capability diagnostic carries them, so a caller branches on the value, not the text.
+type Refusal string
+
+// The refusals, in the order ConnectionRefusal checks them.
+const (
+	// RefusalEffect: the connection's permissions do not allow the tool's effect.
+	RefusalEffect Refusal = "effect-not-permitted"
+	// RefusalToolAllowList: the tool requires an allow-list, and the connection has no tools list.
+	RefusalToolAllowList Refusal = "requires-tool-allow-list"
+	// RefusalToolsList: the connection has a tools list, and it does not name the tool.
+	RefusalToolsList Refusal = "not-in-tools-list"
+	// RefusalNoConnection: no configured connection of the tool's provider exists.
+	RefusalNoConnection Refusal = "no-connection"
+	// RefusalOtherProvider: the connection belongs to another provider than the tool.
+	RefusalOtherProvider Refusal = "other-provider"
+)
+
+// ConnectionRefusal answers whether the local configuration exposes one operation on a connection, and if
+// not, why. The empty refusal means the connection offers the tool: its effect is among the connection's
+// permissions and, when the connection lists tools, its ID is among them. A tool that requires an
+// allow-list is exposed only by a connection whose tools list names it. The effect is checked first,
+// because it is the coarser of the two lists. An unknown connection offers nothing.
+func (c *Config) ConnectionRefusal(name string, tool ToolMetadata) Refusal {
 	conn, ok := c.Connections[name]
-	switch {
-	case !ok:
-		return false
-	case conn.Tools == nil && tool.RequiresToolAllowList:
-		return false
-	case conn.Tools != nil && !contains(conn.Tools, tool.ID):
-		return false
+	if !ok {
+		return RefusalNoConnection
 	}
+	permitted := false
 	for _, permission := range c.ConnectionPermissions(name) {
 		if permission == tool.Effect {
-			return true
+			permitted = true
+			break
 		}
 	}
-	return false
+	switch {
+	case !permitted:
+		return RefusalEffect
+	case conn.Tools == nil && tool.RequiresToolAllowList:
+		return RefusalToolAllowList
+	case conn.Tools != nil && !contains(conn.Tools, tool.ID):
+		return RefusalToolsList
+	}
+	return ""
+}
+
+// ConnectionAllows reports whether a connection offers one operation, by the rule of ConnectionRefusal.
+// Every discovery and invoke path asks this one question, so none of them can offer what another refuses.
+func (c *Config) ConnectionAllows(name string, tool ToolMetadata) bool {
+	return c.ConnectionRefusal(name, tool) == ""
 }
 
 // SecretRoleDescription returns the provider-authored help for a role.

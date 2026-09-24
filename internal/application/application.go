@@ -60,16 +60,22 @@ func (c *Core) SetAudit(writer io.Writer) { c.audit = writer }
 // SearchRequest filters the local operation catalog. Limit is capped even when omitted or non-positive.
 // Cursor continues a previous page: it is the opaque next_cursor of a response to the same filters, and
 // an omitted or empty cursor selects the first page.
+//
+// The catalog keeps only the tools a configured connection offers, or with Connection the tools that one
+// connection offers. All keeps every tool of the other filters as well and says of each one nobody offers
+// why not.
 type SearchRequest struct {
 	Query      string            `json:"query,omitempty"`
 	Provider   string            `json:"provider,omitempty"`
 	Connection string            `json:"connection,omitempty"`
 	Effect     capability.Effect `json:"effect,omitempty"`
+	All        bool              `json:"all,omitempty"`
 	Limit      int               `json:"limit,omitempty"`
 	Cursor     string            `json:"cursor,omitempty"`
 }
 
-// SearchHit is the bounded discovery view of one descriptor.
+// SearchHit is the bounded discovery view of one descriptor. Connections names every connection that
+// offers it; Reason is set only on a tool none of them offers, which only a request with All returns.
 type SearchHit struct {
 	ID          string            `json:"id"`
 	Version     int               `json:"version"`
@@ -79,6 +85,7 @@ type SearchHit struct {
 	Provider    string            `json:"provider"`
 	Effect      capability.Effect `json:"effect"`
 	Connections []string          `json:"connections"`
+	Reason      config.Refusal    `json:"reason,omitempty"`
 }
 
 // SearchResponse is the payload inside the CLI envelope. HasMore is true exactly when another match
@@ -122,7 +129,7 @@ func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
 			ID: descriptor.ID, Version: descriptor.Version, Title: title,
 			Description: descriptor.Description, Tags: nonNilStrings(descriptor.Tags),
 			Provider: descriptor.Provider, Effect: descriptor.Risk.Effect,
-			Connections: c.connectionNamesFor(descriptor),
+			Connections: c.connectionNamesFor(descriptor), Reason: c.refusal(request, descriptor),
 		})
 	}
 	response.Operations = hits
@@ -155,7 +162,7 @@ func searchCursorAfter(request SearchRequest) (string, error) {
 func searchFingerprint(request SearchRequest) []byte {
 	filters, _ := json.Marshal([]string{
 		strings.Join(strings.Fields(strings.ToLower(request.Query)), " "),
-		request.Provider, request.Connection, string(request.Effect),
+		request.Provider, request.Connection, string(request.Effect), fmt.Sprint(request.All),
 	})
 	sum := sha256.Sum256(filters)
 	return sum[:searchCursorBinding]
@@ -197,13 +204,88 @@ func (c *Core) Providers() ProvidersResponse {
 	return ProvidersResponse{Providers: providers}
 }
 
-// ToolSummary is the index entry of one tool: the ID an invoke request carries, what the tool does, and
-// whether it reads or changes the remote system. That is what choosing between the tools of one namespace
-// needs; schemas, tags, examples and routes are one describe away.
+// The ways a connection's tools list shapes what it offers, as ConnectionSummary publishes them.
+const (
+	// ToolsAllPermitted: no tools list; every tool whose effect the permissions allow, except a tool that
+	// requires an allow-list.
+	ToolsAllPermitted = "all-permitted"
+	// ToolsListed: a tools list; only the tools it names.
+	ToolsListed = "listed"
+	// ToolsNone: an explicitly empty tools list; no tool at all.
+	ToolsNone = "none"
+)
+
+// ConnectionSummary is the discovery view of one configured route: the name an invoke request carries, the
+// provider it reaches, the line its owner maintains, the effects its permissions allow, separated by single
+// spaces, and how its tools list shapes what it offers. It never names a service, a URL, a credential, a
+// target, or a secret source.
+type ConnectionSummary struct {
+	Name        string `json:"name"`
+	Provider    string `json:"provider"`
+	Description string `json:"description"`
+	Permissions string `json:"permissions"`
+	Tools       string `json:"tools"`
+}
+
+// ConnectionsResponse is the payload inside the CLI envelope.
+type ConnectionsResponse struct {
+	Connections []ConnectionSummary `json:"connections"`
+}
+
+// Connections lists the configured routes, of one provider when provider is not empty, sorted by provider
+// and then by name. It answers from the configuration alone.
+func (c *Core) Connections(provider string) ConnectionsResponse {
+	connections := make([]ConnectionSummary, 0)
+	for name, connection := range c.config.Connections {
+		owner := c.config.Services[connection.Service].Provider
+		if provider != "" && owner != provider {
+			continue
+		}
+		permitted := map[config.Permission]bool{}
+		for _, permission := range c.config.ConnectionPermissions(name) {
+			permitted[permission] = true
+		}
+		effects := make([]string, 0, len(permitted))
+		for _, permission := range config.Permissions() {
+			if permitted[permission] {
+				effects = append(effects, string(permission))
+			}
+		}
+		tools := ToolsAllPermitted
+		switch {
+		case connection.Tools != nil && len(connection.Tools) == 0:
+			tools = ToolsNone
+		case connection.Tools != nil:
+			tools = ToolsListed
+		}
+		connections = append(connections, ConnectionSummary{
+			Name: name, Provider: owner, Description: connection.Description,
+			Permissions: strings.Join(effects, " "), Tools: tools,
+		})
+	}
+	sort.Slice(connections, func(i, j int) bool {
+		if connections[i].Provider != connections[j].Provider {
+			return connections[i].Provider < connections[j].Provider
+		}
+		return connections[i].Name < connections[j].Name
+	})
+	return ConnectionsResponse{Connections: connections}
+}
+
+// ToolSummary is the index entry of one tool: the ID an invoke request carries, what the tool does,
+// whether it reads or changes the remote system, and the connections that offer it. That is what choosing
+// between the tools of one namespace needs; schemas, tags, examples and descriptions of the routes are one
+// describe away.
+//
+// Connections holds the offering connection names separated by single spaces, so the index stays one
+// table row per tool. Reason is present exactly in a listing of all tools: empty for an offered tool, and
+// otherwise the refusal that says why no connection offers it.
 type ToolSummary struct {
-	ID     string            `json:"id"`
-	Title  string            `json:"title"`
-	Effect capability.Effect `json:"effect"`
+	ID          string            `json:"id"`
+	Title       string            `json:"title"`
+	Effect      capability.Effect `json:"effect"`
+	Connections string            `json:"connections"`
+	Reason      *config.Refusal   `json:"reason,omitempty"`
 }
 
 // ToolsResponse is the payload inside the CLI envelope.
@@ -227,7 +309,15 @@ func (c *Core) Tools(request SearchRequest) (ToolsResponse, error) {
 		if title == "" {
 			title = descriptor.Description
 		}
-		tools = append(tools, ToolSummary{ID: descriptor.ID, Title: title, Effect: descriptor.Risk.Effect})
+		summary := ToolSummary{
+			ID: descriptor.ID, Title: title, Effect: descriptor.Risk.Effect,
+			Connections: strings.Join(c.connectionNamesFor(descriptor), " "),
+		}
+		if request.All {
+			reason := c.refusal(request, descriptor)
+			summary.Reason = &reason
+		}
+		tools = append(tools, summary)
 	}
 	return ToolsResponse{Tools: tools}, nil
 }
@@ -262,7 +352,7 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 		if selectedProvider != "" && descriptor.Provider != selectedProvider {
 			continue
 		}
-		if request.Connection != "" && !c.connectionAllows(request.Connection, descriptor) {
+		if !request.All && c.refusal(request, descriptor) != "" {
 			continue
 		}
 		if request.Effect != "" && descriptor.Risk.Effect != request.Effect {
@@ -323,9 +413,9 @@ func (c *Core) Describe(request DescribeRequest) (DescribeResponse, error) {
 		if err != nil {
 			return DescribeResponse{}, err
 		}
-		if resolved.Provider != descriptor.Provider || !c.connectionAllows(request.Connection, descriptor) {
+		if reason := c.connectionRefusal(resolved, descriptor); reason != "" {
 			return DescribeResponse{}, &capability.UnsupportedError{
-				Connection: request.Connection, Capability: request.Operation,
+				Connection: request.Connection, Capability: request.Operation, Reason: reason,
 			}
 		}
 		connections = []ConnectionRef{c.connectionRef(request.Connection)}
@@ -473,8 +563,8 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 		if err != nil {
 			return nil, err
 		}
-		if resolved.Provider != descriptor.Provider || !c.connectionAllows(explicit, descriptor) {
-			return nil, &capability.UnsupportedError{Connection: explicit, Capability: descriptor.ID}
+		if reason := c.connectionRefusal(resolved, descriptor); reason != "" {
+			return nil, &capability.UnsupportedError{Connection: explicit, Capability: descriptor.ID, Reason: reason}
 		}
 		return resolved, nil
 	}
@@ -504,8 +594,8 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 		if err != nil {
 			return nil, err
 		}
-		if resolved.Provider != descriptor.Provider || !c.connectionAllows(name, descriptor) {
-			return nil, &capability.UnsupportedError{Connection: name, Capability: descriptor.ID}
+		if reason := c.connectionRefusal(resolved, descriptor); reason != "" {
+			return nil, &capability.UnsupportedError{Connection: name, Capability: descriptor.ID, Reason: reason}
 		}
 		return resolved, nil
 	}
@@ -575,6 +665,49 @@ func (c *Core) connectionNamesWithAnyOperation(providerID string) []string {
 
 func (c *Core) connectionAllows(name string, descriptor capability.Descriptor) bool {
 	return c.config.ConnectionAllows(name, descriptor.Tool())
+}
+
+// connectionRefusal is the refusal of one resolved connection: another provider's connection never offers
+// the tool, and a connection of its provider answers by the configuration rule.
+func (c *Core) connectionRefusal(resolved *config.Resolved, descriptor capability.Descriptor) config.Refusal {
+	if resolved.Provider != descriptor.Provider {
+		return config.RefusalOtherProvider
+	}
+	return c.config.ConnectionRefusal(resolved.Name, descriptor.Tool())
+}
+
+// refusal says why the catalog of request does not offer a tool, or nothing when it does. With a
+// connection it is that connection's refusal. Otherwise a tool is offered when any connection of its
+// provider offers it; when none does, the refusal of the connection that comes closest wins, in the order
+// not-in-tools-list, requires-tool-allow-list, effect-not-permitted, and a provider without any connection
+// is refused as no-connection. The choice is deterministic and names the smallest change that would offer
+// the tool.
+func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) config.Refusal {
+	if request.Connection != "" {
+		resolved, err := c.connection(request.Connection)
+		if err != nil {
+			return config.RefusalNoConnection
+		}
+		return c.connectionRefusal(resolved, descriptor)
+	}
+	names := c.connectionNames(descriptor.Provider)
+	if len(names) == 0 {
+		return config.RefusalNoConnection
+	}
+	closest := config.RefusalEffect
+	for _, name := range names {
+		switch c.config.ConnectionRefusal(name, descriptor.Tool()) {
+		case "":
+			return ""
+		case config.RefusalToolsList:
+			closest = config.RefusalToolsList
+		case config.RefusalToolAllowList:
+			if closest != config.RefusalToolsList {
+				closest = config.RefusalToolAllowList
+			}
+		}
+	}
+	return closest
 }
 
 func (c *Core) connectionRef(name string) ConnectionRef {

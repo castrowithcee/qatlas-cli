@@ -64,7 +64,8 @@ func (f *fakeGitHub) mutation(w http.ResponseWriter, document string, variables 
 func (f *fakeGitHub) issueLookup(w http.ResponseWriter, variables map[string]any) {
 	if variables["issue"] == float64(7) {
 		fmt.Fprintf(w, `{"data":{"owner":{"projectV2":%s},"repository":{"issue":null}},`+
-			`"errors":[{"type":"NOT_FOUND","message":"Could not resolve to an Issue"}]}`, f.projectJSON())
+			`"errors":[{"type":"NOT_FOUND","path":["repository","issue"],"message":"Could not resolve to an Issue"}]}`,
+			f.projectJSON())
 		return
 	}
 	fmt.Fprintf(w, `{"data":{"owner":{"projectV2":%s},"repository":{"issue":{"id":"I_%v_%v"}}}}`,
@@ -74,7 +75,8 @@ func (f *fakeGitHub) issueLookup(w http.ResponseWriter, variables map[string]any
 // commentsPage answers the comments of issue 42 in pages; every other number is no issue.
 func (f *fakeGitHub) commentsPage(w http.ResponseWriter, variables map[string]any) {
 	if variables["number"] != float64(42) {
-		fmt.Fprint(w, `{"data":{"repository":{"issue":null}},"errors":[{"type":"NOT_FOUND","message":"no issue"}]}`)
+		fmt.Fprint(w, `{"data":{"repository":{"issue":null}},"errors":[{"type":"NOT_FOUND",`+
+			`"path":["repository","issue"],"message":"no issue"}]}`)
 		return
 	}
 	start := 0
@@ -404,8 +406,9 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 	if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 43, Cursor: options.Cursor}); !isInvalidRequest(err) {
 		t.Errorf("a cursor of another issue = %v, want an invalid request", err)
 	}
-	if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 5}); classOf(err) != provider.ClassProviderError {
-		t.Errorf("comments of no issue = %v, want a provider error", err)
+	if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 5}); classOf(err) != provider.ClassNotFound ||
+		!strings.Contains(err.Error(), "GitHub does not hold issue #5 in repository octo-org/example") {
+		t.Errorf("comments of no issue = %v, want not-found naming the issue", err)
 	}
 
 	before := len(f.recorded())
@@ -528,7 +531,8 @@ func TestFieldChangesAreCheckedBeforeTheFirstChange(t *testing.T) {
 		},
 		"archive": func() error { _, err := c.ArchiveItem(context.Background(), "PVTI_foreign"); return err },
 	} {
-		if err := try(); err == nil || !strings.Contains(err.Error(), "no such item") {
+		if err := try(); classOf(err) != provider.ClassNotFound ||
+			!strings.Contains(err.Error(), "this item in project orgs/octo-org/projects/7") {
 			t.Errorf("%s of a foreign item = %v, want a refusal", name, err)
 		}
 	}
@@ -616,8 +620,9 @@ func TestAddIssueSeparatesTheAddFromTheFieldChanges(t *testing.T) {
 	if len(f.recorded()) != before {
 		t.Error("an issue of another repository reached GitHub")
 	}
-	if _, err := c.AddIssue(context.Background(), "octo-org/example", 7, nil); classOf(err) != provider.ClassProviderError {
-		t.Errorf("a pull request = %v, want a provider error", err)
+	if _, err := c.AddIssue(context.Background(), "octo-org/example", 7, nil); classOf(err) != provider.ClassNotFound ||
+		!strings.Contains(err.Error(), "issue #7 in repository octo-org/example") {
+		t.Errorf("a pull request = %v, want not-found naming the issue", err)
 	}
 	if _, mutations, _ := split(f.recorded()[before:]); len(mutations) != 0 {
 		t.Error("a refused add sent a change")

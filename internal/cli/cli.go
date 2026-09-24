@@ -79,6 +79,18 @@ func (e *UsageError) Error() string { return e.Err.Error() }
 
 func (e *UsageError) Unwrap() error { return e.Err }
 
+// syntaxError is a usage error in the shape of the command line itself: an unknown command or flag, a flag
+// that does not parse, or the wrong number of positional arguments. Only such an error is followed by the
+// usage block; a request that is well formed but refused names its problem and its next step instead.
+type syntaxError struct{ usage *UsageError }
+
+func (e *syntaxError) Error() string { return e.usage.Error() }
+
+func (e *syntaxError) Unwrap() error { return e.usage }
+
+// newSyntaxError marks err as a syntax error, which keeps exit code 2 and adds the usage block.
+func newSyntaxError(err error) error { return &syntaxError{&UsageError{err}} }
+
 // Run executes the root command against the given streams and returns the process exit code. It never
 // terminates the process, so callers and tests share the same path.
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -106,7 +118,8 @@ func run(cmd *cobra.Command, opts *Options, args []string, stdout, stderr io.Wri
 		_ = json.NewEncoder(stderr).Encode(detail)
 	}
 	code := exitCode(err)
-	if code == exitUsage {
+	var syntax *syntaxError
+	if errors.As(err, &syntax) {
 		fmt.Fprint(stderr, executed.UsageString())
 	}
 	writeAudit(stderr, auditFrom(err), opts.Redactor)
@@ -134,17 +147,22 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Use:   "qatlas",
 		Short: "Command-line client for self-hosted knowledge and service backends",
 		Long: "Qatlas CLI is a single command-line entry point to the knowledge and service backends you\n" +
-			"already run. It gives people and automated agents the same predictable interface.\n\n" +
-			"Agents use one tool taxonomy: 'qatlas tools' lists the catalog, 'qatlas tool <id>' describes\n" +
-			"exactly one contract, and 'qatlas invoke <id>' runs it. Discovery writes " + toonContract + ";\n" +
-			"--output json is the interoperable alternative. 'qatlas tui' configures the same setup for\n" +
-			"people, and 'qatlas mcp' serves the fixed broker tools over stdio.",
+			"already run. People configure named connections; agents discover and invoke tools through them.\n\n" +
+			"Start here:\n" +
+			"  qatlas agents   an agent: how to discover, describe, and invoke tools\n" +
+			"  qatlas tui      a person: set up connections and what each one may do\n\n" +
+			"An agent discovers in small steps: 'qatlas connections [provider]' lists the configured routes\n" +
+			"and what each one may do, 'qatlas tools <namespace>' the tools they offer, 'qatlas describe\n" +
+			"<tool-id>' one complete contract, and 'qatlas invoke <tool-id>' runs it. Discovery writes\n" +
+			toonContract + ";\n" +
+			"--output json is the interoperable alternative. 'qatlas mcp' serves the same steps as fixed\n" +
+			"broker tools over stdio.",
 		Version:       version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
-				return &UsageError{fmt.Errorf("unknown command %q", args[0])}
+				return newSyntaxError(fmt.Errorf("unknown command %q", args[0]))
 			}
 			return nil
 		},
@@ -155,21 +173,23 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 
 	// Help and version follow Cobra conventions and go to stdout. Version output stays deterministic.
 	cmd.SetVersionTemplate("{{.Name}} {{.Version}}\n")
-	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &UsageError{err} })
+	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return newSyntaxError(err) })
 
 	f := cmd.PersistentFlags()
 	f.StringVar(&opts.Config, "config", "", "path to the configuration file")
 	f.StringVar(&opts.Connection, "connection", "", "name of the connection to use")
 	f.BoolVar(&opts.Agent, "agent", false, "agent mode: machine-readable output without prose or color")
 	f.StringVar(&opts.Output, "output", string(output.FormatTable),
-		"output format: table, json, compact, or toon; tools and tool default to toon")
+		"output format: table, json, compact, or toon; discovery commands default to toon")
 
 	cmd.AddCommand(
 		newConfigCommand(opts, reg),
 		newCredentialCommand(opts, reg),
 		newProvidersCommand(opts, reg),
+		newConnectionsCommand(opts, reg),
 		newToolsCommand(opts, reg),
-		newToolCommand(opts, reg),
+		newDescribeCommand(opts, reg, "describe", false),
+		newDescribeCommand(opts, reg, "tool", true),
 		newInvokeCommand(opts, reg),
 		newMCPCommand(opts, reg),
 		newTUICommand(opts, reg, version),
@@ -202,7 +222,7 @@ func resolveFormat(c *cobra.Command, opts *Options) error {
 	if c.Flags().Changed("output") {
 		format, err := output.ParseFormat(opts.Output)
 		if err != nil {
-			return &UsageError{err}
+			return newSyntaxError(err)
 		}
 		opts.Format = format
 		return nil

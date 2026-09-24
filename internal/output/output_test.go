@@ -307,7 +307,8 @@ func TestAllCodesAreStable(t *testing.T) {
 		CodeUsage, CodeInvalidRequest, CodeConfigMissing, CodeConfigInvalid, CodeConnectionSelection,
 		CodeUnknownConnection, CodeConnectionAmbiguous, CodeUnknownOperation, CodeUnsupportedCapability,
 		CodeMissingSecret, CodeConfirmationRequired, CodePolicyDenied, CodeUnreachable, CodeTLS, CodeAuth,
-		CodePermission, CodeTimeout, CodeRateLimited, CodeInvalidProviderResult, CodeProviderError, CodeRuntime,
+		CodePermission, CodeNotFound, CodeTimeout, CodeRateLimited, CodeInvalidProviderResult, CodeProviderError,
+		CodeRuntime,
 	}
 	if got := AllCodes(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("AllCodes() = %v, want %v", got, want)

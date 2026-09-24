@@ -283,7 +283,8 @@ Errors keep stable classes and never carry the token, a provider body, or a URL 
 | `auth` | Todoist rejected the token |
 | `permission` | the account's plan does not include the feature (reminders, filters, more labels, or older completed tasks), or the token may not read or change the resource; the message tells them apart |
 | `rate-limited` | Todoist asked to wait; the next request of the same token waits as asked, at most one minute |
-| `provider-error` | Todoist does not hold the resource, rejected the request, no longer accepts the cursor, or answered a change with a server error |
+| `not-found` | Todoist does not hold the resource or does not show it to this token, or it was deleted |
+| `provider-error` | Todoist rejected the request, no longer accepts the cursor, or answered a change with a server error |
 | `invalid-provider-response` | the answer was unreadable, too large, or lacked identifiers |
 
 A resource outside the connection's projects is an invalid request, never a provider error, so a scope

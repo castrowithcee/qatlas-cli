@@ -143,7 +143,7 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 		!reflect.DeepEqual(described.Connections, wantConnections) {
 		t.Fatalf("describe = %+v, structured = %+v", describe, described)
 	}
-	describedByCLI := runFakeCLIJSON(t, "", "tool", "bookstack.pages.get", "--config", path, "--output", "json")
+	describedByCLI := runFakeCLIJSON(t, "", "describe", "bookstack.pages.get", "--config", path, "--output", "json")
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
 
@@ -397,7 +397,7 @@ func TestMCPAndJSONCLIErrorCodeParity(t *testing.T) {
 	}
 	mcpCode, _, _ := strings.Cut(mcpResult.Content[0].Text, ":")
 
-	code, stdout, stderr := runFakeCLI(t, "tool", "absent.operation.get", "--config", path)
+	code, stdout, stderr := runFakeCLI(t, "describe", "absent.operation.get", "--config", path)
 	if code != exitUsage || stdout != "" {
 		t.Fatalf("JSON CLI exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
@@ -441,6 +441,37 @@ func TestMCPToolErrorsAreSafeAndProtocolErrorsStaySeparate(t *testing.T) {
 	}
 	if strings.Contains(encodeResponses(t, responses)+stderr, canary) {
 		t.Fatal("MCP output leaked the registered secret canary")
+	}
+}
+
+// A resource the provider does not hold or does not show to the credential is the runtime failure not-found,
+// with the same code and message over the CLI, exit code 1, and MCP.
+func TestNotFoundIsTheSameRuntimeFailureInCLIAndMCP(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	const message = "GitHub does not hold repository octo-org/absent or does not show it to this token"
+	registry, path := mcpTestRegistry(t, func(context.Context, *config.Resolved, *secret.Resolver,
+		*redact.Redactor, json.RawMessage) (any, error) {
+		return nil, &provider.Error{Class: provider.ClassNotFound, Op: "get page", Message: message}
+	})
+
+	var stdout, stderr bytes.Buffer
+	opts := &Options{Redactor: &redact.Redactor{}}
+	code := run(newRootCommand(opts, registry), opts,
+		[]string{"invoke", "fake.pages.get", "--connection", "primary", "--config", path}, &stdout, &stderr)
+	want := "not-found: get page: " + message
+	if code != exitRuntime || stdout.Len() != 0 || strings.TrimSpace(stderr.String()) != "qatlas: "+want {
+		t.Fatalf("CLI exit=%d stdout=%q stderr=%q, want exit %d and %q", code, stdout.String(), stderr.String(),
+			exitRuntime, want)
+	}
+
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke",` +
+		`"arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
+	responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
+	result := toolResultFrom(t, responses["1"])
+	if !result.IsError || result.Content[0].Text != want {
+		t.Fatalf("MCP result = %+v, want the error %q", result, want)
 	}
 }
 

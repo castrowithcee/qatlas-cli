@@ -5,10 +5,11 @@ import (
 	"strings"
 )
 
-// InvalidRequestError reports malformed JSON or arguments that do not satisfy the input schema.
+// InvalidRequestError reports malformed JSON or arguments that do not satisfy the input schema. The message
+// carries no prefix of its own: every diagnostic already leads with the invalid-request code.
 type InvalidRequestError struct{ Message string }
 
-func (e *InvalidRequestError) Error() string { return "invalid request: " + e.Message }
+func (e *InvalidRequestError) Error() string { return e.Message }
 
 // UnknownOperationError reports an operation ID or requested version absent from the registry.
 type UnknownOperationError struct {

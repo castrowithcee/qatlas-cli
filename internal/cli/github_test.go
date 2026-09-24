@@ -57,12 +57,53 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	path := githubConfig(t)
 	var reads atomic.Int32
 
+	// By default the namespace lists only what a connection offers, each tool with its connections.
 	code, stdout, stderr := runTwentyCLI(t, &reads, "", "tools", "github", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[37]{effect,id,title}:", "read,github.issues.get,", "read,github.issues.list,",
+		"tools[15]{connections,effect,id,title}:\n", "  code,read,github.issues.get,",
+		"  code planning roadmap,read,github.projectitems.list,", "  roadmap,update,github.projectitems.update,",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
+		}
+	}
+	for _, absent := range []string{"github.issues.create", "github.workflowfiles", "github.workflows.dispatch"} {
+		if strings.Contains(stdout, absent) {
+			t.Errorf("tools output offers %s, which no connection offers:\n%s", absent, stdout)
+		}
+	}
+
+	// --all lists the others as well and says why nobody offers them. Where connections disagree, the one
+	// closest to offering the tool gives the reason.
+	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--config", path)
+	if code != exitOK || stderr != "" {
+		t.Fatalf("exit=%d stderr=%q", code, stderr)
+	}
+	for _, want := range []string{
+		`  code,read,github.issues.get,"",Get`, `  "",create,github.issues.create,not-in-tools-list,`,
+		`  "",execute,github.workflows.dispatch,effect-not-permitted,`,
+		`  "",read,github.workflowfiles.get,not-in-tools-list,`,
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("tools --all output does not contain %q:\n%s", want, stdout)
+		}
+	}
+	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--connection", "code",
+		"--config", path)
+	if code != exitOK || stderr != "" ||
+		!strings.Contains(stdout, `  "",read,github.workflowfiles.get,requires-tool-allow-list,`) ||
+		!strings.Contains(stdout, `  "",create,github.issues.create,effect-not-permitted,`) {
+		t.Errorf("tools --all --connection code: exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
+	}
+	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--config", path)
+	if code != exitOK || stderr != "" {
+		t.Fatalf("exit=%d stderr=%q", code, stderr)
+	}
+	for _, want := range []string{
+		"tools[37]{connections,effect,id,reason,title}:", "read,github.issues.get,", "read,github.issues.list,",
 		"read,github.projectitems.get,", "read,github.projectitems.list,", "read,github.comments.list,",
 		"create,github.issues.create,", "update,github.issues.update,", "update,github.issues.close,",
 		"update,github.issues.reopen,", "create,github.comments.create,", "update,github.projectitems.update,",
@@ -86,7 +127,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
 	}
 
-	document := runTwentyJSON(t, "", "tool", "github.projectitems.list", "--config", path)
+	document := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--config", path)
 	var described struct {
 		Tool struct {
 			InputSchema json.RawMessage `json:"input_schema"`
@@ -106,11 +147,11 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	if len(described.Connections) != 3 {
 		t.Errorf("connections = %+v, want every connection that allows it", described.Connections)
 	}
-	issues := runTwentyJSON(t, "", "tool", "github.issues.list", "--config", path)
+	issues := runTwentyJSON(t, "", "describe", "github.issues.list", "--config", path)
 	if !strings.Contains(string(issues), `"name":"code"`) || strings.Contains(string(issues), `"name":"planning"`) {
 		t.Errorf("issue tool connections = %s, want only the repository connection", issues)
 	}
-	planned := runTwentyJSON(t, "", "tool", "github.projectissues.create", "--config", path)
+	planned := runTwentyJSON(t, "", "describe", "github.projectissues.create", "--config", path)
 	if !strings.Contains(string(planned), `"name":"roadmap"`) || strings.Contains(string(planned), `"name":"code"`) ||
 		!strings.Contains(string(planned), `"confirmation":"required"`) ||
 		!strings.Contains(string(planned), `"idempotency":"non_idempotent"`) {
@@ -119,7 +160,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	// A tool that requires an allow-list has no route on a connection that does not list it, whatever the
 	// connection's permissions.
 	for _, id := range []string{"github.workflowfiles.get", "github.workflowfiles.update", "github.actionspermissions.update"} {
-		guarded := runTwentyJSON(t, "", "tool", id, "--config", path)
+		guarded := runTwentyJSON(t, "", "describe", id, "--config", path)
 		if !strings.Contains(string(guarded), `"connections":[]`) ||
 			!strings.Contains(string(guarded), `"requires_tool_allow_list":true`) {
 			t.Errorf("%s = %s, want no connection and the allow-list mark", id, guarded)
@@ -211,11 +252,11 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, toolResultFrom(t, responses[`"search"`]).Structured, &searched)
-	if len(searched.Operations) != 37 || searched.Operations[0].ID != "github.actionspermissions.get" ||
-		searched.Operations[36].ID != "github.workflows.list" {
+	if len(searched.Operations) != 15 || searched.Operations[0].ID != "github.comments.list" ||
+		searched.Operations[14].ID != "github.workflows.list" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
-	describedByCLI := runTwentyJSON(t, "", "tool", "github.projectitems.list", "--config", path, "--output", "json")
+	describedByCLI := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--config", path, "--output", "json")
 	describe := toolResultFrom(t, responses[`"describe"`])
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")

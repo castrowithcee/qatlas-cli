@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -202,6 +203,24 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 				t.Errorf("%s does not describe %s as an optional target", descriptor.ID, name)
 			}
 		}
+		// Every result names the target the tool acted on, under the name of its argument.
+		var output struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+			Required   []string                   `json:"required"`
+		}
+		if err := json.Unmarshal(descriptor.OutputSchema, &output); err != nil {
+			t.Fatalf("%s output schema = %v", descriptor.ID, err)
+		}
+		fields := map[string]bool{}
+		for _, field := range descriptor.Fields {
+			fields[field.Name] = true
+		}
+		for _, name := range names {
+			if string(output.Properties[name]) != `{"type":"string"}` || !slices.Contains(output.Required, name) ||
+				!fields[name] {
+				t.Errorf("%s: the result does not name its %s: %s", descriptor.ID, name, descriptor.OutputSchema)
+			}
+		}
 	}
 
 	reg := registry(t)
@@ -256,5 +275,107 @@ func TestTestConnectionWithoutAnExactTargetReadsTheUser(t *testing.T) {
 		if err != nil || class != provider.ClassOK || len(requests) != 1 || requests[0].path != "/api/v3/user" {
 			t.Errorf("targets %v: test = %q, %v with %+v", targets, class, err, requests)
 		}
+	}
+}
+
+// A result names the repository or project the tool acted on, whether the argument chose it or a default
+// did, and a target GitHub does not hold or does not show to the token is not-found naming that target.
+func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
+	f := &fakeGitHub{items: roster()}
+	base := serve(t, f)
+	host := strings.Split(strings.TrimPrefix(base, "https://"), ":")[0]
+	red := &redact.Redactor{}
+	core := application.New(registry(t), targetsConfig(base), resolver(red, nil), red)
+	named := func(result json.RawMessage, name string) string {
+		var fields map[string]any
+		_ = json.Unmarshal(result, &fields)
+		value, _ := fields[name].(string)
+		return value
+	}
+
+	result, err := invoke(t, core, "github.issues.get", "single", `{"number":42}`, false)
+	if err != nil || named(result, "repository") != "octo-org/example" {
+		t.Errorf("the only repository = %s, %v; want it named in the result", result, err)
+	}
+	result, err = invoke(t, core, "github.projectitems.list", "single", `{}`, false)
+	if err != nil || named(result, "project") != projectTarget || named(result, "repository") != "" {
+		t.Errorf("the only project = %s, %v; want it named in the result", result, err)
+	}
+	result, err = invoke(t, core, "github.projectitems.add", "mixed", `{"repository":"octo-org/example","number":42}`, true)
+	if err != nil || named(result, "project") != projectTarget || named(result, "repository") != "octo-org/example" {
+		t.Errorf("an added issue = %s, %v; want both targets named in the result", result, err)
+	}
+	remotes(t, map[string][]string{"origin": {"git@" + host + ":octo-org/example.git"}})
+	result, err = invoke(t, core, "github.issues.get", "open", `{"number":42}`, false)
+	if err != nil || named(result, "repository") != "octo-org/example" {
+		t.Errorf("the remote = %s, %v; want it named in the result", result, err)
+	}
+
+	const repositoryHint = "; check the name, and that the token can see it (classic: scope repo for a private " +
+		"repository; fine-grained: access to this repository)"
+	remotes(t, map[string][]string{"origin": {"https://" + host + "/octo-org/absent.git"}})
+	for _, tt := range []struct{ operation, arguments, want string }{
+		{"github.issues.list", `{}`, "list issues: GitHub does not hold repository octo-org/absent or does not " +
+			"show it to this token" + repositoryHint},
+		{"github.issues.get", `{"number":42}`, "get issue: GitHub does not hold issue #42 in repository " +
+			"octo-org/absent or does not show it to this token; check the arguments, and that the token can see " +
+			"the repository"},
+		{"github.workflows.list", `{}`, "GitHub does not hold this resource in repository octo-org/absent"},
+	} {
+		if _, err := invoke(t, core, tt.operation, "open", tt.arguments, false); classOf(err) != provider.ClassNotFound ||
+			!strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s of the remote's absent repository = %v (class %q), want not-found with %q", tt.operation,
+				err, classOf(err), tt.want)
+		}
+	}
+
+	// A project GitHub leaves out, with or without a NOT_FOUND error, is not-found naming the project; an
+	// explicit refusal of the token stays permission and names it as well.
+	for _, tt := range []struct {
+		name, answer string
+		class        provider.Class
+		want         string
+	}{
+		{"not found", `{"data":{"owner":{"projectV2":null}},"errors":[{"type":"NOT_FOUND",` +
+			`"path":["owner","projectV2"],"message":"Could not resolve to a ProjectV2 with the number 3."}]}`,
+			provider.ClassNotFound, "list project items: GitHub does not hold project users/octocat/projects/3 " +
+				"or does not show it to this token; check the name, and that the token can see it (classic: " +
+				"scope read:project; fine-grained: Projects access of its organization, as a user-owned project " +
+				"needs a classic token)"},
+		{"left out", `{"data":{"owner":{"projectV2":null}}}`, provider.ClassNotFound,
+			"GitHub does not hold project users/octocat/projects/3 or does not show it to this token"},
+		{"refused", `{"data":{"owner":{"projectV2":null}},"errors":[{"type":"FORBIDDEN",` +
+			`"path":["owner","projectV2"],"message":"Resource not accessible by personal access token"}]}`,
+			provider.ClassPermission, "this GitHub token may not read project users/octocat/projects/3; " +
+				"check its scopes or permissions"},
+	} {
+		answer := tt.answer
+		f.failure = func(w http.ResponseWriter, r *http.Request) bool {
+			if r.URL.Path != "/api/graphql" {
+				return false
+			}
+			_, _ = w.Write([]byte(answer))
+			return true
+		}
+		_, err := invoke(t, core, "github.projectitems.list", "open", `{"project":"users/octocat/projects/3"}`, false)
+		if classOf(err) != tt.class || !strings.Contains(err.Error(), tt.want) {
+			t.Errorf("%s = %v (class %q), want %q with %q", tt.name, err, classOf(err), tt.class, tt.want)
+		}
+	}
+	f.failure = nil
+
+	// A REST 404 of the repository itself names it without a resource inside.
+	c, err := open(resolvedConnection("gh", base, "repos/octo-org/absent"), resolver(red, nil), red, freeLimiter())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = c.rest(context.Background(), "test connection", "/repos/octo-org/absent", &struct{}{})
+	if want := "test connection: GitHub does not hold repository octo-org/absent or does not show it to this " +
+		"token" + repositoryHint; classOf(err) != provider.ClassNotFound || err.Error() != want {
+		t.Errorf("a repository GitHub does not show = %v, want %q", err, want)
+	}
+	if class, err := TestConnection(context.Background(), resolvedConnection("gh", base, "repos/octo-org/absent"),
+		resolver(red, nil), red); err != nil || class != provider.ClassNotFound {
+		t.Errorf("test of an absent repository = %q, %v; want not-found", class, err)
 	}
 }

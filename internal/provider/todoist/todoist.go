@@ -616,7 +616,7 @@ func (c *Client) statusError(op string, response *http.Response, change bool) *p
 		}
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: message}
 	case status == http.StatusNotFound:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: notFoundMessage}
+		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: notFoundMessage}
 	case status >= 400 && status < 500 && planLimited(detail):
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: planMessage}
 	case status == http.StatusForbidden && change:
@@ -650,7 +650,7 @@ func commandError(op string, detail errorJSON) *provider.Error {
 	case detail.HTTPCode == http.StatusForbidden:
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: changeDenied}
 	case detail.HTTPCode == http.StatusNotFound:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: notFoundMessage}
+		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: notFoundMessage}
 	case detail.HTTPCode == http.StatusTooManyRequests:
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Todoist rate-limited the operation"}
 	}

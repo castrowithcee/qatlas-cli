@@ -213,8 +213,8 @@ defaults:
 	t.Run("the configuration validates", func(t *testing.T) {
 		code, stdout, stderr := c.run(t, "config", "validate")
 
-		if code != 0 || stdout != "" || stderr != "" {
-			t.Errorf("exit %d, stdout %q, stderr %q; want a silent success", code, stdout, stderr)
+		if code != 0 || !strings.HasPrefix(stdout, "configuration is valid: ") || stderr != "" {
+			t.Errorf("exit %d, stdout %q, stderr %q; want the success line", code, stdout, stderr)
 		}
 	})
 
@@ -244,21 +244,33 @@ defaults:
 			}
 		}
 
-		// The second step lists the tools of one namespace with what each one is and does.
+		// The configured routes are the next step: names, descriptions and what each one may do, never
+		// where a route leads.
+		code, stdout, stderr = c.run(t, "connections", "bookstack")
+		if code != 0 || stderr != "" {
+			t.Fatalf("exit %d, stderr %q", code, stderr)
+		}
+		if !strings.HasPrefix(stdout, "connections[2]{description,name,permissions,provider,tools}:\n") ||
+			!strings.Contains(stdout, ",primary,") || !strings.Contains(stdout, ",archive,") ||
+			strings.Contains(stdout, "http") {
+			t.Errorf("stdout = %q, want the two BookStack connections without their endpoints", stdout)
+		}
+
+		// The tools of one namespace follow, with what each one is and does and which routes offer it.
 		code, stdout, stderr = c.run(t, "tools", "bookstack")
 		if code != 0 {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		if !strings.HasPrefix(stdout, "tools[5]{effect,id,title}:\n") {
-			t.Errorf("stdout = %q, want a TOON listing of the BookStack tools", stdout)
+		if !strings.HasPrefix(stdout, "tools[2]{connections,effect,id,title}:\n") {
+			t.Errorf("stdout = %q, want a TOON listing of the offered BookStack tools", stdout)
 		}
-		for _, want := range []string{"read,bookstack.pages.get,", "read,bookstack.pages.list,"} {
+		for _, want := range []string{"archive primary,read,bookstack.pages.get,", "archive primary,read,bookstack.pages.list,"} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout = %q, want it to contain %q", stdout, want)
 			}
 		}
 		// What a tool needs, risks and can route through is one tool document away.
-		for _, absent := range []string{"description", "tags", "archive", "primary", "schema"} {
+		for _, absent := range []string{"description", "tags", "schema"} {
 			if strings.Contains(stdout, absent) {
 				t.Errorf("stdout = %q, want the namespace listing without %q", stdout, absent)
 			}
@@ -273,7 +285,7 @@ defaults:
 	})
 
 	t.Run("a tool describes itself", func(t *testing.T) {
-		code, stdout, _ := c.run(t, "tool", "bookstack.pages.list", "--output", "json")
+		code, stdout, _ := c.run(t, "describe", "bookstack.pages.list", "--output", "json")
 
 		if code != 0 {
 			t.Fatalf("exit %d", code)
@@ -379,8 +391,8 @@ defaults:
 	})
 
 	t.Run("both discovery formats carry the same catalog", func(t *testing.T) {
-		_, toon, _ := c.run(t, "tool", "bookstack.pages.list")
-		_, jsonOut, _ := c.run(t, "tool", "bookstack.pages.list", "--output", "json")
+		_, toon, _ := c.run(t, "describe", "bookstack.pages.list")
+		_, jsonOut, _ := c.run(t, "describe", "bookstack.pages.list", "--output", "json")
 
 		var contract map[string]any
 		if err := json.Unmarshal([]byte(jsonOut), &contract); err != nil {
@@ -417,11 +429,11 @@ defaults:
 		}{
 			{"unknown flag", []string{"--nope"}, "", 2, "usage", "qatlas [flags]"},
 			{"unknown command", []string{"frobnicate"}, "", 2, "usage", "qatlas [flags]"},
-			{"unknown connection", []string{"invoke", "bookstack.pages.list", "--connection", "absent"}, "", 2, "unknown-connection", "qatlas invoke <tool-id> [flags]"},
-			{"empty configuration file", []string{"tools", "bookstack", "--config", "/dev/null"}, "", 2, "config-invalid", "qatlas tools <namespace> [flags]"},
-			{"unknown tool", []string{"tool", "absent.pages.get"}, "", 2, "unknown-operation", "qatlas tool <tool-id> [flags]"},
-			{"unknown namespace", []string{"tools", "absent"}, "", 2, "usage", "qatlas tools <namespace> [flags]"},
-			{"unknown tool verb", []string{"tool", "show", "bookstack.pages.list"}, "", 2, "usage", "qatlas tool <tool-id> [flags]"},
+			{"unknown connection", []string{"invoke", "bookstack.pages.list", "--connection", "absent"}, "", 2, "unknown-connection", ""},
+			{"empty configuration file", []string{"tools", "bookstack", "--config", "/dev/null"}, "", 2, "config-invalid", ""},
+			{"unknown tool", []string{"describe", "absent.pages.get"}, "", 2, "unknown-operation", ""},
+			{"unknown namespace", []string{"tools", "absent"}, "", 2, "usage", ""},
+			{"unknown tool verb", []string{"describe", "show", "bookstack.pages.list"}, "", 2, "usage", "qatlas describe <tool-id> [flags]"},
 			{"missing page", []string{"invoke", "bookstack.pages.get"}, `{"id":99}`, 1, "provider-error", ""},
 		}
 
@@ -438,8 +450,12 @@ defaults:
 				if !strings.HasPrefix(stderr, "qatlas: "+tt.in+": ") {
 					t.Errorf("stderr = %q, want the %q code", stderr, tt.in)
 				}
+				// Only a malformed command line is followed by the usage block.
 				if tt.usage != "" && !strings.Contains(stderr, "\nUsage:\n  "+tt.usage+"\n") {
 					t.Errorf("stderr = %q, want usage for %q", stderr, tt.usage)
+				}
+				if tt.usage == "" && strings.Contains(stderr, "Usage:") {
+					t.Errorf("stderr = %q, want no usage block", stderr)
 				}
 			})
 		}
@@ -766,7 +782,7 @@ defaults: {}
 
 	t.Run("configuration and several connections validate", func(t *testing.T) {
 		code, stdout, stderr := c.run(t, "config", "validate")
-		if code != 0 || stdout != "" || stderr != "" {
+		if code != 0 || !strings.HasPrefix(stdout, "configuration is valid: ") || stderr != "" {
 			t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 	})
@@ -775,9 +791,9 @@ defaults: {}
 		// The public CLI names the tool taxonomy, the fixed broker tools name the core contract. Both
 		// answer from the same application core, so the payloads they both publish must be identical.
 		cli := map[string]any{
-			"describe": member(t, jsonCLIDocument(t, c, "", "tool", "bookstack.pages.get",
+			"describe": member(t, jsonCLIDocument(t, c, "", "describe", "bookstack.pages.get",
 				"--output", "json"), "tool"),
-			"connections": member(t, jsonCLIDocument(t, c, "", "tool", "bookstack.pages.get",
+			"connections": member(t, jsonCLIDocument(t, c, "", "describe", "bookstack.pages.get",
 				"--output", "json"), "connections"),
 			"invoke": member(t, jsonCLIDocument(t, c, "", "invoke", "bookstack.pages.list",
 				"--connection", "wiki-primary"), "data"),
@@ -821,9 +837,14 @@ defaults: {}
 		for i := range indexed {
 			entry, _ := indexed[i].(map[string]any)
 			hit, _ := operations[i].(map[string]any)
-			if len(entry) != 3 || entry["id"] != hit["id"] || entry["title"] != hit["title"] ||
-				entry["effect"] != hit["effect"] {
-				t.Errorf("index[%d] = %#v, want the id, title and effect of %v", i, entry, hit["id"])
+			routes, _ := hit["connections"].([]any)
+			names := make([]string, len(routes))
+			for j, route := range routes {
+				names[j], _ = route.(string)
+			}
+			if len(entry) != 4 || entry["id"] != hit["id"] || entry["title"] != hit["title"] ||
+				entry["effect"] != hit["effect"] || entry["connections"] != strings.Join(names, " ") {
+				t.Errorf("index[%d] = %#v, want the id, title, effect and connections of %v", i, entry, hit["id"])
 			}
 		}
 		// A search that fits one page says so: nothing follows and there is no continuation.
@@ -1003,7 +1024,7 @@ defaults:
 				{"", []string{"config", "validate"}},
 				{"", []string{"tools"}},
 				{"", []string{"tools", "--output", "json"}},
-				{"", []string{"tool", "bookstack.pages.list"}},
+				{"", []string{"describe", "bookstack.pages.list"}},
 				{"", []string{"invoke", "bookstack.pages.list"}},
 				{"", []string{"invoke", "bookstack.pages.list", "--connection", "primary"}},
 				{`{"id":1}`, []string{"invoke", "bookstack.pages.get"}},
@@ -1108,8 +1129,8 @@ defaults:
 	t.Run("the configuration validates without holding a secret", func(t *testing.T) {
 		code, stdout, stderr := c.run(t, "config", "validate")
 
-		if code != 0 || stdout != "" || stderr != "" {
-			t.Errorf("exit %d, stdout %q, stderr %q; want a silent success", code, stdout, stderr)
+		if code != 0 || !strings.HasPrefix(stdout, "configuration is valid: ") || stderr != "" {
+			t.Errorf("exit %d, stdout %q, stderr %q; want the success line", code, stdout, stderr)
 		}
 	})
 

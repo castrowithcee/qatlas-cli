@@ -109,12 +109,12 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 	path := seatableConfig(t)
 	var reads atomic.Int32
 
-	code, stdout, stderr := runSeatableCLI(t, &reads, "", "tools", "seatable", "--config", path)
+	code, stdout, stderr := runSeatableCLI(t, &reads, "", "tools", "seatable", "--all", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[7]{effect,id,title}:", "read,seatable.columns.list,", "create,seatable.rows.create,",
+		"tools[7]{connections,effect,id,reason,title}:", "read,seatable.columns.list,", "create,seatable.rows.create,",
 		"delete,seatable.rows.delete,", "read,seatable.rows.get,", "read,seatable.rows.list,",
 		"update,seatable.rows.update,", "read,seatable.tables.list,",
 	} {
@@ -122,7 +122,7 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--config", path))); len(got) != 7 {
+	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--all", "--config", path))); len(got) != 7 {
 		t.Errorf("seatable tools = %v, want schema discovery and all five row tools", got)
 	}
 	if reads.Load() != 0 {
@@ -135,7 +135,7 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 func TestSeaTableToolContractKeepsBaseAndCredentialsOutOfTheArguments(t *testing.T) {
 	path := seatableConfig(t)
 
-	code, stdout, stderr := runSeatableCLI(t, nil, "", "tool", "seatable.rows.list", "--config", path)
+	code, stdout, stderr := runSeatableCLI(t, nil, "", "describe", "seatable.rows.list", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
@@ -148,7 +148,7 @@ func TestSeaTableToolContractKeepsBaseAndCredentialsOutOfTheArguments(t *testing
 		}
 	}
 
-	document := runSeatableJSON(t, "", "tool", "seatable.rows.list", "--config", path)
+	document := runSeatableJSON(t, "", "describe", "seatable.rows.list", "--config", path)
 	var described struct {
 		Tool struct {
 			InputSchema json.RawMessage `json:"input_schema"`
@@ -254,7 +254,7 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"seatable"}}}`,
+			`,"name":"qatlas.search","arguments":{"provider":"seatable","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.describe","arguments":{"operation":"seatable.rows.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
@@ -280,7 +280,7 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	}
 
 	describe := toolResultFrom(t, responses[`"describe"`])
-	describedByCLI := runSeatableJSON(t, "", "tool", "seatable.rows.list", "--config", path, "--output", "json")
+	describedByCLI := runSeatableJSON(t, "", "describe", "seatable.rows.list", "--config", path, "--output", "json")
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
 

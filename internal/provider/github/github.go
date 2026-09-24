@@ -396,7 +396,7 @@ func invokeItemsList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.listItems(ctx, options, after)
+	return bound.locate(client.listItems(ctx, options, after))
 }
 
 func invokeItemsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -415,7 +415,7 @@ func invokeItemsGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	return client.GetItem(ctx, arguments.ItemID)
+	return bound.locate(client.GetItem(ctx, arguments.ItemID))
 }
 
 func invokeIssuesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -436,7 +436,7 @@ func invokeIssuesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	return client.listIssues(ctx, options, after)
+	return bound.locate(client.listIssues(ctx, options, after))
 }
 
 func invokeIssuesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -455,7 +455,7 @@ func invokeIssuesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	return client.GetIssue(ctx, arguments.Number)
+	return bound.locate(client.GetIssue(ctx, arguments.Number))
 }
 
 // targetKind tells a project from a repository.
@@ -490,6 +490,39 @@ func (t target) String() string {
 		number = strconv.Itoa(t.number)
 	}
 	return t.scope + "/" + t.owner + "/projects/" + number
+}
+
+// argument is the target in the form its tool argument takes: OWNER/REPO, or users/LOGIN/projects/NUMBER and
+// orgs/LOGIN/projects/NUMBER.
+func (t target) argument() string {
+	if t.kind == kindRepository {
+		return t.owner + "/" + t.repo
+	}
+	return t.String()
+}
+
+// argumentName is the name of the tool argument and of the result field that carry a target of this kind.
+func (t target) argumentName() string {
+	if t.kind == kindProject {
+		return "project"
+	}
+	return "repository"
+}
+
+// locate adds the target a tool acted on to its successful result, under the name of its argument, so a
+// caller that left the argument to a default sees which repository or project the default chose. A value
+// that is not a JSON object stays as it is and fails the output schema, which requires the field.
+func (t target) locate(value any, err error) (any, error) {
+	if err != nil {
+		return value, err
+	}
+	encoded, err := json.Marshal(value)
+	var fields map[string]json.RawMessage
+	if err != nil || json.Unmarshal(encoded, &fields) != nil || fields == nil {
+		return value, nil
+	}
+	fields[t.argumentName()], _ = json.Marshal(t.argument())
+	return fields, nil
 }
 
 // parseTarget reads users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO, or one of
@@ -831,7 +864,7 @@ func (c *Client) graphqlRequest(ctx context.Context, op, document string, variab
 		return err
 	}
 	if len(envelope.Errors) > 0 {
-		return graphQLFailure(op, envelope.Errors, change)
+		return c.graphQLFailure(op, envelope.Errors, variables, change)
 	}
 	if len(envelope.Data) == 0 || string(envelope.Data) == "null" || json.Unmarshal(envelope.Data, out) != nil {
 		return invalidResponse(op, change)
@@ -851,17 +884,23 @@ func (c *Client) post(ctx context.Context, op, document string, variables map[st
 	return envelope, err
 }
 
-func graphQLFailure(op string, errs []graphQLError, change bool) *provider.Error {
+// graphQLFailure classifies the errors of one GraphQL answer. GitHub names an explicit refusal of the token
+// FORBIDDEN, as "Resource not accessible by personal access token" for a fine-grained token on a user-owned
+// project, or INSUFFICIENT_SCOPES for a classic token without the scope a field needs: both stay permission.
+// NOT_FOUND is its answer for a repository, project, issue, or node it does not hold or does not show to this
+// token, the same answer a REST 404 gives, so both are not-found.
+func (c *Client) graphQLFailure(op string, errs []graphQLError, variables map[string]any,
+	change bool) *provider.Error {
 	for _, e := range errs {
 		message := strings.ToLower(e.Message)
 		switch {
 		case e.Type == "RATE_LIMITED" || strings.Contains(message, "rate limit"):
 			return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "GitHub rate-limited the operation"}
 		case e.Type == "FORBIDDEN" || e.Type == "INSUFFICIENT_SCOPES":
-			return &provider.Error{Class: provider.ClassPermission, Op: op, Message: permissionMessage(change)}
+			return &provider.Error{Class: provider.ClassPermission, Op: op,
+				Message: permissionMessage(c.graphQLSubject(e.Path, variables), change)}
 		case e.Type == "NOT_FOUND":
-			return &provider.Error{Class: provider.ClassProviderError, Op: op,
-				Message: "GitHub does not hold this resource or does not show it to this token"}
+			return notFound(op, c.graphQLSubject(e.Path, variables))
 		case strings.Contains(message, "argument 'query'") || strings.Contains(message, "argument \"query\""):
 			return &provider.Error{Class: provider.ClassProviderError, Op: op,
 				Message: "this GitHub server does not support filtered project item queries"}
@@ -873,11 +912,130 @@ func graphQLFailure(op string, errs []graphQLError, change bool) *provider.Error
 	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "GitHub rejected the query"}
 }
 
-func permissionMessage(change bool) string {
+func permissionMessage(s subject, change bool) string {
 	if change {
-		return "this GitHub token may not change this resource; check its scopes or permissions"
+		return "this GitHub token may not change " + s.String() + "; check its scopes or permissions"
 	}
-	return "this GitHub token may not read this resource; check its scopes or permissions"
+	return "this GitHub token may not read " + s.String() + "; check its scopes or permissions"
+}
+
+// subject is what a refusal names: the repository or project a request addressed and, when the request asked
+// for something inside it, that resource. It carries only names Qatlas checked, never text GitHub sent.
+type subject struct {
+	in   target
+	what string
+}
+
+func (s subject) String() string {
+	if s.in.kind == 0 {
+		if s.what != "" {
+			return s.what
+		}
+		return "this resource"
+	}
+	name := s.in.argumentName() + " " + s.in.argument()
+	if s.what == "" {
+		return name
+	}
+	return s.what + " in " + name
+}
+
+// notFound is the refusal of a resource GitHub does not hold or does not show to this token: a REST 404, a
+// GraphQL NOT_FOUND, or an answer without the requested repository, project, issue, or item. GitHub answers
+// a private resource the token cannot see exactly like a missing one, so the message names the addressed
+// target and what to check instead of guessing which of the two it is.
+func notFound(op string, s subject) *provider.Error {
+	message := "GitHub does not hold " + s.String() + " or does not show it to this token"
+	check, it := "the name", "it"
+	if s.what != "" {
+		check, it = "the arguments", "the "+s.in.argumentName()
+	}
+	switch s.in.kind {
+	case kindRepository:
+		message += "; check " + check + ", and that the token can see " + it + " (classic: scope repo for a " +
+			"private repository; fine-grained: access to this repository)"
+	case kindProject:
+		message += "; check " + check + ", and that the token can see " + it + " (classic: scope read:project; " +
+			"fine-grained: Projects access of its organization, as a user-owned project needs a classic token)"
+	}
+	return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: message}
+}
+
+// graphQLSubject names what a GraphQL error refers to by the aliases of its path: owner is the project of the
+// bound target, repository a repository or an issue inside it, item a project item, and anything else a
+// resource inside the bound target. A repository tool binds the repository and asks for an issue as number;
+// a project tool that plans an issue sends its repository as repoOwner and repoName and the issue as issue.
+func (c *Client) graphQLSubject(path []any, variables map[string]any) subject {
+	switch pathSegment(path, 0) {
+	case "owner":
+		return subject{in: c.target}
+	case "item":
+		return subject{in: c.target, what: "this item"}
+	case "repository":
+		s, number := subject{in: c.target}, variables["number"]
+		if c.target.kind != kindRepository {
+			owner, _ := variables["repoOwner"].(string)
+			name, _ := variables["repoName"].(string)
+			if !validLogin(owner) || !validRepoName(name) {
+				return subject{in: c.target, what: "this resource"}
+			}
+			s.in, number = target{kind: kindRepository, owner: owner, repo: name}, variables["issue"]
+		}
+		switch {
+		case pathSegment(path, 1) == "issue":
+			s.what = "this issue"
+			if n, ok := number.(int); ok {
+				s.what = "issue #" + strconv.Itoa(n)
+			}
+		case len(path) > 1:
+			s.what = "this resource"
+		}
+		return s
+	}
+	return subject{in: c.target, what: "this resource"}
+}
+
+func pathSegment(path []any, i int) string {
+	if i >= len(path) {
+		return ""
+	}
+	segment, _ := path[i].(string)
+	return segment
+}
+
+// restSubject names what a REST request addressed. A path below /repos/OWNER/REPO names that repository, which
+// differs from the bound target where a project tool creates the issue it plans; an issue path names the
+// issue. Any other path names a resource of the bound target.
+func (c *Client) restSubject(request *http.Request) subject {
+	fallback := subject{in: c.target, what: "this resource"}
+	if request == nil || request.URL == nil {
+		return fallback
+	}
+	tail, ok := strings.CutPrefix(request.URL.String(), c.endpoints.rest+"/repos/")
+	if !ok {
+		return fallback
+	}
+	tail, _, _ = strings.Cut(tail, "?")
+	parts := strings.SplitN(tail, "/", 3)
+	if len(parts) < 2 {
+		return fallback
+	}
+	owner, errOwner := url.PathUnescape(parts[0])
+	name, errName := url.PathUnescape(parts[1])
+	if errOwner != nil || errName != nil || !validLogin(owner) || !validRepoName(name) {
+		return fallback
+	}
+	s := subject{in: target{kind: kindRepository, owner: owner, repo: name}}
+	if len(parts) == 3 && parts[2] != "" {
+		s.what = "this resource"
+		if rest, ok := strings.CutPrefix(parts[2], "issues/"); ok {
+			digits, _, _ := strings.Cut(rest, "/")
+			if number, err := strconv.Atoi(digits); err == nil && number > 0 {
+				s.what = "issue #" + strconv.Itoa(number)
+			}
+		}
+	}
+	return s
 }
 
 // uncertain is appended to a failure of a change whose request may have reached GitHub: the change may
@@ -1003,7 +1161,6 @@ func (c *Client) statusError(op string, response *http.Response, change bool) er
 
 // Messages of the refusals a tool may rename to say what the refusal means for its own request.
 const (
-	notFoundMessage = "GitHub does not hold this resource or does not show it to this token"
 	conflictMessage = "GitHub refused the request in the current state of the resource"
 	rejectedMessage = "GitHub rejected the request as invalid"
 )
@@ -1028,9 +1185,12 @@ func (c *Client) classifyStatus(op string, response *http.Response, change bool)
 		}
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: message}
 	case status == http.StatusForbidden:
-		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: permissionMessage(change)}
+		return &provider.Error{Class: provider.ClassPermission, Op: op,
+			Message: permissionMessage(c.restSubject(response.Request), change)}
 	case status == http.StatusNotFound:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: notFoundMessage}
+		// A REST 404 is how GitHub answers both a missing resource and one this token may not see, whatever
+		// the method; a refused change was not applied.
+		return notFound(op, c.restSubject(response.Request))
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: "GitHub answered with a redirect, which Qatlas does not follow; the resource may have moved"}

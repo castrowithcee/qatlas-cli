@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -56,11 +57,12 @@ func TestConfigValidate(t *testing.T) {
 		name       string
 		path       string
 		wantCode   int
+		wantStdout string
 		wantStderr bool
 	}{
-		{"valid configuration is silent", valid, exitOK, false},
-		{"invalid configuration is a usage error", broken, exitUsage, true},
-		{"missing configuration is a usage error", missing, exitUsage, true},
+		{"valid configuration says so", valid, exitOK, "configuration is valid: " + valid + "\n", false},
+		{"invalid configuration is a usage error", broken, exitUsage, "", true},
+		{"missing configuration is a usage error", missing, exitUsage, "", true},
 	}
 
 	for _, tt := range tests {
@@ -72,13 +74,37 @@ func TestConfigValidate(t *testing.T) {
 			if code != tt.wantCode {
 				t.Errorf("exit code = %d, want %d (stderr: %s)", code, tt.wantCode, stderr.String())
 			}
-			if stdout.Len() != 0 {
-				t.Errorf("stdout = %q, want empty", stdout.String())
+			if stdout.String() != tt.wantStdout {
+				t.Errorf("stdout = %q, want %q", stdout.String(), tt.wantStdout)
+			}
+			// A refused configuration names its problem, not the flag list.
+			if strings.Contains(stderr.String(), "Usage:") {
+				t.Errorf("stderr = %q, want no usage block", stderr.String())
 			}
 			if got := stderr.Len() > 0; got != tt.wantStderr {
 				t.Errorf("stderr non-empty = %v, want %v (stderr: %s)", got, tt.wantStderr, stderr.String())
 			}
 		})
+	}
+}
+
+// A machine-readable format reports the success as one object with the same data.
+func TestConfigValidateReportsSuccessMachineReadably(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	valid := writeConfig(t, validConfig)
+	for _, tt := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--output", "json"}, `{"valid":true,"path":` + strconv.Quote(valid) + "}\n"},
+		{[]string{"--agent"}, "valid=true\npath=" + valid + "\n"},
+	} {
+		var stdout, stderr bytes.Buffer
+		code := Run(append([]string{"config", "validate", "--config", valid}, tt.args...), &stdout, &stderr)
+		if code != exitOK || stderr.Len() != 0 || stdout.String() != tt.want {
+			t.Errorf("%v: exit=%d stdout=%q stderr=%q, want %q", tt.args, code, stdout.String(), stderr.String(), tt.want)
+		}
 	}
 }
 
@@ -119,7 +145,7 @@ defaults:
 		t.Run(tt.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			code := Run([]string{"config", "validate", "--config", writeConfig(t, tt.body)}, &stdout, &stderr)
-			if code != tt.want || stdout.Len() != 0 {
+			if code != tt.want || (code != exitOK) != (stdout.Len() == 0) {
 				t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
 			}
 			if strings.Contains(stderr.String(), canary) {

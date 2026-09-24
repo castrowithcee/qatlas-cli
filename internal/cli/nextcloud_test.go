@@ -101,18 +101,18 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 	path := nextcloudConfig(t)
 	var reads atomic.Int32
 
-	code, stdout, stderr := runNextcloudCLI(t, &reads, "", "tools", "nextcloud", "--config", path)
+	code, stdout, stderr := runNextcloudCLI(t, &reads, "", "tools", "nextcloud", "--all", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[6]{effect,id,title}:", "create,nextcloud.files.create,", "delete,nextcloud.files.delete,", "read,nextcloud.files.get,", "read,nextcloud.files.list,", "read,nextcloud.files.stat,", "update,nextcloud.files.update,",
+		"tools[6]{connections,effect,id,reason,title}:", "create,nextcloud.files.create,", "delete,nextcloud.files.delete,", "read,nextcloud.files.get,", "read,nextcloud.files.list,", "read,nextcloud.files.stat,", "update,nextcloud.files.update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--config", path))); len(got) != 6 {
+	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--all", "--config", path))); len(got) != 6 {
 		t.Errorf("nextcloud tools = %v, want all six files tools", got)
 	}
 	if reads.Load() != 0 {
@@ -125,7 +125,7 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 func TestNextcloudToolContractKeepsInstanceIdentityAndRootOutOfTheArguments(t *testing.T) {
 	path := nextcloudConfig(t)
 
-	code, stdout, stderr := runNextcloudCLI(t, nil, "", "tool", "nextcloud.files.list", "--config", path)
+	code, stdout, stderr := runNextcloudCLI(t, nil, "", "describe", "nextcloud.files.list", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
@@ -138,7 +138,7 @@ func TestNextcloudToolContractKeepsInstanceIdentityAndRootOutOfTheArguments(t *t
 		}
 	}
 
-	document := runNextcloudJSON(t, "", "tool", "nextcloud.files.list", "--config", path)
+	document := runNextcloudJSON(t, "", "describe", "nextcloud.files.list", "--config", path)
 	var described struct {
 		Tool struct {
 			InputSchema json.RawMessage `json:"input_schema"`
@@ -254,7 +254,7 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"nextcloud"}}}`,
+			`,"name":"qatlas.search","arguments":{"provider":"nextcloud","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.describe","arguments":{"operation":"nextcloud.files.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
@@ -280,7 +280,7 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	}
 
 	describe := toolResultFrom(t, responses[`"describe"`])
-	describedByCLI := runNextcloudJSON(t, "", "tool", "nextcloud.files.list", "--config", path, "--output", "json")
+	describedByCLI := runNextcloudJSON(t, "", "describe", "nextcloud.files.list", "--config", path, "--output", "json")
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
 

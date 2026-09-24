@@ -542,7 +542,7 @@ func actionsHandler(id string, check func(*actionsArguments, target) error,
 		if err != nil {
 			return nil, err
 		}
-		return call(ctx, client, &arguments)
+		return bound.locate(call(ctx, client, &arguments))
 	}
 }
 

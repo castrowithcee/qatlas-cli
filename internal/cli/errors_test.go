@@ -36,6 +36,7 @@ func TestCodeFor(t *testing.T) {
 		{"policy denied", &application.PolicyDeniedError{Operation: "x"}, output.CodePolicyDenied},
 		{"invalid provider result", &application.InvalidProviderResponseError{Operation: "x"}, output.CodeInvalidProviderResult},
 		{"provider permission", &provider.Error{Class: provider.ClassPermission}, output.CodePermission},
+		{"provider not found", &provider.Error{Class: provider.ClassNotFound}, output.CodeNotFound},
 		{"provider timeout", &provider.Error{Class: provider.ClassTimeout}, output.CodeTimeout},
 		{"provider invalid response", &provider.Error{Class: provider.ClassInvalidResponse}, output.CodeInvalidProviderResult},
 		{"unsupported capability", &capability.UnsupportedError{Capability: "x"}, output.CodeUnsupportedCapability},

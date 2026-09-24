@@ -113,7 +113,7 @@ func TestRemovedGlobalFlagsAreGone(t *testing.T) {
 	for _, args := range [][]string{
 		{"tools", "--limit", "1"},
 		{"tools", "--fields", "id"},
-		{"tool", "bookstack.pages.list", "--limit", "1"},
+		{"describe", "bookstack.pages.list", "--limit", "1"},
 		{"invoke", "bookstack.pages.list", "--limit", "1"},
 	} {
 		var stdout, stderr bytes.Buffer
@@ -179,7 +179,7 @@ func TestRunWritesUsageBeforeCarriedAudit(t *testing.T) {
 	opts := &Options{Redactor: &redact.Redactor{}}
 	cmd := newRootCommand(opts, defaultRegistry())
 	cmd.RunE = func(*cobra.Command, []string) error {
-		return withAudit(&UsageError{errors.New("confirmed usage failure")},
+		return withAudit(newSyntaxError(errors.New("confirmed usage failure")),
 			[]byte(`{"request_id":"audit-id","result":"error"}`+"\n"))
 	}
 
@@ -193,6 +193,54 @@ func TestRunWritesUsageBeforeCarriedAudit(t *testing.T) {
 	audit := strings.Index(value, `{"request_id":"audit-id","result":"error"}`)
 	if diagnostic != 0 || usage < 0 || audit < 0 || !(diagnostic < usage && usage < audit) {
 		t.Fatalf("stderr order is diagnostic, usage, audit: %q", value)
+	}
+}
+
+// Only a malformed command line is followed by the usage block. A well-formed request that is refused keeps
+// exit code 2 and says what is wrong and what to do, without burying that under the flag list.
+func TestUsageFollowsOnlySyntaxErrors(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	cfg := writeConfig(t, "version: 1\n")
+	for _, tt := range []struct {
+		name  string
+		args  []string
+		usage bool
+	}{
+		{"unknown command", []string{"frobnicate"}, true},
+		{"unknown flag", []string{"tools", "bookstack", "--nope"}, true},
+		{"unknown output format", []string{"providers", "--output", "yaml"}, true},
+		{"too many arguments", []string{"describe", "a", "b"}, true},
+		{"unexpected argument", []string{"config", "validate", "surplus"}, true},
+		{"missing configuration", []string{"tools", "bookstack", "--config", "/nonexistent/config.yaml"}, false},
+		{"unknown namespace", []string{"tools", "absent", "--config", cfg}, false},
+		{"unknown provider", []string{"connections", "absent", "--config", cfg}, false},
+		{"unknown tool", []string{"describe", "absent.pages.get", "--config", cfg}, false},
+		{"unknown connection", []string{"invoke", "bookstack.pages.list", "--connection", "absent", "--config", cfg}, false},
+		{"invalid arguments", []string{"invoke", "bookstack.pages.get", "--arg", "id=x", "--config", cfg}, false},
+		{"scalar discovery format", []string{"describe", "bookstack.pages.list", "--output", "table", "--config", cfg}, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			code, stdout, stderr := runTools(t, nil, tt.args...)
+			if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, "qatlas: ") {
+				t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			if got := strings.Contains(stderr, "\nUsage:\n"); got != tt.usage {
+				t.Errorf("usage block = %v, want %v:\n%s", got, tt.usage, stderr)
+			}
+		})
+	}
+}
+
+// The code already says invalid-request, so the message does not repeat it.
+func TestInvalidRequestIsNamedOnce(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	cfg := writeConfig(t, "version: 1\n")
+	code, _, stderr := runTools(t, nil, "invoke", "bookstack.pages.get", "--arg", "id=x", "--config", cfg)
+	if code != exitUsage || !strings.HasPrefix(stderr, "qatlas: invalid-request: ") ||
+		strings.Contains(strings.ToLower(stderr), "invalid request") {
+		t.Errorf("exit=%d stderr=%q", code, stderr)
 	}
 }
 

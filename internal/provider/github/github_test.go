@@ -152,7 +152,8 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 	case strings.Contains(document, "projectV2(number"):
 		if variables["owner"] != "octo-org" || variables["number"] != float64(7) ||
 			!strings.Contains(document, "owner:organization(") {
-			fmt.Fprint(w, `{"data":{"owner":null},"errors":[{"type":"NOT_FOUND","message":"Could not resolve"}]}`)
+			fmt.Fprint(w, `{"data":{"owner":{"projectV2":null}},"errors":[{"type":"NOT_FOUND",`+
+				`"path":["owner","projectV2"],"message":"Could not resolve"}]}`)
 			return
 		}
 		fmt.Fprintf(w, `{"data":{"owner":{"projectV2":%s}}}`, f.projectJSON())
@@ -226,7 +227,7 @@ func itemNodeJSON(item fakeItem, project string, withBody bool) string {
 
 func (f *fakeGitHub) itemsPage(w http.ResponseWriter, variables map[string]any) {
 	if variables["project"] != projectID {
-		fmt.Fprint(w, `{"data":{"project":null},"errors":[{"type":"NOT_FOUND","message":"no node"}]}`)
+		fmt.Fprint(w, `{"data":{"project":null},"errors":[{"type":"NOT_FOUND","path":["project"],"message":"no node"}]}`)
 		return
 	}
 	query, _ := variables["query"].(string)
@@ -326,7 +327,7 @@ func (f *fakeGitHub) itemDetail(w http.ResponseWriter, variables map[string]any)
 	}
 	if item == "null" {
 		fmt.Fprintf(w, `{"data":{"owner":{"projectV2":%s},"item":null},"errors":[{"type":"NOT_FOUND",`+
-			`"message":"Could not resolve to a node"}]}`, f.projectJSON())
+			`"path":["item"],"message":"Could not resolve to a node"}]}`, f.projectJSON())
 		return
 	}
 	fmt.Fprintf(w, `{"data":{"owner":{"projectV2":%s},"item":%s}}`, f.projectJSON(), item)
@@ -334,7 +335,8 @@ func (f *fakeGitHub) itemDetail(w http.ResponseWriter, variables map[string]any)
 
 func (f *fakeGitHub) issuesPage(w http.ResponseWriter, variables map[string]any) {
 	if variables["owner"] != "octo-org" || variables["name"] != "example" {
-		fmt.Fprint(w, `{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","message":"no repository"}]}`)
+		fmt.Fprint(w, `{"data":{"repository":null},"errors":[{"type":"NOT_FOUND","path":["repository"],`+
+			`"message":"no repository"}]}`)
 		return
 	}
 	states, _ := variables["states"].([]any)
@@ -891,8 +893,9 @@ func TestGetItemLoadsExactlyOneBody(t *testing.T) {
 	if err == nil || foreign != nil || strings.Contains(err.Error(), "foreign-body-canary") {
 		t.Errorf("GetItem(foreign) = %+v, %v; want a refusal", foreign, err)
 	}
-	if _, err := c.GetItem(context.Background(), "PVTI_absent"); classOf(err) != provider.ClassProviderError {
-		t.Errorf("GetItem(absent) = %v, want a provider error", err)
+	if _, err := c.GetItem(context.Background(), "PVTI_absent"); classOf(err) != provider.ClassNotFound ||
+		!strings.Contains(err.Error(), "this item in project orgs/octo-org/projects/7") {
+		t.Errorf("GetItem(absent) = %v, want not-found naming the project", err)
 	}
 }
 
@@ -966,7 +969,8 @@ func TestGetIssueReadsOneIssueThroughREST(t *testing.T) {
 	if _, err := c.GetIssue(context.Background(), 7); err == nil || !strings.Contains(err.Error(), "pull request") {
 		t.Errorf("GetIssue(pull request) = %v, want a refusal", err)
 	}
-	if _, err := c.GetIssue(context.Background(), 5); classOf(err) != provider.ClassProviderError {
+	if _, err := c.GetIssue(context.Background(), 5); classOf(err) != provider.ClassNotFound ||
+		!strings.Contains(err.Error(), "issue #5 in repository octo-org/example") {
 		t.Errorf("GetIssue(absent) = %v", err)
 	}
 }
@@ -1117,7 +1121,8 @@ func TestProviderFailuresAreNormalized(t *testing.T) {
 			w.Header().Set("Retry-After", "17")
 			w.WriteHeader(http.StatusTooManyRequests)
 		}, provider.ClassRateLimited, "retry after 17 seconds"},
-		{"not found", func(w http.ResponseWriter) { w.WriteHeader(http.StatusNotFound) }, provider.ClassProviderError, ""},
+		{"not found", func(w http.ResponseWriter) { w.WriteHeader(http.StatusNotFound) }, provider.ClassNotFound,
+			"in project orgs/octo-org/projects/7"},
 		{"redirect", func(w http.ResponseWriter) {
 			w.Header().Set("Location", "https://elsewhere.example.invalid/")
 			w.WriteHeader(http.StatusMovedPermanently)
@@ -1129,14 +1134,16 @@ func TestProviderFailuresAreNormalized(t *testing.T) {
 			fmt.Fprint(w, `{"data":"`+strings.Repeat("x", maxResponseBytes)+`"}`)
 		}, provider.ClassInvalidResponse, "size limit"},
 		{"graphql not found", func(w http.ResponseWriter) {
-			fmt.Fprint(w, `{"data":{"owner":null},"errors":[{"type":"NOT_FOUND","message":"Could not resolve `+tokenValue+`"}]}`)
-		}, provider.ClassProviderError, ""},
+			fmt.Fprint(w, `{"data":{"owner":{"projectV2":null}},"errors":[{"type":"NOT_FOUND",`+
+				`"path":["owner","projectV2"],"message":"Could not resolve `+tokenValue+`"}]}`)
+		}, provider.ClassNotFound, "GitHub does not hold project orgs/octo-org/projects/7 or does not show it"},
 		{"graphql forbidden", func(w http.ResponseWriter) {
-			fmt.Fprint(w, `{"data":null,"errors":[{"type":"FORBIDDEN","message":"no"}]}`)
-		}, provider.ClassPermission, ""},
+			fmt.Fprint(w, `{"data":null,"errors":[{"type":"FORBIDDEN","path":["owner","projectV2"],`+
+				`"message":"Resource not accessible by personal access token"}]}`)
+		}, provider.ClassPermission, "may not read project orgs/octo-org/projects/7"},
 		{"graphql scopes", func(w http.ResponseWriter) {
 			fmt.Fprint(w, `{"errors":[{"type":"INSUFFICIENT_SCOPES","message":"needs read:project"}]}`)
-		}, provider.ClassPermission, ""},
+		}, provider.ClassPermission, "check its scopes"},
 		{"graphql rate limit", func(w http.ResponseWriter) {
 			fmt.Fprint(w, `{"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}`)
 		}, provider.ClassRateLimited, ""},
@@ -1224,8 +1231,8 @@ func TestTestConnectionReadsOnlyTheTarget(t *testing.T) {
 		t.Errorf("requests = %+v, want one read of each target", requests)
 	}
 	class, _ = TestConnection(context.Background(), resolvedConnection("gh", base, userTarget), resolver(red, nil), red)
-	if class != provider.ClassProviderError {
-		t.Errorf("unknown project test = %q, want a provider error", class)
+	if class != provider.ClassNotFound {
+		t.Errorf("unknown project test = %q, want not-found", class)
 	}
 
 	f.failure = func(w http.ResponseWriter, _ *http.Request) bool { w.WriteHeader(http.StatusUnauthorized); return true }

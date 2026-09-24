@@ -93,6 +93,44 @@ the next step without echoing the value:
 A tool that the connection's `permissions` or `tools` exclude stays an unsupported capability, refused before
 a secret is read as well.
 
+Every result names the target the tool acted on in a field named like its argument, whether the argument
+chose it or a default did: `repository` as `OWNER/REPO`, `project` as `users/LOGIN/projects/NUMBER` or
+`orgs/LOGIN/projects/NUMBER`, and both for `github.projectitems.add` and `github.projectissues.create`. The
+field sits beside the tool's own fields, so `github.issues.get` without an argument answers, for example:
+
+```json
+{"assignees": ["hubot"], "body": "...", "labels": ["bug"], "number": 42, "repository": "octo-org/example",
+ "state": "open", "title": "Crash on start"}
+```
+
+`github.projectitems.get` keeps its own `repository` field for the repository of the item's content and names
+its target as `project`.
+
+### Errors
+
+GitHub answers a repository, project, issue, or item it does not hold exactly like one the token may not see:
+a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested project or issue out. Qatlas reports all of them as
+`not-found` and names the target the request addressed, including a target a default chose, with what to
+check:
+
+```text
+qatlas: not-found: list issues: GitHub does not hold repository octo-org/example or does not show it to this token; check the name, and that the token can see it (classic: scope repo for a private repository; fine-grained: access to this repository)
+qatlas: not-found: list project items: GitHub does not hold project users/octocat/projects/3 or does not show it to this token; check the name, and that the token can see it (classic: scope read:project; fine-grained: Projects access of its organization, as a user-owned project needs a classic token)
+qatlas: not-found: get issue: GitHub does not hold issue #5 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+```
+
+| Code | GitHub's answer |
+| --- | --- |
+| `auth` | HTTP 401: GitHub rejected the token itself |
+| `permission` | HTTP 403, or GraphQL `FORBIDDEN` or `INSUFFICIENT_SCOPES`: GitHub saw the target and refused this token explicitly, for example a classic token without `read:project`, or a fine-grained token on a user-owned project; the message names the target |
+| `not-found` | HTTP 404 or GraphQL `NOT_FOUND`: the target or a resource inside it does not exist, or the token may not see it |
+| `rate-limited` | GitHub asked to wait |
+| `provider-error` | GitHub rejected the request in another way, for example as invalid or in the current state of the resource |
+
+A change GitHub answered with `not-found` was not applied. The Actions and workflow maintenance tools keep
+their own permission messages, listed under [Tokens for Actions](#tokens-for-actions) and
+[Credential](#credential).
+
 ### Setup profiles
 
 The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and the reads
@@ -371,7 +409,7 @@ every run may do. They are high risk, and Qatlas keeps them behind a boundary of
 - **Listed only.** A connection offers such a tool only when its `tools` list names it and its `permissions`
   allow the tool's effect. A connection without a `tools` list never offers one, whatever its permissions: a
   planning connection with `create` and `update`, an operator with `execute`, or a connection with every
-  permission neither discovers nor runs them. `qatlas tools`, `qatlas tool`, `qatlas.search`,
+  permission neither discovers nor runs them. `qatlas tools`, `qatlas describe`, `qatlas.search`,
   `qatlas.describe`, route selection, and invoke apply the same rule, and the tool contract shows
   `requires_tool_allow_list: true`. The terminal editor marks these tools `(listed only)`.
 - **Never preselected.** No profile a new connection starts with selects them, and the recommended profile

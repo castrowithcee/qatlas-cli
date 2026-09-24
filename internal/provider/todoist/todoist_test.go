@@ -726,7 +726,7 @@ func TestProviderFailuresAreClassified(t *testing.T) {
 			w.WriteHeader(http.StatusTooManyRequests)
 			fmt.Fprint(w, `{"error_tag":"TOO_MANY_REQUESTS","error_extra":{"retry_after":17}}`)
 		}, provider.ClassRateLimited, "retry after 17 seconds"},
-		{"not found", notFound, provider.ClassProviderError, notFoundMessage},
+		{"not found", notFound, provider.ClassNotFound, notFoundMessage},
 		{"stale cursor", func(w http.ResponseWriter) {
 			w.WriteHeader(http.StatusBadRequest)
 			fmt.Fprint(w, `{"error_tag":"INVALID_ARGUMENT_VALUE","error_extra":{"argument":"cursor"}}`)
@@ -825,8 +825,8 @@ func TestTestConnectionReadsOnlyTheScope(t *testing.T) {
 		t.Errorf("requests = %+v, want one read per project and one bounded account read", requests)
 	}
 	class, _ = TestConnection(context.Background(), resolved(apiRoot, "projMissing"), resolver(red, nil), red)
-	if class != provider.ClassProviderError {
-		t.Errorf("missing project test = %q, want a provider error", class)
+	if class != provider.ClassNotFound {
+		t.Errorf("missing project test = %q, want not-found", class)
 	}
 	for _, base := range []string{"https://todoist.example.invalid/api/v1", "http://api.todoist.com/api/v1",
 		"https://api.todoist.com/rest/v2"} {

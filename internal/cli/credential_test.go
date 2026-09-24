@@ -465,15 +465,15 @@ func TestConfigValidateSecretsReportsMissing(t *testing.T) {
 	}
 }
 
-// Without the flag, validate stays the silent local file check it documents.
-func TestConfigValidateStaysSilentWithoutTheFlag(t *testing.T) {
+// Without the flag, validate stays the local file check it documents and reports only that it passed.
+func TestConfigValidateReportsOnlySuccessWithoutTheFlag(t *testing.T) {
 	dir := keyringFixture(t)
 	opts := testOptionsIn(t, dir, secret.NewMemoryStore())
 
 	code, stdout, stderr := runWithInput(t, opts, "", "config", "validate", "--config", configIn(dir))
 
-	if code != exitOK || stdout != "" || stderr != "" {
-		t.Errorf("exit %d, stdout %q, stderr %q; want a silent success", code, stdout, stderr)
+	if code != exitOK || stdout != "configuration is valid: "+configIn(dir)+"\n" || stderr != "" {
+		t.Errorf("exit %d, stdout %q, stderr %q; want the success line only", code, stdout, stderr)
 	}
 }
 
@@ -739,7 +739,7 @@ defaults:
 		{"", []string{"config", "validate", "--secrets", "--output", "json"}},
 		{"", []string{"tools"}},
 		{"", []string{"tools", "--output", "json"}},
-		{"", []string{"tool", "bookstack.pages.list"}},
+		{"", []string{"describe", "bookstack.pages.list"}},
 		{"", []string{"invoke", "bookstack.pages.list"}},
 		{"", []string{"invoke", "bookstack.pages.list", "--connection", "wiki"}},
 		{`{"id":1}`, []string{"invoke", "bookstack.pages.get"}},

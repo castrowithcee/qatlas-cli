@@ -84,18 +84,18 @@ func TestTwentyToolsAreDiscoverable(t *testing.T) {
 	path := twentyConfig(t)
 	var reads atomic.Int32
 
-	code, stdout, stderr := runTwentyCLI(t, &reads, "", "tools", "twentycrm", "--config", path)
+	code, stdout, stderr := runTwentyCLI(t, &reads, "", "tools", "twentycrm", "--all", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[5]{effect,id,title}:", "create,twentycrm.companies.create,", "delete,twentycrm.companies.delete,", "read,twentycrm.companies.get,", "read,twentycrm.companies.list,", "update,twentycrm.companies.update,",
+		"tools[5]{connections,effect,id,reason,title}:", "create,twentycrm.companies.create,", "delete,twentycrm.companies.delete,", "read,twentycrm.companies.get,", "read,twentycrm.companies.list,", "update,twentycrm.companies.update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--config", path))); len(got) != 5 {
+	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--all", "--config", path))); len(got) != 5 {
 		t.Errorf("twentycrm tools = %v, want all five company tools", got)
 	}
 	if reads.Load() != 0 {
@@ -108,7 +108,7 @@ func TestTwentyToolsAreDiscoverable(t *testing.T) {
 func TestTwentyToolContractExposesOnlyTheStableCoreProjection(t *testing.T) {
 	path := twentyConfig(t)
 
-	code, stdout, stderr := runTwentyCLI(t, nil, "", "tool", "twentycrm.companies.list", "--config", path)
+	code, stdout, stderr := runTwentyCLI(t, nil, "", "describe", "twentycrm.companies.list", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
@@ -122,7 +122,7 @@ func TestTwentyToolContractExposesOnlyTheStableCoreProjection(t *testing.T) {
 		}
 	}
 
-	document := runTwentyJSON(t, "", "tool", "twentycrm.companies.list", "--config", path)
+	document := runTwentyJSON(t, "", "describe", "twentycrm.companies.list", "--config", path)
 	var described struct {
 		Tool struct {
 			InputSchema  json.RawMessage `json:"input_schema"`
@@ -223,7 +223,7 @@ func TestTwentyMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"twentycrm"}}}`,
+			`,"name":"qatlas.search","arguments":{"provider":"twentycrm","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.describe","arguments":{"operation":"twentycrm.companies.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
@@ -249,7 +249,7 @@ func TestTwentyMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	}
 
 	describe := toolResultFrom(t, responses[`"describe"`])
-	describedByCLI := runTwentyJSON(t, "", "tool", "twentycrm.companies.list", "--config", path, "--output", "json")
+	describedByCLI := runTwentyJSON(t, "", "describe", "twentycrm.companies.list", "--config", path, "--output", "json")
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
 

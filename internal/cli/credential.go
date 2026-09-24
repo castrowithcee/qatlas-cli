@@ -216,7 +216,7 @@ func fallbackPath(secrets *secret.Resolver) string {
 
 func exactlyTwoArgs(_ *cobra.Command, args []string) error {
 	if len(args) != 2 {
-		return &UsageError{fmt.Errorf("expected a credential name and a secret role, got %d arguments", len(args))}
+		return newSyntaxError(fmt.Errorf("expected a credential name and a secret role, got %d arguments", len(args)))
 	}
 	return nil
 }

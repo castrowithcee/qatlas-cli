@@ -28,9 +28,11 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Use:   "validate",
 		Short: "Check that the configuration file is complete and consistent",
 		Long: "Validate reads the configuration file and reports every schema and reference problem it\n" +
-			"finds. It contacts no provider and reads no secret values. Success is silent.\n\n" +
+			"finds. It contacts no provider and reads no secret values. On success it prints\n" +
+			"'configuration is valid: <path>'; --output json, compact, or toon, and --agent, print the same as\n" +
+			"one object with the fields valid and path.\n\n" +
 			"A connection's optional tools list names complete tool IDs of its provider, as 'qatlas tools\n" +
-			"<provider>' lists them. Every entry must be a tool this build registers for that provider,\n" +
+			"<provider> --all' lists them. Every entry must be a tool this build registers for that provider,\n" +
 			"listed once, with an effect the connection's permissions allow. An unknown entry is reported\n" +
 			"by its position, never quoted.\n\n" +
 			"With --secrets it additionally resolves the secrets of every connection and reports which\n" +
@@ -49,7 +51,13 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 				return classifyUserError(err)
 			}
 			if !secrets {
-				return nil
+				if opts.Format == output.FormatTable {
+					_, err := fmt.Fprintf(c.OutOrStdout(), "configuration is valid: %s\n", opts.Redactor.Apply(path))
+					return err
+				}
+				return emit(c, opts, output.Object{Fields: []output.Field{
+					{Name: "valid", Value: true}, {Name: "path", Value: path},
+				}})
 			}
 			result, err := secretSources(cfg, opts)
 			if err != nil {
@@ -111,7 +119,7 @@ func secretSources(cfg *config.Config, opts *Options) (output.Result, error) {
 
 func noArgs(_ *cobra.Command, args []string) error {
 	if len(args) > 0 {
-		return &UsageError{fmt.Errorf("unexpected argument %q", args[0])}
+		return newSyntaxError(fmt.Errorf("unexpected argument %q", args[0]))
 	}
 	return nil
 }

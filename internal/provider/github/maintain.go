@@ -665,7 +665,7 @@ func (c *Client) writeWorkflowFile(ctx context.Context, a *actionsArguments) (*W
 		} `json:"commit"`
 	}
 	if err := c.restChange(ctx, op, http.MethodPut, c.contentsPath(a.Path, nil), body, &answer); err != nil {
-		return nil, fileWriteFailure(err, a.SHA != "")
+		return nil, fileWriteFailure(err, c.target, a.SHA != "")
 	}
 	if answer.Content.Path != a.Path || answer.Content.SHA == "" || answer.Commit.SHA == "" {
 		return nil, invalidResponse(op, true)
@@ -677,7 +677,7 @@ func (c *Client) writeWorkflowFile(ctx context.Context, a *actionsArguments) (*W
 
 // fileWriteFailure names what a refused file write most likely means. GitHub answers a stale blob SHA with a
 // conflict and a create of an existing file, or an update with an unknown blob, as an invalid request.
-func fileWriteFailure(err error, update bool) error {
+func fileWriteFailure(err error, repository target, update bool) error {
 	var failure *provider.Error
 	if !errors.As(err, &failure) {
 		return err
@@ -698,10 +698,10 @@ func fileWriteFailure(err error, update bool) error {
 	case failure.Message == rejectedMessage:
 		refused.Message = "GitHub rejected the new file, so nothing was written; a file may already exist at " +
 			"this path, read it with github.workflowfiles.get and change it with github.workflowfiles.update"
-	case failure.Message == notFoundMessage:
-		refused.Message = "GitHub does not hold this repository or branch or does not show it to this token; a " +
-			"workflow file change also needs workflow on a classic token or Workflows: read and write on a " +
-			"fine-grained one"
+	case failure.Class == provider.ClassNotFound:
+		refused.Message = "GitHub does not hold " + subject{in: repository}.String() + " or this branch, or does " +
+			"not show them to this token; a workflow file change also needs workflow on a classic token or " +
+			"Workflows: read and write on a fine-grained one"
 	default:
 		return err
 	}

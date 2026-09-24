@@ -737,7 +737,7 @@ func (c *Client) commentInScope(ctx context.Context, op, id string) error {
 	}
 	switch {
 	case raw.IsDeleted:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: notFoundMessage}
+		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: notFoundMessage}
 	case task != "":
 		if !validID(task) {
 			return invalidResponse(op)

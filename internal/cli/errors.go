@@ -91,9 +91,28 @@ type errorDetail struct {
 	Connections []application.ConnectionRef `json:"connections"`
 }
 
+// unsupportedDetail is the machine-readable form of unsupported-capability: the refused connection and the
+// stable reason the configuration rule gave, the same value 'qatlas tools --all' publishes. The reason is
+// empty when a provider refused the request for a reason of its own.
+type unsupportedDetail struct {
+	Code       output.Code    `json:"code"`
+	Message    string         `json:"message"`
+	Operation  string         `json:"operation"`
+	Connection string         `json:"connection"`
+	Reason     config.Refusal `json:"reason"`
+}
+
 // errorDetailFor returns the detail of err, or nil when its code and message already say everything. The
 // CLI and the MCP broker both publish exactly this value, after the same redaction as the message.
-func errorDetailFor(err error, redactor *redact.Redactor) *errorDetail {
+func errorDetailFor(err error, redactor *redact.Redactor) any {
+	var unsupported *capability.UnsupportedError
+	if errors.As(err, &unsupported) && unsupported.Connection != "" {
+		return &unsupportedDetail{
+			Code: output.CodeUnsupportedCapability, Message: redactor.Error(err),
+			Operation: redactor.Apply(unsupported.Capability), Connection: redactor.Apply(unsupported.Connection),
+			Reason: unsupported.Reason,
+		}
+	}
 	var ambiguous *application.ConnectionAmbiguousError
 	if !errors.As(err, &ambiguous) {
 		return nil
@@ -120,6 +139,8 @@ func providerCode(class provider.Class) output.Code {
 		return output.CodeAuth
 	case provider.ClassPermission:
 		return output.CodePermission
+	case provider.ClassNotFound:
+		return output.CodeNotFound
 	case provider.ClassTimeout:
 		return output.CodeTimeout
 	case provider.ClassRateLimited:

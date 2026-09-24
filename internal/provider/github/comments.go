@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -108,8 +109,11 @@ func (c *Client) listComments(ctx context.Context, options CommentListOptions, a
 	if err := c.graphql(ctx, op, commentsQuery, variables, &page); err != nil {
 		return nil, err
 	}
-	if page.Repository == nil || page.Repository.Issue == nil {
-		return nil, providerError(op, "GitHub does not hold this issue or does not show it to this token")
+	if page.Repository == nil {
+		return nil, notFound(op, subject{in: c.target})
+	}
+	if page.Repository.Issue == nil {
+		return nil, notFound(op, subject{in: c.target, what: "issue #" + strconv.Itoa(options.Number)})
 	}
 	comments := page.Repository.Issue.Comments
 	result := &CommentList{Comments: make([]Comment, 0, len(comments.Nodes))}

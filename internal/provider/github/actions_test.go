@@ -414,8 +414,13 @@ func TestRunsAreFilteredPagedAndCompact(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// The result names the repository the list was read from; the runs themselves leave it out.
+		var top map[string]json.RawMessage
+		if err := json.Unmarshal(result, &top); err != nil || string(top["repository"]) != `"octo-org/example"` {
+			t.Fatalf("a run list names repository %s, want octo-org/example", top["repository"])
+		}
 		for _, forbidden := range []string{"pull_requests", "repository", "head_commit", bodyCanary} {
-			if strings.Contains(string(result), forbidden) {
+			if strings.Contains(string(top["runs"]), forbidden) {
 				t.Fatalf("a run list carries %q: %s", forbidden, result)
 			}
 		}
@@ -533,8 +538,8 @@ func TestActionsMetadataIsCompact(t *testing.T) {
 		}
 	}
 	if _, err := invoke(t, core, "github.workflowruns.get", "observer", `{"run_id":42}`, false); classOf(err) !=
-		provider.ClassProviderError {
-		t.Errorf("an unknown run = %v, want a provider error", err)
+		provider.ClassNotFound || !strings.Contains(err.Error(), "in repository octo-org/example") {
+		t.Errorf("an unknown run = %v, want not-found naming the repository", err)
 	}
 }
 

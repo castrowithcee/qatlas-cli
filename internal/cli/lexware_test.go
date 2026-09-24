@@ -81,18 +81,18 @@ func TestLexwareToolsAreDiscoverable(t *testing.T) {
 	path := lexwareConfig(t)
 	var reads atomic.Int32
 
-	code, stdout, stderr := runLexwareCLI(t, &reads, "", "tools", "lexware", "--config", path)
+	code, stdout, stderr := runLexwareCLI(t, &reads, "", "tools", "lexware", "--all", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[3]{effect,id,title}:", "create,lexware.invoices.create,", "read,lexware.invoices.get,", "read,lexware.invoices.list,",
+		"tools[3]{connections,effect,id,reason,title}:", "create,lexware.invoices.create,", "read,lexware.invoices.get,", "read,lexware.invoices.list,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runLexwareJSON(t, "", "tools", "lexware", "--config", path))); len(got) != 3 {
+	if got := toolIDs(t, string(runLexwareJSON(t, "", "tools", "lexware", "--all", "--config", path))); len(got) != 3 {
 		t.Errorf("lexware tools = %v, want all three invoice tools", got)
 	}
 	if reads.Load() != 0 {
@@ -105,7 +105,7 @@ func TestLexwareToolsAreDiscoverable(t *testing.T) {
 func TestLexwareToolContractExposesOnlyControlledFilters(t *testing.T) {
 	path := lexwareConfig(t)
 
-	code, stdout, stderr := runLexwareCLI(t, nil, "", "tool", "lexware.invoices.list", "--config", path)
+	code, stdout, stderr := runLexwareCLI(t, nil, "", "describe", "lexware.invoices.list", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
@@ -119,7 +119,7 @@ func TestLexwareToolContractExposesOnlyControlledFilters(t *testing.T) {
 		}
 	}
 
-	document := runLexwareJSON(t, "", "tool", "lexware.invoices.list", "--config", path)
+	document := runLexwareJSON(t, "", "describe", "lexware.invoices.list", "--config", path)
 	var described struct {
 		Tool struct {
 			InputSchema json.RawMessage `json:"input_schema"`
@@ -211,7 +211,7 @@ func TestLexwareMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"lexware"}}}`,
+			`,"name":"qatlas.search","arguments":{"provider":"lexware","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.describe","arguments":{"operation":"lexware.invoices.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
@@ -235,7 +235,7 @@ func TestLexwareMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	}
 
 	describe := toolResultFrom(t, responses[`"describe"`])
-	describedByCLI := runLexwareJSON(t, "", "tool", "lexware.invoices.list", "--config", path, "--output", "json")
+	describedByCLI := runLexwareJSON(t, "", "describe", "lexware.invoices.list", "--config", path, "--output", "json")
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
 

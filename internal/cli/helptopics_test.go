@@ -82,6 +82,10 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 			}
 		}
 		for _, snippet := range commandSnippets(topic.Text) {
+			// The former name of describe still runs, but no guide teaches it.
+			if strings.HasPrefix(snippet, "tool ") {
+				t.Errorf("topic %s names the hidden command %q; it is 'qatlas describe'", topic.Name, snippet)
+			}
 			assertCommandSnippet(t, root, topics, topic.Name, snippet)
 		}
 		for _, id := range toolID.FindAllString(topic.Text, -1) {
@@ -94,9 +98,11 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 	agents := topicText(t, "agents")
 	codes := map[string]bool{}
 	for _, code := range []output.Code{
-		output.CodeInvalidRequest, output.CodeUnknownConnection, output.CodeConnectionAmbiguous,
+		output.CodeInvalidRequest, output.CodeUnknownConnection, output.CodeUnsupportedCapability,
+		output.CodeConnectionAmbiguous,
 		output.CodeConfirmationRequired, output.CodePolicyDenied, output.CodeMissingSecret,
-		output.CodeUnreachable, output.CodeAuth, output.CodePermission, output.CodeTimeout, output.CodeRateLimited,
+		output.CodeUnreachable, output.CodeAuth, output.CodePermission, output.CodeNotFound, output.CodeTimeout,
+		output.CodeRateLimited,
 	} {
 		codes[string(code)] = true
 	}

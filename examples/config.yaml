@@ -206,7 +206,7 @@ credentials:
 #
 # description is optional and yours to maintain: one line of at most 200 characters saying what the route
 # is for. A name is a stable selector, not an explanation, so this is what tells two routes of the same
-# provider apart. It is published by 'qatlas tool <tool-id>' and by qatlas.describe, and it names the
+# provider apart. It is published by 'qatlas describe <tool-id>' and by qatlas.describe, and it names the
 # candidates of a connection-ambiguous diagnostic. It is never sent to a provider, and it never selects a
 # route on its own. Because it is published, never write a secret or personal data into it.
 #
@@ -217,7 +217,7 @@ credentials:
 # this value `none` and uses an empty field for the compatibility default.
 #
 # tools is an optional second allow-list of complete tool IDs of this connection's provider, as listed by
-# 'qatlas tools <provider>'. A tool is offered only when both lists admit it: tools never grants an effect
+# 'qatlas tools <provider> --all'. A tool is offered only when both lists admit it: tools never grants an effect
 # that permissions excludes, and it never widens what the provider credential or the target allows. When
 # tools is omitted, every tool whose effect permissions allows is offered, including tools a later version
 # adds, except high-risk tools marked as listed only: those are offered only by a connection whose tools
