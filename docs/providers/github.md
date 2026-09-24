@@ -1,20 +1,21 @@
 ---
 description: >
-  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 ---
 
 # GitHub
 
-GitHub is a controlled planning provider, not a replacement for `gh`. It reads and maintains issues,
-comments, and project items, and it observes and, when allowed, operates the GitHub Actions of a repository.
+GitHub is a controlled planning provider, not a replacement for `gh`. It lists the projects and repositories
+of a user or an organization, reads and maintains issues, comments, and project items, and it observes and,
+when allowed, operates the GitHub Actions of a repository.
 On a connection that names them explicitly, it also maintains workflow files and Actions settings. It sees
 pull requests only as project items, and it never accepts a free filter expression, a GraphQL document, or a
-REST route from the caller. A `repository` or `project` argument names exactly one target, and it must lie
-inside the connection's targets when the connection lists any.
+REST route from the caller. A `repository`, `project`, or `owner` argument names exactly one target, and it
+must lie inside the connection's targets when the connection lists any.
 
 ## Configuration
 
@@ -46,13 +47,15 @@ and order:
 | `orgs/LOGIN/projects/NUMBER` | one organization project |
 | `repos/OWNER/*` | every repository of one owner |
 | `users/LOGIN/projects/*`, `orgs/LOGIN/projects/*` | every project of one user or organization |
+| `users/LOGIN`, `orgs/LOGIN` | listing every project and repository of one user or organization |
 
-`*` is accepted only as the whole last segment; there are no ranges and no other patterns. Owners,
-repositories, and projects are compared without case, like GitHub compares them, and an entry listed twice
-makes the file invalid. The token stays an independent upper bound: the targets never grant what the token
-lacks, and the token never widens the targets, so a call reaches only what both allow. The single
-`target: ...` form and existing lists, such as a project followed by the repositories it plans in, stay valid
-and are read as the same allow-list.
+An owner entry allows the [owner lists](#owners-projects-and-repositories) only: it names what they may show,
+not a repository or project any other tool may act on. `*` is accepted only as the whole last segment of a
+repository or project entry; there are no ranges and no other patterns. Owners, repositories, and projects
+are compared without case, like GitHub compares them, and an entry listed twice makes the file invalid. The
+token stays an independent upper bound: the targets never grant what the token lacks, and the token never
+widens the targets, so a call reaches only what both allow. The single `target: ...` form and existing lists,
+such as a project followed by the repositories it plans in, stay valid and are read as the same allow-list.
 
 One GitHub connection carries the project, issue, comment, and Actions tools together. Which of them it
 offers is decided by `permissions` and `tools` alone. Reads are a connection's only default: every change
@@ -68,12 +71,14 @@ Every repository tool (issues, comments, Actions, workflow maintenance, and Acti
 `github.projectdrafts.create`) takes `project` as `users/LOGIN/projects/NUMBER` or
 `orgs/LOGIN/projects/NUMBER`. `github.projectitems.add` and `github.projectissues.create` touch both, take
 both, and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the
-items of the project, not a target.
+items of the project, not a target. The owner lists `github.projects.list` and `github.repositories.list` take
+`owner` as `users/LOGIN` for a user or `orgs/LOGIN` for an organization.
 
-An argument may be left out only when the targets allow exactly one repository, or exactly one project, and
-not as a pattern: that one is the default of its kind. Nothing else chooses a target; in particular, the git
-remote of the working directory never does, for `qatlas invoke` and a `qatlas mcp` broker alike. A connection
-without targets, or with a pattern, therefore needs `repository` as `OWNER/REPO` on every repository call.
+An argument may be left out only when the targets allow exactly one repository, exactly one project, or
+exactly one owner as an owner entry, and not as a pattern: that one is the default of its kind. Nothing else
+chooses a target; in particular, the git remote of the working directory never does, for `qatlas invoke` and
+a `qatlas mcp` broker alike, and neither does it choose an owner. A connection without targets, or with a
+pattern, therefore needs `repository` as `OWNER/REPO` on every repository call.
 
 A default never widens or narrows the targets, and an explicit argument always wins. Every target is checked
 before a secret is read and before GitHub is contacted, and every refusal is an `invalid-request` that names
@@ -81,8 +86,8 @@ the next step without echoing the value:
 
 | Case | Next step the message names |
 | --- | --- |
-| a `repository` or `project` outside the targets | pass one the targets allow, or add it to the targets |
-| no argument, and no default settles it | pass `repository` as `OWNER/REPO` or `project` as `users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER` |
+| a `repository`, `project`, or `owner` outside the targets | pass one the targets allow, or add it to the targets |
+| no argument, and no default settles it | pass `repository` as `OWNER/REPO`, `project` as `users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`, or `owner` as `users/LOGIN` or `orgs/LOGIN` |
 | the targets name no target of the tool's kind | add one to the targets, or use another connection |
 | a malformed argument, or a pattern as an argument | the argument's form |
 
@@ -91,8 +96,9 @@ a secret is read as well.
 
 Every result names the target the tool acted on in a field named like its argument, whether the argument
 chose it or a default did: `repository` as `OWNER/REPO`, `project` as `users/LOGIN/projects/NUMBER` or
-`orgs/LOGIN/projects/NUMBER`, and both for `github.projectitems.add` and `github.projectissues.create`. The
-field sits beside the tool's own fields, so `github.issues.get` without an argument answers, for example:
+`orgs/LOGIN/projects/NUMBER`, both for `github.projectitems.add` and `github.projectissues.create`, and
+`owner` as `users/LOGIN` or `orgs/LOGIN` for the owner lists. The field sits beside the tool's own fields,
+so `github.issues.get` without an argument answers, for example:
 
 ```json
 {"assignees": ["hubot"], "body": "...", "labels": ["bug"], "number": 42, "repository": "octo-org/example",
@@ -113,6 +119,8 @@ check:
 qatlas: not-found: list issues: GitHub does not hold repository octo-org/example or does not show it to this token; check the name, and that the token can see it (classic: scope repo for a private repository; fine-grained: access to this repository)
 qatlas: not-found: list project items: GitHub does not hold project users/octocat/projects/3 or does not show it to this token; check the name, and that the token can see it (classic: scope read:project; fine-grained: Projects access of its organization, as a user-owned project needs a classic token)
 qatlas: not-found: get issue: GitHub does not hold issue #5 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: list repositories: GitHub does not hold owner orgs/octocat or does not show it to this token; check the login, and users/ for a user or orgs/ for an organization
+qatlas: permission: list projects: this GitHub token may not read the projects of owner users/octocat; check its scopes or permissions; classic: scope read:project; fine-grained: Projects: read of the organization, as the projects of a user need a classic token
 ```
 
 | Code | GitHub's answer |
@@ -130,9 +138,10 @@ their own permission messages, listed under [Tokens for Actions](#tokens-for-act
 ### Setup profiles
 
 The terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and the reads
-`github.projectitems.list`, `github.projectitems.get`, `github.issues.list`, `github.issues.get`, and
-`github.comments.list`. The profile `planning` ticks
-`[read, create, update]` with the project reads, `github.projectitems.update`, `github.projectitems.add`,
+`github.projects.list`, `github.repositories.list`, `github.projectitems.list`, `github.projectitems.get`,
+`github.issues.list`, `github.issues.get`, and `github.comments.list`. The profile `planning` ticks
+`[read, create, update]` with the owner lists, the project reads, `github.projectitems.update`,
+`github.projectitems.add`,
 `github.projectdrafts.create`, and `github.projectissues.create`; archiving stays unticked. The profiles
 `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions). A profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
@@ -151,6 +160,42 @@ connections:
 
 `roadmap` defaults `project` to its one project. `repository` comes from the call, and only repositories of
 `octo-org` are accepted.
+
+## Owners: projects and repositories
+
+The owner lists find a project number or a repository name without knowing it in advance:
+
+```sh
+qatlas invoke github.projects.list --connection planning --arg owner=orgs/octo-org
+qatlas invoke github.repositories.list --connection planning --arg owner=users/octocat
+```
+
+| Tool | Lists | Each entry |
+| --- | --- | --- |
+| `github.projects.list` | the projects of the owner, in number order, open and closed | `project` (`users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`), `number`, `title`, `url`, `closed` |
+| `github.repositories.list` | the repositories the owner owns, in name order, archived ones included | `repository` (`OWNER/REPO`), `visibility` (`public`, `private`, `internal`), `archived` |
+
+`project` and `repository` are the values the other tools take as arguments. Titles are untrusted data. A
+connection without targets lists everything of the owner that its token can see. A connection with targets
+lists the projects or repositories of an owner only when its targets name that owner, name a project or
+repository pattern of it, or name one of its projects or repositories:
+
+| Targets of the connection | `github.projects.list` of `orgs/octo-org` | `github.repositories.list` of `orgs/octo-org` |
+| --- | --- | --- |
+| `orgs/octo-org` | every project | every repository |
+| `orgs/octo-org/projects/*` | every project | refused |
+| `repos/octo-org/*` | refused | every repository |
+| `orgs/octo-org/projects/7`, `repos/octo-org/example` | project 7 only | `octo-org/example` only |
+
+A refusal is an `invalid-request` before a secret is read. `owner` may be left out only when the targets name
+exactly one owner entry. `users/` and `orgs/` must match the owner's kind: GitHub resolves a login only under
+its own kind, and the other answers `not-found`. A user's repositories are the ones the user owns, not those
+the user collaborates on.
+
+Reading the projects needs `read:project` on a classic token. A fine-grained token lists the projects of an
+organization with Projects read access, but not the projects of a user; GitHub refuses that with
+`permission`. The repositories need no scope for public ones, `repo` on a classic token for private ones, or
+access to the repositories on a fine-grained token.
 
 ## Project-first use
 
@@ -245,9 +290,10 @@ the chosen project before it changes it, and never retries.
 
 Lists take `limit` (1 to 100, default 30) and an opaque `cursor`, and answer `has_more` plus `next_cursor`
 when another batch may follow. A full batch never means the end: read on while `has_more` is true. A cursor
-is bound to the repository or project of the call and to the filters that produced it, and a comment cursor
-to its issue; a cursor from other filters, another issue, or another repository or project is an invalid
-request. Batches follow the
+is bound to the repository or project of the call and to the filters that produced it, an owner list cursor
+to its owner and its list, and a comment cursor to its issue; a cursor from other filters, another issue, or
+another repository, project, or owner is an invalid request. The owner lists show only what the targets
+allow, so a batch may hold fewer entries than `limit` while `has_more` stays true. Batches follow the
 project order, so reading every batch reaches each matching item once. A batch may be short, even empty,
 when Qatlas stopped scanning after a bounded number of requests; `has_more` then stays true.
 

@@ -1,10 +1,12 @@
 // Package github implements controlled planning and GitHub Actions access to GitHub.
 //
 // A connection binds one token to an optional allow-list of targets: repositories (repos/OWNER/REPO),
-// user or organization projects (users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER), and patterns
-// with * as the last segment for every repository or project of one owner. Without targets, a connection
-// reaches whatever its token reaches. Every tool takes the repository or project it acts on as an argument;
-// the argument may be left out when the targets allow exactly one of its kind. The project tools list compact,
+// user or organization projects (users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER), patterns
+// with * as the last segment for every repository or project of one owner, and owners (users/LOGIN,
+// orgs/LOGIN) whose projects and repositories may be listed. Without targets, a connection reaches whatever
+// its token reaches. Every tool takes the repository, project, or owner it acts on as an argument; the
+// argument may be left out when the targets allow exactly one of its kind. The owner lists name the projects
+// and repositories of one user or organization that the targets allow. The project tools list compact,
 // server-side filtered items of a project page by page, read the full content of one selected item, and
 // maintain its items and their field values; the issue tools read, create, and change issues of a
 // repository and read or write the comments of one issue on explicit request. The Actions tools observe the
@@ -303,11 +305,25 @@ func Register(reg *capability.Registry) error {
 				"settings Administration: read and write; keep those in a credential of their own",
 		}},
 		Target: config.TargetMetadata{
-			Label:    "project or repository",
+			Label:    "project, repository, or owner",
 			Multiple: true,
 			Description: "optional allow-list of repos/OWNER/REPO, users/LOGIN/projects/NUMBER, and " +
 				"orgs/LOGIN/projects/NUMBER, or repos/OWNER/*, users/LOGIN/projects/*, and orgs/LOGIN/projects/* " +
-				"for all of one owner; without targets a connection reaches whatever its token reaches",
+				"for all of one owner, and users/LOGIN or orgs/LOGIN to list what an owner holds; without targets " +
+				"a connection reaches whatever its token reaches",
+			Kinds: []config.TargetKind{{
+				Name: "repository", Description: "one repository, or with * every repository of one owner",
+				Forms: []string{"repos/OWNER/REPO", "repos/OWNER/*"},
+			}, {
+				Name: "project", Description: "one project of a user or an organization, or with * every project of " +
+					"one owner",
+				Forms: []string{"users/LOGIN/projects/NUMBER", "orgs/LOGIN/projects/NUMBER", "users/LOGIN/projects/*",
+					"orgs/LOGIN/projects/*"},
+			}, {
+				Name: "owner", Description: "a user or an organization whose projects and repositories may be " +
+					"listed; allows no repository or project by itself",
+				Forms: []string{"users/LOGIN", "orgs/LOGIN"},
+			}},
 			Validate: func(raw string) error {
 				_, err := parseTarget(raw)
 				return err
@@ -319,14 +335,16 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read", Recommended: true,
-			Description: "reads project items, issues, and comments and changes nothing",
-			Tools:       []string{itemsList.ID, itemsGet.ID, issuesList.ID, issuesGet.ID, commentsList.ID},
+			Description: "lists projects and repositories, reads project items, issues, and comments, and " +
+				"changes nothing",
+			Tools: []string{projectsList.ID, repositoriesList.ID, itemsList.ID, itemsGet.ID, issuesList.ID,
+				issuesGet.ID, commentsList.ID},
 		}, {
 			ID: "planning", Title: "Project planning",
-			Description: "reads the project and changes its items: sets fields, adds issues, and creates " +
-				"drafts and planned issues; archiving stays unticked",
-			Tools: []string{itemsList.ID, itemsGet.ID, itemsUpdate.ID, itemsAdd.ID, draftsCreate.ID,
-				projectIssuesCreate.ID},
+			Description: "lists projects and repositories, reads the project, and changes its items: sets " +
+				"fields, adds issues, and creates drafts and planned issues; archiving stays unticked",
+			Tools: []string{projectsList.ID, repositoriesList.ID, itemsList.ID, itemsGet.ID, itemsUpdate.ID,
+				itemsAdd.ID, draftsCreate.ID, projectIssuesCreate.ID},
 		}, {
 			ID: "actions-observer", Title: "Actions observer",
 			Description: "reads the workflows, runs, jobs, artifact metadata, and the end of job logs of a " +
@@ -354,7 +372,9 @@ func Register(reg *capability.Registry) error {
 		return err
 	}
 	operations := append([]capability.Operation{
-		{Descriptor: itemsList, Handler: capability.Handler(invokeItemsList)},
+		{Descriptor: projectsList, Handler: capability.Handler(invokeProjectsList)},
+		capability.Operation{Descriptor: repositoriesList, Handler: capability.Handler(invokeRepositoriesList)},
+		capability.Operation{Descriptor: itemsList, Handler: capability.Handler(invokeItemsList)},
 		capability.Operation{Descriptor: itemsGet, Handler: capability.Handler(invokeItemsGet)},
 		capability.Operation{Descriptor: issuesList, Handler: capability.Handler(invokeIssuesList)},
 		capability.Operation{Descriptor: issuesGet, Handler: capability.Handler(invokeIssuesGet)},
@@ -458,19 +478,21 @@ func invokeIssuesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	return bound.locate(client.GetIssue(ctx, arguments.Number))
 }
 
-// targetKind tells a project from a repository.
+// targetKind tells a project from a repository and from the user or organization that owns them.
 type targetKind int
 
 const (
 	kindProject targetKind = iota + 1
 	kindRepository
+	kindOwner
 )
 
-// target is one GitHub project or repository, or, as a pattern in a connection's targets, every project or
-// every repository of one owner: a pattern has repo "*" or project number 0.
+// target is one GitHub project, repository, or owner, or, as a pattern in a connection's targets, every
+// project or every repository of one owner: a pattern has repo "*" or project number 0. An owner is a user
+// or an organization; as a target it allows listing its projects and repositories, not acting on them.
 type target struct {
 	kind   targetKind
-	scope  string // users or orgs for a project
+	scope  string // users or orgs for a project or an owner
 	owner  string
 	number int
 	repo   string
@@ -482,8 +504,11 @@ func (t target) pattern() bool {
 }
 
 func (t target) String() string {
-	if t.kind == kindRepository {
+	switch t.kind {
+	case kindRepository:
 		return "repos/" + t.owner + "/" + t.repo
+	case kindOwner:
+		return t.scope + "/" + t.owner
 	}
 	number := "*"
 	if t.number != 0 {
@@ -492,8 +517,8 @@ func (t target) String() string {
 	return t.scope + "/" + t.owner + "/projects/" + number
 }
 
-// argument is the target in the form its tool argument takes: OWNER/REPO, or users/LOGIN/projects/NUMBER and
-// orgs/LOGIN/projects/NUMBER.
+// argument is the target in the form its tool argument takes: OWNER/REPO, users/LOGIN/projects/NUMBER and
+// orgs/LOGIN/projects/NUMBER, or users/LOGIN and orgs/LOGIN.
 func (t target) argument() string {
 	if t.kind == kindRepository {
 		return t.owner + "/" + t.repo
@@ -503,8 +528,11 @@ func (t target) argument() string {
 
 // argumentName is the name of the tool argument and of the result field that carry a target of this kind.
 func (t target) argumentName() string {
-	if t.kind == kindProject {
+	switch t.kind {
+	case kindProject:
 		return "project"
+	case kindOwner:
+		return "owner"
 	}
 	return "repository"
 }
@@ -526,8 +554,9 @@ func (t target) locate(value any, err error) (any, error) {
 }
 
 // parseTarget reads users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO, or one of
-// them with * as the whole last segment. No other form is accepted, so a target always names one project,
-// one repository, or all of either of one owner. The error never quotes the value.
+// them with * as the whole last segment, or an owner as users/LOGIN or orgs/LOGIN. No other form is accepted,
+// so a target always names one project, one repository, all of either of one owner, or one owner. The error
+// never quotes the value.
 func parseTarget(raw string) (target, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -538,6 +567,11 @@ func parseTarget(raw string) (target, error) {
 	}
 	parts := strings.Split(trimmed, "/")
 	switch {
+	case len(parts) == 2 && (parts[0] == "users" || parts[0] == "orgs"):
+		if !validLogin(parts[1]) {
+			return target{}, errors.New("the GitHub target does not name a usable owner login")
+		}
+		return target{kind: kindOwner, scope: parts[0], owner: parts[1]}, nil
 	case len(parts) == 4 && (parts[0] == "users" || parts[0] == "orgs") && parts[2] == "projects":
 		if !validLogin(parts[1]) {
 			return target{}, errors.New("the GitHub target does not name a usable owner login")
@@ -557,7 +591,8 @@ func parseTarget(raw string) (target, error) {
 		return target{kind: kindRepository, owner: parts[1], repo: parts[2]}, nil
 	}
 	return target{}, errors.New("a GitHub target must be users/LOGIN/projects/NUMBER, " +
-		"orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO, or one of them with * as its last segment")
+		"orgs/LOGIN/projects/NUMBER, or repos/OWNER/REPO, or one of them with * as its last segment, or " +
+		"users/LOGIN or orgs/LOGIN")
 }
 
 func projectNumber(value string) (int, bool) {
@@ -719,7 +754,7 @@ type Client struct {
 }
 
 // Open resolves the token of one selected connection and returns a client for the first project or
-// repository its targets name exactly, or for no target when they name none.
+// repository its targets name exactly, or for no target when they name none. An owner is never that target.
 func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
 	return open(resolved, secrets, red, nil)
 }
@@ -762,7 +797,7 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	client := &Client{endpoints: api, allowed: allowed, auth: "Bearer " + value.Secret, http: newHTTPClient(),
 		limiter: lim}
 	for _, entry := range allowed {
-		if !entry.pattern() {
+		if !entry.pattern() && entry.kind != kindOwner {
 			client.target = entry
 			break
 		}
@@ -935,6 +970,9 @@ func (s subject) String() string {
 	if s.what == "" {
 		return name
 	}
+	if s.in.kind == kindOwner {
+		return s.what + " of " + name
+	}
 	return s.what + " in " + name
 }
 
@@ -955,6 +993,8 @@ func notFound(op string, s subject) *provider.Error {
 	case kindProject:
 		message += "; check " + check + ", and that the token can see " + it + " (classic: scope read:project; " +
 			"fine-grained: Projects access of its organization, as a user-owned project needs a classic token)"
+	case kindOwner:
+		message += "; check the login, and users/ for a user or orgs/ for an organization"
 	}
 	return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: message}
 }

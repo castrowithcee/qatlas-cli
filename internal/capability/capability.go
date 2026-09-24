@@ -230,6 +230,10 @@ func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 	for i := range metadata.Profiles {
 		metadata.Profiles[i].Tools = append([]string(nil), metadata.Profiles[i].Tools...)
 	}
+	metadata.Target.Kinds = append([]config.TargetKind(nil), metadata.Target.Kinds...)
+	for i := range metadata.Target.Kinds {
+		metadata.Target.Kinds[i].Forms = append([]string(nil), metadata.Target.Kinds[i].Forms...)
+	}
 	return metadata
 }
 

@@ -67,7 +67,8 @@ type SecretRole struct {
 // form of one configured target so a malformed value fails configuration validation instead of the first
 // call. ValidateSet, when set, checks the targets of one connection together once each of them passed
 // Validate, so a provider can refuse a combination its connections cannot form. Neither error may quote a
-// value.
+// value. Kinds, when set, names every kind of target the provider accepts with the forms an entry of that
+// kind takes, so an editor can offer the kinds one by one.
 type TargetMetadata struct {
 	Label           string
 	Description     string
@@ -75,8 +76,17 @@ type TargetMetadata struct {
 	Multiple        bool
 	Wildcard        string
 	WildcardWarning string
+	Kinds           []TargetKind
 	Validate        func(string) error
 	ValidateSet     func([]string) error
+}
+
+// TargetKind is one kind of target, such as a repository or a project. Forms lists the accepted spellings
+// with upper-case placeholders, for example repos/OWNER/REPO, and Description says what an entry allows.
+type TargetKind struct {
+	Name        string
+	Description string
+	Forms       []string
 }
 
 // ToolMetadata is the configuration view of one registered operation: the ID a connection's tools list

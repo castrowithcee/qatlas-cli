@@ -155,6 +155,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.projectdrafts.create":     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		"github.projectissues.create":     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		"github.projectitems.list":        readRisk,
+		"github.projects.list":            readRisk,
+		"github.repositories.list":        readRisk,
 		"github.projectitems.get":         readRisk,
 		"github.issues.list":              readRisk,
 		"github.issues.get":               readRisk,
@@ -203,8 +205,9 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		if descriptor.Risk.Effect != capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationRequired {
 			t.Errorf("%s changes without confirmation", descriptor.ID)
 		}
+		owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "document"} {
-			if strings.Contains(string(descriptor.InputSchema), forbidden) {
+			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("%s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
 		}

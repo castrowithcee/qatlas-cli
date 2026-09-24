@@ -180,7 +180,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none.
 		"1,Self-hosted documentation platform for team knowledge,company handbook,bookstack,5",
 		"1,Cloud-based instant messaging service,\"\",telegram,3",
-		",\"\",github,37", ",\"\",lexware,3", ",\"\",nextcloud,6", ",\"\",seatable,7", ",\"\",todoist,39",
+		",\"\",github,39", ",\"\",lexware,3", ",\"\",nextcloud,6", ",\"\",seatable,7", ",\"\",todoist,39",
 		",\"\",twentycrm,5", "0,Code hosting and software collaboration platform,",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -377,7 +377,8 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.issues.get", "github.issues.list", "github.issues.reopen", "github.issues.update",
 			"github.projectdrafts.create", "github.projectissues.create", "github.projectitems.add",
 			"github.projectitems.archive", "github.projectitems.get", "github.projectitems.list",
-			"github.projectitems.update", "github.workflowartifacts.list", "github.workflowfiles.create",
+			"github.projectitems.update", "github.projects.list", "github.repositories.list",
+			"github.workflowartifacts.list", "github.workflowfiles.create",
 			"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowfiles.update",
 			"github.workflowjobs.get", "github.workflowjobs.list", "github.workflowjobs.log",
 			"github.workflowpermissions.get", "github.workflowpermissions.update", "github.workflowruns.cancel",

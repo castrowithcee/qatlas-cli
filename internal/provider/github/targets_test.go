@@ -184,7 +184,9 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 			t.Fatalf("%s schema = %v", descriptor.ID, err)
 		}
 		names := []string{"repository"}
-		if strings.HasPrefix(descriptor.ID, Provider+".project") {
+		if descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID {
+			names = []string{"owner"}
+		} else if strings.HasPrefix(descriptor.ID, Provider+".project") {
 			names = []string{"project"}
 			if both[descriptor.ID] {
 				names = append(names, "repository")

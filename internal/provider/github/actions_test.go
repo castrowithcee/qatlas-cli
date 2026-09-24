@@ -293,7 +293,7 @@ func TestActionsProfilesSeparateObserverAndOperator(t *testing.T) {
 		profiles[profile.ID] = profile
 	}
 	observer, operator, read := profiles["actions-observer"], profiles["actions-operator"], profiles["read"]
-	if observer.Recommended || operator.Recommended || !read.Recommended || len(read.Tools) != 5 {
+	if observer.Recommended || operator.Recommended || !read.Recommended || len(read.Tools) != 7 {
 		t.Errorf("profiles = %+v, want the read profile unchanged and both Actions profiles not recommended", profiles)
 	}
 	if got := metadata.ProfilePermissions(observer); len(got) != 1 || got[0] != config.PermissionRead ||

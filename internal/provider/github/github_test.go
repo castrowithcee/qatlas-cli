@@ -71,6 +71,9 @@ type fakeGitHub struct {
 	failField string
 	// comments is the number of comments issue 42 holds.
 	comments int
+	// ownerRepos and ownerProjects are what the organization octo-org holds, in name and number order.
+	ownerRepos    []string
+	ownerProjects []int
 }
 
 func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +142,8 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables map[string]any) {
 	switch {
+	case strings.Contains(document, "projectsV2(first") || strings.Contains(document, "repositories(first"):
+		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
 		f.mutation(w, document, variables)
 	case strings.Contains(document, "comments(first"):
@@ -546,20 +551,23 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			t.Errorf("descriptor %s = %+v, want a safe read requiring an explicit connection", descriptor.ID, descriptor.Risk)
 		}
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "comments"} {
-			if strings.Contains(string(descriptor.InputSchema), forbidden) {
+			// Only the owner lists take an owner, as their target.
+			owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID
+			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("descriptor %s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
 		}
 	}
 	equalIDs(t, ids, []string{"github.actionspermissions.get", "github.comments.list", "github.issues.get",
-		"github.issues.list", "github.projectitems.get", "github.projectitems.list", "github.workflowartifacts.list",
+		"github.issues.list", "github.projectitems.get", "github.projectitems.list", "github.projects.list",
+		"github.repositories.list", "github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
 		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
 		"github.workflowruns.list", "github.workflows.get", "github.workflows.list"})
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 37 {
+	if len(metadata.Tools) != 39 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }
@@ -570,6 +578,8 @@ func TestTargetFormsAreValidated(t *testing.T) {
 		"orgs/octo-org/projects/12":    {kind: kindProject, scope: "orgs", owner: "octo-org", number: 12},
 		" repos/octo-org/example.go ":  {kind: kindRepository, owner: "octo-org", repo: "example.go"},
 		"repos/octo_enterprise/a-b_c1": {kind: kindRepository, owner: "octo_enterprise", repo: "a-b_c1"},
+		"users/octocat":                {kind: kindOwner, scope: "users", owner: "octocat"},
+		"orgs/octo-org":                {kind: kindOwner, scope: "orgs", owner: "octo-org"},
 	}
 	for raw, want := range valid {
 		if got, err := parseTarget(raw); err != nil || got != want {
@@ -581,7 +591,8 @@ func TestTargetFormsAreValidated(t *testing.T) {
 		"repos/octo-org/..", "repos/octo org/example", "orgs/octo-org/projects/0", "orgs/octo-org/projects/07",
 		"orgs/octo-org/projects/x", "orgs/octo-org/projects/1234567890", "teams/octo-org/projects/1",
 		"orgs/octo-org/project/1", "users/octocat/projects/3/items", "https://github.com/orgs/octo-org/projects/7",
-		"orgs/octo-org/projects/-1", "repos/octo-org/example?x=1",
+		"orgs/octo-org/projects/-1", "repos/octo-org/example?x=1", "users/", "orgs/-octo", "users/*",
+		"teams/octo-org", "users/octocat/", "repos/octo-org/", "orgs/octo org",
 	} {
 		if _, err := parseTarget(raw); err == nil {
 			t.Errorf("parseTarget(%q) accepted an unusable target", raw)
@@ -617,14 +628,16 @@ connections:
 	}
 	for _, target := range []string{"", "    target: orgs/octo-org/projects/7\n", "    target: users/octocat/projects/1\n",
 		"    target: repos/octo-org/example\n", "    targets: [repos/octo-org/example, repos/octo-org/other]\n",
-		"    targets: [repos/octo-org/*, users/octocat/projects/*, orgs/octo-org/projects/7]\n"} {
+		"    targets: [repos/octo-org/*, users/octocat/projects/*, orgs/octo-org/projects/7]\n",
+		"    target: users/octocat\n", "    targets: [orgs/octo-org, repos/octo-org/*, users/octocat]\n"} {
 		if _, err := config.Decode(strings.NewReader(document(target)), reg); err != nil {
 			t.Errorf("target %q was refused: %v", target, err)
 		}
 	}
 	for _, target := range []string{"    target: octo-org/example\n", "    target: orgs/octo-org/projects/zero\n",
 		"    targets: [repos/octo-org/*x]\n", "    targets: [repos/*/example]\n", "    targets: [orgs/octo-org/projects/*/x]\n",
-		"    targets: [repos/octo-org/example, repos/octo-org/EXAMPLE]\n"} {
+		"    targets: [repos/octo-org/example, repos/octo-org/EXAMPLE]\n", "    targets: [users/*]\n",
+		"    targets: [orgs/octo-org, orgs/OCTO-ORG]\n"} {
 		_, err := config.Decode(strings.NewReader(document(target)), reg)
 		if err == nil || !strings.Contains(err.Error(), "connections.planning") {
 			t.Errorf("target %q: err = %v, want a refused connection", target, err)
