@@ -318,6 +318,9 @@ type projectJSON struct {
 	Fields struct {
 		Nodes []fieldJSON `json:"nodes"`
 	} `json:"fields"`
+	Views struct {
+		Nodes []viewJSON `json:"nodes"`
+	} `json:"views"`
 }
 
 type ownerJSON struct {
@@ -326,13 +329,15 @@ type ownerJSON struct {
 	} `json:"owner"`
 }
 
-// projectInfo is the field model of the bound project, resolved once per request.
+// projectInfo is the field model of the bound project, and its views when a request asked for them,
+// resolved once per request.
 type projectInfo struct {
 	id            string
 	fields        map[string]fieldJSON
 	ordered       []fieldJSON
 	statusID      string
 	statusOptions []string
+	views         []viewJSON
 }
 
 func (p *projectInfo) option(value string) (string, bool) {
@@ -350,7 +355,8 @@ func projectInfoOf(op string, project target, owner ownerJSON) (*projectInfo, er
 	if owner.Owner == nil || owner.Owner.ProjectV2 == nil || owner.Owner.ProjectV2.ID == "" {
 		return nil, notFound(op, subject{in: project})
 	}
-	info := &projectInfo{id: owner.Owner.ProjectV2.ID, fields: map[string]fieldJSON{}}
+	info := &projectInfo{id: owner.Owner.ProjectV2.ID, fields: map[string]fieldJSON{},
+		views: owner.Owner.ProjectV2.Views.Nodes}
 	for _, field := range owner.Owner.ProjectV2.Fields.Nodes {
 		if field.ID == "" {
 			continue

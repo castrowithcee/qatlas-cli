@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle, the project field schema, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -10,8 +10,9 @@ updated: 2026-09-24
 # GitHub
 
 GitHub is a controlled planning provider, not a replacement for `gh`. It lists the projects and repositories
-of a user or an organization, creates, changes, copies, and deletes projects and links them to repositories,
-reads and maintains the fields of a project with their options and iterations, reads and maintains issues,
+of a user or an organization, creates, changes, copies, and deletes projects, links them to repositories, and
+marks them as templates, reads and maintains the fields of a project with their options and iterations and
+its views, reads and maintains issues,
 comments, and project items, and it observes and, when allowed, operates the
 GitHub Actions of a repository.
 On a connection that names them explicitly, it also maintains workflow files and Actions settings. It sees
@@ -66,9 +67,10 @@ One GitHub connection carries the project, issue, comment, and Actions tools tog
 offers is decided by `permissions` and `tools` alone. Reads are a connection's only default: every change
 needs `create` or `update` in the connection's `permissions`, every Actions execution needs `execute`, and a
 connection with a `tools` list offers only the tools it lists, never one added in a later version.
-`github.projects.delete`, `github.projectfields.delete`, `github.projectfieldoptions.delete`, and
-`github.projectiterations.replace` need `delete`. They and the workflow maintainer and Actions administrator
-tools are listed only: a connection without a `tools` list never offers them, whatever its permissions.
+`github.projects.delete`, `github.projectfields.delete`, `github.projectfieldoptions.delete`,
+`github.projectiterations.replace`, and `github.projectviews.delete` need `delete`. They and the workflow
+maintainer and Actions administrator tools are listed only: a connection without a `tools` list never offers
+them, whatever its permissions.
 
 ### The target of a call
 
@@ -154,9 +156,10 @@ The terminal editor starts a new connection on the setup profile `read`, which t
 `github.projectitems.add`,
 `github.projectdrafts.create`, and `github.projectissues.create`; archiving stays unticked. The profile
 `projects` ticks `[read, create, update]` with the owner lists, the
-[project lifecycle](#project-lifecycle) tools except `github.projects.delete`, and `github.projectfields.list`,
-`create`, and `update` of the [project fields](#project-fields); no profile ticks a tool with the effect
-`delete`. The
+[project lifecycle](#project-lifecycle) tools except `github.projects.delete`, the template tools,
+`github.projectfields.list`, `create`, and `update` of the [project fields](#project-fields), and
+`github.projectviews.list`, `create`, and `update` of the [project views](#project-views); no profile ticks a
+tool with the effect `delete`. The
 profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions). A profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -224,6 +227,8 @@ confirmation in its own invoke request, is sent exactly once, and follows the ru
 | `github.projects.copy` | create | non-idempotent | copies `project` with its fields and views into a new project `title` of `owner`; `include_drafts: true` copies its draft issues as well |
 | `github.projects.link` | update | idempotent | links `project` to `repository`; a linked project stays linked once |
 | `github.projects.unlink` | update | idempotent | removes the link between `project` and `repository` |
+| `github.projecttemplates.mark` | update | idempotent | marks `project` of an organization as a template |
+| `github.projecttemplates.unmark` | update | idempotent | stops offering `project` as a template |
 | `github.projects.delete` | delete | unknown | deletes `project` with its items, fields, and views; listed only |
 
 `closed: true` closes a project and `closed: false` reopens it; `public` switches its visibility, which an
@@ -235,6 +240,13 @@ project's state after the change. A repeated link or unlink succeeds again and l
 once or unlinked. A repeated delete ends as `not-found` when the project is resolved, before any mutation;
 its idempotency stays `unknown` because a delete addresses the project by number: read the current state
 before repeating one.
+
+A template is a project its organization offers when someone creates a project; `github.projects.copy` copies
+any allowed project, template or not. The template tools answer the project's state with `template`. GitHub
+marks only projects of an organization as templates: it refuses a user's project as unprocessable, so
+Qatlas refuses `github.projecttemplates.mark` for a `users/LOGIN/projects/NUMBER` project with
+`invalid-request` before a secret is read. Unmarking a project that is no template, a user's project
+included, succeeds and changes nothing.
 
 ```sh
 echo '{"owner":"orgs/octo-org","title":"Roadmap 2027"}' | qatlas invoke github.projects.create --connection projects --confirm
@@ -262,10 +274,9 @@ connections:
 
 The lifecycle tools need `project` on a classic token, or Projects read and write access of the organization
 on a fine-grained token; the projects of a user need a classic token. A link or an unlink also needs a token
-that can see the repository. Deleting a project needs the rights of a project administrator. GitHub offers no
-API to create, change, or delete the views of a project, so Qatlas has no view tool; a copy takes the views of
-its source along. No lifecycle tool deletes a field, an option, or an item; the fields have
-[tools of their own](#project-fields).
+that can see the repository. Deleting a project needs the rights of a project administrator. A copy takes
+the views of its source along. No lifecycle tool deletes a field, an option, a view, or an item; the
+[fields](#project-fields) and the [views](#project-views) have tools of their own.
 
 ## Project fields
 
@@ -353,6 +364,64 @@ connections:
 The field tools need `project` on a classic token, or Projects read and write access of the organization on a
 fine-grained token; the projects of a user need a classic token. The issue fields an organization defines for
 its issues (`createProjectV2IssueField`) are not supported.
+
+## Project views
+
+The view tools read the views of a project and create, change, and delete them. A view is addressed by
+`view`, its number in the project, and the fields it shows by their names, compared without case and resolved
+against the project's fields and views in one query before the one change is sent. Each change needs
+confirmation in its own invoke request, is sent exactly once, and follows the rules under
+[unclear outcomes](#unclear-outcomes-and-conflicts).
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.projectviews.list` | read | safe | lists every view with its layout, filter, visible fields, grouping, board columns, and sorting |
+| `github.projectviews.create` | create | non-idempotent | creates one `table`, `board`, or `roadmap` view with `name`, `fields`, and `filter` |
+| `github.projectviews.update` | update | idempotent | changes `name`, `layout`, `filter`, or `fields`; left-out settings stay |
+| `github.projectviews.delete` | delete | unknown | deletes one view; the items and fields stay; listed only |
+
+`github.projectviews.list` answers `views` in project order, at most 100. Each view has `number`, `name`,
+`layout` (`table`, `board`, or `roadmap`), `filter` (empty without one), `fields` (the visible fields in
+the view's order, the title first), `group_by` and `column_by` (field names), and `sort_by` (entries with
+`field` and `direction`, `asc` or `desc`). Names and filters are untrusted data.
+
+```sh
+qatlas invoke github.projectviews.list --connection projects --arg project=orgs/octo-org/projects/7
+echo '{"project":"orgs/octo-org/projects/7","name":"Bugs","layout":"board","fields":["Assignees","Priority"],
+  "filter":"label:bug -status:Done"}' | qatlas invoke github.projectviews.create --connection projects --confirm
+echo '{"project":"orgs/octo-org/projects/7","view":2,"name":"Open work","fields":["Status","Sprint"]}' |
+  qatlas invoke github.projectviews.update --connection projects --confirm
+```
+
+`fields` names every field the view shows, in the view's order. GitHub shows the title first in every
+view, so `[]` leaves only the title; without `fields`, a new view shows GitHub's default selection. A roadmap
+takes no visible fields: GitHub refuses them, so Qatlas refuses `fields` for a roadmap, new or existing,
+before any change. A new board without further settings takes its columns from `Status`; a board changed to
+another layout no longer reports `column_by`.
+
+`filter` is written in GitHub's project filter syntax, such as `status:Todo` or `label:bug -status:Done`. It is
+the only filter expression Qatlas takes from a caller, and it reaches GitHub as one value, never as part of a
+query. GitHub judges the syntax and keeps a filter it cannot read as written. A filter holds at most 512
+characters, GitHub's own limit, and no control characters; `""` removes it.
+
+GitHub creates a view without a filter, so `github.projectviews.create` with a non-empty `filter` sends two
+changes: the create, and then the filter of the new view. Once the view exists, the answer reports it in
+`view` together with `complete`. When the filter could not be set, `complete` is false and `error` says why,
+including when the filter may have been set without a confirmation; set it with `github.projectviews.update`
+then, instead of creating the view again. A repeated create makes a second view.
+
+A view number the project lacks is refused before any change and names the project's view numbers, and an
+unknown field names the project's fields. `github.projectviews.delete` needs `delete` in the connection's
+`permissions` and its name in the connection's `tools`. GitHub keeps the last view of a project, so Qatlas
+refuses to delete it. A repeated delete is refused once the number is gone; its idempotency stays `unknown`,
+because a delete addresses the view by number.
+
+GitHub's API does not set the grouping, the sorting, the board column field, field widths, the slice, or
+field sums of a view. The list reads the grouping, the sorting, and the board columns as GitHub reports them;
+widths, slices, and sums are neither read nor set. Change them in GitHub itself.
+
+The view tools need `project` on a classic token, or Projects read and write access of the organization on a
+fine-grained token; the projects of a user need a classic token.
 
 ## Project-first use
 

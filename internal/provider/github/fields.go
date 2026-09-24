@@ -412,12 +412,21 @@ func (c *Client) fieldNamed(ctx context.Context, op, name string) (*projectInfo,
 	if err != nil {
 		return nil, fieldJSON{}, err
 	}
-	field, ok := info.field(name)
-	if !ok {
-		return nil, fieldJSON{}, invalidRequest("field is not a field of this project; its fields are " +
-			strings.Join(info.fieldNames(), ", "))
+	field, err := info.named("field", name)
+	if err != nil {
+		return nil, fieldJSON{}, err
 	}
 	return info, field, nil
+}
+
+// named finds the field a name in argument addresses, or names every field of the project in its refusal.
+func (info *projectInfo) named(argument, name string) (fieldJSON, error) {
+	field, ok := info.field(name)
+	if !ok {
+		return fieldJSON{}, invalidRequest(argument + " is not a field of this project; its fields are " +
+			strings.Join(info.fieldNames(), ", "))
+	}
+	return field, nil
 }
 
 func (info *projectInfo) fieldNames() []string {
@@ -1184,9 +1193,9 @@ func invokeFieldsList(ctx context.Context, resolved *config.Resolved, secrets *s
 	return bound.locate(client.ListFields(ctx))
 }
 
-// fieldHandler decodes the arguments of one field change, checks its target and the arguments, and only
-// then opens the client that runs it.
-func fieldHandler[T interface{ check() error }](op string, run func(*Client, context.Context, T) (any, error)) capability.Handler {
+// projectHandler decodes the arguments of one change of a project's fields or views, checks its target and
+// the arguments, and only then opens the client that runs it.
+func projectHandler[T interface{ check() error }](op string, run func(*Client, context.Context, T) (any, error)) capability.Handler {
 	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 		raw json.RawMessage) (any, error) {
 		var arguments T
@@ -1216,21 +1225,21 @@ type fieldName struct {
 func (name fieldName) check() error { return checkName("field", name.Field) }
 
 var (
-	invokeFieldsCreate = fieldHandler("create project field",
+	invokeFieldsCreate = projectHandler("create project field",
 		func(c *Client, ctx context.Context, spec FieldSpec) (any, error) { return c.CreateField(ctx, spec) })
-	invokeFieldsUpdate = fieldHandler("update project field",
+	invokeFieldsUpdate = projectHandler("update project field",
 		func(c *Client, ctx context.Context, changes FieldChanges) (any, error) {
 			return c.UpdateField(ctx, changes)
 		})
-	invokeFieldOptionsDelete = fieldHandler("delete project field options",
+	invokeFieldOptionsDelete = projectHandler("delete project field options",
 		func(c *Client, ctx context.Context, removal OptionRemoval) (any, error) {
 			return c.RemoveOptions(ctx, removal)
 		})
-	invokeIterationsReplace = fieldHandler("replace project iterations",
+	invokeIterationsReplace = projectHandler("replace project iterations",
 		func(c *Client, ctx context.Context, changes IterationChanges) (any, error) {
 			return c.ReplaceIterations(ctx, changes)
 		})
-	invokeFieldsDelete = fieldHandler("delete project field",
+	invokeFieldsDelete = projectHandler("delete project field",
 		func(c *Client, ctx context.Context, name fieldName) (any, error) {
 			return c.DeleteField(ctx, name.Field)
 		})

@@ -237,7 +237,7 @@ defaults:
 		}
 		for provider, want := range map[string][2]string{
 			"bookstack": {"2", "5"}, "telegram": {"0", "3"}, "lexware": {"0", "3"}, "twentycrm": {"0", "5"},
-			"seatable": {"0", "7"}, "nextcloud": {"0", "6"}, "github": {"0", "51"}, "todoist": {"0", "39"},
+			"seatable": {"0", "7"}, "nextcloud": {"0", "6"}, "github": {"0", "57"}, "todoist": {"0", "39"},
 		} {
 			if rows[provider] != want {
 				t.Errorf("%s = %v connections and tools, want %v:\n%s", provider, rows[provider], want, stdout)

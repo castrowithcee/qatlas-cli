@@ -271,10 +271,11 @@ const fieldNodeSelection = `... on ProjectV2FieldCommon{id name dataType} ` +
 // option and iteration. GitHub holds at most 50 fields per project, so one page reads them all.
 const planningFieldSelection = `fields(first:100){nodes{` + fieldNodeSelection + `}}`
 
-// planningRequest names what one change resolves before it writes: the field model, an item that has to
-// belong to the project, or an issue of an allowed repository that is to be added.
+// planningRequest names what one change resolves before it writes: the field model, the views, an item that
+// has to belong to the project, or an issue of an allowed repository that is to be added.
 type planningRequest struct {
 	fields     bool
+	views      bool
 	item       string
 	repository target
 	number     int
@@ -296,12 +297,15 @@ type planningJSON struct {
 }
 
 // resolve reads everything one change needs in exactly one query: the project and, as requested, its field
-// model, an item it must hold, and the node of an issue. It returns the project and the issue node.
+// model, its views, an item it must hold, and the node of an issue. It returns the project and the issue node.
 func (c *Client) resolve(ctx context.Context, op string, request planningRequest) (*projectInfo, string, error) {
 	declarations := "$owner:String!,$number:Int!"
 	selection := "id"
 	if request.fields {
 		selection += " " + planningFieldSelection
+	}
+	if request.views {
+		selection += " " + viewsSelection
 	}
 	body := `owner:` + c.target.ownerField() + `(login:$owner){projectV2(number:$number){` + selection + `}}`
 	variables := c.projectVariables()

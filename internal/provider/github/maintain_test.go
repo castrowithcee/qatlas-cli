@@ -215,7 +215,7 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 		guarded[id] = true
 	}
 	deletes := map[string]bool{projectsDelete.ID: true, fieldsDelete.ID: true, fieldOptionsDelete.ID: true,
-		iterationsReplace.ID: true}
+		iterationsReplace.ID: true, viewsDelete.ID: true}
 	for _, descriptor := range reg.Provider(Provider) {
 		if descriptor.RequiresToolAllowList != (guarded[descriptor.ID] || deletes[descriptor.ID]) {
 			t.Errorf("%s requires an allow-list = %t", descriptor.ID, descriptor.RequiresToolAllowList)
@@ -229,7 +229,7 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 		}
 	}
 	if marked != len(guardedTools)+len(deletes) || len(guardedTools) != 10 {
-		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools and the four deletes", marked)
+		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools and the five deletes", marked)
 	}
 	profiles := map[string]config.ToolProfile{}
 	for _, profile := range metadata.Profiles {

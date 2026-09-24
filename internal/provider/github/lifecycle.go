@@ -11,11 +11,12 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// The project lifecycle tools create, change, close, reopen, copy, and delete a project and link it to a
-// repository or unlink it. A new project has no number yet, so creating one, and the destination of a copy,
-// need the owner as an owner target, or a connection without targets; a project pattern of the owner is not
-// enough. Every other lifecycle tool checks the project like the other project tools, and a link or an
-// unlink checks the repository as well. GitHub offers no API for the views of a project.
+// The project lifecycle tools create, change, close, reopen, copy, and delete a project, link it to a
+// repository or unlink it, and mark it as a template or unmark it. A new project has no number yet, so
+// creating one, and the destination of a copy, need the owner as an owner target, or a connection without
+// targets; a project pattern of the owner is not enough. Every other lifecycle tool checks the project like
+// the other project tools, and a link or an unlink checks the repository as well. GitHub marks only projects
+// of an organization as templates.
 
 // The state of a project after a change. The update names its project through its target field; a create
 // and a copy name the new project inside created.
@@ -196,6 +197,53 @@ var projectsUnlink = capability.Descriptor{
 const linkedOutput = `{"type":"object","properties":{"linked":{"type":"boolean"}},"required":["linked"],` +
 	`"additionalProperties":false}`
 
+const templateOutput = `{"type":"object","properties":{` + projectStateProperties + `,"template":{"type":"boolean"}},` +
+	`"required":[` + projectStateRequired + `,"template"],"additionalProperties":false}`
+
+var templateFields = []capability.Field{
+	{Name: "title", Description: "Project title, untrusted data"},
+	{Name: "url", Description: "Web address of the project"},
+	{Name: "template", Description: "True while the project is a template of its organization"},
+}
+
+var templatesMark = capability.Descriptor{
+	ID:      Provider + ".projecttemplates.mark",
+	Version: 1,
+	Title:   "Mark a GitHub project as a template",
+	Description: "Mark one project of an organization an explicit connection allows as a template, which the " +
+		"organization offers when a project is created; GitHub marks no project of a user",
+	Tags:                       []string{"github", "projects", "templates", "update", "planning"},
+	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema:                json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	OutputSchema:               json.RawMessage(templateOutput),
+	Fields:                     templateFields,
+	Examples: []capability.Example{{
+		Description: "Offer a project as a template",
+		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7"}`),
+	}},
+}
+
+var templatesUnmark = capability.Descriptor{
+	ID:      Provider + ".projecttemplates.unmark",
+	Version: 1,
+	Title:   "Unmark a GitHub project as a template",
+	Description: "Stop offering one project an explicit connection allows as a template; the project itself " +
+		"stays unchanged",
+	Tags:                       []string{"github", "projects", "templates", "update", "planning"},
+	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema:                json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	OutputSchema:               json.RawMessage(templateOutput),
+	Fields:                     templateFields,
+	Examples: []capability.Example{{
+		Description: "Withdraw a template",
+		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7"}`),
+	}},
+}
+
 var linkedField = capability.Field{Name: "linked", Description: "True after a link, false after an unlink"}
 
 // lifecycleOperations are the project lifecycle tools.
@@ -207,6 +255,8 @@ func lifecycleOperations() []capability.Operation {
 		{Descriptor: projectsCopy, Handler: capability.Handler(invokeProjectsCopy)},
 		{Descriptor: projectsLink, Handler: capability.Handler(invokeProjectsLink(true))},
 		{Descriptor: projectsUnlink, Handler: capability.Handler(invokeProjectsLink(false))},
+		{Descriptor: templatesMark, Handler: capability.Handler(invokeProjectsTemplate(true))},
+		{Descriptor: templatesUnmark, Handler: capability.Handler(invokeProjectsTemplate(false))},
 	}
 }
 
@@ -228,6 +278,12 @@ type Created struct {
 // Deleted is the answer of a deleted project.
 type Deleted struct {
 	Deleted bool `json:"deleted"`
+}
+
+// Templated is a project after it was marked or unmarked as a template.
+type Templated struct {
+	ProjectState
+	Template bool `json:"template"`
 }
 
 // Linked is the answer of a link or an unlink.
@@ -279,14 +335,20 @@ const (
 		`input:{projectId:$project,repositoryId:$repository}){clientMutationId}}`
 	unlinkProjectMutation = `mutation($project:ID!,$repository:ID!){link:unlinkProjectV2FromRepository(` +
 		`input:{projectId:$project,repositoryId:$repository}){clientMutationId}}`
+	templateSelection    = `projectV2{number title url closed public template}`
+	markTemplateMutation = `mutation($project:ID!){template:markProjectV2AsTemplate(input:{projectId:$project}){` +
+		templateSelection + `}}`
+	unmarkTemplateMutation = `mutation($project:ID!){template:unmarkProjectV2AsTemplate(input:{projectId:$project}){` +
+		templateSelection + `}}`
 )
 
 type projectStateJSON struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	URL    string `json:"url"`
-	Closed bool   `json:"closed"`
-	Public bool   `json:"public"`
+	Number   int    `json:"number"`
+	Title    string `json:"title"`
+	URL      string `json:"url"`
+	Closed   bool   `json:"closed"`
+	Public   bool   `json:"public"`
+	Template bool   `json:"template"`
 }
 
 type projectAnswerJSON struct {
@@ -494,6 +556,51 @@ func (c *Client) linkProject(ctx context.Context, repo target, link bool) (*Link
 	return &Linked{Linked: link}, nil
 }
 
+// checkTemplateOwner refuses to mark a project of a user as a template: GitHub marks only projects of an
+// organization and answers any other with a bare refusal.
+func checkTemplateOwner(project target) error {
+	if project.scope != "orgs" {
+		return invalidRequest("GitHub marks only a project of an organization as a template, and " +
+			project.argument() + " belongs to a user")
+	}
+	return nil
+}
+
+// markTemplate marks the bound project as a template, or unmarks it. Unmarking a project that is no template
+// succeeds and changes nothing.
+func (c *Client) markTemplate(ctx context.Context, template bool) (*Templated, error) {
+	op, mutation := "mark project as template", markTemplateMutation
+	if !template {
+		op, mutation = "unmark project as template", unmarkTemplateMutation
+	}
+	if c.target.kind != kindProject {
+		return nil, providerError(op, "this connection is not bound to a project")
+	}
+	if template {
+		if err := checkTemplateOwner(c.target); err != nil {
+			return nil, err
+		}
+	}
+	info, _, err := c.resolve(ctx, op, planningRequest{})
+	if err != nil {
+		return nil, err
+	}
+	var answer struct {
+		Template *projectAnswerJSON `json:"template"`
+	}
+	if err := c.mutate(ctx, op, mutation, map[string]any{"project": info.id}, &answer); err != nil {
+		return nil, err
+	}
+	state, err := stateOf(op, c.target, answer.Template)
+	if err != nil {
+		return nil, err
+	}
+	if state.Number != c.target.number {
+		return nil, invalidResponse(op, true)
+	}
+	return &Templated{ProjectState: *state, Template: answer.Template.Project.Template}, nil
+}
+
 // The handlers check every target and argument before a credential is resolved, so a refused request never
 // becomes a secret read or a provider call.
 
@@ -598,5 +705,26 @@ func invokeProjectsLink(link bool) func(context.Context, *config.Resolved, *secr
 			return nil, err
 		}
 		return bound.locate(repo.locate(client.linkProject(ctx, repo, link)))
+	}
+}
+
+func invokeProjectsTemplate(template bool) func(context.Context, *config.Resolved, *secret.Resolver,
+	*redact.Redactor, json.RawMessage) (any, error) {
+	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+		raw json.RawMessage) (any, error) {
+		bound, err := selectTarget(resolved, kindProject, raw)
+		if err != nil {
+			return nil, err
+		}
+		if template {
+			if err := checkTemplateOwner(bound); err != nil {
+				return nil, err
+			}
+		}
+		client, err := openAt(resolved, secrets, red, bound)
+		if err != nil {
+			return nil, err
+		}
+		return bound.locate(client.markTemplate(ctx, template))
 	}
 }
