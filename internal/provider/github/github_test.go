@@ -148,6 +148,7 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 	case f.lifecycle(w, document, variables):
 	case f.fieldSchema(w, document, variables):
 	case f.viewChange(w, document, variables):
+	case f.itemChange(w, document, variables):
 	case strings.Contains(document, "projectsV2(first") || strings.Contains(document, "repositories(first"):
 		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
@@ -155,11 +156,11 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 	case strings.Contains(document, "comments(first"):
 		f.commentsPage(w, variables)
 	case strings.Contains(document, "$repoOwner"):
-		f.issueLookup(w, variables)
+		f.planningLookup(w, variables)
 	case strings.Contains(document, "items(first"):
 		f.itemsPage(w, variables)
 	case strings.Contains(document, "item:node"):
-		f.itemDetail(w, variables)
+		f.planningLookup(w, variables)
 	case strings.Contains(document, "projectV2(number"):
 		if variables["owner"] != "octo-org" || variables["number"] != float64(7) ||
 			!strings.Contains(document, "owner:organization(") {
@@ -221,7 +222,7 @@ func itemNodeJSON(item fakeItem, project string, withBody bool) string {
 		labels[i] = `{"name":"` + label + `"}`
 	}
 	people := fmt.Sprintf(`"assignees":{"totalCount":%d,"nodes":[%s]}`, len(logins), strings.Join(logins, ","))
-	content := `{"__typename":"DraftIssue","title":"` + item.title + `",` + people
+	content := `{"__typename":"DraftIssue","id":"DI_` + item.id + `","title":"` + item.title + `",` + people
 	switch item.kind {
 	case "ISSUE", "PULL_REQUEST":
 		state := `"issueState":"OPEN"`
@@ -333,25 +334,64 @@ func splitTerms(query string) []string {
 	return terms
 }
 
-func (f *fakeGitHub) itemDetail(w http.ResponseWriter, variables map[string]any) {
-	id, _ := variables["item"].(string)
-	item := "null"
-	for _, candidate := range f.items {
-		if candidate.id == id {
-			item = itemNodeJSON(candidate, projectID, true)
+// planningLookup answers a planning query that resolves the project and, as requested, the item and the item
+// after it, a repository or one of its issues, and the users to assign. An item of another project is answered
+// with that project; an unknown item, number 7, which is a pull request, and the login ghost are not found.
+func (f *fakeGitHub) planningLookup(w http.ResponseWriter, variables map[string]any) {
+	data := map[string]json.RawMessage{"owner": json.RawMessage(`{"projectV2":` + f.projectJSON() + `}`)}
+	errs := []string{}
+	notFound := func(path ...string) {
+		quoted, _ := json.Marshal(path)
+		errs = append(errs, `{"type":"NOT_FOUND","path":`+string(quoted)+`,"message":"Could not resolve"}`)
+	}
+	for _, alias := range []string{"item", "after"} {
+		id, ok := variables[alias].(string)
+		if !ok {
+			continue
+		}
+		node := "null"
+		for _, candidate := range f.items {
+			if candidate.id == id {
+				node = itemNodeJSON(candidate, projectID, true)
+			}
+		}
+		for _, candidate := range f.foreign {
+			if candidate.id == id {
+				node = itemNodeJSON(candidate, foreignID, true)
+			}
+		}
+		if data[alias] = json.RawMessage(node); node == "null" {
+			notFound(alias)
 		}
 	}
-	for _, candidate := range f.foreign {
-		if candidate.id == id {
-			item = itemNodeJSON(candidate, foreignID, true)
+	if name, ok := variables["repoName"]; ok {
+		switch issue := variables["issue"]; issue {
+		case nil:
+			data["repository"] = json.RawMessage(fmt.Sprintf(`{"id":"R_%v"}`, name))
+		case float64(7):
+			data["repository"] = json.RawMessage(`{"issue":null}`)
+			notFound("repository", "issue")
+		default:
+			data["repository"] = json.RawMessage(fmt.Sprintf(`{"issue":{"id":"I_%v_%v"}}`, name, issue))
 		}
 	}
-	if item == "null" {
-		fmt.Fprintf(w, `{"data":{"owner":{"projectV2":%s},"item":null},"errors":[{"type":"NOT_FOUND",`+
-			`"path":["item"],"message":"Could not resolve to a node"}]}`, f.projectJSON())
-		return
+	for i := 0; ; i++ {
+		alias := "assignee" + strconv.Itoa(i)
+		login, ok := variables[alias].(string)
+		if !ok {
+			break
+		}
+		data[alias] = json.RawMessage(`{"id":"U_` + login + `"}`)
+		if login == "ghost" {
+			data[alias] = json.RawMessage("null")
+			notFound(alias)
+		}
 	}
-	fmt.Fprintf(w, `{"data":{"owner":{"projectV2":%s},"item":%s}}`, f.projectJSON(), item)
+	answer, _ := json.Marshal(map[string]any{"data": data})
+	if len(errs) > 0 {
+		answer = append(answer[:len(answer)-1], []byte(`,"errors":[`+strings.Join(errs, ",")+`]}`)...)
+	}
+	_, _ = w.Write(answer)
 }
 
 func (f *fakeGitHub) issuesPage(w http.ResponseWriter, variables map[string]any) {
@@ -602,7 +642,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 57 {
+	if len(metadata.Tools) != 62 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

@@ -61,7 +61,7 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 		name, schema, argument = "project", projectSchema, projectArgument
 		fields = []capability.Field{projectField}
 		switch d.ID {
-		case itemsAdd.ID, projectIssuesCreate.ID, projectsLink.ID, projectsUnlink.ID:
+		case itemsAdd.ID, projectIssuesCreate.ID, draftsConvert.ID, projectsLink.ID, projectsUnlink.ID:
 			fields = append(fields, repositoryField)
 		case projectsCopy.ID:
 			fields = append(fields, newOwnerField)

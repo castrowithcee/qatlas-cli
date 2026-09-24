@@ -523,30 +523,14 @@ func (c *Client) linkProject(ctx context.Context, repo target, link bool) (*Link
 	if c.target.kind != kindProject {
 		return nil, providerError(op, "this connection is not bound to a project")
 	}
-	variables := c.projectVariables()
-	variables["repoOwner"], variables["repoName"] = repo.owner, repo.repo
-	var resolved struct {
-		ownerJSON
-		Repository *struct {
-			ID string `json:"id"`
-		} `json:"repository"`
-	}
-	if err := c.graphql(ctx, op, `query($owner:String!,$number:Int!,$repoOwner:String!,$repoName:String!){`+
-		`owner:`+c.target.ownerField()+`(login:$owner){projectV2(number:$number){id}} `+
-		`repository(owner:$repoOwner,name:$repoName){id}}`, variables, &resolved); err != nil {
-		return nil, err
-	}
-	info, err := projectInfoOf(op, c.target, resolved.ownerJSON)
+	info, nodes, err := c.resolve(ctx, op, planningRequest{repository: repo})
 	if err != nil {
 		return nil, err
-	}
-	if resolved.Repository == nil || resolved.Repository.ID == "" {
-		return nil, notFound(op, subject{in: repo})
 	}
 	var answer struct {
 		Link *json.RawMessage `json:"link"`
 	}
-	if err := c.mutate(ctx, op, mutation, map[string]any{"project": info.id, "repository": resolved.Repository.ID},
+	if err := c.mutate(ctx, op, mutation, map[string]any{"project": info.id, "repository": nodes.repository},
 		&answer); err != nil {
 		return nil, err
 	}

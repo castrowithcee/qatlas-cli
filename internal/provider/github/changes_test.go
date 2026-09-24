@@ -59,19 +59,6 @@ func (f *fakeGitHub) mutation(w http.ResponseWriter, document string, variables 
 	}
 }
 
-// issueLookup answers a planning query that resolves the project and one issue of a repository. Number 7
-// is a pull request, which the issue field of a repository does not resolve.
-func (f *fakeGitHub) issueLookup(w http.ResponseWriter, variables map[string]any) {
-	if variables["issue"] == float64(7) {
-		fmt.Fprintf(w, `{"data":{"owner":{"projectV2":%s},"repository":{"issue":null}},`+
-			`"errors":[{"type":"NOT_FOUND","path":["repository","issue"],"message":"Could not resolve to an Issue"}]}`,
-			f.projectJSON())
-		return
-	}
-	fmt.Fprintf(w, `{"data":{"owner":{"projectV2":%s},"repository":{"issue":{"id":"I_%v_%v"}}}}`,
-		f.projectJSON(), variables["repoName"], variables["issue"])
-}
-
 // commentsPage answers the comments of issue 42 in pages; every other number is no issue.
 func (f *fakeGitHub) commentsPage(w http.ResponseWriter, variables map[string]any) {
 	if variables["number"] != float64(42) {
@@ -154,6 +141,13 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.projectitems.archive": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.projectdrafts.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		"github.projectissues.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.projectitems.delete":  changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"github.projectitems.unarchive": changeRisk(capability.EffectUpdate,
+			capability.IdempotencyIdempotent),
+		"github.projectitems.move":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projectdrafts.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projectdrafts.convert": changeRisk(capability.EffectCreate,
+			capability.IdempotencyIdempotent),
 		"github.projectitems.list":    readRisk,
 		"github.projects.list":        readRisk,
 		"github.projects.create":      changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),

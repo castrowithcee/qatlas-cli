@@ -37,7 +37,8 @@ func (f *fakeGitHub) lifecycle(w http.ResponseWriter, document string, variables
 		default:
 			notFound("owner")
 		}
-	case strings.Contains(document, "repository(owner:$repoOwner,name:$repoName){id}"):
+	case strings.Contains(document, "repository(owner:$repoOwner,name:$repoName){id}") &&
+		!strings.Contains(document, "item:node"):
 		if variables["repoOwner"] != "octo-org" || variables["repoName"] != "example" {
 			fmt.Fprintf(w, `{"data":{"owner":{"projectV2":{"id":%q}},"repository":null},"errors":[{"type":`+
 				`"NOT_FOUND","path":["repository"],"message":"Could not resolve"}]}`, projectID)

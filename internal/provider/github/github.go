@@ -8,7 +8,8 @@
 // argument; the argument may be left out when the targets allow exactly one of its kind. The owner lists name
 // the projects and repositories of one user or organization that the targets allow. The project tools list
 // compact, server-side filtered items of a project page by page, read the full content of one selected item,
-// and maintain its items and their field values; the project lifecycle tools create, change, close, copy, and,
+// and maintain its items, their order, their field values, and its draft issues, and, only on a connection
+// whose tools list names it, delete an item; the project lifecycle tools create, change, close, copy, and,
 // only on a connection whose tools list names it, delete a project, link it to repositories, and mark it as a
 // template; the field schema tools read, create, and change the fields of a project with their options and
 // iterations and, only on a connection whose tools list names them, remove options, iterations, and fields;
@@ -291,8 +292,8 @@ var issuesGet = capability.Descriptor{
 	}},
 }
 
-// Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the project
-// lifecycle, field schema, and view tools, the Actions observer and operator tools, and the listed-only
+// Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the item and
+// draft tools, the project lifecycle, field schema, and view tools, the Actions observer and operator tools, and the listed-only
 // workflow maintainer and Actions administrator tools. Only reads are a connection's default: every change
 // and every execution needs a permission of its own, and a listed-only tool also its name in the
 // connection's tools list.
@@ -351,9 +352,10 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "planning", Title: "Project planning",
 			Description: "lists projects and repositories, reads the project, and changes its items: sets " +
-				"fields, adds issues, and creates drafts and planned issues; archiving stays unticked",
+				"fields, adds issues, orders items, creates and edits drafts, converts drafts into issues, and " +
+				"creates planned issues; archiving and restoring stay unticked",
 			Tools: []string{projectsList.ID, repositoriesList.ID, itemsList.ID, itemsGet.ID, itemsUpdate.ID,
-				itemsAdd.ID, draftsCreate.ID, projectIssuesCreate.ID},
+				itemsAdd.ID, itemsMove.ID, draftsCreate.ID, draftsUpdate.ID, draftsConvert.ID, projectIssuesCreate.ID},
 		}, {
 			ID: "projects", Title: "Project lifecycle",
 			Description: "lists projects and repositories, creates, updates, closes, reopens, and copies " +
@@ -407,8 +409,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: itemsArchive, Handler: capability.Handler(invokeItemsArchive)},
 		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
-	}, append(append(append(append(lifecycleOperations(), fieldOperations()...), viewOperations()...),
-		actionsOperations()...), maintenanceOperations()...)...)
+	}, append(append(append(append(append(itemOperations(), lifecycleOperations()...), fieldOperations()...),
+		viewOperations()...), actionsOperations()...), maintenanceOperations()...)...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1019,8 +1021,8 @@ func notFound(op string, s subject) *provider.Error {
 }
 
 // graphQLSubject names what a GraphQL error refers to by the aliases of its path: owner is the project of the
-// bound target, repository a repository or an issue inside it, item a project item, and anything else a
-// resource inside the bound target. A repository tool binds the repository and asks for an issue as number;
+// bound target, repository a repository or an issue inside it, item and after a project item, assigneeN a
+// user to assign, and anything else a resource inside the bound target. A repository tool binds the repository and asks for an issue as number;
 // a project tool that plans an issue sends its repository as repoOwner and repoName and the issue as issue.
 func (c *Client) graphQLSubject(path []any, variables map[string]any) subject {
 	switch pathSegment(path, 0) {
@@ -1028,6 +1030,8 @@ func (c *Client) graphQLSubject(path []any, variables map[string]any) subject {
 		return subject{in: c.target}
 	case "item":
 		return subject{in: c.target, what: "this item"}
+	case "after":
+		return subject{in: c.target, what: "the item after_id names"}
 	case "repository":
 		s, number := subject{in: c.target}, variables["number"]
 		if c.target.kind != kindRepository {
@@ -1048,6 +1052,12 @@ func (c *Client) graphQLSubject(path []any, variables map[string]any) subject {
 			s.what = "this resource"
 		}
 		return s
+	}
+	// A user to assign is named by its login, which Qatlas checked before it was sent.
+	if segment := pathSegment(path, 0); strings.HasPrefix(segment, "assignee") {
+		if login, _ := variables[segment].(string); validLogin(login) {
+			return subject{what: "user " + login}
+		}
 	}
 	return subject{in: c.target, what: "this resource"}
 }

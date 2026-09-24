@@ -272,33 +272,58 @@ const fieldNodeSelection = `... on ProjectV2FieldCommon{id name dataType} ` +
 const planningFieldSelection = `fields(first:100){nodes{` + fieldNodeSelection + `}}`
 
 // planningRequest names what one change resolves before it writes: the field model, the views, an item that
-// has to belong to the project, or an issue of an allowed repository that is to be added.
+// has to belong to the project and, when draft is set, has to be a draft issue, a second item after that has
+// to belong to it as well, a repository the connection allows with one of its issues when number is set, and
+// the users that assignees names.
 type planningRequest struct {
 	fields     bool
 	views      bool
 	item       string
+	draft      bool
+	after      string
 	repository target
 	number     int
+	assignees  []string
+}
+
+// planningNodes are the nodes a change resolved beside the project: the issue, the repository, the draft
+// issue of the item, and the users in the order of the request's assignees.
+type planningNodes struct {
+	issue, repository, draft string
+	assignees                []string
+}
+
+type planningItemJSON struct {
+	ID      string `json:"id"`
+	Project *struct {
+		ID string `json:"id"`
+	} `json:"project"`
+	Content *struct {
+		ID string `json:"id"`
+	} `json:"content"`
 }
 
 type planningJSON struct {
 	ownerJSON
-	Item *struct {
-		ID      string `json:"id"`
-		Project *struct {
-			ID string `json:"id"`
-		} `json:"project"`
-	} `json:"item"`
+	Item       *planningItemJSON `json:"item"`
+	After      *planningItemJSON `json:"after"`
 	Repository *struct {
+		ID    string `json:"id"`
 		Issue *struct {
 			ID string `json:"id"`
 		} `json:"issue"`
 	} `json:"repository"`
 }
 
+// belongs reports whether an answered item is the requested one and belongs to the project.
+func (item *planningItemJSON) belongs(id string, info *projectInfo) bool {
+	return item != nil && item.ID == id && item.Project != nil && item.Project.ID == info.id
+}
+
 // resolve reads everything one change needs in exactly one query: the project and, as requested, its field
-// model, its views, an item it must hold, and the node of an issue. It returns the project and the issue node.
-func (c *Client) resolve(ctx context.Context, op string, request planningRequest) (*projectInfo, string, error) {
+// model, its views, the items it must hold, a repository or one of its issues, and the users to assign.
+func (c *Client) resolve(ctx context.Context, op string, request planningRequest) (*projectInfo, planningNodes, error) {
+	var nodes planningNodes
 	declarations := "$owner:String!,$number:Int!"
 	selection := "id"
 	if request.fields {
@@ -310,38 +335,86 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 	body := `owner:` + c.target.ownerField() + `(login:$owner){projectV2(number:$number){` + selection + `}}`
 	variables := c.projectVariables()
 	if request.item != "" {
+		content := ""
+		if request.draft {
+			content = " content{... on DraftIssue{id}}"
+		}
 		declarations += ",$item:ID!"
-		body += ` item:node(id:$item){... on ProjectV2Item{id project{id}}}`
+		body += ` item:node(id:$item){... on ProjectV2Item{id project{id}` + content + `}}`
 		variables["item"] = request.item
 	}
-	if request.number != 0 {
-		declarations += ",$repoOwner:String!,$repoName:String!,$issue:Int!"
-		body += ` repository(owner:$repoOwner,name:$repoName){issue(number:$issue){id}}`
+	if request.after != "" {
+		declarations += ",$after:ID!"
+		body += ` after:node(id:$after){... on ProjectV2Item{id project{id}}}`
+		variables["after"] = request.after
+	}
+	if request.repository.kind == kindRepository {
+		inner := "id"
+		declarations += ",$repoOwner:String!,$repoName:String!"
+		if request.number != 0 {
+			inner = "issue(number:$issue){id}"
+			declarations += ",$issue:Int!"
+			variables["issue"] = request.number
+		}
+		body += ` repository(owner:$repoOwner,name:$repoName){` + inner + `}`
 		variables["repoOwner"], variables["repoName"] = request.repository.owner, request.repository.repo
-		variables["issue"] = request.number
+	}
+	for i, login := range request.assignees {
+		alias := "assignee" + strconv.Itoa(i)
+		declarations += ",$" + alias + ":String!"
+		body += " " + alias + ":user(login:$" + alias + "){id}"
+		variables[alias] = login
+	}
+	var data json.RawMessage
+	if err := c.graphql(ctx, op, `query(`+declarations+`){`+body+`}`, variables, &data); err != nil {
+		return nil, nodes, err
 	}
 	var answer planningJSON
-	if err := c.graphql(ctx, op, `query(`+declarations+`){`+body+`}`, variables, &answer); err != nil {
-		return nil, "", err
+	var aliases map[string]json.RawMessage
+	if json.Unmarshal(data, &answer) != nil || json.Unmarshal(data, &aliases) != nil {
+		return nil, nodes, invalidResponse(op, false)
 	}
 	info, err := projectInfoOf(op, c.target, answer.ownerJSON)
 	if err != nil {
-		return nil, "", err
+		return nil, nodes, err
 	}
-	if request.item != "" && (answer.Item == nil || answer.Item.ID != request.item || answer.Item.Project == nil ||
-		answer.Item.Project.ID != info.id) {
-		return nil, "", notFound(op, subject{in: c.target, what: "this item"})
+	if request.item != "" && !answer.Item.belongs(request.item, info) {
+		return nil, nodes, notFound(op, subject{in: c.target, what: "this item"})
 	}
+	if request.draft {
+		if answer.Item.Content == nil || answer.Item.Content.ID == "" {
+			return nil, nodes, invalidRequest("item_id names an issue or pull request of this project; only a " +
+				"draft issue can be changed or converted this way")
+		}
+		nodes.draft = answer.Item.Content.ID
+	}
+	if request.after != "" && !answer.After.belongs(request.after, info) {
+		return nil, nodes, notFound(op, subject{in: c.target, what: "the item after_id names"})
+	}
+	for i, login := range request.assignees {
+		var user struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(aliases["assignee"+strconv.Itoa(i)], &user) != nil || user.ID == "" {
+			return nil, nodes, notFound(op, subject{what: "user " + login})
+		}
+		nodes.assignees = append(nodes.assignees, user.ID)
+	}
+	if request.repository.kind != kindRepository {
+		return info, nodes, nil
+	}
+	if answer.Repository == nil || (request.number == 0 && answer.Repository.ID == "") {
+		return nil, nodes, notFound(op, subject{in: request.repository})
+	}
+	nodes.repository = answer.Repository.ID
 	if request.number == 0 {
-		return info, "", nil
-	}
-	if answer.Repository == nil {
-		return nil, "", notFound(op, subject{in: request.repository})
+		return info, nodes, nil
 	}
 	if answer.Repository.Issue == nil || answer.Repository.Issue.ID == "" {
-		return nil, "", notFound(op, subject{in: request.repository, what: "issue #" + strconv.Itoa(request.number)})
+		return nil, nodes, notFound(op, subject{in: request.repository, what: "issue #" + strconv.Itoa(request.number)})
 	}
-	return info, answer.Repository.Issue.ID, nil
+	nodes.issue = answer.Repository.Issue.ID
+	return info, nodes, nil
 }
 
 // FieldResult is the outcome of one field change: updated, failed, unknown when the change may have been
@@ -596,7 +669,7 @@ func (c *Client) addIssue(ctx context.Context, repo target, number int, values F
 	if err != nil {
 		return nil, err
 	}
-	info, contentID, err := c.resolve(ctx, op, planningRequest{fields: len(inputs) > 0, repository: repo,
+	info, nodes, err := c.resolve(ctx, op, planningRequest{fields: len(inputs) > 0, repository: repo,
 		number: number})
 	if err != nil {
 		return nil, err
@@ -605,7 +678,7 @@ func (c *Client) addIssue(ctx context.Context, repo target, number int, values F
 	if err != nil {
 		return nil, err
 	}
-	itemID, err := c.addItem(ctx, op, info.id, contentID)
+	itemID, err := c.addItem(ctx, op, info.id, nodes.issue)
 	if err != nil {
 		return nil, err
 	}

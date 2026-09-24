@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-09-24
+updated: 2026-09-25
 ---
 
 # GitHub
@@ -13,7 +13,7 @@ GitHub is a controlled planning provider, not a replacement for `gh`. It lists t
 of a user or an organization, creates, changes, copies, and deletes projects, links them to repositories, and
 marks them as templates, reads and maintains the fields of a project with their options and iterations and
 its views, reads and maintains issues,
-comments, and project items, and it observes and, when allowed, operates the
+comments, project items, and draft issues, and it observes and, when allowed, operates the
 GitHub Actions of a repository.
 On a connection that names them explicitly, it also maintains workflow files and Actions settings. It sees
 pull requests only as project items, and it never accepts a free filter expression, a GraphQL document, or a
@@ -68,7 +68,8 @@ offers is decided by `permissions` and `tools` alone. Reads are a connection's o
 needs `create` or `update` in the connection's `permissions`, every Actions execution needs `execute`, and a
 connection with a `tools` list offers only the tools it lists, never one added in a later version.
 `github.projects.delete`, `github.projectfields.delete`, `github.projectfieldoptions.delete`,
-`github.projectiterations.replace`, and `github.projectviews.delete` need `delete`. They and the workflow
+`github.projectiterations.replace`, `github.projectviews.delete`, and `github.projectitems.delete` need
+`delete`. They and the workflow
 maintainer and Actions administrator tools are listed only: a connection without a `tools` list never offers
 them, whatever its permissions.
 
@@ -76,11 +77,11 @@ them, whatever its permissions.
 
 Every repository tool (issues, comments, Actions, workflow maintenance, and Actions administration) takes
 `repository` as `OWNER/REPO`. Every project tool (`github.projectitems.list`, `get`, `update`, `archive`,
-`github.projectdrafts.create`, `github.projects.update`, `delete`, and the
-[field schema tools](#project-fields)) takes `project` as
+`unarchive`, `move`, `delete`, `github.projectdrafts.create`, `update`, `github.projects.update`, `delete`,
+and the [field schema tools](#project-fields)) takes `project` as
 `users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`. `github.projectitems.add`,
-`github.projectissues.create`, `github.projects.link`, and `github.projects.unlink` touch both, take both,
-and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the items of
+`github.projectissues.create`, `github.projectdrafts.convert`, `github.projects.link`, and
+`github.projects.unlink` touch both, take both, and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the items of
 the project, not a target. The owner lists `github.projects.list` and `github.repositories.list` and
 `github.projects.create` take `owner` as `users/LOGIN` for a user or `orgs/LOGIN` for an organization;
 `github.projects.copy` takes the source as `project` and the destination as `owner`, and checks both.
@@ -108,7 +109,7 @@ a secret is read as well.
 Every result names the target the tool acted on in a field named like its argument, whether the argument
 chose it or a default did: `repository` as `OWNER/REPO`, `project` as `users/LOGIN/projects/NUMBER` or
 `orgs/LOGIN/projects/NUMBER`, both for `github.projectitems.add`, `github.projectissues.create`,
-`github.projects.link`, and `github.projects.unlink`, and `owner` as `users/LOGIN` or `orgs/LOGIN` for the
+`github.projectdrafts.convert`, `github.projects.link`, and `github.projects.unlink`, and `owner` as `users/LOGIN` or `orgs/LOGIN` for the
 owner lists, `github.projects.create`, and, beside `project`, `github.projects.copy`. The field sits beside the tool's own fields,
 so `github.issues.get` without an argument answers, for example:
 
@@ -153,8 +154,9 @@ The terminal editor starts a new connection on the setup profile `read`, which t
 `github.projects.list`, `github.repositories.list`, `github.projectitems.list`, `github.projectitems.get`,
 `github.issues.list`, `github.issues.get`, and `github.comments.list`. The profile `planning` ticks
 `[read, create, update]` with the owner lists, the project reads, `github.projectitems.update`,
-`github.projectitems.add`,
-`github.projectdrafts.create`, and `github.projectissues.create`; archiving stays unticked. The profile
+`github.projectitems.add`, `github.projectitems.move`, `github.projectdrafts.create`,
+`github.projectdrafts.update`, `github.projectdrafts.convert`, and `github.projectissues.create`; archiving
+and restoring stay unticked. The profile
 `projects` ticks `[read, create, update]` with the owner lists, the
 [project lifecycle](#project-lifecycle) tools except `github.projects.delete`, the template tools,
 `github.projectfields.list`, `create`, and `update` of the [project fields](#project-fields), and
@@ -467,7 +469,12 @@ read and before GitHub is contacted. The changes of projects themselves are list
 | `github.projectitems.update` | update | idempotent | sets or clears field values of one item |
 | `github.projectitems.add` | create | idempotent | adds an existing issue of a named repository, then sets fields |
 | `github.projectitems.archive` | update | idempotent | archives one item; GitHub keeps it restorable |
+| `github.projectitems.unarchive` | update | idempotent | restores one archived item |
+| `github.projectitems.move` | update | idempotent | places one item after `after_id`, or first without it |
+| `github.projectitems.delete` | delete | idempotent | removes one item from the project; an issue or pull request stays, a draft is deleted; listed only |
 | `github.projectdrafts.create` | create | non-idempotent | adds one draft issue, then sets fields |
+| `github.projectdrafts.update` | update | idempotent | replaces the title, body, or assignees of a draft; left-out fields stay |
+| `github.projectdrafts.convert` | create | idempotent | turns a draft into an issue of a named repository; the item keeps its identifier, place, and fields |
 | `github.projectissues.create` | create | non-idempotent | opens an issue in a named repository, adds it, then sets fields |
 
 Issues and comments are written through REST. `labels` and `assignees` replace the whole set; `[]` removes
@@ -487,6 +494,32 @@ echo '{"item_id":"PVTI_...","fields":{"Status":"In progress","Estimate":3,"Areas
   qatlas invoke github.projectitems.update --connection roadmap --confirm
 echo '{"repository":"octo-org/example","title":"Crash on start","fields":{"Status":"Todo"}}' |
   qatlas invoke github.projectissues.create --connection roadmap --confirm
+```
+
+### Items and drafts
+
+The item tools address an item by the `item_id` of `github.projectitems.list`. Each resolves the project and
+every item it names in one query and refuses an item of another project, or one GitHub does not show, as
+`not-found` before any change; that holds for `after_id` of `github.projectitems.move` as well.
+`github.projectitems.move` sets the project order, which views without a sort show: it places the item
+directly after `after_id`, or first when `after_id` is left out. `github.projectitems.delete` removes the item
+and its field values; the issue or pull request stays in its repository, while a draft issue exists only as
+its item and is deleted with it. A repeated delete finds no item and is refused, and an issue added again
+gets a new item, so a repetition never removes anything else.
+
+`github.projectdrafts.update` and `github.projectdrafts.convert` accept only the item of a draft issue and
+refuse an issue or pull request as `invalid-request`. `assignees` names logins and replaces every assignee of
+the draft; `[]` removes them all, and a login GitHub does not know is `not-found`. `body: ""` empties the
+body. `github.projectdrafts.convert` creates the issue in `repository`, which the targets must allow beside
+the project, and answers with its number and URL. The item keeps its identifier, its place, and its field
+values, so a repeated conversion finds no draft and is refused without opening a second issue. The token
+needs write access to the issues of that repository besides the project.
+
+```sh
+echo '{"item_id":"PVTI_...","after_id":"PVTI_..."}' |
+  qatlas invoke github.projectitems.move --connection roadmap --confirm
+echo '{"item_id":"PVTI_...","repository":"octo-org/example"}' |
+  qatlas invoke github.projectdrafts.convert --connection roadmap --confirm
 ```
 
 ### Batches and partial results
