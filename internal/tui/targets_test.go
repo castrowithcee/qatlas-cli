@@ -131,7 +131,7 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	if saved.Target != "" || !reflect.DeepEqual(saved.Targets, []string{"repos/octo/*", "orgs/octo/projects/1"}) {
 		t.Fatalf("saved %q / %v, want two targets", saved.Target, saved.Targets)
 	}
-	if got := m.describe("gh"); !strings.Contains(got, "2 targets: repos/octo/*, orgs/octo/projects/1") {
+	if got := m.describe("gh"); !strings.Contains(got, "  2 targets  ") {
 		t.Fatalf("list entry = %q", got)
 	}
 

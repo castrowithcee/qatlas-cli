@@ -56,6 +56,7 @@ func TestConnectionTestClasses(t *testing.T) {
 		provider.ClassRateLimited:     "wait and try again",
 		provider.ClassInvalidResponse: "returned an invalid response",
 		provider.ClassProviderError:   "check the root URL and API access",
+		provider.ClassNotFound:        "check the target and whether the credential may see it",
 	}
 
 	for want, explanation := range classes {

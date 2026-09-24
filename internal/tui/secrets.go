@@ -576,6 +576,20 @@ func (m *Model) storedSource(credential, role string) string {
 	return string(source)
 }
 
+// secretState is the short form of where a secret role resolves from: a mark when the secret is where the
+// credential keeps it, and otherwise the state that needs attention.
+func secretState(source string) string {
+	switch source {
+	case stateStored, statePlaintext, string(secret.SourceEnv):
+		return "✓"
+	case stateEmpty, string(secret.SourceMissing):
+		return "missing"
+	case stateOverride:
+		return "env override"
+	}
+	return source
+}
+
 // secretNextStep names the one thing to do about a keyring role in its current state, or nothing when the
 // secret is where it should be. It is built from the state alone and names no value.
 func (m *Model) secretNextStep(credential, role string) string {

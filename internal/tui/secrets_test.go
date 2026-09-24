@@ -198,7 +198,7 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 	if view := screenOf(m); !strings.Contains(view, placeKeyring) {
 		t.Errorf("the list does not show where the secrets are kept:\n%s", view)
 	}
-	if view := screenOf(m); !strings.Contains(view, stateStored) {
+	if view := screenOf(m); !strings.Contains(view, "token-id ✓, token-secret missing") {
 		t.Errorf("the list does not show where the roles resolve from:\n%s", view)
 	}
 

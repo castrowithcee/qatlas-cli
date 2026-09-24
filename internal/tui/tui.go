@@ -160,8 +160,8 @@ const (
 	// descriptionHint names the one consequence that sets this field apart from everything else in the
 	// editor: what is typed here is published by discovery, so it is the one place where free text can
 	// carry a secret out of this machine.
-	descriptionHint = "optional; one line saying what this route is for. discovery publishes it, so it " +
-		"must never carry a secret or personal data"
+	descriptionHint = "optional; what an agent uses this route for, e.g. 'issues in the test repository, " +
+		"read and create'. discovery publishes it, so it must never carry a secret or personal data"
 	// undescribedMarker ends the row of a connection that needsDescription, and undescribedHint says once
 	// under the list what it means. Neither blocks anything: the description stays optional.
 	undescribedMarker = "(no description)"
@@ -205,8 +205,8 @@ const (
 // credential may, and then it decides which secret roles exist.
 const providerLabel = "provider"
 
-// providerColumn is the leading column both lists read down. A credential whose provider is neither named
-// nor derivable says so rather than leaving a gap that shifts every column.
+// providerColumn is the provider column of the credential list. A credential whose provider is neither
+// named nor derivable says so rather than leaving an empty cell.
 func providerColumn(provider string) string {
 	if provider == "" {
 		return "(none)"
@@ -2530,19 +2530,20 @@ func (m *Model) notes() string {
 // listView draws the list screen: its frame, and between them as many rows as fit.
 func (m *Model) listView() string {
 	header, footer := m.listFrame()
+	row := m.listRows()
 	var b strings.Builder
 	b.WriteString(header)
-	start, end := m.listWindowIn(header, footer)
+	start, end := m.windowIn(&m.list, header, footer, row)
 	for i := start; i < end; i++ {
-		b.WriteString(m.listRow(i) + "\n")
+		b.WriteString(row(i) + "\n")
 	}
 	b.WriteString(footer)
 	return b.String()
 }
 
 // listFrame is everything of the list screen except its rows: above them the heading, the position of the
-// selection and the filter; below them the test result, the keys and the notes. The rows get the lines
-// that are left, so a list of any length fits the terminal and only the rows scroll.
+// selection, the filter and the column names; below them the test result, the keys and the notes. The rows
+// get the lines that are left, so a list of any length fits the terminal and only the rows scroll.
 func (m *Model) listFrame() (string, string) {
 	var head strings.Builder
 	title := titleStyle.Render(m.section.title())
@@ -2559,6 +2560,11 @@ func (m *Model) listFrame() (string, string) {
 		head.WriteString(m.filterLine(&m.list) + "\n")
 	} else {
 		head.WriteString("\n")
+	}
+	if total > 0 {
+		t := m.listTable()
+		_, width := m.fit("  ")
+		head.WriteString(hintStyle.Render(clipCells("  "+t.header(t.layout(width)), m.usable(0))) + "\n")
 	}
 	switch {
 	case total == 0:
@@ -2610,17 +2616,23 @@ func (m *Model) searchLine(l *filterList, label string) string {
 	return prefix + in.View()
 }
 
-// listRow draws the shown entry at index i of the list. The selection carries the focus marker only while
-// the list has the focus, so the screen never shows two.
-func (m *Model) listRow(i int) string {
-	return m.row(i == m.list.cursor && m.screen != screenNav, m.describe(m.list.matches[i]))
+// listRows draws the shown entry at index i of the list as a row of its table, with the columns laid out
+// once for all rows. The selection carries the focus marker only while the list has the focus, so the screen
+// never shows two.
+func (m *Model) listRows() func(i int) string {
+	t := m.listTable()
+	_, width := m.fit("  ")
+	layout := t.layout(width)
+	return func(i int) string {
+		name := m.list.matches[i]
+		return m.row(i == m.list.cursor && m.screen != screenNav, t.line(t.rows[name], layout))
+	}
 }
 
 // listWindow is the range of shown entries whose rows fit between the frame of the list screen.
-func (m *Model) listWindow() (int, int) { return m.listWindowIn(m.listFrame()) }
-
-func (m *Model) listWindowIn(header, footer string) (int, int) {
-	return m.windowIn(&m.list, header, footer, m.listRow)
+func (m *Model) listWindow() (int, int) {
+	header, footer := m.listFrame()
+	return m.windowIn(&m.list, header, footer, m.listRows())
 }
 
 // windowIn is the range of shown entries of l whose rows, drawn by row, fit between header and footer.
@@ -3182,6 +3194,8 @@ func (m *Model) testLine() string {
 			provider.ClassRateLimited:     providerName + " is rate-limiting requests; wait and try again",
 			provider.ClassInvalidResponse: providerName + " returned an invalid response",
 			provider.ClassProviderError:   providerName + " returned an unusable response; check the root URL and API access",
+			provider.ClassNotFound: providerName + " did not find the target; check the target and whether the " +
+				"credential may see it",
 		}[m.testClass]
 		if providerName == "BookStack" && m.testClass == provider.ClassAuth {
 			explanation = "BookStack rejected the token or its user lacks permission"
@@ -3192,46 +3206,84 @@ func (m *Model) testLine() string {
 	return ""
 }
 
-// describe summarises one entry for the list. It never shows a secret value.
-func (m *Model) describe(name string) string {
+// sectionColumns are the columns of the list of each section. The name leads, the free text of a section
+// is the first to give way, and a column that only adds detail to the others may be left out of a narrow
+// terminal.
+var sectionColumns = map[section][]column{
+	sectionServices: {{title: "NAME"}, {title: "PROVIDER", optional: true}, {title: "BASE URL", flex: true}},
+	sectionCredentials: {{title: "NAME"}, {title: "PROVIDER", optional: true},
+		{title: "STORAGE", optional: true, short: map[string]string{
+			placeKeyring: "keyring", placeEnv: "env", placePlaintext: "file"}},
+		{title: "SECRETS", flex: true}},
+	sectionConnections: {{title: "NAME"}, {title: "SERVICE"}, {title: "EFFECTS", optional: true},
+		{title: "TOOLS", optional: true}, {title: "TARGETS", optional: true}, {title: "DESCRIPTION", flex: true}},
+	sectionDefaults: {{title: "PROVIDER OR TOOL"}, {title: "CONNECTION"}},
+}
+
+// listTable is the table of every entry of the section, filtered out or not.
+func (m *Model) listTable() table {
+	t := table{columns: sectionColumns[m.section], rows: map[string][]string{}}
+	for _, name := range m.list.all {
+		t.rows[name] = m.cells(name)
+	}
+	return t
+}
+
+// describe is what the filter of the list looks at for one entry: every cell of its row, so what can be
+// read can be found. It never holds a secret value.
+func (m *Model) describe(name string) string { return strings.Join(m.cells(name), columnGap) }
+
+// cells are the values of one entry in the columns of its section. They never show a secret value.
+func (m *Model) cells(name string) []string {
 	switch m.section {
 	case sectionServices:
-		// The provider leads the line: what a service is comes before what it is called, and reading down
-		// the column shows at a glance how many services each provider has.
 		s := m.cfg.Services[name]
-		return fmt.Sprintf("%s  %s  %s", s.Provider, name, s.BaseURL)
+		return []string{name, s.Provider, s.BaseURL}
 	case sectionCredentials:
-		// Where the secrets are kept decides what the credential is, so it is part of the line rather than
+		// Where the secrets are kept decides what the credential is, so it is a column rather than
 		// something the reader has to open the form to find out.
 		cred := m.cfg.Credentials[name]
 		provider := m.credentialProvider(name, cred)
 		credentialRoles := m.credentialRoles(provider)
-		parts := make([]string, 0, len(credentialRoles))
+		roles := make([]string, 0, len(credentialRoles))
 		for _, role := range credentialRoles {
-			switch {
-			case cred.Type == config.CredentialTypeKeyring:
-				parts = append(parts, fmt.Sprintf("%s (%s)", role, m.storedSource(name, role)))
-			case cred.Values[role] != "":
-				parts = append(parts, fmt.Sprintf("%s=%s (%s)", role, cred.Values[role],
-					m.envSource(cred.Values[role])))
+			source := m.envSource(cred.Values[role])
+			if cred.Type == config.CredentialTypeKeyring {
+				source = m.storedSource(name, role)
 			}
+			roles = append(roles, role+" "+secretState(source))
 		}
-		return strings.TrimSpace(fmt.Sprintf("%s  %s  %s  %s", providerColumn(provider), name, m.storagePlace(name, cred),
-			strings.Join(parts, "  ")))
+		return []string{name, providerColumn(provider), m.storagePlace(name, cred), strings.Join(roles, ", ")}
 	case sectionConnections:
 		conn := m.cfg.Connections[name]
-		detail := fmt.Sprintf("%s  %s / %s", name, conn.Service, conn.Credential)
-		if targets := targetSummary(conn.TargetValues()); targets != "" {
-			detail += " / " + targets
+		effects := make([]string, 0, len(config.Permissions()))
+		for _, permission := range m.cfg.ConnectionPermissions(name) {
+			effects = append(effects, string(permission))
 		}
-		if m.needsDescription(name) {
-			detail += "  " + undescribedMarker
+		tools := "all"
+		if conn.Tools != nil {
+			tools = fmt.Sprintf("listed %d", len(conn.Tools))
+			if len(conn.Tools) == 0 {
+				tools = "none"
+			}
 		}
-		return detail
+		// A single target stands as it is, several by their number: the form lists them.
+		targets, values := "-", conn.TargetValues()
+		switch {
+		case len(values) == 1:
+			targets = values[0]
+		case len(values) > 1:
+			targets = fmt.Sprintf("%d targets", len(values))
+		}
+		description := conn.Description
+		if description == "" && m.needsDescription(name) {
+			description = undescribedMarker
+		}
+		return []string{name, conn.Service, strings.Join(effects, ","), tools, targets, description}
 	case sectionDefaults:
-		return fmt.Sprintf("%s  %s", name, m.cfg.Defaults.Connections[name])
+		return []string{name, m.cfg.Defaults.Connections[name]}
 	}
-	return name
+	return []string{name}
 }
 
 // renderField draws one form row. The focused text field is drawn by the text input itself, so the cursor

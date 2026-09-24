@@ -598,8 +598,8 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 	assertNoRawStorageTerm(t, "the saved keyring credential form", screenOf(e))
 	openSectionByName(t, e, sectionCredentials)
 	assertNoRawStorageTerm(t, "the credential list", screenOf(e))
-	if words := strings.Join(strings.Fields(screenOf(e)), " "); !strings.Contains(words, "store "+placeKeyring) ||
-		!strings.Contains(words, "vars "+placeEnv) {
+	if words := strings.Join(strings.Fields(screenOf(e)), " "); !strings.Contains(words, "store (none) "+placeKeyring) ||
+		!strings.Contains(words, "vars (none) "+placeEnv) {
 		t.Errorf("the credential list does not say where the secrets are kept:\n%s", screenOf(e))
 	}
 }

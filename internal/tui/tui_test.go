@@ -548,7 +548,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	if err != nil || len(saved.Services) != 1 || len(saved.Credentials) != 1 || len(saved.Connections) != 1 {
 		t.Fatalf("saved configuration = %+v, %v", saved, err)
 	}
-	if view := m.View(); !strings.Contains(view, "wiki  wiki / reader") ||
+	if view := m.View(); !strings.Contains(view, "wiki  wiki     read") ||
 		!strings.Contains(view, "1 Services     1") {
 		t.Errorf("the workspace or the sidebar does not show the result:\n%s", view)
 	}
@@ -1345,7 +1345,8 @@ func TestConnectionDescriptionIsEditedThroughTheForm(t *testing.T) {
 
 	openEntryForm(t, m, sectionConnections, "wiki")
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"description", "discovery publishes it", "never carry a secret"} {
+	for _, want := range []string{"description", "what an agent uses this route for",
+		"issues in the test repository", "discovery publishes it", "never carry a secret"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the connection form does not say %q:\n%s", want, screenOf(m))
 		}
@@ -1403,8 +1404,8 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 		t.Fatalf("editor reported %q", m.fail)
 	}
 	view := listed()
-	for _, want := range []string{"wiki wiki / reader " + undescribedMarker,
-		"wiki-2 wiki / reader " + undescribedMarker, "sees only names and descriptions"} {
+	for _, want := range []string{"wiki wiki read all - " + undescribedMarker,
+		"wiki-2 wiki read all - " + undescribedMarker, "sees only names and descriptions"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the list does not say %q:\n%s", want, screenOf(m))
 		}
