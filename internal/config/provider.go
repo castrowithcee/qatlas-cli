@@ -111,9 +111,13 @@ type ToolProfile struct {
 // ProviderMetadata is the configuration contract of one compiled provider. SupportedPermissions and Tools
 // are derived from the registered operations, sorted by effect order and by ID, and never declared by hand.
 // Profiles are declared by the provider and checked against its registered tools.
+//
+// Description is one English line on what kind of system the provider is, the same for every
+// installation. Discovery publishes it beside the note a user maintains in ProviderNotes, and searches both.
 type ProviderMetadata struct {
 	ID                   string
 	Name                 string
+	Description          string
 	DefaultBaseURL       string
 	DefaultPermissions   []Permission
 	SupportedPermissions []Permission

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -140,6 +141,69 @@ func TestConnectionDescriptionIsOneShortNormalizedLine(t *testing.T) {
 			// A description is free text, which is exactly where a secret gets pasted by accident.
 			if strings.Contains(message, canary) {
 				t.Errorf("error = %q, want it not to quote the description", message)
+			}
+		})
+	}
+}
+
+// A provider note is optional prose the user maintains per provider and discovery publishes. A file
+// without one stays valid, a note arrives in one normalized form, and a refusal never quotes the note.
+func TestProviderNoteIsOptionalAndOneShortNormalizedLine(t *testing.T) {
+	const canary = "config-note-canary-5d02"
+	withNotes := func(lines string) string {
+		return strings.Replace(minimal, "defaults:\n", "provider_notes:\n"+lines+"defaults:\n", 1)
+	}
+
+	t.Run("a configuration without notes stays valid", func(t *testing.T) {
+		cfg, err := Decode(strings.NewReader(minimal), testProviders)
+		if err != nil {
+			t.Fatalf("Decode() = %v", err)
+		}
+		if cfg.ProviderNotes != nil || cfg.ProviderNotes["bookstack"] != "" {
+			t.Errorf("notes = %#v, want none", cfg.ProviderNotes)
+		}
+	})
+
+	t.Run("blanks are normalized and an empty note is dropped", func(t *testing.T) {
+		cfg, err := Decode(strings.NewReader(withNotes("  bookstack: \"  team   wiki \"\n  seatable: \"\"\n")),
+			testProviders)
+		if err != nil {
+			t.Fatalf("Decode() = %v", err)
+		}
+		if want := map[string]string{"bookstack": "team wiki"}; !reflect.DeepEqual(cfg.ProviderNotes, want) {
+			t.Errorf("notes = %#v, want %#v", cfg.ProviderNotes, want)
+		}
+	})
+
+	t.Run("a note of exactly the limit is accepted", func(t *testing.T) {
+		cfg, err := Decode(strings.NewReader(withNotes("  bookstack: "+strings.Repeat("a", maxDescriptionLength)+"\n")),
+			testProviders)
+		if err != nil {
+			t.Fatalf("Decode() = %v", err)
+		}
+		if got := len(cfg.ProviderNotes["bookstack"]); got != maxDescriptionLength {
+			t.Errorf("note length = %d, want %d", got, maxDescriptionLength)
+		}
+	})
+
+	for _, tt := range []struct{ name, lines, key, want string }{
+		{"a line break", "  bookstack: |\n    " + canary + "\n    second line\n", "provider_notes.bookstack: ",
+			"must not contain a line break"},
+		{"one character too many", "  bookstack: " + canary + strings.Repeat("b", maxDescriptionLength+1-len(canary)) +
+			"\n", "provider_notes.bookstack: ", "is 201 characters long"},
+		{"an unknown provider", "  unknown: " + canary + "\n", "provider_notes.unknown: ", "unknown provider"},
+	} {
+		t.Run(tt.name+" is refused", func(t *testing.T) {
+			_, err := Decode(strings.NewReader(withNotes(tt.lines)), testProviders)
+			if err == nil {
+				t.Fatal("Decode() = nil error")
+			}
+			message := err.Error()
+			if !strings.Contains(message, tt.key) || !strings.Contains(message, tt.want) {
+				t.Errorf("error = %q, want it to name %q and %q", message, tt.key, tt.want)
+			}
+			if strings.Contains(message, canary) {
+				t.Errorf("error = %q, want it not to quote the note", message)
 			}
 		})
 	}

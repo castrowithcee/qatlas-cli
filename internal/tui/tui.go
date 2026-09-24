@@ -137,6 +137,9 @@ type field struct {
 	expanded bool
 }
 
+// providerNoteLabel is the row of a service form that edits the note of the service's provider.
+const providerNoteLabel = "provider note"
+
 // Field hints. They name the shape of an entry, never a rule the core owns: the core states the exact
 // character set when it refuses a value, and repeating it here would let the two drift apart.
 const (
@@ -162,6 +165,11 @@ const (
 	// carry a secret out of this machine.
 	descriptionHint = "optional; what an agent uses this route for, e.g. 'issues in the test repository, " +
 		"read and create'. discovery publishes it, so it must never carry a secret or personal data"
+	// providerNoteHint says the same for the note of a provider, and that one note serves every service
+	// of that provider rather than this service alone.
+	providerNoteHint = "optional; what this provider stands for here, e.g. 'wiki' or 'CRM', shared by every " +
+		"service of the provider. discovery publishes and searches it, so it must never carry a secret or " +
+		"personal data"
 	// undescribedMarker ends the row of a connection that needsDescription, and undescribedHint says once
 	// under the list what it means. Neither blocks anything: the description stays optional.
 	undescribedMarker = "(no description)"
@@ -1112,6 +1120,10 @@ func (m *Model) providerChosen(previous string) {
 	if strings.TrimSpace(base.input.Value()) == "" || base.input.Value() == old.DefaultBaseURL {
 		base.input.SetValue(metadata.DefaultBaseURL)
 	}
+	// The note row shows the note of the chosen provider, unless it holds text typed for the previous one.
+	if note := m.field(providerNoteLabel); note != nil && note.input.Value() == m.cfg.ProviderNotes[previous] {
+		note.input.SetValue(m.cfg.ProviderNotes[m.fieldValue("provider")])
+	}
 }
 
 // connectionProviders are the providers a connection can actually be built for: those with at least one
@@ -1873,6 +1885,10 @@ func (m *Model) buildFields(name string) []field {
 			metadata, _ := m.cfg.ProviderMetadata(fields[1].value())
 			fields[2].input.SetValue(metadata.DefaultBaseURL)
 		}
+		// The note belongs to the provider, not to this service; it stands here because a service is
+		// where a provider is set up.
+		fields = append(fields, textField(providerNoteLabel, m.cfg.ProviderNotes[fields[1].value()], false).
+			withHint(providerNoteHint))
 	case sectionCredentials:
 		cred := m.cfg.Credentials[name]
 		// A new credential starts in the system keyring: that is the place this editor can complete on its
@@ -1976,11 +1992,18 @@ func (m *Model) save(name string) tea.Cmd {
 func (m *Model) apply(cfg *config.Config, name string) error {
 	switch m.section {
 	case sectionServices:
-		return cfg.SetService(name, config.Service{
-			Provider: m.fieldValue("provider"),
+		provider := m.fieldValue("provider")
+		if err := cfg.SetService(name, config.Service{
+			Provider: provider,
 			BaseURL:  m.fieldValue("base url"),
 			Options:  cfg.Services[name].Options,
-		})
+		}); err != nil {
+			return err
+		}
+		if provider == "" {
+			return nil
+		}
+		return cfg.SetProviderNote(provider, m.fieldValue(providerNoteLabel))
 	case sectionCredentials:
 		cred := config.Credential{Provider: m.fieldValue(providerLabel), Type: m.credentialType()}
 		// Only an env credential names anything here. A keyring credential carries no values at all, so

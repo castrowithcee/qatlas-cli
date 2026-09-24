@@ -129,6 +129,46 @@ func TestConnectionDescriptionSurvivesTheStore(t *testing.T) {
 	}
 }
 
+// A provider note is written, read back, changed, and removed again through the same store, and a clone
+// carries it without sharing it.
+func TestProviderNoteSurvivesTheStore(t *testing.T) {
+	store, path := newTarget(t)
+	cfg := sample(t)
+	for _, step := range []struct{ write, want string }{
+		{"wiki", "wiki"},
+		{"  team   wiki  ", "team wiki"},
+		{"", ""},
+	} {
+		must(t, cfg.SetProviderNote("bookstack", step.write))
+		must(t, store.Save(cfg))
+		loaded, err := store.Load()
+		if err != nil {
+			t.Fatalf("Load() = %v", err)
+		}
+		if got := loaded.ProviderNotes["bookstack"]; got != step.want {
+			t.Errorf("note = %q, want %q", got, step.want)
+		}
+		if !reflect.DeepEqual(loaded, cfg) {
+			t.Errorf("loaded = %+v,\nwant %+v", loaded, cfg)
+		}
+		cfg = loaded
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Contains(string(data), "provider_notes") {
+		t.Errorf("a removed note left its section behind:\n%s", data)
+	}
+
+	must(t, cfg.SetProviderNote("bookstack", "wiki"))
+	clone := cfg.Clone()
+	must(t, clone.SetProviderNote("bookstack", "archive"))
+	if got := cfg.ProviderNotes["bookstack"]; got != "wiki" {
+		t.Errorf("changing a clone changed the original note to %q", got)
+	}
+}
+
 func TestSaveAndLoadEmptyRoundTrip(t *testing.T) {
 	store, _ := newTarget(t)
 	cfg := store.New()

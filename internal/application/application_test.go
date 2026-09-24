@@ -454,6 +454,81 @@ func TestProvidersCountToolsAndConnections(t *testing.T) {
 	}
 }
 
+// A provider is published with its own description and the note the configuration keeps on it, and a
+// query finds its tools by either, and by the description of a connection that offers them.
+func TestProviderDescriptionNoteAndConnectionDescriptionsAreSearched(t *testing.T) {
+	base, _ := testCore(t, []string{"archive", "primary"}, nil, true)
+	registry := capability.NewRegistry()
+	if err := registry.RegisterProvider(config.ProviderMetadata{
+		ID: "fake", Name: "Fake", Description: "Sample documentation platform",
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var operations []capability.Operation
+	for _, descriptor := range base.registry.All() {
+		_, handler, _ := base.registry.Lookup(descriptor.ID)
+		operations = append(operations, capability.Operation{Descriptor: descriptor, Handler: handler})
+	}
+	if err := registry.Register("fake", operations...); err != nil {
+		t.Fatal(err)
+	}
+	core := New(registry, base.config, base.secrets, base.redactor)
+	if err := core.config.SetProviderNote("fake", "CRM"); err != nil {
+		t.Fatal(err)
+	}
+	want := []ProviderSummary{{Provider: "fake", Description: "Sample documentation platform", Note: "CRM",
+		Tools: 2, Connections: 2}}
+	if got := core.Providers().Providers; !reflect.DeepEqual(got, want) {
+		t.Errorf("Providers() = %+v, want %+v", got, want)
+	}
+
+	both := []string{"fake.pages.delete", "fake.pages.get"}
+	for _, tt := range []struct {
+		name, query, connection string
+		want                    []string
+	}{
+		{"the provider description", "documentation", "", both},
+		{"the note, in any case", "crm", "", both},
+		{"the note and a tag together", "CRM page", "", both},
+		{"a term nothing holds", "crm absent", "", nil},
+		{"a connection description", "wiki", "", both},
+		{"the description of the filtered connection", "wiki", "archive", both},
+		{"only the filtered connection's description", "wiki", "primary", nil},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			request := SearchRequest{Query: tt.query, Connection: tt.connection}
+			searched, err := core.Search(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			listed, err := core.Tools(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var found, indexed []string
+			for _, hit := range searched.Operations {
+				found = append(found, hit.ID)
+			}
+			for _, tool := range listed.Tools {
+				indexed = append(indexed, tool.ID)
+			}
+			if !reflect.DeepEqual(found, tt.want) || !reflect.DeepEqual(indexed, tt.want) {
+				t.Errorf("Search = %v, Tools = %v, want %v", found, indexed, tt.want)
+			}
+		})
+	}
+
+	if err := core.config.SetProviderNote("fake", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := core.Tools(SearchRequest{Query: "crm"}); err != nil || len(got.Tools) != 0 {
+		t.Errorf("Tools(crm) without the note = %+v, %v, want none", got.Tools, err)
+	}
+	if got := core.Providers().Providers[0].Note; got != "" {
+		t.Errorf("note = %q, want empty without one", got)
+	}
+}
+
 func TestInvokeConnectionSelection(t *testing.T) {
 	tests := []struct {
 		name        string

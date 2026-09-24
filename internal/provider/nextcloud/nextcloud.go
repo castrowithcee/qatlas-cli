@@ -211,6 +211,7 @@ func fileMutationDescriptor(action string, effect capability.Effect, input strin
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Nextcloud", DefaultPermissions: []config.Permission{config.PermissionRead},
+		Description: "Self-hosted file sync, sharing, and collaboration platform",
 		SecretRoles: []config.SecretRole{{
 			Name: roleUserID,
 			Description: "Nextcloud user ID of the identity to act as: the value shown as username in " +

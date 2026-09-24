@@ -168,11 +168,17 @@ func searchFingerprint(request SearchRequest) []byte {
 	return sum[:searchCursorBinding]
 }
 
-// ProviderSummary is one namespace of the tool catalog: how many tools it offers and how many configured
-// connections can run them. A provider without a connection stays listed with zero, so it is visible as
-// unconfigured rather than silently missing.
+// ProviderSummary is one namespace of the tool catalog: what kind of system it is, what it stands for in
+// this installation, how many tools it offers, and how many configured connections can run them. A
+// provider without a connection stays listed with zero, so it is visible as unconfigured rather than
+// silently missing.
+//
+// Description is the provider's own line and the same everywhere; Note is the line the user maintains in
+// the configuration and is empty where there is none. Neither names a service, a URL, or a credential.
 type ProviderSummary struct {
 	Provider    string `json:"provider"`
+	Description string `json:"description"`
+	Note        string `json:"note"`
 	Tools       int    `json:"tools"`
 	Connections int    `json:"connections"`
 }
@@ -205,8 +211,11 @@ func (c *Core) Providers() ProvidersResponse {
 		if !seen {
 			index = len(providers)
 			at[descriptor.Provider] = index
+			metadata, _ := c.registry.ProviderMetadata(descriptor.Provider)
 			providers = append(providers, ProviderSummary{
-				Provider: descriptor.Provider, Connections: len(c.connectionNamesWithAnyOperation(descriptor.Provider)),
+				Provider: descriptor.Provider, Description: metadata.Description,
+				Note:        c.config.ProviderNotes[descriptor.Provider],
+				Connections: len(c.connectionNamesWithAnyOperation(descriptor.Provider)),
 			})
 		}
 		providers[index].Tools++
@@ -376,9 +385,7 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 		if request.Effect != "" && descriptor.Risk.Effect != request.Effect {
 			continue
 		}
-		haystack := strings.ToLower(strings.Join(append([]string{
-			descriptor.ID, descriptor.Title, descriptor.Description,
-		}, descriptor.Tags...), " "))
+		haystack := strings.ToLower(strings.Join(c.searchText(request, descriptor), " "))
 		matched := true
 		for _, term := range terms {
 			if !strings.Contains(haystack, term) {
@@ -395,6 +402,22 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 		}
 	}
 	return matches, nil
+}
+
+// searchText is everything a query term may match for one tool: its ID, title, description, and tags, the
+// description of its provider and the note the user keeps on that provider, and the descriptions of the
+// connections that offer it, or with a connection filter of that connection alone. A word of a task such
+// as "wiki" or "CRM" thus finds the tools of the provider or route it names, without a list of synonyms.
+func (c *Core) searchText(request SearchRequest, descriptor capability.Descriptor) []string {
+	metadata, _ := c.registry.ProviderMetadata(descriptor.Provider)
+	text := append([]string{descriptor.ID, descriptor.Title, descriptor.Description}, descriptor.Tags...)
+	text = append(text, metadata.Description, c.config.ProviderNotes[descriptor.Provider])
+	for _, name := range c.connectionNamesFor(descriptor) {
+		if request.Connection == "" || name == request.Connection {
+			text = append(text, c.config.Connections[name].Description)
+		}
+	}
+	return text
 }
 
 // DescribeRequest selects exactly one versioned descriptor. Connection only restricts its possible routes.

@@ -27,13 +27,20 @@ const Version = 1
 // The model is provider -> service -> connection -> credential: a service describes a technical API
 // endpoint, a credential only the source of a secret, and a connection the selectable access context. That
 // separation is what allows several instances of one provider, and several keys for one instance.
+//
+// ProviderNotes maps a provider ID to one optional line the user maintains on what that provider stands
+// for here, such as "wiki" or "CRM". The provider's own description says what kind of system it is, a
+// connection's description what one route is for; the note sits between them and lets a reader map a word
+// of a task to a provider. Discovery publishes it verbatim and searches it, so like a connection
+// description it is configuration, never a secret and never personal data.
 type Config struct {
-	Version     int                   `yaml:"version"`
-	Services    map[string]Service    `yaml:"services,omitempty"`
-	Credentials map[string]Credential `yaml:"credentials,omitempty"`
-	Connections map[string]Connection `yaml:"connections,omitempty"`
-	Defaults    Defaults              `yaml:"defaults"`
-	providers   ProviderCatalog       `yaml:"-"`
+	Version       int                   `yaml:"version"`
+	Services      map[string]Service    `yaml:"services,omitempty"`
+	Credentials   map[string]Credential `yaml:"credentials,omitempty"`
+	Connections   map[string]Connection `yaml:"connections,omitempty"`
+	ProviderNotes map[string]string     `yaml:"provider_notes,omitempty"`
+	Defaults      Defaults              `yaml:"defaults"`
+	providers     ProviderCatalog       `yaml:"-"`
 }
 
 // Service is a technical API endpoint of one provider.
@@ -373,7 +380,7 @@ func (c *Config) Validate() error {
 				}
 			}
 		}
-		if err := validateDescription(conn.Description); err != nil {
+		if err := validateLine(conn.Description, descriptionRule); err != nil {
 			report("connections.%s.description: %v", name, err)
 		}
 		seenPermissions := map[Permission]bool{}
@@ -434,6 +441,16 @@ func (c *Config) Validate() error {
 			if known && conn.Tools != nil {
 				c.validateTools(name, service.Provider, metadata, report)
 			}
+		}
+	}
+
+	for _, provider := range sortedKeys(c.ProviderNotes) {
+		if _, ok := providers.ProviderMetadata(provider); !ok {
+			report("provider_notes.%s: unknown provider, known providers are %s", provider,
+				strings.Join(c.Providers(), ", "))
+		}
+		if err := validateLine(c.ProviderNotes[provider], noteRule); err != nil {
+			report("provider_notes.%s: %v", provider, err)
 		}
 	}
 
@@ -705,32 +722,36 @@ const envNameRule = "must be the name of an environment variable, written with l
 const keyringValuesRule = "must be absent for a keyring credential, whose secrets live in the credential " +
 	"store; set them with 'qatlas credential set'"
 
-// maxDescriptionLength bounds a connection description. It labels a route for the person choosing one, it
-// is not documentation, and discovery repeats it on every describe, so it stays short enough to read at a
-// glance.
+// maxDescriptionLength bounds a connection description and a provider note. Each labels a route or a
+// provider for the person choosing one, neither is documentation, and discovery repeats them, so they stay
+// short enough to read at a glance.
 const maxDescriptionLength = 200
 
-// descriptionRule states what a connection description must look like. Like the other rules it never
-// quotes the input: a description is free text, and free text is exactly where a secret gets pasted by
-// accident.
-const descriptionRule = "a connection description must be a single line of at most 200 characters; " +
-	"discovery publishes it, so it must never carry a secret or personal data"
+// descriptionRule and noteRule state what a connection description and a provider note must look like.
+// Like the other rules they never quote the input: both are free text, and free text is exactly where a
+// secret gets pasted by accident.
+const (
+	descriptionRule = "a connection description must be a single line of at most 200 characters; " +
+		"discovery publishes it, so it must never carry a secret or personal data"
+	noteRule = "a provider note must be a single line of at most 200 characters; " +
+		"discovery publishes it, so it must never carry a secret or personal data"
+)
 
-// validateDescription refuses a description that is not one short line. An empty description is a missing
-// one and needs no rule.
-func validateDescription(text string) error {
+// validateLine refuses a description or note that is not one short line, naming rule. An empty text is a
+// missing one and needs no rule.
+func validateLine(text, rule string) error {
 	if strings.ContainsAny(text, "\n\r") {
-		return errors.New("must not contain a line break: " + descriptionRule)
+		return errors.New("must not contain a line break: " + rule)
 	}
 	if length := utf8.RuneCountInString(normalizeDescription(text)); length > maxDescriptionLength {
-		return fmt.Errorf("is %d characters long: %s", length, descriptionRule)
+		return fmt.Errorf("is %d characters long: %s", length, rule)
 	}
 	return nil
 }
 
 // normalizeDescription drops the blanks at the edges and collapses the runs between words, so the same
 // sentence typed with different spacing is stored, measured and published as one text. A line break is
-// deliberately not collapsed: validateDescription refuses it, because a description is one line.
+// deliberately not collapsed: validateLine refuses it, because a description is one line.
 func normalizeDescription(text string) string {
 	return strings.Join(strings.FieldsFunc(text, func(r rune) bool { return r == ' ' || r == '\t' }), " ")
 }

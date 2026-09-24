@@ -210,6 +210,7 @@ var invoicesCreate = capability.Descriptor{
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
+		Description:        "Online accounting and invoicing service for small businesses",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,

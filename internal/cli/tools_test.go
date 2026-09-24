@@ -69,6 +69,8 @@ connections:
     service: telegram
     credential: bot
     target: "-1009900112233"
+provider_notes:
+  bookstack: company handbook
 defaults: {}
 `, server.URL, server.URL))
 	return cfg, &calls, providerCanary
@@ -167,22 +169,26 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	if !strings.HasPrefix(stdout, "providers[8]{connections,provider,tools}:\n") ||
+	if !strings.HasPrefix(stdout, "providers[8]{connections,description,note,provider,tools}:\n") ||
 		!strings.HasSuffix(stdout, "\n") || strings.Contains(stdout, "\r") {
 		t.Errorf("stdout = %q, want an LF TOON table of eight namespace rows", stdout)
 	}
 	for _, want := range []string{
 		// BookStack has exactly one configured connection, Telegram one, and every other compiled
-		// provider none. An unconfigured namespace stays visible with zero.
-		"1,bookstack,5", "1,telegram,3", "0,github,37", "0,lexware,3", "0,nextcloud,6", "0,seatable,7", "0,todoist,39",
-		"0,twentycrm,5",
+		// provider none. An unconfigured namespace stays visible with zero. Every row carries the
+		// provider's description, and the note the configuration keeps, which is empty where there is
+		// none.
+		"1,Self-hosted documentation platform for team knowledge,company handbook,bookstack,5",
+		"1,Cloud-based instant messaging service,\"\",telegram,3",
+		",\"\",github,37", ",\"\",lexware,3", ",\"\",nextcloud,6", ",\"\",seatable,7", ",\"\",todoist,39",
+		",\"\",twentycrm,5", "0,Code hosting and software collaboration platform,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
 		}
 	}
 	// The first step names namespaces, not tools: no ID, no title, and no connection name reaches it.
-	for _, absent := range []string{".", "title", "description", "effect", "wiki", "alerts"} {
+	for _, absent := range []string{".", "title", "effect", "wiki", "alerts"} {
 		if strings.Contains(stdout, absent) {
 			t.Errorf("the namespace index published %q:\n%s", absent, stdout)
 		}
@@ -236,7 +242,7 @@ connections:
 defaults: {}
 `)
 		code, stdout, stderr := runTools(t, nil, "providers", "--config", empty)
-		if code != exitOK || stderr != "" || !strings.Contains(stdout, "0,telegram,3") {
+		if code != exitOK || stderr != "" || !strings.Contains(stdout, `0,Cloud-based instant messaging service,"",telegram,3`) {
 			t.Errorf("providers: exit=%d stdout=%q stderr=%q, want telegram counted with zero", code, stdout, stderr)
 		}
 		code, stdout, stderr = runTools(t, nil, "connections", "telegram", "--config", empty)
@@ -244,7 +250,7 @@ defaults: {}
 			t.Errorf("connections: exit=%d stdout=%q stderr=%q, want alerts listed", code, stdout, stderr)
 		}
 		_, help, _ := runTools(t, nil, "providers", "--help")
-		if !strings.Contains(help, "A connection counts when it offers at\nleast one tool of the provider") ||
+		if !strings.Contains(help, "A connection counts when it offers at least one tool of the provider") ||
 			!strings.Contains(help, "('tools: []')") {
 			t.Errorf("providers help does not explain the count:\n%s", help)
 		}
@@ -411,6 +417,11 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		{"offered by query", []string{"--query", "pages"}, []string{"bookstack.pages.get", "bookstack.pages.list"}},
 		{"offered by a connection", []string{"telegram", "--connection", "alerts"}, []string{"telegram.messages.send"}},
 		{"offered by another provider's connection", []string{"--query", "pages", "--connection", "alerts"}, []string{}},
+		// A query also finds a tool by the description and the note of its provider and by the description
+		// of a connection that offers it.
+		{"offered by the provider description", []string{"--query", "instant"}, []string{"telegram.messages.send"}},
+		{"offered by the provider note", []string{"--query", "Handbook"}, []string{"bookstack.pages.get", "bookstack.pages.list"}},
+		{"offered by a connection description", []string{"--query", "read-only account"}, []string{"bookstack.pages.get", "bookstack.pages.list"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			args := append([]string{"tools"}, tt.args...)

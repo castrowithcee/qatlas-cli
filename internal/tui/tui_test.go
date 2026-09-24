@@ -779,7 +779,9 @@ func TestResizePreservesState(t *testing.T) {
 	}
 
 	press(t, m, "enter")
-	press(t, m, "tab", "tab")
+	for i := 0; i < len(m.fields) && m.fields[m.focus].label != "base url"; i++ {
+		press(t, m, "tab")
+	}
 	typeText(t, m, "/draft")
 	focus, url := m.focus, m.fieldValue("base url")
 	for _, size := range []struct{ width, height int }{{60, 24}, {40, 12}, {20, 5}, {100, 28}} {
@@ -1466,6 +1468,68 @@ func TestSpacesAtTheEdgesAreTrimmedVisibly(t *testing.T) {
 	}
 	if got := saved.Services["wiki"].BaseURL; got != "https://wiki.example.invalid" {
 		t.Errorf("saved base url = %q", got)
+	}
+}
+
+// The note of a provider is edited in the form of one of its services. It is saved under the provider, a
+// later save of the service keeps it, and clearing the row removes it again.
+func TestServiceFormEditsTheProviderNote(t *testing.T) {
+	m, store, _ := newModel(t)
+	addService(t, m, "wiki", "https://wiki.example.invalid")
+	focusNote := func() {
+		t.Helper()
+		press(t, m, "enter")
+		for i := 0; i < len(m.fields) && m.fields[m.focus].label != providerNoteLabel; i++ {
+			press(t, m, "tab")
+		}
+		if got := m.fields[m.focus].label; got != providerNoteLabel {
+			t.Fatalf("focused field = %q, want the provider note", got)
+		}
+	}
+	saved := func() *config.Config {
+		t.Helper()
+		if m.fail != "" {
+			t.Fatalf("editor reported %q", m.fail)
+		}
+		cfg, err := store.Load()
+		if err != nil {
+			t.Fatalf("Load() = %v", err)
+		}
+		return cfg
+	}
+	provider := saved().Services["wiki"].Provider
+
+	focusNote()
+	if hint := m.fieldHint(m.fields[m.focus]); !strings.Contains(hint, "never carry a secret") {
+		t.Errorf("the note row does not warn that discovery publishes it: %q", hint)
+	}
+	typeText(t, m, " Wiki ")
+	press(t, m, "ctrl+s")
+	if got := saved().ProviderNotes[provider]; got != "Wiki" {
+		t.Fatalf("saved note = %q, want Wiki", got)
+	}
+
+	// A save that changes only the base url keeps the note: it is read into the form and written back.
+	press(t, m, "enter")
+	for i := 0; i < len(m.fields) && m.fields[m.focus].label != "base url"; i++ {
+		press(t, m, "tab")
+	}
+	if got := m.fieldValue(providerNoteLabel); got != "Wiki" {
+		t.Errorf("the reopened form shows the note %q, want Wiki", got)
+	}
+	typeText(t, m, "/next")
+	press(t, m, "ctrl+s")
+	if cfg := saved(); cfg.ProviderNotes[provider] != "Wiki" ||
+		cfg.Services["wiki"].BaseURL != "https://wiki.example.invalid/next" {
+		t.Errorf("after a base url change: note %q, base url %q", cfg.ProviderNotes[provider],
+			cfg.Services["wiki"].BaseURL)
+	}
+
+	focusNote()
+	clearField(t, m)
+	press(t, m, "ctrl+s")
+	if notes := saved().ProviderNotes; notes != nil {
+		t.Errorf("notes = %#v, want none after clearing the row", notes)
 	}
 }
 

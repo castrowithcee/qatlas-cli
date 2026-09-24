@@ -285,6 +285,7 @@ func rowMutationDescriptor(action string, effect capability.Effect, idempotency 
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "SeaTable", DefaultBaseURL: cloudOrigin,
+		Description:        "Spreadsheet-like no-code database platform",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIToken,

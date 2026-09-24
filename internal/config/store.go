@@ -66,6 +66,7 @@ func (c *Config) Clone() *Config {
 		}
 		out.Connections[name] = copied
 	}
+	out.ProviderNotes = cloneStrings(c.ProviderNotes)
 	if c.Defaults.Connections != nil {
 		out.Defaults.Connections = cloneStrings(c.Defaults.Connections)
 	}
@@ -278,6 +279,27 @@ func (c *Config) DeleteConnection(name string) error {
 	return nil
 }
 
+// SetProviderNote sets the note of one provider in its normalized form, or removes it when the note is
+// empty, so a provider without a note is never written as an empty entry.
+func (c *Config) SetProviderNote(provider, note string) error {
+	if provider == "" {
+		return errors.New("a provider must not be empty")
+	}
+	note = normalizeDescription(note)
+	if note == "" {
+		delete(c.ProviderNotes, provider)
+		if len(c.ProviderNotes) == 0 {
+			c.ProviderNotes = nil
+		}
+		return nil
+	}
+	if c.ProviderNotes == nil {
+		c.ProviderNotes = map[string]string{}
+	}
+	c.ProviderNotes[provider] = note
+	return nil
+}
+
 // SetDefault points a domain at a connection.
 func (c *Config) SetDefault(domain, connection string) error {
 	if domain == "" {
@@ -303,6 +325,12 @@ func (c *Config) normalize() {
 	for name, conn := range c.Connections {
 		conn.Description = normalizeDescription(conn.Description)
 		c.Connections[name] = conn
+	}
+	for provider, note := range c.ProviderNotes {
+		_ = c.SetProviderNote(provider, note)
+	}
+	if len(c.ProviderNotes) == 0 {
+		c.ProviderNotes = nil
 	}
 }
 

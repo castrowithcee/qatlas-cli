@@ -150,6 +150,7 @@ var (
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "BookStack", DefaultPermissions: []config.Permission{config.PermissionRead},
+		Description: "Self-hosted documentation platform for team knowledge",
 		SecretRoles: []config.SecretRole{
 			{Name: roleTokenID, Description: "BookStack token ID: the value labeled Token ID when you create an API token; it is not a name you choose"},
 			{Name: roleTokenSecret, Description: "BookStack token secret: the value labeled Token Secret when you create the same API token"},

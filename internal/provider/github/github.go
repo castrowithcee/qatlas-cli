@@ -290,6 +290,7 @@ var issuesGet = capability.Descriptor{
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
+		Description:        "Code hosting and software collaboration platform",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,

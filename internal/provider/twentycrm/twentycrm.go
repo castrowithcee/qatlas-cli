@@ -192,6 +192,7 @@ func companyMutationDescriptor(action string, effect capability.Effect, idempote
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Twenty CRM", DefaultBaseURL: cloudOrigin,
+		Description:        "Open-source customer relationship management (CRM) system",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,

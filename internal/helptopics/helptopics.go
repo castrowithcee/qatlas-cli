@@ -107,11 +107,15 @@ const agents = `An agent uses qatlas like a person on the command line, through 
 
 A tool is one versioned contract with an ID of the form <provider>.<object>.<action>. A provider is the namespace of its tools, and a connection is a configured route through which its tools run.
 
+Three lines tell the systems apart. A provider's description says what kind of system it is. Its optional note, kept by a person, says what it stands for in this installation, for example wiki or CRM. A connection's description says what one route is for. Map a word of the task to a provider by its description and note, then choose the connection by its description.
+
 Discover in small steps, in this order, then invoke. Discovery writes TOON; --output json returns JSON.
 
   qatlas agents                     this guide
-  qatlas providers                  every provider with the number of its
-                                    tools and configured connections
+  qatlas providers                  every provider: what kind of system it
+                                    is, the note on what it stands for
+                                    here, and the number of its tools and
+                                    configured connections
   qatlas connections <provider>     the configured connections: description,
                                     permitted effects, and whether a tools
                                     list narrows them
@@ -124,7 +128,9 @@ Discover in small steps, in this order, then invoke. Discovery writes TOON; --ou
 
 Narrow or widen the catalog:
 
-  qatlas tools --query "<terms>"    search every provider
+  qatlas tools --query "<terms>"    search every provider; the terms also
+                                    match provider descriptions and notes
+                                    and connection descriptions
   qatlas tools <provider> --connection <name>
                                     only the tools that connection offers
   qatlas tools <provider> --all     also the tools no connection offers,
@@ -185,7 +191,7 @@ A block for the AGENTS.md or CLAUDE.md of a project:
   - Invoke with 'qatlas invoke <tool-id> --connection <name>' and pass the arguments as --arg name=value, a list or an object as JSON, or as one JSON object on stdin.
   - Never ask for, pass, or print a secret. On an auth or permission error, stop and report the code.`
 
-const configuration = `The configuration file has four sections. 'qatlas tui' edits them and 'qatlas config validate' checks them.
+const configuration = `The configuration file has four sections and optional provider notes. 'qatlas tui' edits them and 'qatlas config validate' checks them.
 
 Services say where: one provider and the root URL of one of its instances. Two instances of one provider are two services.
 
@@ -193,6 +199,8 @@ Credentials say with what: where the secrets of a provider come from, never the 
 
 Connections are the routes an agent takes: one service and one credential, an optional scope inside the service (target or targets), the permitted effects (read, create, update, delete, execute), an optional tools list of tool IDs, and an optional one-line description. A tool runs through a connection only when its effect is permitted and, where a tools list exists, the list names it; a tool marked requires_tool_allow_list runs only through a connection whose tools list names it. 'qatlas tools <provider> --all' shows the tools a connection does not offer and why. Where a provider accepts several targets, targets is an allow-list: for GitHub it is optional, may mix repositories and projects, allows patterns such as repos/OWNER/*, and a tool names the repository or project it acts on, which must lie inside the list.
 
+Provider notes say what a provider stands for here, one optional line per provider ID under provider_notes, for example bookstack: wiki or seatable: CRM. The provider's own description already says what kind of system it is; the note adds the word a task uses for it, so an agent can map "the CRM" to a provider. With a single connection the note may repeat its description or stay empty. 'qatlas tui' edits the note in the form of a service of that provider.
+
 Defaults say which connection a tool uses without --connection, keyed by a provider or a tool ID. They apply only to tools that do not require an explicit connection, and many providers require one for every tool. Without a default, a tool runs through the single connection that offers it and asks for --connection when several do.
 
-The sections stay apart so that a secret is stored once and used by several routes, each route carries only the rights its purpose needs, for example a read-only connection beside one that may create pages, and discovery shows an agent connection names, descriptions, and permitted effects only, never a URL, a credential, a target, or a secret. Give each connection a one-line description so an agent can choose between them; discovery publishes it, so it must never hold a secret or personal data.`
+The sections stay apart so that a secret is stored once and used by several routes, each route carries only the rights its purpose needs, for example a read-only connection beside one that may create pages, and discovery shows an agent connection names, descriptions, and permitted effects only, never a URL, a credential, a target, or a secret. Give each connection a one-line description so an agent can choose between them. Discovery publishes descriptions and provider notes and searches them, so they must never hold a secret or personal data.`

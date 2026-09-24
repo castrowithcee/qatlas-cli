@@ -124,6 +124,7 @@ var messagesDelete = capability.Descriptor{
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Telegram", DefaultBaseURL: defaultURL,
+		Description:        "Cloud-based instant messaging service",
 		DefaultPermissions: []config.Permission{config.PermissionCreate},
 		SecretRoles: []config.SecretRole{{
 			Name:        roleBotToken,

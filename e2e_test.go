@@ -224,17 +224,23 @@ defaults:
 		if code != 0 {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		// Discovery starts with one row per namespace: how many tools it offers and how many configured
-		// connections can run them. A provider without a route is visible as exactly that.
-		if !strings.HasPrefix(stdout, "providers[8]{connections,provider,tools}:\n") {
+		// Discovery starts with one row per namespace: what kind of system it is, the note the
+		// configuration keeps on it, how many tools it offers and how many configured connections can run
+		// them. A provider without a route is visible as exactly that.
+		if !strings.HasPrefix(stdout, "providers[8]{connections,description,note,provider,tools}:\n") {
 			t.Errorf("stdout = %q, want a TOON index of the compiled namespaces", stdout)
 		}
-		for _, want := range []string{
-			"2,bookstack,5", "0,telegram,3", "0,lexware,3", "0,twentycrm,5", "0,seatable,7",
-			"0,nextcloud,6", "0,github,37", "0,todoist,39",
+		rows := map[string][2]string{}
+		for _, line := range strings.Split(strings.TrimSpace(stdout), "\n")[1:] {
+			fields := strings.Split(strings.TrimSpace(line), ",")
+			rows[fields[len(fields)-2]] = [2]string{fields[0], fields[len(fields)-1]}
+		}
+		for provider, want := range map[string][2]string{
+			"bookstack": {"2", "5"}, "telegram": {"0", "3"}, "lexware": {"0", "3"}, "twentycrm": {"0", "5"},
+			"seatable": {"0", "7"}, "nextcloud": {"0", "6"}, "github": {"0", "37"}, "todoist": {"0", "39"},
 		} {
-			if !strings.Contains(stdout, want) {
-				t.Errorf("stdout = %q, want it to contain %q", stdout, want)
+			if rows[provider] != want {
+				t.Errorf("%s = %v connections and tools, want %v:\n%s", provider, rows[provider], want, stdout)
 			}
 		}
 		// The first step names namespaces only: no tool ID and no route name reaches it.

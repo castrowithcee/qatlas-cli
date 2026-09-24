@@ -25,12 +25,14 @@ func newProvidersCommand(opts *Options, registry *capability.Registry) *cobra.Co
 	return &cobra.Command{
 		Use:   "providers",
 		Short: "List the tool namespaces this installation offers",
-		Long: "Providers lists every namespace of the tool catalog with the number of tools it offers and the\n" +
-			"number of configured connections that can run them. A connection counts when it offers at\n" +
-			"least one tool of the provider, so one whose permissions allow none of its tools, or whose\n" +
-			"tools list is empty ('tools: []'), is left out of the count and still listed by 'qatlas\n" +
-			"connections'. A provider without such a connection stays listed with zero. It is answered from\n" +
-			"the local configuration alone: no provider is contacted and no secret is read.\n\n" +
+		Long: "Providers lists every namespace of the tool catalog with a one-line description of the system,\n" +
+			"the note the configuration keeps on what that provider stands for here (provider_notes, empty\n" +
+			"where there is none), the number of tools it offers, and the number of configured connections\n" +
+			"that can run them. A connection counts when it offers at least one tool of the provider, so one\n" +
+			"whose permissions allow none of its tools, or whose tools list is empty ('tools: []'), is left\n" +
+			"out of the count and still listed by 'qatlas connections'. A provider without such a connection\n" +
+			"stays listed with zero. It is answered from the local configuration alone: no provider is\n" +
+			"contacted, no secret is read, and no URL or credential is published.\n\n" +
 			"The connections themselves, with what each one may do, are one 'qatlas connections' away, and\n" +
 			"the tools of one namespace one 'qatlas tools <provider>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
@@ -111,7 +113,9 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"contacted and no secret is read.\n\n" +
 			"The namespace argument is the provider prefix of the tool IDs; 'qatlas providers' lists the\n" +
 			"namespaces. --query answers the same form for a targeted search and may be used without a\n" +
-			"namespace, keeping only the tools whose ID, title, description, or tags contain every term.\n\n" +
+			"namespace, keeping only the tools where every term occurs in the ID, title, description, or\n" +
+			"tags, in the description or note of the provider, or in the description of a connection that\n" +
+			"offers the tool, so a word such as wiki or crm finds the provider or route it names.\n\n" +
 			"A connection offers a tool when its permissions allow the tool's effect and, if the connection\n" +
 			"has a tools list, that list names the tool; without a tools list every tool of an allowed effect\n" +
 			"is offered, except a high-risk tool whose contract says requires_tool_allow_list, which only a\n" +

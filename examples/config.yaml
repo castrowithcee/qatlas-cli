@@ -499,6 +499,14 @@ connections:
     target: "*"
     permissions: [read]
 
+# A provider note says in one optional line what a provider stands for here, in the words a task uses for
+# it. The provider's own description already says what kind of system it is, and a connection description
+# what one route is for. Discovery publishes and searches notes, so `qatlas tools --query wiki` finds the
+# BookStack tools; like a description, a note never holds a secret or personal data.
+provider_notes:
+  bookstack: team wiki
+  twentycrm: CRM of the sales team
+
 # Defaults are useful for read operations. The key is a tool namespace such as bookstack, or a complete
 # tool ID such as bookstack.pages.list when one tool needs its own route. Confirmed Telegram sends and
 # the Lexware, Twenty CRM, SeaTable, Nextcloud, GitHub and Todoist tools deliberately ignore defaults and

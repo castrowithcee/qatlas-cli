@@ -81,7 +81,7 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 	wantNamespaces := []application.ProviderSummary{}
 	for _, metadata := range reg.ProviderMetadataAll() {
 		wantNamespaces = append(wantNamespaces, application.ProviderSummary{
-			Provider: metadata.ID, Tools: len(reg.Provider(metadata.ID)),
+			Provider: metadata.ID, Description: metadata.Description, Tools: len(reg.Provider(metadata.ID)),
 		})
 	}
 	if !reflect.DeepEqual(namespaces.Providers, wantNamespaces) {
@@ -268,6 +268,9 @@ func TestProviderConformanceChecksDetectViolations(t *testing.T) {
 		want       string
 	}{
 		{"no name", func(m *config.ProviderMetadata) { m.Name = "" }, nil, "name"},
+		{"no description", func(m *config.ProviderMetadata) { m.Description = " " }, nil, "description"},
+		{"a description of two lines", func(m *config.ProviderMetadata) { m.Description = "one\ntwo" }, nil,
+			"description"},
 		{"no operation", func(*config.ProviderMetadata) {}, []capability.Descriptor{}, "no operation"},
 		{"supported permissions without a registered effect", func(m *config.ProviderMetadata) {
 			m.SupportedPermissions = []config.Permission{config.PermissionRead}
@@ -408,6 +411,12 @@ func providerViolations(metadata config.ProviderMetadata, descriptors []capabili
 
 	if strings.TrimSpace(metadata.Name) == "" {
 		fail("provider %q has no display name", metadata.ID)
+	}
+	// The description is what discovery shows before any tool, so it is one short line on the kind of
+	// system, like a connection description.
+	if description := strings.TrimSpace(metadata.Description); description == "" ||
+		strings.ContainsAny(description, "\r\n") || len(description) > 200 {
+		fail("provider %q needs a one-line description of at most 200 characters", metadata.ID)
 	}
 	if len(descriptors) == 0 {
 		fail("provider %q registers no operation and is missing from discovery", metadata.ID)
@@ -747,7 +756,7 @@ func assertViolation(t *testing.T, violations []string, want string) {
 // negative case can break exactly one invariant.
 func conformantMetadata() config.ProviderMetadata {
 	metadata := config.ProviderMetadata{
-		ID: "sample", Name: "Sample",
+		ID: "sample", Name: "Sample", Description: "Sample system for the conformance checks",
 		DefaultPermissions:   []config.Permission{config.PermissionRead},
 		SupportedPermissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
 		SecretRoles:          []config.SecretRole{{Name: "api-token"}},
