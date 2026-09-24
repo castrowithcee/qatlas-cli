@@ -674,19 +674,23 @@ func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 		t.Fatalf("Help() = %v", err)
 	}
 	for _, want := range []string{
-		"qatlas connections [provider]", "qatlas tools <namespace>", "qatlas describe\n<tool-id>",
-		"qatlas invoke <tool-id>", "TOON 4.1",
+		"qatlas providers", "qatlas connections <provider>", "qatlas tools <provider>",
+		"qatlas describe <tool-id>", "qatlas invoke <tool-id>", "TOON 4.1",
 	} {
 		if !strings.Contains(help.String(), want) {
 			t.Errorf("help does not mention %q:\n%s", want, help.String())
 		}
 	}
-	// The help starts with the way in: the agents guide for an agent, the editor for a person.
+	// The help starts with the way in: the agents guide for an agent, the editor for a person. Discovery
+	// then begins with the providers, before their connections.
 	intro, _, _ := strings.Cut(help.String(), "Usage:")
-	agents, tui, steps := strings.Index(intro, "qatlas agents"), strings.Index(intro, "qatlas tui"),
-		strings.Index(intro, "qatlas connections")
-	if agents < 0 || tui < 0 || !(agents < steps && tui < steps) {
+	agents, tui := strings.Index(intro, "qatlas agents"), strings.Index(intro, "qatlas tui")
+	providers, connections := strings.Index(intro, "qatlas providers"), strings.Index(intro, "qatlas connections")
+	if agents < 0 || tui < 0 || !(agents < providers && tui < providers) {
 		t.Errorf("the help does not start with 'qatlas agents' and 'qatlas tui':\n%s", intro)
+	}
+	if providers < 0 || !(providers < connections) {
+		t.Errorf("the help does not name 'qatlas providers' before 'qatlas connections':\n%s", intro)
 	}
 	_, listed, found := strings.Cut(help.String(), "Available Commands:")
 	if !found {
@@ -897,7 +901,7 @@ func TestUnsupportedCapabilityNamesTheReason(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			code, stdout, stderr := runTools(t, &reads, append(tt.args, "--config", cfg)...)
 			lines := strings.Split(strings.TrimSuffix(stderr, "\n"), "\n")
-			wantMessage := `qatlas: unsupported-capability: connection "wiki" does not offer capability ` +
+			wantMessage := `qatlas: unsupported-capability: connection "wiki" does not offer tool ` +
 				`"bookstack.pages.delete" (effect-not-permitted); 'qatlas describe bookstack.pages.delete' names ` +
 				`the connections that offer it, or change the connection in 'qatlas tui'`
 			if code != exitUsage || stdout != "" || len(lines) != 2 || lines[0] != wantMessage {

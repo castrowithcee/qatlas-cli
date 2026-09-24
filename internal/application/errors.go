@@ -19,9 +19,9 @@ type UnknownOperationError struct {
 
 func (e *UnknownOperationError) Error() string {
 	if e.Version > 0 {
-		return fmt.Sprintf("unknown operation %q at version %d", e.Operation, e.Version)
+		return fmt.Sprintf("unknown tool %q at version %d", e.Operation, e.Version)
 	}
-	return fmt.Sprintf("unknown operation %q", e.Operation)
+	return fmt.Sprintf("unknown tool %q", e.Operation)
 }
 
 // ConnectionAmbiguousError reports that local configuration has several valid routes and no unique default.
@@ -37,7 +37,7 @@ func (e *ConnectionAmbiguousError) Error() string {
 	for i, connection := range e.Connections {
 		names[i] = connection.Name
 	}
-	return fmt.Sprintf("operation %q has multiple matching connections: %s",
+	return fmt.Sprintf("tool %q has multiple matching connections: %s",
 		e.Operation, strings.Join(names, ", "))
 }
 
@@ -51,28 +51,28 @@ type ConnectionSelectionError struct {
 
 func (e *ConnectionSelectionError) Error() string {
 	if e.ExplicitRequired {
-		return fmt.Sprintf("operation %q requires an explicit connection in this invoke request", e.Operation)
+		return fmt.Sprintf("tool %q requires an explicit connection in this invoke request", e.Operation)
 	}
-	return fmt.Sprintf("no configured connection can invoke operation %q", e.Operation)
+	return fmt.Sprintf("no configured connection can invoke tool %q", e.Operation)
 }
 
 // ConfirmationRequiredError reports a mutating request without its request-bound confirmation.
 type ConfirmationRequiredError struct{ Operation string }
 
 func (e *ConfirmationRequiredError) Error() string {
-	return fmt.Sprintf("operation %q requires confirmation in this invoke request", e.Operation)
+	return fmt.Sprintf("tool %q requires confirmation in this invoke request", e.Operation)
 }
 
 // PolicyDeniedError deliberately omits policy internals from the public diagnostic.
 type PolicyDeniedError struct{ Operation string }
 
 func (e *PolicyDeniedError) Error() string {
-	return fmt.Sprintf("policy denied operation %q", e.Operation)
+	return fmt.Sprintf("policy denied tool %q", e.Operation)
 }
 
 // InvalidProviderResponseError reports output that does not satisfy the registered contract.
 type InvalidProviderResponseError struct{ Operation string }
 
 func (e *InvalidProviderResponseError) Error() string {
-	return fmt.Sprintf("operation %q returned an invalid provider response", e.Operation)
+	return fmt.Sprintf("tool %q returned an invalid provider response", e.Operation)
 }

@@ -99,7 +99,7 @@ func TestInvokeWithoutMatchingConnectionIsASelectionError(t *testing.T) {
 		t.Errorf("stdout = %q, want empty", stdout.String())
 	}
 	first, _, _ := strings.Cut(stderr.String(), "\n")
-	if !strings.HasPrefix(first, "qatlas: connection-selection: no configured connection can invoke operation") {
+	if !strings.HasPrefix(first, "qatlas: connection-selection: no configured connection can invoke tool") {
 		t.Errorf("stderr = %q", stderr.String())
 	}
 	if strings.Contains(first, "--connection") {
@@ -319,7 +319,7 @@ defaults:
 		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	first, _, _ := strings.Cut(stderr.String(), "\n")
-	want := `qatlas: connection-selection: operation "fake.messages.send" requires an explicit connection in this invoke request`
+	want := `qatlas: connection-selection: tool "fake.messages.send" requires an explicit connection in this invoke request`
 	if first != want {
 		t.Fatalf("first stderr line = %q, want %q", first, want)
 	}
@@ -364,7 +364,8 @@ func TestArgumentFlagsAreTypedByTheSchema(t *testing.T) {
 		{"a fraction where a whole number belongs", "limit=1.5", "must be a whole number"},
 		{"a word where a number belongs", "ratio=some", "must be a number"},
 		{"a word where a boolean belongs", "draft=perhaps", "must be true or false"},
-		{"broken JSON for a list", "tags=a,b", "pass the whole arguments object on stdin"},
+		{"broken JSON for a list", "tags=a,b",
+			`takes JSON, for example --arg 'tags=["value"]', or pass the whole arguments object on stdin`},
 	}
 	for _, tt := range refusals {
 		t.Run(tt.name+" is refused", func(t *testing.T) {

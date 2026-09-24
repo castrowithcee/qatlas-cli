@@ -21,10 +21,16 @@ type Topic struct {
 func All() []Topic {
 	return []Topic{
 		{Name: "start", Short: "Set up a first connection and run a first tool", Text: start},
-		{Name: "agents", Short: "Let an agent discover and invoke tools through qatlas", Text: agents},
+		Agents(),
 		{Name: "configuration", Short: "Services, credentials, connections, and defaults explained",
 			Text: configuration},
 	}
+}
+
+// Agents returns the guide for agents. 'qatlas agents' prints it, and 'qatlas mcp' hands the same text to
+// every client as its server instructions, so both ways read one guide.
+func Agents() Topic {
+	return Topic{Name: "agents", Short: "Let an agent discover and invoke tools through qatlas", Text: agents}
 }
 
 // listMarker is the start of a numbered or bulleted item; a wrapped item continues under its text.
@@ -97,14 +103,19 @@ const start = `Qatlas reaches the services you already run through named connect
 
 'qatlas help agents' explains how an agent uses qatlas, and 'qatlas help configuration' what services, credentials, connections, and defaults are. 'qatlas config validate' checks the configuration file.`
 
-const agents = `An agent uses qatlas like a person on the command line, through connections a person configured beforehand. It never handles a secret: of a route it knows only the connection name, its one-line description, and the effects it may use.
+const agents = `An agent uses qatlas like a person on the command line, through connections a person configured beforehand. It never handles a secret: of a connection it knows only the name, its one-line description, and the effects it may use.
 
-Discover in small steps, then invoke. Discovery writes TOON; --output json returns JSON.
+A tool is one versioned contract with an ID of the form <provider>.<object>.<action>. A provider is the namespace of its tools, and a connection is a configured route through which its tools run.
 
-  qatlas connections [provider]     the configured connections: provider,
-                                    description, permitted effects, and
-                                    whether a tools list narrows them
-  qatlas tools <namespace>          the tools those connections offer, each
+Discover in small steps, in this order, then invoke. Discovery writes TOON; --output json returns JSON.
+
+  qatlas agents                     this guide
+  qatlas providers                  every provider with the number of its
+                                    tools and configured connections
+  qatlas connections <provider>     the configured connections: description,
+                                    permitted effects, and whether a tools
+                                    list narrows them
+  qatlas tools <provider>           the tools those connections offer, each
                                     with the connections that offer it
   qatlas describe <tool-id>         one contract: schemas, risk, examples,
                                     and the connections that can run it
@@ -113,26 +124,53 @@ Discover in small steps, then invoke. Discovery writes TOON; --output json retur
 
 Narrow or widen the catalog:
 
-  qatlas tools --query "<terms>"    search every namespace
-  qatlas tools <namespace> --connection <name>
+  qatlas tools --query "<terms>"    search every provider
+  qatlas tools <provider> --connection <name>
                                     only the tools that connection offers
-  qatlas tools <namespace> --all    also the tools no connection offers,
+  qatlas tools <provider> --all     also the tools no connection offers,
                                     each with the reason
-
-'qatlas providers' counts the tools and connections of every namespace.
 
 Invoke:
 
   qatlas invoke <tool-id> --connection <name> --arg name=value
+  qatlas invoke <tool-id> --connection <name> --arg 'labels=["bug"]'
   echo '{"name":"value"}' | qatlas invoke <tool-id> --connection <name>
 
---arg is repeated once per argument and typed by the input schema; a list or an object goes to stdin as one JSON object. Use one of the two ways, not both. A tool whose contract requires confirmation runs only with --confirm, and the audit event of that change goes to stderr. The result is one JSON object with a data field on stdout. --agent keeps other output machine-readable, without prose or colour.
+--arg is repeated once per argument and typed by the input schema: a string as written, a number, true or false, and a list or an object as JSON. The whole arguments object as one JSON object on stdin is the equal alternative; use one of the two ways, not both. A tool whose contract requires confirmation runs only with --confirm, and the audit event of that change goes to stderr. The result is one JSON object with a data field on stdout. --agent keeps other output machine-readable, without prose or colour.
 
 Always pass --connection. Many tools require it (requires_explicit_connection in the contract); without it a tool runs only through a default or through the single connection that offers it.
 
-Errors go to stderr as "qatlas: <code>: <message>". Exit code 0 is success, 2 a problem of the request or the configuration (for example invalid-request, unknown-connection, unsupported-capability, connection-ambiguous, confirmation-required, policy-denied, missing-secret), and 1 a runtime or provider failure (for example unreachable, auth, permission, not-found, timeout, rate-limited). not-found means the provider does not hold the resource or does not show it to this credential; the message names the target it addressed, so check that target and what the credential may see. connection-ambiguous is followed by one JSON line that lists the candidate connections; choose one and pass it with --connection. unsupported-capability is followed by one JSON line with the connection and the reason it does not offer the tool (effect-not-permitted, requires-tool-allow-list, not-in-tools-list, or other-provider); 'qatlas describe <tool-id>' names the connections that do, and only a person changes a connection, in 'qatlas tui'.
+Errors go to stderr as "qatlas: <code>: <message>"; branch on the code, not on the message. Exit code 0 is success.
 
-MCP: 'qatlas mcp' serves the fixed tools qatlas.search, qatlas.describe, and qatlas.invoke over stdio, with the same connections and the same rules. qatlas.search returns the offered tools; all set to true adds the others with their reason. Add the command "qatlas mcp" as a stdio server to the agent's client.
+Exit code 2 is a problem of the request or the configuration:
+
+- usage: the command, a flag, or a field name is wrong.
+- invalid-request: the arguments do not satisfy the input schema, or the request is malformed.
+- config-missing: there is no configuration file; a person creates one with 'qatlas tui'.
+- config-invalid: the configuration, or a file beside it, is not usable; only a person fixes it.
+- connection-selection: no connection could be chosen for the tool; pass --connection.
+- unknown-connection: the named connection is not configured; 'qatlas connections <provider>' lists them.
+- connection-ambiguous: several connections offer the tool; one JSON line follows that lists the candidates, choose one and pass it with --connection.
+- unknown-operation: no tool has this ID or version; find it with 'qatlas tools <provider>'.
+- unsupported-capability: the connection does not offer the tool; one JSON line follows with the connection and the reason (effect-not-permitted, requires-tool-allow-list, not-in-tools-list, or other-provider). 'qatlas describe <tool-id>' names the connections that do, and only a person changes a connection, in 'qatlas tui'.
+- missing-secret: the credential of the connection yields no secret; only a person stores it.
+- confirmation-required: the tool changes data and runs only with --confirm.
+- policy-denied: local policy refuses the call.
+
+Exit code 1 is a runtime or provider failure:
+
+- unreachable: the provider host did not answer.
+- tls: the TLS connection to the provider failed.
+- auth: the provider rejected the credential; stop and report the code.
+- permission: the credential may not do this; stop and report the code.
+- not-found: the provider does not hold the resource or does not show it to this credential; the message names the target it addressed, so check that target and what the credential may see.
+- timeout: the provider did not answer in time; a non-idempotent call is not retried.
+- rate-limited: the provider refuses further requests for now; wait before retrying.
+- invalid-provider-response: the provider result does not satisfy the output schema.
+- provider-error: the provider answered with something unusable.
+- runtime: anything else failed.
+
+MCP: 'qatlas mcp' serves the same catalog over stdio as three fixed MCP tools, with the same connections, rules, and error codes. qatlas.search finds tools like 'qatlas tools' and names the connections that offer each one; all set to true adds the others with their reason. qatlas.describe returns one contract like 'qatlas describe', and qatlas.invoke runs one like 'qatlas invoke', with confirm for --confirm. qatlas.describe and qatlas.invoke take the tool ID as operation and a connection name as connection; qatlas.invoke takes the arguments object as arguments. A failed call is a tool result with isError and structuredContent carrying the code. The server hands this guide to its client as instructions. Add the command "qatlas mcp" as a stdio server to the agent's client.
 
 Tell the agent which connections it may use and what each one is for, and whether it may change data. Never hand it a token, password, or key: qatlas reads the secrets itself.
 
@@ -140,11 +178,11 @@ A block for the AGENTS.md or CLAUDE.md of a project:
 
   ## Qatlas
   Use the qatlas CLI to reach <what the connections are for>.
-  - Start with 'qatlas agents'.
+  - Start with 'qatlas agents' and follow its discovery order.
   - Connections: <name> for <purpose>; <name> for <purpose>.
   - Changes: <allowed with --confirm | not allowed, read only>.
-  - Before invoking, run 'qatlas tools <namespace> --connection <name>' and 'qatlas describe <tool-id>'.
-  - Invoke with 'qatlas invoke <tool-id> --connection <name>' and pass the arguments as --arg name=value or as one JSON object on stdin.
+  - Before invoking, run 'qatlas tools <provider> --connection <name>' and 'qatlas describe <tool-id>'.
+  - Invoke with 'qatlas invoke <tool-id> --connection <name>' and pass the arguments as --arg name=value, a list or an object as JSON, or as one JSON object on stdin.
   - Never ask for, pass, or print a secret. On an auth or permission error, stop and report the code.`
 
 const configuration = `The configuration file has four sections. 'qatlas tui' edits them and 'qatlas config validate' checks them.

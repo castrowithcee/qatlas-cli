@@ -15,6 +15,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
@@ -39,18 +40,20 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 	return &cobra.Command{
 		Use:   "mcp",
 		Short: "Serve the fixed agent tools over MCP stdio",
-		Long: "The server offers the fixed broker tools qatlas.search, qatlas.describe, and qatlas.invoke\n" +
-			"over MCP stdio, one JSON-RPC message per line.\n\n" +
+		Long: "The server offers the fixed MCP tools qatlas.search, qatlas.describe, and qatlas.invoke\n" +
+			"over MCP 2026-07-28 stdio, one JSON-RPC message per line. server/discover returns the guide\n" +
+			"'qatlas agents' prints as its instructions, so a client that only speaks MCP reads the same guide.\n" +
+			"qatlas.describe and qatlas.invoke take the tool ID as operation.\n\n" +
 			"qatlas.search answers from the local configuration alone: no provider is contacted and no\n" +
-			"secret is read. Like 'qatlas tools' it returns only the operations a configured connection\n" +
-			"offers, or with connection the operations that connection offers; all set to true adds the\n" +
-			"others, each with the reason 'qatlas tools --all' names. It filters by query, provider,\n" +
-			"connection, and effect and returns at most limit operations in stable ID order; an omitted,\n" +
-			"non-positive, or larger limit becomes 50. The response\n" +
-			"carries operations, has_more, which is true exactly when another match follows, and next_cursor,\n" +
-			"which is present only then. Passing next_cursor back as cursor with the same filters returns the\n" +
-			"following page; a request without cursor returns the first. A cursor that is malformed or belongs\n" +
-			"to other filters fails with invalid-request.\n\n" +
+			"secret is read. Like 'qatlas tools' it returns only the tools a configured connection offers,\n" +
+			"or with connection the tools that connection offers; all set to true adds the others, each\n" +
+			"with the reason 'qatlas tools --all' names. It filters by query, provider, connection, and\n" +
+			"effect and returns at most limit tools in stable ID order; an omitted, non-positive, or larger\n" +
+			"limit becomes 50. The response carries the tools as operations, has_more, which is true\n" +
+			"exactly when another match follows, and next_cursor, which is present only then. Passing\n" +
+			"next_cursor back as cursor with the same filters returns the following page; a request\n" +
+			"without cursor returns the first. A cursor that is malformed or belongs to other filters fails\n" +
+			"with invalid-request.\n\n" +
 			"A qatlas.invoke refused with connection-ambiguous carries structuredContent with code,\n" +
 			"message, operation, and connections: every candidate route with its name and its description,\n" +
 			"which is empty where none is maintained. Nothing is chosen for the caller; the next request\n" +
@@ -199,6 +202,7 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 			"capabilities":      map[string]any{"tools": map[string]any{}},
 			"ttlMs":             mcpCacheTTLMillis,
 			"cacheScope":        "public",
+			"instructions":      helptopics.Agents().Text,
 			"_meta":             mcpServerMeta(),
 		}))
 	case "tools/list":
@@ -476,18 +480,20 @@ func mcpTools() []mcpTool {
 	return []mcpTool{
 		{
 			Name: "qatlas.search",
-			Description: "Search the configured operation catalog. Returns the operations a configured connection " +
-				"offers, at most limit of them in stable ID order; all adds the others with the reason no " +
+			Description: "Search the configured tool catalog. Returns the tools a configured connection offers " +
+				"as operations, at most limit of them in stable ID order; all adds the others with the reason no " +
 				"connection offers them. has_more is true exactly when another match follows, and next_cursor, " +
 				"passed back as cursor with the same filters, returns the following page.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the operations no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},
 		{
-			Name: "qatlas.describe", Description: "Describe one versioned operation contract",
+			Name:        "qatlas.describe",
+			Description: "Describe one versioned tool contract; operation is the tool ID",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"operation":{"type":"string"},"version":{"type":"integer"},"connection":{"type":"string"}},"required":["operation"],"additionalProperties":false}`),
 		},
 		{
-			Name: "qatlas.invoke", Description: "Invoke one operation through the Qatlas application core",
+			Name:        "qatlas.invoke",
+			Description: "Invoke one tool through a configured connection; operation is the tool ID",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"operation":{"type":"string"},"version":{"type":"integer"},"connection":{"type":"string"},"arguments":{"type":"object"},"confirm":{"type":"boolean"}},"required":["operation"],"additionalProperties":false}`),
 		},
 	}

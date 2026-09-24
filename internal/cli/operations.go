@@ -146,7 +146,7 @@ func argumentsFromFlags(schema json.RawMessage, pairs []string) (json.RawMessage
 // the core validates the whole object against the schema afterwards and reports it there, in the same
 // words a request from stdin would get.
 func typedArgument(schema json.RawMessage, name, raw string) (any, error) {
-	switch propertyType(schema, name) {
+	switch kind := propertyType(schema, name); kind {
 	case "integer":
 		if _, err := strconv.ParseInt(raw, 10, 64); err != nil {
 			return nil, &application.InvalidRequestError{
@@ -171,12 +171,16 @@ func typedArgument(schema json.RawMessage, name, raw string) (any, error) {
 		return value, nil
 	case "array", "object":
 		// A structured value has no flat spelling worth inventing. It is accepted as JSON here, and the
-		// message names the way that was built for it.
+		// message shows that spelling beside the other way, the whole object on stdin.
 		var value any
 		if err := json.Unmarshal([]byte(raw), &value); err != nil {
+			example := `["value"]`
+			if kind == "object" {
+				example = `{"key":"value"}`
+			}
 			return nil, &application.InvalidRequestError{
-				Message: fmt.Sprintf("--arg %s expects JSON; pass the whole arguments object on stdin instead",
-					name),
+				Message: fmt.Sprintf("--arg %s takes JSON, for example --arg '%s=%s', "+
+					"or pass the whole arguments object on stdin", name, name, example),
 			}
 		}
 		return value, nil

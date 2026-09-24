@@ -24,9 +24,9 @@ type UnsupportedError struct {
 
 func (e *UnsupportedError) Error() string {
 	if e.Connection == "" {
-		return fmt.Sprintf("no configured connection offers capability %q", e.Capability)
+		return fmt.Sprintf("no configured connection offers tool %q", e.Capability)
 	}
-	message := fmt.Sprintf("connection %q does not offer capability %q", e.Connection, e.Capability)
+	message := fmt.Sprintf("connection %q does not offer tool %q", e.Connection, e.Capability)
 	if e.Reason != "" {
 		message += fmt.Sprintf(" (%s)", e.Reason)
 	}

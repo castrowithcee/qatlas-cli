@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -51,7 +52,7 @@ var (
 	quotedCommand = regexp.MustCompile(`["']qatlas ([^"']+)["']`)
 	flagName      = regexp.MustCompile(`--[a-z][a-z-]*`)
 	toolID        = regexp.MustCompile(`\b[a-z]+\.[a-z]+\.[a-z]+\b`)
-	codeExamples  = regexp.MustCompile(`\(for\s+example\s+([^)]*)\)`)
+	listedCode    = regexp.MustCompile(`(?m)^- ([a-z-]+): \S`)
 )
 
 // The topics may only name commands, flags, tools, codes, and contract fields this build has.
@@ -96,26 +97,23 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 	}
 
 	agents := topicText(t, "agents")
-	codes := map[string]bool{}
-	for _, code := range []output.Code{
-		output.CodeInvalidRequest, output.CodeUnknownConnection, output.CodeUnsupportedCapability,
-		output.CodeConnectionAmbiguous,
-		output.CodeConfirmationRequired, output.CodePolicyDenied, output.CodeMissingSecret,
-		output.CodeUnreachable, output.CodeAuth, output.CodePermission, output.CodeNotFound, output.CodeTimeout,
-		output.CodeRateLimited,
-	} {
-		codes[string(code)] = true
+	// Every code this build can emit is listed once, in the order the documentation shows them, each with
+	// what it means.
+	var listed []output.Code
+	for _, match := range listedCode.FindAllStringSubmatch(agents, -1) {
+		listed = append(listed, output.Code(match[1]))
 	}
-	examples := codeExamples.FindAllStringSubmatch(agents, -1)
-	if len(examples) != 2 {
-		t.Fatalf("the agents topic has %d lists of error codes, want 2", len(examples))
+	if !reflect.DeepEqual(listed, output.AllCodes()) {
+		t.Errorf("the agents topic lists the error codes\n%v\nwant\n%v", listed, output.AllCodes())
 	}
-	for _, example := range examples {
-		for _, code := range strings.FieldsFunc(example[1], func(r rune) bool { return r == ',' || r == ' ' || r == '\n' }) {
-			if code != "and" && !codes[code] {
-				t.Errorf("the agents topic names %q as an error code", code)
-			}
+	// Discovery starts with the providers and narrows step by step to one invocation.
+	last := -1
+	for _, step := range []string{"agents", "providers", "connections", "tools", "describe", "invoke"} {
+		at := strings.Index(agents, "qatlas "+step)
+		if at <= last {
+			t.Errorf("the agents topic does not name 'qatlas %s' as the next discovery step", step)
 		}
+		last = at
 	}
 	for _, tool := range []string{"qatlas.search", "qatlas.describe", "qatlas.invoke"} {
 		if !strings.Contains(agents, tool) || !knownMCPTool(tool) {
@@ -130,7 +128,8 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 		!strings.Contains(string(contract), `"requires_explicit_connection"`) {
 		t.Errorf("the agents topic names a contract field the contract does not have")
 	}
-	for _, want := range []string{"AGENTS.md", "CLAUDE.md", "<name>", "Exit code 0", "2 a problem", "1 a runtime"} {
+	for _, want := range []string{"AGENTS.md", "CLAUDE.md", "<name>", "Exit code 0", "Exit code 2", "Exit code 1",
+		`--arg 'labels=["bug"]'`, "on stdin"} {
 		if !strings.Contains(agents, want) {
 			t.Errorf("the agents topic does not say %q", want)
 		}

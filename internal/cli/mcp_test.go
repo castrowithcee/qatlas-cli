@@ -61,6 +61,14 @@ func TestMCPDiscoveryAndFixedTools(t *testing.T) {
 	if _, ok := capabilities["tools"]; !ok {
 		t.Fatalf("capabilities = %s", capabilities)
 	}
+	// A client that only speaks MCP reads the same guide 'qatlas agents' prints, as the server instructions.
+	var instructions struct {
+		Instructions string `json:"instructions"`
+	}
+	decodeRaw(t, discover, &instructions)
+	if instructions.Instructions != topicText(t, "agents") {
+		t.Errorf("server/discover instructions = %q, want the agents guide", instructions.Instructions)
+	}
 
 	var listed struct {
 		ResultType string    `json:"resultType"`

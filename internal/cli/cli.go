@@ -151,12 +151,12 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"Start here:\n" +
 			"  qatlas agents   an agent: how to discover, describe, and invoke tools\n" +
 			"  qatlas tui      a person: set up connections and what each one may do\n\n" +
-			"An agent discovers in small steps: 'qatlas connections [provider]' lists the configured routes\n" +
-			"and what each one may do, 'qatlas tools <namespace>' the tools they offer, 'qatlas describe\n" +
-			"<tool-id>' one complete contract, and 'qatlas invoke <tool-id>' runs it. Discovery writes\n" +
-			toonContract + ";\n" +
+			"An agent discovers in small steps: 'qatlas providers' lists every provider with its tools and\n" +
+			"connections, 'qatlas connections <provider>' the configured routes and what each one may do,\n" +
+			"'qatlas tools <provider>' the tools they offer, 'qatlas describe <tool-id>' one complete\n" +
+			"contract, and 'qatlas invoke <tool-id>' runs it. Discovery writes " + toonContract + ";\n" +
 			"--output json is the interoperable alternative. 'qatlas mcp' serves the same steps as fixed\n" +
-			"broker tools over stdio.",
+			"MCP tools over stdio and hands the guide of 'qatlas agents' to its client.",
 		Version:       version,
 		SilenceErrors: true,
 		SilenceUsage:  true,
