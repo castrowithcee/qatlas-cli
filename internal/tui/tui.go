@@ -322,6 +322,8 @@ type Model struct {
 	targetInput  textinput.Model
 	targetEdit   int
 	targetRemove bool
+	// targetAdd is the menu that adds a target, with its builder, while it is open.
+	targetAdd *targetAdd
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
 	// confirmation is about the selected entry of the list.
 	confirmRole string
@@ -723,7 +725,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return m.requestLeave(-1)
 	case screenTargets:
 		// A typed target or a remove question is dropped as esc drops it; a changed list still asks.
-		m.targetEdit, m.targetRemove = -1, false
+		m.targetEdit, m.targetRemove, m.targetAdd = -1, false, nil
 		m.targetInput.Blur()
 		return m.leaveTargets()
 	case screenProviders:
@@ -2763,6 +2765,10 @@ func (m *Model) keepScrollPosition() {
 	case screenProviders:
 		m.providers.list.offset, _ = m.providerTableWindow()
 	case screenTargets:
+		if m.targetAdd != nil {
+			m.targetAdd.choices.offset, _ = m.addWindow()
+			return
+		}
 		m.targetList.offset, _ = m.targetWindow()
 	}
 }

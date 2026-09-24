@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -413,4 +414,330 @@ func pageEntries(page []field, label string) []string {
 		}
 	}
 	return nil
+}
+
+// knownTargetsModel is a GitHub editor whose service wiki already serves a connection with targets, and
+// whose second service zeta serves one more, whose targets belong to another host.
+func knownTargetsModel(t *testing.T) (*Model, string, *capability.Registry) {
+	t.Helper()
+	reg := targetsRegistry(t, github.Register)
+	m, path := toolsModel(t, reg, map[string]config.Connection{
+		"gh-a": {Service: "wiki", Credential: "reader",
+			Targets: []string{"repos/octo/a", "repos/octo/b", "users/octo/projects/2"}},
+	})
+	mustNoError(t, m.cfg.SetService("zeta", config.Service{Provider: github.Provider,
+		BaseURL: "https://zeta.example.invalid"}))
+	mustNoError(t, m.cfg.SetConnection("gh-z", config.Connection{Service: "zeta", Credential: "reader",
+		Target: "repos/elsewhere/x"}))
+	return m, path, reg
+}
+
+// addRows are the rows the add menu or the builder shows now, as they read.
+func addRows(m *Model) []string {
+	var rows []string
+	for _, key := range m.targetAdd.choices.matches {
+		rows = append(rows, m.targetAdd.text[key])
+	}
+	return rows
+}
+
+// pickRow moves to the first shown row of the add menu or the builder that contains text.
+func pickRow(t *testing.T, m *Model, text string) {
+	t.Helper()
+	for i, row := range addRows(m) {
+		if strings.Contains(row, text) {
+			m.targetAdd.choices.cursor = i
+			return
+		}
+	}
+	t.Fatalf("no row contains %q: %v", text, addRows(m))
+}
+
+// build adds a target through the builder of kind: each step takes the row containing the given text, or,
+// for a step written as =value, the typed value.
+func build(t *testing.T, m *Model, kind string, steps ...string) {
+	t.Helper()
+	press(t, m, "a")
+	pickRow(t, m, "new "+kind)
+	press(t, m, "enter")
+	for _, step := range steps {
+		if m.targetAdd == nil {
+			t.Fatalf("the builder closed before step %q: error %q", step, m.fail)
+		}
+		if value, typed := strings.CutPrefix(step, "="); typed {
+			typeText(t, m, value)
+		} else {
+			pickRow(t, m, step)
+		}
+		press(t, m, "enter")
+	}
+}
+
+// Adding offers the targets other connections of the same service use, and only those not listed yet;
+// the targets of another service are not offered. A picked target is saved as it is.
+func TestAddingOffersTheTargetsOfTheSameService(t *testing.T) {
+	m, path, reg := knownTargetsModel(t)
+	openSectionByName(t, m, sectionConnections)
+	press(t, m, "n")
+	typeText(t, m, "gh")
+	focusField(t, m, "service")
+	if m.fieldValue("service") != "wiki" {
+		t.Fatalf("service = %q, want wiki", m.fieldValue("service"))
+	}
+	openTargetList(t, m)
+	press(t, m, "a")
+	if m.targetAdd == nil {
+		t.Fatalf("a did not open the add menu: editing %d", m.targetEdit)
+	}
+	view := screenOf(m)
+	if !strings.Contains(view, "repos/octo/a  · used by gh-a") || strings.Contains(view, "elsewhere") {
+		t.Fatalf("the menu does not offer the targets of wiki alone:\n%s", view)
+	}
+	// Typing filters; the typed line comes first and a known target is picked below it.
+	typeText(t, m, "octo/b")
+	if rows := addRows(m); len(rows) != 2 || !strings.HasPrefix(rows[0], `use as typed: "octo/b"`) ||
+		!strings.HasPrefix(rows[1], "repos/octo/b") {
+		t.Fatalf("filtered rows = %v", rows)
+	}
+	press(t, m, "down", "enter")
+	if m.targetAdd != nil || !reflect.DeepEqual(m.targetList.all, []string{"repos/octo/b"}) {
+		t.Fatalf("picking did not take the target: %v, error %q", m.targetList.all, m.fail)
+	}
+	press(t, m, "a")
+	if rows := strings.Join(addRows(m), "\n"); strings.Contains(rows, "repos/octo/b") ||
+		!strings.Contains(rows, "users/octo/projects/2") {
+		t.Fatalf("the menu offers a listed target again or lost another:\n%s", rows)
+	}
+	press(t, m, "esc", "ctrl+s")
+	if saved := savedConnection(t, path, reg, "gh"); m.fail != "" || saved.Target != "repos/octo/b" {
+		t.Fatalf("saved %q / %v, error %q", saved.Target, saved.Targets, m.fail)
+	}
+}
+
+// The builder asks for the placeholders of every GitHub kind one by one, suggests the owners, repositories
+// and numbers the service already uses there, offers * as all, and writes the usual path.
+func TestTheBuilderWritesEveryGitHubKind(t *testing.T) {
+	m, path, reg := knownTargetsModel(t)
+	openConnection(t, m, "gh-a")
+	openTargetList(t, m)
+
+	press(t, m, "a")
+	pickRow(t, m, "new repository")
+	press(t, m, "enter")
+	if view := screenOf(m); !strings.Contains(view, "New repository · OWNER") ||
+		!reflect.DeepEqual(addRows(m), []string{"octo"}) {
+		t.Fatalf("the owner step lacks its suggestion: %v\n%s", addRows(m), view)
+	}
+	press(t, m, "enter")
+	if rows := addRows(m); !reflect.DeepEqual(rows, []string{"a", "b", "* (all)"}) {
+		t.Fatalf("the repository step offers %v", rows)
+	}
+	typeText(t, m, "cli")
+	press(t, m, "enter")
+
+	build(t, m, "repository", "=new-owner", "* (all)")
+	build(t, m, "project", "orgs", "=octo-org", "=7")
+	build(t, m, "project", "users", "octo", "2")
+	if !strings.Contains(m.fail, "already in the list") {
+		t.Fatalf("a listed project was built again: %v, error %q", m.targetList.all, m.fail)
+	}
+	press(t, m, "esc")
+	build(t, m, "project", "users", "octo", "* (all)")
+	build(t, m, "owner", "users", "octo")
+	if m.fail != "" {
+		t.Fatalf("building reported %q", m.fail)
+	}
+	press(t, m, "ctrl+s")
+	want := []string{"repos/octo/a", "repos/octo/b", "users/octo/projects/2", "repos/octo/cli", "repos/new-owner/*",
+		"orgs/octo-org/projects/7", "users/octo/projects/*", "users/octo"}
+	if saved := savedConnection(t, path, reg, "gh-a"); m.fail != "" || !reflect.DeepEqual(saved.Targets, want) {
+		t.Fatalf("saved %v, error %q", saved.Targets, m.fail)
+	}
+}
+
+// The builder steps back on backspace, and what the provider refuses stays typed with the reason, so it
+// can be fixed or cancelled like a typed target.
+func TestTheBuilderStepsBackAndHandsOverWhatIsRefused(t *testing.T) {
+	m, _, _ := knownTargetsModel(t)
+	openConnection(t, m, "gh-a")
+	openTargetList(t, m)
+	build(t, m, "project", "orgs", "=octo-org")
+	press(t, m, "backspace")
+	if view := screenOf(m); !strings.Contains(view, "New project · LOGIN") {
+		t.Fatalf("backspace did not step back to the login:\n%s", view)
+	}
+	press(t, m, "backspace", "backspace")
+	if m.targetAdd == nil || m.targetAdd.kind != -1 {
+		t.Fatal("backspace did not step back to the menu")
+	}
+	pickRow(t, m, "new project")
+	press(t, m, "enter")
+	pickRow(t, m, "orgs")
+	press(t, m, "enter")
+	typeText(t, m, "octo-org")
+	press(t, m, "enter")
+	typeText(t, m, "x")
+	press(t, m, "enter")
+	if m.targetAdd != nil || m.targetEdit < 0 || m.targetInput.Value() != "orgs/octo-org/projects/x" ||
+		!strings.Contains(m.fail, "project number") {
+		t.Fatalf("a refused build was not handed over: editing %d %q, error %q", m.targetEdit,
+			m.targetInput.Value(), m.fail)
+	}
+	press(t, m, "esc")
+	if len(m.targetList.all) != 3 {
+		t.Fatalf("a refused build reached the list: %v", m.targetList.all)
+	}
+}
+
+// ctrl+s saves from the menu and the builder too: a typed line is taken as typed, a builder completes on
+// its last step, and an incomplete one says what is missing while nothing is written or dropped.
+func TestCtrlSSavesFromTheMenuAndTheBuilder(t *testing.T) {
+	m, path, reg := knownTargetsModel(t)
+	openConnection(t, m, "gh-a")
+	openTargetList(t, m)
+	press(t, m, "a")
+	pickRow(t, m, "new repository")
+	press(t, m, "enter")
+	press(t, m, "ctrl+s")
+	if m.screen != screenTargets || m.targetAdd == nil || !strings.Contains(m.fail, "not complete yet: choose OWNER") {
+		t.Fatalf("an incomplete build was saved or dropped: screen %v, error %q", m.screen, m.fail)
+	}
+	press(t, m, "enter")
+	typeText(t, m, "cli")
+	press(t, m, "ctrl+s")
+	if m.fail != "" || m.screen != screenList {
+		t.Fatalf("ctrl+s on the last step did not save: screen %v, error %q", m.screen, m.fail)
+	}
+	if saved := savedConnection(t, path, reg, "gh-a"); !slices.Contains(saved.Targets, "repos/octo/cli") {
+		t.Fatalf("saved %v, want the built target", saved.Targets)
+	}
+
+	openConnection(t, m, "gh-a")
+	openTargetList(t, m)
+	press(t, m, "a")
+	typeText(t, m, "repos/octo")
+	press(t, m, "ctrl+s")
+	if m.targetEdit < 0 || m.fail == "" {
+		t.Fatalf("a refused typed line was saved: editing %d, error %q", m.targetEdit, m.fail)
+	}
+	typeText(t, m, "/d")
+	press(t, m, "ctrl+s")
+	if saved := savedConnection(t, path, reg, "gh-a"); m.fail != "" || !slices.Contains(saved.Targets, "repos/octo/d") {
+		t.Fatalf("saved %v, error %q", saved.Targets, m.fail)
+	}
+}
+
+// A provider without kinds still offers the targets of its service, and a typed one as before.
+func TestAProviderWithoutKindsOffersKnownTargets(t *testing.T) {
+	reg := targetsRegistry(t, seatable.Register)
+	m, path := toolsModel(t, reg, map[string]config.Connection{
+		"rows-a": {Service: "wiki", Credential: "reader", Targets: []string{"Kunden", "Tickets"}}})
+	openSectionByName(t, m, sectionConnections)
+	press(t, m, "n")
+	typeText(t, m, "rows")
+	openTargetList(t, m)
+	press(t, m, "a")
+	if rows := strings.Join(addRows(m), "\n"); strings.Contains(rows, "new ") || !strings.Contains(rows, "Kunden") {
+		t.Fatalf("the menu offers %q", rows)
+	}
+	pickRow(t, m, "Tickets")
+	press(t, m, "enter")
+	addTarget(t, m, "Neu")
+	press(t, m, "ctrl+s")
+	if saved := savedConnection(t, path, reg, "rows"); !reflect.DeepEqual(saved.Targets, []string{"Tickets", "Neu"}) {
+		t.Fatalf("saved %v, error %q", saved.Targets, m.fail)
+	}
+}
+
+// The guided setup offers the known targets and the builder alike, and ctrl+s goes on to its next step.
+func TestTheGuidedSetupOffersKnownTargetsAndTheBuilder(t *testing.T) {
+	m, path, reg := knownTargetsModel(t)
+	m.screen = screenNav
+	press(t, m, "c", "enter", "ctrl+s", "ctrl+s")
+	if m.wizard == nil || m.wizard.step != stepScope {
+		t.Fatalf("the setup did not reach its scope step: %+v, error %q", m.wizard, m.fail)
+	}
+	openTargetList(t, m)
+	press(t, m, "a")
+	pickRow(t, m, "repos/octo/a")
+	press(t, m, "enter")
+	press(t, m, "a")
+	pickRow(t, m, "new repository")
+	press(t, m, "enter", "enter")
+	typeText(t, m, "c")
+	press(t, m, "ctrl+s")
+	if m.fail != "" || m.wizard.step != stepPermissions {
+		t.Fatalf("ctrl+s in the builder did not go on: step %d, error %q", m.wizard.step, m.fail)
+	}
+	if got := pageEntries(m.wizard.pages[stepScope], targetsLabel); !reflect.DeepEqual(got,
+		[]string{"repos/octo/a", "repos/octo/c"}) {
+		t.Fatalf("the scope step holds %v", got)
+	}
+	if hasConnection(t, path, reg, "github") {
+		t.Fatal("the setup wrote its connection before the summary")
+	}
+}
+
+// A pattern is never taken without an explicit choice: * is never the selected row when a step opens,
+// enter on the resting line takes nothing, and ctrl+s takes only a typed value, never a merely selected
+// row, in the builder and in the menu alike.
+func TestAPatternNeedsAnExplicitChoice(t *testing.T) {
+	m, path, reg := knownTargetsModel(t)
+	openConnection(t, m, "gh-a")
+	openTargetList(t, m)
+	unchanged := func(when string) {
+		t.Helper()
+		if saved := savedConnection(t, path, reg, "gh-a"); len(saved.Targets) != 3 || m.screen != screenTargets {
+			t.Fatalf("%s: screen %v, saved %v", when, m.screen, saved.Targets)
+		}
+	}
+
+	build(t, m, "project", "users", "=cli")
+	if rows := addRows(m); !reflect.DeepEqual(rows, []string{"(type a value, or choose a row)", "* (all)"}) ||
+		m.targetAdd.choices.cursor != 0 {
+		t.Fatalf("the number step offers %v on row %d", rows, m.targetAdd.choices.cursor)
+	}
+	press(t, m, "ctrl+s")
+	if m.targetAdd == nil || !strings.Contains(m.fail, "not complete yet: choose NUMBER or * (all)") {
+		t.Fatalf("ctrl+s without a value did not say what is missing: error %q", m.fail)
+	}
+	unchanged("ctrl+s on the pattern step")
+	press(t, m, "enter")
+	if m.targetAdd == nil || !strings.Contains(m.fail, "type NUMBER or * (all) first") {
+		t.Fatalf("enter on the resting line took something: error %q", m.fail)
+	}
+	press(t, m, "down", "enter")
+	if !slices.Contains(m.targetList.all, "users/cli/projects/*") {
+		t.Fatalf("an explicit * was not taken: %v, error %q", m.targetList.all, m.fail)
+	}
+
+	// Suggestions come before *, and a selected suggestion is no choice for ctrl+s either.
+	press(t, m, "a")
+	pickRow(t, m, "new repository")
+	press(t, m, "enter", "enter")
+	if rows := addRows(m); rows[len(rows)-1] != "* (all)" || m.targetAdd.text[m.targetAdd.choices.matches[0]] != "a" {
+		t.Fatalf("the repository step offers %v", rows)
+	}
+	press(t, m, "ctrl+s")
+	if m.targetAdd == nil || !strings.Contains(m.fail, "not complete yet") {
+		t.Fatalf("ctrl+s took the selected suggestion: error %q", m.fail)
+	}
+	unchanged("ctrl+s on a selected suggestion")
+	typeText(t, m, "*")
+	press(t, m, "ctrl+s")
+	if saved := savedConnection(t, path, reg, "gh-a"); m.fail != "" || !slices.Contains(saved.Targets, "repos/octo/*") ||
+		!slices.Contains(saved.Targets, "users/cli/projects/*") {
+		t.Fatalf("a typed * was not saved: %v, error %q", saved.Targets, m.fail)
+	}
+
+	// In the menu, ctrl+s saves the list without the selected row.
+	openConnection(t, m, "gh-a")
+	openTargetList(t, m)
+	press(t, m, "a")
+	pickRow(t, m, "new owner")
+	press(t, m, "ctrl+s")
+	if saved := savedConnection(t, path, reg, "gh-a"); m.fail != "" || m.screen != screenList || len(saved.Targets) != 5 {
+		t.Fatalf("ctrl+s in the menu took its selected row: screen %v, saved %v, error %q", m.screen, saved.Targets,
+			m.fail)
+	}
 }

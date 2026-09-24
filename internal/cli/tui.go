@@ -92,10 +92,21 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"d removes it after asking. ctrl+s keeps the list and saves the connection in one step, taking a\n" +
 			"target that is still being typed first; in the guided setup it goes on to the next step instead,\n" +
 			"since the setup saves only from its summary. esc closes an unchanged list; after a change it asks\n" +
-			"first: k keeps the list in the row, d discards the changes, and esc returns to the list. Each\n" +
-			"target is typed on its own, checked by the provider when it is taken, and refused when the list\n" +
-			"holds it already. In the form, right unfolds the row to show every target and left folds it again\n" +
-			"to their number and the first two. The row says what an empty list means for the provider: a GitHub\n" +
+			"first: k keeps the list in the row, d discards the changes, and esc returns to the list.\n\n" +
+			"a opens a menu whenever there is more to offer than typing: the targets other connections of the\n" +
+			"same service use, marked with those connections, and for a provider that names kinds of targets,\n" +
+			"such as GitHub's repository, project, and owner, a builder for a new one. Typing filters the menu,\n" +
+			"and its first row takes the typed line as a target, the way for experts. The builder asks for the\n" +
+			"parts of the kind one by one, for example the owner and then the repository name or the project\n" +
+			"number, suggests the values the same service already uses there, offers * as all, and writes the\n" +
+			"usual path such as repos/OWNER/REPO; backspace on an empty line steps back, and esc cancels the\n" +
+			"entry. * is never selected when a step opens, so a pattern is added only when it is chosen with\n" +
+			"enter or typed. ctrl+s takes a typed line, or a typed value that completes a build, never a row\n" +
+			"that is merely selected, and says what is missing otherwise. Every target, however it was added,\n" +
+			"is checked by the provider when it is taken; a refused one stays typed with the reason, and one\n" +
+			"the list holds already is refused. enter on a target edits it as typed text.\n\n" +
+			"In the form, right unfolds the targets row to show every target and left folds it again to their\n" +
+			"number and the first two. The row says what an empty list means for the provider: a GitHub\n" +
 			"connection without targets reaches whatever its credential reaches, while SeaTable or Telegram\n" +
 			"cannot be saved without one, and Telegram takes one chat only. One target is saved as target,\n" +
 			"several as targets.\n\n" +

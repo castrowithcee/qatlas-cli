@@ -10,13 +10,14 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
 
-// The target list of a connection is edited in a screen of its own, opened from its row like a picker: a
-// is add, enter edits the selected target, and x or d removes it after asking. ctrl+s keeps the list and
-// saves the form in one step, from every state of the screen, the typed target included; in the guided
-// setup it goes on to the next step instead, which saves only from its summary. esc closes an unchanged
-// list at once and asks about a changed one, so no change is dropped silently. Each target is typed on its
-// own, so none has to be quoted into a line with the others. A target is checked by the provider when it
-// is taken; the list as a whole is checked by the core when the form is saved, like every other rule.
+// The target list of a connection is edited in a screen of its own, opened from its row like a picker: a is
+// add, which offers known targets and a builder where there are any, enter edits the selected target, and x
+// or d removes it after asking. ctrl+s keeps the list and saves the form in one step, from every state of the
+// screen, the typed target included; in the guided setup it goes on to the next step instead, which saves
+// only from its summary. esc closes an unchanged list at once and asks about a changed one, so no change is
+// dropped silently. Each target is typed on its own, so none has to be quoted into a line with the others. A
+// target is checked by the provider when it is taken; the list as a whole is checked by the core when the
+// form is saved, like every other rule.
 
 // targetMetadata is what the provider of the form says about its targets.
 func (m *Model) targetMetadata() config.TargetMetadata {
@@ -27,7 +28,7 @@ func (m *Model) targetMetadata() config.TargetMetadata {
 // openTargets opens the entries of the focused target list on its first target.
 func (m *Model) openTargets() {
 	m.targetList.reset(append([]string(nil), m.fields[m.focus].entries...))
-	m.targetEdit, m.targetRemove = -1, false
+	m.targetEdit, m.targetRemove, m.targetAdd = -1, false, nil
 	m.targetInput.Blur()
 	m.screen = screenTargets
 	m.clearMessages()
@@ -42,6 +43,10 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	case "ctrl+s":
 		// ctrl+s saves from every state of the list, the way it does from every row of the form. A typed
 		// target is taken first; one the provider refuses stays typed with the reason, and nothing is saved.
+		// The add menu takes its typed line the same way, and the builder its target once it is complete.
+		if m.targetAdd != nil && !m.saveAdd() {
+			return nil
+		}
 		if m.targetEdit >= 0 {
 			m.takeTarget()
 			if m.targetEdit >= 0 {
@@ -52,6 +57,9 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 		m.targetRemove = false
 		m.keepTargets()
 		return m.updateForm(key)
+	}
+	if m.targetAdd != nil {
+		return m.updateAdd(key)
 	}
 	if m.targetEdit >= 0 {
 		switch key.String() {
@@ -90,11 +98,11 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 				metadata.Label)
 			return nil
 		}
-		m.editTarget(len(m.targetList.all), "")
+		m.startAdd()
 	case "enter", "e":
 		if !selected {
 			// An empty list has nothing to edit, so enter adds its first target.
-			m.editTarget(0, "")
+			m.startAdd()
 			return nil
 		}
 		m.editTarget(m.targetList.cursor, target)
@@ -213,6 +221,9 @@ func (m *Model) removeTarget() {
 
 // targetsView draws the target list screen: its frame, and between them as many targets as fit.
 func (m *Model) targetsView() string {
+	if m.targetAdd != nil {
+		return m.addView()
+	}
 	header, footer := m.targetFrame()
 	var b strings.Builder
 	b.WriteString(header)
