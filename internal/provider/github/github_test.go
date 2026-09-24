@@ -50,9 +50,10 @@ type fakeItem struct {
 }
 
 type fakeIssue struct {
-	number int
-	state  string
-	labels []string
+	number    int
+	state     string
+	labels    []string
+	assignees []string
 }
 
 // fakeGitHub answers the GraphQL and REST routes this provider uses. Items are filtered with a small
@@ -344,10 +345,24 @@ func (f *fakeGitHub) issuesPage(w http.ResponseWriter, variables map[string]any)
 			`"message":"no repository"}]}`)
 		return
 	}
-	states, _ := variables["states"].([]any)
+	// Like GitHub, an absent assignee filters nothing, an explicit null keeps the unassigned issues, and "*"
+	// keeps the assigned ones.
+	filter, ok := variables["filter"].(map[string]any)
+	if !ok {
+		// Filters bound one by one reach filterBy as explicit fields, null included.
+		filter = variables
+	}
+	states, _ := filter["states"].([]any)
+	assignee, byAssignee := filter["assignee"]
 	matching := []int{}
 	for i, issue := range f.issues {
-		if len(states) == 0 || strings.EqualFold(states[0].(string), issue.state) {
+		assigned := len(issue.assignees) > 0
+		switch login, _ := assignee.(string); {
+		case len(states) > 0 && !strings.EqualFold(states[0].(string), issue.state):
+		case byAssignee && assignee == nil && assigned:
+		case byAssignee && assignee != nil && login == "*" && !assigned:
+		case byAssignee && login != "*" && login != "" && !containsFold(issue.assignees, login):
+		default:
 			matching = append(matching, i)
 		}
 	}
@@ -367,9 +382,14 @@ func (f *fakeGitHub) issuesPage(w http.ResponseWriter, variables map[string]any)
 	for _, index := range matching[start:end] {
 		issue := f.issues[index]
 		endCursor = "icur-" + strconv.Itoa(index)
+		logins := []string{}
+		for _, login := range issue.assignees {
+			logins = append(logins, fmt.Sprintf(`{"login":%q}`, login))
+		}
 		nodes = append(nodes, fmt.Sprintf(`{"number":%d,"title":"Issue %d","state":"%s","url":"https://github.com/`+
-			`octo-org/example/issues/%d","updatedAt":"2026-01-01T00:00:00Z","assignees":{"nodes":[]},`+
-			`"labels":{"nodes":[{"name":"bug"}]}}`, issue.number, issue.number, strings.ToUpper(issue.state), issue.number))
+			`octo-org/example/issues/%d","updatedAt":"2026-01-01T00:00:00Z","assignees":{"nodes":[%s]},`+
+			`"labels":{"nodes":[{"name":"bug"}]}}`, issue.number, issue.number, strings.ToUpper(issue.state), issue.number,
+			strings.Join(logins, ",")))
 	}
 	fmt.Fprintf(w, `{"data":{"repository":{"issues":{"pageInfo":{"hasNextPage":%t,"endCursor":%q},"nodes":[%s]}}}}`,
 		end < len(matching), endCursor, strings.Join(nodes, ","))
@@ -917,7 +937,7 @@ func TestIssuesArePagedWithoutPullRequests(t *testing.T) {
 		if n%4 == 0 {
 			state = "closed"
 		}
-		f.issues = append(f.issues, fakeIssue{number: n, state: state})
+		f.issues = append(f.issues, fakeIssue{number: n, state: state, assignees: []string{"octocat"}})
 	}
 	base := serve(t, f)
 	c := client(t, base, repoTarget)
@@ -945,7 +965,8 @@ func TestIssuesArePagedWithoutPullRequests(t *testing.T) {
 	}
 	request := f.recorded()[0]
 	vars := request.variables
-	if fmt.Sprint(vars["states"]) != "[OPEN]" || fmt.Sprint(vars["labels"]) != "[bug]" || vars["assignee"] != "octocat" ||
+	filter, _ := vars["filter"].(map[string]any)
+	if fmt.Sprint(filter["states"]) != "[OPEN]" || fmt.Sprint(filter["labels"]) != "[bug]" || filter["assignee"] != "octocat" ||
 		vars["owner"] != "octo-org" || vars["name"] != "example" || vars["first"] != float64(30) ||
 		strings.Contains(request.document, "body") || strings.Contains(request.document, "comments") {
 		t.Errorf("request = %+v", request)
@@ -956,6 +977,51 @@ func TestIssuesArePagedWithoutPullRequests(t *testing.T) {
 	}
 	if _, err := c.ListIssues(context.Background(), IssueListOptions{State: "closed", Cursor: options.Cursor}); !isInvalidRequest(err) {
 		t.Errorf("a cursor of other filters = %v, want an invalid request", err)
+	}
+}
+
+func TestIssuesFilterByAssigneeOnlyWhenNamed(t *testing.T) {
+	f := &fakeGitHub{issues: []fakeIssue{{number: 4, state: "open", assignees: []string{"octocat", "hubot"}},
+		{number: 3, state: "open", assignees: []string{"hubot"}}, {number: 2, state: "open"},
+		{number: 1, state: "open", assignees: []string{"octocat"}}}}
+	base := serve(t, f)
+	c := client(t, base, repoTarget)
+
+	numbers := func(list *IssueList) []int {
+		result := []int{}
+		for _, issue := range list.Issues {
+			result = append(result, issue.Number)
+		}
+		return result
+	}
+	all, err := c.ListIssues(context.Background(), IssueListOptions{State: "all"})
+	if err != nil || fmt.Sprint(numbers(all)) != "[4 3 2 1]" {
+		t.Errorf("without assignee = %v, %v; want assigned and unassigned issues", all, err)
+	}
+	filter, _ := f.recorded()[0].variables["filter"].(map[string]any)
+	if len(filter) != 0 || strings.Contains(f.recorded()[0].document, "assignee:") {
+		t.Errorf("filter without assignee = %v, want no filter at all", filter)
+	}
+	mine, err := c.ListIssues(context.Background(), IssueListOptions{State: "all", Assignee: "octocat"})
+	if err != nil || fmt.Sprint(numbers(mine)) != "[4 1]" {
+		t.Errorf("with assignee = %v, %v; want the issues of octocat", mine, err)
+	}
+	filter, _ = f.recorded()[1].variables["filter"].(map[string]any)
+	if fmt.Sprint(filter) != "map[assignee:octocat]" {
+		t.Errorf("filter with assignee = %v, want only the named login", filter)
+	}
+
+	first, err := c.ListIssues(context.Background(), IssueListOptions{State: "all", Limit: 1})
+	if err != nil || !first.HasMore {
+		t.Fatalf("first batch = %v, %v", first, err)
+	}
+	next, err := c.ListIssues(context.Background(), IssueListOptions{State: "all", Limit: 1, Cursor: first.NextCursor})
+	if err != nil || fmt.Sprint(numbers(next)) != "[3]" {
+		t.Errorf("next batch = %v, %v; want the cursor of the same filters to continue", next, err)
+	}
+	if _, err := c.ListIssues(context.Background(), IssueListOptions{State: "all", Assignee: "octocat",
+		Cursor: first.NextCursor}); !isInvalidRequest(err) {
+		t.Errorf("a cursor without assignee = %v, want an invalid request", err)
 	}
 }
 

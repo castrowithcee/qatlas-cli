@@ -50,10 +50,11 @@ func (o *IssueListOptions) binding(bound target) []byte {
 }
 
 // issuesQuery lists issues of one repository. The GraphQL issue connection holds no pull requests, and its
-// cursor pages stay stable because the order is the fixed creation order.
-const issuesQuery = `query($owner:String!,$name:String!,$first:Int!,$after:String,$states:[IssueState!],` +
-	`$labels:[String!],$assignee:String){repository(owner:$owner,name:$name){issues(first:$first,after:$after,` +
-	`orderBy:{field:CREATED_AT,direction:DESC},filterBy:{states:$states,labels:$labels,assignee:$assignee}){` +
+// cursor pages stay stable because the order is the fixed creation order. The filter carries only the
+// filters that are set, because GitHub reads an explicit null assignee as "no assignee".
+const issuesQuery = `query($owner:String!,$name:String!,$first:Int!,$after:String,$filter:IssueFilters!){` +
+	`repository(owner:$owner,name:$name){issues(first:$first,after:$after,` +
+	`orderBy:{field:CREATED_AT,direction:DESC},filterBy:$filter){` +
 	`pageInfo{hasNextPage endCursor} nodes{number title state url updatedAt ` +
 	`assignees(first:10){nodes{login}} labels(first:20){nodes{name}}}}}}`
 
@@ -110,21 +111,21 @@ func (c *Client) ListIssues(ctx context.Context, options IssueListOptions) (*Iss
 // listIssues reads exactly one server page of issues of the bound repository.
 func (c *Client) listIssues(ctx context.Context, options IssueListOptions, after string) (*IssueList, error) {
 	const op = "list issues"
+	filter := map[string]any{}
 	variables := map[string]any{
-		"owner": c.target.owner, "name": c.target.repo, "first": options.Limit,
-		"after": nil, "states": nil, "labels": nil, "assignee": nil,
+		"owner": c.target.owner, "name": c.target.repo, "first": options.Limit, "after": nil, "filter": filter,
 	}
 	if after != "" {
 		variables["after"] = after
 	}
 	if options.State != "all" {
-		variables["states"] = []string{strings.ToUpper(options.State)}
+		filter["states"] = []string{strings.ToUpper(options.State)}
 	}
 	if len(options.Labels) > 0 {
-		variables["labels"] = options.Labels
+		filter["labels"] = options.Labels
 	}
 	if options.Assignee != "" {
-		variables["assignee"] = options.Assignee
+		filter["assignee"] = options.Assignee
 	}
 	var page issuesPageJSON
 	if err := c.graphql(ctx, op, issuesQuery, variables, &page); err != nil {
