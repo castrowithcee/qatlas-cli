@@ -106,12 +106,14 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[39]{connections,effect,id,reason,title}:", "read,github.issues.get,", "read,github.issues.list,",
+		"tools[45]{connections,effect,id,reason,title}:", "read,github.issues.get,", "read,github.issues.list,",
 		"read,github.projectitems.get,", "read,github.projectitems.list,", "read,github.comments.list,",
 		"create,github.issues.create,", "update,github.issues.update,", "update,github.issues.close,",
 		"update,github.issues.reopen,", "create,github.comments.create,", "update,github.projectitems.update,",
 		"create,github.projectitems.add,", "update,github.projectitems.archive,",
 		"create,github.projectdrafts.create,", "create,github.projectissues.create,",
+		"create,github.projects.create,", "update,github.projects.update,", "delete,github.projects.delete,",
+		"create,github.projects.copy,", "update,github.projects.link,", "update,github.projects.unlink,",
 		"read,github.workflows.list,", "read,github.workflows.get,", "read,github.workflowruns.list,",
 		"read,github.workflowruns.get,", "read,github.workflowjobs.list,", "read,github.workflowjobs.get,",
 		"read,github.workflowjobs.log,", "read,github.workflowartifacts.list,",

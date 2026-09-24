@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle, reads, confirmed changes of issues, comments, and project fields, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -10,8 +10,9 @@ updated: 2026-09-24
 # GitHub
 
 GitHub is a controlled planning provider, not a replacement for `gh`. It lists the projects and repositories
-of a user or an organization, reads and maintains issues, comments, and project items, and it observes and,
-when allowed, operates the GitHub Actions of a repository.
+of a user or an organization, creates, changes, copies, and deletes projects and links them to repositories,
+reads and maintains issues, comments, and project items, and it observes and, when allowed, operates the
+GitHub Actions of a repository.
 On a connection that names them explicitly, it also maintains workflow files and Actions settings. It sees
 pull requests only as project items, and it never accepts a free filter expression, a GraphQL document, or a
 REST route from the caller. A `repository`, `project`, or `owner` argument names exactly one target, and it
@@ -47,10 +48,13 @@ and order:
 | `orgs/LOGIN/projects/NUMBER` | one organization project |
 | `repos/OWNER/*` | every repository of one owner |
 | `users/LOGIN/projects/*`, `orgs/LOGIN/projects/*` | every project of one user or organization |
-| `users/LOGIN`, `orgs/LOGIN` | listing every project and repository of one user or organization |
+| `users/LOGIN`, `orgs/LOGIN` | listing every project and repository of one user or organization, and creating or copying projects there |
 
-An owner entry allows the [owner lists](#owners-projects-and-repositories) only: it names what they may show,
-not a repository or project any other tool may act on. `*` is accepted only as the whole last segment of a
+An owner entry allows the [owner lists](#owners-projects-and-repositories), `github.projects.create`, and the
+destination of `github.projects.copy` only: it names what the lists may show and where a new project may be
+made, not a repository or an existing project any other tool may act on. A new project has no number yet, so
+a project pattern such as `orgs/LOGIN/projects/*` does not allow creating or copying one; only the owner entry
+or a connection without targets does. `*` is accepted only as the whole last segment of a
 repository or project entry; there are no ranges and no other patterns. Owners, repositories, and projects
 are compared without case, like GitHub compares them, and an entry listed twice makes the file invalid. The
 token stays an independent upper bound: the targets never grant what the token lacks, and the token never
@@ -60,19 +64,21 @@ such as a project followed by the repositories it plans in, stay valid and are r
 One GitHub connection carries the project, issue, comment, and Actions tools together. Which of them it
 offers is decided by `permissions` and `tools` alone. Reads are a connection's only default: every change
 needs `create` or `update` in the connection's `permissions`, every Actions execution needs `execute`, and a
-connection with a `tools` list offers only the tools it lists, never one added in a later version. The
-workflow maintainer and Actions administrator tools are listed only: a connection without a `tools` list
-never offers them, whatever its permissions.
+connection with a `tools` list offers only the tools it lists, never one added in a later version.
+`github.projects.delete` needs `delete`. It and the workflow maintainer and Actions administrator tools are
+listed only: a connection without a `tools` list never offers them, whatever its permissions.
 
 ### The target of a call
 
 Every repository tool (issues, comments, Actions, workflow maintenance, and Actions administration) takes
 `repository` as `OWNER/REPO`. Every project tool (`github.projectitems.list`, `get`, `update`, `archive`,
-`github.projectdrafts.create`) takes `project` as `users/LOGIN/projects/NUMBER` or
-`orgs/LOGIN/projects/NUMBER`. `github.projectitems.add` and `github.projectissues.create` touch both, take
-both, and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the
-items of the project, not a target. The owner lists `github.projects.list` and `github.repositories.list` take
-`owner` as `users/LOGIN` for a user or `orgs/LOGIN` for an organization.
+`github.projectdrafts.create`, `github.projects.update`, `delete`) takes `project` as
+`users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`. `github.projectitems.add`,
+`github.projectissues.create`, `github.projects.link`, and `github.projects.unlink` touch both, take both,
+and check both against the targets. In `github.projectitems.list`, `repository` stays a filter on the items of
+the project, not a target. The owner lists `github.projects.list` and `github.repositories.list` and
+`github.projects.create` take `owner` as `users/LOGIN` for a user or `orgs/LOGIN` for an organization;
+`github.projects.copy` takes the source as `project` and the destination as `owner`, and checks both.
 
 An argument may be left out only when the targets allow exactly one repository, exactly one project, or
 exactly one owner as an owner entry, and not as a pattern: that one is the default of its kind. Nothing else
@@ -96,8 +102,9 @@ a secret is read as well.
 
 Every result names the target the tool acted on in a field named like its argument, whether the argument
 chose it or a default did: `repository` as `OWNER/REPO`, `project` as `users/LOGIN/projects/NUMBER` or
-`orgs/LOGIN/projects/NUMBER`, both for `github.projectitems.add` and `github.projectissues.create`, and
-`owner` as `users/LOGIN` or `orgs/LOGIN` for the owner lists. The field sits beside the tool's own fields,
+`orgs/LOGIN/projects/NUMBER`, both for `github.projectitems.add`, `github.projectissues.create`,
+`github.projects.link`, and `github.projects.unlink`, and `owner` as `users/LOGIN` or `orgs/LOGIN` for the
+owner lists, `github.projects.create`, and, beside `project`, `github.projects.copy`. The field sits beside the tool's own fields,
 so `github.issues.get` without an argument answers, for example:
 
 ```json
@@ -142,8 +149,10 @@ The terminal editor starts a new connection on the setup profile `read`, which t
 `github.issues.list`, `github.issues.get`, and `github.comments.list`. The profile `planning` ticks
 `[read, create, update]` with the owner lists, the project reads, `github.projectitems.update`,
 `github.projectitems.add`,
-`github.projectdrafts.create`, and `github.projectissues.create`; archiving stays unticked. The profiles
-`actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions). A profile is a
+`github.projectdrafts.create`, and `github.projectissues.create`; archiving stays unticked. The profile
+`projects` ticks `[read, create, update]` with the owner lists and the
+[project lifecycle](#project-lifecycle) tools except `github.projects.delete`, which no profile ticks. The
+profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions). A profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
 
@@ -197,6 +206,61 @@ organization with Projects read access, but not the projects of a user; GitHub r
 `permission`. The repositories need no scope for public ones, `repo` on a classic token for private ones, or
 access to the repositories on a fine-grained token.
 
+## Project lifecycle
+
+The lifecycle tools make and maintain projects themselves, not their items. Each one is a change that needs
+confirmation in its own invoke request, is sent exactly once, and follows the rules under
+[unclear outcomes](#unclear-outcomes-and-conflicts).
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.projects.create` | create | non-idempotent | creates one empty project with `title` in `owner` |
+| `github.projects.update` | update | idempotent | changes `title`, `short_description`, `readme`, `public`, or `closed`; left-out settings stay |
+| `github.projects.copy` | create | non-idempotent | copies `project` with its fields and views into a new project `title` of `owner`; `include_drafts: true` copies its draft issues as well |
+| `github.projects.link` | update | idempotent | links `project` to `repository`; a linked project stays linked once |
+| `github.projects.unlink` | update | idempotent | removes the link between `project` and `repository` |
+| `github.projects.delete` | delete | unknown | deletes `project` with its items, fields, and views; listed only |
+
+`closed: true` closes a project and `closed: false` reopens it; `public` switches its visibility, which an
+organization policy may forbid. At least one setting is required. `short_description` and `readme` need at
+least one character: GitHub ignores an empty value and answers with success, so it cannot clear either
+through its API, and Qatlas refuses `""` before a secret is read. A create and a copy answer the new
+project in `created` as `project`, `number`, `title`, `url`, `closed`, and `public`; an update answers the
+project's state after the change. A repeated link or unlink succeeds again and leaves the project linked
+once or unlinked. A repeated delete ends as `not-found` when the project is resolved, before any mutation;
+its idempotency stays `unknown` because a delete addresses the project by number: read the current state
+before repeating one.
+
+```sh
+echo '{"owner":"orgs/octo-org","title":"Roadmap 2027"}' | qatlas invoke github.projects.create --connection projects --confirm
+echo '{"project":"orgs/octo-org/projects/7","closed":true}' | qatlas invoke github.projects.update --connection projects --confirm
+echo '{"project":"orgs/octo-org/projects/7","repository":"octo-org/example"}' |
+  qatlas invoke github.projects.link --connection projects --confirm
+```
+
+`github.projects.create` and the destination of `github.projects.copy` need the owner as an owner entry of
+the targets, or a connection without targets; `owner` may be left out when the targets name exactly one owner
+entry. Every other lifecycle tool, and the source of a copy, needs the project inside the targets like any
+project tool, and a link or an unlink needs the repository inside them as well. `github.projects.delete`
+needs `delete` in the connection's `permissions` and its name in the connection's `tools`:
+
+```yaml
+connections:
+  projects:
+    service: github
+    credential: github-planner
+    targets: [orgs/octo-org, orgs/octo-org/projects/*, repos/octo-org/*]
+    permissions: [read, create, update, delete]
+    tools: [github.projects.list, github.repositories.list, github.projects.create, github.projects.update,
+      github.projects.copy, github.projects.link, github.projects.unlink, github.projects.delete]
+```
+
+The lifecycle tools need `project` on a classic token, or Projects read and write access of the organization
+on a fine-grained token; the projects of a user need a classic token. A link or an unlink also needs a token
+that can see the repository. Deleting a project needs the rights of a project administrator. GitHub offers no
+API to create, change, or delete the views of a project, so Qatlas has no view tool; a copy takes the views of
+its source along. No lifecycle tool deletes a field, an option, or an item.
+
 ## Project-first use
 
 When a repository has an authoritative project, work selection starts there:
@@ -227,7 +291,8 @@ comments.
 
 Every change requires confirmation in its own invoke request (`--confirm`, or `confirm: true` over MCP).
 An unconfirmed change, and a change the connection's permissions or tools exclude, ends before a secret is
-read and before GitHub is contacted.
+read and before GitHub is contacted. The changes of projects themselves are listed under
+[project lifecycle](#project-lifecycle).
 
 | Tool | Effect | Idempotency | Does |
 | --- | --- | --- | --- |

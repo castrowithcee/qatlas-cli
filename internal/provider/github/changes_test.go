@@ -156,6 +156,12 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.projectissues.create":     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		"github.projectitems.list":        readRisk,
 		"github.projects.list":            readRisk,
+		"github.projects.create":          changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.projects.update":          changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projects.delete":          changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+		"github.projects.copy":            changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.projects.link":            changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.projects.unlink":          changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.repositories.list":        readRisk,
 		"github.projectitems.get":         readRisk,
 		"github.issues.list":              readRisk,
@@ -205,7 +211,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		if descriptor.Risk.Effect != capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationRequired {
 			t.Errorf("%s changes without confirmation", descriptor.ID)
 		}
-		owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID
+		owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
+			descriptor.ID == projectsCreate.ID || descriptor.ID == projectsCopy.ID
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "document"} {
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("%s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)

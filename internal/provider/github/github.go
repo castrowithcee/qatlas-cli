@@ -1,20 +1,21 @@
 // Package github implements controlled planning and GitHub Actions access to GitHub.
 //
-// A connection binds one token to an optional allow-list of targets: repositories (repos/OWNER/REPO),
-// user or organization projects (users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER), patterns
-// with * as the last segment for every repository or project of one owner, and owners (users/LOGIN,
-// orgs/LOGIN) whose projects and repositories may be listed. Without targets, a connection reaches whatever
-// its token reaches. Every tool takes the repository, project, or owner it acts on as an argument; the
-// argument may be left out when the targets allow exactly one of its kind. The owner lists name the projects
-// and repositories of one user or organization that the targets allow. The project tools list compact,
-// server-side filtered items of a project page by page, read the full content of one selected item, and
-// maintain its items and their field values; the issue tools read, create, and change issues of a
-// repository and read or write the comments of one issue on explicit request. The Actions tools observe the
-// GitHub Actions of a repository and, only with the execute permission, dispatch, re-run, or cancel one named
-// workflow or run. Only a connection whose tools list names them maintains workflow files below
-// .github/workflows/ and Actions settings. A tool that touches a project and a repository checks both.
-// Nothing here accepts a free filter expression, a GraphQL document, or a route from an agent, and every
-// target is checked against the allow-list before a credential is resolved.
+// A connection binds one token to an optional allow-list of targets: repositories (repos/OWNER/REPO), user or
+// organization projects (users/LOGIN/projects/NUMBER, orgs/LOGIN/projects/NUMBER), patterns with * as the last
+// segment for every repository or project of one owner, and owners (users/LOGIN, orgs/LOGIN) whose projects and
+// repositories may be listed and in which projects may be created or copied. Without targets, a connection
+// reaches whatever its token reaches. Every tool takes the repository, project, or owner it acts on as an
+// argument; the argument may be left out when the targets allow exactly one of its kind. The owner lists name
+// the projects and repositories of one user or organization that the targets allow. The project tools list
+// compact, server-side filtered items of a project page by page, read the full content of one selected item,
+// and maintain its items and their field values; the project lifecycle tools create, change, close, copy, and,
+// only on a connection whose tools list names it, delete a project and link it to repositories; the issue tools
+// read, create, and change issues of a repository and read or write the comments of one issue on explicit
+// request. The Actions tools observe the GitHub Actions of a repository and, only with the execute permission,
+// dispatch, re-run, or cancel one named workflow or run. Only a connection whose tools list names them
+// maintains workflow files below .github/workflows/ and Actions settings. A tool that touches a project and a
+// repository checks both. Nothing here accepts a free filter expression, a GraphQL document, or a route from an
+// agent, and every target is checked against the allow-list before a credential is resolved.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -285,10 +286,10 @@ var issuesGet = capability.Descriptor{
 	}},
 }
 
-// Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the
-// Actions observer and operator tools, and the listed-only workflow maintainer and Actions administrator
-// tools. Only reads are a connection's default: every change and every execution needs a permission of its
-// own, and a listed-only tool also its name in the connection's tools list.
+// Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the project
+// lifecycle tools, the Actions observer and operator tools, and the listed-only workflow maintainer and
+// Actions administrator tools. Only reads are a connection's default: every change and every execution needs
+// a permission of its own, and a listed-only tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
@@ -309,7 +310,8 @@ func Register(reg *capability.Registry) error {
 			Multiple: true,
 			Description: "optional allow-list of repos/OWNER/REPO, users/LOGIN/projects/NUMBER, and " +
 				"orgs/LOGIN/projects/NUMBER, or repos/OWNER/*, users/LOGIN/projects/*, and orgs/LOGIN/projects/* " +
-				"for all of one owner, and users/LOGIN or orgs/LOGIN to list what an owner holds; without targets " +
+				"for all of one owner, and users/LOGIN or orgs/LOGIN to list what an owner holds and to create or " +
+				"copy projects there; without targets " +
 				"a connection reaches whatever its token reaches",
 			Kinds: []config.TargetKind{{
 				Name: "repository", Description: "one repository, or with * every repository of one owner",
@@ -321,7 +323,8 @@ func Register(reg *capability.Registry) error {
 					"orgs/LOGIN/projects/*"},
 			}, {
 				Name: "owner", Description: "a user or an organization whose projects and repositories may be " +
-					"listed; allows no repository or project by itself",
+					"listed and in which projects may be created or copied; allows no repository or existing project " +
+					"by itself",
 				Forms: []string{"users/LOGIN", "orgs/LOGIN"},
 			}},
 			Validate: func(raw string) error {
@@ -345,6 +348,13 @@ func Register(reg *capability.Registry) error {
 				"fields, adds issues, and creates drafts and planned issues; archiving stays unticked",
 			Tools: []string{projectsList.ID, repositoriesList.ID, itemsList.ID, itemsGet.ID, itemsUpdate.ID,
 				itemsAdd.ID, draftsCreate.ID, projectIssuesCreate.ID},
+		}, {
+			ID: "projects", Title: "Project lifecycle",
+			Description: "lists projects and repositories and creates, updates, closes, reopens, and copies " +
+				"projects and links or unlinks their repositories; every change needs its own confirmation, and " +
+				"deleting stays unticked",
+			Tools: []string{projectsList.ID, repositoriesList.ID, projectsCreate.ID, projectsUpdate.ID,
+				projectsCopy.ID, projectsLink.ID, projectsUnlink.ID},
 		}, {
 			ID: "actions-observer", Title: "Actions observer",
 			Description: "reads the workflows, runs, jobs, artifact metadata, and the end of job logs of a " +
@@ -389,7 +399,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: itemsArchive, Handler: capability.Handler(invokeItemsArchive)},
 		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
-	}, append(actionsOperations(), maintenanceOperations()...)...)
+	}, append(append(lifecycleOperations(), actionsOperations()...), maintenanceOperations()...)...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}

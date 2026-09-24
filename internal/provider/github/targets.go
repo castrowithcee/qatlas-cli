@@ -43,21 +43,28 @@ var projectField = capability.Field{Name: "project", Description: "Project the t
 	"users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER; the one a default chose when the argument was " +
 	"left out"}
 
-// withTargetArgument adds the target argument of its kind to one tool: owner to the owner lists, project to
-// the project tools, repository to every other tool. Every result names the target the tool acted on in a
-// field of the same name; the project tools that add or create an issue also name its repository, which they
-// take as well.
+// withTargetArgument adds the target argument of its kind to one tool: owner to the owner lists and to the
+// project create, project to the other project tools, repository to every other tool. Every result names the
+// target the tool acted on in a field of the same name; the project tools that add or create an issue or link
+// a repository also name that repository, and a project copy the owner of the copy, which they take as well.
 func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	name, schema, argument := "repository", repoSchema, repositoryArgument
 	fields := []capability.Field{repositoryField}
-	if d.ID == projectsList.ID || d.ID == repositoriesList.ID {
+	switch {
+	case d.ID == projectsList.ID || d.ID == repositoriesList.ID:
 		name, schema, argument = "owner", ownerSchema, ownerArgument
 		fields = []capability.Field{ownerField}
-	} else if strings.HasPrefix(d.ID, Provider+".project") {
+	case d.ID == projectsCreate.ID:
+		name, schema, argument = "owner", ownerSchema, newOwnerArgument
+		fields = []capability.Field{newOwnerField}
+	case strings.HasPrefix(d.ID, Provider+".project"):
 		name, schema, argument = "project", projectSchema, projectArgument
 		fields = []capability.Field{projectField}
-		if d.ID == itemsAdd.ID || d.ID == projectIssuesCreate.ID {
+		switch d.ID {
+		case itemsAdd.ID, projectIssuesCreate.ID, projectsLink.ID, projectsUnlink.ID:
 			fields = append(fields, repositoryField)
+		case projectsCopy.ID:
+			fields = append(fields, newOwnerField)
 		}
 	}
 	var input, properties map[string]json.RawMessage
@@ -188,9 +195,11 @@ func (a allowlist) names(kind targetKind) bool {
 	return false
 }
 
-// chooseOwner returns the owner whose projects or repositories an owner tool lists. An explicit argument
-// wins; without one, only an owner the list names exactly, and no other, is the default. The owner must be
-// one the list lets the tool list. Every refusal is an invalid request that never quotes the value.
+// chooseOwner returns the owner whose projects or repositories an owner tool lists, or, for kindOwner, the
+// owner a new project is created in. An explicit argument wins; without one, only an owner the list names
+// exactly, and no other, is the default. A listed owner must be one the list lets the tool list; the owner of
+// a new project must be one the list allows as an owner, since a project pattern names no project yet to
+// come. Every refusal is an invalid request that never quotes the value.
 func (a allowlist) chooseOwner(kind targetKind, value string) (target, error) {
 	const form = "users/LOGIN or orgs/LOGIN"
 	var chosen target
@@ -211,7 +220,12 @@ func (a allowlist) chooseOwner(kind targetKind, value string) (target, error) {
 		return target{}, invalidRequest("owner is required because the connection's targets do not name exactly " +
 			"one; pass owner as " + form)
 	}
-	if !a.lists(chosen, kind) {
+	if kind == kindOwner && !a.allows(chosen) {
+		return target{}, invalidRequest("owner is outside the targets of this connection for a new project; " +
+			"pass an owner target they name, or add the owner as users/LOGIN or orgs/LOGIN to the connection's " +
+			"targets, since a project pattern of the owner is not enough")
+	}
+	if kind != kindOwner && !a.lists(chosen, kind) {
 		name := "repositories"
 		if kind == kindProject {
 			name = "projects"
@@ -273,8 +287,9 @@ func parseArgument(kind targetKind, value string) (target, error) {
 	return parsed, err
 }
 
-// selectOwner reads the owner argument of an owner tool that lists targets of one kind and resolves the owner
-// against the connection's targets, before a credential is resolved.
+// selectOwner reads the owner argument of an owner tool that lists targets of one kind, or with kindOwner of a
+// tool that creates a project, and resolves the owner against the connection's targets, before a credential
+// is resolved.
 func selectOwner(resolved *config.Resolved, kind targetKind, raw json.RawMessage) (target, error) {
 	if resolved == nil {
 		return target{}, providerError("open", "no connection was selected")

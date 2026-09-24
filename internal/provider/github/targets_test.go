@@ -174,7 +174,8 @@ func TestACursorOfAnotherTargetIsRefused(t *testing.T) {
 // Discovery names the target argument of every tool and says when it may be left out; the schema admits
 // only a single target, never a pattern.
 func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
-	both := map[string]bool{itemsAdd.ID: true, projectIssuesCreate.ID: true}
+	both := map[string]bool{itemsAdd.ID: true, projectIssuesCreate.ID: true, projectsLink.ID: true,
+		projectsUnlink.ID: true}
 	for _, descriptor := range registry(t).Provider(Provider) {
 		var schema struct {
 			Properties map[string]json.RawMessage `json:"properties"`
@@ -184,9 +185,13 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 			t.Fatalf("%s schema = %v", descriptor.ID, err)
 		}
 		names := []string{"repository"}
-		if descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID {
+		switch {
+		case descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
+			descriptor.ID == projectsCreate.ID:
 			names = []string{"owner"}
-		} else if strings.HasPrefix(descriptor.ID, Provider+".project") {
+		case descriptor.ID == projectsCopy.ID:
+			names = []string{"project", "owner"}
+		case strings.HasPrefix(descriptor.ID, Provider+".project"):
 			names = []string{"project"}
 			if both[descriptor.ID] {
 				names = append(names, "repository")
