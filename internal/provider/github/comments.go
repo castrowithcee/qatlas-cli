@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -39,11 +40,12 @@ func (o *CommentListOptions) binding(bound target) []byte {
 	return fingerprint("comments", bound.String(), o.Number)
 }
 
-// commentsQuery lists the comments of one issue, oldest first. The issue field of a repository answers for
-// issues only, so a pull request number is refused by GitHub itself.
+// commentsQuery lists the comments of one issue, oldest first. It asks for the issue or pull request of the
+// number, so a pull request number is refused as such instead of as a missing issue.
 const commentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){` +
-	`repository(owner:$owner,name:$name){issue(number:$number){comments(first:$first,after:$after){` +
-	`pageInfo{hasNextPage endCursor} nodes{id author{login} body createdAt updatedAt url}}}}}`
+	`repository(owner:$owner,name:$name){issueOrPullRequest(number:$number){__typename ... on Issue{` +
+	`comments(first:$first,after:$after){` +
+	`pageInfo{hasNextPage endCursor} nodes{id author{login} body createdAt updatedAt url}}}}}}`
 
 // CommentList is the normalised batch of comments of one issue.
 type CommentList struct {
@@ -65,6 +67,7 @@ type Comment struct {
 type commentsPageJSON struct {
 	Repository *struct {
 		Issue *struct {
+			Typename string `json:"__typename"`
 			Comments struct {
 				PageInfo struct {
 					HasNextPage bool   `json:"hasNextPage"`
@@ -81,7 +84,7 @@ type commentsPageJSON struct {
 					URL       string `json:"url"`
 				} `json:"nodes"`
 			} `json:"comments"`
-		} `json:"issue"`
+		} `json:"issueOrPullRequest"`
 	} `json:"repository"`
 }
 
@@ -107,6 +110,12 @@ func (c *Client) listComments(ctx context.Context, options CommentListOptions, a
 	}
 	var page commentsPageJSON
 	if err := c.graphql(ctx, op, commentsQuery, variables, &page); err != nil {
+		// A token without access to pull requests is refused on the number of a pull request.
+		var failure *provider.Error
+		if errors.As(err, &failure) && failure.Class == provider.ClassPermission &&
+			c.pullRequestNumber(ctx, options.Number) {
+			return nil, c.pullRequestRefusal(options.Number)
+		}
 		return nil, err
 	}
 	if page.Repository == nil {
@@ -114,6 +123,13 @@ func (c *Client) listComments(ctx context.Context, options CommentListOptions, a
 	}
 	if page.Repository.Issue == nil {
 		return nil, notFound(op, subject{in: c.target, what: "issue #" + strconv.Itoa(options.Number)})
+	}
+	switch page.Repository.Issue.Typename {
+	case "Issue":
+	case "PullRequest":
+		return nil, c.pullRequestRefusal(options.Number)
+	default:
+		return nil, invalidResponse(op, false)
 	}
 	comments := page.Repository.Issue.Comments
 	result := &CommentList{Comments: make([]Comment, 0, len(comments.Nodes))}

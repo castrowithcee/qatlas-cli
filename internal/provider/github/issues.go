@@ -2,6 +2,8 @@ package github
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -223,9 +225,63 @@ func (c *Client) readIssue(ctx context.Context, op string, number int) (*Issue, 
 	}
 	var raw restIssueJSON
 	if err := c.rest(ctx, op, issuePath(c.target, number), &raw); err != nil {
+		// A fine-grained token without access to pull requests is refused on the issue route of a pull
+		// request; only then a lookup of the number tells a pull request from a refused issue.
+		var failure *provider.Error
+		if errors.As(err, &failure) && failure.Class == provider.ClassPermission && c.pullRequestNumber(ctx, number) {
+			return nil, c.pullRequestRefusal(number)
+		}
 		return nil, err
 	}
+	if raw.PullRequest != nil && raw.Number == number {
+		return nil, c.pullRequestRefusal(number)
+	}
 	return issueOf(op, raw, number, false)
+}
+
+// kindQuery asks what one number of a repository names. A token that may see the pull request gets its type
+// name. A token without access to pull requests is refused on issueOrPullRequest, while issue answers
+// NOT_FOUND for a pull request; a missing number is NOT_FOUND on both.
+const kindQuery = `query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){` +
+	`issueOrPullRequest(number:$number){__typename} issue(number:$number){__typename}}}`
+
+// pullRequestNumber reports whether number of the bound repository names a pull request. It runs only after
+// a refusal, and a failed lookup reports false, so the original refusal stays.
+func (c *Client) pullRequestNumber(ctx context.Context, number int) bool {
+	variables := map[string]any{"owner": c.target.owner, "name": c.target.repo, "number": number}
+	envelope, err := c.post(ctx, "look up number", kindQuery, variables, false)
+	if err != nil {
+		return false
+	}
+	var answer struct {
+		Repository *struct {
+			IssueOrPullRequest *struct {
+				Typename string `json:"__typename"`
+			} `json:"issueOrPullRequest"`
+		} `json:"repository"`
+	}
+	if len(envelope.Errors) == 0 {
+		return json.Unmarshal(envelope.Data, &answer) == nil && answer.Repository != nil &&
+			answer.Repository.IssueOrPullRequest != nil && answer.Repository.IssueOrPullRequest.Typename == "PullRequest"
+	}
+	hidden, noIssue := false, false
+	for _, e := range envelope.Errors {
+		switch {
+		case e.Type == "FORBIDDEN" && pathSegment(e.Path, 1) == "issueOrPullRequest":
+			hidden = true
+		case e.Type == "NOT_FOUND" && pathSegment(e.Path, 1) == "issue":
+			noIssue = true
+		default:
+			return false
+		}
+	}
+	return hidden && noIssue
+}
+
+// pullRequestRefusal refuses a pull request number at an issue tool.
+func (c *Client) pullRequestRefusal(number int) error {
+	return invalidRequest(subject{in: c.target, what: "number " + strconv.Itoa(number)}.String() +
+		" is a pull request; issue tools do not handle pull requests")
 }
 
 func checkNumber(number int) error {

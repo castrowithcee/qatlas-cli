@@ -138,6 +138,11 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			`"body":"`+bodyCanary+`","user":{"login":"octocat"},"assignees":[{"login":"hubot"}],`+
 			`"labels":[{"name":"bug"}],"milestone":{"title":"v1"},"html_url":"https://github.com/octo-org/example/issues/42",`+
 			`"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","closed_at":null,"comments":3}`)
+	case r.Method == http.MethodGet && (r.URL.Path == "/api/v3/repos/octo-org/example/issues/8" ||
+		r.URL.Path == "/api/v3/repos/octo-org/example/issues/9" || r.URL.Path == "/api/v3/repos/octo-org/example/issues/10"):
+		// A fine-grained token is refused on the issue route of a pull request it may not see.
+		w.WriteHeader(http.StatusForbidden)
+		fmt.Fprint(w, `{"message":"Resource not accessible by personal access token"}`)
 	case r.URL.Path == "/api/v3/repos/octo-org/example/issues/7":
 		fmt.Fprint(w, `{"number":7,"title":"A change","state":"open","body":"pr body",`+
 			`"pull_request":{"url":"https://api.github.com/repos/octo-org/example/pulls/7"}}`)
@@ -159,6 +164,8 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
 		f.mutation(w, document, variables)
+	case strings.Contains(document, "{__typename} issue(number"):
+		f.numberKind(w, variables)
 	case strings.Contains(document, "comments(first"):
 		f.commentsPage(w, variables)
 	case strings.Contains(document, "$repoOwner"):
@@ -1149,8 +1156,21 @@ func TestGetIssueReadsOneIssueThroughREST(t *testing.T) {
 		request.version != apiVersion || request.auth != "Bearer "+tokenValue {
 		t.Errorf("request = %+v", request)
 	}
-	if _, err := c.GetIssue(context.Background(), 7); err == nil || !strings.Contains(err.Error(), "pull request") {
-		t.Errorf("GetIssue(pull request) = %v, want a refusal", err)
+	for _, number := range []int{7, 8} {
+		if _, err := c.GetIssue(context.Background(), number); !isInvalidRequest(err) || !strings.Contains(err.Error(),
+			fmt.Sprintf("number %d in repository octo-org/example is a pull request; issue tools do not handle pull requests", number)) {
+			t.Errorf("GetIssue(pull request %d) = %v, want an invalid request naming it", number, err)
+		}
+	}
+	// A refusal stays when the lookup names an issue or fails itself.
+	for _, number := range []int{9, 10} {
+		if _, err := c.GetIssue(context.Background(), number); classOf(err) != provider.ClassPermission ||
+			!strings.Contains(err.Error(), fmt.Sprintf("may not read issue #%d in repository octo-org/example", number)) {
+			t.Errorf("GetIssue(refused issue %d) = %v, want permission", number, err)
+		}
+	}
+	if queries, _, _ := split(f.recorded()); len(queries) != 3 {
+		t.Errorf("lookups = %d, want one after each refusal only", len(queries))
 	}
 	if _, err := c.GetIssue(context.Background(), 5); classOf(err) != provider.ClassNotFound ||
 		!strings.Contains(err.Error(), "issue #5 in repository octo-org/example") {

@@ -1061,7 +1061,7 @@ func (c *Client) graphQLSubject(path []any, variables map[string]any) subject {
 			s.in, number = target{kind: kindRepository, owner: owner, repo: name}, variables["issue"]
 		}
 		switch {
-		case pathSegment(path, 1) == "issue":
+		case pathSegment(path, 1) == "issue" || pathSegment(path, 1) == "issueOrPullRequest":
 			s.what = "this issue"
 			if n, ok := number.(int); ok {
 				s.what = "issue #" + strconv.Itoa(n)

@@ -149,6 +149,7 @@ qatlas: auth: list issues: GitHub rejected the token; check or renew the credent
 | `auth` | HTTP 401: GitHub rejected the token itself, or Qatlas cannot send it; the message adds the next step, checking or renewing the credential with `qatlas credential set <credential> <role>` or in `qatlas tui` |
 | `permission` | HTTP 403, or GraphQL `FORBIDDEN` or `INSUFFICIENT_SCOPES`: GitHub saw the target and refused this token explicitly, for example a classic token without `read:project`, or a fine-grained token on a user-owned project; the message names the target and, as the next step, the scopes or permissions of the token to check |
 | `not-found` | HTTP 404 or GraphQL `NOT_FOUND`: the target or a resource inside it does not exist, or the token may not see it |
+| `invalid-request` | the number an issue tool names belongs to a pull request, which issue tools do not handle |
 | `rate-limited` | GitHub asked to wait |
 | `provider-error` | GitHub rejected the request in another way, for example as invalid or in the current state of the resource |
 
@@ -598,7 +599,16 @@ Issues and comments are written through REST. `labels` and `assignees` replace t
 every entry. GitHub creates a label the repository does not have yet, so a misspelled name adds a new label;
 Qatlas does not check label names beforehand. Before an existing issue changes or gets a comment, Qatlas
 reads it once and refuses a pull request of the same number. Bodies and comments are stored exactly as given
-and never interpreted.
+and never interpreted. `github.issues.get`, `github.issues.update`, `github.issues.close`,
+`github.issues.reopen`, `github.comments.list`, and `github.comments.create` refuse the number of a pull
+request as `invalid-request` and name the number and the repository, with a classic and a fine-grained token
+alike; a change is never sent. A fine-grained token without access to pull requests is refused by GitHub on
+such a number; only then Qatlas looks the number up once, and a refusal that names no pull request stays
+`permission`.
+
+```text
+qatlas: invalid-request: number 39 in repository octo-org/example is a pull request; issue tools do not handle pull requests
+```
 
 Project field values are named, not identified: `fields` maps field names to an option name of a
 single-select field, a list of option names of a multi-select field, an iteration title (current, planned, or

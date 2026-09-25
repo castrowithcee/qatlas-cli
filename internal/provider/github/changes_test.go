@@ -67,10 +67,21 @@ func (f *fakeGitHub) mutation(w http.ResponseWriter, document string, variables 
 }
 
 // commentsPage answers the comments of issue 42 in pages; every other number is no issue.
+// commentsPage answers the comments of issue 42. Number 7 is a pull request, 8 a pull request and 9 an issue
+// a fine-grained token may not read, and every other number is missing.
 func (f *fakeGitHub) commentsPage(w http.ResponseWriter, variables map[string]any) {
-	if variables["number"] != float64(42) {
-		fmt.Fprint(w, `{"data":{"repository":{"issue":null}},"errors":[{"type":"NOT_FOUND",`+
-			`"path":["repository","issue"],"message":"no issue"}]}`)
+	switch variables["number"] {
+	case float64(42):
+	case float64(7):
+		fmt.Fprint(w, `{"data":{"repository":{"issueOrPullRequest":{"__typename":"PullRequest"}}}}`)
+		return
+	case float64(8), float64(9):
+		fmt.Fprint(w, `{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"FORBIDDEN",`+
+			`"path":["repository","issueOrPullRequest"],"message":"Resource not accessible by personal access token"}]}`)
+		return
+	default:
+		fmt.Fprint(w, `{"data":{"repository":{"issueOrPullRequest":null}},"errors":[{"type":"NOT_FOUND",`+
+			`"path":["repository","issueOrPullRequest"],"message":"no issue"}]}`)
 		return
 	}
 	start := 0
@@ -85,8 +96,28 @@ func (f *fakeGitHub) commentsPage(w http.ResponseWriter, variables map[string]an
 			`"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","url":"https://github.com/c/%d"}`,
 			i, i, i))
 	}
-	fmt.Fprintf(w, `{"data":{"repository":{"issue":{"comments":{"pageInfo":{"hasNextPage":%t,"endCursor":"ccur-%d"},`+
+	fmt.Fprintf(w, `{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","comments":{"pageInfo":`+
+		`{"hasNextPage":%t,"endCursor":"ccur-%d"},`+
 		`"nodes":[%s]}}}}}`, end < f.comments, end-1, strings.Join(nodes, ","))
+}
+
+// numberKind answers the lookup of what a number names, as GitHub does after a refused issue read: 7 is a
+// pull request the token may see, 8 a pull request a fine-grained token may not see, 9 an issue, and 10
+// fails the lookup itself.
+func (f *fakeGitHub) numberKind(w http.ResponseWriter, variables map[string]any) {
+	switch variables["number"] {
+	case float64(7):
+		fmt.Fprint(w, `{"data":{"repository":{"issueOrPullRequest":{"__typename":"PullRequest"},"issue":null}},`+
+			`"errors":[{"type":"NOT_FOUND","path":["repository","issue"],"message":"no issue"}]}`)
+	case float64(8):
+		fmt.Fprint(w, `{"data":{"repository":{"issueOrPullRequest":null,"issue":null}},"errors":[`+
+			`{"type":"FORBIDDEN","path":["repository","issueOrPullRequest"],"message":"not accessible"},`+
+			`{"type":"NOT_FOUND","path":["repository","issue"],"message":"no issue"}]}`)
+	case float64(9):
+		fmt.Fprint(w, `{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue"},"issue":{"__typename":"Issue"}}}}`)
+	default:
+		w.WriteHeader(http.StatusBadGateway)
+	}
 }
 
 func planningClient(t *testing.T, base string, targets ...string) *Client {
@@ -385,21 +416,38 @@ func TestIssueChangesUseRESTAndRefusePullRequests(t *testing.T) {
 		}
 	}
 
+	// Number 7 is a pull request a classic token reads; number 8 one a fine-grained token is refused on.
 	before := len(f.recorded())
-	for name, try := range map[string]func() error{
-		"update": func() error { _, err := c.UpdateIssue(context.Background(), 7, IssueContent{Body: &body}); return err },
-		"close":  func() error { _, err := c.CloseIssue(context.Background(), 7, ""); return err },
-		"comment": func() error {
-			_, err := c.CreateComment(context.Background(), 7, "hello")
-			return err
-		},
-	} {
-		if err := try(); err == nil || !strings.Contains(err.Error(), "pull request") {
-			t.Errorf("%s on a pull request = %v, want a refusal", name, err)
+	for _, number := range []int{7, 8} {
+		for name, try := range map[string]func() error{
+			"update": func() error {
+				_, err := c.UpdateIssue(context.Background(), number, IssueContent{Body: &body})
+				return err
+			},
+			"close":  func() error { _, err := c.CloseIssue(context.Background(), number, ""); return err },
+			"reopen": func() error { _, err := c.ReopenIssue(context.Background(), number); return err },
+			"comment": func() error {
+				_, err := c.CreateComment(context.Background(), number, "hello")
+				return err
+			},
+		} {
+			if err := try(); !isInvalidRequest(err) ||
+				!strings.Contains(err.Error(), fmt.Sprintf("number %d in repository octo-org/example is a pull request", number)) {
+				t.Errorf("%s on pull request %d = %v, want an invalid request naming it", name, number, err)
+			}
 		}
 	}
-	if _, _, rest := split(f.recorded()[before:]); rest[http.MethodPatch] != 0 || rest[http.MethodPost] != 0 {
-		t.Errorf("a pull request was changed: %v", rest)
+	if _, mutations, rest := split(f.recorded()[before:]); rest[http.MethodPatch] != 0 || rest[http.MethodPost] != 0 ||
+		len(mutations) != 0 {
+		t.Errorf("a pull request was changed: %v, %d mutations", rest, len(mutations))
+	}
+	// An issue the lookup confirms keeps the refusal and is not changed either.
+	before = len(f.recorded())
+	if _, err := c.CloseIssue(context.Background(), 9, ""); classOf(err) != provider.ClassPermission {
+		t.Errorf("close on a refused issue = %v, want permission", err)
+	}
+	if _, _, rest := split(f.recorded()[before:]); rest[http.MethodPatch] != 0 {
+		t.Errorf("a refused issue was changed: %v", rest)
 	}
 	for _, try := range []func() error{
 		func() error { _, err := c.UpdateIssue(context.Background(), 42, IssueContent{}); return err },
@@ -454,6 +502,16 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 	if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 5}); classOf(err) != provider.ClassNotFound ||
 		!strings.Contains(err.Error(), "GitHub does not hold issue #5 in repository octo-org/example") {
 		t.Errorf("comments of no issue = %v, want not-found naming the issue", err)
+	}
+	for _, number := range []int{7, 8} {
+		if _, err := c.ListComments(context.Background(), CommentListOptions{Number: number}); !isInvalidRequest(err) ||
+			!strings.Contains(err.Error(), fmt.Sprintf("number %d in repository octo-org/example is a pull request", number)) {
+			t.Errorf("comments of pull request %d = %v, want an invalid request naming it", number, err)
+		}
+	}
+	if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 9}); classOf(err) != provider.ClassPermission ||
+		!strings.Contains(err.Error(), "may not read issue #9 in repository octo-org/example") {
+		t.Errorf("comments of a refused issue = %v, want permission", err)
 	}
 
 	before := len(f.recorded())
