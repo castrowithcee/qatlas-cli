@@ -784,8 +784,14 @@ func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) 
 	return closest
 }
 
+// connectionRef names one route with its description. The description is redacted here already, so a
+// diagnostic that shortens it can never cut a known secret into a part the redactor no longer recognizes.
 func (c *Core) connectionRef(name string) ConnectionRef {
-	return ConnectionRef{Name: name, Description: c.config.Connections[name].Description}
+	description := c.config.Connections[name].Description
+	if c.redactor != nil {
+		description = c.redactor.Apply(description)
+	}
+	return ConnectionRef{Name: name, Description: description}
 }
 
 func (c *Core) connectionNames(provider string) []string {

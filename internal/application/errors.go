@@ -94,12 +94,7 @@ type ConnectionAmbiguousError struct {
 }
 
 func (e *ConnectionAmbiguousError) Error() string {
-	names := make([]string, len(e.Connections))
-	for i, connection := range e.Connections {
-		names[i] = connection.Name
-	}
-	return fmt.Sprintf("tool %q has multiple matching connections: %s",
-		e.Operation, strings.Join(names, ", "))
+	return fmt.Sprintf("tool %q has multiple matching connections: %s", e.Operation, candidates(e.Connections))
 }
 
 // ConnectionSelectionError reports a registered operation for which no connection can be selected.
@@ -115,9 +110,33 @@ type ConnectionSelectionError struct {
 
 func (e *ConnectionSelectionError) Error() string {
 	if e.ExplicitRequired {
-		return fmt.Sprintf("tool %q requires an explicit connection in this invoke request", e.Operation)
+		message := fmt.Sprintf("tool %q requires an explicit connection in this invoke request", e.Operation)
+		if len(e.Connections) > 0 {
+			message += "; the connections that offer it: " + candidates(e.Connections)
+		}
+		return message
 	}
 	return fmt.Sprintf("no configured connection can invoke tool %q", e.Operation)
+}
+
+// maxCandidateDescription bounds the description a diagnostic shows of each candidate route, so a message
+// that names many routes stays readable where only its text is shown.
+const maxCandidateDescription = 80
+
+// candidates names every route a caller may choose, each with the description its owner maintains in
+// parentheses, shortened to maxCandidateDescription characters, and alone where there is none. The detail of
+// the diagnostic keeps every description in full.
+func candidates(connections []ConnectionRef) string {
+	named := make([]string, len(connections))
+	for i, connection := range connections {
+		named[i] = connection.Name
+		if description := []rune(connection.Description); len(description) > maxCandidateDescription {
+			named[i] += " (" + string(description[:maxCandidateDescription-1]) + "…)"
+		} else if len(description) > 0 {
+			named[i] += " (" + connection.Description + ")"
+		}
+	}
+	return strings.Join(named, ", ")
 }
 
 // ConfirmationRequiredError reports a mutating request without its request-bound confirmation.

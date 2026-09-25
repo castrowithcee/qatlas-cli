@@ -1257,7 +1257,8 @@ func TestCatalogNamesWhyAToolIsNotOffered(t *testing.T) {
 		})
 		if !errors.As(err, &unsupported) || unsupported.Reason != tt.want ||
 			!strings.Contains(err.Error(), "("+string(tt.want)+")") ||
-			!strings.Contains(err.Error(), "'qatlas describe "+tt.operation+"'") {
+			strings.Contains(err.Error(), "qatlas") {
+			// The next step names discovery per route, so the surface that shows the message adds it.
 			t.Errorf("Invoke(%s, %s) = %v, want unsupported with %s", tt.operation, tt.connection, err, tt.want)
 		}
 		_, err = core.Describe(DescribeRequest{Operation: tt.operation, Connection: tt.connection})
@@ -1321,5 +1322,41 @@ func TestSuggestNamesOnlyALikelyTypo(t *testing.T) {
 		if got := Suggest(tt.name, candidates); got != tt.want {
 			t.Errorf("Suggest(%q) = %q, want %q", tt.name, got, tt.want)
 		}
+	}
+}
+
+// A refusal that asks the caller to choose names the candidates in its text, for a client that shows only the
+// text: each with its description, shortened to 80 characters, and alone without one. The description is
+// redacted before it is shortened, so the cut never leaves a part of a known secret behind.
+func TestCandidateDiagnosticsNameTheRoutes(t *testing.T) {
+	long := strings.Repeat("d", 75) + " secret-value-canary tail"
+	redactor := &redact.Redactor{}
+	redactor.Add("secret-value-canary")
+	core := &Core{redactor: redactor, config: &config.Config{Connections: map[string]config.Connection{
+		"long": {Description: long}, "plain": {}, "short": {Description: "team pages"},
+	}}}
+	refs := []ConnectionRef{core.connectionRef("short"), core.connectionRef("plain"), core.connectionRef("long")}
+	shortened := strings.Repeat("d", 75) + " " + redact.Marker[:3] + "…"
+	if refs[2].Description != strings.Repeat("d", 75)+" "+redact.Marker+" tail" {
+		t.Fatalf("description = %q, want it redacted", refs[2].Description)
+	}
+
+	want := `tool "fake.pages.get" has multiple matching connections: short (team pages), plain, long (` +
+		shortened + `)`
+	if got := (&ConnectionAmbiguousError{Operation: "fake.pages.get", Connections: refs}).Error(); got != want {
+		t.Errorf("ambiguous = %q, want %q", got, want)
+	}
+	want = `tool "fake.pages.get" requires an explicit connection in this invoke request; the connections ` +
+		`that offer it: short (team pages), plain, long (` + shortened + `)`
+	selection := &ConnectionSelectionError{Operation: "fake.pages.get", ExplicitRequired: true, Connections: refs}
+	if got := selection.Error(); got != want {
+		t.Errorf("selection = %q, want %q", got, want)
+	}
+	selection.Connections = nil
+	if got := selection.Error(); got != `tool "fake.pages.get" requires an explicit connection in this invoke request` {
+		t.Errorf("selection without candidates = %q", got)
+	}
+	if got := len([]rune(shortened)); got != maxCandidateDescription {
+		t.Errorf("shortened description has %d characters, want %d", got, maxCandidateDescription)
 	}
 }

@@ -49,6 +49,19 @@ func nextStep(err error, r route) string {
 		// claim which of the two happened.
 		return "check or renew the credential of this connection with " +
 			"'qatlas credential set <credential> <role>' or in 'qatlas tui'"
+	case output.CodeUnsupportedCapability:
+		// The step is the same whatever the reason: pick a route that offers the tool, or change this one.
+		// Without a refused connection no route offers the tool at all, and nothing is left to pick.
+		var unsupported *capability.UnsupportedError
+		if !errors.As(err, &unsupported) || unsupported.Connection == "" {
+			return ""
+		}
+		if r == routeMCP {
+			return "call qatlas.describe with operation " + unsupported.Capability +
+				" and without connection for the connections that offer it, or change the connection in 'qatlas tui'"
+		}
+		return "'qatlas describe " + unsupported.Capability + "' names the connections that offer it, " +
+			"or change the connection in 'qatlas tui'"
 	case output.CodeUnknownConnection:
 		var (
 			unknown             *capability.UnknownConnectionError
@@ -62,7 +75,11 @@ func nextStep(err error, r route) string {
 				return "call qatlas.describe with operation " + operation +
 					" and without connection for the connections that can run it"
 			}
-			return "call qatlas.describe of the tool without connection for the connections that can run it"
+			if provider != "" {
+				return "call qatlas.search with list connections and provider " + provider +
+					" for the configured connections"
+			}
+			return "call qatlas.search with list connections for the configured connections"
 		}
 		if provider != "" {
 			return "list the configured connections with 'qatlas connections " + provider + "'"

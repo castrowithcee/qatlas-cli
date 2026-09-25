@@ -1108,8 +1108,11 @@ func TestUnsupportedCapabilityNamesTheReason(t *testing.T) {
 	result := toolResultFrom(t, responses["1"])
 	var detail map[string]any
 	decodeRaw(t, result.Structured, &detail)
-	if mcpStderr != "" || !result.IsError ||
-		!strings.HasPrefix(result.Content[0].Text, "unsupported-capability: connection \"wiki\"") ||
+	// Over MCP the step names the broker tool instead of the command, and the person's editor as before.
+	wantText := `unsupported-capability: connection "wiki" does not offer tool "bookstack.pages.delete" ` +
+		`(effect-not-permitted); call qatlas.describe with operation bookstack.pages.delete and without ` +
+		`connection for the connections that offer it, or change the connection in 'qatlas tui'`
+	if mcpStderr != "" || !result.IsError || result.Content[0].Text != wantText ||
 		detail["reason"] != "effect-not-permitted" || detail["connection"] != "wiki" {
 		t.Errorf("MCP invoke = %+v detail=%v stderr=%q", result, detail, mcpStderr)
 	}

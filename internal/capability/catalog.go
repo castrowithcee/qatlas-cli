@@ -41,7 +41,7 @@ func (e *UnsupportedError) Error() string {
 	if e.Reason != "" {
 		message += fmt.Sprintf(" (%s)", e.Reason)
 	}
-	// The next step is the same whatever the reason: pick a route that offers the tool, or change this one.
-	return message + fmt.Sprintf("; 'qatlas describe %s' names the connections that offer it, or change "+
-		"the connection in 'qatlas tui'", e.Capability)
+	// The next step names discovery, which reads differently on the command line and over MCP, so the
+	// surface that shows the message appends it.
+	return message
 }

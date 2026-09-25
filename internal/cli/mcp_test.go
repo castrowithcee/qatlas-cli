@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -364,6 +365,12 @@ defaults: {}
 	if !jsonEqual([]byte(lines[1]), invoke.Structured) {
 		t.Fatalf("CLI detail = %s, MCP detail = %s", lines[1], invoke.Structured)
 	}
+	// A client that shows only the text still learns the candidates, and both routes say the same.
+	wantText := `connection-selection: tool "fake.pages.get" requires an explicit connection in this invoke ` +
+		`request; the connections that offer it: primary (team pages), secondary`
+	if invoke.Content[0].Text != wantText || lines[0] != "qatlas: "+wantText {
+		t.Fatalf("CLI text = %q, MCP text = %q, want %q", lines[0], invoke.Content[0].Text, wantText)
+	}
 	var detail struct {
 		Code        string                      `json:"code"`
 		Operation   string                      `json:"operation"`
@@ -448,6 +455,11 @@ func TestConnectionAmbiguityNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	if !jsonEqual(cliDetail, invoke.Structured) {
 		t.Fatalf("CLI detail = %s, MCP detail = %s", cliDetail, invoke.Structured)
 	}
+	wantText := `connection-ambiguous: tool "bookstack.pages.list" has multiple matching connections: ` +
+		`wiki (read-only account on the team wiki), wiki-2, wiki-staging (staging wiki ` + redact.Marker + `)`
+	if invoke.Content[0].Text != wantText || lines[0] != "qatlas: "+wantText {
+		t.Fatalf("CLI text = %q, MCP text = %q, want %q", lines[0], invoke.Content[0].Text, wantText)
+	}
 
 	var detail struct {
 		Code        string                      `json:"code"`
@@ -480,6 +492,70 @@ func TestConnectionAmbiguityNamesCandidatesOverCLIAndMCP(t *testing.T) {
 				t.Errorf("diagnostic %q carries %q", published, canary)
 			}
 		}
+	}
+}
+
+// list turns qatlas.search into the overview 'qatlas providers' and 'qatlas connections' print: the same
+// data in the same order, answered from the configuration alone. It is a mode of its own, so a search
+// argument beside it is refused, and provider only filters the connections.
+func TestMCPSearchListsProvidersAndConnectionsLikeTheCLI(t *testing.T) {
+	cfg, calls, _ := catalogEnvironment(t)
+	var reads atomic.Int32
+	cliJSON := func(args ...string) []byte {
+		t.Helper()
+		code, stdout, stderr := runTools(t, &reads, append(args, "--config", cfg, "--output", "json")...)
+		if code != exitOK || stderr != "" {
+			t.Fatalf("CLI %v: exit=%d stderr=%q", args, code, stderr)
+		}
+		return []byte(stdout)
+	}
+	search := func(arguments string) mcpToolResult {
+		t.Helper()
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
+			`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
+		responses, stderr := runMCPWithOptions(t, defaultRegistry(), input,
+			&Options{Config: cfg, Redactor: &redact.Redactor{}})
+		if stderr != "" {
+			t.Fatalf("stderr = %q", stderr)
+		}
+		return toolResultFrom(t, responses["1"])
+	}
+
+	for _, tt := range []struct {
+		arguments string
+		cli       []string
+	}{
+		{`{"list":"providers"}`, []string{"providers"}},
+		{`{"list":"connections"}`, []string{"connections"}},
+		{`{"list":"connections","provider":"bookstack"}`, []string{"connections", "bookstack"}},
+	} {
+		result := search(tt.arguments)
+		if result.IsError || !bytes.Equal(bytes.TrimSpace(cliJSON(tt.cli...)), result.Structured) {
+			t.Errorf("search %s = %s, want the JSON of 'qatlas %s'", tt.arguments, result.Structured,
+				strings.Join(tt.cli, " "))
+		}
+	}
+	var listed application.ConnectionsResponse
+	decodeRaw(t, search(`{"list":"connections","provider":"bookstack"}`).Structured, &listed)
+	if len(listed.Connections) != 1 || listed.Connections[0].Name != "wiki" ||
+		listed.Connections[0].Description != "read-only account on the team wiki" {
+		t.Errorf("connections of bookstack = %+v", listed.Connections)
+	}
+
+	for arguments, want := range map[string]string{
+		`{"list":"providers","provider":"bookstack"}`:    "invalid-request: $.provider is not allowed with list providers",
+		`{"list":"connections","query":"wiki"}`:          "invalid-request: $.query is not allowed with list connections",
+		`{"list":"connections","cursor":"x","all":true}`: "invalid-request: $.all is not allowed with list connections",
+		`{"list":"tools"}`:                               "invalid-request: $.list is not an allowed value",
+		`{"list":"connections","provider":"bookstak"}`: `invalid-request: unknown provider "bookstak" (did you ` +
+			`mean "bookstack"?); leave the provider out to list every connection`,
+	} {
+		if result := search(arguments); !result.IsError || result.Content[0].Text != want {
+			t.Errorf("search %s = %+v, want %q", arguments, result, want)
+		}
+	}
+	if calls.Load() != 0 || reads.Load() != 0 {
+		t.Errorf("provider calls = %d, secret lookups = %d, want none", calls.Load(), reads.Load())
 	}
 }
 
@@ -1249,9 +1325,14 @@ func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
 			t.Errorf("CLI = %q, MCP = %q, want %q with %q and %q", tt.cli, tt.mcp, tt.want, tt.cliStep, tt.mcpStep)
 		}
 	}
-	// A search names no tool, so its step names none either.
+	// A search names no tool, so its step names the connection overview, of the provider where it names one.
 	if got, want := mcp("qatlas.search", `{"connection":"absent"}`), `unknown-connection: unknown connection `+
-		`"absent"; call qatlas.describe of the tool without connection for the connections that can run it`; got != want {
+		`"absent"; call qatlas.search with list connections for the configured connections`; got != want {
+		t.Errorf("MCP search = %q, want %q", got, want)
+	}
+	if got, want := mcp("qatlas.search", `{"provider":"fake","connection":"absent"}`), `unknown-connection: `+
+		`unknown connection "absent"; call qatlas.search with list connections and provider fake for the `+
+		`configured connections`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
 	}
 	if got, want := cli("tools", "fake", "--connection", "absent"), `qatlas: unknown-connection: unknown `+

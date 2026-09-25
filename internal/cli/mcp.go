@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -72,6 +73,10 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"Passing next_cursor back as cursor with the same filters returns the following page; a\n" +
 			"request without cursor returns the first. A cursor that is malformed or belongs to other\n" +
 			"filters fails with invalid-request.\n\n" +
+			"list turns qatlas.search into an overview of what it searches: list providers returns the\n" +
+			"providers 'qatlas providers' lists, and list connections the configured connections 'qatlas\n" +
+			"connections' lists, of provider when given, as the same data in the same order. Beside list only\n" +
+			"provider is allowed, and only with connections; any other argument fails with invalid-request.\n\n" +
 			"A failed tool call is a result with isError set to true whose text is '<code>: <message>' and\n" +
 			"whose structuredContent is an object with at least code and message, such as\n" +
 			"{\"code\":\"unknown-operation\",\"message\":\"...\"}. Some codes add fields. A qatlas.invoke\n" +
@@ -79,8 +84,10 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"name and its description, which is empty where none is maintained. Nothing is chosen for the\n" +
 			"caller; the next request names one of them as connection. A qatlas.invoke refused with\n" +
 			"connection-selection adds the same fields; connections names the routes that offer the tool, and\n" +
-			"is empty when none does. A request refused with unsupported-capability adds operation,\n" +
-			"connection, and reason.",
+			"is empty when none does. The text names the same candidates, each with its description shortened\n" +
+			"to 80 characters, for a client that shows only the text. A request refused with\n" +
+			"unsupported-capability adds operation, connection, and reason. Where a message points to\n" +
+			"discovery, it names qatlas.search or qatlas.describe instead of a command.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			// Nobody watches the requests of a server, so the keyring must not wait for an unlock prompt.
@@ -478,11 +485,18 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 
 	switch name {
 	case "qatlas.search":
-		var request application.SearchRequest
+		var request struct {
+			application.SearchRequest
+			List string `json:"list"`
+		}
 		if err := decodeMCPArguments(raw, &request); err != nil {
 			return nil, nil, err
 		}
-		response, err := core.Search(request)
+		if request.List != "" {
+			response, err := s.list(core, raw, request.List, request.Provider)
+			return response, nil, err
+		}
+		response, err := core.Search(request.SearchRequest)
 		return response, nil, err
 	case "qatlas.describe":
 		var request application.DescribeRequest
@@ -505,6 +519,36 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 	default:
 		return nil, nil, fmt.Errorf("unknown MCP tool")
 	}
+}
+
+// list answers the overview mode of qatlas.search: the providers 'qatlas providers' lists, or the
+// connections 'qatlas connections [provider]' lists, as the same data. It is a mode of its own, so the
+// arguments of the tool search are refused beside it, and provider is only the filter of connections.
+func (s *mcpServer) list(core *application.Core, raw json.RawMessage, list, provider string) (any, error) {
+	var arguments map[string]json.RawMessage
+	_ = json.Unmarshal(raw, &arguments)
+	names := make([]string, 0, len(arguments))
+	for name := range arguments {
+		if name != "list" && (name != "provider" || list != "connections") {
+			names = append(names, name)
+		}
+	}
+	if len(names) > 0 {
+		sort.Strings(names)
+		return nil, &application.InvalidRequestError{Message: fmt.Sprintf("$.%s is not allowed with list %s",
+			names[0], list)}
+	}
+	if list == "providers" {
+		return core.Providers(), nil
+	}
+	if provider != "" {
+		if _, ok := s.registry.ProviderMetadata(provider); !ok {
+			return nil, &application.InvalidRequestError{Message: fmt.Sprintf("unknown provider %q", provider) +
+				application.DidYouMean(application.Suggest(provider, application.ProviderIDs(s.registry))) +
+				"; leave the provider out to list every connection"}
+		}
+	}
+	return core.Connections(provider), nil
 }
 
 func decodeMCPArguments(raw json.RawMessage, target any) error {
@@ -563,8 +607,12 @@ func mcpTools() []mcpTool {
 				"as operations, at most limit of them in stable ID order, each with id, title, effect, and the " +
 				"connections that offer it; all adds the others with the reason no connection offers them. " +
 				"qatlas.describe returns the rest of a contract. has_more is true exactly when another match " +
-				"follows, and next_cursor, passed back as cursor with the same filters, returns the following page.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
+				"follows, and next_cursor, passed back as cursor with the same filters, returns the following page. " +
+				"list returns an overview instead: providers lists every provider with its description, note, " +
+				"and counts of tools, connections that can run them, and configured connections; connections " +
+				"lists the configured connections, of provider when given, each with its description, " +
+				"permitted effects, and tools list. list takes no other argument than provider with connections.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"list":{"type":"string","enum":["providers","connections"],"description":"Return the providers or the configured connections instead of tools; only provider may accompany connections"},"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},
 		{
 			Name: "qatlas.describe",

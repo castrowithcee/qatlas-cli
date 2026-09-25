@@ -110,8 +110,8 @@ func TestAgentErrorIsMachineReadable(t *testing.T) {
 
 // auth names a person's action, which reads the same on both routes. permission gets no second step: each
 // provider names the rights to check in its own message. Codes without a step keep their message as it is.
-// unknown-connection points to discovery, the command on the CLI and the tool over MCP, for the provider and
-// the tool the request named.
+// unknown-connection and unsupported-capability point to discovery, the command on the CLI and the tool over
+// MCP, for the provider and the tool the request named.
 func TestNextStepByCodeAndRoute(t *testing.T) {
 	authErr := &provider.Error{Class: provider.ClassAuth}
 	for _, r := range []route{routeCLI, routeMCP} {
@@ -143,7 +143,17 @@ func TestNextStepByCodeAndRoute(t *testing.T) {
 		{"CLI without provider", &capability.UnknownConnectionError{Name: "absent"}, routeCLI,
 			"list the configured connections with 'qatlas connections'"},
 		{"MCP without tool", &capability.UnknownConnectionError{Name: "absent", Provider: "github"}, routeMCP,
-			"call qatlas.describe of the tool without connection for the connections that can run it"},
+			"call qatlas.search with list connections and provider github for the configured connections"},
+		{"MCP without provider", &capability.UnknownConnectionError{Name: "absent"}, routeMCP,
+			"call qatlas.search with list connections for the configured connections"},
+		{"CLI unsupported", &capability.UnsupportedError{Connection: "wiki", Capability: "github.issues.list"},
+			routeCLI, "'qatlas describe github.issues.list' names the connections that offer it, or change the " +
+				"connection in 'qatlas tui'"},
+		{"MCP unsupported", &capability.UnsupportedError{Connection: "wiki", Capability: "github.issues.list"},
+			routeMCP, "call qatlas.describe with operation github.issues.list and without connection for the " +
+				"connections that offer it, or change the connection in 'qatlas tui'"},
+		{"unsupported without connection", &capability.UnsupportedError{Capability: "github.issues.list"},
+			routeMCP, ""},
 		{"configured name", &config.SelectionError{Name: "absent"}, routeCLI,
 			"list the configured connections with 'qatlas connections'"},
 	} {
