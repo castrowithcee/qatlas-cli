@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -196,6 +197,10 @@ func TestSaveThroughSymlink(t *testing.T) {
 		t.Fatalf("Save() = %v", err)
 	}
 	if err := os.Symlink(real, link); err != nil {
+		// Creating a symlink on Windows needs a privilege an account does not always hold.
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlink: %v", err)
+		}
 		t.Fatalf("symlink: %v", err)
 	}
 
@@ -221,6 +226,9 @@ func TestSaveThroughSymlink(t *testing.T) {
 }
 
 func TestFilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes do not carry on Windows")
+	}
 	store, path := newTarget(t)
 
 	if err := store.Save(sample(t)); err != nil {
@@ -407,6 +415,9 @@ func TestFailedSaveLeavesTargetIntact(t *testing.T) {
 
 // A directory that cannot be written to must fail before the target is touched.
 func TestSaveIntoUnwritableDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a directory mode does not restrict writing on Windows")
+	}
 	store, path := newTarget(t)
 	if err := store.Save(sample(t)); err != nil {
 		t.Fatalf("initial Save() = %v", err)

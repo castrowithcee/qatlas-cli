@@ -98,7 +98,8 @@ func TestConfigValidateReportsSuccessMachineReadably(t *testing.T) {
 		want string
 	}{
 		{[]string{"--output", "json"}, `{"valid":true,"path":` + strconv.Quote(valid) + "}\n"},
-		{[]string{"--agent"}, "valid=true\npath=" + valid + "\n"},
+		// The compact format escapes a backslash, which a Windows path carries.
+		{[]string{"--agent"}, "valid=true\npath=" + strings.ReplaceAll(valid, `\`, `\\`) + "\n"},
 	} {
 		var stdout, stderr bytes.Buffer
 		code := Run(append([]string{"config", "validate", "--config", valid}, tt.args...), &stdout, &stderr)

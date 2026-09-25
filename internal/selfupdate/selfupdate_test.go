@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -148,7 +149,8 @@ func TestUpdateReplacesBinaryAndManpage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm()&0o500 != 0o500 {
+	// Windows has no execute bit; the mode there says only whether the file is read-only.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o500 != 0o500 {
 		t.Fatalf("updated executable mode = %v", info.Mode())
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -125,10 +126,29 @@ func mock(t *testing.T, wantAuth string, pages []map[string]any, content string)
 	return server
 }
 
+// binaryName is the file name the command under test gets on this platform; Windows only starts a file
+// that carries the .exe extension.
+func binaryName() string {
+	if runtime.GOOS == "windows" {
+		return "qatlas.exe"
+	}
+	return "qatlas"
+}
+
+// skipWithoutCertFile skips a run in which the built binary has to trust a local TLS mock. The mock's
+// certificate reaches the binary through SSL_CERT_FILE, which Go reads on Linux and the other Unix systems
+// only; on macOS and Windows the platform verifier decides, and it knows nothing of the mock.
+func skipWithoutCertFile(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		t.Skipf("SSL_CERT_FILE does not reach the certificate verifier on %s", runtime.GOOS)
+	}
+}
+
 // buildBinary compiles the command under test into dir and returns its path.
 func buildBinary(t *testing.T, dir string) string {
 	t.Helper()
-	bin := filepath.Join(dir, "qatlas")
+	bin := filepath.Join(dir, binaryName())
 	// The throwaway binary needs no VCS stamping, and stamping fails in a working copy without a
 	// repository of its own.
 	build := exec.Command("go", "build", "-buildvcs=false", "-o", bin, ".")
@@ -440,7 +460,7 @@ defaults:
 			{"unknown flag", []string{"--nope"}, "", 2, "usage", "qatlas [flags]"},
 			{"unknown command", []string{"frobnicate"}, "", 2, "usage", "qatlas [flags]"},
 			{"unknown connection", []string{"invoke", "bookstack.pages.list", "--connection", "absent"}, "", 2, "unknown-connection", ""},
-			{"empty configuration file", []string{"tools", "bookstack", "--config", "/dev/null"}, "", 2, "config-invalid", ""},
+			{"empty configuration file", []string{"tools", "bookstack", "--config", os.DevNull}, "", 2, "config-invalid", ""},
 			{"unknown tool", []string{"describe", "absent.pages.get"}, "", 2, "unknown-operation", ""},
 			{"unknown namespace", []string{"tools", "absent"}, "", 2, "usage", ""},
 			{"unknown tool verb", []string{"describe", "show", "bookstack.pages.list"}, "", 2, "usage", "qatlas describe <tool-id> [flags]"},
@@ -881,6 +901,7 @@ defaults: {}
 	})
 
 	t.Run("confirmed Telegram send matches over the tool CLI and MCP", func(t *testing.T) {
+		skipWithoutCertFile(t)
 		arguments := `{"operation":"telegram.messages.send","connection":"telegram-alerts","arguments":{"text":"` + telegramSuccessText + `"},"confirm":true}`
 		before := probe.count(telegramSuccessText)
 		code, stdout, stderr := c.runInput(t, `{"text":"`+telegramSuccessText+`"}`,
@@ -905,6 +926,7 @@ defaults: {}
 	})
 
 	t.Run("failed Telegram send keeps provider details private", func(t *testing.T) {
+		skipWithoutCertFile(t)
 		before := probe.count(telegramFailureText)
 		code, stdout, stderr := c.runInput(t, `{"text":"`+telegramFailureText+`"}`,
 			"invoke", "telegram.messages.send", "--connection", "telegram-operations", "--confirm")
@@ -916,6 +938,7 @@ defaults: {}
 	})
 
 	t.Run("ambiguous Telegram network result is not retried", func(t *testing.T) {
+		skipWithoutCertFile(t)
 		before := probe.count(telegramUnclearText)
 		code, stdout, stderr := c.runInput(t, `{"text":"`+telegramUnclearText+`"}`,
 			"invoke", "telegram.messages.send", "--connection", "telegram-operations", "--confirm")
@@ -941,7 +964,7 @@ func filesUnder(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	files := map[string]string{}
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() || d.Name() == "qatlas" {
+		if err != nil || d.IsDir() || d.Name() == binaryName() {
 			return nil
 		}
 		data, err := os.ReadFile(path)
@@ -1171,7 +1194,8 @@ defaults:
 		if err != nil {
 			t.Fatalf("the fallback was not written: %v", err)
 		}
-		if info.Mode().Perm() != 0o600 {
+		// Windows synthesises the mode from the read-only attribute, so 0600 cannot show there.
+		if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 			t.Errorf("mode = %v, want 0600", info.Mode().Perm())
 		}
 
@@ -1193,6 +1217,9 @@ defaults:
 	})
 
 	t.Run("a fallback others can read is refused", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("file modes do not carry on Windows")
+		}
 		if err := os.Chmod(fallback, 0o644); err != nil {
 			t.Fatalf("Chmod() = %v", err)
 		}
@@ -1223,6 +1250,9 @@ defaults:
 	})
 
 	t.Run("a delete that cannot clear the file says so", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("file modes do not carry on Windows")
+		}
 		if err := os.Chmod(fallback, 0o644); err != nil {
 			t.Fatalf("Chmod() = %v", err)
 		}
@@ -1441,6 +1471,8 @@ func TestDebugLogsCarryNoSecret(t *testing.T) {
 	if testing.Short() {
 		t.Skip("the acceptance run builds the binary")
 	}
+	// HTTP/2 needs TLS, so the binary has to trust the local server.
+	skipWithoutCertFile(t)
 
 	dir := t.TempDir()
 	bin := buildBinary(t, dir)

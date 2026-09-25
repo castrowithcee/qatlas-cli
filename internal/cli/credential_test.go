@@ -250,7 +250,8 @@ func TestCredentialSetPlaintext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat() = %v", err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	// Windows synthesises the mode from the read-only attribute, so 0600 cannot show there.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Errorf("mode = %v, want 0600", info.Mode().Perm())
 	}
 	data, err := os.ReadFile(path)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -864,6 +865,9 @@ func TestTypeChangeGuardAsksWhatIsStoredNotWhatDelivers(t *testing.T) {
 		{
 			name: "a fallback file that cannot be read is not an empty file",
 			arrange: func(t *testing.T, dir string, secrets *secret.Resolver, _ *secret.MemoryStore) Secrets {
+				if runtime.GOOS == "windows" {
+					t.Skip("file modes do not carry on Windows")
+				}
 				mustNoError(t, secrets.SetPlaintext("reader", "token-id", "canary-too-open"))
 				if err := os.Chmod(filepath.Join(dir, secret.FileName), 0o644); err != nil {
 					t.Fatalf("chmod: %v", err)
