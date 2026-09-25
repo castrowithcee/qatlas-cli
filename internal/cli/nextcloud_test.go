@@ -106,7 +106,7 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[6]{connections,effect,id,reason,title}:", "create,nextcloud.files.create,", "delete,nextcloud.files.delete,", "read,nextcloud.files.get,", "read,nextcloud.files.list,", "read,nextcloud.files.stat,", "update,nextcloud.files.update,",
+		"tools[6]{id,title,effect,connections,reason}:", "nextcloud.files.create,Create a Nextcloud file,create,", "nextcloud.files.delete,Delete a Nextcloud file,delete,", "nextcloud.files.get,Read Nextcloud file content,read,", "nextcloud.files.list,List Nextcloud files,read,", "nextcloud.files.stat,Get Nextcloud file metadata,read,", "nextcloud.files.update,Update a Nextcloud file,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)

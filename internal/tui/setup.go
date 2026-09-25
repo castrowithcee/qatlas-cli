@@ -596,6 +596,9 @@ func (m *Model) summaryView() string {
 	for _, row := range m.summaryRows() {
 		b.WriteString(m.row(false, row) + "\n")
 	}
+	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
+		b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
+	}
 	if w.plan.storage == storagePlaintext && w.saved == "" {
 		b.WriteString(m.indentedWith(warningStyle, "warning: the secrets are written unencrypted into "+
 			m.plaintextPath()) + "\n")

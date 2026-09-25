@@ -131,23 +131,35 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 		}
 	}
 
+	// describe publishes the compact contract by default and the registered descriptor on request, and the
+	// CLI and the MCP broker publish the same one either way.
 	for _, descriptor := range reg.All() {
 		registered, err := json.Marshal(descriptor)
 		if err != nil {
 			t.Fatal(err)
 		}
-		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.describe","arguments":{"operation":"` + descriptor.ID + `","version":` +
-			strconv.Itoa(descriptor.Version) + `}}}` + "\n"
-		described, stderr := runMCPWithOptions(t, reg, input, mcpOptions())
-		if stderr != "" {
-			t.Fatalf("MCP describe %s stderr = %q", descriptor.ID, stderr)
+		compact, err := json.Marshal(application.Compact(descriptor))
+		if err != nil {
+			t.Fatal(err)
 		}
-		byCLI := jsonMember(t, cliJSON("describe", descriptor.ID), "tool")
-		byMCP := jsonMember(t, toolResultFrom(t, described["1"]).Structured, "operation")
-		if !jsonEqual(byCLI, registered) || !jsonEqual(byMCP, registered) {
-			t.Errorf("%s: CLI tool = %s, MCP describe = %s, registered = %s", descriptor.ID, byCLI, byMCP,
-				registered)
+		for _, full := range []bool{false, true} {
+			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
+				`,"name":"qatlas.describe","arguments":{"operation":"` + descriptor.ID + `","version":` +
+				strconv.Itoa(descriptor.Version) + `,"full":` + strconv.FormatBool(full) + `}}}` + "\n"
+			described, stderr := runMCPWithOptions(t, reg, input, mcpOptions())
+			if stderr != "" {
+				t.Fatalf("MCP describe %s stderr = %q", descriptor.ID, stderr)
+			}
+			args, want := []string{"describe", descriptor.ID}, compact
+			if full {
+				args, want = append(args, "--full"), registered
+			}
+			byCLI := jsonMember(t, cliJSON(args...), "tool")
+			byMCP := jsonMember(t, toolResultFrom(t, described["1"]).Structured, "operation")
+			if !jsonEqual(byCLI, want) || !jsonEqual(byMCP, want) {
+				t.Errorf("%s full=%t: CLI tool = %s, MCP describe = %s, want %s", descriptor.ID, full, byCLI,
+					byMCP, want)
+			}
 		}
 	}
 	if reads.Load() != 0 {

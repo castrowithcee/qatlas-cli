@@ -224,23 +224,26 @@ defaults:
 		if code != 0 {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		// Discovery starts with one row per namespace: what kind of system it is, the note the
-		// configuration keeps on it, how many tools it offers and how many configured connections can run
-		// them. A provider without a route is visible as exactly that.
-		if !strings.HasPrefix(stdout, "providers[8]{connections,description,note,provider,tools}:\n") {
+		// Discovery starts with one row per namespace: the provider first, then what kind of system it
+		// is, the note the configuration keeps on it, how many tools it offers, how many configured
+		// connections can run them, and how many are configured. A provider without a route is visible
+		// as exactly that.
+		if !strings.HasPrefix(stdout, "providers[8]{provider,description,note,tools,connections,configured}:\n") {
 			t.Errorf("stdout = %q, want a TOON index of the compiled namespaces", stdout)
 		}
-		rows := map[string][2]string{}
+		rows := map[string][3]string{}
 		for _, line := range strings.Split(strings.TrimSpace(stdout), "\n")[1:] {
 			fields := strings.Split(strings.TrimSpace(line), ",")
-			rows[fields[len(fields)-2]] = [2]string{fields[0], fields[len(fields)-1]}
+			n := len(fields)
+			rows[fields[0]] = [3]string{fields[n-3], fields[n-2], fields[n-1]}
 		}
-		for provider, want := range map[string][2]string{
-			"bookstack": {"2", "5"}, "telegram": {"0", "3"}, "lexware": {"0", "3"}, "twentycrm": {"0", "5"},
-			"seatable": {"0", "7"}, "nextcloud": {"0", "6"}, "github": {"0", "72"}, "todoist": {"0", "39"},
+		for provider, want := range map[string][3]string{
+			"bookstack": {"5", "2", "2"}, "telegram": {"3", "0", "0"}, "lexware": {"3", "0", "0"},
+			"twentycrm": {"5", "0", "0"}, "seatable": {"7", "0", "0"}, "nextcloud": {"6", "0", "0"},
+			"github": {"72", "0", "0"}, "todoist": {"39", "0", "0"},
 		} {
 			if rows[provider] != want {
-				t.Errorf("%s = %v connections and tools, want %v:\n%s", provider, rows[provider], want, stdout)
+				t.Errorf("%s = %v tools and connections, want %v:\n%s", provider, rows[provider], want, stdout)
 			}
 		}
 		// The first step names namespaces only: no tool ID and no route name reaches it.
@@ -256,8 +259,8 @@ defaults:
 		if code != 0 || stderr != "" {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		if !strings.HasPrefix(stdout, "connections[2]{description,name,permissions,provider,tools}:\n") ||
-			!strings.Contains(stdout, ",primary,") || !strings.Contains(stdout, ",archive,") ||
+		if !strings.HasPrefix(stdout, "connections[2]{name,provider,description,permissions,tools}:\n") ||
+			!strings.Contains(stdout, "  primary,bookstack,") || !strings.Contains(stdout, "  archive,bookstack,") ||
 			strings.Contains(stdout, "http") {
 			t.Errorf("stdout = %q, want the two BookStack connections without their endpoints", stdout)
 		}
@@ -267,10 +270,11 @@ defaults:
 		if code != 0 {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		if !strings.HasPrefix(stdout, "tools[2]{connections,effect,id,title}:\n") {
+		if !strings.HasPrefix(stdout, "tools[2]{id,title,effect,connections}:\n") {
 			t.Errorf("stdout = %q, want a TOON listing of the offered BookStack tools", stdout)
 		}
-		for _, want := range []string{"archive primary,read,bookstack.pages.get,", "archive primary,read,bookstack.pages.list,"} {
+		for _, want := range []string{"  bookstack.pages.get,Get a BookStack page,read,archive primary\n",
+			"  bookstack.pages.list,List BookStack pages,read,archive primary\n"} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout = %q, want it to contain %q", stdout, want)
 			}
@@ -299,8 +303,8 @@ defaults:
 		// A route is published as the name an invoke request carries and the line its owner maintains;
 		// a route without a description carries the empty string rather than disappearing.
 		for _, want := range []string{`"id":"bookstack.pages.list"`, `"effect":"read"`,
-			`"connections":[{"description":"","name":"archive"},` +
-				`{"description":"the live team wiki, writes land here","name":"primary"}]`} {
+			`"connections":[{"name":"archive","description":""},` +
+				`{"name":"primary","description":"the live team wiki, writes land here"}]`} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout = %q, want it to contain %q", stdout, want)
 			}

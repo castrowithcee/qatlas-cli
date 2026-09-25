@@ -2635,7 +2635,15 @@ func (m *Model) listFrame() (string, string) {
 				break
 			}
 		}
-		foot = m.testLine() + foot
+		// A connection that offers no tool is valid, so it is named rather than refused, with the same
+		// words 'qatlas config validate' uses.
+		var idle strings.Builder
+		for _, name := range m.list.all {
+			if warning := m.cfg.IdleWarning(name); warning != "" {
+				idle.WriteString("\n" + m.wrapped(warningStyle, "warning: "+warning))
+			}
+		}
+		foot = m.testLine() + idle.String() + foot
 	}
 	return head.String(), foot + m.notes()
 }

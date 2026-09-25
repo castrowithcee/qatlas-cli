@@ -86,7 +86,7 @@ func TestLexwareToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[3]{connections,effect,id,reason,title}:", "create,lexware.invoices.create,", "read,lexware.invoices.get,", "read,lexware.invoices.list,",
+		"tools[3]{id,title,effect,connections,reason}:", "lexware.invoices.create,Create a Lexware invoice,create,", "lexware.invoices.get,Get a Lexware invoice,read,", "lexware.invoices.list,List open Lexware invoices,read,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)

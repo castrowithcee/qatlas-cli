@@ -315,3 +315,32 @@ func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
 		t.Fatalf("an ordinary tool is marked:\n%s", view)
 	}
 }
+
+// A connection that offers no tool is valid, so the editor keeps it and names it instead: in the list of
+// connections and in the summary of the guided setup, with the words 'qatlas config validate' uses.
+func TestAConnectionThatOffersNoToolIsNamed(t *testing.T) {
+	m, _ := toolsModel(t, wikiRegistry(t), map[string]config.Connection{
+		"closed": {Service: "wiki", Credential: "reader", Tools: []string{}},
+		"open":   {Service: "wiki", Credential: "reader", Description: "team wiki"},
+	})
+	warning := m.cfg.IdleWarning("closed")
+	if warning != `connection "closed" offers no tool: its tools list is empty ('tools: []'), so no agent can use it` {
+		t.Fatalf("IdleWarning(closed) = %q", warning)
+	}
+	if got := m.cfg.IdleWarning("open"); got != "" {
+		t.Fatalf("IdleWarning(open) = %q, want none for a connection that offers tools", got)
+	}
+
+	openSectionByName(t, m, sectionConnections)
+	view := strings.Join(strings.Fields(screenOf(m)), " ")
+	if !strings.Contains(view, "warning: "+warning) || strings.Contains(view, `connection "open" offers no tool`) {
+		t.Errorf("the connection list does not name exactly the closed connection:\n%s", screenOf(m))
+	}
+
+	m.wizard = &setup{step: stepSummary, provider: "bookstack", candidate: m.cfg,
+		plan: setupPlan{service: "wiki", credential: "reader", connection: "closed"}}
+	m.screen = screenSummary
+	if view := strings.Join(strings.Fields(screenOf(m)), " "); !strings.Contains(view, "warning: "+warning) {
+		t.Errorf("the setup summary does not name the closed connection:\n%s", screenOf(m))
+	}
+}

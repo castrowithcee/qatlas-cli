@@ -57,6 +57,9 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"client that only speaks MCP reads the same guide. qatlas.describe and qatlas.invoke take the\n" +
 			"tool ID as operation. Arguments outside a tool's input schema fail with invalid-request naming\n" +
 			"the field, such as '$.tool is not allowed'.\n\n" +
+			"qatlas.describe returns the compact contract 'qatlas describe' prints as operation, beside the\n" +
+			"connections that can run it; full set to true returns the complete descriptor with both\n" +
+			"schemas instead, as 'qatlas describe --full' does.\n\n" +
 			"qatlas.search answers from the local configuration alone: no provider is contacted and no\n" +
 			"secret is read. Like 'qatlas tools' it returns only the tools a configured connection offers,\n" +
 			"or with connection the tools that connection offers; all set to true adds the others, each\n" +
@@ -485,7 +488,10 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 			return nil, nil, err
 		}
 		response, err := core.Describe(request)
-		return response, nil, err
+		if err != nil || request.Full {
+			return response, nil, err
+		}
+		return response.Compact(), nil, nil
 	case "qatlas.invoke":
 		var request application.InvokeRequest
 		if err := decodeMCPArguments(raw, &request); err != nil {
@@ -558,9 +564,11 @@ func mcpTools() []mcpTool {
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},
 		{
-			Name:        "qatlas.describe",
-			Description: "Describe one versioned tool contract; operation is the tool ID",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"operation":{"type":"string"},"version":{"type":"integer"},"connection":{"type":"string"}},"required":["operation"],"additionalProperties":false}`),
+			Name: "qatlas.describe",
+			Description: "Describe one versioned tool contract; operation is the tool ID. Returns the compact " +
+				"contract: arguments and result fields as rows derived from the schemas, risk, examples, and the " +
+				"connections that can run it; full returns the complete descriptor with both schemas.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"operation":{"type":"string"},"version":{"type":"integer"},"connection":{"type":"string"},"full":{"type":"boolean","description":"Return the complete descriptor with the input and output schema instead of the compact contract"}},"required":["operation"],"additionalProperties":false}`),
 		},
 		{
 			Name:        "qatlas.invoke",

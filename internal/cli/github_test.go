@@ -66,8 +66,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[22]{connections,effect,id,title}:\n", "  code,read,github.issues.get,",
-		"  code planning roadmap,read,github.projectitems.list,", "  roadmap,update,github.projectitems.update,",
+		"tools[22]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
+		"  github.projectitems.list,List GitHub project items,read,code planning roadmap\n", "  github.projectitems.update,Update GitHub project item fields,update,roadmap\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -86,9 +86,9 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		`  code,read,github.issues.get,"",Get`, `  "",create,github.issues.create,not-in-tools-list,`,
-		`  "",execute,github.workflows.dispatch,effect-not-permitted,`,
-		`  "",read,github.workflowfiles.get,not-in-tools-list,`,
+		`  github.issues.get,Get a GitHub issue,read,code,""`, `  github.issues.create,Create a GitHub issue,create,"",not-in-tools-list`,
+		`  github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,"",effect-not-permitted`,
+		`  github.workflowfiles.get,Get a GitHub workflow file,read,"",not-in-tools-list`,
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools --all output does not contain %q:\n%s", want, stdout)
@@ -97,8 +97,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--connection", "code",
 		"--config", path)
 	if code != exitOK || stderr != "" ||
-		!strings.Contains(stdout, `  "",read,github.workflowfiles.get,requires-tool-allow-list,`) ||
-		!strings.Contains(stdout, `  "",create,github.issues.create,effect-not-permitted,`) {
+		!strings.Contains(stdout, `  github.workflowfiles.get,Get a GitHub workflow file,read,"",requires-tool-allow-list`) ||
+		!strings.Contains(stdout, `  github.issues.create,Create a GitHub issue,create,"",effect-not-permitted`) {
 		t.Errorf("tools --all --connection code: exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
 	}
 	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--config", path)
@@ -106,38 +106,38 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[72]{connections,effect,id,reason,title}:", "read,github.issues.get,", "read,github.issues.list,",
-		"read,github.projectitems.get,", "read,github.projectitems.list,", "read,github.comments.list,",
-		"create,github.issues.create,", "update,github.issues.update,", "update,github.issues.close,",
-		"update,github.issues.reopen,", "create,github.comments.create,", "update,github.projectitems.update,",
-		"create,github.projectitems.add,", "update,github.projectitems.archive,",
-		"update,github.projectitems.unarchive,", "update,github.projectitems.move,",
-		"delete,github.projectitems.delete,", "create,github.projectdrafts.create,",
-		"update,github.projectdrafts.update,", "create,github.projectdrafts.convert,",
-		"create,github.projectissues.create,",
-		"create,github.projects.create,", "update,github.projects.update,", "delete,github.projects.delete,",
-		"create,github.projects.copy,", "update,github.projects.link,", "update,github.projects.unlink,",
-		"read,github.projectfields.list,", "create,github.projectfields.create,",
-		"update,github.projectfields.update,", "delete,github.projectfields.delete,",
-		"delete,github.projectfieldoptions.delete,", "delete,github.projectiterations.replace,",
-		"read,github.projectviews.list,", "create,github.projectviews.create,",
-		"update,github.projectviews.update,", "delete,github.projectviews.delete,",
-		"update,github.projecttemplates.mark,", "update,github.projecttemplates.unmark,",
-		"read,github.projectstatus.list,", "create,github.projectstatus.create,",
-		"update,github.projectstatus.update,", "delete,github.projectstatus.delete,",
-		"read,github.projectteams.list,", "update,github.projectcollaborators.update,",
-		"update,github.projects.linkteam,",
-		"update,github.projects.unlinkteam,", "read,github.projectworkflows.list,",
-		"delete,github.projectworkflows.delete,",
-		"read,github.workflows.list,", "read,github.workflows.get,", "read,github.workflowruns.list,",
-		"read,github.workflowruns.get,", "read,github.workflowjobs.list,", "read,github.workflowjobs.get,",
-		"read,github.workflowjobs.log,", "read,github.workflowartifacts.list,",
-		"execute,github.workflows.dispatch,", "execute,github.workflowruns.rerun,",
-		"execute,github.workflowruns.rerunfailed,", "execute,github.workflowruns.cancel,",
-		"read,github.workflowfiles.list,", "read,github.workflowfiles.get,", "create,github.workflowfiles.create,",
-		"update,github.workflowfiles.update,", "update,github.workflows.enable,", "update,github.workflows.disable,",
-		"read,github.actionspermissions.get,", "update,github.actionspermissions.update,",
-		"read,github.workflowpermissions.get,", "update,github.workflowpermissions.update,",
+		"tools[72]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"github.projectitems.get,Get a GitHub project item,read,", "github.projectitems.list,List GitHub project items,read,", "github.comments.list,List comments of a GitHub issue,read,",
+		"github.issues.create,Create a GitHub issue,create,", "github.issues.update,Update a GitHub issue,update,", "github.issues.close,Close a GitHub issue,update,",
+		"github.issues.reopen,Reopen a GitHub issue,update,", "github.comments.create,Comment on a GitHub issue,create,", "github.projectitems.update,Update GitHub project item fields,update,",
+		"github.projectitems.add,Add a GitHub issue to the project,create,", "github.projectitems.archive,Archive a GitHub project item,update,",
+		"github.projectitems.unarchive,Restore an archived GitHub project item,update,", "github.projectitems.move,Move a GitHub project item,update,",
+		"github.projectitems.delete,Delete a GitHub project item,delete,", "github.projectdrafts.create,Create a GitHub project draft,create,",
+		"github.projectdrafts.update,Update a GitHub project draft,update,", "github.projectdrafts.convert,Convert a GitHub project draft into an issue,create,",
+		"github.projectissues.create,Create a planned GitHub issue,create,",
+		"github.projects.create,Create a GitHub project,create,", "github.projects.update,Update a GitHub project,update,", "github.projects.delete,Delete a GitHub project,delete,",
+		"github.projects.copy,Copy a GitHub project,create,", "github.projects.link,Link a GitHub project to a repository,update,", "github.projects.unlink,Unlink a GitHub project from a repository,update,",
+		"github.projectfields.list,List the fields of a GitHub project,read,", "github.projectfields.create,Create a GitHub project field,create,",
+		"github.projectfields.update,Update a GitHub project field,update,", "github.projectfields.delete,Delete a GitHub project field,delete,",
+		"github.projectfieldoptions.delete,Delete options of a GitHub project field,delete,", "github.projectiterations.replace,Replace the iterations of a GitHub project field,delete,",
+		"github.projectviews.list,List the views of a GitHub project,read,", "github.projectviews.create,Create a GitHub project view,create,",
+		"github.projectviews.update,Update a GitHub project view,update,", "github.projectviews.delete,Delete a GitHub project view,delete,",
+		"github.projecttemplates.mark,Mark a GitHub project as a template,update,", "github.projecttemplates.unmark,Unmark a GitHub project as a template,update,",
+		"github.projectstatus.list,List the status updates of a GitHub project,read,", "github.projectstatus.create,Post a GitHub project status update,create,",
+		"github.projectstatus.update,Update a GitHub project status update,update,", "github.projectstatus.delete,Delete a GitHub project status update,delete,",
+		"github.projectteams.list,List the teams of a GitHub project,read,", "github.projectcollaborators.update,Change the collaborators of a GitHub project,update,",
+		"github.projects.linkteam,Link a GitHub project to a team,update,",
+		"github.projects.unlinkteam,Unlink a GitHub project from a team,update,", "github.projectworkflows.list,List the automations of a GitHub project,read,",
+		"github.projectworkflows.delete,Delete a GitHub project automation,delete,",
+		"github.workflows.list,List GitHub Actions workflows,read,", "github.workflows.get,Get a GitHub Actions workflow,read,", "github.workflowruns.list,List GitHub Actions workflow runs,read,",
+		"github.workflowruns.get,Get a GitHub Actions workflow run,read,", "github.workflowjobs.list,List GitHub Actions jobs of a run,read,", "github.workflowjobs.get,Get a GitHub Actions job,read,",
+		"github.workflowjobs.log,Read the end of a GitHub Actions job log,read,", "github.workflowartifacts.list,List GitHub Actions artifacts of a run,read,",
+		"github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,", "github.workflowruns.rerun,Re-run a GitHub Actions workflow run,execute,",
+		"github.workflowruns.rerunfailed,Re-run the failed jobs of a GitHub Actions run,execute,", "github.workflowruns.cancel,Cancel a GitHub Actions workflow run,execute,",
+		"github.workflowfiles.list,List GitHub workflow files,read,", "github.workflowfiles.get,Get a GitHub workflow file,read,", "github.workflowfiles.create,Create a GitHub workflow file,create,",
+		"github.workflowfiles.update,Update a GitHub workflow file,update,", "github.workflows.enable,Enable a GitHub Actions workflow,update,", "github.workflows.disable,Disable a GitHub Actions workflow,update,",
+		"github.actionspermissions.get,Get the GitHub Actions permissions of a repository,read,", "github.actionspermissions.update,Change the GitHub Actions permissions of a repository,update,",
+		"github.workflowpermissions.get,Get the default GITHUB_TOKEN permissions of a repository,read,", "github.workflowpermissions.update,Change the default GITHUB_TOKEN permissions of a repository,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -147,7 +147,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
 	}
 
-	document := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--config", path)
+	document := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--full", "--config", path)
 	var described struct {
 		Tool struct {
 			InputSchema json.RawMessage `json:"input_schema"`
@@ -180,7 +180,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	// A tool that requires an allow-list has no route on a connection that does not list it, whatever the
 	// connection's permissions.
 	for _, id := range []string{"github.workflowfiles.get", "github.workflowfiles.update", "github.actionspermissions.update"} {
-		guarded := runTwentyJSON(t, "", "describe", id, "--config", path)
+		guarded := runTwentyJSON(t, "", "describe", id, "--full", "--config", path)
 		if !strings.Contains(string(guarded), `"connections":[]`) ||
 			!strings.Contains(string(guarded), `"requires_tool_allow_list":true`) {
 			t.Errorf("%s = %s, want no connection and the allow-list mark", id, guarded)

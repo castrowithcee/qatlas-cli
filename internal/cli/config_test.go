@@ -155,6 +155,47 @@ defaults:
 	}
 }
 
+// A connection that offers no tool is valid but useless to an agent, so validate still succeeds and names it
+// on stderr, with the reason, in name order.
+func TestConfigValidateWarnsAboutAConnectionThatOffersNoTool(t *testing.T) {
+	path := writeConfig(t, `version: 1
+services:
+  telegram-main:
+    provider: telegram
+    base_url: https://api.telegram.org
+credentials:
+  notifier:
+    type: env
+    values:
+      bot-token: TELEGRAM_BOT_TOKEN
+connections:
+  muted:
+    service: telegram-main
+    credential: notifier
+    target: "-1001111111111"
+    tools: []
+  alerts:
+    service: telegram-main
+    credential: notifier
+    target: "-1002222222222"
+  closed:
+    service: telegram-main
+    credential: notifier
+    target: "-1003333333333"
+    permissions: []
+defaults: {}
+`)
+	var stdout, stderr bytes.Buffer
+	code := Run([]string{"config", "validate", "--config", path}, &stdout, &stderr)
+	want := "qatlas: warning: connection \"closed\" offers no tool: its permissions are empty " +
+		"('permissions: []'), so no agent can use it\n" +
+		"qatlas: warning: connection \"muted\" offers no tool: its tools list is empty ('tools: []'), so no " +
+		"agent can use it\n"
+	if code != exitOK || !strings.HasPrefix(stdout.String(), "configuration is valid: ") || stderr.String() != want {
+		t.Errorf("exit=%d stdout=%q stderr=%q, want success and %q", code, stdout.String(), stderr.String(), want)
+	}
+}
+
 // Validation is deterministic: it reads only the file and reports problems in a stable order.
 func TestConfigValidateIsDeterministic(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")

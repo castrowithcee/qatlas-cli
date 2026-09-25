@@ -35,6 +35,9 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"<provider> --all' lists them. Every entry must be a tool this build registers for that provider,\n" +
 			"listed once, with an effect the connection's permissions allow. An unknown entry is reported\n" +
 			"by its position, never quoted.\n\n" +
+			"A connection that offers no tool, because its permissions or its tools list are empty or allow\n" +
+			"none of its provider's tools, is valid but useless to an agent. Validate names each one in a\n" +
+			"warning on stderr and still succeeds.\n\n" +
 			"With --secrets it additionally resolves the secrets of every connection and reports which\n" +
 			"source delivers each of them, so an environment variable that overrides the credential store\n" +
 			"is visible instead of silent. It prints where a secret comes from, never what it is, and it\n" +
@@ -49,6 +52,13 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			cfg, err := config.Load(path, reg)
 			if err != nil {
 				return classifyUserError(err)
+			}
+			// A connection that offers no tool is valid, so it only warns: the file stays usable, and the
+			// warning goes to stderr so stdout keeps its answer.
+			for _, name := range sortedConnections(cfg) {
+				if warning := cfg.IdleWarning(name); warning != "" {
+					fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+				}
 			}
 			if !secrets {
 				if opts.Format == output.FormatTable {
@@ -91,12 +101,7 @@ func secretSources(cfg *config.Config, opts *Options) (output.Result, error) {
 		return nil, err
 	}
 
-	names := make([]string, 0, len(cfg.Connections))
-	for name := range cfg.Connections {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
+	names := sortedConnections(cfg)
 	rows := make([]output.Row, 0, len(names))
 	for _, name := range names {
 		resolved, err := cfg.Resolve(name, "")
@@ -115,6 +120,16 @@ func secretSources(cfg *config.Config, opts *Options) (output.Result, error) {
 		}
 	}
 	return output.Collection{Columns: secretSourceColumns, Rows: rows}, nil
+}
+
+// sortedConnections returns the names of the configured connections in name order.
+func sortedConnections(cfg *config.Config) []string {
+	names := make([]string, 0, len(cfg.Connections))
+	for name := range cfg.Connections {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func noArgs(_ *cobra.Command, args []string) error {

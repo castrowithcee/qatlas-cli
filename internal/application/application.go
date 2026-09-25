@@ -169,18 +169,21 @@ func searchFingerprint(request SearchRequest) []byte {
 }
 
 // ProviderSummary is one namespace of the tool catalog: what kind of system it is, what it stands for in
-// this installation, how many tools it offers, and how many configured connections can run them. A
-// provider without a connection stays listed with zero, so it is visible as unconfigured rather than
-// silently missing.
+// this installation, how many tools it offers, how many configured connections can run them, and how many
+// are configured at all. A provider without a connection stays listed with zero, so it is visible as
+// unconfigured rather than silently missing, and a connection that offers no tool counts in Configured
+// but not in Connections, so the difference shows it.
 //
 // Description is the provider's own line and the same everywhere; Note is the line the user maintains in
 // the configuration and is empty where there is none. Neither names a service, a URL, or a credential.
+// The members are ordered by meaning: the identifier, its descriptions, then the counts.
 type ProviderSummary struct {
 	Provider    string `json:"provider"`
 	Description string `json:"description"`
 	Note        string `json:"note"`
 	Tools       int    `json:"tools"`
 	Connections int    `json:"connections"`
+	Configured  int    `json:"configured"`
 }
 
 // ProvidersResponse is the payload inside the CLI envelope.
@@ -216,6 +219,7 @@ func (c *Core) Providers() ProvidersResponse {
 				Provider: descriptor.Provider, Description: metadata.Description,
 				Note:        c.config.ProviderNotes[descriptor.Provider],
 				Connections: len(c.connectionNamesWithAnyOperation(descriptor.Provider)),
+				Configured:  len(c.connectionNames(descriptor.Provider)),
 			})
 		}
 		providers[index].Tools++
@@ -421,10 +425,13 @@ func (c *Core) searchText(request SearchRequest, descriptor capability.Descripto
 }
 
 // DescribeRequest selects exactly one versioned descriptor. Connection only restricts its possible routes.
+// Full asks the publishing surface for the complete descriptor instead of its compact contract; Describe
+// itself always answers with the complete one.
 type DescribeRequest struct {
 	Operation  string `json:"operation"`
 	Version    int    `json:"version,omitempty"`
 	Connection string `json:"connection,omitempty"`
+	Full       bool   `json:"full,omitempty"`
 }
 
 // ConnectionRef is the discovery view of one configured route. Name is the stable value an invoke request
@@ -440,6 +447,18 @@ type ConnectionRef struct {
 type DescribeResponse struct {
 	Operation   capability.Descriptor `json:"operation"`
 	Connections []ConnectionRef       `json:"connections"`
+}
+
+// CompactDescribeResponse is what describe publishes unless the complete descriptor is asked for: the
+// compact contract and the possible configured routes.
+type CompactDescribeResponse struct {
+	Operation   CompactDescriptor `json:"operation"`
+	Connections []ConnectionRef   `json:"connections"`
+}
+
+// Compact returns the response with the compact contract in place of the complete descriptor.
+func (r DescribeResponse) Compact() CompactDescribeResponse {
+	return CompactDescribeResponse{Operation: Compact(r.Operation), Connections: r.Connections}
 }
 
 // Describe returns one registered descriptor without contacting a provider.

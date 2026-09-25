@@ -96,14 +96,15 @@ func runTools(t *testing.T, reads *atomic.Int32, args ...string) (int, string, s
 	return code, stdout.String(), stderr.String()
 }
 
-// toonOfJSON renders a JSON document with the encoder that the TOON specification tests verify. A command
-// whose TOON output equals this rendering carries exactly the data of its JSON output.
+// toonOfJSON renders a JSON document with the encoder that the TOON specification tests verify, keeping
+// the member order of the document. A command whose TOON output equals this rendering carries exactly the
+// data of its JSON output, in the same order.
 func toonOfJSON(t *testing.T, document string) string {
 	t.Helper()
 	decoder := json.NewDecoder(strings.NewReader(document))
 	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
+	value, err := orderedValue(decoder)
+	if err != nil {
 		t.Fatalf("output is not valid JSON: %v: %s", err, document)
 	}
 	encoded, err := output.MarshalTOON(value)
@@ -169,19 +170,19 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	if !strings.HasPrefix(stdout, "providers[8]{connections,description,note,provider,tools}:\n") ||
+	if !strings.HasPrefix(stdout, "providers[8]{provider,description,note,tools,connections,configured}:\n") ||
 		!strings.HasSuffix(stdout, "\n") || strings.Contains(stdout, "\r") {
 		t.Errorf("stdout = %q, want an LF TOON table of eight namespace rows", stdout)
 	}
 	for _, want := range []string{
 		// BookStack has exactly one configured connection, Telegram one, and every other compiled
-		// provider none. An unconfigured namespace stays visible with zero. Every row carries the
-		// provider's description, and the note the configuration keeps, which is empty where there is
-		// none.
-		"1,Self-hosted documentation platform for team knowledge,company handbook,bookstack,5",
-		"1,Cloud-based instant messaging service,\"\",telegram,3",
-		",\"\",github,72", ",\"\",lexware,3", ",\"\",nextcloud,6", ",\"\",seatable,7", ",\"\",todoist,39",
-		",\"\",twentycrm,5", "0,Code hosting and software collaboration platform,",
+		// provider none. An unconfigured namespace stays visible with zero. Every row names the provider
+		// first, then its description and the note the configuration keeps, which is empty where there is
+		// none, then the counts of tools, usable connections, and configured connections.
+		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
+		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
+		"  github,Code hosting and software collaboration platform,\"\",72,0,0\n", ",\"\",3,0,0\n",
+		",\"\",6,0,0\n", ",\"\",7,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -242,16 +243,17 @@ connections:
 defaults: {}
 `)
 		code, stdout, stderr := runTools(t, nil, "providers", "--config", empty)
-		if code != exitOK || stderr != "" || !strings.Contains(stdout, `0,Cloud-based instant messaging service,"",telegram,3`) {
-			t.Errorf("providers: exit=%d stdout=%q stderr=%q, want telegram counted with zero", code, stdout, stderr)
+		if code != exitOK || stderr != "" || !strings.Contains(stdout, `  telegram,Cloud-based instant messaging service,"",3,0,1`) {
+			t.Errorf("providers: exit=%d stdout=%q stderr=%q, want telegram with no usable and one configured "+
+				"connection", code, stdout, stderr)
 		}
 		code, stdout, stderr = runTools(t, nil, "connections", "telegram", "--config", empty)
 		if code != exitOK || stderr != "" || !strings.Contains(stdout, "alerts") {
 			t.Errorf("connections: exit=%d stdout=%q stderr=%q, want alerts listed", code, stdout, stderr)
 		}
 		_, help, _ := runTools(t, nil, "providers", "--help")
-		if !strings.Contains(help, "A connection counts when it offers at least one tool of the provider") ||
-			!strings.Contains(help, "('tools: []')") {
+		if !strings.Contains(help, "counts a connection when it offers at least one tool of the provider") ||
+			!strings.Contains(help, "('tools: []')") || !strings.Contains(help, "configured") {
 			t.Errorf("providers help does not explain the count:\n%s", help)
 		}
 	})
@@ -276,9 +278,9 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	// The wiki connection keeps the read-only default permissions, so it offers the two read tools only.
-	if want := "tools[2]{connections,effect,id,title}:\n" +
-		"  wiki,read,bookstack.pages.get,Get a BookStack page\n" +
-		"  wiki,read,bookstack.pages.list,List BookStack pages\n"; stdout != want {
+	if want := "tools[2]{id,title,effect,connections}:\n" +
+		"  bookstack.pages.get,Get a BookStack page,read,wiki\n" +
+		"  bookstack.pages.list,List BookStack pages,read,wiki\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 	for _, absent := range []string{"description", "tags", "version", "reason", "alerts", "read-only account"} {
@@ -316,17 +318,17 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Fatalf("exit=%d stderr=%q", code, stderr)
 		}
 		for _, want := range []string{
-			"tools[5]{connections,effect,id,reason,title}:\n",
-			`  "",create,bookstack.pages.create,effect-not-permitted,`,
-			`  "",delete,bookstack.pages.delete,effect-not-permitted,`,
-			`  wiki,read,bookstack.pages.get,"",Get a BookStack page`,
+			"tools[5]{id,title,effect,connections,reason}:\n",
+			`  bookstack.pages.create,Create a BookStack page,create,"",effect-not-permitted` + "\n",
+			`  bookstack.pages.delete,Delete a BookStack page,delete,"",effect-not-permitted` + "\n",
+			`  bookstack.pages.get,Get a BookStack page,read,wiki,""` + "\n",
 		} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout does not contain %q:\n%s", want, stdout)
 			}
 		}
 		code, stdout, stderr = runTools(t, nil, "tools", "lexware", "--all", "--config", cfg)
-		if code != exitOK || stderr != "" || !strings.Contains(stdout, `  "",read,lexware.invoices.list,no-connection,`) {
+		if code != exitOK || stderr != "" || !strings.Contains(stdout, `  lexware.invoices.list,List open Lexware invoices,read,"",no-connection`) {
 			t.Errorf("a namespace without a connection: exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
 		}
 	})
@@ -468,9 +470,10 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 	})
 }
 
-// Acceptance 3: one tool document carries the complete contract, and the TOON default and --output json
-// are two renderings of the same data.
-func TestToolDescribesOneCompleteContract(t *testing.T) {
+// Acceptance 3: one tool document carries the compact contract, and the TOON default and --output json
+// are two renderings of the same data, in the same order: the tool before its connections, and within the
+// tool its identifier before its descriptions, its risk, and its tables.
+func TestToolDescribesOneCompactContract(t *testing.T) {
 	cfg, _, _ := catalogEnvironment(t)
 
 	code, toon, stderr := runTools(t, nil, "describe", "bookstack.pages.list", "--config", cfg)
@@ -484,21 +487,45 @@ func TestToolDescribesOneCompleteContract(t *testing.T) {
 	if got := toonOfJSON(t, jsonOut); got != toon {
 		t.Errorf("TOON output = %q, want the TOON rendering of the JSON data %q", toon, got)
 	}
+	if !strings.HasPrefix(toon, "tool:\n  id: bookstack.pages.list\n  version: 1\n  title: ") ||
+		!strings.Contains(toon, "\nconnections[1]{name,description}:\n") ||
+		!strings.Contains(toon, "  arguments[2]{name,type,required,form,limits,description}:\n") ||
+		!strings.Contains(toon, "  fields[7]{name,description}:\n") {
+		t.Errorf("TOON output does not name the tool first and carry both tables:\n%s", toon)
+	}
+	for _, absent := range []string{"input_schema", "output_schema", "tags", "requires_tool_allow_list"} {
+		if strings.Contains(toon, absent) {
+			t.Errorf("the compact contract published %q:\n%s", absent, toon)
+		}
+	}
 
 	var document struct {
-		Tool        capability.Descriptor       `json:"tool"`
-		Connections []application.ConnectionRef `json:"connections"`
+		Tool        application.CompactDescriptor `json:"tool"`
+		Connections []application.ConnectionRef   `json:"connections"`
 	}
-	if err := json.Unmarshal([]byte(jsonOut), &document); err != nil {
-		t.Fatalf("tool output is not valid JSON: %v", err)
+	decoder := json.NewDecoder(strings.NewReader(jsonOut))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&document); err != nil {
+		t.Fatalf("tool output is not the compact contract: %v: %s", err, jsonOut)
 	}
 	tool := document.Tool
 	if tool.ID != "bookstack.pages.list" || tool.Version != 1 || tool.Description == "" ||
-		len(tool.Tags) == 0 || len(tool.InputSchema) == 0 || len(tool.OutputSchema) == 0 ||
-		len(tool.Examples) == 0 || len(tool.Fields) == 0 || tool.Risk.Effect != capability.EffectRead ||
-		tool.Risk.Idempotency != capability.IdempotencySafe ||
-		tool.Risk.Confirmation != capability.ConfirmationNone || tool.Risk.DataSensitivity == "" {
+		len(tool.Examples) == 0 || len(tool.Fields) != 7 || tool.Effect != capability.EffectRead ||
+		tool.Idempotency != capability.IdempotencySafe || tool.Confirmation != capability.ConfirmationNone ||
+		tool.DataSensitivity == "" {
 		t.Errorf("tool contract = %+v", tool)
+	}
+	// The argument table is derived from the input schema, with the descriptions the descriptor keeps.
+	registered, _, _ := defaultRegistry().Lookup("bookstack.pages.list")
+	if len(tool.Arguments) != len(registered.Arguments) {
+		t.Fatalf("arguments = %+v, want one row per argument of %+v", tool.Arguments, registered.Arguments)
+	}
+	for i, argument := range registered.Arguments {
+		row := tool.Arguments[i]
+		if row.Name != argument.Name || row.Description != argument.Description || row.Required != argument.Required ||
+			row.Type != "integer" || row.Limits == "" {
+			t.Errorf("argument row %d = %+v, want %s typed and bounded from the schema", i, row, argument.Name)
+		}
 	}
 	// A connection is published as the name that selects it plus the line its owner maintains, so a
 	// reader can tell two routes of one provider apart without opening the configuration.
@@ -506,6 +533,62 @@ func TestToolDescribesOneCompleteContract(t *testing.T) {
 	if !reflect.DeepEqual(document.Connections, want) {
 		t.Errorf("connections = %+v, want %+v", document.Connections, want)
 	}
+
+	t.Run("--full prints the registered descriptor unchanged", func(t *testing.T) {
+		code, toon, stderr := runTools(t, nil, "describe", "bookstack.pages.list", "--full", "--config", cfg)
+		if code != exitOK || stderr != "" {
+			t.Fatalf("TOON exit=%d stderr=%q", code, stderr)
+		}
+		code, jsonOut, stderr := runTools(t, nil, "describe", "bookstack.pages.list", "--full", "--config", cfg,
+			"--output", "json")
+		if code != exitOK || stderr != "" {
+			t.Fatalf("JSON exit=%d stderr=%q", code, stderr)
+		}
+		if got := toonOfJSON(t, jsonOut); got != toon {
+			t.Errorf("TOON output = %q, want the TOON rendering of the JSON data %q", toon, got)
+		}
+		registered, err := json.Marshal(registered)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := jsonMember(t, []byte(jsonOut), "tool"); !jsonEqual(got, registered) {
+			t.Errorf("--full tool = %s, want the registered descriptor %s", got, registered)
+		}
+		if !strings.HasPrefix(toon, "tool:\n  id: bookstack.pages.list\n") || !strings.Contains(toon, "input_schema:") {
+			t.Errorf("--full TOON output = %q, want the descriptor with its schemas", toon)
+		}
+	})
+
+	t.Run("an object argument carries its members as rows of their own", func(t *testing.T) {
+		code, jsonOut, stderr := runTools(t, nil, "describe", "lexware.invoices.create", "--config", cfg,
+			"--output", "json")
+		if code != exitOK || stderr != "" {
+			t.Fatalf("exit=%d stderr=%q", code, stderr)
+		}
+		var document struct {
+			Tool application.CompactDescriptor `json:"tool"`
+		}
+		if err := json.Unmarshal([]byte(jsonOut), &document); err != nil {
+			t.Fatal(err)
+		}
+		rows := map[string]application.ArgumentRow{}
+		for _, row := range document.Tool.Arguments {
+			rows[row.Name] = row
+		}
+		for _, want := range []application.ArgumentRow{
+			{Name: "line_items", Type: "object[]", Required: true, Limits: "items 1..100"},
+			{Name: "line_items[].type", Type: "string", Required: true, Form: "custom|text"},
+			{Name: "line_items[].name", Type: "string", Required: true, Limits: "len 1..255"},
+			{Name: "line_items[].quantity", Type: "number"},
+			{Name: "address", Type: "object", Required: true},
+			{Name: "address.country_code", Type: "string", Limits: "len 2"},
+			{Name: "tax_type", Type: "string", Required: true, Form: "net|gross|vatfree"},
+		} {
+			if got := rows[want.Name]; got != want {
+				t.Errorf("argument %s = %+v, want %+v", want.Name, got, want)
+			}
+		}
+	})
 
 	t.Run("a connection without a description carries the empty string", func(t *testing.T) {
 		code, jsonOut, stderr := runTools(t, nil, "describe", "telegram.messages.send", "--config", cfg,
@@ -553,6 +636,29 @@ func TestToolDescribesOneCompleteContract(t *testing.T) {
 			}
 		}
 	})
+}
+
+// The compact contract exists to be read by an agent, so its TOON default must cost less than its JSON
+// rendering for every registered tool, not only on average.
+func TestCompactContractIsSmallerAsTOON(t *testing.T) {
+	cfg, _, _ := catalogEnvironment(t)
+	for _, descriptor := range defaultRegistry().All() {
+		code, toon, stderr := runTools(t, nil, "describe", descriptor.ID, "--config", cfg)
+		if code != exitOK || stderr != "" {
+			t.Fatalf("%s: exit=%d stderr=%q", descriptor.ID, code, stderr)
+		}
+		code, jsonOut, stderr := runTools(t, nil, "describe", descriptor.ID, "--config", cfg, "--output", "json")
+		if code != exitOK || stderr != "" {
+			t.Fatalf("%s: exit=%d stderr=%q", descriptor.ID, code, stderr)
+		}
+		if len(toon) >= len(jsonOut) {
+			t.Errorf("%s: TOON %d bytes, JSON %d bytes; want TOON smaller:\n%s", descriptor.ID, len(toon),
+				len(jsonOut), toon)
+		}
+		if strings.Contains(toon, "input_schema") || strings.Contains(jsonOut, "output_schema") {
+			t.Errorf("%s: the compact contract repeats a schema", descriptor.ID)
+		}
+	}
 }
 
 // Acceptance 4: discovery reads no secret and publishes no secret, provider body, or payload canary.
@@ -868,7 +974,8 @@ func TestToolCommandsKeepTheDataOfTheRemovedCommands(t *testing.T) {
 		}
 	}
 
-	// describe returned one complete descriptor and its connections.
+	// describe returned one contract and its connections, now the compact one unless --full asks for the
+	// complete descriptor.
 	for _, id := range []string{"bookstack.pages.get", "bookstack.pages.list", "telegram.messages.send"} {
 		code, stdout, stderr = runTools(t, nil, "describe", id, "--config", cfg, "--output", "json")
 		if code != exitOK || stderr != "" {
@@ -885,7 +992,7 @@ func TestToolCommandsKeepTheDataOfTheRemovedCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Describe(%s) = %v", id, err)
 		}
-		wantOperation, err := json.Marshal(described.Operation)
+		wantOperation, err := json.Marshal(application.Compact(described.Operation))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -908,9 +1015,9 @@ func TestConnectionsListTheConfiguredRoutes(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	want := "connections[2]{description,name,permissions,provider,tools}:\n" +
-		"  read-only account on the team wiki,wiki,read,bookstack,all-permitted\n" +
-		"  \"\",alerts,create,telegram,all-permitted\n"
+	want := "connections[2]{name,provider,description,permissions,tools}:\n" +
+		"  wiki,bookstack,read-only account on the team wiki,read,all-permitted\n" +
+		"  alerts,telegram,\"\",create,all-permitted\n"
 	if stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
@@ -933,7 +1040,7 @@ func TestConnectionsListTheConfiguredRoutes(t *testing.T) {
 
 	code, stdout, stderr = runTools(t, &reads, "connections", "telegram", "--config", cfg)
 	if code != exitOK || stderr != "" ||
-		stdout != "connections[1]{description,name,permissions,provider,tools}:\n  \"\",alerts,create,telegram,all-permitted\n" {
+		stdout != "connections[1]{name,provider,description,permissions,tools}:\n  alerts,telegram,\"\",create,all-permitted\n" {
 		t.Errorf("connections telegram: exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 	}
 	code, stdout, stderr = runTools(t, &reads, "connections", "lexware", "--config", cfg)

@@ -692,6 +692,35 @@ func (c *Config) ConnectionAllows(name string, tool ToolMetadata) bool {
 	return c.ConnectionRefusal(name, tool) == ""
 }
 
+// IdleWarning says why a connection offers no tool at all, or returns "" when it offers at least one. Such
+// a connection is valid and stays configured, but no agent can use it, and discovery counts it among the
+// configured connections of its provider only. The text names the connection and the reason, never a
+// secret, and is the same wherever it is shown.
+func (c *Config) IdleWarning(name string) string {
+	conn, ok := c.Connections[name]
+	if !ok {
+		return ""
+	}
+	// A provider this build registers no tool for leaves nothing to judge the connection by.
+	metadata, _ := c.ProviderMetadata(c.Services[conn.Service].Provider)
+	if len(metadata.Tools) == 0 {
+		return ""
+	}
+	for _, tool := range metadata.Tools {
+		if c.ConnectionAllows(name, tool) {
+			return ""
+		}
+	}
+	reason := "its permissions and tools list allow none of its provider's tools"
+	switch {
+	case conn.Permissions != nil && len(conn.Permissions) == 0:
+		reason = "its permissions are empty ('permissions: []')"
+	case conn.Tools != nil && len(conn.Tools) == 0:
+		reason = "its tools list is empty ('tools: []')"
+	}
+	return fmt.Sprintf("connection %q offers no tool: %s, so no agent can use it", name, reason)
+}
+
 // SecretRoleDescription returns the provider-authored help for a role.
 func (c *Config) SecretRoleDescription(role string) string {
 	for _, metadata := range c.providerCatalog().ProviderMetadataAll() {

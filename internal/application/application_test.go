@@ -439,12 +439,13 @@ func searchAll(t *testing.T, core *Core, request SearchRequest) []SearchResponse
 	}
 }
 
-// Providers is the first step of the cascade: one line per namespace, with the size of its catalog and
-// how many configured routes can run it. A provider without a connection stays listed with zero.
+// Providers is the first step of the cascade: one line per namespace, with the size of its catalog, how
+// many configured routes can run it, and how many are configured. A provider without a connection stays
+// listed with zero.
 func TestProvidersCountToolsAndConnections(t *testing.T) {
 	core, _ := testCore(t, []string{"archive", "primary"}, nil, true)
 	got := core.Providers().Providers
-	want := []ProviderSummary{{Provider: "fake", Tools: 2, Connections: 2}}
+	want := []ProviderSummary{{Provider: "fake", Tools: 2, Connections: 2, Configured: 2}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Providers() = %+v, want %+v", got, want)
 	}
@@ -477,7 +478,7 @@ func TestProviderDescriptionNoteAndConnectionDescriptionsAreSearched(t *testing.
 		t.Fatal(err)
 	}
 	want := []ProviderSummary{{Provider: "fake", Description: "Sample documentation platform", Note: "CRM",
-		Tools: 2, Connections: 2}}
+		Tools: 2, Connections: 2, Configured: 2}}
 	if got := core.Providers().Providers; !reflect.DeepEqual(got, want) {
 		t.Errorf("Providers() = %+v, want %+v", got, want)
 	}

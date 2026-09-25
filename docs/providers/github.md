@@ -834,8 +834,9 @@ every run may do. They are high risk, and Qatlas keeps them behind a boundary of
   allow the tool's effect. A connection without a `tools` list never offers one, whatever its permissions: a
   planning connection with `create` and `update`, an operator with `execute`, or a connection with every
   permission neither discovers nor runs them. `qatlas tools`, `qatlas describe`, `qatlas.search`,
-  `qatlas.describe`, route selection, and invoke apply the same rule, and the tool contract shows
-  `requires_tool_allow_list: true`. The terminal editor marks these tools `(listed only)`.
+  `qatlas.describe`, route selection, and invoke apply the same rule, and the complete tool contract
+  (`qatlas describe --full`) shows `requires_tool_allow_list: true`. The terminal editor marks these tools
+  `(listed only)`.
 - **Never preselected.** No profile a new connection starts with selects them, and the recommended profile
   of a provider may not. The profiles `workflow-maintainer` and `actions-admin` exist only to be chosen on
   purpose; they keep the two groups apart.

@@ -114,15 +114,18 @@ Discover in small steps, in this order, then invoke. Discovery writes TOON; --ou
   qatlas agents                     this guide
   qatlas providers                  every provider: what kind of system it
                                     is, the note on what it stands for
-                                    here, and the number of its tools and
-                                    configured connections
+                                    here, the number of its tools, of the
+                                    connections that can run them, and of
+                                    all configured connections
   qatlas connections <provider>     the configured connections: description,
                                     permitted effects, and whether a tools
                                     list narrows them
   qatlas tools <provider>           the tools those connections offer, each
                                     with the connections that offer it
-  qatlas describe <tool-id>         one contract: schemas, risk, examples,
-                                    and the connections that can run it
+  qatlas describe <tool-id>         one compact contract: the arguments and
+                                    result fields as tables, risk, examples,
+                                    and the connections that can run it;
+                                    --full adds both schemas
   qatlas invoke <tool-id> --connection <name>
                                     run it
 
@@ -176,7 +179,7 @@ Exit code 1 is a runtime or provider failure:
 - provider-error: the provider answered with something unusable.
 - runtime: anything else failed.
 
-MCP: 'qatlas mcp' serves the same catalog over stdio as three fixed MCP tools, with the same connections, rules, and error codes. qatlas.search finds tools like 'qatlas tools' and names the connections that offer each one; all set to true adds the others with their reason. qatlas.describe returns one contract like 'qatlas describe', and qatlas.invoke runs one like 'qatlas invoke', with confirm for --confirm. qatlas.describe and qatlas.invoke take the tool ID as operation and a connection name as connection; qatlas.invoke takes the arguments object as arguments. A failed call is a tool result with isError and structuredContent carrying the code. The server hands this guide to its client as instructions. Add the command "qatlas mcp" as a stdio server to the agent's client; it speaks MCP 2026-07-28 with the protocol version and client capabilities in the _meta of every request, and MCP 2025-11-25 and 2025-06-18 after an initialize request.
+MCP: 'qatlas mcp' serves the same catalog over stdio as three fixed MCP tools, with the same connections, rules, and error codes. qatlas.search finds tools like 'qatlas tools' and names the connections that offer each one; all set to true adds the others with their reason. qatlas.describe returns one compact contract like 'qatlas describe', or with full set to true the complete one like 'qatlas describe --full', and qatlas.invoke runs one like 'qatlas invoke', with confirm for --confirm. qatlas.describe and qatlas.invoke take the tool ID as operation and a connection name as connection; qatlas.invoke takes the arguments object as arguments. A failed call is a tool result with isError and structuredContent carrying the code. The server hands this guide to its client as instructions. Add the command "qatlas mcp" as a stdio server to the agent's client; it speaks MCP 2026-07-28 with the protocol version and client capabilities in the _meta of every request, and MCP 2025-11-25 and 2025-06-18 after an initialize request.
 
 Tell the agent which connections it may use and what each one is for, and whether it may change data. Never hand it a token, password, or key: qatlas reads the secrets itself.
 

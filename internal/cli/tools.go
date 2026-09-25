@@ -22,20 +22,22 @@ const toonContract = "TOON 4.1 (https://github.com/toon-format/spec/blob/v4.1.1/
 
 // newProvidersCommand lists the namespaces of the tool catalog. Discovery cascades: this command answers
 // which namespaces exist, "connections" which routes a person configured, "tools <namespace>" which tools
-// those routes offer, and "describe <id>" one complete contract. Each step stays small enough to read,
+// those routes offer, and "describe <id>" the contract of one tool. Each step stays small enough to read,
 // however many providers are compiled in.
 func newProvidersCommand(opts *Options, registry *capability.Registry) *cobra.Command {
 	return &cobra.Command{
 		Use:   "providers",
 		Short: "List the tool namespaces this installation offers",
-		Long: "Providers lists every namespace of the tool catalog with a one-line description of the system,\n" +
-			"the note the configuration keeps on what that provider stands for here (provider_notes, empty\n" +
-			"where there is none), the number of tools it offers, and the number of configured connections\n" +
-			"that can run them. A connection counts when it offers at least one tool of the provider, so one\n" +
-			"whose permissions allow none of its tools, or whose tools list is empty ('tools: []'), is left\n" +
-			"out of the count and still listed by 'qatlas connections'. A provider without such a connection\n" +
-			"stays listed with zero. It is answered from the local configuration alone: no provider is\n" +
-			"contacted, no secret is read, and no URL or credential is published.\n\n" +
+		Long: "Providers lists every namespace of the tool catalog, one row each: the provider, a one-line\n" +
+			"description of the system, the note the configuration keeps on what that provider stands for\n" +
+			"here (provider_notes, empty where there is none), the number of tools it offers, the number of\n" +
+			"connections that can run them, and the number of connections configured for it at all.\n\n" +
+			"connections counts a connection when it offers at least one tool of the provider, so one whose\n" +
+			"permissions allow none of its tools, or whose tools list is empty ('tools: []'), is left out of\n" +
+			"it while configured still counts it, and 'qatlas connections' still lists it. 'qatlas config\n" +
+			"validate' warns about such a connection. A provider without any connection stays listed with\n" +
+			"zero. It is answered from the local configuration alone: no provider is contacted, no secret is\n" +
+			"read, and no URL or credential is published.\n\n" +
 			"The connections themselves, with what each one may do, are one 'qatlas connections' away, and\n" +
 			"the tools of one namespace one 'qatlas tools <provider>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
@@ -50,7 +52,7 @@ func newProvidersCommand(opts *Options, registry *capability.Registry) *cobra.Co
 			if err != nil {
 				return err
 			}
-			return emitDocument(c, format, map[string]any{"providers": core.Providers().Providers})
+			return emitDocument(c, format, core.Providers())
 		},
 	}
 }
@@ -94,7 +96,7 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			if err != nil {
 				return err
 			}
-			return emitDocument(c, format, map[string]any{"connections": core.Connections(provider).Connections})
+			return emitDocument(c, format, core.Connections(provider))
 		},
 	}
 }
@@ -136,8 +138,8 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"tool for different reasons, the reason of the one closest to offering it is shown, in the order\n" +
 			"not-in-tools-list, requires-tool-allow-list, effect-not-permitted. 'qatlas tui' changes what a\n" +
 			"connection offers.\n\n" +
-			"Everything else about a tool, including its schemas and the descriptions of the connections that\n" +
-			"can run it, is one 'qatlas describe <tool-id>' away.\n\n" +
+			"Everything else about a tool, including its arguments, its risk, and the descriptions of the\n" +
+			"connections that can run it, is one 'qatlas describe <tool-id>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
 			"JSON. When no connection offers a listed tool, the list is empty and a note on stderr points to\n" +
 			"--all.",
@@ -170,7 +172,7 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			if err != nil {
 				return classifyUserError(err)
 			}
-			if err := emitDocument(c, format, map[string]any{"tools": response.Tools}); err != nil {
+			if err := emitDocument(c, format, response); err != nil {
 				return err
 			}
 			// An empty answer that only the configuration causes says so on stderr, so stdout stays the
@@ -195,15 +197,26 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 // below it, because the tool itself is the leaf of the public taxonomy. The former name "tool" stays a
 // hidden alias, so existing scripts keep working while help and documentation name the verb only.
 func newDescribeCommand(opts *Options, registry *capability.Registry, use string, hidden bool) *cobra.Command {
-	return &cobra.Command{
+	var full bool
+	cmd := &cobra.Command{
 		Use:    use + " <tool-id>",
 		Hidden: hidden,
 		Short:  "Describe one tool contract",
-		Long: "Describe prints the complete contract of one tool: version, description, tags, input and output\n" +
-			"schema, risk metadata, secret-free examples, and the connections that can run it. Every\n" +
-			"connection is named with its stable invoke value and the optional one-line description its\n" +
-			"owner maintains. It is answered from the local configuration alone: no provider is contacted\n" +
-			"and no secret is read.\n\n" +
+		Long: "Describe prints the compact contract of one tool: its ID, version, title, description, risk\n" +
+			"metadata, its arguments and result fields as tables, secret-free examples, and the\n" +
+			"connections that can run it. Every connection is named with its stable invoke value and the\n" +
+			"optional one-line description its owner maintains. It is answered from the local\n" +
+			"configuration alone: no provider is contacted and no secret is read.\n\n" +
+			"The argument table is derived from the input schema, one row per argument with its name, type,\n" +
+			"whether it is required, its form, its limits, and its description. The form lists the allowed\n" +
+			"values separated by |, or names the written form a pattern checks. The limits name a range such\n" +
+			"as 1..100, with len for the characters of a string, items for the entries of a list, keys for\n" +
+			"the members of an object, and each for every entry. A member of an object argument has a row of\n" +
+			"its own, such as address.city, and inside a list line_items[].name. The field table names the\n" +
+			"fields of the result the same way, derived from the output schema.\n\n" +
+			"--full prints the complete descriptor instead, with the provider, the tags, the input and output\n" +
+			"schema as JSON Schema, and the argument and field metadata beside them. Invoke always validates the arguments against\n" +
+			"that complete input schema.\n\n" +
 			"With --connection it refuses a connection that does not offer the tool with\n" +
 			"unsupported-capability and the reason, as 'qatlas tools --all' names it.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
@@ -224,11 +237,19 @@ func newDescribeCommand(opts *Options, registry *capability.Registry, use string
 			if err != nil {
 				return classifyUserError(err)
 			}
-			return emitDocument(c, format, map[string]any{
-				"tool": response.Operation, "connections": response.Connections,
-			})
+			var tool any = response.Operation
+			if !full {
+				tool = application.Compact(response.Operation)
+			}
+			return emitDocument(c, format, struct {
+				Tool        any                         `json:"tool"`
+				Connections []application.ConnectionRef `json:"connections"`
+			}{tool, response.Connections})
 		},
 	}
+	cmd.Flags().BoolVar(&full, "full", false,
+		"print the complete descriptor with the input and output schema instead of the compact contract")
+	return cmd
 }
 
 // newInvokeCommand runs one tool. The tool ID is positional and only the schema-dependent arguments come
@@ -380,22 +401,24 @@ func checkInvokeFormat(c *cobra.Command, opts *Options) error {
 		c.CommandPath(), output.FormatJSON, opts.Format, output.FormatJSON)}
 }
 
-// emitDocument writes one discovery document. Both formats render the same normalized JSON value, so the
+// emitDocument writes one discovery document. Both formats render the same JSON encoding of payload, so the
 // TOON default and --output json cannot drift apart: TOON is a rendering of the JSON data model here, not
-// a second contract.
+// a second contract. Members keep the order of the encoding, which is the declaration order of the Go
+// structs and the written order of a raw schema, so both formats name an entry before they describe it.
 func emitDocument(c *cobra.Command, format output.Format, payload any) error {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode discovery document: %w", err)
 	}
+	if format == output.FormatJSON {
+		_, err = c.OutOrStdout().Write(append(encoded, '\n'))
+		return err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
 	decoder.UseNumber()
-	var document any
-	if err := decoder.Decode(&document); err != nil {
+	document, err := orderedValue(decoder)
+	if err != nil {
 		return fmt.Errorf("encode discovery document: %w", err)
-	}
-	if format == output.FormatJSON {
-		return json.NewEncoder(c.OutOrStdout()).Encode(document)
 	}
 	toon, err := output.MarshalTOON(document)
 	if err != nil {
@@ -403,6 +426,44 @@ func emitDocument(c *cobra.Command, format output.Format, payload any) error {
 	}
 	_, err = c.OutOrStdout().Write(append(toon, '\n'))
 	return err
+}
+
+// orderedValue decodes the next JSON value like encoding/json into any, except that an object becomes an
+// output.Object, which keeps its members in the order they were written rather than sorting them.
+func orderedValue(decoder *json.Decoder) (any, error) {
+	token, err := decoder.Token()
+	if err != nil {
+		return nil, err
+	}
+	switch token {
+	case json.Delim('{'):
+		object := output.Object{Fields: []output.Field{}}
+		for decoder.More() {
+			key, err := decoder.Token()
+			if err != nil {
+				return nil, err
+			}
+			value, err := orderedValue(decoder)
+			if err != nil {
+				return nil, err
+			}
+			object.Fields = append(object.Fields, output.Field{Name: key.(string), Value: value})
+		}
+		_, err = decoder.Token()
+		return object, err
+	case json.Delim('['):
+		array := []any{}
+		for decoder.More() {
+			value, err := orderedValue(decoder)
+			if err != nil {
+				return nil, err
+			}
+			array = append(array, value)
+		}
+		_, err = decoder.Token()
+		return array, err
+	}
+	return token, nil
 }
 
 func exactlyOneArg(what string) cobra.PositionalArgs {
