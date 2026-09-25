@@ -35,6 +35,13 @@ func (f *fakeGitHub) mutation(w http.ResponseWriter, document string, variables 
 	case strings.Contains(document, "addProjectV2DraftIssue"):
 		fmt.Fprint(w, `{"data":{"add":{"projectItem":{"id":"PVTI_draft"}}}}`)
 	case strings.Contains(document, "archiveProjectV2Item"):
+		// GitHub answers the archive of an archived item with no item and no error.
+		for _, item := range f.items {
+			if item.id == variables["item"] && item.archived {
+				fmt.Fprint(w, `{"data":{"archive":null}}`)
+				return
+			}
+		}
 		fmt.Fprintf(w, `{"data":{"archive":{"item":{"id":%q}}}}`, variables["item"])
 	default:
 		data, errs := []string{}, []string{}
@@ -746,6 +753,18 @@ func TestDraftsAndArchive(t *testing.T) {
 	_, mutations, _ = split(f.recorded())
 	if last := mutations[len(mutations)-1]; last.variables["item"] != "PVTI_item03" || last.variables["project"] != projectID {
 		t.Errorf("archive = %+v", last)
+	}
+
+	// An item that is already archived is reported as archived without another mutation.
+	f.items[4].archived = true
+	before := len(f.recorded())
+	archived, err = c.ArchiveItem(context.Background(), "PVTI_item04")
+	if err != nil || !archived.Archived || archived.ItemID != "PVTI_item04" {
+		t.Fatalf("ArchiveItem() of an archived item = %+v, %v", archived, err)
+	}
+	queries, mutations, _ = split(f.recorded()[before:])
+	if len(queries) != 1 || !strings.Contains(queries[0].document, "id isArchived project{id}") || len(mutations) != 0 {
+		t.Errorf("repeated archive requests = %+v %+v", queries, mutations)
 	}
 }
 

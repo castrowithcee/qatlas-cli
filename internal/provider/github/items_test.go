@@ -155,7 +155,7 @@ func TestProjectItemChangesSendOneMutationEach(t *testing.T) {
 		result                     string
 	}{
 		{"delete an issue item", itemsDelete.ID, `{"item_id":"PVTI_item00"}`,
-			[]string{"item:node(id:$item){... on ProjectV2Item{id project{id}}}"},
+			[]string{"item:node(id:$item){... on ProjectV2Item{id isArchived project{id}}}"},
 			[]string{"deleteProjectV2Item(input:{projectId:$project,itemId:$item}){deletedItemId}"},
 			map[string]string{"project": projectID, "item": "PVTI_item00"},
 			`{"deleted":true,"item_id":"PVTI_item00","project":"orgs/octo-org/projects/7"}`},

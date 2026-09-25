@@ -617,7 +617,9 @@ every item it names in one query and refuses an item of another project, or one 
 directly after `after_id`, or first when `after_id` is left out. `github.projectitems.delete` removes the item
 and its field values; the issue or pull request stays in its repository, while a draft issue exists only as
 its item and is deleted with it. A repeated delete finds no item and is refused, and an issue added again
-gets a new item, so a repetition never removes anything else.
+gets a new item, so a repetition never removes anything else. `github.projectitems.archive` reads whether
+the item is archived with the project; an archived item is answered with `archived: true` without a change,
+so a repeated archive succeeds like the first one.
 
 `github.projectdrafts.update` and `github.projectdrafts.convert` accept only the item of a draft issue and
 refuse an issue or pull request as `invalid-request`. `assignees` names logins and replaces every assignee of

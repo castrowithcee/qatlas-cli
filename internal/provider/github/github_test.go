@@ -47,6 +47,7 @@ type fakeItem struct {
 	id, kind, title, repo, status, body string
 	number                              int
 	assignees, labels                   []string
+	archived                            bool
 }
 
 type fakeIssue struct {
@@ -247,6 +248,9 @@ func itemNodeJSON(item fakeItem, project string, withBody bool) string {
 		item.id, item.kind, len(values), strings.Join(values, ","), content)
 	if project != "" {
 		node += `,"project":{"id":"` + project + `"}`
+	}
+	if item.archived {
+		node += `,"isArchived":true`
 	}
 	return node + "}"
 }

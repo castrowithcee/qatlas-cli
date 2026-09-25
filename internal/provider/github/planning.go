@@ -292,15 +292,17 @@ type planningRequest struct {
 
 // planningNodes are the nodes a change resolved beside the project: the issue, the repository, the draft
 // issue of the item, the users in the order of the request's assignees, and the teams in the order of its
-// teams.
+// teams. archived reports whether the item is archived.
 type planningNodes struct {
 	issue, repository, draft string
 	assignees, teams         []string
+	archived                 bool
 }
 
 type planningItemJSON struct {
-	ID      string `json:"id"`
-	Project *struct {
+	ID         string `json:"id"`
+	IsArchived bool   `json:"isArchived"`
+	Project    *struct {
 		ID string `json:"id"`
 	} `json:"project"`
 	Content *struct {
@@ -364,7 +366,7 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 			content = " content{... on DraftIssue{id}}"
 		}
 		declarations += ",$item:ID!"
-		body += ` item:node(id:$item){... on ProjectV2Item{id project{id}` + content + `}}`
+		body += ` item:node(id:$item){... on ProjectV2Item{id isArchived project{id}` + content + `}}`
 		variables["item"] = request.item
 	}
 	if request.after != "" {
@@ -410,6 +412,7 @@ func (c *Client) resolve(ctx context.Context, op string, request planningRequest
 	if request.item != "" && !answer.Item.belongs(request.item, info) {
 		return nil, nodes, notFound(op, subject{in: c.target, what: "this item"})
 	}
+	nodes.archived = request.item != "" && answer.Item.IsArchived
 	if request.draft {
 		if answer.Item.Content == nil || answer.Item.Content.ID == "" {
 			return nil, nodes, invalidRequest("item_id names an issue or pull request of this project; only a " +
@@ -783,7 +786,9 @@ type Archived struct {
 	Archived bool   `json:"archived"`
 }
 
-// ArchiveItem archives one item of the bound project. The item stays restorable in GitHub.
+// ArchiveItem archives one item of the bound project. The item stays restorable in GitHub. An item that is
+// already archived is reported as archived without a change, because GitHub answers a repeated archive with
+// no item.
 func (c *Client) ArchiveItem(ctx context.Context, itemID string) (*Archived, error) {
 	const op = "archive project item"
 	if c.target.kind != kindProject {
@@ -792,9 +797,12 @@ func (c *Client) ArchiveItem(ctx context.Context, itemID string) (*Archived, err
 	if err := checkItemID(itemID); err != nil {
 		return nil, err
 	}
-	info, _, err := c.resolve(ctx, op, planningRequest{item: itemID})
+	info, nodes, err := c.resolve(ctx, op, planningRequest{item: itemID})
 	if err != nil {
 		return nil, err
+	}
+	if nodes.archived {
+		return &Archived{ItemID: itemID, Archived: true}, nil
 	}
 	var archived struct {
 		Archive *struct {
