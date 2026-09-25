@@ -1429,3 +1429,115 @@ defaults:
 		}
 	})
 }
+
+// With GODEBUG=http2debug, the HTTP/2 transport of the standard library logs every request header through
+// the standard logger, the Authorization header included. GODEBUG is read when the process starts, so only
+// the built binary can show that such a run prints the marker instead of the credential.
+func TestDebugLogsCarryNoSecret(t *testing.T) {
+	if testing.Short() {
+		t.Skip("the acceptance run builds the binary")
+	}
+
+	dir := t.TempDir()
+	bin := buildBinary(t, dir)
+
+	auth := "Token " + canaryPrimaryID + ":" + canaryPrimarySecret
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ProtoMajor != 2 {
+			t.Errorf("protocol = %s, want HTTP/2", r.Proto)
+		}
+		if r.Header.Get("Authorization") != auth {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{page(1, "Debug Runbook")}, "total": 1})
+	}))
+	server.EnableHTTP2 = true
+	server.StartTLS()
+	t.Cleanup(server.Close)
+
+	certificatePath := filepath.Join(dir, "http2-test-ca.pem")
+	certificate := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw})
+	if err := os.WriteFile(certificatePath, certificate, 0o600); err != nil {
+		t.Fatalf("writing the test CA: %v", err)
+	}
+	configPath := filepath.Join(dir, "config.yaml")
+	config := fmt.Sprintf(`version: 1
+services:
+  wiki:
+    provider: bookstack
+    base_url: %s
+credentials:
+  reader:
+    type: env
+    values:
+      token-id: DEBUG_WIKI_ID
+      token-secret: DEBUG_WIKI_SECRET
+connections:
+  wiki:
+    service: wiki
+    credential: reader
+defaults:
+  connections:
+    bookstack: wiki
+`, server.URL)
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatalf("writing the configuration: %v", err)
+	}
+
+	env := []string{
+		"HOME=" + dir,
+		"PATH=" + os.Getenv("PATH"),
+		"SSL_CERT_FILE=" + certificatePath,
+		"QATLAS_CONFIG=" + configPath,
+		secret.StoreSelector + "=none",
+		"DEBUG_WIKI_ID=" + canaryPrimaryID,
+		"DEBUG_WIKI_SECRET=" + canaryPrimarySecret,
+	}
+	mcpInput := `{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpMeta +
+		`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
+	// The header line proves that the debug log ran at all; without it the check below would pass on a run
+	// that never logged anything.
+	const redactedHeader = `http2: Transport encoding header "authorization" = "Token ` + redact.Marker + `"`
+
+	for _, debug := range []string{"http2debug=1", "http2debug=2"} {
+		t.Run(debug, func(t *testing.T) {
+			var seen strings.Builder
+			c := &runner{bin: bin, env: append(append([]string{}, env...), "GODEBUG="+debug), seen: &seen}
+
+			code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
+			if code != 0 || !strings.Contains(stdout, "Debug Runbook") {
+				t.Fatalf("CLI exit %d, stdout %q", code, stdout)
+			}
+			if !strings.Contains(stderr, redactedHeader) {
+				t.Errorf("CLI stderr carries no redacted header line %q", redactedHeader)
+			}
+
+			code, stdout, stderr = c.runInput(t, mcpInput, "mcp")
+			if code != 0 || !strings.Contains(stdout, "Debug Runbook") {
+				t.Fatalf("MCP exit %d, stdout %q", code, stdout)
+			}
+			if !strings.Contains(stderr, redactedHeader) {
+				t.Errorf("MCP stderr carries no redacted header line %q", redactedHeader)
+			}
+
+			for _, canary := range []string{canaryPrimaryID, canaryPrimarySecret} {
+				if strings.Contains(seen.String(), canary) {
+					t.Errorf("the canary %q reached the output", canary)
+				}
+			}
+		})
+	}
+
+	t.Run("without debug logging nothing is logged", func(t *testing.T) {
+		c := &runner{bin: bin, env: env, seen: &strings.Builder{}}
+
+		code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
+		if code != 0 || !strings.Contains(stdout, "Debug Runbook") {
+			t.Fatalf("exit %d, stdout %q", code, stdout)
+		}
+		if strings.Contains(stderr, "http2:") {
+			t.Errorf("stderr = %q, want no HTTP/2 diagnostics", stderr)
+		}
+	})
+}

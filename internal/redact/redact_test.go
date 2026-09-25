@@ -3,6 +3,7 @@ package redact
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"testing"
@@ -118,5 +119,52 @@ func TestConcurrentUse(t *testing.T) {
 
 	if got := r.Apply("secret-value-07 in a message"); strings.Contains(got, "secret-value-07") {
 		t.Errorf("Apply() = %q, want the secret removed", got)
+	}
+}
+
+// A library that logs a request header through the standard logger must not get the credential out.
+func TestWriter(t *testing.T) {
+	var (
+		r   Redactor
+		out strings.Builder
+	)
+	r.Add("s3cr3t-value", "Bearer s3cr3t-value")
+	logger := log.New(r.Writer(&out), "", 0)
+
+	logger.Printf("http2: Transport encoding header %q = %q", "authorization", "Bearer s3cr3t-value")
+
+	if got, want := out.String(), `http2: Transport encoding header "authorization" = "`+Marker+`"`+"\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+}
+
+// The writer reports the length it was handed, whatever the redacted text measures.
+func TestWriterReportsTheInputLength(t *testing.T) {
+	var r Redactor
+	r.Add("s3cr3t-value")
+
+	in := []byte("token s3cr3t-value")
+	n, err := r.Writer(&strings.Builder{}).Write(in)
+
+	if n != len(in) || err != nil {
+		t.Errorf("Write() = %d, %v; want %d, nil", n, err, len(in))
+	}
+}
+
+// A diagnostic that quotes a value with %q escapes quotes, backslashes, and control characters. The escaped
+// form must be removed as completely as the value itself.
+func TestQuotedSecret(t *testing.T) {
+	const secret = "s3cr\"et\\va\x01lue"
+	var r Redactor
+	r.Add(secret)
+
+	if got, want := r.Apply(fmt.Sprintf("%q", secret)), `"`+Marker+`"`; got != want {
+		t.Errorf("Apply(%%q) = %q, want %q", got, want)
+	}
+
+	var out strings.Builder
+	log.New(r.Writer(&out), "", 0).Printf("header %q", secret)
+	if got, want := out.String(), `header "`+Marker+`"`+"\n"; got != want {
+		t.Errorf("logged = %q, want %q", got, want)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"log"
 	"strings"
 	"testing"
 
@@ -94,6 +95,31 @@ func TestRun(t *testing.T) {
 				t.Errorf("stderr non-empty = %v, want %v (stderr: %s)", got, tt.wantStderr, stderr.String())
 			}
 		})
+	}
+}
+
+// Diagnostics of libraries reach the standard logger. A run hands them to its own stderr, behind the
+// redactor, and leaves the format of the logger as it was.
+func TestRunRoutesTheStandardLogger(t *testing.T) {
+	previous, flags, prefix := log.Writer(), log.Flags(), log.Prefix()
+	t.Cleanup(func() {
+		log.SetOutput(previous)
+		log.SetFlags(flags)
+	})
+
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"--version"}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit code = %d, want %d", code, exitOK)
+	}
+	if log.Flags() != flags || log.Prefix() != prefix {
+		t.Errorf("flags %d, prefix %q; want %d, %q", log.Flags(), log.Prefix(), flags, prefix)
+	}
+
+	log.SetFlags(0)
+	log.Print("library diagnostic")
+
+	if got, want := stderr.String(), "library diagnostic\n"; got != want {
+		t.Errorf("stderr = %q, want %q", got, want)
 	}
 }
 

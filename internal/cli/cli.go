@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -95,6 +96,10 @@ func newSyntaxError(err error) error { return &syntaxError{&UsageError{err}} }
 // terminates the process, so callers and tests share the same path.
 func Run(args []string, stdout, stderr io.Writer) int {
 	opts := &Options{Redactor: &redact.Redactor{}, Input: os.Stdin}
+	// The standard library and other packages write their diagnostics through the standard logger, for
+	// example the HTTP/2 transport under GODEBUG=http2debug, which prints every request header. Routing it
+	// through the redactor of this run keeps a credential out of stderr even there.
+	log.SetOutput(opts.Redactor.Writer(stderr))
 	return run(newRootCommand(opts, defaultRegistry()), opts, args, stdout, stderr)
 }
 
