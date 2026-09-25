@@ -247,9 +247,9 @@ func TestOwnerRefusalsTouchNeitherTheSecretNorGitHub(t *testing.T) {
 		{"a repository as the owner", repositoriesList.ID, "open", `{"owner":"repos/octo-org/a"}`,
 			"$.owner does not have the required form users/LOGIN or orgs/LOGIN"},
 		{"a cursor of another owner", repositoriesList.ID, "open",
-			`{"owner":"orgs/hubot","cursor":"` + cursor + `"}`, "cursor is not a next_cursor of this list"},
+			`{"owner":"orgs/hubot","cursor":"` + cursor + `"}`, "cursor is not a next_cursor of this list; start the list again without cursor"},
 		{"a cursor of the other list", projectsList.ID, "open",
-			`{"owner":"orgs/octo-org","cursor":"` + cursor + `"}`, "cursor is not a next_cursor of this list"},
+			`{"owner":"orgs/octo-org","cursor":"` + cursor + `"}`, "cursor is not a next_cursor of this list; start the list again without cursor"},
 		{"a limit out of bounds", projectsList.ID, "open", `{"owner":"orgs/octo-org","limit":101}`, "$.limit"},
 	} {
 		reads = 0

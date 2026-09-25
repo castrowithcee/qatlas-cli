@@ -244,11 +244,11 @@ func decodeCursor(binding []byte, cursor string, limit int) (int, string, error)
 	decoded, err := base64.RawURLEncoding.DecodeString(cursor)
 	if len(cursor) > maxCursorLength || err != nil || len(decoded) <= cursorBinding+1 ||
 		!bytes.Equal(decoded[:cursorBinding], binding) {
-		return 0, "", invalidRequest("cursor is not a next_cursor of this list")
+		return 0, "", invalidRequest("cursor is not a next_cursor of this list; start the list again without cursor")
 	}
 	size, next := int(decoded[cursorBinding]), string(decoded[cursorBinding+1:])
 	if size < 1 || size > maxLimit || !validProviderCursor(next) {
-		return 0, "", invalidRequest("cursor is not a next_cursor of this list")
+		return 0, "", invalidRequest("cursor is not a next_cursor of this list; start the list again without cursor")
 	}
 	return size, next, nil
 }

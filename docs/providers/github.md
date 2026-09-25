@@ -131,12 +131,14 @@ its target as `project`.
 GitHub answers a repository, project, issue, or item it does not hold exactly like one the token may not see:
 a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested project or issue out. Qatlas reports all of them as
 `not-found` and names the target the request addressed, including a target a default chose, with what to
-check:
+check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, and the
+workflow file or `.github/workflows` directory with the ref it was read at, where the call named one:
 
 ```text
 qatlas: not-found: list issues: GitHub does not hold repository octo-org/example or does not show it to this token; check the name, and that the token can see it (classic: scope repo for a private repository; fine-grained: access to this repository)
 qatlas: not-found: list project items: GitHub does not hold project users/octocat/projects/3 or does not show it to this token; check the name, and that the token can see it (classic: scope read:project; fine-grained: Projects access of its organization, as a user-owned project needs a classic token)
 qatlas: not-found: get issue: GitHub does not hold issue #5 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: dispatch workflow: GitHub does not hold workflow file .github/workflows/release.yml at ref other in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: list repositories: GitHub does not hold owner orgs/octocat or does not show it to this token; check the login, and users/ for a user or orgs/ for an organization
 qatlas: permission: list projects: this GitHub token may not read the projects of owner users/octocat; check its scopes or permissions; classic: scope read:project; fine-grained: Projects: read of the organization, as the projects of a user need a classic token
 qatlas: auth: list issues: GitHub rejected the token; check or renew the credential of this connection with 'qatlas credential set <credential> <role>' or in 'qatlas tui'
@@ -677,7 +679,8 @@ is bound to the repository or project of the call and to the filters that produc
 to its owner and its list, and a comment cursor to its issue; a cursor from other filters, another issue, or
 another repository, project, or owner is an invalid request. A checksum covers the whole cursor, so one that
 was altered, cut short, or not issued by Qatlas is an invalid request as well; every such refusal happens
-before GitHub is asked. The owner lists show only what the targets allow, so a batch may hold fewer entries
+before GitHub is asked and names the next step: `cursor is not a next_cursor of this list; start the list
+again without cursor`. The owner lists show only what the targets allow, so a batch may hold fewer entries
 than `limit` while `has_more` stays true. Batches follow the project order, so reading every batch reaches
 each matching item once. A batch may be short, even empty, when Qatlas stopped scanning after a bounded
 number of requests; `has_more` then stays true.
@@ -880,7 +883,9 @@ A `path` is `.github/workflows/NAME.yml` or `.github/workflows/NAME.yaml`, where
 letters, digits, `.`, `_`, or `-`, does not start with `.`, and holds no `..`. Nothing else is accepted: no
 subdirectory, no other directory, no absolute or relative prefix, no percent-encoding, no whitespace, and no
 character outside ASCII, so a lookalike slash or dot cannot lead elsewhere. The path is checked before a
-secret is read. No tool deletes or renames a file or writes any other path.
+secret is read, and a path of another form, `ci.yml` as well as a subdirectory, is an invalid request that
+names the rule: `$.path does not have the required form a file directly in .github/workflows/ ending in .yml
+or .yaml`. No tool deletes or renames a file or writes any other path.
 
 `github.workflowfiles.update` needs `sha`, the blob SHA `github.workflowfiles.get` or
 `github.workflowfiles.list` reported. GitHub writes the file only while it still has that blob; otherwise

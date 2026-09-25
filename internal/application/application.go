@@ -19,7 +19,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -147,7 +146,8 @@ func searchCursorAfter(request SearchRequest) (string, error) {
 	decoded, err := base64.RawURLEncoding.DecodeString(request.Cursor)
 	if err != nil || len(decoded) <= searchCursorBinding ||
 		!bytes.Equal(decoded[:searchCursorBinding], searchFingerprint(request)) {
-		return "", &InvalidRequestError{Message: "cursor is not a next_cursor of this search"}
+		return "", &InvalidRequestError{Message: "cursor is not a next_cursor of this search; " +
+			"start the search again without cursor"}
 	}
 	return string(decoded[searchCursorBinding:]), nil
 }
@@ -362,7 +362,7 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 	if request.Connection != "" {
 		resolved, err := c.connection(request.Connection)
 		if err != nil {
-			return nil, err
+			return nil, unknownConnectionOf(err, request.Provider, "")
 		}
 		selectedProvider = resolved.Provider
 	}
@@ -467,7 +467,7 @@ func (c *Core) Describe(request DescribeRequest) (DescribeResponse, error) {
 	if request.Connection != "" {
 		resolved, err := c.connection(request.Connection)
 		if err != nil {
-			return DescribeResponse{}, err
+			return DescribeResponse{}, unknownConnectionOf(err, descriptor.Provider, descriptor.ID)
 		}
 		if reason := c.connectionRefusal(resolved, descriptor); reason != "" {
 			return DescribeResponse{}, &capability.UnsupportedError{
@@ -513,7 +513,7 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 
 	resolved, err := c.selectConnection(request.Connection, descriptor)
 	if err != nil {
-		return InvokeResponse{}, err
+		return InvokeResponse{}, unknownConnectionOf(err, descriptor.Provider, descriptor.ID)
 	}
 	if c.policy != nil {
 		if err := c.policy(ctx, request, descriptor, resolved); err != nil {
@@ -578,19 +578,12 @@ func newRequestID() (string, error) {
 	return hex.EncodeToString(value[:]), nil
 }
 
+// auditResult is success or the code of the failure, the same code the diagnostic leads with.
 func auditResult(err error) string {
 	if err == nil {
 		return "success"
 	}
-	var providerErr *provider.Error
-	if errors.As(err, &providerErr) {
-		return string(providerErr.Class)
-	}
-	var invalid *InvalidProviderResponseError
-	if errors.As(err, &invalid) {
-		return string(provider.ClassInvalidResponse)
-	}
-	return "error"
+	return string(ErrorCode(err))
 }
 
 func (c *Core) writeAudit(event auditEvent) {
@@ -675,6 +668,17 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 	default:
 		return nil, &ConnectionAmbiguousError{Operation: descriptor.ID, Connections: connections}
 	}
+}
+
+// unknownConnectionOf names the provider and the tool a request asked about in the unknown connection err
+// reports, so its next step can point to the configured ones. Both are names of the registry, never a value;
+// an empty one stays unknown. Any other error is returned as it is.
+func unknownConnectionOf(err error, provider, operation string) error {
+	var unknown *capability.UnknownConnectionError
+	if errors.As(err, &unknown) {
+		unknown.Provider, unknown.Operation = provider, operation
+	}
+	return err
 }
 
 func (c *Core) connection(name string) (*config.Resolved, error) {

@@ -592,7 +592,8 @@ func TestListsReadOnePageAndCursorsStayOpaque(t *testing.T) {
 		{"todoist.tasks.filter", "one", `{"query":"today","cursor":"` + listed.NextCursor + `"}`},
 		{"todoist.tasks.list", "multi", `{"label":"waiting","cursor":"` + listed.NextCursor + `"}`},
 	} {
-		if _, err := env.invoke(call.operation, call.connection, call.arguments); !isInvalidRequest(err) {
+		if _, err := env.invoke(call.operation, call.connection, call.arguments); !isInvalidRequest(err) ||
+			err.Error() != "cursor is not a next_cursor of this list; start the list again without cursor" {
 			t.Errorf("%s on %s with a foreign cursor = %v, want an invalid request", call.operation, call.connection, err)
 		}
 	}

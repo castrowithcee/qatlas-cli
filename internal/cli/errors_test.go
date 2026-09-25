@@ -110,20 +110,46 @@ func TestAgentErrorIsMachineReadable(t *testing.T) {
 
 // auth names a person's action, which reads the same on both routes. permission gets no second step: each
 // provider names the rights to check in its own message. Codes without a step keep their message as it is.
+// unknown-connection points to discovery, the command on the CLI and the tool over MCP, for the provider and
+// the tool the request named.
 func TestNextStepByCodeAndRoute(t *testing.T) {
+	authErr := &provider.Error{Class: provider.ClassAuth}
 	for _, r := range []route{routeCLI, routeMCP} {
-		if step := nextStep(output.CodeAuth, r); !strings.Contains(step, "qatlas credential set <credential> <role>") ||
+		if step := nextStep(authErr, r); !strings.Contains(step, "qatlas credential set <credential> <role>") ||
 			!strings.Contains(step, "qatlas tui") {
 			t.Errorf("route %d: auth step = %q, want the credential commands", r, step)
 		}
-		for _, code := range []output.Code{output.CodePermission, output.CodeNotFound, output.CodeProviderError} {
-			if step := nextStep(code, r); step != "" {
-				t.Errorf("route %d: %s step = %q, want none", r, code, step)
+		for _, class := range []provider.Class{provider.ClassPermission, provider.ClassNotFound,
+			provider.ClassProviderError} {
+			if step := nextStep(&provider.Error{Class: class}, r); step != "" {
+				t.Errorf("route %d: %s step = %q, want none", r, class, step)
 			}
 		}
 	}
-	if nextStep(output.CodeAuth, routeCLI) != nextStep(output.CodeAuth, routeMCP) {
+	if nextStep(authErr, routeCLI) != nextStep(authErr, routeMCP) {
 		t.Error("the auth step differs between the routes")
+	}
+
+	named := &capability.UnknownConnectionError{Name: "absent", Provider: "github", Operation: "github.issues.list"}
+	for _, tt := range []struct {
+		name string
+		err  error
+		r    route
+		want string
+	}{
+		{"CLI with provider", named, routeCLI, "list the configured connections with 'qatlas connections github'"},
+		{"MCP with tool", named, routeMCP, "call qatlas.describe with operation github.issues.list and without " +
+			"connection for the connections that can run it"},
+		{"CLI without provider", &capability.UnknownConnectionError{Name: "absent"}, routeCLI,
+			"list the configured connections with 'qatlas connections'"},
+		{"MCP without tool", &capability.UnknownConnectionError{Name: "absent", Provider: "github"}, routeMCP,
+			"call qatlas.describe of the tool without connection for the connections that can run it"},
+		{"configured name", &config.SelectionError{Name: "absent"}, routeCLI,
+			"list the configured connections with 'qatlas connections'"},
+	} {
+		if got := nextStep(tt.err, tt.r); got != tt.want {
+			t.Errorf("%s: step = %q, want %q", tt.name, got, tt.want)
+		}
 	}
 
 	permission := &provider.Error{Class: provider.ClassPermission, Op: "list issues",

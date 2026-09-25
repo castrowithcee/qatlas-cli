@@ -50,7 +50,8 @@ const (
 )
 
 const (
-	workflowFileSchema  = `{"type":"string","minLength":23,"maxLength":123,"pattern":"` + workflowFilePattern + `"}`
+	workflowFileSchema = `{"type":"string","maxLength":123,"pattern":"` + workflowFilePattern + `",` +
+		`"x-form":"a file directly in .github/workflows/ ending in .yml or .yaml"}`
 	blobSHASchema       = `{"type":"string","minLength":40,"maxLength":64,"pattern":"` + blobSHAPattern + `"}`
 	workflowTextSchema  = `{"type":"string","minLength":1,"maxLength":524288}`
 	commitMessageSchema = `{"type":"string","minLength":1,"maxLength":1000}`

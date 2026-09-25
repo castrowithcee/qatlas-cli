@@ -974,7 +974,7 @@ func TestCursorsAreBoundToFiltersAndTarget(t *testing.T) {
 	}
 	for name, cursor := range alteredCursors(t, page.NextCursor) {
 		if _, err := c.ListItems(context.Background(), ItemListOptions{Cursor: cursor}); !isInvalidRequest(err) ||
-			!strings.Contains(err.Error(), "cursor is not a next_cursor of this list") {
+			!strings.Contains(err.Error(), "cursor is not a next_cursor of this list; start the list again without cursor") {
 			t.Errorf("%s: err = %v, want an invalid request", name, err)
 		}
 	}

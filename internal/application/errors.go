@@ -1,10 +1,17 @@
 package application
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
 // InvalidRequestError reports malformed JSON or arguments that do not satisfy the input schema. The message
@@ -132,4 +139,91 @@ type InvalidProviderResponseError struct{ Operation string }
 
 func (e *InvalidProviderResponseError) Error() string {
 	return fmt.Sprintf("tool %q returned an invalid provider response", e.Operation)
+}
+
+// ErrorCode maps an error of the core, the configuration, the secrets, or a provider to its
+// provider-independent code, and anything else to runtime. Agents branch on the code instead of parsing the
+// message, and the audit event of a failed change records the same code.
+func ErrorCode(err error) output.Code {
+	var (
+		notFound      *config.NotFoundError
+		invalid       *config.InvalidError
+		selection     *config.SelectionError
+		unknownConn   *capability.UnknownConnectionError
+		unsupported   *capability.UnsupportedError
+		invalidReq    *InvalidRequestError
+		unknownOp     *UnknownOperationError
+		ambiguous     *ConnectionAmbiguousError
+		appSelection  *ConnectionSelectionError
+		confirmation  *ConfirmationRequiredError
+		denied        *PolicyDeniedError
+		invalidResult *InvalidProviderResponseError
+
+		missingSecret *secret.MissingSecretError
+		permission    *secret.PermissionError
+		providerErr   *provider.Error
+	)
+	switch {
+	case errors.As(err, &notFound):
+		return output.CodeConfigMissing
+	case errors.As(err, &invalid):
+		return output.CodeConfigInvalid
+	case errors.As(err, &selection):
+		// A name that does not exist is the same problem however the command reached it.
+		if selection.Name != "" {
+			return output.CodeUnknownConnection
+		}
+		return output.CodeConnectionSelection
+	case errors.As(err, &unknownConn):
+		return output.CodeUnknownConnection
+	case errors.As(err, &ambiguous):
+		return output.CodeConnectionAmbiguous
+	case errors.As(err, &appSelection):
+		return output.CodeConnectionSelection
+	case errors.As(err, &unknownOp):
+		return output.CodeUnknownOperation
+	case errors.As(err, &unsupported):
+		return output.CodeUnsupportedCapability
+	case errors.As(err, &invalidReq):
+		return output.CodeInvalidRequest
+	case errors.As(err, &confirmation):
+		return output.CodeConfirmationRequired
+	case errors.As(err, &denied):
+		return output.CodePolicyDenied
+	case errors.As(err, &invalidResult):
+		return output.CodeInvalidProviderResult
+	case errors.As(err, &permission):
+		// A credential file others can read is one state with one fix, whichever operation ran into it.
+		// It is named before the missing secret it causes, so reading, writing, and deleting all report
+		// the file rather than three different things.
+		return output.CodeConfigInvalid
+	case errors.As(err, &missingSecret):
+		return output.CodeMissingSecret
+	case errors.As(err, &providerErr):
+		return providerCode(providerErr.Class)
+	}
+	return output.CodeRuntime
+}
+
+func providerCode(class provider.Class) output.Code {
+	switch class {
+	case provider.ClassUnreachable:
+		return output.CodeUnreachable
+	case provider.ClassTLS:
+		return output.CodeTLS
+	case provider.ClassAuth:
+		return output.CodeAuth
+	case provider.ClassPermission:
+		return output.CodePermission
+	case provider.ClassNotFound:
+		return output.CodeNotFound
+	case provider.ClassTimeout:
+		return output.CodeTimeout
+	case provider.ClassRateLimited:
+		return output.CodeRateLimited
+	case provider.ClassInvalidResponse:
+		return output.CodeInvalidProviderResult
+	default:
+		return output.CodeProviderError
+	}
 }

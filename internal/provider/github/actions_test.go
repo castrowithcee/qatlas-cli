@@ -480,8 +480,9 @@ func TestRunsAreFilteredPagedAndCompact(t *testing.T) {
 	before := len(f.recorded())
 	for name, cursor := range alteredCursors(t, listed.NextCursor) {
 		if _, err := invoke(t, core, "github.workflowruns.list", "observer",
-			`{"status":"success","cursor":"`+cursor+`"}`, false); !isInvalidRequest(err) {
-			t.Errorf("%s: err = %v, want an invalid request", name, err)
+			`{"status":"success","cursor":"`+cursor+`"}`, false); !isInvalidRequest(err) ||
+			!strings.HasSuffix(err.Error(), "; start the list again without cursor") {
+			t.Errorf("%s: err = %v, want an invalid request with the next step", name, err)
 		}
 	}
 	if requests := f.recorded()[before:]; len(requests) != 0 {
@@ -740,7 +741,8 @@ func TestDispatchChecksTheDeclaredInputs(t *testing.T) {
 		{"no dispatch trigger", "ci.yml", "main", nil, "does not declare workflow_dispatch"},
 		{"a disabled workflow", "old.yml", "main", nil, "not active"},
 		{"a dynamic workflow", "3", "main", nil, "no workflow file"},
-		{"a ref without the file", "release.yml", "other", map[string]string{"channel": "beta"}, "does not hold"},
+		{"a ref without the file", "release.yml", "other", map[string]string{"channel": "beta"},
+			"does not hold workflow file .github/workflows/release.yml at ref other in repository octo-org/example"},
 	} {
 		before := len(f.recorded())
 		_, err := c.dispatchWorkflow(context.Background(), tt.workflow, tt.ref, tt.inputs)

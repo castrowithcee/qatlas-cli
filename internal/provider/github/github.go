@@ -731,7 +731,7 @@ func decodeCursor(binding []byte, cursor string) (string, error) {
 	decoded, err := base64.RawURLEncoding.DecodeString(cursor)
 	if len(cursor) > maxCursorLength || err != nil || len(decoded) <= cursorBinding ||
 		encodeCursor(binding, string(decoded[cursorBinding:])) != cursor {
-		return "", invalidRequest("cursor is not a next_cursor of this list")
+		return "", invalidRequest("cursor is not a next_cursor of this list; start the list again without cursor")
 	}
 	return string(decoded[cursorBinding:]), nil
 }
@@ -1122,8 +1122,38 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := actionsSubject(parts[2]); what != "" {
 			s.what = what
 		}
+		if what := contentsSubject(parts[2], request.URL.Query().Get("ref")); what != "" {
+			s.what = what
+		}
 	}
 	return s
+}
+
+// contentsSubject names the workflow file or the workflow directory a Contents path below a repository
+// addresses and the ref it was read at, if any. It names only a path and a ref of the characters the input
+// schema allows, and is empty otherwise.
+func contentsSubject(path, ref string) string {
+	rest, ok := strings.CutPrefix(path, "contents/")
+	if !ok {
+		return ""
+	}
+	rest, err := url.PathUnescape(rest)
+	if err != nil {
+		return ""
+	}
+	var what string
+	switch {
+	case validWorkflowFile(rest):
+		what = "workflow file " + rest
+	case rest+"/" == workflowsDir:
+		what = "directory " + rest
+	default:
+		return ""
+	}
+	if validRef(ref) {
+		what += " at ref " + ref
+	}
+	return what
 }
 
 // actionsSubject names the workflow run, job, or workflow an Actions path below a repository addresses:

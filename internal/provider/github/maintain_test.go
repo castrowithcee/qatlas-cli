@@ -412,6 +412,20 @@ func TestWorkflowFilePathsStayInsideTheWorkflowDirectory(t *testing.T) {
 	}
 }
 
+// A path of the wrong form is refused with the rule it breaks, however short it is.
+func TestWorkflowFilePathRefusalNamesTheRule(t *testing.T) {
+	_, _, base := serveMaintain(t)
+	red := &redact.Redactor{}
+	core := application.New(registry(t), maintainConfig(base), resolver(red, nil), red)
+	const want = "$.path does not have the required form a file directly in .github/workflows/ ending in .yml or .yaml"
+	for _, path := range []string{"ci.yml", ".github/workflows/sub/ci.yml", ""} {
+		if _, err := invoke(t, core, workflowFilesGet.ID, "maintainer", `{"path":"`+path+`"}`, false); !isInvalidRequest(err) ||
+			err.Error() != want {
+			t.Errorf("path %q = %v, want %q", path, err, want)
+		}
+	}
+}
+
 // The other bounds of a file change, and a missing confirmation, end before I/O as well.
 func TestWorkflowFileChangesAreBoundedBeforeIO(t *testing.T) {
 	f, _, base := serveMaintain(t)
@@ -596,11 +610,16 @@ func TestWorkflowFilesAreWrittenOnlyOverTheBlobTheyReplace(t *testing.T) {
 	m.mu.Unlock()
 	for path, detail := range map[string]string{
 		".github/workflows/bin.yml": "not text", ".github/workflows/big.yml": "at most 512 KiB",
-		".github/workflows/none.yml": "does not hold",
+		".github/workflows/none.yml": "does not hold workflow file .github/workflows/none.yml in repository " +
+			"octo-org/example or does not show it to this token",
 	} {
 		if _, err := c.workflowFile(ctx, path, ""); err == nil || !strings.Contains(err.Error(), detail) {
 			t.Errorf("workflowFile(%s) = %v, want %q", path, err, detail)
 		}
+	}
+	if _, err := c.workflowFile(ctx, ".github/workflows/none.yml", "release/v1"); err == nil ||
+		!strings.Contains(err.Error(), "does not hold workflow file .github/workflows/none.yml at ref release/v1 in") {
+		t.Errorf("workflowFile at a ref = %v, want not-found naming the file and the ref", err)
 	}
 }
 
@@ -847,5 +866,23 @@ func TestGuardedToolsSatisfyTheirContractThroughTheApplicationCore(t *testing.T)
 	if strings.Count(events, `"result":"success"`) != 6 || strings.Contains(events, fileCanary) ||
 		strings.Contains(events, messageCanary) || strings.Contains(events, "on: push") {
 		t.Errorf("audit = %s, want one content-free event per change", events)
+	}
+}
+
+// A Contents path names the workflow file or the workflow directory and the ref, and nothing that is not of
+// the form the input schema allows.
+func TestContentsSubjectNamesOnlyCheckedPathsAndRefs(t *testing.T) {
+	for _, tt := range []struct{ path, ref, want string }{
+		{"contents/.github/workflows/ci.yml", "", "workflow file .github/workflows/ci.yml"},
+		{"contents/.github/workflows/ci.yml", "release/v1", "workflow file .github/workflows/ci.yml at ref release/v1"},
+		{"contents/.github/workflows", "main", "directory .github/workflows at ref main"},
+		{"contents/.github/workflows/ci.yml", "bad..ref", "workflow file .github/workflows/ci.yml"},
+		{"contents/README.md", "main", ""},
+		{"contents/.github/workflows/%2e%2e/ci.yml", "", ""},
+		{"actions/workflows/ci.yml", "", ""},
+	} {
+		if got := contentsSubject(tt.path, tt.ref); got != tt.want {
+			t.Errorf("contentsSubject(%q, %q) = %q, want %q", tt.path, tt.ref, got, tt.want)
+		}
 	}
 }

@@ -554,8 +554,9 @@ func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
 		`{"provider":"bookstack","cursor":"not a cursor"}`,
 	} {
 		result := search(arguments)
-		if !result.IsError || !strings.HasPrefix(result.Content[0].Text, string(output.CodeInvalidRequest)+": ") {
-			t.Errorf("search %s = %+v, want an invalid-request tool error", arguments, result)
+		if !result.IsError || result.Content[0].Text != string(output.CodeInvalidRequest)+
+			": cursor is not a next_cursor of this search; start the search again without cursor" {
+			t.Errorf("search %s = %+v, want an invalid-request tool error with the next step", arguments, result)
 		}
 	}
 }
@@ -1225,18 +1226,37 @@ func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
 		return result.Content[0].Text
 	}
 
-	for _, tt := range []struct{ cli, mcp, want string }{
+	// The next step of an unknown connection points to discovery, which differs between the two routes.
+	for _, tt := range []struct{ cli, mcp, want, cliStep, mcpStep string }{
 		{cli("describe", "fake.page.get"), mcp("qatlas.describe", `{"operation":"fake.page.get"}`),
-			`unknown-operation: unknown tool "fake.page.get" (did you mean "fake.pages.get"?)`},
+			`unknown-operation: unknown tool "fake.page.get" (did you mean "fake.pages.get"?)`, "", ""},
 		{cli("invoke", "fake.pages.get", "--connection", "primry"),
 			mcp("qatlas.invoke", `{"operation":"fake.pages.get","connection":"primry"}`),
-			`unknown-connection: unknown connection "primry" (did you mean "primary"?)`},
+			`unknown-connection: unknown connection "primry" (did you mean "primary"?)`,
+			"; list the configured connections with 'qatlas connections fake'",
+			"; call qatlas.describe with operation fake.pages.get and without connection for the connections " +
+				"that can run it"},
+		{cli("describe", "fake.pages.get", "--connection", "absent"),
+			mcp("qatlas.describe", `{"operation":"fake.pages.get","connection":"absent"}`),
+			`unknown-connection: unknown connection "absent"`,
+			"; list the configured connections with 'qatlas connections fake'",
+			"; call qatlas.describe with operation fake.pages.get and without connection for the connections " +
+				"that can run it"},
 		{cli("describe", "zzz.unrelated.tool"), mcp("qatlas.describe", `{"operation":"zzz.unrelated.tool"}`),
-			`unknown-operation: unknown tool "zzz.unrelated.tool"`},
+			`unknown-operation: unknown tool "zzz.unrelated.tool"`, "", ""},
 	} {
-		if tt.cli != "qatlas: "+tt.want || tt.mcp != tt.want {
-			t.Errorf("CLI = %q, MCP = %q, want %q", tt.cli, tt.mcp, tt.want)
+		if tt.cli != "qatlas: "+tt.want+tt.cliStep || tt.mcp != tt.want+tt.mcpStep {
+			t.Errorf("CLI = %q, MCP = %q, want %q with %q and %q", tt.cli, tt.mcp, tt.want, tt.cliStep, tt.mcpStep)
 		}
+	}
+	// A search names no tool, so its step names none either.
+	if got, want := mcp("qatlas.search", `{"connection":"absent"}`), `unknown-connection: unknown connection `+
+		`"absent"; call qatlas.describe of the tool without connection for the connections that can run it`; got != want {
+		t.Errorf("MCP search = %q, want %q", got, want)
+	}
+	if got, want := cli("tools", "fake", "--connection", "absent"), `qatlas: unknown-connection: unknown `+
+		`connection "absent"; list the configured connections with 'qatlas connections fake'`; got != want {
+		t.Errorf("CLI tools = %q, want %q", got, want)
 	}
 
 	if got, want := cli("tools", "fak"), `qatlas: usage: unknown tool namespace "fak" (did you mean "fake"?); `+

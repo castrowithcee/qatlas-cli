@@ -14,6 +14,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -819,6 +820,62 @@ func TestExplicitConnectionAndConfirmationPrecedeSecretsIOAndAudit(t *testing.T)
 	if strings.Contains(audit.String(), `"id":"1"`) || strings.Contains(audit.String(), "test-token") {
 		t.Fatalf("audit contains arguments or secret: %s", audit.String())
 	}
+}
+
+// The audit event of a failed change records the code its diagnostic leads with, never a generic error.
+func TestAuditRecordsTheCodeOfAFailure(t *testing.T) {
+	for _, tt := range []struct {
+		err  error
+		want string
+	}{
+		{nil, "success"},
+		{&provider.Error{Class: provider.ClassPermission}, "permission"},
+		{&provider.Error{Class: provider.ClassInvalidResponse}, "invalid-provider-response"},
+		{&InvalidProviderResponseError{Operation: "x"}, "invalid-provider-response"},
+		{fmt.Errorf("check: %w", &InvalidRequestError{Message: "cursor"}), "invalid-request"},
+		{&secret.MissingSecretError{Credential: "c", Role: "token"}, "missing-secret"},
+		{&capability.UnsupportedError{Capability: "x"}, "unsupported-capability"},
+		{errors.New("io failure"), "runtime"},
+	} {
+		if got := auditResult(tt.err); got != tt.want {
+			t.Errorf("auditResult(%v) = %q, want %q", tt.err, got, tt.want)
+		}
+	}
+
+	core, _ := testCore(t, []string{"primary"}, nil, false)
+	var audit bytes.Buffer
+	core.SetAudit(&audit)
+	if _, err := core.Invoke(context.Background(), InvokeRequest{Operation: "fake.pages.delete",
+		Connection: "primary", Confirmed: true, Arguments: json.RawMessage(`{"id":"7"}`)}); err == nil {
+		t.Fatal("Invoke() without the secret succeeded")
+	}
+	var event struct {
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(audit.Bytes()), &event); err != nil || event.Result != "missing-secret" {
+		t.Fatalf("audit = %q, want result missing-secret", audit.String())
+	}
+}
+
+// An unknown connection names the provider and the tool the request asked about, so its next step can point
+// to the configured ones; a search names only its provider.
+func TestUnknownConnectionNamesProviderAndTool(t *testing.T) {
+	core, _ := testCore(t, []string{"primary"}, nil, true)
+	check := func(name string, err error, providerID, operation string) {
+		t.Helper()
+		var unknown *capability.UnknownConnectionError
+		if !errors.As(err, &unknown) || unknown.Name != "absent" || unknown.Provider != providerID ||
+			unknown.Operation != operation {
+			t.Errorf("%s = %#v, want provider %q and tool %q", name, err, providerID, operation)
+		}
+	}
+	_, err := core.Invoke(context.Background(), InvokeRequest{Operation: "fake.pages.get", Connection: "absent",
+		Arguments: json.RawMessage(`{"id":"7"}`)})
+	check("Invoke", err, "fake", "fake.pages.get")
+	_, err = core.Describe(DescribeRequest{Operation: "fake.pages.get", Connection: "absent"})
+	check("Describe", err, "fake", "fake.pages.get")
+	_, err = core.Search(SearchRequest{Provider: "fake", Connection: "absent"})
+	check("Search", err, "fake", "")
 }
 
 func TestInvokeRejectsOutputOutsideTheDescriptor(t *testing.T) {

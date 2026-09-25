@@ -11,6 +11,10 @@ import (
 type UnknownConnectionError struct {
 	Name       string
 	Suggestion string
+	// Provider and Operation name what the request asked the connection for, where it named that; the
+	// next step of the diagnostic points to the connections configured for them.
+	Provider  string
+	Operation string
 }
 
 func (e *UnknownConnectionError) Error() string {

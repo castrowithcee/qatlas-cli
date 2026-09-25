@@ -7,7 +7,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
-	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -15,72 +14,20 @@ import (
 // codeFor maps an error to its provider-independent code. Agents branch on the code instead of parsing
 // the message.
 func codeFor(err error) output.Code {
-	var (
-		notFound      *config.NotFoundError
-		invalid       *config.InvalidError
-		selection     *config.SelectionError
-		unknownConn   *capability.UnknownConnectionError
-		unsupported   *capability.UnsupportedError
-		projection    *output.ProjectionError
-		usage         *UsageError
-		invalidReq    *application.InvalidRequestError
-		unknownOp     *application.UnknownOperationError
-		ambiguous     *application.ConnectionAmbiguousError
-		appSelection  *application.ConnectionSelectionError
-		confirmation  *application.ConfirmationRequiredError
-		denied        *application.PolicyDeniedError
-		invalidResult *application.InvalidProviderResponseError
-
-		missingSecret *secret.MissingSecretError
-		permission    *secret.PermissionError
-		providerErr   *provider.Error
-	)
 	var deadline *deadlineError
-	switch {
-	case errors.As(err, &deadline):
+	if errors.As(err, &deadline) {
 		// An invoke that reached its limit is a timeout, whatever surfaced when it did.
 		return output.CodeTimeout
-	case errors.As(err, &notFound):
-		return output.CodeConfigMissing
-	case errors.As(err, &invalid):
-		return output.CodeConfigInvalid
-	case errors.As(err, &selection):
-		// A name that does not exist is the same problem however the command reached it.
-		if selection.Name != "" {
-			return output.CodeUnknownConnection
-		}
-		return output.CodeConnectionSelection
-	case errors.As(err, &unknownConn):
-		return output.CodeUnknownConnection
-	case errors.As(err, &ambiguous):
-		return output.CodeConnectionAmbiguous
-	case errors.As(err, &appSelection):
-		return output.CodeConnectionSelection
-	case errors.As(err, &unknownOp):
-		return output.CodeUnknownOperation
-	case errors.As(err, &unsupported):
-		return output.CodeUnsupportedCapability
-	case errors.As(err, &invalidReq):
-		return output.CodeInvalidRequest
-	case errors.As(err, &confirmation):
-		return output.CodeConfirmationRequired
-	case errors.As(err, &denied):
-		return output.CodePolicyDenied
-	case errors.As(err, &invalidResult):
-		return output.CodeInvalidProviderResult
-	case errors.As(err, &permission):
-		// A credential file others can read is one state with one fix, whichever operation ran into it.
-		// It is named before the missing secret it causes, so reading, writing, and deleting all report
-		// the file rather than three different things.
-		return output.CodeConfigInvalid
-	case errors.As(err, &missingSecret):
-		return output.CodeMissingSecret
-	case errors.As(err, &providerErr):
-		return providerCode(providerErr.Class)
-	case errors.As(err, &projection), errors.As(err, &usage):
+	}
+	code := application.ErrorCode(err)
+	var (
+		projection *output.ProjectionError
+		usage      *UsageError
+	)
+	if code == output.CodeRuntime && (errors.As(err, &projection) || errors.As(err, &usage)) {
 		return output.CodeUsage
 	}
-	return output.CodeRuntime
+	return code
 }
 
 // route is the way a diagnostic reaches its caller. A next step that is an action of a person reads the
@@ -92,15 +39,35 @@ const (
 	routeMCP
 )
 
-// nextStep is what to do about a refusal with code, or "" where the message of the error already says it.
-// It never names a secret, a secret source, or a target, so it is safe on every route.
-func nextStep(code output.Code, _ route) string {
-	switch code {
+// nextStep is what to do about a refusal err, or "" where the message of the error already says it. It never
+// names a secret, a secret source, or a target, so it is safe on every route: at most the name of a provider
+// or a tool the request asked about.
+func nextStep(err error, r route) string {
+	switch codeFor(err) {
 	case output.CodeAuth:
 		// Some providers answer a credential that lacks access with auth as well, so the step does not
 		// claim which of the two happened.
 		return "check or renew the credential of this connection with " +
 			"'qatlas credential set <credential> <role>' or in 'qatlas tui'"
+	case output.CodeUnknownConnection:
+		var (
+			unknown             *capability.UnknownConnectionError
+			provider, operation string
+		)
+		if errors.As(err, &unknown) {
+			provider, operation = unknown.Provider, unknown.Operation
+		}
+		if r == routeMCP {
+			if operation != "" {
+				return "call qatlas.describe with operation " + operation +
+					" and without connection for the connections that can run it"
+			}
+			return "call qatlas.describe of the tool without connection for the connections that can run it"
+		}
+		if provider != "" {
+			return "list the configured connections with 'qatlas connections " + provider + "'"
+		}
+		return "list the configured connections with 'qatlas connections'"
 	}
 	return ""
 }
@@ -118,7 +85,7 @@ func (e *nextStepError) Unwrap() error { return e.err }
 // withNextStep returns err with the next step its code names on route. The CLI and the MCP broker both call
 // it before anything of the error is shown, so a message and its detail carry the same text.
 func withNextStep(err error, r route) error {
-	step := nextStep(codeFor(err), r)
+	step := nextStep(err, r)
 	if step == "" {
 		return err
 	}
@@ -187,29 +154,6 @@ func errorDetailFor(err error, redactor *redact.Redactor) any {
 	}
 	return &errorDetail{
 		Code: code, Message: redactor.Error(err), Operation: redactor.Apply(operation), Connections: connections,
-	}
-}
-
-func providerCode(class provider.Class) output.Code {
-	switch class {
-	case provider.ClassUnreachable:
-		return output.CodeUnreachable
-	case provider.ClassTLS:
-		return output.CodeTLS
-	case provider.ClassAuth:
-		return output.CodeAuth
-	case provider.ClassPermission:
-		return output.CodePermission
-	case provider.ClassNotFound:
-		return output.CodeNotFound
-	case provider.ClassTimeout:
-		return output.CodeTimeout
-	case provider.ClassRateLimited:
-		return output.CodeRateLimited
-	case provider.ClassInvalidResponse:
-		return output.CodeInvalidProviderResult
-	default:
-		return output.CodeProviderError
 	}
 }
 

@@ -680,7 +680,7 @@ func pageOf(binding []byte, cursor string, limit int) (int, int, error) {
 	page, pageErr := strconv.Atoi(first)
 	perPage, sizeErr := strconv.Atoi(second)
 	if pageErr != nil || sizeErr != nil || page < 2 || page > maxPage || perPage < 1 || perPage > maxLimit {
-		return 0, 0, invalidRequest("cursor is not a next_cursor of this list")
+		return 0, 0, invalidRequest("cursor is not a next_cursor of this list; start the list again without cursor")
 	}
 	return page, perPage, nil
 }
