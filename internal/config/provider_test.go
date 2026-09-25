@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	yaml "go.yaml.in/yaml/v3"
 )
 
 type testProviderCatalog map[string]ProviderMetadata
@@ -339,5 +341,55 @@ func TestProviderMetadataNeverTreatsTargetAsASecret(t *testing.T) {
 	if got := New(testProviders).SecretRoles(); len(got) != 8 || got[0] != "api-key" ||
 		got[2] != "app-password" || got[4] != "token" || got[7] != "user-id" {
 		t.Fatalf("secret roles = %v", got)
+	}
+}
+
+// A service may leave base_url out when its provider declares a default endpoint. The default applies where
+// the endpoint is read and is never written into the file; a provider without a default still needs one.
+func TestAnOmittedBaseURLTakesTheProviderDefault(t *testing.T) {
+	const prefix = `version: 1
+services:
+  main: {provider: PROVIDER}
+  enterprise: {provider: github, base_url: https://ghe.example.invalid/api/v3}
+credentials:
+  reader: {type: keyring}
+connections:
+  route: {service: main, credential: reader, target: TARGET}
+  other: {service: enterprise, credential: reader, target: repos/octo-org/example}
+defaults: {}
+`
+	input := strings.NewReplacer("PROVIDER", "github", "TARGET", "repos/octo-org/example").Replace(prefix)
+	cfg, err := Decode(strings.NewReader(input), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if got := cfg.Services["main"].BaseURL; got != "" {
+		t.Errorf("stored base_url = %q, want it left out", got)
+	}
+	for connection, want := range map[string]string{
+		"route": "https://api.github.com", "other": "https://ghe.example.invalid/api/v3",
+	} {
+		resolved, err := cfg.Resolve(connection, "")
+		if err != nil {
+			t.Fatalf("Resolve(%s) = %v", connection, err)
+		}
+		if resolved.BaseURL != want {
+			t.Errorf("Resolve(%s).BaseURL = %q, want %q", connection, resolved.BaseURL, want)
+		}
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		t.Fatalf("Marshal() = %v", err)
+	}
+	if strings.Count(string(data), "base_url") != 1 {
+		t.Errorf("saved configuration writes the default:\n%s", data)
+	}
+
+	for _, provider := range []string{"bookstack", "nextcloud"} {
+		input := strings.NewReplacer("PROVIDER", provider, "TARGET", "books").Replace(prefix)
+		if _, err := Decode(strings.NewReader(input), testProviders); err == nil ||
+			!strings.Contains(err.Error(), "services.main.base_url: must not be empty") {
+			t.Errorf("provider %s without base_url error = %v", provider, err)
+		}
 	}
 }

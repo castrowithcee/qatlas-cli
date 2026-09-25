@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-25
 ---
 
 # Todoist
@@ -19,8 +19,8 @@ own confirmation. Saved filters are only read.
 ## Configuration
 
 A service is always the official API root `https://api.todoist.com/api/v1`, which the terminal editor fills
-in. Qatlas refuses any other URL before a secret is read, because a personal token belongs to that one
-service.
+in and which applies when `base_url` is left out. Qatlas refuses any other URL before a secret is read,
+because a personal token belongs to that one service.
 
 The credential provides `token`, the personal API token from Todoist under Settings, Integrations,
 Developer. That token reaches the whole account, so the connection target is what limits Qatlas. A

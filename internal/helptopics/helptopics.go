@@ -193,7 +193,7 @@ A block for the AGENTS.md or CLAUDE.md of a project:
 
 const configuration = `The configuration file has four sections and optional provider notes. 'qatlas tui' edits them and 'qatlas config validate' checks them.
 
-Services say where: one provider and the root URL of one of its instances. Two instances of one provider are two services.
+Services say where: one provider and the root URL of one of its instances as base_url. A provider with a public API, such as GitHub, Telegram, or Todoist, uses that API when base_url is left out; a self-hosted system such as BookStack or Nextcloud always needs it. Two instances of one provider are two services.
 
 Credentials say with what: where the secrets of a provider come from, never the secrets themselves. Type keyring, the recommended one, keeps them in the system keyring of this machine; 'qatlas credential set' or s in the editor stores them. A set variable QATLAS_<CREDENTIAL>_<ROLE> overrides the keyring, for CI and containers. Type env names one environment variable per secret role. An unencrypted file beside the configuration is the last resort and is written only after an explicit confirmation. 'qatlas tui' offers the three places as its secrets choice: system keyring, environment variables, and unencrypted file; the file stores the first and the last as type keyring.
 

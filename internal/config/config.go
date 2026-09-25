@@ -43,10 +43,11 @@ type Config struct {
 	providers     ProviderCatalog       `yaml:"-"`
 }
 
-// Service is a technical API endpoint of one provider.
+// Service is a technical API endpoint of one provider. BaseURL may be left out for a provider that declares
+// a default endpoint; ServiceBaseURL returns the endpoint that applies.
 type Service struct {
 	Provider string            `yaml:"provider"`
-	BaseURL  string            `yaml:"base_url"`
+	BaseURL  string            `yaml:"base_url,omitempty"`
 	Options  map[string]string `yaml:"options,omitempty"`
 }
 
@@ -303,7 +304,7 @@ func (c *Config) Validate() error {
 			report("services.%s: unknown provider %q, known providers are %s",
 				name, s.Provider, strings.Join(c.Providers(), ", "))
 		}
-		if err := validateBaseURL(s.BaseURL); err != nil {
+		if err := validateBaseURL(c.ServiceBaseURL(s)); err != nil {
 			report("services.%s.base_url: %v", name, err)
 		}
 	}
@@ -530,6 +531,18 @@ func (c *Config) providerCatalog() ProviderCatalog {
 		return c.providers
 	}
 	return emptyProviderCatalog{}
+}
+
+// ServiceBaseURL returns the endpoint a service reaches: its base_url, or the default endpoint of its
+// provider when the file leaves base_url out. A provider declares a default only for an endpoint every
+// installation can use, such as its public API; a provider without one, like a self-hosted system, still
+// needs base_url. The default is applied where the endpoint is read, never written into the file.
+func (c *Config) ServiceBaseURL(s Service) string {
+	if s.BaseURL != "" {
+		return s.BaseURL
+	}
+	metadata, _ := c.providerCatalog().ProviderMetadata(s.Provider)
+	return metadata.DefaultBaseURL
 }
 
 // Providers returns the registered provider IDs in deterministic order.

@@ -56,7 +56,7 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 	return &Resolved{
 		Name:        name,
 		Provider:    service.Provider,
-		BaseURL:     service.BaseURL,
+		BaseURL:     c.ServiceBaseURL(service),
 		Options:     service.Options,
 		Target:      conn.Target,
 		Targets:     append([]string(nil), conn.Targets...),

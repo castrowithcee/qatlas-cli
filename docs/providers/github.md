@@ -24,7 +24,9 @@ must lie inside the connection's targets when the connection lists any.
 ## Configuration
 
 A service is `https://api.github.com` (the default), `https://api.SUBDOMAIN.ghe.com` for GitHub Enterprise
-Cloud with data residency, or `https://HOST/api/v3` for GitHub Enterprise Server. Qatlas derives the GraphQL
+Cloud with data residency, or `https://HOST/api/v3` for GitHub Enterprise Server. A service without
+`base_url` uses the default; Qatlas applies it when reading the file and leaves the file unchanged, so
+`qatlas config validate` accepts `provider: github` alone. Qatlas derives the GraphQL
 endpoint from it (`/graphql`, or `https://HOST/api/graphql` on Enterprise Server). Filtered project items
 need a server that supports the `query` argument of `ProjectV2.items`.
 
