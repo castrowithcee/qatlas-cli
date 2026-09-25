@@ -670,10 +670,12 @@ Lists take `limit` (1 to 100, default 30) and an opaque `cursor`, and answer `ha
 when another batch may follow. A full batch never means the end: read on while `has_more` is true. A cursor
 is bound to the repository or project of the call and to the filters that produced it, an owner list cursor
 to its owner and its list, and a comment cursor to its issue; a cursor from other filters, another issue, or
-another repository, project, or owner is an invalid request. The owner lists show only what the targets
-allow, so a batch may hold fewer entries than `limit` while `has_more` stays true. Batches follow the
-project order, so reading every batch reaches each matching item once. A batch may be short, even empty,
-when Qatlas stopped scanning after a bounded number of requests; `has_more` then stays true.
+another repository, project, or owner is an invalid request. A checksum covers the whole cursor, so one that
+was altered, cut short, or not issued by Qatlas is an invalid request as well; every such refusal happens
+before GitHub is asked. The owner lists show only what the targets allow, so a batch may hold fewer entries
+than `limit` while `has_more` stays true. Batches follow the project order, so reading every batch reaches
+each matching item once. A batch may be short, even empty, when Qatlas stopped scanning after a bounded
+number of requests; `has_more` then stays true.
 
 The Actions lists follow the same contract, but GitHub pages them by number: a continuation keeps the batch
 size of its first batch, whatever `limit` it names. They are ordered newest first, so a run started while a

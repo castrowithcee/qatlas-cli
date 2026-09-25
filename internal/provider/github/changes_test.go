@@ -439,8 +439,17 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 	if len(ids) != 45 || ids[0] != "IC_0" || ids[44] != "IC_44" {
 		t.Errorf("comments = %v, want every comment once, oldest first", ids)
 	}
+	refused := len(f.recorded())
 	if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 43, Cursor: options.Cursor}); !isInvalidRequest(err) {
 		t.Errorf("a cursor of another issue = %v, want an invalid request", err)
+	}
+	for name, cursor := range alteredCursors(t, options.Cursor) {
+		if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 42, Cursor: cursor}); !isInvalidRequest(err) {
+			t.Errorf("%s: err = %v, want an invalid request", name, err)
+		}
+	}
+	if requests := f.recorded()[refused:]; len(requests) != 0 {
+		t.Errorf("requests = %d, want refusals before provider I/O", len(requests))
 	}
 	if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 5}); classOf(err) != provider.ClassNotFound ||
 		!strings.Contains(err.Error(), "GitHub does not hold issue #5 in repository octo-org/example") {

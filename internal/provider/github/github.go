@@ -714,20 +714,23 @@ func fingerprint(parts ...any) []byte {
 	return sum[:cursorBinding]
 }
 
-// encodeCursor wraps a GitHub connection cursor into the opaque, filter-bound Qatlas cursor.
+// encodeCursor wraps a GitHub connection cursor into the opaque, filter-bound Qatlas cursor. Its prefix is a
+// checksum over the binding and the GitHub cursor, so the GitHub part is covered as well.
 func encodeCursor(binding []byte, after string) string {
-	return base64.RawURLEncoding.EncodeToString(append(append([]byte(nil), binding...), after...))
+	sum := sha256.Sum256(append(append([]byte(nil), binding...), after...))
+	return base64.RawURLEncoding.EncodeToString(append(sum[:cursorBinding], after...))
 }
 
 // decodeCursor returns the GitHub connection cursor a Qatlas cursor continues after, or the empty string for
-// the first batch. A cursor that is malformed or belongs to other filters or another target is refused.
+// the first batch. A cursor that is malformed, altered, cut short, or belongs to other filters or another
+// target is refused: only the exact cursor encodeCursor issued for this binding is accepted.
 func decodeCursor(binding []byte, cursor string) (string, error) {
 	if cursor == "" {
 		return "", nil
 	}
 	decoded, err := base64.RawURLEncoding.DecodeString(cursor)
 	if len(cursor) > maxCursorLength || err != nil || len(decoded) <= cursorBinding ||
-		!bytes.Equal(decoded[:cursorBinding], binding) {
+		encodeCursor(binding, string(decoded[cursorBinding:])) != cursor {
 		return "", invalidRequest("cursor is not a next_cursor of this list")
 	}
 	return string(decoded[cursorBinding:]), nil

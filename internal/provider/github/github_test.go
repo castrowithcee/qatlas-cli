@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -609,6 +610,30 @@ func isInvalidRequest(err error) bool {
 	return errors.As(err, &invalid)
 }
 
+// alteredCursors derives from a valid next_cursor the variants Qatlas never issued: a changed end, an end cut
+// short, a changed GitHub part behind the original prefix, and another GitHub cursor behind that prefix.
+func alteredCursors(t *testing.T, cursor string) map[string]string {
+	t.Helper()
+	decoded, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil || len(decoded) <= cursorBinding+1 {
+		t.Fatalf("cursor %q is not a Qatlas cursor", cursor)
+	}
+	last := byte('A')
+	if cursor[len(cursor)-1] == last {
+		last = 'B'
+	}
+	changed := append([]byte(nil), decoded...)
+	changed[len(changed)-1] ^= 1
+	foreign := append(append([]byte(nil), decoded[:cursorBinding]...), "Y3Vyc29yOnYyOpK5"...)
+	return map[string]string{
+		"a changed end":            cursor[:len(cursor)-1] + string(last),
+		"an end cut short":         cursor[:len(cursor)-1],
+		"a cursor cut by one byte": base64.RawURLEncoding.EncodeToString(decoded[:len(decoded)-1]),
+		"a changed GitHub part":    base64.RawURLEncoding.EncodeToString(changed),
+		"a foreign GitHub part":    base64.RawURLEncoding.EncodeToString(foreign),
+	}
+}
+
 func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
@@ -947,6 +972,12 @@ func TestCursorsAreBoundToFiltersAndTarget(t *testing.T) {
 			t.Errorf("%s: err = %v, want an invalid request", name, err)
 		}
 	}
+	for name, cursor := range alteredCursors(t, page.NextCursor) {
+		if _, err := c.ListItems(context.Background(), ItemListOptions{Cursor: cursor}); !isInvalidRequest(err) ||
+			!strings.Contains(err.Error(), "cursor is not a next_cursor of this list") {
+			t.Errorf("%s: err = %v, want an invalid request", name, err)
+		}
+	}
 	if requests := f.recorded()[before:]; len(requests) != 0 {
 		t.Errorf("requests = %d, want refusals before provider I/O", len(requests))
 	}
@@ -1040,8 +1071,18 @@ func TestIssuesArePagedWithoutPullRequests(t *testing.T) {
 	if err != nil || len(all.Issues) != 45 || all.HasMore {
 		t.Errorf("all issues = %d, %v", len(all.Issues), err)
 	}
+	before := len(f.recorded())
 	if _, err := c.ListIssues(context.Background(), IssueListOptions{State: "closed", Cursor: options.Cursor}); !isInvalidRequest(err) {
 		t.Errorf("a cursor of other filters = %v, want an invalid request", err)
+	}
+	for name, cursor := range alteredCursors(t, options.Cursor) {
+		options := IssueListOptions{Labels: []string{"bug"}, Assignee: "octocat", Cursor: cursor}
+		if _, err := c.ListIssues(context.Background(), options); !isInvalidRequest(err) {
+			t.Errorf("%s: err = %v, want an invalid request", name, err)
+		}
+	}
+	if requests := f.recorded()[before:]; len(requests) != 0 {
+		t.Errorf("requests = %d, want refusals before provider I/O", len(requests))
 	}
 }
 

@@ -478,6 +478,20 @@ func TestRunsAreFilteredPagedAndCompact(t *testing.T) {
 		t.Errorf("a cursor of other filters = %v, want an invalid request", err)
 	}
 	before := len(f.recorded())
+	for name, cursor := range alteredCursors(t, listed.NextCursor) {
+		if _, err := invoke(t, core, "github.workflowruns.list", "observer",
+			`{"status":"success","cursor":"`+cursor+`"}`, false); !isInvalidRequest(err) {
+			t.Errorf("%s: err = %v, want an invalid request", name, err)
+		}
+	}
+	if requests := f.recorded()[before:]; len(requests) != 0 {
+		t.Errorf("requests = %d, want refusals before provider I/O", len(requests))
+	}
+	if _, err := invoke(t, core, "github.workflowruns.list", "observer",
+		`{"status":"success","cursor":"`+listed.NextCursor+`"}`, false); err != nil {
+		t.Errorf("the cursor of the same filters = %v, want the next batch", err)
+	}
+	before = len(f.recorded())
 	if _, err := invoke(t, core, "github.workflowruns.list", "observer", `{"workflow":"ci.yml","branch":"main",`+
 		`"event":"push","actor":"dependabot[bot]","created_from":"2026-01-01","created_to":"2026-01-31T23:59:59Z"}`,
 		false); err != nil {
