@@ -74,15 +74,13 @@ type SearchRequest struct {
 	Cursor     string            `json:"cursor,omitempty"`
 }
 
-// SearchHit is the bounded discovery view of one descriptor. Connections names every connection that
-// offers it; Reason is set only on a tool none of them offers, which only a request with All returns.
+// SearchHit is the bounded discovery view of one descriptor: the same entry as ToolSummary, so a search
+// costs what the index costs, with the offering connections as a list. Description, version, and tags are
+// one describe away. Connections names every connection that offers it; Reason is set only on a tool none
+// of them offers, which only a request with All returns.
 type SearchHit struct {
 	ID          string            `json:"id"`
-	Version     int               `json:"version"`
 	Title       string            `json:"title"`
-	Description string            `json:"description"`
-	Tags        []string          `json:"tags"`
-	Provider    string            `json:"provider"`
 	Effect      capability.Effect `json:"effect"`
 	Connections []string          `json:"connections"`
 	Reason      config.Refusal    `json:"reason,omitempty"`
@@ -126,9 +124,7 @@ func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
 			title = descriptor.Description
 		}
 		hits = append(hits, SearchHit{
-			ID: descriptor.ID, Version: descriptor.Version, Title: title,
-			Description: descriptor.Description, Tags: nonNilStrings(descriptor.Tags),
-			Provider: descriptor.Provider, Effect: descriptor.Risk.Effect,
+			ID: descriptor.ID, Title: title, Effect: descriptor.Risk.Effect,
 			Connections: c.connectionNamesFor(descriptor), Reason: c.refusal(request, descriptor),
 		})
 	}
@@ -806,13 +802,6 @@ func validEffect(effect capability.Effect) bool {
 		return true
 	}
 	return false
-}
-
-func nonNilStrings(values []string) []string {
-	if values == nil {
-		return []string{}
-	}
-	return append([]string(nil), values...)
 }
 
 func sortedSet(values map[string]bool) []string {

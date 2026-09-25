@@ -835,8 +835,8 @@ defaults: {}
 			}
 		}
 
-		// qatlas.search keeps the request-bound agent contract, while the public listing publishes only
-		// what choosing a tool needs. What both must agree on is which tools exist and what they are.
+		// qatlas.search pages the entries of the public listing and lists their connections instead of
+		// joining them. Both publish only what choosing a tool needs, for the same tools in the same order.
 		index, searched := member(t, jsonCLIDocument(t, c, "", "tools", "bookstack", "--query", "pages",
 			"--output", "json"), "tools"), member(t, mcpData(t, responses["search"]), "operations")
 		indexed, indexOK := index.([]any)
@@ -852,7 +852,7 @@ defaults: {}
 			for j, route := range routes {
 				names[j], _ = route.(string)
 			}
-			if len(entry) != 4 || entry["id"] != hit["id"] || entry["title"] != hit["title"] ||
+			if len(entry) != 4 || len(hit) != 4 || entry["id"] != hit["id"] || entry["title"] != hit["title"] ||
 				entry["effect"] != hit["effect"] || entry["connections"] != strings.Join(names, " ") {
 				t.Errorf("index[%d] = %#v, want the id, title, effect and connections of %v", i, entry, hit["id"])
 			}

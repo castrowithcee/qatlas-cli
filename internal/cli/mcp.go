@@ -66,10 +66,12 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"with the reason 'qatlas tools --all' names. It filters by query, provider, connection, and\n" +
 			"effect and returns at most limit tools in stable ID order; an omitted, non-positive, or larger\n" +
 			"limit becomes 50. The response carries the tools as operations, has_more, which is true\n" +
-			"exactly when another match follows, and next_cursor, which is present only then. Passing\n" +
-			"next_cursor back as cursor with the same filters returns the following page; a request\n" +
-			"without cursor returns the first. A cursor that is malformed or belongs to other filters fails\n" +
-			"with invalid-request.\n\n" +
+			"exactly when another match follows, and next_cursor, which is present only then. Each tool is\n" +
+			"the entry 'qatlas tools' prints: id, title, effect, and connections, here a list of the\n" +
+			"connection names that offer it, plus reason with all; qatlas.describe returns the rest.\n" +
+			"Passing next_cursor back as cursor with the same filters returns the following page; a\n" +
+			"request without cursor returns the first. A cursor that is malformed or belongs to other\n" +
+			"filters fails with invalid-request.\n\n" +
 			"A failed tool call is a result with isError set to true whose text is '<code>: <message>' and\n" +
 			"whose structuredContent is an object with at least code and message, such as\n" +
 			"{\"code\":\"unknown-operation\",\"message\":\"...\"}. Some codes add fields. A qatlas.invoke\n" +
@@ -558,9 +560,10 @@ func mcpTools() []mcpTool {
 		{
 			Name: "qatlas.search",
 			Description: "Search the configured tool catalog. Returns the tools a configured connection offers " +
-				"as operations, at most limit of them in stable ID order; all adds the others with the reason no " +
-				"connection offers them. has_more is true exactly when another match follows, and next_cursor, " +
-				"passed back as cursor with the same filters, returns the following page.",
+				"as operations, at most limit of them in stable ID order, each with id, title, effect, and the " +
+				"connections that offer it; all adds the others with the reason no connection offers them. " +
+				"qatlas.describe returns the rest of a contract. has_more is true exactly when another match " +
+				"follows, and next_cursor, passed back as cursor with the same filters, returns the following page.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},
 		{

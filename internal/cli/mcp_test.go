@@ -127,8 +127,8 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 	if len(searchResult.Operations) != 2 {
 		t.Fatalf("search operations = %d, want 2", len(searchResult.Operations))
 	}
-	// qatlas.search keeps the request-bound agent contract; the CLI index deliberately publishes less.
-	// What must agree is which tools they name, in which order.
+	// qatlas.search pages the entries of the CLI index and lists their connections instead of joining them.
+	// What must agree is which tools they name, in which order, and what each entry says.
 	indexed := toolSummaries(t, string(runFakeCLIJSON(t, "", "tools", "--query", "page", "--config", path,
 		"--output", "json")))
 	if len(indexed) != len(searchResult.Operations) {
@@ -136,7 +136,8 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 	}
 	for i, tool := range indexed {
 		hit := searchResult.Operations[i]
-		if tool.ID != hit.ID || tool.Title != hit.Title || tool.Effect != hit.Effect {
+		if tool.ID != hit.ID || tool.Title != hit.Title || tool.Effect != hit.Effect ||
+			tool.Connections != strings.Join(hit.Connections, " ") {
 			t.Errorf("index[%d] = %+v, want %+v", i, tool, hit)
 		}
 	}
@@ -555,6 +556,41 @@ func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
 		result := search(arguments)
 		if !result.IsError || !strings.HasPrefix(result.Content[0].Text, string(output.CodeInvalidRequest)+": ") {
 			t.Errorf("search %s = %+v, want an invalid-request tool error", arguments, result)
+		}
+	}
+}
+
+// A qatlas.search hit carries what picking a tool needs, in the order of the CLI index: id, title, effect,
+// and the offering connections as a list, plus the reason only in a search with all. Description, version,
+// tags, and provider stay one describe away.
+func TestMCPSearchHitsAreCompact(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	path := writeConfig(t, strings.Replace(validConfig, "    description: read-only account on the team wiki\n",
+		"    description: read-only account on the team wiki\n    tools: [bookstack.pages.get]\n", 1))
+	registry := fakeRegistry(t)
+	input := strings.Join([]string{
+		`{"jsonrpc":"2.0","id":"offered","method":"tools/call","params":{` + mcpTestMeta +
+			`,"name":"qatlas.search","arguments":{"provider":"bookstack"}}}`,
+		`{"jsonrpc":"2.0","id":"all","method":"tools/call","params":{` + mcpTestMeta +
+			`,"name":"qatlas.search","arguments":{"provider":"bookstack","all":true}}}`,
+	}, "\n") + "\n"
+	responses, stderr := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
+	if stderr != "" {
+		t.Fatalf("stderr = %q", stderr)
+	}
+
+	for id, want := range map[string]string{
+		`"offered"`: `{"operations":[{"id":"bookstack.pages.get","title":"Read one page","effect":"read",` +
+			`"connections":["wiki"]}],"has_more":false}`,
+		`"all"`: `{"operations":[{"id":"bookstack.pages.get","title":"Read one page","effect":"read",` +
+			`"connections":["wiki"]},{"id":"bookstack.pages.list","title":"List pages","effect":"read",` +
+			`"connections":[],"reason":"not-in-tools-list"}],"has_more":false}`,
+	} {
+		result := toolResultFrom(t, responses[id])
+		if result.IsError || string(result.Structured) != want || result.Content[0].Text != want {
+			t.Errorf("search %s = %s, text %q, want %s", id, result.Structured, result.Content[0].Text, want)
 		}
 	}
 }
