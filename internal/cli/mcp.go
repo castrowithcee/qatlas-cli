@@ -68,13 +68,15 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"next_cursor back as cursor with the same filters returns the following page; a request\n" +
 			"without cursor returns the first. A cursor that is malformed or belongs to other filters fails\n" +
 			"with invalid-request.\n\n" +
-			"A qatlas.invoke refused with connection-ambiguous carries structuredContent with code,\n" +
-			"message, operation, and connections: every candidate route with its name and its description,\n" +
-			"which is empty where none is maintained. Nothing is chosen for the caller; the next request\n" +
-			"names one of them as connection. A qatlas.invoke refused with connection-selection carries\n" +
-			"the same structuredContent; connections names the routes that offer the tool, and is empty\n" +
-			"when none does. A request refused with unsupported-capability carries\n" +
-			"structuredContent with code, message, operation, connection, and reason.",
+			"A failed tool call is a result with isError set to true whose text is '<code>: <message>' and\n" +
+			"whose structuredContent is an object with at least code and message, such as\n" +
+			"{\"code\":\"unknown-operation\",\"message\":\"...\"}. Some codes add fields. A qatlas.invoke\n" +
+			"refused with connection-ambiguous adds operation and connections: every candidate route with its\n" +
+			"name and its description, which is empty where none is maintained. Nothing is chosen for the\n" +
+			"caller; the next request names one of them as connection. A qatlas.invoke refused with\n" +
+			"connection-selection adds the same fields; connections names the routes that offer the tool, and\n" +
+			"is empty when none does. A request refused with unsupported-capability adds operation,\n" +
+			"connection, and reason.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			server := newMCPServer(opts, registry, c.OutOrStdout(), c.ErrOrStderr())
@@ -585,16 +587,20 @@ func toolResult(data any, err error, ctx context.Context, redactor *redact.Redac
 			message = "request deadline exceeded"
 			detail = nil
 		}
-		result["content"] = []map[string]string{{"type": "text", "text": string(code) + ": " + message}}
-		if detail != nil {
-			result["structuredContent"] = detail
+		if detail == nil {
+			// Every refusal carries at least its code and message, so a caller branches on structuredContent
+			// alone. The CLI keeps writing a detail only where errorDetailFor adds something.
+			detail = map[string]string{"code": string(code), "message": message}
 		}
+		result["content"] = []map[string]string{{"type": "text", "text": string(code) + ": " + message}}
+		result["structuredContent"] = detail
 		result["isError"] = true
 		return result
 	}
 	encoded, marshalErr := json.Marshal(data)
 	if marshalErr != nil {
 		result["content"] = []map[string]string{{"type": "text", "text": "runtime: encode tool result"}}
+		result["structuredContent"] = map[string]string{"code": string(output.CodeRuntime), "message": "encode tool result"}
 		result["isError"] = true
 		return result
 	}

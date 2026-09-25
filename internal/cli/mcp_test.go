@@ -678,6 +678,33 @@ func TestNotFoundIsTheSameRuntimeFailureInCLIAndMCP(t *testing.T) {
 
 func TestMCPConfirmedMutationKeepsAuditOffProtocol(t *testing.T) {
 	const message = "private-message-canary-1842"
+	registry, path := mcpSendRegistry(t)
+	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
+		`,"name":"qatlas.invoke","arguments":{"operation":"fake.messages.send","connection":"target","arguments":{"text":"` +
+		message + `"},"confirm":true}}}` + "\n"
+	responses, stderr := runMCPWithOptions(t, registry, input, &Options{
+		Config: path, Redactor: &redact.Redactor{}, Secrets: secret.NewWith(nil, nil, nil, nil),
+	})
+	if result := toolResultFrom(t, responses["1"]); result.IsError {
+		t.Fatalf("mutation result = %+v", result)
+	}
+	var audit map[string]any
+	if err := json.Unmarshal([]byte(stderr), &audit); err != nil {
+		t.Fatalf("stderr is not one audit event: %q: %v", stderr, err)
+	}
+	if len(audit) != 6 || audit["operation"] != "fake.messages.send" || audit["connection"] != "target" ||
+		audit["confirmed"] != true || audit["result"] != "success" {
+		t.Fatalf("audit = %#v", audit)
+	}
+	if strings.Contains(stderr, message) || strings.Contains(encodeResponses(t, responses), `"request_id"`) {
+		t.Fatalf("message or audit crossed streams: stdout=%s stderr=%s", encodeResponses(t, responses), stderr)
+	}
+}
+
+// mcpSendRegistry offers fake.messages.send, a create tool that requires confirmation and an explicit
+// connection, through the connection target.
+func mcpSendRegistry(t *testing.T) (*capability.Registry, string) {
+	t.Helper()
 	registry := capability.NewRegistry()
 	if err := registry.RegisterProvider(config.ProviderMetadata{
 		ID: "fake", Name: "Fake", DefaultPermissions: []config.Permission{config.PermissionCreate},
@@ -703,7 +730,7 @@ func TestMCPConfirmedMutationKeepsAuditOffProtocol(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	path := writeConfig(t, `version: 1
+	return registry, writeConfig(t, `version: 1
 services:
   fake:
     provider: fake
@@ -717,26 +744,6 @@ connections:
     credential: sender
 defaults: {}
 `)
-	input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
-		`,"name":"qatlas.invoke","arguments":{"operation":"fake.messages.send","connection":"target","arguments":{"text":"` +
-		message + `"},"confirm":true}}}` + "\n"
-	responses, stderr := runMCPWithOptions(t, registry, input, &Options{
-		Config: path, Redactor: &redact.Redactor{}, Secrets: secret.NewWith(nil, nil, nil, nil),
-	})
-	if result := toolResultFrom(t, responses["1"]); result.IsError {
-		t.Fatalf("mutation result = %+v", result)
-	}
-	var audit map[string]any
-	if err := json.Unmarshal([]byte(stderr), &audit); err != nil {
-		t.Fatalf("stderr is not one audit event: %q: %v", stderr, err)
-	}
-	if len(audit) != 6 || audit["operation"] != descriptor.ID || audit["connection"] != "target" ||
-		audit["confirmed"] != true || audit["result"] != "success" {
-		t.Fatalf("audit = %#v", audit)
-	}
-	if strings.Contains(stderr, message) || strings.Contains(encodeResponses(t, responses), `"request_id"`) {
-		t.Fatalf("message or audit crossed streams: stdout=%s stderr=%s", encodeResponses(t, responses), stderr)
-	}
 }
 
 func TestMCPCancellationStopsCoreAndSuppressesResponse(t *testing.T) {
@@ -857,6 +864,79 @@ type mcpToolResult struct {
 	} `json:"content"`
 	Structured json.RawMessage `json:"structuredContent"`
 	IsError    bool            `json:"isError"`
+}
+
+// Every failed tool call carries structuredContent with at least the code and the message of its text, so a
+// caller branches on the object alone, including where no code adds a detail and on the deadline.
+func TestMCPToolErrorsCarryCodeAndMessage(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("QATLAS_CREDENTIAL_STORE", "none")
+	failing := func(err error) func(t *testing.T) (*capability.Registry, string) {
+		return func(t *testing.T) (*capability.Registry, string) {
+			return mcpTestRegistry(t, func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+				json.RawMessage) (any, error) {
+				return nil, err
+			})
+		}
+	}
+	waiting := func(t *testing.T) (*capability.Registry, string) {
+		return mcpTestRegistry(t, func(ctx context.Context, _ *config.Resolved, _ *secret.Resolver,
+			_ *redact.Redactor, _ json.RawMessage) (any, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		})
+	}
+	unused := failing(errors.New("handler must not run"))
+	for _, tt := range []struct {
+		code      output.Code
+		registry  func(t *testing.T) (*capability.Registry, string)
+		tool      string
+		arguments string
+		timeout   bool
+	}{
+		{output.CodeInvalidRequest, unused, "qatlas.search", `{"cursor":"bogus"}`, false},
+		{output.CodeUnknownOperation, unused, "qatlas.describe", `{"operation":"absent.operation.get"}`, false},
+		{output.CodeUnknownConnection, unused, "qatlas.describe", `{"operation":"fake.pages.get","connection":"absent"}`, false},
+		{output.CodeConfirmationRequired, mcpSendRegistry, "qatlas.invoke",
+			`{"operation":"fake.messages.send","connection":"target","arguments":{"text":"hello"}}`, false},
+		{output.CodeNotFound, failing(&provider.Error{Class: provider.ClassNotFound, Op: "get page", Message: "absent"}),
+			"qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
+		{output.CodeProviderError, failing(&provider.Error{Class: provider.ClassProviderError, Op: "get page", Message: "failed"}),
+			"qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
+		{output.CodeTimeout, waiting, "qatlas.invoke",
+			`{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, true},
+	} {
+		t.Run(string(tt.code), func(t *testing.T) {
+			registry, path := tt.registry(t)
+			var stdout, stderr bytes.Buffer
+			server := newMCPServer(&Options{
+				Config: path, Redactor: &redact.Redactor{}, Secrets: secret.NewWith(nil, nil, nil, nil),
+			}, registry, &stdout, &stderr)
+			if tt.timeout {
+				server.timeout = 20 * time.Millisecond
+			}
+			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"` + tt.tool +
+				`","arguments":` + tt.arguments + `}}` + "\n"
+			if err := server.serve(context.Background(), strings.NewReader(input)); err != nil {
+				t.Fatal(err)
+			}
+			result := toolResultFrom(t, decodeMCPResponses(t, stdout.String())["1"])
+			var detail struct {
+				Code    output.Code `json:"code"`
+				Message string      `json:"message"`
+			}
+			if !result.IsError || result.Structured == nil {
+				t.Fatalf("result = %+v, want a tool error with structuredContent", result)
+			}
+			decodeRaw(t, result.Structured, &detail)
+			if detail.Code != tt.code || detail.Message == "" ||
+				result.Content[0].Text != string(detail.Code)+": "+detail.Message {
+				t.Fatalf("structuredContent = %s with text %q, want code %s and the message of the text",
+					result.Structured, result.Content[0].Text, tt.code)
+			}
+		})
+	}
 }
 
 func runMCP(t *testing.T, registry *capability.Registry, input string) (map[string]decodedMCPResponse, string) {
