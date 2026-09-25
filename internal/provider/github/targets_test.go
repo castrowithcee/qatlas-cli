@@ -366,7 +366,7 @@ func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 	f.failure = nil
 
 	// A REST 404 of the repository itself names it without a resource inside.
-	c, err := open(resolvedConnection("gh", base, "repos/octo-org/absent"), resolver(red, nil), red, freeLimiter())
+	c, err := open(context.Background(), resolvedConnection("gh", base, "repos/octo-org/absent"), resolver(red, nil), red, freeLimiter())
 	if err != nil {
 		t.Fatal(err)
 	}

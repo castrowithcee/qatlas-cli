@@ -46,7 +46,7 @@ func telegramClient(t *testing.T, target string, transport http.RoundTripper) (*
 	}, nil, nil, red)
 	httpClient := newHTTPClient()
 	httpClient.Transport = transport
-	client, err := openWithHTTP(&config.Resolved{
+	client, err := openWithHTTP(context.Background(), &config.Resolved{
 		Name: "alerts", Provider: Provider, BaseURL: "https://api.telegram.test", Target: target,
 		Credential: "notifier", Secrets: config.Credential{Type: config.CredentialTypeEnv,
 			Values: map[string]string{roleBotToken: "TEST_TELEGRAM_BOT_TOKEN"}},
@@ -311,7 +311,7 @@ func TestConnectionsKeepBotsAndTargetsSeparate(t *testing.T) {
 		resolver := secret.NewWith(func(string) string { return token }, nil, nil, red)
 		httpClient := newHTTPClient()
 		httpClient.Transport = transport
-		client, err := openWithHTTP(&config.Resolved{
+		client, err := openWithHTTP(context.Background(), &config.Resolved{
 			Name: name, Provider: Provider, BaseURL: "https://api.telegram.test", Target: target,
 			Credential: name, Secrets: config.Credential{Type: config.CredentialTypeEnv,
 				Values: map[string]string{roleBotToken: "BOT_TOKEN"}},
@@ -352,7 +352,7 @@ func TestOpenRejectsUnsafeConfigurationBeforeSecretResolution(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			resolutions := 0
 			resolver := secret.NewWith(func(string) string { resolutions++; return testToken }, nil, nil, nil)
-			_, err := openWithHTTP(&config.Resolved{
+			_, err := openWithHTTP(context.Background(), &config.Resolved{
 				Name: "alerts", Provider: Provider, BaseURL: tt.base, Target: tt.target,
 				Credential: "notifier", Secrets: config.Credential{Type: config.CredentialTypeEnv,
 					Values: map[string]string{roleBotToken: "BOT_TOKEN"}},

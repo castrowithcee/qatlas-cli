@@ -12,6 +12,9 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
+
+	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
 )
 
 // Class is the stable outcome of a connection test. Callers branch on it instead of on message text.
@@ -92,6 +95,21 @@ func Transport(op, subject string, err error) *Error {
 	return &Error{
 		Class: ClassUnreachable, Op: op, Message: subject + " could not be reached", Cause: TransportCause(err),
 	}
+}
+
+// Waited normalises a failure of the rate limiter before a request, which subject names, for example
+// "GitHub". A pause that would outlast the request ends it at once as rate-limited with the wait; any
+// other failure means the request ended while it waited. Either way nothing was sent.
+func Waited(op, subject string, err error) *Error {
+	var beyond *ratelimit.BeyondDeadlineError
+	if errors.As(err, &beyond) {
+		seconds := int((beyond.Wait + time.Second - 1) / time.Second)
+		return &Error{Class: ClassRateLimited, Op: op, Message: fmt.Sprintf(
+			"the %s rate limit asks to wait longer than this request may take; retry after %d seconds",
+			subject, seconds)}
+	}
+	return &Error{Class: ClassTimeout, Op: op,
+		Message: "the request ended while it waited for the " + subject + " rate limit"}
 }
 
 // TransportCause attributes a transport failure to a stable cause by walking the typed error chain. It

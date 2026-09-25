@@ -1,6 +1,7 @@
 package secret
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -87,7 +88,8 @@ func StoreAdvice(state StoreState, goos string) string {
 		case "Windows Credential Manager":
 			fix = "sign in to Windows as this user again"
 		case "Secret Service":
-			fix = "unlock its login collection, for example in GNOME Keyring or KWallet"
+			fix = "unlock its login collection in a desktop session of this user, for example in GNOME " +
+				"Keyring or KWallet; a session without a desktop, such as SSH, cannot answer the unlock prompt"
 		}
 		return label + " is locked: " + fix
 	case StoreUnavailable:
@@ -103,8 +105,8 @@ func StoreAdvice(state StoreState, goos string) string {
 		}
 		return label + " cannot be reached: " + fix
 	case StoreTimedOut:
-		return fmt.Sprintf("%s did not answer within %s: answer a pending unlock prompt, or unlock it "+
-			"first, then try again", label, storeTimeout)
+		return fmt.Sprintf("%s did not answer within %s: answer the unlock prompt on the desktop, or unlock it "+
+			"there first, then try again", label, storeTimeout)
 	case StoreOff:
 		return fmt.Sprintf("%s is switched off because %s=%s: unset it, or set it to %s, to use the keyring",
 			label, StoreSelector, StoreNone, StoreAuto)
@@ -112,19 +114,39 @@ func StoreAdvice(state StoreState, goos string) string {
 	return ""
 }
 
-// storeTimeout bounds every call into the platform store.
+// storeTimeout bounds every call into the platform store; a request that ends sooner ends it sooner.
 //
 // The library offers no context, and the call goes to a service in another process: a half-started
-// keyring daemon can leave it waiting forever, which would freeze a command and, later, an interface that
-// has to stay usable. Thirty seconds is long enough for a person to answer a legitimate unlock dialog and
-// short enough that a stuck daemon does not hold a run indefinitely. It is the same order as the request
-// timeout the provider uses, so nothing in this binary waits on anything for longer than that.
-const storeTimeout = 30 * time.Second
+// keyring daemon or an unlock prompt nobody answers can leave it waiting forever. Ten seconds is long
+// enough for a person to answer a legitimate unlock dialog and leaves most of an invocation's time limit to
+// the provider. It is a variable only so a test can shorten it.
+var storeTimeout = 10 * time.Second
+
+// noPromptKey marks a context whose request nobody can answer an unlock prompt for.
+type noPromptKey struct{}
+
+func withoutPrompt(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noPromptKey{}, true)
+}
+
+// promptable reports whether an unlock prompt can reach someone: the request is not unattended, and the
+// session has a display to show it on.
+func promptable(ctx context.Context) bool {
+	if unattended, _ := ctx.Value(noPromptKey{}).(bool); unattended {
+		return false
+	}
+	return os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != ""
+}
 
 type systemStore struct{}
 
-func (systemStore) Get(key string) (string, error) {
-	value, err := within(storeTimeout, func() (string, error) { return keyring.Get(StoreService, key) })
+func (systemStore) Get(ctx context.Context, key string) (string, error) {
+	value, err := within(ctx, func(ctx context.Context) (string, error) {
+		if err := ready(ctx); err != nil {
+			return "", err
+		}
+		return keyring.Get(StoreService, key)
+	})
 	switch {
 	case err == nil:
 		return value, nil
@@ -138,7 +160,10 @@ func (systemStore) Get(key string) (string, error) {
 }
 
 func (systemStore) Set(key, value string) error {
-	_, err := within(storeTimeout, func() (struct{}, error) {
+	_, err := within(context.Background(), func(ctx context.Context) (struct{}, error) {
+		if err := ready(ctx); err != nil {
+			return struct{}{}, err
+		}
 		return struct{}{}, keyring.Set(StoreService, key, value)
 	})
 	switch {
@@ -152,7 +177,10 @@ func (systemStore) Set(key, value string) error {
 }
 
 func (systemStore) Delete(key string) error {
-	_, err := within(storeTimeout, func() (struct{}, error) {
+	_, err := within(context.Background(), func(ctx context.Context) (struct{}, error) {
+		if err := ready(ctx); err != nil {
+			return struct{}{}, err
+		}
 		return struct{}{}, keyring.Delete(StoreService, key)
 	})
 	switch {
@@ -167,31 +195,33 @@ func (systemStore) Delete(key string) error {
 	}
 }
 
-// within runs one store operation under a deadline. A deadline that passes is not an abort: it is the same
-// class as a store that cannot be reached, so the cascade moves on and the stage says what happened.
+// within runs one store operation for at most storeTimeout, and never past the end of ctx. A limit that
+// passes is not an abort: it is the same class as a store that cannot be reached, so the cascade moves on
+// and the stage says what happened. The operation gets the bounded context, so whatever of it honours one
+// ends with it.
 //
 // The channel is buffered, so the operation can still finish and hand back its result after the deadline
 // without blocking on a receiver that has gone away.
-func within[T any](limit time.Duration, op func() (T, error)) (T, error) {
+func within[T any](ctx context.Context, op func(context.Context) (T, error)) (T, error) {
+	ctx, cancel := context.WithTimeout(ctx, storeTimeout)
+	defer cancel()
+
 	type outcome struct {
 		value T
 		err   error
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		value, err := op()
+		value, err := op(ctx)
 		done <- outcome{value: value, err: err}
 	}()
-
-	timer := time.NewTimer(limit)
-	defer timer.Stop()
 
 	select {
 	case got := <-done:
 		return got.value, got.err
-	case <-timer.C:
+	case <-ctx.Done():
 		var zero T
-		return zero, fmt.Errorf("%w: %w after %s", ErrUnavailable, ErrTimedOut, limit)
+		return zero, fmt.Errorf("%w: %w", ErrUnavailable, ErrTimedOut)
 	}
 }
 
@@ -211,9 +241,9 @@ func classify(err error) error {
 // dead end: the cascade simply moves on to the next stage.
 type unavailableStore struct{ err error }
 
-func (s unavailableStore) Get(string) (string, error) { return "", s.err }
-func (s unavailableStore) Set(string, string) error   { return s.err }
-func (s unavailableStore) Delete(string) error        { return s.err }
+func (s unavailableStore) Get(context.Context, string) (string, error) { return "", s.err }
+func (s unavailableStore) Set(string, string) error                    { return s.err }
+func (s unavailableStore) Delete(string) error                         { return s.err }
 
 // MemoryStore is a credential store that lives in this process only.
 //
@@ -236,7 +266,7 @@ func (s *MemoryStore) Fail(err error) {
 	s.unavailable = err
 }
 
-func (s *MemoryStore) Get(key string) (string, error) {
+func (s *MemoryStore) Get(_ context.Context, key string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.unavailable != nil {

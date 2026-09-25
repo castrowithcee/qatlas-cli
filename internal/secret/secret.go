@@ -20,12 +20,15 @@
 package secret
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -96,12 +99,17 @@ func (e *MissingSecretError) Unwrap() error { return e.Err }
 // value, or anything read from a file.
 //
 // A keyring that is locked, unreachable or switched off is named first, with what to do on this platform:
-// storing the secret again would run into the same keyring.
+// storing the secret again would run into the same keyring. The variable is the way that works in a session
+// without a desktop, such as SSH, where nobody can unlock the keyring.
 func (e *MissingSecretError) remedy() string {
 	if e.Type == config.CredentialTypeKeyring {
 		env := DerivedEnvName(e.Credential, e.Role)
-		if advice := StoreAdvice(StoreStage(e.Checked), runtime.GOOS); advice != "" {
-			return fmt.Sprintf("%s; or export %s", advice, env)
+		switch state := StoreStage(e.Checked); state {
+		case StoreLocked, StoreUnavailable, StoreTimedOut:
+			return fmt.Sprintf("%s; or export %s for this session (a built-in encrypted store for sessions "+
+				"without a desktop is not available yet)", StoreAdvice(state, runtime.GOOS), env)
+		case StoreOff:
+			return fmt.Sprintf("%s; or export %s", StoreAdvice(state, runtime.GOOS), env)
 		}
 		return fmt.Sprintf("store it in the system keyring with 'qatlas credential set %s %s', or export %s",
 			e.Credential, e.Role, env)
@@ -178,8 +186,10 @@ func StoreStage(checked []string) StoreState {
 
 // Store is the system credential store. It is an interface so a test never touches the store of the
 // machine it runs on, and so a platform without one can be represented instead of aborting.
+//
+// Get takes the context of the request that needs the secret, so a store call never outlives it.
 type Store interface {
-	Get(key string) (string, error)
+	Get(ctx context.Context, key string) (string, error)
 	Set(key, value string) error
 	Delete(key string) error
 }
@@ -230,7 +240,19 @@ type Resolver struct {
 	store     Store
 	plaintext *File
 	redactor  *redact.Redactor
+
+	mu         sync.Mutex
+	unattended bool
+	// failed is what the store said when it last failed, and failedAt when; see storeRetry.
+	failed   StoreState
+	failedAt time.Time
 }
+
+// storeRetry is how long the cascade skips a store that failed. A locked or unreachable store stays so for
+// the next role of the same run, and asking it again would only wait a second time; one invoke ends within
+// this span, so a run of the CLI asks a failing store once. A server or an interface that runs for longer
+// asks again after it, so a keyring unlocked in the meantime is found.
+const storeRetry = time.Minute
 
 // New returns the resolver of a normal run: the process environment, the credential store of the
 // platform, and the plaintext fallback file in dir, which is the directory holding config.yaml. It fails
@@ -255,9 +277,18 @@ func NewWith(env func(string) string, store Store, plaintext *File, red *redact.
 	return &Resolver{env: env, store: store, plaintext: plaintext, redactor: red}
 }
 
+// Unattended prepares the resolver for a server that answers requests nobody watches, such as the MCP
+// broker: the store never waits for an unlock prompt, which nobody would answer.
+func (r *Resolver) Unattended() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.unattended = true
+}
+
 // Resolve returns the secret of one (credential, role) pair. The credential name and its configuration
-// entry are passed separately because the entry alone does not know what it is called.
-func (r *Resolver) Resolve(credential string, cred config.Credential, role string) (Value, error) {
+// entry are passed separately because the entry alone does not know what it is called. The store stage
+// ends with ctx at the latest.
+func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.Credential, role string) (Value, error) {
 	checked := make([]string, 0, 3)
 
 	envName := EnvName(credential, cred, role)
@@ -281,13 +312,13 @@ func (r *Resolver) Resolve(credential string, cred config.Credential, role strin
 
 	// A machine without a running secret service must not be a dead end, so an unreachable store is one
 	// more stage that did not deliver rather than a failure.
-	switch value, err := r.store.Get(StoreKey(credential, role)); {
-	case err == nil && value != "":
+	switch value, state := r.fromStore(ctx, StoreKey(credential, role)); {
+	case state == StoreHolds && value != "":
 		return r.deliver(value, SourceStore, checked), nil
-	case err == nil:
+	case state == StoreHolds:
 		checked = append(checked, stage(SourceStore, string(StoreEmpty)))
 	default:
-		checked = append(checked, stage(SourceStore, string(StoreStateOf(err))))
+		checked = append(checked, stage(SourceStore, string(state)))
 	}
 
 	value, err := r.fallback(credential, role)
@@ -314,6 +345,40 @@ func (r *Resolver) Resolve(credential string, cred config.Credential, role strin
 	return Value{}, missing(credential, cred, role, checked, cause)
 }
 
+// fromStore asks the store for one key, unless it failed less than storeRetry ago; then the earlier answer
+// stands without asking again.
+func (r *Resolver) fromStore(ctx context.Context, key string) (string, StoreState) {
+	r.mu.Lock()
+	if r.failed != StoreNotAsked && time.Since(r.failedAt) < storeRetry {
+		defer r.mu.Unlock()
+		return "", r.failed
+	}
+	unattended := r.unattended
+	r.mu.Unlock()
+
+	if unattended {
+		ctx = withoutPrompt(ctx)
+	}
+	value, err := r.store.Get(ctx, key)
+	state := StoreStateOf(err)
+	switch state {
+	case StoreHolds, StoreEmpty:
+		r.storeAnswered()
+	default:
+		r.mu.Lock()
+		r.failed, r.failedAt = state, time.Now()
+		r.mu.Unlock()
+	}
+	return value, state
+}
+
+// storeAnswered forgets an earlier failure once the store works again.
+func (r *Resolver) storeAnswered() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.failed = StoreNotAsked
+}
+
 func missing(credential string, cred config.Credential, role string, checked []string, cause error) error {
 	return &MissingSecretError{
 		Credential: credential, Role: role, Type: cred.Type, Checked: checked, Err: cause,
@@ -323,7 +388,7 @@ func missing(credential string, cred config.Credential, role string, checked []s
 // Status reports which stage would deliver, without handing the value to the caller. A user interface asks
 // here, so it can show the source of a secret it must never see.
 func (r *Resolver) Status(credential string, cred config.Credential, role string) (Source, []string) {
-	value, err := r.Resolve(credential, cred, role)
+	value, err := r.Resolve(context.Background(), credential, cred, role)
 	var missing *MissingSecretError
 	if errors.As(err, &missing) {
 		return SourceMissing, missing.Checked
@@ -366,7 +431,7 @@ func (r *Resolver) Stored(credential, role string) Placement {
 	var p Placement
 	var causes []error
 
-	switch value, err := r.store.Get(StoreKey(credential, role)); {
+	switch value, err := r.store.Get(context.Background(), StoreKey(credential, role)); {
 	case err == nil && value != "":
 		p.Holding = append(p.Holding, SourceStore)
 	case err == nil, errors.Is(err, ErrNoEntry):
@@ -397,7 +462,11 @@ func (r *Resolver) Stored(credential, role string) Placement {
 // plaintext fallback: that needs SetPlaintext and therefore an explicit decision.
 func (r *Resolver) Set(credential, role, value string) error {
 	r.register(value)
-	return r.store.Set(StoreKey(credential, role), value)
+	if err := r.store.Set(StoreKey(credential, role), value); err != nil {
+		return err
+	}
+	r.storeAnswered()
+	return nil
 }
 
 // SetPlaintext writes a secret into the plaintext fallback file and switches that fallback on. It is the

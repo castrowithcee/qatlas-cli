@@ -806,7 +806,8 @@ func TestMCPDeadlineReturnsTimeoutToolError(t *testing.T) {
 	}
 	responses := decodeMCPResponses(t, stdout.String())
 	result := toolResultFrom(t, responses["1"])
-	if !result.IsError || result.Content[0].Text != "timeout: request deadline exceeded" {
+	if !result.IsError || result.Content[0].Text != "timeout: the request did not finish within 20ms; "+
+		"check that the service answers, then try again" {
 		t.Fatalf("deadline result = %+v", result)
 	}
 }

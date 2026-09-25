@@ -65,7 +65,7 @@ func walkSetup(t *testing.T, m *Model, until int) {
 func assertNoStoredSecret(t *testing.T, mem *secret.MemoryStore, dir string) {
 	t.Helper()
 	for _, role := range []string{"token-id", "token-secret"} {
-		if _, err := mem.Get(secret.StoreKey("reader", role)); !errors.Is(err, secret.ErrNoEntry) {
+		if _, err := mem.Get(context.Background(), secret.StoreKey("reader", role)); !errors.Is(err, secret.ErrNoEntry) {
 			t.Errorf("the credential store holds reader/%s: %v", role, err)
 		}
 	}
@@ -143,7 +143,7 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 		t.Fatalf("save failed: %q", m.fail)
 	}
 	for role, want := range map[string]string{"token-id": canaryID, "token-secret": canarySecret} {
-		if got, err := mem.Get(secret.StoreKey("reader", role)); err != nil || got != want {
+		if got, err := mem.Get(context.Background(), secret.StoreKey("reader", role)); err != nil || got != want {
 			t.Errorf("stored reader/%s: err %v, match %v", role, err, got == want)
 		}
 	}
@@ -395,7 +395,7 @@ func TestAFailedSaveLeavesNothingBehind(t *testing.T) {
 		if _, err := store.Load(); err != nil {
 			t.Errorf("Load() = %v", err)
 		}
-		if got, err := mem.Get(secret.StoreKey("reader", "token-id")); err != nil || got != canaryID {
+		if got, err := mem.Get(context.Background(), secret.StoreKey("reader", "token-id")); err != nil || got != canaryID {
 			t.Errorf("the retried save did not store the secret: %v", err)
 		}
 	})
@@ -465,7 +465,7 @@ func TestGuidedSetupOtherSecretSources(t *testing.T) {
 			"token-secret"); source != secret.SourcePlaintext {
 			t.Errorf("token-secret resolves from %q, want the plaintext file", source)
 		}
-		if _, err := mem.Get(secret.StoreKey("reader", "token-id")); !errors.Is(err, secret.ErrNoEntry) {
+		if _, err := mem.Get(context.Background(), secret.StoreKey("reader", "token-id")); !errors.Is(err, secret.ErrNoEntry) {
 			t.Errorf("the credential store was written: %v", err)
 		}
 	})

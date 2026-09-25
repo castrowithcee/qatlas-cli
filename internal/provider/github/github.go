@@ -439,7 +439,7 @@ func invokeItemsList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -458,7 +458,7 @@ func invokeItemsGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -479,7 +479,7 @@ func invokeIssuesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -498,7 +498,7 @@ func invokeIssuesGet(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -785,13 +785,13 @@ type Client struct {
 
 // Open resolves the token of one selected connection and returns a client for the first project or
 // repository its targets name exactly, or for no target when they name none. An owner is never that target.
-func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
-	return open(resolved, secrets, red, nil)
+func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+	return open(ctx, resolved, secrets, red, nil)
 }
 
 // open is the internal seam. A caller may supply the rate limiter, and the package's own tests replace the
 // transport, so no test ever reaches GitHub.
-func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
@@ -811,7 +811,7 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if secrets == nil {
 		return nil, providerError("open", "no credential resolver was configured")
 	}
-	value, err := secrets.Resolve(resolved.Credential, resolved.Secrets, roleToken)
+	value, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, roleToken)
 	if err != nil {
 		return nil, err
 	}
@@ -836,8 +836,8 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 }
 
 // openAt opens a client for the target a tool acts on, which selectTarget has already checked.
-func openAt(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, bound target) (*Client, error) {
-	client, err := Open(resolved, secrets, red)
+func openAt(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, bound target) (*Client, error) {
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -865,7 +865,7 @@ func newHTTPClient() *http.Client {
 // because GitHub checks each resource and scope on every request.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {
@@ -1185,8 +1185,7 @@ func (c *Client) restChange(ctx context.Context, op, method, path string, body a
 // request of this token waits mutationInterval.
 func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []byte, out any, change bool) error {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return &provider.Error{Class: provider.ClassTimeout, Op: op,
-			Message: "the request ended while it waited for the GitHub rate limit"}
+		return provider.Waited(op, "GitHub", err)
 	}
 	var body io.Reader
 	if payload != nil {

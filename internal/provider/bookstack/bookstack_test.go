@@ -78,7 +78,7 @@ func newClient(t *testing.T, baseURL string, red *redact.Redactor) *Client {
 	t.Setenv("TEST_TOKEN_ID", canaryID)
 	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
 
-	client, err := Open(&config.Resolved{
+	client, err := Open(context.Background(), &config.Resolved{
 		Name:     "wiki",
 		Provider: Provider,
 		BaseURL:  baseURL,
@@ -481,7 +481,7 @@ func TestConnectionsStaySeparate(t *testing.T) {
 
 	open := func(baseURL, idEnv, secretEnv string) *Client {
 		t.Helper()
-		c, err := Open(&config.Resolved{
+		c, err := Open(context.Background(), &config.Resolved{
 			Name: "c", Provider: Provider, BaseURL: baseURL,
 			Secrets: envCredential(map[string]string{roleTokenID: idEnv, roleTokenSecret: secretEnv}),
 		}, resolver(nil), nil)
@@ -578,7 +578,7 @@ func TestOpenRequiresSecrets(t *testing.T) {
 			t.Setenv("MISSING_ON_PURPOSE", "")
 			t.Setenv(pasted, "")
 
-			_, err := Open(&config.Resolved{
+			_, err := Open(context.Background(), &config.Resolved{
 				Name: "c", Provider: Provider, BaseURL: "https://x.invalid",
 				Credential: "reader", Secrets: envCredential(tt.envNames),
 			}, resolver(nil), nil)

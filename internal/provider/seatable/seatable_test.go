@@ -162,7 +162,7 @@ func stubLimiter(t *testing.T, token string) {
 func client(t *testing.T, target string) (*Client, *redact.Redactor) {
 	t.Helper()
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, target),
+	c, err := open(context.Background(), resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, target),
 		resolver(red), red, freeLimiter())
 	if err != nil {
 		t.Fatalf("open() = %v", err)
@@ -310,7 +310,7 @@ func TestOpenBindsTheInstanceTargetAndToken(t *testing.T) {
 			"https://cloud.seatable.io?x=1", "", "not a url",
 		} {
 			resolved := resolvedConnection("sales", "sales-reader", salesEnv, origin, "Kunden")
-			if _, err := open(resolved, resolver(red), red, freeLimiter()); err == nil {
+			if _, err := open(context.Background(), resolved, resolver(red), red, freeLimiter()); err == nil {
 				t.Errorf("open() accepted the origin %q", origin)
 			}
 		}
@@ -323,7 +323,7 @@ func TestOpenBindsTheInstanceTargetAndToken(t *testing.T) {
 			"id:0000/id:../..", "Kunden\x00", strings.Repeat("a", maxTargetLength+1),
 		} {
 			resolved := resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, target)
-			if _, err := open(resolved, resolver(red), red, freeLimiter()); err == nil {
+			if _, err := open(context.Background(), resolved, resolver(red), red, freeLimiter()); err == nil {
 				t.Errorf("open() accepted the target %q", target)
 			}
 		}
@@ -332,7 +332,7 @@ func TestOpenBindsTheInstanceTargetAndToken(t *testing.T) {
 	t.Run("a credential without a secret is refused", func(t *testing.T) {
 		red := &redact.Redactor{}
 		resolved := resolvedConnection("sales", "sales-reader", "TEST_SEATABLE_ABSENT", cloudOrigin, "Kunden")
-		if _, err := open(resolved, resolver(red), red, freeLimiter()); err == nil {
+		if _, err := open(context.Background(), resolved, resolver(red), red, freeLimiter()); err == nil {
 			t.Error("open() accepted a credential without a secret")
 		}
 	})
@@ -378,7 +378,7 @@ func TestAllowListAndWildcardSelectOnlyExplicitTables(t *testing.T) {
 		resolved := resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "")
 		resolved.Targets = values
 		red := &redact.Redactor{}
-		client, err := open(resolved, resolver(red), red, freeLimiter())
+		client, err := open(context.Background(), resolved, resolver(red), red, freeLimiter())
 		if err != nil {
 			t.Fatalf("open() = %v", err)
 		}
@@ -443,7 +443,7 @@ func TestSchemaDiscoveryIsBoundedByTheConnectionScope(t *testing.T) {
 	resolved := resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "")
 	resolved.Targets = []string{"*"}
 	red := &redact.Redactor{}
-	client, err := open(resolved, resolver(red), red, freeLimiter())
+	client, err := open(context.Background(), resolved, resolver(red), red, freeLimiter())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,7 +466,7 @@ func TestSchemaDiscoveryIsBoundedByTheConnectionScope(t *testing.T) {
 	}
 
 	resolved.Targets = []string{"id:0001"}
-	client, err = open(resolved, resolver(red), red, freeLimiter())
+	client, err = open(context.Background(), resolved, resolver(red), red, freeLimiter())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -877,7 +877,7 @@ func TestRateLimitSpacesRequestsOfOneToken(t *testing.T) {
 		})
 
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "Kunden"),
+	c, err := open(context.Background(), resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "Kunden"),
 		resolver(red), red, limited)
 	if err != nil {
 		t.Fatalf("open() = %v", err)
@@ -926,7 +926,7 @@ func TestRateLimitHeadersHoldTheNextRequest(t *testing.T) {
 		})
 
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "Kunden"),
+	c, err := open(context.Background(), resolvedConnection("sales", "sales-reader", salesEnv, cloudOrigin, "Kunden"),
 		resolver(red), red, limited)
 	if err != nil {
 		t.Fatalf("open() = %v", err)
@@ -970,7 +970,7 @@ func TestInstancesBasesAndTokensStaySeparated(t *testing.T) {
 		resolvedConnection("support", "support-reader", supportEnv, cloudOrigin, "id:0001"),
 		resolvedConnection("onprem", "onprem-reader", onpremEnv, selfHosted, "Tickets"),
 	} {
-		c, err := open(connection, secrets, red, freeLimiter())
+		c, err := open(context.Background(), connection, secrets, red, freeLimiter())
 		if err != nil {
 			t.Fatalf("open(%s) = %v", connection.Name, err)
 		}

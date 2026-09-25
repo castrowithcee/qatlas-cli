@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -126,7 +127,7 @@ func TestCredentialSet(t *testing.T) {
 	if stdout != "" || stderr != "" {
 		t.Errorf("stdout = %q, stderr = %q, want a silent success", stdout, stderr)
 	}
-	got, err := store.Get(secret.StoreKey("vault-reader", "token-id"))
+	got, err := store.Get(context.Background(), secret.StoreKey("vault-reader", "token-id"))
 	if err != nil || got != canaryStored {
 		t.Errorf("store holds %q (%v), want the secret", got, err)
 	}
@@ -359,7 +360,7 @@ func TestCredentialDelete(t *testing.T) {
 	if code != exitOK || stdout != "" || stderr != "" {
 		t.Errorf("exit %d, stdout %q, stderr %q; want a silent success", code, stdout, stderr)
 	}
-	if _, err := store.Get(secret.StoreKey("vault-reader", "token-id")); err == nil {
+	if _, err := store.Get(context.Background(), secret.StoreKey("vault-reader", "token-id")); err == nil {
 		t.Error("the store still holds the entry")
 	}
 

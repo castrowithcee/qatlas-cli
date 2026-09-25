@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sync"
 	"testing"
@@ -133,5 +134,31 @@ func TestRegistryReplaceRestoresThePreviousState(t *testing.T) {
 	restore()
 	if registry.For(key) != original {
 		t.Error("restore() did not put the original limiter back")
+	}
+}
+
+// A pause that would outlast the request ends it at once with the wait, and leaves the slot free for a
+// later request instead of reserving it.
+func TestWaitPastTheDeadlineEndsAtOnce(t *testing.T) {
+	c := &clock{now: time.Unix(0, 0)}
+	limiter := New(time.Second, c.Now, c.Sleep)
+	limiter.HoldFor(time.Minute)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	err := limiter.Wait(ctx)
+
+	var beyond *BeyondDeadlineError
+	if !errors.As(err, &beyond) || beyond.Wait != time.Minute {
+		t.Fatalf("Wait() = %v, want the pause of a minute reported", err)
+	}
+	if got := c.waits(); len(got) != 0 {
+		t.Errorf("waits = %v, want none", got)
+	}
+	if err := limiter.Wait(context.Background()); err != nil {
+		t.Fatalf("Wait() without deadline = %v", err)
+	}
+	if got := c.waits(); !reflect.DeepEqual(got, []time.Duration{time.Minute}) {
+		t.Errorf("waits = %v, want the held minute once", got)
 	}
 }

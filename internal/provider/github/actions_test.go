@@ -768,7 +768,7 @@ func TestRunChangesAreCheckedAndSentOnce(t *testing.T) {
 		return nil
 	})
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("gh", base, repoTarget), resolver(red, nil), red, limited)
+	c, err := open(context.Background(), resolvedConnection("gh", base, repoTarget), resolver(red, nil), red, limited)
 	if err != nil {
 		t.Fatal(err)
 	}

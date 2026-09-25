@@ -35,7 +35,11 @@ func codeFor(err error) output.Code {
 		permission    *secret.PermissionError
 		providerErr   *provider.Error
 	)
+	var deadline *deadlineError
 	switch {
+	case errors.As(err, &deadline):
+		// An invoke that reached its limit is a timeout, whatever surfaced when it did.
+		return output.CodeTimeout
 	case errors.As(err, &notFound):
 		return output.CodeConfigMissing
 	case errors.As(err, &invalid):
@@ -106,6 +110,10 @@ type unsupportedDetail struct {
 // errorDetailFor returns the detail of err, or nil when its code and message already say everything. The
 // CLI and the MCP broker both publish exactly this value, after the same redaction as the message.
 func errorDetailFor(err error, redactor *redact.Redactor) any {
+	var deadline *deadlineError
+	if errors.As(err, &deadline) {
+		return nil
+	}
 	var unsupported *capability.UnsupportedError
 	if errors.As(err, &unsupported) && unsupported.Connection != "" {
 		return &unsupportedDetail{
@@ -170,6 +178,11 @@ func providerCode(class provider.Class) output.Code {
 func classifyUserError(err error) error {
 	if err == nil {
 		return nil
+	}
+	// A timeout is a runtime failure even where the secret it waited for is what surfaced.
+	var deadline *deadlineError
+	if errors.As(err, &deadline) {
+		return err
 	}
 	var (
 		notFound     *config.NotFoundError

@@ -603,7 +603,7 @@ func invokeProjectsCreate(ctx context.Context, resolved *config.Resolved, secret
 	if err := checkProjectTitle(arguments.Title); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, owner)
+	client, err := openAt(ctx, resolved, secrets, red, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -623,7 +623,7 @@ func invokeProjectsUpdate(ctx context.Context, resolved *config.Resolved, secret
 	if err := changes.check(); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -636,7 +636,7 @@ func invokeProjectsDelete(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -664,7 +664,7 @@ func invokeProjectsCopy(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := checkProjectTitle(arguments.Title); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -684,7 +684,7 @@ func invokeProjectsLink(link bool) func(context.Context, *config.Resolved, *secr
 		if err != nil {
 			return nil, err
 		}
-		client, err := openAt(resolved, secrets, red, bound)
+		client, err := openAt(ctx, resolved, secrets, red, bound)
 		if err != nil {
 			return nil, err
 		}
@@ -705,7 +705,7 @@ func invokeProjectsTemplate(template bool) func(context.Context, *config.Resolve
 				return nil, err
 			}
 		}
-		client, err := openAt(resolved, secrets, red, bound)
+		client, err := openAt(ctx, resolved, secrets, red, bound)
 		if err != nil {
 			return nil, err
 		}

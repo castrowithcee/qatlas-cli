@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -440,17 +444,196 @@ func TestArgumentFlagsAreTypedByTheSchema(t *testing.T) {
 	})
 }
 
-// The two ways of passing arguments describe the same object. Using both would leave open which one
-// applies, so the CLI says so rather than merging them.
-func TestArgumentFlagsAndStdinAreExclusive(t *testing.T) {
+// --arg is the whole request: stdin is not read, so an agent that leaves its stdin open, or a shell with a
+// terminal on it, never waits for an end of input nobody sends.
+func TestArgumentFlagsLeaveStdinUnread(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
+	shortenInvokeTimeout(t, 2*time.Second)
 	cfg := writeConfig(t, validConfig)
 
-	code, stdout, stderr := runFakeCLIInput(t, `{"limit":1}`,
-		"invoke", "bookstack.pages.list", "--arg", "limit=1", "--config", cfg)
-	if code != exitUsage || stdout != "" ||
-		!strings.Contains(stderr, "arguments were given both as --arg and on stdin") {
-		t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+	for name, input := range map[string]io.Reader{
+		"an open stdin":        blockingReader(t),
+		"an object on stdin":   strings.NewReader(`{"limit":"not a number"}`),
+		"a pipe nobody closes": openPipe(t),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			redactor := &redact.Redactor{}
+			opts := &Options{Input: input, Redactor: redactor, Secrets: secret.NewWith(nil, nil, nil, redactor)}
+			start := time.Now()
+			code := run(newRootCommand(opts, fakeRegistry(t)), opts,
+				[]string{"invoke", "bookstack.pages.list", "--arg", "limit=1", "--config", cfg}, &stdout, &stderr)
+
+			if code != exitOK || !strings.Contains(stdout.String(), `"result":[`) || stderr.Len() != 0 {
+				t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+			}
+			if elapsed := time.Since(start); elapsed > time.Second {
+				t.Errorf("invoke took %s, want it not to wait for stdin", elapsed)
+			}
+		})
 	}
+}
+
+// Without --arg, stdin is read, but only until the invoke's time limit: an input that never ends is a
+// timeout that names the way out, not a wait without end.
+func TestStdinThatNeverEndsTimesOut(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	shortenInvokeTimeout(t, 50*time.Millisecond)
+	cfg := writeConfig(t, validConfig)
+
+	for name, input := range map[string]io.Reader{
+		"a reader":             blockingReader(t),
+		"a pipe nobody closes": openPipe(t),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			opts := &Options{Input: input, Redactor: &redact.Redactor{}}
+			start := time.Now()
+			code := run(newRootCommand(opts, fakeRegistry(t)), opts,
+				[]string{"invoke", "bookstack.pages.list", "--config", cfg}, &stdout, &stderr)
+
+			want := "qatlas: timeout: stdin did not end within 50ms; close it after the JSON arguments object, " +
+				"or pass the arguments with --arg\n"
+			if code != exitRuntime || stdout.Len() != 0 || stderr.String() != want {
+				t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+			}
+			if elapsed := time.Since(start); elapsed > time.Second {
+				t.Errorf("invoke took %s, want it to end at the limit", elapsed)
+			}
+		})
+	}
+}
+
+func TestOnlyATerminalCountsAsInteractive(t *testing.T) {
+	if terminal(strings.NewReader("")) || terminal(openPipe(t)) {
+		t.Error("a reader or a pipe counts as a terminal, want it read")
+	}
+}
+
+// A provider that does not answer ends with the invoke's limit, as a timeout with the next step.
+func TestInvokeEndsAtItsLimitWithTheNextStep(t *testing.T) {
+	shortenInvokeTimeout(t, 50*time.Millisecond)
+	for name, tt := range map[string]struct {
+		fail func(ctx context.Context) error
+		want string
+	}{
+		"a provider that did not answer": {
+			fail: func(ctx context.Context) error { return provider.Transport("get page", "Fake", ctx.Err()) },
+			want: "qatlas: timeout: get page: Fake did not answer in time; check that the service answers, " +
+				"then try again\n",
+		},
+		"a bare context error": {
+			fail: func(ctx context.Context) error { return ctx.Err() },
+			want: "qatlas: timeout: the request did not finish within 50ms; check that the service answers, " +
+				"then try again\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			registry, path := mcpTestRegistry(t, func(ctx context.Context, _ *config.Resolved, _ *secret.Resolver,
+				_ *redact.Redactor, _ json.RawMessage) (any, error) {
+				<-ctx.Done()
+				return nil, tt.fail(ctx)
+			})
+			var stdout, stderr bytes.Buffer
+			opts := &Options{Input: strings.NewReader(""), Redactor: &redact.Redactor{},
+				Secrets: secret.NewWith(nil, nil, nil, nil)}
+			code := run(newRootCommand(opts, registry), opts,
+				[]string{"invoke", "fake.pages.get", "--connection", "primary", "--config", path}, &stdout, &stderr)
+
+			if code != exitRuntime || stdout.Len() != 0 || stderr.String() != tt.want {
+				t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+			}
+		})
+	}
+}
+
+// A keyring that waits on an unlock prompt until the invoke's limit ends it is a timeout in the CLI and in
+// MCP alike, and both keep the message that names the way out instead of a bare deadline.
+func TestKeyringThatNeverAnswersTimesOutWithTheWayOut(t *testing.T) {
+	registry, path := mcpTestRegistry(t, func(ctx context.Context, resolved *config.Resolved,
+		secrets *secret.Resolver, _ *redact.Redactor, _ json.RawMessage) (any, error) {
+		_, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, "token")
+		return nil, err
+	})
+	stuck := func() *secret.Resolver { return secret.NewWith(nil, stuckStore{}, nil, nil) }
+	env := secret.DerivedEnvName("reader", "token")
+
+	t.Run("CLI", func(t *testing.T) {
+		shortenInvokeTimeout(t, 50*time.Millisecond)
+		var stdout, stderr bytes.Buffer
+		opts := &Options{Input: strings.NewReader(""), Redactor: &redact.Redactor{}, Secrets: stuck()}
+		code := run(newRootCommand(opts, registry), opts,
+			[]string{"invoke", "fake.pages.get", "--connection", "primary", "--config", path}, &stdout, &stderr)
+
+		if code != exitRuntime || !strings.HasPrefix(stderr.String(), "qatlas: timeout: credentials.reader") ||
+			!strings.Contains(stderr.String(), "credential store (timed out)") ||
+			!strings.Contains(stderr.String(), "export "+env+" for this session") {
+			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
+		}
+	})
+
+	t.Run("MCP", func(t *testing.T) {
+		var stdout, stderr bytes.Buffer
+		server := newMCPServer(&Options{Config: path, Redactor: &redact.Redactor{}, Secrets: stuck()},
+			registry, &stdout, &stderr)
+		server.timeout = 50 * time.Millisecond
+		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta + `,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","connection":"primary","arguments":{}}}}` + "\n"
+		if err := server.serve(context.Background(), strings.NewReader(input)); err != nil {
+			t.Fatal(err)
+		}
+		result := toolResultFrom(t, decodeMCPResponses(t, stdout.String())["1"])
+		var detail struct{ Code, Message string }
+		decodeRaw(t, result.Structured, &detail)
+		if !result.IsError || detail.Code != "timeout" ||
+			!strings.Contains(detail.Message, "credential store (timed out)") ||
+			!strings.Contains(detail.Message, "export "+env+" for this session") ||
+			result.Content[0].Text != "timeout: "+detail.Message {
+			t.Errorf("result = %+v, detail = %+v", result, detail)
+		}
+	})
+}
+
+// stuckStore is a keyring waiting on an unlock prompt nobody answers: it holds every read until the
+// request ends, the way the platform store's own deadline ends it.
+type stuckStore struct{}
+
+func (stuckStore) Get(ctx context.Context, _ string) (string, error) {
+	<-ctx.Done()
+	return "", fmt.Errorf("%w: %w", secret.ErrUnavailable, secret.ErrTimedOut)
+}
+func (stuckStore) Set(string, string) error { return secret.ErrUnavailable }
+func (stuckStore) Delete(string) error      { return secret.ErrUnavailable }
+
+func shortenInvokeTimeout(t *testing.T, d time.Duration) {
+	t.Helper()
+	previous := invokeTimeout
+	invokeTimeout = d
+	t.Cleanup(func() { invokeTimeout = previous })
+}
+
+// blockingReader is a stdin that never delivers and never ends until the test is over.
+func blockingReader(t *testing.T) io.Reader {
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	return readerFunc(func([]byte) (int, error) {
+		<-release
+		return 0, io.EOF
+	})
+}
+
+type readerFunc func([]byte) (int, error)
+
+func (f readerFunc) Read(p []byte) (int, error) { return f(p) }
+
+// openPipe is an operating system pipe whose writer stays open until the test is over, as an agent's stdin
+// can be.
+func openPipe(t *testing.T) *os.File {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = writer.Close(); _ = reader.Close() })
+	return reader
 }

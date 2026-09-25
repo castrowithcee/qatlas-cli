@@ -462,7 +462,7 @@ func invokeTeamsList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +487,7 @@ func invokeCollaboratorsUpdate(ctx context.Context, resolved *config.Resolved, s
 			return nil, err
 		}
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -512,7 +512,7 @@ func invokeTeamsLink(link bool) func(context.Context, *config.Resolved, *secret.
 		if err := checkTeamOwner(bound); err != nil {
 			return nil, err
 		}
-		client, err := openAt(resolved, secrets, red, bound)
+		client, err := openAt(ctx, resolved, secrets, red, bound)
 		if err != nil {
 			return nil, err
 		}

@@ -163,7 +163,7 @@ func Register(reg *capability.Registry) error {
 		}},
 	}, func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor) (provider.Class, error) {
-		client, err := Open(resolved, secrets, red)
+		client, err := Open(ctx, resolved, secrets, red)
 		if err != nil {
 			return "", err
 		}
@@ -189,7 +189,7 @@ func invokePagesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func invokePagesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, err
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func invokePagesCreate(ctx context.Context, resolved *config.Resolved, secrets *
 	if json.Unmarshal(raw, &input) != nil || (input.BookID == 0) == (input.ChapterID == 0) {
 		return nil, providerError("create page", "exactly one of book_id or chapter_id is required")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +248,7 @@ func invokePagesUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if input.Markdown != nil {
 		change.Markdown = *input.Markdown
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +263,7 @@ func invokePagesDelete(ctx context.Context, resolved *config.Resolved, secrets *
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError("delete page", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -282,7 +282,7 @@ type Client struct {
 
 // Open builds a client for a resolved connection. The secrets come from the resolver, which owns the
 // cascade and the redaction; this provider only asks for the two roles it needs and never returns them.
-func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
 	base, err := url.Parse(resolved.BaseURL)
 	if err != nil {
 		return nil, &provider.Error{
@@ -291,11 +291,11 @@ func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 		}
 	}
 
-	tokenID, err := role(resolved, secrets, roleTokenID)
+	tokenID, err := role(ctx, resolved, secrets, roleTokenID)
 	if err != nil {
 		return nil, err
 	}
-	tokenSecret, err := role(resolved, secrets, roleTokenSecret)
+	tokenSecret, err := role(ctx, resolved, secrets, roleTokenSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -322,14 +322,14 @@ func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 
 // role resolves one secret role of the connection. Which stage delivers is not this provider's business:
 // it needs the value, and the resolver decides where it comes from.
-func role(resolved *config.Resolved, secrets *secret.Resolver, name string) (string, error) {
+func role(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, name string) (string, error) {
 	if secrets == nil {
 		return "", &provider.Error{
 			Class: provider.ClassProviderError, Op: "open",
 			Message: "no credential resolver was configured",
 		}
 	}
-	value, err := secrets.Resolve(resolved.Credential, resolved.Secrets, name)
+	value, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, name)
 	if err != nil {
 		return "", err
 	}

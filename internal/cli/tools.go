@@ -2,9 +2,12 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -239,12 +242,18 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 		Long: "Invoke runs the named tool through the application core, which validates the arguments against\n" +
 			"the input schema before it selects a connection or contacts a provider.\n\n" +
 			"The arguments come either from --arg name=value, repeated once per argument, or from stdin as\n" +
-			"exactly one JSON object; giving both is an error, and giving neither invokes the tool without\n" +
-			"arguments. --arg reads its type from the input schema, so a numeric argument needs no quoting\n" +
-			"and no JSON, while an argument that is itself a list or an object is written as JSON, for\n" +
-			"example --arg 'labels=[\"bug\"]'.\n\n" +
+			"exactly one JSON object. With --arg, stdin is not read at all; without it, stdin is read unless\n" +
+			"it is a terminal, and a terminal or empty input invokes the tool without arguments. --arg reads\n" +
+			"its type from the input schema, so a numeric argument needs no quoting and no JSON, while an\n" +
+			"argument that is itself a list or an object is written as JSON, for example\n" +
+			"--arg 'labels=[\"bug\"]'.\n\n" +
 			"--connection selects the route when the configuration leaves more than one possibility, and\n" +
 			"--confirm carries the confirmation a mutating tool requires for this request.\n\n" +
+			"Every invoke ends within 60 seconds, reading stdin, resolving the secret, waiting for a rate\n" +
+			"limit, and the provider's requests included. What reaches that limit ends with timeout and\n" +
+			"the next step; a rate-limit pause that would outlast it ends at once with rate-limited and the\n" +
+			"seconds to wait. The system keyring is given at most 10 seconds and is asked once; see\n" +
+			"'qatlas help credential' for a session without a desktop.\n\n" +
 			"The result is written to stdout as JSON, the only format invoke writes: --output json is\n" +
 			"accepted and any other --output is refused. Diagnostics and the audit event of a confirmed\n" +
 			"mutation go to stderr. A connection-ambiguous diagnostic is followed by one JSON line with\n" +
@@ -258,9 +267,11 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			if err := checkInvokeFormat(c, opts); err != nil {
 				return err
 			}
-			arguments, err := invokeArguments(c, registry, args[0], flagArgs)
+			ctx, cancel := context.WithTimeout(c.Context(), invokeTimeout)
+			defer cancel()
+			arguments, err := invokeArguments(ctx, c, registry, args[0], flagArgs)
 			if err != nil {
-				return &UsageError{err}
+				return err
 			}
 			core, err := applicationCore(opts, registry, true)
 			if err != nil {
@@ -268,10 +279,13 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			}
 			var audit bytes.Buffer
 			core.SetAudit(&audit)
-			response, err := core.Invoke(c.Context(), application.InvokeRequest{
+			response, err := core.Invoke(ctx, application.InvokeRequest{
 				Operation: args[0], Connection: opts.Connection, Arguments: arguments, Confirmed: confirm,
 			})
 			if err != nil {
+				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+					err = pastDeadline(err, invokeTimeout)
+				}
 				return withAudit(classifyUserError(err), audit.Bytes())
 			}
 			if err := writeEnvelope(c.OutOrStdout(), response); err != nil {
@@ -288,26 +302,56 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 	return cmd
 }
 
-// invokeArguments takes the arguments from whichever way the caller used. Both ways describe the same
-// object, so using them together would leave open which one applies; the CLI says so instead of merging.
-func invokeArguments(c *cobra.Command, registry *capability.Registry, id string,
+// invokeArguments takes the arguments from whichever way the caller used. --arg wins without looking at
+// stdin, and a terminal on stdin is never read: either would otherwise wait for an end of input that an
+// agent's open pipe or a person's shell never sends. Reading stdin ends with ctx at the latest.
+func invokeArguments(ctx context.Context, c *cobra.Command, registry *capability.Registry, id string,
 	flagArgs []string) (json.RawMessage, error) {
-	stdin, err := readInvokeArguments(c.InOrStdin())
-	if err != nil {
-		return nil, err
-	}
-	if len(flagArgs) == 0 {
-		return stdin, nil
-	}
-	if !bytes.Equal(stdin, []byte(`{}`)) {
-		return nil, &application.InvalidRequestError{
-			Message: "arguments were given both as --arg and on stdin; use one of the two",
+	if len(flagArgs) > 0 {
+		// An unknown tool has no schema to type against. The values stay strings and the core reports the
+		// unknown tool, which is the error the caller actually made.
+		descriptor, _, _ := registry.Lookup(id)
+		arguments, err := argumentsFromFlags(descriptor.InputSchema, flagArgs)
+		if err != nil {
+			return nil, &UsageError{err}
 		}
+		return arguments, nil
 	}
-	// An unknown tool has no schema to type against. The values stay strings and the core reports the
-	// unknown tool, which is the error the caller actually made.
-	descriptor, _, _ := registry.Lookup(id)
-	return argumentsFromFlags(descriptor.InputSchema, flagArgs)
+	input := c.InOrStdin()
+	if terminal(input) {
+		return json.RawMessage(`{}`), nil
+	}
+
+	type outcome struct {
+		arguments json.RawMessage
+		err       error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		arguments, err := readInvokeArguments(input)
+		done <- outcome{arguments, err}
+	}()
+	select {
+	case got := <-done:
+		if got.err != nil {
+			return nil, &UsageError{got.err}
+		}
+		return got.arguments, nil
+	case <-ctx.Done():
+		return nil, &deadlineError{err: fmt.Errorf("stdin did not end within %s; close it after the JSON "+
+			"arguments object, or pass the arguments with --arg", seconds(invokeTimeout))}
+	}
+}
+
+// terminal reports whether the input is an interactive terminal. Anything that is not a file, such as the
+// reader of a test or an embedding program, counts as a pipe and is read.
+func terminal(input io.Reader) bool {
+	file, ok := input.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 // discoveryFormat resolves the output format of the discovery commands. TOON is the default because these

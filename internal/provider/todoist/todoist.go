@@ -277,13 +277,13 @@ type Client struct {
 }
 
 // Open resolves the token of one selected connection and returns a client for its configured scope.
-func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
-	return open(resolved, secrets, red, nil)
+func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+	return open(ctx, resolved, secrets, red, nil)
 }
 
 // open is the internal seam. A caller may supply the rate limiter, and the package's own tests replace the
 // transport, so no test ever reaches Todoist.
-func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
@@ -298,7 +298,7 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if secrets == nil {
 		return nil, providerError("open", "no credential resolver was configured")
 	}
-	value, err := secrets.Resolve(resolved.Credential, resolved.Secrets, roleToken)
+	value, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, roleToken)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +340,7 @@ func newHTTPClient() *http.Client {
 // the scope; plan-dependent reads such as reminders are checked by Todoist on each request.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {
@@ -505,8 +505,7 @@ const uncertain = "; the change may have been applied, read the current state be
 func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []byte, contentType string,
 	out any, change bool) error {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return &provider.Error{Class: provider.ClassTimeout, Op: op,
-			Message: "the request ended while it waited for the Todoist rate limit"}
+		return provider.Waited(op, "Todoist", err)
 	}
 	var body io.Reader
 	if payload != nil {

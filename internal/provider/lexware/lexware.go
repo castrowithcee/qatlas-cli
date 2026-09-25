@@ -242,7 +242,7 @@ func invokeInvoicesList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list invoices", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +257,7 @@ func invokeInvoicesGet(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("get invoice", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func invokeInvoicesCreate(ctx context.Context, resolved *config.Resolved, secret
 	if err := input.validate(); err != nil {
 		return nil, providerError("create invoice", err.Error())
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -350,13 +350,13 @@ type Client struct {
 }
 
 // Open resolves the API key of one selected connection and returns a client for the fixed gateway.
-func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
-	return open(resolved, secrets, red, nil)
+func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+	return open(ctx, resolved, secrets, red, nil)
 }
 
 // open is the internal seam. A caller may supply the rate limiter, and the package's own tests replace
 // the transport, so no test ever reaches a productive Lexware organization.
-func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
@@ -368,7 +368,7 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if secrets == nil {
 		return nil, providerError("open", "no credential resolver was configured")
 	}
-	value, err := secrets.Resolve(resolved.Credential, resolved.Secrets, roleAPIKey)
+	value, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, roleAPIKey)
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +408,7 @@ func newHTTPClient() *http.Client {
 // stable outcome class. It reads one invoice metadata record and nothing else.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {
@@ -818,10 +818,7 @@ type invoiceJSON struct {
 // get performs one bounded read against the fixed gateway and decodes the response into out.
 func (c *Client) get(ctx context.Context, op, path string, query url.Values, out any) error {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return &provider.Error{
-			Class: provider.ClassTimeout, Op: op,
-			Message: "the request ended while it waited for the Lexware rate limit",
-		}
+		return provider.Waited(op, "Lexware", err)
 	}
 
 	target := gateway + path
@@ -861,7 +858,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 
 func (c *Client) post(ctx context.Context, op, path string, query url.Values, payload, out any) error {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "the request ended while it waited for the Lexware rate limit"}
+		return provider.Waited(op, "Lexware", err)
 	}
 	body, err := json.Marshal(payload)
 	if err != nil || len(body) > maxResponseBytes {

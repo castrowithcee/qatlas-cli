@@ -98,7 +98,7 @@ func freeLimiter() *ratelimit.Limiter {
 func client(t *testing.T) (*Client, *redact.Redactor) {
 	t.Helper()
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("crm", "crm-cloud-reader", cloudEnv, cloudOrigin), resolver(red), red,
+	c, err := open(context.Background(), resolvedConnection("crm", "crm-cloud-reader", cloudEnv, cloudOrigin), resolver(red), red,
 		freeLimiter())
 	if err != nil {
 		t.Fatalf("open() = %v", err)
@@ -511,7 +511,7 @@ func TestOversizedResponsesAreRefused(t *testing.T) {
 // cloud origin and a self-hosted https origin, and refuses everything that is not a bare https origin.
 func TestOpenRedactsTheKeyAndBindsTheConfiguredOrigin(t *testing.T) {
 	red := &redact.Redactor{}
-	if _, err := open(resolvedConnection("crm", "crm-cloud-reader", cloudEnv, cloudOrigin),
+	if _, err := open(context.Background(), resolvedConnection("crm", "crm-cloud-reader", cloudEnv, cloudOrigin),
 		resolver(red), red, freeLimiter()); err != nil {
 		t.Fatalf("open() = %v", err)
 	}
@@ -522,7 +522,7 @@ func TestOpenRedactsTheKeyAndBindsTheConfiguredOrigin(t *testing.T) {
 	}
 
 	for _, origin := range []string{cloudOrigin, cloudOrigin + "/", selfHosted, selfHosted + "/"} {
-		if _, err := open(resolvedConnection("crm", "crm-cloud-reader", cloudEnv, origin),
+		if _, err := open(context.Background(), resolvedConnection("crm", "crm-cloud-reader", cloudEnv, origin),
 			resolver(red), red, freeLimiter()); err != nil {
 			t.Errorf("open() refused the configured origin %q: %v", origin, err)
 		}
@@ -538,13 +538,13 @@ func TestOpenRedactsTheKeyAndBindsTheConfiguredOrigin(t *testing.T) {
 		"//api.twenty.com", "api.twenty.com", "", //
 	} {
 		connection := resolvedConnection("crm", "crm-cloud-reader", cloudEnv, origin)
-		if _, err := open(connection, resolver(red), red, freeLimiter()); err == nil {
+		if _, err := open(context.Background(), connection, resolver(red), red, freeLimiter()); err == nil {
 			t.Errorf("open() accepted the origin %q", origin)
 		}
 	}
 
 	missing := resolvedConnection("crm", "crm-cloud-reader", "TEST_TWENTY_ABSENT", cloudOrigin)
-	if _, err := open(missing, resolver(red), red, freeLimiter()); err == nil {
+	if _, err := open(context.Background(), missing, resolver(red), red, freeLimiter()); err == nil {
 		t.Error("open() accepted a credential without a secret")
 	}
 }
@@ -565,7 +565,7 @@ func TestWorkspacesKeepTheirOwnOriginKeyAndRateBudget(t *testing.T) {
 		resolvedConnection("crm", "crm-cloud-reader", cloudEnv, cloudOrigin),
 		resolvedConnection("crm-internal", "crm-selfhosted-reader", internalEnv, selfHosted),
 	} {
-		c, err := open(connection, secrets, red, freeLimiter())
+		c, err := open(context.Background(), connection, secrets, red, freeLimiter())
 		if err != nil {
 			t.Fatalf("open(%s) = %v", connection.Name, err)
 		}
@@ -611,7 +611,7 @@ func TestRateLimitSpacesRequestsOfOneKey(t *testing.T) {
 		})
 
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("crm", "crm-cloud-reader", cloudEnv, cloudOrigin), resolver(red), red, limited)
+	c, err := open(context.Background(), resolvedConnection("crm", "crm-cloud-reader", cloudEnv, cloudOrigin), resolver(red), red, limited)
 	if err != nil {
 		t.Fatalf("open() = %v", err)
 	}
@@ -636,7 +636,7 @@ func TestRateLimitRespectsCancellation(t *testing.T) {
 	limited.HoldFor(time.Hour)
 
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("crm", "crm-cloud-reader", cloudEnv, cloudOrigin), resolver(red), red, limited)
+	c, err := open(context.Background(), resolvedConnection("crm", "crm-cloud-reader", cloudEnv, cloudOrigin), resolver(red), red, limited)
 	if err != nil {
 		t.Fatalf("open() = %v", err)
 	}

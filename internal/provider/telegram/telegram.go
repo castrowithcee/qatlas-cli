@@ -165,7 +165,7 @@ func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets 
 			Class: provider.ClassProviderError, Op: "send message", Message: "the validated arguments could not be read",
 		}
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func invokeMessagesEdit(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("edit message", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func invokeMessagesDelete(ctx context.Context, resolved *config.Resolved, secret
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("delete message", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -212,11 +212,11 @@ type Client struct {
 }
 
 // Open resolves the bot token only after the application core selected and confirmed the exact request.
-func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
-	return openWithHTTP(resolved, secrets, red, newHTTPClient())
+func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+	return openWithHTTP(ctx, resolved, secrets, red, newHTTPClient())
 }
 
-func openWithHTTP(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+func openWithHTTP(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	httpClient *http.Client) (*Client, error) {
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
@@ -232,7 +232,7 @@ func openWithHTTP(resolved *config.Resolved, secrets *secret.Resolver, red *reda
 	if secrets == nil {
 		return nil, providerError("open", "no credential resolver was configured")
 	}
-	value, err := secrets.Resolve(resolved.Credential, resolved.Secrets, roleBotToken)
+	value, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, roleBotToken)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func newHTTPClient() *http.Client {
 // TestConnection calls getMe, Telegram's read-only authentication check. It never sends to Target.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {

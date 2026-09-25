@@ -12,8 +12,10 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
 )
 
 // The canaries stand for everything a transport failure carries and no diagnostic may publish: the full
@@ -178,5 +180,18 @@ func TestErrorPublishesTheCause(t *testing.T) {
 	without := &provider.Error{Class: provider.ClassAuth, Op: "send message", Message: "Telegram rejected the token"}
 	if got, want := without.Error(), "send message: Telegram rejected the token"; got != want {
 		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
+
+// A limiter pause that outlasts the request is rate-limited with the wait; one the request ended during is
+// a timeout.
+func TestWaitedNamesTheWaitOrTheTimeout(t *testing.T) {
+	limited := provider.Waited("list issues", "GitHub", &ratelimit.BeyondDeadlineError{Wait: 1500 * time.Millisecond})
+	if limited.Class != provider.ClassRateLimited || !strings.Contains(limited.Message, "retry after 2 seconds") {
+		t.Errorf("Waited(beyond) = %+v", limited)
+	}
+	ended := provider.Waited("list issues", "GitHub", context.DeadlineExceeded)
+	if ended.Class != provider.ClassTimeout || ended.Message != "the request ended while it waited for the GitHub rate limit" {
+		t.Errorf("Waited(deadline) = %+v", ended)
 	}
 }

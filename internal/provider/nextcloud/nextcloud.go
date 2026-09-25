@@ -259,7 +259,7 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("list files", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +272,7 @@ func invokeFilesStat(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError("stat file", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -285,24 +285,24 @@ type contentArguments struct {
 	ETag    string `json:"etag"`
 }
 
-func openForContent(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (*Client, contentArguments, error) {
+func openForContent(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (*Client, contentArguments, error) {
 	var input contentArguments
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, input, providerError("file operation", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	return client, input, err
 }
 
 func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
-	client, input, err := openForContent(resolved, secrets, red, raw)
+	client, input, err := openForContent(ctx, resolved, secrets, red, raw)
 	if err != nil {
 		return nil, err
 	}
 	return client.GetFile(ctx, input.Path)
 }
 func invokeFilesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
-	client, input, err := openForContent(resolved, secrets, red, raw)
+	client, input, err := openForContent(ctx, resolved, secrets, red, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +313,7 @@ func invokeFilesCreate(ctx context.Context, resolved *config.Resolved, secrets *
 	return map[string]any{"created": true, "etag": etag}, nil
 }
 func invokeFilesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
-	client, input, err := openForContent(resolved, secrets, red, raw)
+	client, input, err := openForContent(ctx, resolved, secrets, red, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +324,7 @@ func invokeFilesUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	return map[string]any{"updated": true, "etag": etag}, nil
 }
 func invokeFilesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
-	client, input, err := openForContent(resolved, secrets, red, raw)
+	client, input, err := openForContent(ctx, resolved, secrets, red, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +348,7 @@ type Client struct {
 }
 
 // Open resolves the identity of one selected connection and returns a client bound to its root folder.
-func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
 	const op = "open"
 	if resolved == nil {
 		return nil, providerError(op, "no connection was selected")
@@ -365,7 +365,7 @@ func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 		return nil, providerError(op, "no credential resolver was configured")
 	}
 
-	userID, err := role(resolved, secrets, roleUserID)
+	userID, err := role(ctx, resolved, secrets, roleUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +374,7 @@ func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 			Class: provider.ClassAuth, Op: op, Message: "the Nextcloud user ID is unusable",
 		}
 	}
-	password, err := role(resolved, secrets, roleAppPassword)
+	password, err := role(ctx, resolved, secrets, roleAppPassword)
 	if err != nil {
 		return nil, err
 	}
@@ -402,8 +402,8 @@ func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 
 // role resolves one secret role of the connection. Which stage of the cascade delivers is not this
 // provider's business: it needs the value, and the resolver decides where it comes from.
-func role(resolved *config.Resolved, secrets *secret.Resolver, name string) (string, error) {
-	value, err := secrets.Resolve(resolved.Credential, resolved.Secrets, name)
+func role(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, name string) (string, error) {
+	value, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, name)
 	if err != nil {
 		return "", err
 	}
@@ -568,7 +568,7 @@ func (e *redirectRefusedError) Error() string {
 // the identity may read the folder the connection is bound to. Nothing is written and no content is read.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {

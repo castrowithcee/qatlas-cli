@@ -327,7 +327,7 @@ func invokeTablesList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list tables", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -340,7 +340,7 @@ func invokeColumnsList(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list columns", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +353,7 @@ func invokeRowsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list rows", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +369,7 @@ func invokeRowsGet(ctx context.Context, resolved *config.Resolved, secrets *secr
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("get row", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -387,7 +387,7 @@ func invokeRowsCreate(ctx context.Context, resolved *config.Resolved, secrets *s
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError("create row", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +402,7 @@ func invokeRowsUpdate(ctx context.Context, resolved *config.Resolved, secrets *s
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError("update row", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +417,7 @@ func invokeRowsDelete(ctx context.Context, resolved *config.Resolved, secrets *s
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError("delete row", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -465,13 +465,13 @@ type baseAccess struct {
 }
 
 // Open resolves the API token of one selected connection and returns a client for its configured origin.
-func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
-	return open(resolved, secrets, red, nil)
+func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+	return open(ctx, resolved, secrets, red, nil)
 }
 
 // open is the internal seam. A caller may supply the rate limiter, and the package's own tests replace
 // the transport, so no test ever reaches a productive SeaTable installation.
-func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
@@ -487,7 +487,7 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if secrets == nil {
 		return nil, providerError("open", "no credential resolver was configured")
 	}
-	value, err := secrets.Resolve(resolved.Credential, resolved.Secrets, roleAPIToken)
+	value, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, roleAPIToken)
 	if err != nil {
 		return nil, err
 	}
@@ -689,7 +689,7 @@ func newHTTPClient() *http.Client {
 // table. The check reads metadata only.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {
@@ -1315,10 +1315,7 @@ type tableJSON struct {
 func (c *Client) get(ctx context.Context, op, path string, query url.Values, token string,
 	limit int64, out any) error {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return &provider.Error{
-			Class: provider.ClassTimeout, Op: op,
-			Message: "the request ended while it waited for the SeaTable rate limit",
-		}
+		return provider.Waited(op, "SeaTable", err)
 	}
 
 	target := c.origin + path
@@ -1359,7 +1356,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, tok
 
 func (c *Client) change(ctx context.Context, op, method, path, token string, body []byte) error {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "the request ended while it waited for the SeaTable rate limit"}
+		return provider.Waited(op, "SeaTable", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.origin+path, strings.NewReader(string(body)))
 	if err != nil {

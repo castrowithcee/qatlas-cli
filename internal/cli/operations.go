@@ -8,12 +8,53 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
+
+// invokeTimeout bounds one invoke in the CLI and in the MCP broker: reading stdin, resolving the secret,
+// waiting for a rate limit, and every provider request. It is a variable only so a test can shorten it.
+var invokeTimeout = 60 * time.Second
+
+// deadlineError reports an invoke that reached its time limit. It keeps the error that surfaced then, so
+// the cause stays reachable, and its message names the next step.
+type deadlineError struct{ err error }
+
+func (e *deadlineError) Error() string { return e.err.Error() }
+func (e *deadlineError) Unwrap() error { return e.err }
+
+// pastDeadline turns what an invoke returned after its limit passed into a timeout that says how to go on.
+// A secret the keyring could not deliver in time already names the way out; a provider that did not answer
+// in time gets the next step added; anything else, such as a bare context error, is replaced by the limit
+// that was reached.
+func pastDeadline(err error, limit time.Duration) error {
+	const next = "check that the service answers, then try again"
+	var (
+		missing *secret.MissingSecretError
+		failure *provider.Error
+	)
+	switch {
+	case errors.As(err, &missing):
+		return &deadlineError{err: err}
+	case errors.As(err, &failure) && failure.Class == provider.ClassTimeout:
+		return &deadlineError{err: fmt.Errorf("%w; %s", err, next)}
+	}
+	return &deadlineError{err: fmt.Errorf("the request did not finish within %s; %s", seconds(limit), next)}
+}
+
+// seconds writes a limit the way a message names it.
+func seconds(d time.Duration) string {
+	if d%time.Second != 0 {
+		return d.String()
+	}
+	return fmt.Sprintf("%d seconds", d/time.Second)
+}
 
 // maxAgentRequestBytes bounds the complete stdin input before JSON decoding. One MiB leaves ample room for
 // tool arguments while preventing an untrusted agent from making the short-lived CLI allocate an unbounded

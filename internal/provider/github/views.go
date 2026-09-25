@@ -615,7 +615,7 @@ func invokeViewsList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}

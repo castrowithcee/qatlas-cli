@@ -8,6 +8,7 @@ package ratelimit
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -29,14 +30,27 @@ func New(interval time.Duration, now func() time.Time,
 	return &Limiter{interval: interval, now: now, sleep: sleep}
 }
 
+// BeyondDeadlineError reports a slot that is due only after the request has to end. Waiting for it would
+// only end in a timeout, so the request ends at once and says how long the budget of this key still needs.
+type BeyondDeadlineError struct{ Wait time.Duration }
+
+func (e *BeyondDeadlineError) Error() string {
+	return fmt.Sprintf("the next slot is due in %s, after the request ends", e.Wait)
+}
+
 // Wait reserves the next slot and blocks until it is due. It returns the context error when the request
-// ends while it waits, so a cancelled request never becomes a provider call.
+// ends while it waits, so a cancelled request never becomes a provider call, and a *BeyondDeadlineError
+// without reserving anything when the slot is due only after the request's deadline.
 func (l *Limiter) Wait(ctx context.Context) error {
 	l.mu.Lock()
 	now := l.now()
 	wait := l.next.Sub(now)
 	if wait < 0 {
 		wait = 0
+	}
+	if deadline, ok := ctx.Deadline(); ok && wait > 0 && wait > time.Until(deadline) {
+		l.mu.Unlock()
+		return &BeyondDeadlineError{Wait: wait}
 	}
 	l.next = now.Add(wait + l.interval)
 	l.mu.Unlock()

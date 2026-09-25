@@ -173,7 +173,7 @@ type writtenMsg struct {
 
 // refreshSources asks where the secrets of the given credentials resolve from.
 //
-// Every question may reach the platform store, which is allowed to take up to thirty seconds, so the
+// Every question may reach the platform store, which is allowed to take up to ten seconds, so the
 // questions are asked in a command and the event loop keeps handling keys meanwhile. A later job wins: the
 // result of an abandoned one is dropped through the same generation counter the connection test uses.
 func (m *Model) refreshSources(queries []credQuery) tea.Cmd {

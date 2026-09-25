@@ -343,7 +343,7 @@ func invokeOwnerList(ctx context.Context, resolved *config.Resolved, secrets *se
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, owner)
+	client, err := openAt(ctx, resolved, secrets, red, owner)
 	if err != nil {
 		return nil, err
 	}

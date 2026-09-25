@@ -785,7 +785,7 @@ func TestARateLimitHoldsTheNextRequest(t *testing.T) {
 	resolved := &config.Resolved{Name: "account", Provider: Provider, BaseURL: apiRoot, Target: wildcard,
 		Credential: "td-reader", Secrets: config.Credential{Type: config.CredentialTypeEnv,
 			Values: map[string]string{roleToken: tokenEnv}}}
-	c, err := open(resolved, resolver(red, nil), red, limited)
+	c, err := open(context.Background(), resolved, resolver(red, nil), red, limited)
 	if err != nil {
 		t.Fatal(err)
 	}

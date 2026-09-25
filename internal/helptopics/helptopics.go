@@ -142,7 +142,7 @@ Invoke:
   qatlas invoke <tool-id> --connection <name> --arg 'labels=["bug"]'
   echo '{"name":"value"}' | qatlas invoke <tool-id> --connection <name>
 
---arg is repeated once per argument and typed by the input schema: a string as written, a number, true or false, and a list or an object as JSON. The whole arguments object as one JSON object on stdin is the equal alternative; use one of the two ways, not both. A tool whose contract requires confirmation runs only with --confirm, and the audit event of that change goes to stderr. The result is one JSON object with a data field on stdout. --agent keeps other output machine-readable, without prose or colour.
+--arg is repeated once per argument and typed by the input schema: a string as written, a number, true or false, and a list or an object as JSON. The whole arguments object as one JSON object on stdin is the equal alternative; with --arg, stdin is not read. Every invoke ends within 60 seconds; what reaches that limit ends with timeout and the next step. A tool whose contract requires confirmation runs only with --confirm, and the audit event of that change goes to stderr. The result is one JSON object with a data field on stdout. --agent keeps other output machine-readable, without prose or colour.
 
 Always pass --connection. Many tools require it (requires_explicit_connection in the contract); without it a tool runs only through a default or through the single connection that offers it.
 

@@ -505,7 +505,7 @@ func resolver(red *redact.Redactor, reads *int) *secret.Resolver {
 func client(t *testing.T, base, target string) *Client {
 	t.Helper()
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("gh", base, target), resolver(red, nil), red, freeLimiter())
+	c, err := open(context.Background(), resolvedConnection("gh", base, target), resolver(red, nil), red, freeLimiter())
 	if err != nil {
 		t.Fatalf("open() = %v", err)
 	}
@@ -1342,7 +1342,7 @@ func TestProviderFailuresAreNormalized(t *testing.T) {
 			f := &fakeGitHub{failure: func(w http.ResponseWriter, _ *http.Request) bool { tt.answer(w); return true }}
 			base := serve(t, f)
 			red := &redact.Redactor{}
-			c, err := open(resolvedConnection("gh", base, projectTarget), resolver(red, nil), red, freeLimiter())
+			c, err := open(context.Background(), resolvedConnection("gh", base, projectTarget), resolver(red, nil), red, freeLimiter())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1377,7 +1377,7 @@ func TestRateLimitHeadersHoldTheNextRequest(t *testing.T) {
 		return nil
 	})
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("gh", base, repoTarget), resolver(red, nil), red, limited)
+	c, err := open(context.Background(), resolvedConnection("gh", base, repoTarget), resolver(red, nil), red, limited)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1392,6 +1392,34 @@ func TestRateLimitHeadersHoldTheNextRequest(t *testing.T) {
 	}
 	if retryAfter(http.Header{"Retry-After": {"7"}}) != 7*time.Second || capHold(2*maxHold) != maxHold {
 		t.Error("the retry hint or its bound is wrong")
+	}
+}
+
+// A rate-limit pause that would outlast the request ends it at once as rate-limited, with the wait, and
+// sends nothing: waiting for it could only end in a timeout.
+func TestRateLimitPausePastTheDeadlineEndsAtOnce(t *testing.T) {
+	f := &fakeGitHub{items: roster()}
+	base := serve(t, f)
+	limited := ratelimit.New(0, time.Now, ratelimit.Sleep)
+	limited.HoldFor(time.Minute)
+	red := &redact.Redactor{}
+	c, err := open(context.Background(), resolvedConnection("gh", base, repoTarget), resolver(red, nil), red, limited)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	_, err = c.GetIssue(ctx, 42)
+
+	var failure *provider.Error
+	if !errors.As(err, &failure) || failure.Class != provider.ClassRateLimited ||
+		!strings.Contains(failure.Message, "retry after 60 seconds") {
+		t.Fatalf("GetIssue() = %v, want rate-limited with the wait", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("GetIssue() waited %s, want it to end at once", elapsed)
 	}
 }
 

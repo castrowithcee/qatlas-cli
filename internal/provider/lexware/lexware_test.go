@@ -95,7 +95,7 @@ func freeLimiter() *ratelimit.Limiter {
 func client(t *testing.T) (*Client, *redact.Redactor) {
 	t.Helper()
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("lexware-primary", "lexware-key", primaryEnv), resolver(red), red, freeLimiter())
+	c, err := open(context.Background(), resolvedConnection("lexware-primary", "lexware-key", primaryEnv), resolver(red), red, freeLimiter())
 	if err != nil {
 		t.Fatalf("open() = %v", err)
 	}
@@ -515,7 +515,7 @@ func TestOversizedResponsesAreRefused(t *testing.T) {
 // any base URL other than the fixed gateway.
 func TestOpenRedactsTheKeyAndBindsTheFixedGateway(t *testing.T) {
 	red := &redact.Redactor{}
-	if _, err := open(resolvedConnection("lexware-primary", "lexware-key", primaryEnv),
+	if _, err := open(context.Background(), resolvedConnection("lexware-primary", "lexware-key", primaryEnv),
 		resolver(red), red, freeLimiter()); err != nil {
 		t.Fatalf("open() = %v", err)
 	}
@@ -529,13 +529,13 @@ func TestOpenRedactsTheKeyAndBindsTheFixedGateway(t *testing.T) {
 		"https://api.lexware.io.attacker.invalid", ""} {
 		connection := resolvedConnection("lexware-primary", "lexware-key", primaryEnv)
 		connection.BaseURL = base
-		if _, err := open(connection, resolver(red), red, freeLimiter()); err == nil {
+		if _, err := open(context.Background(), connection, resolver(red), red, freeLimiter()); err == nil {
 			t.Errorf("open() accepted base URL %q", base)
 		}
 	}
 
 	missing := resolvedConnection("lexware-primary", "lexware-key", "TEST_LEXWARE_ABSENT")
-	if _, err := open(missing, resolver(red), red, freeLimiter()); err == nil {
+	if _, err := open(context.Background(), missing, resolver(red), red, freeLimiter()); err == nil {
 		t.Error("open() accepted a credential without a secret")
 	}
 }
@@ -555,7 +555,7 @@ func TestConnectionsKeepTheirOwnKeyAndRateBudget(t *testing.T) {
 		resolvedConnection("lexware-primary", "primary-key", primaryEnv),
 		resolvedConnection("lexware-archive", "archive-key", archiveEnv),
 	} {
-		c, err := open(connection, secrets, red, freeLimiter())
+		c, err := open(context.Background(), connection, secrets, red, freeLimiter())
 		if err != nil {
 			t.Fatalf("open(%s) = %v", connection.Name, err)
 		}
@@ -598,7 +598,7 @@ func TestRateLimitSpacesRequestsOfOneKey(t *testing.T) {
 		})
 
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("lexware-primary", "lexware-key", primaryEnv), resolver(red), red, limited)
+	c, err := open(context.Background(), resolvedConnection("lexware-primary", "lexware-key", primaryEnv), resolver(red), red, limited)
 	if err != nil {
 		t.Fatalf("open() = %v", err)
 	}
@@ -620,7 +620,7 @@ func TestRateLimitRespectsCancellation(t *testing.T) {
 	limited.HoldFor(time.Hour)
 
 	red := &redact.Redactor{}
-	c, err := open(resolvedConnection("lexware-primary", "lexware-key", primaryEnv), resolver(red), red, limited)
+	c, err := open(context.Background(), resolvedConnection("lexware-primary", "lexware-key", primaryEnv), resolver(red), red, limited)
 	if err != nil {
 		t.Fatalf("open() = %v", err)
 	}

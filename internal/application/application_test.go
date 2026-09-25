@@ -104,7 +104,7 @@ func TestConnectionToolsFilterEveryPathTheSameWay(t *testing.T) {
 	handler := capability.Handler(func(_ context.Context, resolved *config.Resolved, resolver *secret.Resolver,
 		_ *redact.Redactor, _ json.RawMessage) (any, error) {
 		handlerCalls++
-		if _, err := resolver.Resolve(resolved.Credential, resolved.Secrets, "token"); err != nil {
+		if _, err := resolver.Resolve(context.Background(), resolved.Credential, resolved.Secrets, "token"); err != nil {
 			return nil, err
 		}
 		return map[string]any{"ok": true}, nil
@@ -719,7 +719,7 @@ func TestExplicitConnectionAndConfirmationPrecedeSecretsIOAndAudit(t *testing.T)
 	handler := capability.Handler(func(_ context.Context, resolved *config.Resolved, resolver *secret.Resolver,
 		_ *redact.Redactor, _ json.RawMessage) (any, error) {
 		handlerCalls++
-		if _, err := resolver.Resolve(resolved.Credential, resolved.Secrets, "token"); err != nil {
+		if _, err := resolver.Resolve(context.Background(), resolved.Credential, resolved.Secrets, "token"); err != nil {
 			return nil, err
 		}
 		return map[string]any{"ok": true}, nil
@@ -912,7 +912,7 @@ func testCore(t *testing.T, connections []string, defaults map[string]string, wi
 	calls := new(int)
 	handler := capability.Handler(func(_ context.Context, resolved *config.Resolved, resolver *secret.Resolver,
 		_ *redact.Redactor, _ json.RawMessage) (any, error) {
-		if _, err := resolver.Resolve(resolved.Credential, resolved.Secrets, "token"); err != nil {
+		if _, err := resolver.Resolve(context.Background(), resolved.Credential, resolved.Secrets, "token"); err != nil {
 			return nil, err
 		}
 		*calls++
@@ -999,7 +999,7 @@ func TestToolsRequiringAnAllowListAreOfferedOnlyWhereListed(t *testing.T) {
 	handler := capability.Handler(func(_ context.Context, resolved *config.Resolved, resolver *secret.Resolver,
 		_ *redact.Redactor, _ json.RawMessage) (any, error) {
 		handlerCalls++
-		if _, err := resolver.Resolve(resolved.Credential, resolved.Secrets, "token"); err != nil {
+		if _, err := resolver.Resolve(context.Background(), resolved.Credential, resolved.Secrets, "token"); err != nil {
 			return nil, err
 		}
 		return map[string]any{"ok": true}, nil

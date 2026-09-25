@@ -538,7 +538,7 @@ func actionsHandler(id string, check func(*actionsArguments, target) error,
 		if err := check(&arguments, bound); err != nil {
 			return nil, err
 		}
-		client, err := openAt(resolved, secrets, red, bound)
+		client, err := openAt(ctx, resolved, secrets, red, bound)
 		if err != nil {
 			return nil, err
 		}
@@ -1147,8 +1147,7 @@ type JobLog struct {
 func (c *Client) jobLog(ctx context.Context, id int64, lines, maxBytes int) (*JobLog, error) {
 	const op = "read job log"
 	if err := c.limiter.Wait(ctx); err != nil {
-		return nil, &provider.Error{Class: provider.ClassTimeout, Op: op,
-			Message: "the request ended while it waited for the GitHub rate limit"}
+		return nil, provider.Waited(op, "GitHub", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		c.endpoints.rest+c.actionsPath("jobs/"+strconv.FormatInt(id, 10)+"/logs"), nil)

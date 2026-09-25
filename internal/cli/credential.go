@@ -33,7 +33,15 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"the configuration and is written only when --plaintext asks for it. QATLAS_CREDENTIAL_STORE=none\n" +
 			"switches the system keyring off for a run.\n\n" +
 			"These commands write and remove the entries. No command ever shows a stored secret back, not\n" +
-			"even masked; 'qatlas config validate --secrets' shows which source delivers each role.",
+			"even masked; 'qatlas config validate --secrets' shows which source delivers each role.\n\n" +
+			"Every call into the system keyring ends within 10 seconds, and within the 60 seconds of an\n" +
+			"invoke. On Linux a session without a desktop, such as SSH, or the MCP broker never waits for\n" +
+			"an unlock prompt: a locked keyring ends at once as locked, and one without a reachable session\n" +
+			"bus as unavailable, without starting one. After such a failure the keyring is not asked again\n" +
+			"for 60 seconds, so an invoke asks it once and the MCP broker asks again after that. The message\n" +
+			"names the next step: unlock the keyring in a desktop session of the same user, or export\n" +
+			"QATLAS_<CREDENTIAL>_<ROLE> for the session. A built-in encrypted store for sessions without a\n" +
+			"desktop is not available yet.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}

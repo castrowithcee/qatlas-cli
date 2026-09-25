@@ -1186,7 +1186,7 @@ func invokeFieldsList(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -1209,7 +1209,7 @@ func projectHandler[T interface{ check() error }](op string, run func(*Client, c
 		if err := arguments.check(); err != nil {
 			return nil, err
 		}
-		client, err := openAt(resolved, secrets, red, bound)
+		client, err := openAt(ctx, resolved, secrets, red, bound)
 		if err != nil {
 			return nil, err
 		}

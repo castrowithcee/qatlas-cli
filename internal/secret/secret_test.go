@@ -1,6 +1,7 @@
 package secret
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -56,7 +57,7 @@ func TestCascadeOrder(t *testing.T) {
 			t.Fatalf("Set() = %v", err)
 		}
 
-		got, err := r.Resolve(credName, keyringCred(), role)
+		got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
 		if err != nil {
 			t.Fatalf("Resolve() = %v", err)
@@ -75,7 +76,7 @@ func TestCascadeOrder(t *testing.T) {
 			t.Fatalf("Set() = %v", err)
 		}
 
-		got, err := r.Resolve(credName, keyringCred(), role)
+		got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
 		if err != nil {
 			t.Fatalf("Resolve() = %v", err)
@@ -94,7 +95,7 @@ func TestCascadeOrder(t *testing.T) {
 			t.Fatalf("Set() = %v", err)
 		}
 
-		got, err := r.Resolve(credName, keyringCred(), role)
+		got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
 		if err != nil {
 			t.Fatalf("Resolve() = %v", err)
@@ -113,7 +114,7 @@ func TestUnavailableStoreFallsThrough(t *testing.T) {
 		t.Fatalf("Set() = %v", err)
 	}
 
-	got, err := r.Resolve(credName, keyringCred(), role)
+	got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
 	if err != nil {
 		t.Fatalf("Resolve() = %v, want the fallback to take over", err)
@@ -134,7 +135,7 @@ func TestLockedStoreIsNamedPrecisely(t *testing.T) {
 
 	r, store, _, _ := fixture(t, nil)
 	store.Fail(classified)
-	_, err := r.Resolve(credName, keyringCred(), role)
+	_, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 	var missing *MissingSecretError
 	if !errors.As(err, &missing) {
 		t.Fatalf("Resolve() = %v, want MissingSecretError", err)
@@ -264,7 +265,7 @@ func TestMissingSecretNamesALockedKeyring(t *testing.T) {
 	r, store, _, _ := fixture(t, nil)
 	store.Fail(fmt.Errorf("%w: %w", ErrUnavailable, ErrLocked))
 
-	_, err := r.Resolve(credName, keyringCred(), role)
+	_, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 	if err == nil {
 		t.Fatal("Resolve() = nil, want a missing secret")
 	}
@@ -277,7 +278,7 @@ func TestMissingSecretNamesALockedKeyring(t *testing.T) {
 	}
 
 	r, _, _, _ = fixture(t, nil)
-	_, err = r.Resolve(credName, keyringCred(), role)
+	_, err = r.Resolve(context.Background(), credName, keyringCred(), role)
 	if err == nil || !strings.Contains(err.Error(), "store it in the system keyring with 'qatlas credential set") {
 		t.Errorf("error = %v, want the keyring named as the place to store it", err)
 	}
@@ -295,7 +296,7 @@ func TestPlaintextNeedsTheSwitch(t *testing.T) {
 	}
 	r := NewWith(func(string) string { return "" }, NewMemoryStore(), NewFile(path), &redact.Redactor{})
 
-	_, err := r.Resolve(credName, keyringCred(), role)
+	_, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
 	var missing *MissingSecretError
 	if !errors.As(err, &missing) {
@@ -314,7 +315,7 @@ func TestResolveCreatesNoFile(t *testing.T) {
 	dir := t.TempDir()
 	r := NewWith(func(string) string { return "" }, NewMemoryStore(), NewFile(filepath.Join(dir, FileName)), nil)
 
-	if _, err := r.Resolve(credName, keyringCred(), role); err == nil {
+	if _, err := r.Resolve(context.Background(), credName, keyringCred(), role); err == nil {
 		t.Fatal("Resolve() = nil, want an error")
 	}
 
@@ -335,7 +336,7 @@ func TestMissingSecretMessage(t *testing.T) {
 	t.Run("a credential of type env", func(t *testing.T) {
 		r, _, _, _ := fixture(t, nil)
 
-		_, err := r.Resolve("reader", envCred(pasted), role)
+		_, err := r.Resolve(context.Background(), "reader", envCred(pasted), role)
 
 		var missing *MissingSecretError
 		if !errors.As(err, &missing) {
@@ -363,7 +364,7 @@ func TestMissingSecretMessage(t *testing.T) {
 	t.Run("a credential of type keyring", func(t *testing.T) {
 		r, _, _, _ := fixture(t, nil)
 
-		_, err := r.Resolve(credName, keyringCred(), role)
+		_, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
 		// A keyring credential has no values section, so the message must not send the user to one.
 		if strings.Contains(err.Error(), ".values.") {
@@ -388,7 +389,7 @@ func TestMissingSecretMessage(t *testing.T) {
 	t.Run("a role the credential does not name", func(t *testing.T) {
 		r, _, _, _ := fixture(t, nil)
 
-		_, err := r.Resolve("reader", envCred("SOME_VARIABLE"), "token-secret")
+		_, err := r.Resolve(context.Background(), "reader", envCred("SOME_VARIABLE"), "token-secret")
 
 		if !strings.Contains(err.Error(), "environment variable (not named)") {
 			t.Errorf("error = %q, want the unnamed variable reported", err)
@@ -424,7 +425,7 @@ func TestEnvCredentialUsesItsOwnVariable(t *testing.T) {
 		DerivedEnvName("reader", "token-id"): "must-not-be-used",
 	})
 
-	got, err := r.Resolve("reader", envCred("WIKI_TOKEN_ID"), role)
+	got, err := r.Resolve(context.Background(), "reader", envCred("WIKI_TOKEN_ID"), role)
 
 	if err != nil {
 		t.Fatalf("Resolve() = %v", err)
@@ -456,7 +457,7 @@ func TestDeliveredValuesAreRedacted(t *testing.T) {
 				tt.setup(r, store, file)
 			}
 
-			if _, err := r.Resolve(credName, keyringCred(), role); err != nil {
+			if _, err := r.Resolve(context.Background(), credName, keyringCred(), role); err != nil {
 				t.Fatalf("Resolve() = %v", err)
 			}
 
@@ -496,7 +497,7 @@ func TestSetAndDelete(t *testing.T) {
 	if err := r.Set(credName, role, canaryStore); err != nil {
 		t.Fatalf("Set() = %v", err)
 	}
-	if got, err := store.Get(StoreKey(credName, role)); err != nil || got != canaryStore {
+	if got, err := store.Get(context.Background(), StoreKey(credName, role)); err != nil || got != canaryStore {
 		t.Fatalf("store holds %q (%v), want the value", got, err)
 	}
 	if _, err := os.Stat(file.Path()); !errors.Is(err, os.ErrNotExist) {
@@ -523,7 +524,7 @@ func TestResolverWithoutStore(t *testing.T) {
 	env := map[string]string{DerivedEnvName(credName, role): canaryEnv}
 	r := NewWith(func(name string) string { return env[name] }, nil, nil, nil)
 
-	got, err := r.Resolve(credName, keyringCred(), role)
+	got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
 	if err != nil {
 		t.Fatalf("Resolve() = %v", err)
@@ -531,7 +532,7 @@ func TestResolverWithoutStore(t *testing.T) {
 	if got.Source != SourceEnv {
 		t.Errorf("source = %q, want %q", got.Source, SourceEnv)
 	}
-	if _, err := r.Resolve(credName, keyringCred(), "unset"); err == nil {
+	if _, err := r.Resolve(context.Background(), credName, keyringCred(), "unset"); err == nil {
 		t.Error("Resolve() = nil, want an error when nothing delivers")
 	}
 }
@@ -549,7 +550,7 @@ func TestEnvCredentialNeverFallsThrough(t *testing.T) {
 		t.Fatalf("Set() = %v", err)
 	}
 
-	value, err := r.Resolve("reader", envCred("WIKI_TOKEN_ID"), role)
+	value, err := r.Resolve(context.Background(), "reader", envCred("WIKI_TOKEN_ID"), role)
 
 	var missing *MissingSecretError
 	if !errors.As(err, &missing) {
@@ -569,7 +570,7 @@ func TestEnvCredentialNeverFallsThrough(t *testing.T) {
 
 	// The same store entry and the same file do deliver for a keyring credential, which is the type the
 	// cascade exists for.
-	if got, err := r.Resolve("reader", keyringCred(), role); err != nil || got.Source != SourceStore {
+	if got, err := r.Resolve(context.Background(), "reader", keyringCred(), role); err != nil || got.Source != SourceStore {
 		t.Errorf("keyring credential resolved to %q (%v), want the credential store", got.Source, err)
 	}
 }
@@ -588,7 +589,7 @@ func TestPlaintextRefusesAWidenedMode(t *testing.T) {
 	}
 	r := NewWith(func(string) string { return "" }, NewMemoryStore(), f, &redact.Redactor{})
 
-	_, err := r.Resolve(credName, keyringCred(), role)
+	_, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
 	var missing *MissingSecretError
 	if !errors.As(err, &missing) {
@@ -625,7 +626,7 @@ func TestPlaintextRefusesAWidenedMode(t *testing.T) {
 	if err := os.Chmod(f.Path(), 0o600); err != nil {
 		t.Fatalf("Chmod() = %v", err)
 	}
-	if got, err := r.Resolve(credName, keyringCred(), role); err != nil || got.Source != SourcePlaintext {
+	if got, err := r.Resolve(context.Background(), credName, keyringCred(), role); err != nil || got.Source != SourcePlaintext {
 		t.Errorf("resolved %q (%v), want the fallback to work once it is private", got.Source, err)
 	}
 }
@@ -685,7 +686,7 @@ func TestStoreSelectorNone(t *testing.T) {
 		t.Fatalf("New() = %v", err)
 	}
 
-	_, err = r.Resolve(credName, keyringCred(), role)
+	_, err = r.Resolve(context.Background(), credName, keyringCred(), role)
 
 	var missing *MissingSecretError
 	if !errors.As(err, &missing) {
@@ -787,7 +788,7 @@ func TestDeleteReportsWhatItCouldNotClear(t *testing.T) {
 		if !errors.As(err, &perm) {
 			t.Errorf("error = %v, want the permission problem to be reachable", err)
 		}
-		if _, err := store.Get(StoreKey(credName, role)); !errors.Is(err, ErrNoEntry) {
+		if _, err := store.Get(context.Background(), StoreKey(credName, role)); !errors.Is(err, ErrNoEntry) {
 			t.Errorf("store still holds the entry: %v", err)
 		}
 		stillThere(t, f)
@@ -814,7 +815,7 @@ func TestDeleteReportsWhatItCouldNotClear(t *testing.T) {
 // as a store that cannot be reached: the cascade goes on and the stage says what happened.
 func TestStoreDeadline(t *testing.T) {
 	t.Run("a call that answers returns its result", func(t *testing.T) {
-		got, err := within(time.Minute, func() (string, error) { return "answer", nil })
+		got, err := within(context.Background(), func(context.Context) (string, error) { return "answer", nil })
 
 		if err != nil || got != "answer" {
 			t.Errorf("within() = %q, %v; want the result", got, err)
@@ -822,11 +823,12 @@ func TestStoreDeadline(t *testing.T) {
 	})
 
 	t.Run("a call that never answers is reported, not waited for", func(t *testing.T) {
+		shortenStoreTimeout(t, 10*time.Millisecond)
 		release := make(chan struct{})
 		defer close(release)
 
 		start := time.Now()
-		_, err := within(10*time.Millisecond, func() (string, error) {
+		_, err := within(context.Background(), func(context.Context) (string, error) {
 			<-release
 			return "too late", nil
 		})
@@ -839,6 +841,47 @@ func TestStoreDeadline(t *testing.T) {
 		}
 	})
 
+	t.Run("a request that ends sooner ends the call sooner", func(t *testing.T) {
+		release := make(chan struct{})
+		defer close(release)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		start := time.Now()
+		_, err := within(ctx, func(context.Context) (string, error) {
+			<-release
+			return "too late", nil
+		})
+
+		if !errors.Is(err, ErrTimedOut) {
+			t.Fatalf("within() = %v, want a timeout", err)
+		}
+		if elapsed := time.Since(start); elapsed > time.Second {
+			t.Errorf("within() waited %s, want it to end with the request", elapsed)
+		}
+	})
+
+	t.Run("a blocking store ends the stage within the request", func(t *testing.T) {
+		shortenStoreTimeout(t, 20*time.Millisecond)
+		release := make(chan struct{})
+		defer close(release)
+		r := NewWith(nil, blockingStore{release: release}, nil, nil)
+
+		start := time.Now()
+		_, err := r.Resolve(context.Background(), credName, keyringCred(), role)
+
+		var missing *MissingSecretError
+		if !errors.As(err, &missing) || StoreStage(missing.Checked) != StoreTimedOut {
+			t.Fatalf("Resolve() = %v, want the timed-out store named", err)
+		}
+		if elapsed := time.Since(start); elapsed > time.Second {
+			t.Errorf("Resolve() waited %s, want it to give up at the store deadline", elapsed)
+		}
+		if !strings.Contains(err.Error(), "export "+DerivedEnvName(credName, role)+" for this session") {
+			t.Errorf("message = %q, want the variable named as the way out", err)
+		}
+	})
+
 	t.Run("the cascade goes on and names the stage", func(t *testing.T) {
 		store := NewMemoryStore()
 		store.Fail(fmt.Errorf("%w: %w", ErrUnavailable, ErrTimedOut))
@@ -848,7 +891,7 @@ func TestStoreDeadline(t *testing.T) {
 			t.Fatalf("Set() = %v", err)
 		}
 
-		got, err := r.Resolve(credName, keyringCred(), role)
+		got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
 		if err != nil {
 			t.Fatalf("Resolve() = %v, want the fallback to take over", err)
@@ -860,6 +903,90 @@ func TestStoreDeadline(t *testing.T) {
 			t.Errorf("checked = %v, want the timeout named", got.Checked)
 		}
 	})
+}
+
+// blockingStore is a store whose every read waits for a release that comes only after the test, which is
+// what a keyring stuck in an unlock prompt looks like to the resolver. It honours the context it is given,
+// the way the platform store's deadline does.
+type blockingStore struct{ release chan struct{} }
+
+func (s blockingStore) Get(ctx context.Context, _ string) (string, error) {
+	return within(ctx, func(context.Context) (string, error) {
+		<-s.release
+		return "", ErrNoEntry
+	})
+}
+func (blockingStore) Set(string, string) error { return ErrUnavailable }
+func (blockingStore) Delete(string) error      { return ErrUnavailable }
+
+func shortenStoreTimeout(t *testing.T, d time.Duration) {
+	t.Helper()
+	previous := storeTimeout
+	storeTimeout = d
+	t.Cleanup(func() { storeTimeout = previous })
+}
+
+// countingStore reports err, or unavailable where no prompt could be answered, and counts how often it was
+// asked.
+type countingStore struct {
+	err   error
+	calls int
+}
+
+func (s *countingStore) Get(ctx context.Context, _ string) (string, error) {
+	s.calls++
+	switch {
+	case s.err != nil:
+		return "", s.err
+	case !promptable(ctx):
+		return "", ErrUnavailable
+	}
+	return "", ErrNoEntry
+}
+func (s *countingStore) Set(string, string) error { return nil }
+func (s *countingStore) Delete(string) error      { return nil }
+
+// A store that failed once is not asked again for the next role of the same run, so a locked keyring
+// costs one wait, not one per role; a server asks again once storeRetry has passed.
+func TestFailedStoreIsNotAskedAgain(t *testing.T) {
+	store := &countingStore{err: fmt.Errorf("%w: %w", ErrUnavailable, ErrLocked)}
+	r := NewWith(nil, store, nil, nil)
+
+	for _, name := range []string{"token-id", "token-secret"} {
+		_, err := r.Resolve(context.Background(), credName, keyringCred(), name)
+		var missing *MissingSecretError
+		if !errors.As(err, &missing) || StoreStage(missing.Checked) != StoreLocked {
+			t.Fatalf("Resolve(%s) = %v, want the locked store named", name, err)
+		}
+	}
+	if store.calls != 1 {
+		t.Errorf("store calls = %d, want 1", store.calls)
+	}
+
+	r.mu.Lock()
+	r.failedAt = time.Now().Add(-storeRetry)
+	r.mu.Unlock()
+	store.err = nil
+	if _, err := r.Resolve(context.Background(), credName, keyringCred(), role); err == nil {
+		t.Fatal("Resolve() delivered from an empty store")
+	}
+	if store.calls != 2 {
+		t.Errorf("store calls = %d, want the store asked again after the retry interval", store.calls)
+	}
+}
+
+// An unattended resolver hands the store a request no prompt may wait on, whatever the session shows.
+func TestUnattendedResolverNeverPrompts(t *testing.T) {
+	t.Setenv("DISPLAY", ":0")
+	store := &countingStore{}
+	r := NewWith(nil, store, nil, nil)
+	r.Unattended()
+
+	_, err := r.Resolve(context.Background(), credName, keyringCred(), role)
+	var missing *MissingSecretError
+	if !errors.As(err, &missing) || StoreStage(missing.Checked) != StoreUnavailable {
+		t.Fatalf("Resolve() = %v, want the store asked without a prompt", err)
+	}
 }
 
 // Stored answers a different question than the cascade: not what would be delivered, but what lies

@@ -451,7 +451,7 @@ func handle[T any](op string, prepare func(scope, T) (run, error)) capability.Ha
 		if err != nil {
 			return nil, err
 		}
-		client, err := Open(resolved, secrets, red)
+		client, err := Open(ctx, resolved, secrets, red)
 		if err != nil {
 			return nil, err
 		}
@@ -769,7 +769,7 @@ func prepareRemindersList(bound scope, arguments struct {
 // credential is resolved.
 func invokeFiltersList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, _ json.RawMessage) (any, error) {
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}

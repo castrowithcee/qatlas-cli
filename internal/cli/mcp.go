@@ -23,7 +23,6 @@ import (
 
 const (
 	mcpProtocolVersion    = "2026-07-28"
-	mcpRequestTimeout     = 30 * time.Second
 	mcpCacheTTLMillis     = 60 * 60 * 1000
 	maxMCPMessageBytes    = 1 << 20
 	maxMCPInFlight        = 16
@@ -79,6 +78,8 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"connection, and reason.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
+			// Nobody watches the requests of a server, so the keyring must not wait for an unlock prompt.
+			opts.unattended = true
 			server := newMCPServer(opts, registry, c.OutOrStdout(), c.ErrOrStderr())
 			return server.serve(c.Context(), c.InOrStdin())
 		},
@@ -116,7 +117,7 @@ func newMCPServer(opts *Options, registry *capability.Registry, stdout, stderr i
 	}
 	return &mcpServer{
 		opts: opts, registry: registry, stdout: stdout, stderr: stderr,
-		timeout: mcpRequestTimeout, pending: make(map[string]*mcpPending),
+		timeout: invokeTimeout, pending: make(map[string]*mcpPending),
 	}
 }
 
@@ -439,7 +440,10 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage) {
 		defer cancel()
 		result, audit, err := s.callTool(requestContext, params.Name, params.Arguments)
 		s.writeAudit(audit)
-		response := mcpResultResponse(message.ID, toolResult(result, err, requestContext, s.opts.Redactor))
+		if err != nil && errors.Is(requestContext.Err(), context.DeadlineExceeded) {
+			err = pastDeadline(err, s.timeout)
+		}
+		response := mcpResultResponse(message.ID, toolResult(result, err, s.opts.Redactor))
 
 		s.mu.Lock()
 		if !pending.cancelled {
@@ -576,17 +580,12 @@ func mcpServerMeta() map[string]any {
 	}
 }
 
-func toolResult(data any, err error, ctx context.Context, redactor *redact.Redactor) map[string]any {
+func toolResult(data any, err error, redactor *redact.Redactor) map[string]any {
 	result := map[string]any{"resultType": "complete", "_meta": mcpServerMeta()}
 	if err != nil {
 		code := codeFor(err)
 		message := redactor.Error(err)
 		detail := errorDetailFor(err, redactor)
-		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			code = output.CodeTimeout
-			message = "request deadline exceeded"
-			detail = nil
-		}
 		if detail == nil {
 			// Every refusal carries at least its code and message, so a caller branches on structuredContent
 			// alone. The CLI keeps writing a detail only where errorDetailFor adds something.

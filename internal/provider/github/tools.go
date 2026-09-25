@@ -376,7 +376,7 @@ func invokeIssuesCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := content.check(true); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +402,7 @@ func invokeIssuesUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := arguments.IssueContent.check(false); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -425,7 +425,7 @@ func invokeIssuesClose(ctx context.Context, resolved *config.Resolved, secrets *
 	if err := checkNumber(arguments.Number); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -447,7 +447,7 @@ func invokeIssuesReopen(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := checkNumber(arguments.Number); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -468,7 +468,7 @@ func invokeCommentsList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -494,7 +494,7 @@ func invokeCommentsCreate(ctx context.Context, resolved *config.Resolved, secret
 	if err := checkCommentBody(arguments.Body); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -524,7 +524,7 @@ func invokeItemsUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if len(inputs) == 0 {
 		return nil, invalidRequest("fields must name at least one field")
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +556,7 @@ func invokeItemsAdd(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if _, err := arguments.Fields.inputs(); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -578,7 +578,7 @@ func invokeItemsArchive(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := checkItemID(arguments.ItemID); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +605,7 @@ func invokeDraftsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if _, err := arguments.Fields.inputs(); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}
@@ -635,7 +635,7 @@ func invokeProjectIssuesCreate(ctx context.Context, resolved *config.Resolved, s
 	if _, err := arguments.Fields.inputs(); err != nil {
 		return nil, err
 	}
-	client, err := openAt(resolved, secrets, red, bound)
+	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {
 		return nil, err
 	}

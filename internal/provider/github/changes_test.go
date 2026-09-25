@@ -94,7 +94,7 @@ func planningClient(t *testing.T, base string, targets ...string) *Client {
 	red := &redact.Redactor{}
 	resolved := resolvedConnection("gh", base, "")
 	resolved.Targets = targets
-	c, err := open(resolved, resolver(red, nil), red, freeLimiter())
+	c, err := open(context.Background(), resolved, resolver(red, nil), red, freeLimiter())
 	if err != nil {
 		t.Fatalf("open() = %v", err)
 	}
@@ -853,7 +853,7 @@ func TestChangesAreSpaced(t *testing.T) {
 	red := &redact.Redactor{}
 	resolved := resolvedConnection("gh", base, "")
 	resolved.Targets = planningTargets
-	c, err := open(resolved, resolver(red, nil), red, limited)
+	c, err := open(context.Background(), resolved, resolver(red, nil), red, limited)
 	if err != nil {
 		t.Fatal(err)
 	}

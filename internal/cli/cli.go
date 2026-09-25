@@ -50,6 +50,10 @@ type Options struct {
 	// configuration was resolved from; a test sets it beforehand so no run touches the credential store
 	// of the machine it runs on.
 	Secrets *secret.Resolver
+
+	// unattended marks a run that serves requests nobody watches, so the resolver never waits for an
+	// unlock prompt.
+	unattended bool
 }
 
 // resolver returns the credential resolver of this run, building it once.
@@ -67,6 +71,9 @@ func (o *Options) resolver() (*secret.Resolver, error) {
 	if err != nil {
 		// An unusable store selector is a mistake in the invocation, not a runtime failure.
 		return nil, &UsageError{err}
+	}
+	if o.unattended {
+		resolver.Unattended()
 	}
 	o.Secrets = resolver
 	return o.Secrets, nil

@@ -226,7 +226,7 @@ func invokeCompaniesList(ctx context.Context, resolved *config.Resolved, secrets
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list companies", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func invokeCompaniesGet(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("get company", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +259,7 @@ func invokeCompaniesCreate(ctx context.Context, resolved *config.Resolved, secre
 	if json.Unmarshal(raw, &input) != nil || input.Name == nil {
 		return nil, providerError("create company", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +271,7 @@ func invokeCompaniesUpdate(ctx context.Context, resolved *config.Resolved, secre
 	if json.Unmarshal(raw, &input) != nil || (input.Name == nil && input.Domain == nil) {
 		return nil, providerError("update company", "name or domain is required")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +283,7 @@ func invokeCompaniesDelete(ctx context.Context, resolved *config.Resolved, secre
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError("delete company", "the validated arguments could not be read")
 	}
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
@@ -303,13 +303,13 @@ type Client struct {
 }
 
 // Open resolves the API key of one selected connection and returns a client for its configured origin.
-func Open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
-	return open(resolved, secrets, red, nil)
+func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+	return open(ctx, resolved, secrets, red, nil)
 }
 
 // open is the internal seam. A caller may supply the rate limiter, and the package's own tests replace
 // the transport, so no test ever reaches a productive Twenty workspace.
-func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
@@ -321,7 +321,7 @@ func open(resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redac
 	if secrets == nil {
 		return nil, providerError("open", "no credential resolver was configured")
 	}
-	value, err := secrets.Resolve(resolved.Credential, resolved.Secrets, roleAPIKey)
+	value, err := secrets.Resolve(ctx, resolved.Credential, resolved.Secrets, roleAPIKey)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +376,7 @@ func newHTTPClient() *http.Client {
 // call could answer with an incomplete record.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
-	client, err := Open(resolved, secrets, red)
+	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {
@@ -752,10 +752,7 @@ func primaryDomain(raw json.RawMessage) string {
 // get performs one bounded read against the configured origin and decodes the response into out.
 func (c *Client) get(ctx context.Context, op, path string, query url.Values, limit int64, out any) error {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return &provider.Error{
-			Class: provider.ClassTimeout, Op: op,
-			Message: "the request ended while it waited for the Twenty rate limit",
-		}
+		return provider.Waited(op, "Twenty", err)
 	}
 
 	target := c.origin + path
@@ -795,7 +792,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, lim
 
 func (c *Client) change(ctx context.Context, op, method, path string, payload any, out any) error {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "the request ended while it waited for the Twenty rate limit"}
+		return provider.Waited(op, "Twenty", err)
 	}
 	var body io.Reader
 	if payload != nil {

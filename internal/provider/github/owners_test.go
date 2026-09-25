@@ -356,7 +356,7 @@ func TestAnOwnerTargetAllowsNoRepositoryOrProject(t *testing.T) {
 	}
 	resolved := resolvedConnection("gh", base, "")
 	resolved.Targets = []string{"orgs/octo-org", repoTarget}
-	c, err := open(resolved, resolver(red, nil), red, freeLimiter())
+	c, err := open(context.Background(), resolved, resolver(red, nil), red, freeLimiter())
 	if err != nil || c.target.String() != repoTarget {
 		t.Errorf("default client target = %v, %v; want the repository", c.target, err)
 	}

@@ -188,7 +188,7 @@ func resolver(red *redact.Redactor) *secret.Resolver {
 func client(t *testing.T) (*Client, *redact.Redactor) {
 	t.Helper()
 	red := &redact.Redactor{}
-	c, err := Open(resolvedConnection("reports", "cloud-reader", aliceUserEnv, aliceTokenEnv,
+	c, err := Open(context.Background(), resolvedConnection("reports", "cloud-reader", aliceUserEnv, aliceTokenEnv,
 		mainInstance, "Reports"), resolver(red), red)
 	if err != nil {
 		t.Fatalf("Open() = %v", err)
@@ -338,7 +338,7 @@ func TestOpenBindsInstanceIdentityAndRoot(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			red := &redact.Redactor{}
-			c, err := Open(tt.connection, resolver(red), red)
+			c, err := Open(context.Background(), tt.connection, resolver(red), red)
 			if err != nil {
 				t.Fatalf("Open() = %v", err)
 			}
@@ -361,7 +361,7 @@ func TestOpenBindsInstanceIdentityAndRoot(t *testing.T) {
 // A connection bound to the whole Files root of an identity addresses it as a collection.
 func TestTheWholeFilesRootIsAValidConnectionRoot(t *testing.T) {
 	red := &redact.Redactor{}
-	c, err := Open(resolvedConnection("all", "cloud-reader", aliceUserEnv, aliceTokenEnv, mainInstance, "/"),
+	c, err := Open(context.Background(), resolvedConnection("all", "cloud-reader", aliceUserEnv, aliceTokenEnv, mainInstance, "/"),
 		resolver(red), red)
 	if err != nil {
 		t.Fatalf("Open() = %v", err)
@@ -397,7 +397,7 @@ func TestUnusableServicesAndTargetsAreRefused(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			red := &redact.Redactor{}
-			_, err := Open(resolvedConnection("x", "cloud-reader", aliceUserEnv, aliceTokenEnv,
+			_, err := Open(context.Background(), resolvedConnection("x", "cloud-reader", aliceUserEnv, aliceTokenEnv,
 				tt.instance, tt.target), resolver(red), red)
 			if err == nil {
 				t.Fatal("the connection was opened")
@@ -428,7 +428,7 @@ func TestUnusableIdentitiesAreRefused(t *testing.T) {
 				}
 				return tt.password
 			}, nil, nil, red)
-			_, err := Open(resolvedConnection("x", "cloud-reader", aliceUserEnv, aliceTokenEnv,
+			_, err := Open(context.Background(), resolvedConnection("x", "cloud-reader", aliceUserEnv, aliceTokenEnv,
 				mainInstance, "Reports"), secrets, red)
 			if got := classOf(err); got != provider.ClassAuth {
 				t.Fatalf("class = %q, want an authentication problem, error %v", got, err)
@@ -1001,7 +1001,7 @@ func TestInstancesIdentitiesAndRootsStaySeparated(t *testing.T) {
 	}
 	for _, tt := range connections {
 		red := &redact.Redactor{}
-		c, err := Open(tt.connection, resolver(red), red)
+		c, err := Open(context.Background(), tt.connection, resolver(red), red)
 		if err != nil {
 			t.Fatalf("Open(%s) = %v", tt.connection.Name, err)
 		}
