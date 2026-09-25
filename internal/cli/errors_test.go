@@ -107,3 +107,35 @@ func TestAgentErrorIsMachineReadable(t *testing.T) {
 		t.Errorf("first stderr line = %q, want the code prefix", first)
 	}
 }
+
+// auth names a person's action, which reads the same on both routes. permission gets no second step: each
+// provider names the rights to check in its own message. Codes without a step keep their message as it is.
+func TestNextStepByCodeAndRoute(t *testing.T) {
+	for _, r := range []route{routeCLI, routeMCP} {
+		if step := nextStep(output.CodeAuth, r); !strings.Contains(step, "qatlas credential set <credential> <role>") ||
+			!strings.Contains(step, "qatlas tui") {
+			t.Errorf("route %d: auth step = %q, want the credential commands", r, step)
+		}
+		for _, code := range []output.Code{output.CodePermission, output.CodeNotFound, output.CodeProviderError} {
+			if step := nextStep(code, r); step != "" {
+				t.Errorf("route %d: %s step = %q, want none", r, code, step)
+			}
+		}
+	}
+	if nextStep(output.CodeAuth, routeCLI) != nextStep(output.CodeAuth, routeMCP) {
+		t.Error("the auth step differs between the routes")
+	}
+
+	permission := &provider.Error{Class: provider.ClassPermission, Op: "list issues",
+		Message: "this GitHub token may not read repository o/r; check its scopes or permissions"}
+	if got := withNextStep(permission, routeCLI); got != error(permission) {
+		t.Errorf("permission = %v, want the provider message unchanged", got)
+	}
+	auth := &provider.Error{Class: provider.ClassAuth, Op: "open", Message: "the GitHub token is unusable"}
+	got := withNextStep(auth, routeMCP)
+	var providerErr *provider.Error
+	if !errors.As(got, &providerErr) || providerErr != auth || codeFor(got) != output.CodeAuth ||
+		!strings.HasPrefix(got.Error(), auth.Error()+"; ") {
+		t.Errorf("auth = %v, want the provider error kept and the step appended", got)
+	}
+}

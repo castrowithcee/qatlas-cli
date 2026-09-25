@@ -67,7 +67,7 @@ var issuesCreate = capability.Descriptor{
 	Version: 1,
 	Title:   "Create a GitHub issue",
 	Description: "Open one issue in a repository an explicit connection allows; a repeated call opens a " +
-		"second issue",
+		"second issue, and GitHub creates any label the repository does not have yet",
 	Tags:                       []string{"github", "issues", "create"},
 	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	Provider:                   Provider,
@@ -93,7 +93,8 @@ var issuesUpdate = capability.Descriptor{
 	Version: 1,
 	Title:   "Update a GitHub issue",
 	Description: "Replace the title, body, labels, or assignees of one issue of " +
-		"a repository an explicit connection allows; fields left out stay unchanged",
+		"a repository an explicit connection allows; fields left out stay unchanged, and GitHub creates any " +
+		"label the repository does not have yet",
 	Tags:                       []string{"github", "issues", "update"},
 	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:                   Provider,
@@ -329,7 +330,8 @@ var projectIssuesCreate = capability.Descriptor{
 	Version: 1,
 	Title:   "Create a planned GitHub issue",
 	Description: "Open one issue in a repository an explicit connection allows, add it to a GitHub project it " +
-		"allows, then set field values; a repeated call opens a second issue",
+		"allows, then set field values; a repeated call opens a second issue, and GitHub creates any label the " +
+		"repository does not have yet",
 	Tags:                       []string{"github", "projects", "issues", "create", "planning"},
 	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	Provider:                   Provider,

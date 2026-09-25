@@ -997,7 +997,8 @@ func statusError(op string, status int) error {
 	case http.StatusForbidden:
 		return &provider.Error{
 			Class: provider.ClassPermission, Op: op,
-			Message: "this Nextcloud identity may not perform this operation on the path",
+			Message: "this Nextcloud identity may not perform this operation on the path; check the rights of " +
+				"the user on the path in Nextcloud",
 		}
 	case http.StatusNotFound:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: messageNotFound}

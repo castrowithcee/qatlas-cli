@@ -449,7 +449,8 @@ func statusError(op string, status int) error {
 	case http.StatusUnauthorized:
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Telegram rejected the bot token"}
 	case http.StatusForbidden:
-		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: "Telegram refused this operation"}
+		return &provider.Error{Class: provider.ClassPermission, Op: op,
+			Message: "Telegram refused this operation; check the rights of the bot in Telegram"}
 	case http.StatusTooManyRequests:
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Telegram rate-limited the operation"}
 	default:

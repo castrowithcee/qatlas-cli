@@ -937,6 +937,8 @@ func TestMCPToolErrorsCarryCodeAndMessage(t *testing.T) {
 		{output.CodeUnknownConnection, unused, "qatlas.describe", `{"operation":"fake.pages.get","connection":"absent"}`, false},
 		{output.CodeConfirmationRequired, mcpSendRegistry, "qatlas.invoke",
 			`{"operation":"fake.messages.send","connection":"target","arguments":{"text":"hello"}}`, false},
+		{output.CodeAuth, failing(&provider.Error{Class: provider.ClassAuth, Op: "get page", Message: "rejected"}),
+			"qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
 		{output.CodeNotFound, failing(&provider.Error{Class: provider.ClassNotFound, Op: "get page", Message: "absent"}),
 			"qatlas.invoke", `{"operation":"fake.pages.get","connection":"primary","arguments":{}}`, false},
 		{output.CodeProviderError, failing(&provider.Error{Class: provider.ClassProviderError, Op: "get page", Message: "failed"}),

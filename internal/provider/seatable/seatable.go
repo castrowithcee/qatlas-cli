@@ -1408,7 +1408,7 @@ func statusError(op string, status int) error {
 	case http.StatusForbidden:
 		return &provider.Error{
 			Class: provider.ClassPermission, Op: op,
-			Message: "this SeaTable API token may not perform this operation",
+			Message: "this SeaTable API token may not perform this operation; check the permission of the API token in SeaTable",
 		}
 	case http.StatusNotFound:
 		return &provider.Error{

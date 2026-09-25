@@ -845,7 +845,8 @@ func statusError(op string, status int) error {
 	case http.StatusForbidden:
 		return &provider.Error{
 			Class: provider.ClassPermission, Op: op,
-			Message: "the workspace role of this API key may not perform this operation",
+			Message: "the workspace role of this API key may not perform this operation; check the role of " +
+				"the API key in Twenty",
 		}
 	case http.StatusNotFound:
 		return &provider.Error{

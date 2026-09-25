@@ -229,6 +229,9 @@ func TestSendMessageNormalizesProviderAndTransportFailuresWithoutRetry(t *testin
 			if !errors.As(err, &providerErr) || providerErr.Class != tt.want || providerErr.Cause != tt.cause {
 				t.Fatalf("SendMessage() = %T %v, want class %q cause %q", err, err, tt.want, tt.cause)
 			}
+			if tt.want == provider.ClassPermission && !strings.Contains(err.Error(), "; check ") {
+				t.Errorf("a refusal names no next step: %v", err)
+			}
 			if strings.Contains(err.Error(), "private provider body") {
 				t.Fatalf("error leaks provider body: %v", err)
 			}

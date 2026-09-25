@@ -758,6 +758,9 @@ func TestProviderFailuresAreClassified(t *testing.T) {
 			if classOf(err) != tt.class || !strings.Contains(err.Error(), tt.detail) {
 				t.Fatalf("err = %v (class %q), want class %q with %q", err, classOf(err), tt.class, tt.detail)
 			}
+			if tt.class == provider.ClassPermission && !strings.Contains(err.Error(), "; check ") {
+				t.Errorf("a refusal names no next step: %v", err)
+			}
 			message := env.red.Error(err) + err.Error()
 			for _, leak := range []string{tokenValue, foreignCanary, "api.todoist.com", "PREMIUM_ONLY"} {
 				if strings.Contains(message, leak) {

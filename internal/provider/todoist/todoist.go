@@ -588,9 +588,9 @@ type errorJSON struct {
 // Messages of the refusals a test or a tool relies on to tell the classes apart.
 const (
 	notFoundMessage   = "Todoist does not hold this resource or does not show it to this token"
-	planMessage       = "the Todoist plan of this account does not include this feature"
-	permissionMessage = "this Todoist token may not read this resource"
-	changeDenied      = "this Todoist token may not change this resource"
+	planMessage       = "the Todoist plan of this account does not include this feature; check the plan in Todoist"
+	permissionMessage = "this Todoist token may not read this resource; check the rights of its account in Todoist"
+	changeDenied      = "this Todoist token may not change this resource; check the rights of its account in Todoist"
 )
 
 // statusError maps an HTTP status to a stable class. A refusal because of the account's plan stays a

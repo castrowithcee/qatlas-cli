@@ -83,6 +83,48 @@ func codeFor(err error) output.Code {
 	return output.CodeRuntime
 }
 
+// route is the way a diagnostic reaches its caller. A next step that is an action of a person reads the
+// same on both routes; one that points to discovery names the commands of the CLI or the tools of MCP.
+type route int
+
+const (
+	routeCLI route = iota
+	routeMCP
+)
+
+// nextStep is what to do about a refusal with code, or "" where the message of the error already says it.
+// It never names a secret, a secret source, or a target, so it is safe on every route.
+func nextStep(code output.Code, _ route) string {
+	switch code {
+	case output.CodeAuth:
+		// Some providers answer a credential that lacks access with auth as well, so the step does not
+		// claim which of the two happened.
+		return "check or renew the credential of this connection with " +
+			"'qatlas credential set <credential> <role>' or in 'qatlas tui'"
+	}
+	return ""
+}
+
+// nextStepError adds the next step of its code to a diagnostic. Unwrap keeps the classification of the error
+// it carries, so code, detail, exit code, and audit stay what they were.
+type nextStepError struct {
+	err  error
+	step string
+}
+
+func (e *nextStepError) Error() string { return e.err.Error() + "; " + e.step }
+func (e *nextStepError) Unwrap() error { return e.err }
+
+// withNextStep returns err with the next step its code names on route. The CLI and the MCP broker both call
+// it before anything of the error is shown, so a message and its detail carry the same text.
+func withNextStep(err error, r route) error {
+	step := nextStep(codeFor(err), r)
+	if step == "" {
+		return err
+	}
+	return &nextStepError{err: err, step: step}
+}
+
 // errorDetail is the machine-readable form of a diagnostic whose code alone does not say how to go on. For
 // connection-ambiguous and connection-selection it names every route an explicit connection may choose,
 // each with the description its owner maintains and an empty one where there is none, so a caller picks a

@@ -902,12 +902,12 @@ func statusError(op string, status int) error {
 	case http.StatusPaymentRequired:
 		return &provider.Error{
 			Class: provider.ClassPermission, Op: op,
-			Message: "the Lexware contract does not include this API access",
+			Message: "the Lexware contract does not include this API access; check the contract in Lexware",
 		}
 	case http.StatusForbidden:
 		return &provider.Error{
 			Class: provider.ClassPermission, Op: op,
-			Message: "the API key is not permitted to perform this operation",
+			Message: "the API key is not permitted to perform this operation; check the rights of the API key in Lexware",
 		}
 	case http.StatusNotFound:
 		return &provider.Error{

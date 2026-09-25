@@ -594,6 +594,7 @@ func mcpServerMeta() map[string]any {
 func toolResult(data any, err error, redactor *redact.Redactor) map[string]any {
 	result := map[string]any{"resultType": "complete", "_meta": mcpServerMeta()}
 	if err != nil {
+		err = withNextStep(err, routeMCP)
 		code := codeFor(err)
 		message := redactor.Error(err)
 		detail := errorDetailFor(err, redactor)

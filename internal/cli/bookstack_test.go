@@ -486,3 +486,55 @@ func TestBookStackInvokeRedactsSuccessfulPayloads(t *testing.T) {
 		})
 	}
 }
+
+// A refused credential names how to check or renew it, in the same words on the command line and over MCP,
+// whether the provider said 401 or, as BookStack does for a token without API access, 403. The secret the
+// request carried never appears, even where the provider echoes it.
+func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
+	const step = "; check or renew the credential of this connection with " +
+		"'qatlas credential set <credential> <role>' or in 'qatlas tui'"
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(status)
+				_, _ = fmt.Fprintf(w, `{"error":{"code":%d,"message":%q}}`, status,
+					"denied "+r.Header.Get("Authorization"))
+			}))
+			defer server.Close()
+			cfg := bookstackConfig(t, server.URL)
+
+			code, stdout, stderr := runInvoke(t, "", "invoke", "bookstack.pages.list", "--config", cfg)
+			cliDiagnostic := strings.TrimPrefix(strings.TrimSpace(stderr), "qatlas: ")
+			if code != exitRuntime || stdout != "" || !strings.HasPrefix(cliDiagnostic, "auth: ") ||
+				!strings.HasSuffix(cliDiagnostic, step) {
+				t.Fatalf("CLI exit=%d stdout=%q stderr=%q, want auth with the next step", code, stdout, stderr)
+			}
+
+			opts := testOptions(t, nil)
+			opts.Config = cfg
+			var out, errOut bytes.Buffer
+			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
+				`,"name":"qatlas.invoke","arguments":{"operation":"bookstack.pages.list","connection":"wiki"}}}` + "\n"
+			if err := newMCPServer(opts, defaultRegistry(), &out, &errOut).serve(context.Background(),
+				strings.NewReader(input)); err != nil {
+				t.Fatal(err)
+			}
+			result := toolResultFrom(t, decodeMCPResponses(t, out.String())["1"])
+			var detail struct {
+				Code    output.Code `json:"code"`
+				Message string      `json:"message"`
+			}
+			decodeRaw(t, result.Structured, &detail)
+			if !result.IsError || result.Content[0].Text != cliDiagnostic || detail.Code != output.CodeAuth ||
+				string(detail.Code)+": "+detail.Message != cliDiagnostic {
+				t.Fatalf("MCP result = %+v, want the CLI diagnosis %q", result, cliDiagnostic)
+			}
+
+			for _, canary := range []string{canaryID, canarySecret} {
+				if strings.Contains(stderr+out.String()+errOut.String(), canary) {
+					t.Errorf("the diagnosis leaks %q", canary)
+				}
+			}
+		})
+	}
+}

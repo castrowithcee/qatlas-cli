@@ -837,6 +837,9 @@ func TestProviderStatusesAreClassified(t *testing.T) {
 			if class := classOf(err); class != tt.want {
 				t.Fatalf("class = %q, want %q (%v)", class, tt.want, err)
 			}
+			if tt.want == provider.ClassPermission && !strings.Contains(err.Error(), "; check ") {
+				t.Errorf("a refusal names no next step: %v", err)
+			}
 			if strings.Contains(err.Error(), bodyCanary) {
 				t.Errorf("the error carries the provider body: %v", err)
 			}
