@@ -705,7 +705,7 @@ or a free REST path.
 | `github.workflows.dispatch` | execute | non-idempotent | required | starts one `workflow_dispatch` run on a branch or tag |
 | `github.workflowruns.rerun` | execute | non-idempotent | required | re-runs every job of a completed run |
 | `github.workflowruns.rerunfailed` | execute | non-idempotent | required | re-runs the failed jobs of a completed run and their dependents |
-| `github.workflowruns.cancel` | execute | idempotent | required | asks GitHub to cancel a run that has not completed |
+| `github.workflowruns.cancel` | execute | idempotent | required | asks GitHub to cancel a run; a completed run is reported with its state |
 
 No observer or operator tool changes a workflow file or a setting; that is the listed-only group under
 [workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration). No tool
@@ -805,8 +805,14 @@ echo '{"workflow":"release.yml","ref":"main","inputs":{"channel":"beta"}}' |
   qatlas invoke github.workflows.dispatch --connection ci-operator --confirm
 ```
 
-The re-runs and the cancel read the run first: a re-run needs a completed run and a cancel one that has not
-completed, so GitHub's refusal of either never reads like a missing permission.
+The re-runs and the cancel read the run first. A re-run needs a completed run, so GitHub's refusal never
+reads like a missing permission; it answers `run_id` and `accepted`.
+
+The cancel is idempotent. For a run that has not completed it sends one cancel and answers `run_id` and
+`accepted: true`; the run then ends asynchronously. For a run that has already completed, cancelled or not,
+it sends nothing and answers `accepted: false` with the `status` and `conclusion` it found. When the run
+completes between the read and the cancel, GitHub refuses the cancel; Qatlas reads the run again and answers
+the same way.
 
 ### Tokens for Actions
 
@@ -854,7 +860,7 @@ every run may do. They are high risk, and Qatlas keeps them behind a boundary of
 | `github.workflowfiles.create` | create | idempotent | required | commits one new workflow file; fails when the file exists |
 | `github.workflowfiles.update` | update | idempotent | required | replaces one workflow file while it still has the given blob SHA |
 | `github.workflows.enable` | update | idempotent | required | enables one workflow |
-| `github.workflows.disable` | update | idempotent | required | disables one workflow |
+| `github.workflows.disable` | update | idempotent | required | disables one workflow; a disabled workflow stays as it is |
 | `github.actionspermissions.get` | read | safe | none | reads `enabled` and `allowed_actions` |
 | `github.actionspermissions.update` | update | idempotent | required | changes `enabled` or `allowed_actions` |
 | `github.workflowpermissions.get` | read | safe | none | reads `default_workflow_permissions` and `can_approve_pull_request_reviews` |
@@ -892,7 +898,9 @@ event of a change names only the request, tool, connection, confirmation, result
 
 `github.workflows.enable` and `github.workflows.disable` take `workflow`, an identifier or a file name such
 as `ci.yml`, accept only a workflow whose file lies below `.github/workflows/`, and answer `previous_state`
-and `state`.
+and `state`. Both are idempotent: enabling an active workflow answers `active` for both. A workflow already in
+a disabled state (`disabled_manually`, `disabled_inactivity`, or `disabled_fork`) is not changed by a disable,
+which sends nothing and answers that state as `previous_state` and `state`.
 
 ```sh
 qatlas invoke github.workflowfiles.get --connection ci-maintainer --arg path=.github/workflows/ci.yml

@@ -199,7 +199,8 @@ const workflowStateOutput = `{"type":"object","properties":{"workflow_id":{"type
 
 var workflowStateFields = []capability.Field{
 	{Name: "previous_state", Description: "State of the workflow before the change"},
-	{Name: "state", Description: "State GitHub accepted: active or disabled_manually"},
+	{Name: "state", Description: "State after the call: active or disabled_manually, or the disabled state a " +
+		"disable found and left unchanged"},
 }
 
 var workflowsEnable = capability.Descriptor{
@@ -227,7 +228,8 @@ var workflowsDisable = capability.Descriptor{
 	Version: 1,
 	Title:   "Disable a GitHub Actions workflow",
 	Description: "Disable one workflow with a file below .github/workflows/ of " +
-		"a repository an explicit connection allows, so GitHub no longer runs it; offered only where the connection lists it",
+		"a repository an explicit connection allows, so GitHub no longer runs it; a workflow already disabled is " +
+		"left as it is and reported with its state; offered only where the connection lists it",
 	Tags:                       []string{"github", "actions", "workflows", "disable", "maintainer"},
 	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, workflowFileSensitivity),
 	Provider:                   Provider,
@@ -718,7 +720,8 @@ type WorkflowState struct {
 
 // setWorkflowState enables or disables one workflow. The workflow is read first, so a workflow without a
 // file below .github/workflows/ is refused and the answer names the state before the change; the change is
-// one request that is never repeated.
+// one request that is never repeated. GitHub refuses to disable a workflow in any disabled state, so such a
+// workflow is reported unchanged without a request.
 func (c *Client) setWorkflowState(ctx context.Context, workflow string, enable bool) (*WorkflowState, error) {
 	op, action, state := "disable workflow", "disable", "disabled_manually"
 	if enable {
@@ -730,6 +733,9 @@ func (c *Client) setWorkflowState(ctx context.Context, workflow string, enable b
 	}
 	if !validWorkflowFile(flow.Path) {
 		return nil, providerError(op, "the workflow has no workflow file below .github/workflows/")
+	}
+	if !enable && strings.HasPrefix(flow.State, "disabled_") {
+		return &WorkflowState{WorkflowID: flow.ID, Path: flow.Path, PreviousState: flow.State, State: flow.State}, nil
 	}
 	if err := c.restChange(ctx, op, http.MethodPut,
 		c.actionsPath("workflows/"+strconv.FormatInt(flow.ID, 10)+"/"+action), struct{}{}, nil); err != nil {

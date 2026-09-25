@@ -605,7 +605,8 @@ func TestWorkflowFilesAreWrittenOnlyOverTheBlobTheyReplace(t *testing.T) {
 }
 
 // Enabling or disabling a workflow and changing a setting report the state before and after, send the
-// complete setting GitHub replaces in one request, and a workflow without a file is refused before it.
+// complete setting GitHub replaces in one request, and a workflow without a file is refused before it. A
+// workflow already disabled in any way is reported unchanged without a request.
 func TestWorkflowStatesAndSettingsReportBeforeAndAfter(t *testing.T) {
 	f, m, base := serveMaintain(t)
 	c := client(t, base, repoTarget)
@@ -629,6 +630,30 @@ func TestWorkflowStatesAndSettingsReportBeforeAndAfter(t *testing.T) {
 	if _, _, rest := split(f.recorded()[before:]); rest[http.MethodPut] != 0 {
 		t.Error("a dynamic workflow was changed")
 	}
+	route := f.failure
+	f.failure = func(w http.ResponseWriter, r *http.Request) bool {
+		if r.Method == http.MethodGet && r.URL.Path == actionsPrefix+"actions/workflows/stale.yml" {
+			fmt.Fprint(w, `{"id":5,"name":"Stale","path":".github/workflows/stale.yml","state":"disabled_inactivity"}`)
+			return true
+		}
+		return route(w, r)
+	}
+	for workflow, want := range map[string]WorkflowState{
+		"old.yml": {WorkflowID: 4, Path: ".github/workflows/old.yml", PreviousState: "disabled_manually",
+			State: "disabled_manually"},
+		"stale.yml": {WorkflowID: 5, Path: ".github/workflows/stale.yml", PreviousState: "disabled_inactivity",
+			State: "disabled_inactivity"},
+	} {
+		before := len(f.recorded())
+		state, err := c.setWorkflowState(ctx, workflow, false)
+		if err != nil || *state != want {
+			t.Errorf("disable of %s = %+v, %v, want %+v", workflow, state, err, want)
+		}
+		if _, _, rest := split(f.recorded()[before:]); rest[http.MethodPut] != 0 {
+			t.Errorf("the disabled %s was changed", workflow)
+		}
+	}
+	f.failure = route
 
 	actions, err := c.updateActionsPermissions(ctx, &actionsArguments{AllowedActions: "local_only"})
 	if err != nil || actions.Before != (ActionsPermissions{Enabled: true, AllowedActions: "all"}) ||

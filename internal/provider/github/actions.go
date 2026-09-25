@@ -408,17 +408,25 @@ var runsCancel = capability.Descriptor{
 	ID:      Provider + ".workflowruns.cancel",
 	Version: 1,
 	Title:   "Cancel a GitHub Actions workflow run",
-	Description: "Ask GitHub to cancel one workflow run of a repository an explicit connection allows that has " +
-		"not completed; jobs end as GitHub cancels them",
+	Description: "Ask GitHub to cancel one workflow run of a repository an explicit connection allows; jobs end " +
+		"as GitHub cancels them, and a run that has already completed is left as it is and reported with its state",
 	Tags:                       []string{"github", "actions", "runs", "cancel", "execute"},
 	Risk:                       changeRisk(capability.EffectExecute, capability.IdempotencyIdempotent),
 	Provider:                   Provider,
 	RequiresExplicitConnection: true,
 	InputSchema:                inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
-	OutputSchema:               json.RawMessage(runChangeOutput),
-	Arguments:                  []capability.Argument{{Name: "run_id", Description: "Workflow run identifier", Required: true}},
-	Fields:                     runChangeFields,
-	Examples:                   []capability.Example{{Description: "Cancel a run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"run_id":{"type":"integer"},` +
+		`"accepted":{"type":"boolean"},"status":{"type":"string"},"conclusion":{"type":"string"}},` +
+		`"required":["run_id","accepted"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{{Name: "run_id", Description: "Workflow run identifier", Required: true}},
+	Fields: []capability.Field{
+		{Name: "run_id", Description: "The run the request concerned"},
+		{Name: "accepted", Description: "True once GitHub accepted the cancel; the run changes asynchronously. " +
+			"False when the run had already completed and no cancel was sent"},
+		{Name: "status", Description: "Status of a run found completed, present only when accepted is false"},
+		{Name: "conclusion", Description: "Conclusion of a run found completed, such as success or cancelled"},
+	},
+	Examples: []capability.Example{{Description: "Cancel a run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
 }
 
 // observerTools and operatorTools are the two tool groups of GitHub Actions and of their profiles.
@@ -479,7 +487,7 @@ func actionsOperations() []capability.Operation {
 			return c.changeRun(ctx, "re-run failed jobs", a.RunID, "rerun-failed-jobs")
 		}),
 		bind(runsCancel, checkRunArgument, func(ctx context.Context, c *Client, a *actionsArguments) (any, error) {
-			return c.changeRun(ctx, "cancel workflow run", a.RunID, "cancel")
+			return c.cancelRun(ctx, a.RunID)
 		}),
 	}
 }
@@ -1430,25 +1438,21 @@ func (c *Client) dispatchWorkflow(ctx context.Context, workflow, ref string, inp
 	return &Dispatch{WorkflowID: flow.ID, Path: flow.Path, Ref: ref, Accepted: true}, nil
 }
 
-// RunChange is the answer to an accepted re-run or cancel request.
+// RunChange is the answer to an accepted re-run request.
 type RunChange struct {
 	RunID    int64 `json:"run_id"`
 	Accepted bool  `json:"accepted"`
 }
 
-// changeRun re-runs or cancels one run of the bound repository. The run is read first: GitHub re-runs only a
-// completed run and cancels only one that has not completed, and its refusal of either would otherwise read
-// like a missing permission. The change itself is one request that is never repeated.
+// changeRun re-runs one run of the bound repository. The run is read first: GitHub re-runs only a completed
+// run, and its refusal would otherwise read like a missing permission. The change itself is one request that
+// is never repeated.
 func (c *Client) changeRun(ctx context.Context, op string, id int64, action string) (*RunChange, error) {
 	run, err := c.run(ctx, op, id)
 	if err != nil {
 		return nil, err
 	}
-	completed := run.Status == "completed"
-	switch {
-	case action == "cancel" && completed:
-		return nil, providerError(op, "the run has already completed, so there is nothing to cancel")
-	case action != "cancel" && !completed:
+	if run.Status != "completed" {
 		return nil, providerError(op, "the run has not completed yet; GitHub re-runs only a completed run")
 	}
 	if err := c.restChange(ctx, op, http.MethodPost, c.actionsPath("runs/"+strconv.FormatInt(id, 10)+"/"+action),
@@ -1456,4 +1460,42 @@ func (c *Client) changeRun(ctx context.Context, op string, id int64, action stri
 		return nil, actionsFailure(err, actionsChangePermission)
 	}
 	return &RunChange{RunID: id, Accepted: true}, nil
+}
+
+// RunCancel is the answer to a cancel: accepted when Qatlas sent it, otherwise the state of the run that had
+// already completed.
+type RunCancel struct {
+	RunID      int64  `json:"run_id"`
+	Accepted   bool   `json:"accepted"`
+	Status     string `json:"status,omitempty"`
+	Conclusion string `json:"conclusion,omitempty"`
+}
+
+// cancelRun cancels one run of the bound repository. The run is read first, and a completed run is reported
+// with its state without a request, so a repeated cancel succeeds. GitHub refuses with a conflict to cancel a
+// run that completed after the read; the run is then read again and reported the same way. The cancel itself
+// is one request that is never repeated.
+func (c *Client) cancelRun(ctx context.Context, id int64) (*RunCancel, error) {
+	const op = "cancel workflow run"
+	run, err := c.run(ctx, op, id)
+	if err != nil {
+		return nil, err
+	}
+	if run.Status != "completed" {
+		err := c.restChange(ctx, op, http.MethodPost, c.actionsPath("runs/"+strconv.FormatInt(id, 10)+"/cancel"),
+			struct{}{}, nil)
+		if err == nil {
+			return &RunCancel{RunID: id, Accepted: true}, nil
+		}
+		var failure *provider.Error
+		if !errors.As(err, &failure) || failure.Message != conflictMessage {
+			return nil, actionsFailure(err, actionsChangePermission)
+		}
+		again, readErr := c.run(ctx, op, id)
+		if readErr != nil || again.Status != "completed" {
+			return nil, err
+		}
+		run = again
+	}
+	return &RunCancel{RunID: id, Status: run.Status, Conclusion: run.Conclusion}, nil
 }

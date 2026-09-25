@@ -753,8 +753,8 @@ func TestDispatchChecksTheDeclaredInputs(t *testing.T) {
 	}
 }
 
-// Re-runs need a completed run and a cancel one that has not completed; each change is one request to the
-// run of the bound repository, and the next request of the token waits for the mutation interval.
+// Re-runs need a completed run; a cancel of a run that has not completed and each re-run is one request to
+// the run of the bound repository, and the next request of the token waits for the mutation interval.
 func TestRunChangesAreCheckedAndSentOnce(t *testing.T) {
 	f, _, base := serveActions(t)
 	var (
@@ -781,7 +781,21 @@ func TestRunChangesAreCheckedAndSentOnce(t *testing.T) {
 		{"cancel", "cancel", "actions/runs/5001/cancel", runningRun},
 	} {
 		before := len(f.recorded())
-		answer, err := c.changeRun(context.Background(), tt.op, tt.run, tt.action)
+		var (
+			answer *RunChange
+			err    error
+		)
+		if tt.action == "cancel" {
+			var cancelled *RunCancel
+			if cancelled, err = c.cancelRun(context.Background(), tt.run); err == nil {
+				if cancelled.Status != "" || cancelled.Conclusion != "" {
+					t.Errorf("cancel = %+v, want no state of an accepted cancel", cancelled)
+				}
+				answer = &RunChange{RunID: cancelled.RunID, Accepted: cancelled.Accepted}
+			}
+		} else {
+			answer, err = c.changeRun(context.Background(), tt.op, tt.run, tt.action)
+		}
 		if err != nil || answer.RunID != tt.run || !answer.Accepted {
 			t.Fatalf("%s = %+v, %v", tt.op, answer, err)
 		}
@@ -802,7 +816,6 @@ func TestRunChangesAreCheckedAndSentOnce(t *testing.T) {
 	}{
 		{"rerun", runningRun, "not completed"},
 		{"rerun-failed-jobs", runningRun, "not completed"},
-		{"cancel", failedRun, "already completed"},
 	} {
 		before := len(f.recorded())
 		if _, err := c.changeRun(context.Background(), "change", tt.run, tt.action); err == nil ||
@@ -812,6 +825,63 @@ func TestRunChangesAreCheckedAndSentOnce(t *testing.T) {
 		if _, _, rest := split(f.recorded()[before:]); rest[http.MethodPost] != 0 {
 			t.Errorf("%s of %d was sent", tt.action, tt.run)
 		}
+	}
+}
+
+// A cancel of a completed run succeeds without a request and reports the state of the run, so a repeated
+// cancel is idempotent; so does a cancel GitHub refuses with a conflict because the run completed after the
+// read. A conflict of a run still running stays a refusal.
+func TestCancelOfACompletedRunReportsItsState(t *testing.T) {
+	f, _, base := serveActions(t)
+	c := client(t, base, repoTarget)
+	ctx := context.Background()
+
+	before := len(f.recorded())
+	answer, err := c.cancelRun(ctx, failedRun)
+	if err != nil || *answer != (RunCancel{RunID: failedRun, Status: "completed", Conclusion: "failure"}) {
+		t.Errorf("cancel of a completed run = %+v, %v", answer, err)
+	}
+	if _, _, rest := split(f.recorded()[before:]); rest[http.MethodPost] != 0 {
+		t.Error("a completed run was cancelled")
+	}
+
+	// GitHub refuses the cancel with a conflict; with completes, the run completed between read and cancel.
+	var (
+		mu                  sync.Mutex
+		completes, finished bool
+	)
+	route := f.failure
+	f.failure = func(w http.ResponseWriter, r *http.Request) bool {
+		mu.Lock()
+		defer mu.Unlock()
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/cancel"):
+			finished = completes
+			w.WriteHeader(http.StatusConflict)
+			fmt.Fprint(w, `{"message":"Cannot cancel a workflow run that is completed."}`)
+			return true
+		case finished && r.URL.Path == actionsPrefix+"actions/runs/"+strconv.Itoa(runningRun):
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, runJSONOf(fakeRun{id: runningRun, status: "completed", conclusion: "cancelled"}))
+			return true
+		}
+		return route(w, r)
+	}
+	if _, err := c.cancelRun(ctx, runningRun); classOf(err) != provider.ClassProviderError ||
+		!strings.Contains(err.Error(), "current state") {
+		t.Errorf("a refused cancel of a running run = %v, want the conflict", err)
+	}
+	mu.Lock()
+	completes = true
+	mu.Unlock()
+	before = len(f.recorded())
+	answer, err = c.cancelRun(ctx, runningRun)
+	if err != nil || *answer != (RunCancel{RunID: runningRun, Status: "completed", Conclusion: "cancelled"}) {
+		t.Errorf("cancel of a run completed after the read = %+v, %v", answer, err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 3 || requests[1].method != http.MethodPost ||
+		requests[2].method != http.MethodGet {
+		t.Errorf("requests = %+v, want the read, one cancel, and the read again", requests)
 	}
 }
 
@@ -846,7 +916,7 @@ func TestUnclearExecutionsAreNeverRepeated(t *testing.T) {
 					return err
 				},
 				func() error { _, err := c.changeRun(context.Background(), "rerun", failedRun, "rerun"); return err },
-				func() error { _, err := c.changeRun(context.Background(), "cancel", runningRun, "cancel"); return err },
+				func() error { _, err := c.cancelRun(context.Background(), runningRun); return err },
 			}
 			for i, call := range calls {
 				err := call()
@@ -913,6 +983,7 @@ func TestActionsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 		{"github.workflowruns.rerun", `{"run_id":5000}`, true},
 		{"github.workflowruns.rerunfailed", `{"run_id":5000}`, true},
 		{"github.workflowruns.cancel", `{"run_id":5001}`, true},
+		{"github.workflowruns.cancel", `{"run_id":5000}`, true},
 	} {
 		result, err := invoke(t, core, request.operation, "operator", request.arguments, request.confirmed)
 		if err != nil {
@@ -923,7 +994,7 @@ func TestActionsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 			t.Errorf("%s answered with the token: %s", request.operation, result)
 		}
 	}
-	if strings.Count(audit.String(), `"result":"success"`) != 4 || strings.Contains(audit.String(), logCanary) ||
+	if strings.Count(audit.String(), `"result":"success"`) != 5 || strings.Contains(audit.String(), logCanary) ||
 		strings.Contains(audit.String(), "stable") {
 		t.Errorf("audit = %s, want one content-free event per execution", audit.String())
 	}
