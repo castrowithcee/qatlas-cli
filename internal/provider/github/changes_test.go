@@ -261,6 +261,14 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.pullrequestcommits.list": readRisk,
 		"github.pullrequestdiffs.get":    readRisk,
 		"github.pullrequestchecks.list":  readRisk,
+		"github.pullrequests.create":     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.pullrequests.update":     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.pullrequests.close":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.pullrequests.reopen":     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.pullrequestbranches.update": changeRisk(capability.EffectUpdate,
+			capability.IdempotencyNonIdempotent),
+		"github.pullrequests.merge": guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent,
+			dataSensitivity),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {

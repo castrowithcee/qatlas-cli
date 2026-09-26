@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -23,6 +25,7 @@ type fakePull struct {
 	headBranch, headSHA, baseBranch string
 	labels                          []string
 	body                            string
+	mergeCommitSHA                  string
 }
 
 type fakeFile struct {
@@ -44,8 +47,10 @@ type fakeStatus struct {
 }
 
 // fakePulls answers the pull request routes of the bound repository through the failure hook of fakeGitHub.
-// Every other repository is unknown to it.
+// Every other repository is unknown to it. notMergeable makes the next merge attempt answer 405 instead of
+// comparing the head commit, consumed by the one request that hits it.
 type fakePulls struct {
+	f             *fakeGitHub
 	pulls         []fakePull
 	files         map[int][]fakeFile
 	commits       map[int][]fakeCommit
@@ -54,16 +59,24 @@ type fakePulls struct {
 	runsTotal     map[string]int
 	statuses      map[string][]fakeStatus
 	statusesTotal map[string]int
+	seq           int
+	notMergeable  bool
 }
 
 func servePulls(t *testing.T) (*fakeGitHub, *fakePulls, string) {
 	t.Helper()
 	p := &fakePulls{}
 	f := &fakeGitHub{failure: p.route}
+	p.f = f
 	return f, p, serve(t, f)
 }
 
 func (p *fakePulls) route(w http.ResponseWriter, r *http.Request) bool {
+	if r.URL.Path == "/api/graphql" {
+		w.Header().Set("Content-Type", "application/json")
+		p.draftMutation(w)
+		return true
+	}
 	rest, ok := strings.CutPrefix(r.URL.Path, actionsPrefix)
 	if !ok || !(strings.HasPrefix(rest, "pulls") || strings.HasPrefix(rest, "commits/")) {
 		return false
@@ -72,10 +85,18 @@ func (p *fakePulls) route(w http.ResponseWriter, r *http.Request) bool {
 	switch {
 	case r.Method == http.MethodGet && rest == "pulls":
 		p.listPulls(w, r)
+	case r.Method == http.MethodPost && rest == "pulls":
+		p.createPull(w)
 	case r.Method == http.MethodGet && strings.HasPrefix(rest, "pulls/") && strings.HasSuffix(rest, "/files"):
 		p.listFiles(w, r, rest)
 	case r.Method == http.MethodGet && strings.HasPrefix(rest, "pulls/") && strings.HasSuffix(rest, "/commits"):
 		p.listCommits(w, r, rest)
+	case r.Method == http.MethodPut && strings.HasSuffix(rest, "/merge"):
+		p.mergePull(w, rest)
+	case r.Method == http.MethodPut && strings.HasSuffix(rest, "/update-branch"):
+		p.updateBranch(w, rest)
+	case r.Method == http.MethodPatch && strings.HasPrefix(rest, "pulls/") && !strings.Contains(strings.TrimPrefix(rest, "pulls/"), "/"):
+		p.patchPull(w, rest)
 	case r.Method == http.MethodGet && strings.HasPrefix(rest, "pulls/") && r.Header.Get("Accept") == "application/vnd.github.diff":
 		p.getDiff(w, rest)
 	case r.Method == http.MethodGet && strings.HasPrefix(rest, "pulls/"):
@@ -88,6 +109,159 @@ func (p *fakePulls) route(w http.ResponseWriter, r *http.Request) bool {
 		w.WriteHeader(http.StatusNotFound)
 	}
 	return true
+}
+
+// lastBody is the decoded REST body of the most recent request, which fakeGitHub already recorded before the
+// failure hook ran.
+func (p *fakePulls) lastBody() map[string]any {
+	requests := p.f.recorded()
+	if len(requests) == 0 {
+		return nil
+	}
+	return requests[len(requests)-1].body
+}
+
+func (p *fakePulls) lastVariables() map[string]any {
+	requests := p.f.recorded()
+	if len(requests) == 0 {
+		return nil
+	}
+	return requests[len(requests)-1].variables
+}
+
+func (p *fakePulls) lastDocument() string {
+	requests := p.f.recorded()
+	if len(requests) == 0 {
+		return ""
+	}
+	return requests[len(requests)-1].document
+}
+
+func (p *fakePulls) index(number int) int {
+	for i, pull := range p.pulls {
+		if pull.number == number {
+			return i
+		}
+	}
+	return -1
+}
+
+func (p *fakePulls) createPull(w http.ResponseWriter) {
+	body := p.lastBody()
+	p.seq++
+	number := 200 + p.seq
+	title, _ := body["title"].(string)
+	head, _ := body["head"].(string)
+	base, _ := body["base"].(string)
+	pullBody, _ := body["body"].(string)
+	draft, _ := body["draft"].(bool)
+	pull := fakePull{number: number, title: title, state: "open", draft: draft, headBranch: head,
+		headSHA: fmt.Sprintf("createdsha%d", number), baseBranch: base, body: pullBody}
+	p.pulls = append(p.pulls, pull)
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprint(w, pullJSONOf(pull))
+}
+
+func (p *fakePulls) patchPull(w http.ResponseWriter, rest string) {
+	number, ok := pullNumber(rest)
+	idx := p.index(number)
+	if !ok || idx < 0 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	body := p.lastBody()
+	pull := &p.pulls[idx]
+	if v, ok := body["title"].(string); ok {
+		pull.title = v
+	}
+	if v, ok := body["body"].(string); ok {
+		pull.body = v
+	}
+	if v, ok := body["base"].(string); ok {
+		pull.baseBranch = v
+	}
+	if v, ok := body["state"].(string); ok {
+		pull.state = v
+	}
+	fmt.Fprint(w, pullJSONOf(*pull))
+}
+
+func (p *fakePulls) mergePull(w http.ResponseWriter, rest string) {
+	tail := strings.TrimSuffix(strings.TrimPrefix(rest, "pulls/"), "/merge")
+	number, err := strconv.Atoi(tail)
+	idx := p.index(number)
+	if err != nil || idx < 0 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	pull := &p.pulls[idx]
+	body := p.lastBody()
+	sha, _ := body["sha"].(string)
+	switch {
+	case p.notMergeable:
+		p.notMergeable = false
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		fmt.Fprint(w, `{"message":"Pull Request is not mergeable"}`)
+	case sha != pull.headSHA:
+		w.WriteHeader(http.StatusConflict)
+		fmt.Fprint(w, `{"message":"Head branch was modified. Review and try the merge again."}`)
+	default:
+		pull.merged, pull.state, pull.mergeCommitSHA = true, "closed", fmt.Sprintf("mergecommit%d", number)
+		fmt.Fprintf(w, `{"sha":%q,"merged":true,"message":"Pull Request successfully merged"}`, pull.mergeCommitSHA)
+	}
+}
+
+func (p *fakePulls) updateBranch(w http.ResponseWriter, rest string) {
+	tail := strings.TrimSuffix(strings.TrimPrefix(rest, "pulls/"), "/update-branch")
+	number, err := strconv.Atoi(tail)
+	idx := p.index(number)
+	if err != nil || idx < 0 {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	body := p.lastBody()
+	sha, _ := body["expected_head_sha"].(string)
+	if sha != p.pulls[idx].headSHA {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		fmt.Fprint(w, `{"message":"expected_head_sha is not the current head"}`)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	fmt.Fprintf(w, `{"message":"Updating pull request branch.","url":"https://api.github.com/repos/octo-org/example/pulls/%d"}`,
+		number)
+}
+
+// pullNodeID and pullNodeNumber mirror each other: the fake's node identifier of a pull request, and the
+// number it stands for.
+func pullNodeID(number int) string { return fmt.Sprintf("PR_kw%d", number) }
+
+func pullNodeNumber(id string) (int, bool) {
+	digits, ok := strings.CutPrefix(id, "PR_kw")
+	if !ok {
+		return 0, false
+	}
+	n, err := strconv.Atoi(digits)
+	return n, err == nil
+}
+
+// draftMutation answers markPullRequestReadyForReview and convertPullRequestToDraft, the only GraphQL calls a
+// pull request tool sends.
+func (p *fakePulls) draftMutation(w http.ResponseWriter) {
+	id, _ := p.lastVariables()["id"].(string)
+	number, ok := pullNodeNumber(id)
+	idx := p.index(number)
+	if !ok || idx < 0 {
+		fmt.Fprint(w, `{"data":null,"errors":[{"type":"NOT_FOUND","message":"no pull request"}]}`)
+		return
+	}
+	pull := &p.pulls[idx]
+	alias := "ready"
+	if strings.Contains(p.lastDocument(), "convertPullRequestToDraft") {
+		pull.draft, alias = true, "draft"
+	} else {
+		pull.draft = false
+	}
+	fmt.Fprintf(w, `{"data":{%q:{"pullRequest":{"id":%q,"isDraft":%v}}}}`, alias, id, pull.draft)
 }
 
 func pullNumber(rest string) (int, bool) {
@@ -122,14 +296,19 @@ func pullJSONOf(pull fakePull) string {
 	if pull.state == "closed" {
 		closedAt = `"2026-01-04T00:00:00Z"`
 	}
-	return fmt.Sprintf(`{"number":%d,"title":%q,"body":%q,"state":%q,"draft":%v,`+
+	mergeCommitSHA := pull.mergeCommitSHA
+	if mergeCommitSHA == "" {
+		mergeCommitSHA = "mergecommitsha"
+	}
+	return fmt.Sprintf(`{"number":%d,"node_id":%q,"title":%q,"body":%q,"state":%q,"draft":%v,`+
 		`"user":{"login":"octocat"},"head":{"ref":%q,"sha":%q},"base":{"ref":%q,"sha":"basesha"},`+
 		`"labels":[%s],"requested_reviewers":[{"login":"hubot"}],"merged":%v,`+
-		`"mergeable":true,"mergeable_state":"clean","merge_commit_sha":"mergecommitsha","commits":3,`+
+		`"mergeable":true,"mergeable_state":"clean","merge_commit_sha":%q,"commits":3,`+
 		`"changed_files":2,"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z",`+
 		`"closed_at":%s,"merged_at":%s,"html_url":"https://github.com/octo-org/example/pull/%d"}`,
-		pull.number, pull.title, pull.body, pull.state, pull.draft, pull.headBranch, pull.headSHA, pull.baseBranch,
-		labelsJSON(pull.labels), pull.merged, closedAt, mergedAt, pull.number)
+		pull.number, pullNodeID(pull.number), pull.title, pull.body, pull.state, pull.draft, pull.headBranch,
+		pull.headSHA, pull.baseBranch, labelsJSON(pull.labels), pull.merged, mergeCommitSHA, closedAt, mergedAt,
+		pull.number)
 }
 
 func (p *fakePulls) listPulls(w http.ResponseWriter, r *http.Request) {
@@ -644,5 +823,329 @@ func TestPullRequestsSatisfyTheirContractThroughTheApplicationCore(t *testing.T)
 		if strings.Contains(string(result), tokenValue) {
 			t.Errorf("%s answered with the token: %s", request.operation, result)
 		}
+	}
+}
+
+// Create opens a pull request with one request; update sends REST fields, a draft change, or both, re-reading
+// the pull request only when a draft change leaves the REST answer stale; close and reopen are idempotent on
+// a pull request already in the state asked for, and reopening a merged pull request is refused.
+func TestPullRequestCreateUpdateCloseAndReopen(t *testing.T) {
+	f, p, base := servePulls(t)
+	p.pulls = append(p.pulls, fakePull{number: 50, title: "Old title", state: "open", headBranch: "feature",
+		headSHA: "sha050", baseBranch: "main"})
+	red := &redact.Redactor{}
+	core := application.New(registry(t), coreChangeConfig(base), resolver(red, nil), red)
+
+	before := len(f.recorded())
+	created, err := invoke(t, core, "github.pullrequests.create", "repo",
+		`{"title":"Add retry logic","head":"feature/retry","base":"main","draft":true}`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var createdPull struct {
+		State string `json:"state"`
+		Draft bool   `json:"draft"`
+	}
+	if err := json.Unmarshal(created, &createdPull); err != nil || createdPull.State != "open" || !createdPull.Draft {
+		t.Fatalf("created pull = %s, %v", created, err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 1 || requests[0].method != http.MethodPost {
+		t.Errorf("create requests = %+v, want exactly one POST", requests)
+	}
+
+	before = len(f.recorded())
+	updated, err := invoke(t, core, "github.pullrequests.update", "repo",
+		`{"number":50,"title":"New title","base":"develop"}`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var updatedPull struct {
+		Title      string `json:"title"`
+		BaseBranch string `json:"base_branch"`
+	}
+	if err := json.Unmarshal(updated, &updatedPull); err != nil || updatedPull.Title != "New title" ||
+		updatedPull.BaseBranch != "develop" {
+		t.Fatalf("updated pull = %s, %v", updated, err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 2 || requests[0].method != http.MethodGet ||
+		requests[1].method != http.MethodPatch {
+		t.Errorf("update requests = %+v, want a read then a PATCH", requests)
+	}
+
+	// A draft change alone sends only the mutation, then re-reads the pull request because GitHub's REST
+	// answer would otherwise still show the earlier draft state.
+	before = len(f.recorded())
+	toDraft, err := invoke(t, core, "github.pullrequests.update", "repo", `{"number":50,"draft":true}`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var draftPull struct {
+		Draft bool `json:"draft"`
+	}
+	if err := json.Unmarshal(toDraft, &draftPull); err != nil || !draftPull.Draft {
+		t.Fatalf("draft pull = %s, %v", toDraft, err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 3 || requests[0].method != http.MethodGet ||
+		requests[1].path != "/api/graphql" || requests[2].method != http.MethodGet {
+		t.Errorf("draft-only requests = %+v, want a read, a mutation, then a read", requests)
+	}
+
+	// A REST field and a draft change together send both, then re-read once.
+	before = len(f.recorded())
+	ready, err := invoke(t, core, "github.pullrequests.update", "repo",
+		`{"number":50,"title":"Ready again","draft":false}`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var readyPull struct {
+		Title string `json:"title"`
+		Draft bool   `json:"draft"`
+	}
+	if err := json.Unmarshal(ready, &readyPull); err != nil || readyPull.Draft || readyPull.Title != "Ready again" {
+		t.Fatalf("ready pull = %s, %v", ready, err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 4 || requests[0].method != http.MethodGet ||
+		requests[1].method != http.MethodPatch || requests[2].path != "/api/graphql" ||
+		requests[3].method != http.MethodGet {
+		t.Errorf("combined update requests = %+v, want a read, a PATCH, a mutation, then a read", requests)
+	}
+
+	before = len(f.recorded())
+	closed, err := invoke(t, core, "github.pullrequests.close", "repo", `{"number":50}`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var closedPull struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(closed, &closedPull); err != nil || closedPull.State != "closed" {
+		t.Fatalf("closed pull = %s, %v", closed, err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 2 || requests[1].method != http.MethodPatch {
+		t.Errorf("close requests = %+v, want a read then a PATCH", requests)
+	}
+
+	// A repeated close on an already-closed pull request is idempotent and sends only the read.
+	before = len(f.recorded())
+	if _, err := invoke(t, core, "github.pullrequests.close", "repo", `{"number":50}`, true); err != nil {
+		t.Fatal(err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 1 {
+		t.Errorf("a repeated close sent %d requests, want only the read", len(requests))
+	}
+
+	before = len(f.recorded())
+	reopened, err := invoke(t, core, "github.pullrequests.reopen", "repo", `{"number":50}`, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reopenedPull struct {
+		State string `json:"state"`
+	}
+	if err := json.Unmarshal(reopened, &reopenedPull); err != nil || reopenedPull.State != "open" {
+		t.Fatalf("reopened pull = %s, %v", reopened, err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 2 || requests[1].method != http.MethodPatch {
+		t.Errorf("reopen requests = %+v, want a read then a PATCH", requests)
+	}
+
+	// A repeated reopen on an already-open pull request is idempotent and sends only the read.
+	before = len(f.recorded())
+	if _, err := invoke(t, core, "github.pullrequests.reopen", "repo", `{"number":50}`, true); err != nil {
+		t.Fatal(err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 1 {
+		t.Errorf("a repeated reopen sent %d requests, want only the read", len(requests))
+	}
+
+	// A merged pull request cannot be reopened; the refusal names it before any request is sent.
+	idx := p.index(50)
+	p.pulls[idx].state, p.pulls[idx].merged = "closed", true
+	before = len(f.recorded())
+	if _, err := invoke(t, core, "github.pullrequests.reopen", "repo", `{"number":50}`, true); !isInvalidRequest(err) ||
+		!strings.Contains(err.Error(), "pull request #50 is already merged and cannot be reopened") {
+		t.Errorf("reopen of a merged pull request = %v, want an invalid request naming it", err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 1 {
+		t.Errorf("a refused reopen sent %d requests, want only the read", len(requests))
+	}
+}
+
+// A head branch update is sent only while the given commit is still the pull request's head; a stale one is
+// refused clearly without applying anything.
+func TestPullRequestBranchUpdateQueuesWhileTheHeadMatches(t *testing.T) {
+	f, p, base := servePulls(t)
+	head := strings.Repeat("a", 40)
+	p.pulls = append(p.pulls, fakePull{number: 60, title: "x", state: "open", headSHA: head})
+	red := &redact.Redactor{}
+	core := application.New(registry(t), coreChangeConfig(base), resolver(red, nil), red)
+
+	result, err := invoke(t, core, "github.pullrequestbranches.update", "repo",
+		fmt.Sprintf(`{"number":60,"expected_head_sha":%q}`, head), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Number   int  `json:"number"`
+		Accepted bool `json:"accepted"`
+	}
+	if err := json.Unmarshal(result, &got); err != nil || !got.Accepted || got.Number != 60 {
+		t.Fatalf("branch update = %s, %v", result, err)
+	}
+	if requests := f.recorded(); len(requests) != 2 || requests[0].method != http.MethodGet ||
+		requests[1].method != http.MethodPut {
+		t.Errorf("requests = %+v, want a read then a PUT", requests)
+	}
+
+	before := len(f.recorded())
+	stale := strings.Repeat("b", 40)
+	_, err = invoke(t, core, "github.pullrequestbranches.update", "repo",
+		fmt.Sprintf(`{"number":60,"expected_head_sha":%q}`, stale), true)
+	if classOf(err) != provider.ClassProviderError ||
+		!strings.Contains(err.Error(), "expected_head_sha may no longer be its current head commit") {
+		t.Errorf("a stale expected_head_sha = %v, want a clear provider refusal", err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 2 || requests[1].method != http.MethodPut {
+		t.Errorf("stale update requests = %+v, want a read then the refused PUT", requests)
+	}
+}
+
+// A merge is sent only while sha is still the pull request's head; already merged with exactly that head is
+// success without another request, already merged with another is refused naming both, a changed head answers
+// 409 and becomes an invalid request naming both, an unmergeable pull request answers 405 with the reason, and
+// merge is never offered by a connection whose tools list does not name it.
+func TestPullRequestMergeIsIdempotentAndReportsConflictsClearly(t *testing.T) {
+	f, p, base := servePulls(t)
+	head := strings.Repeat("c", 40)
+	p.pulls = append(p.pulls, fakePull{number: 70, title: "x", state: "open", headSHA: head})
+	red := &redact.Redactor{}
+	cfg := coreChangeConfig(base)
+	cfg.Connections["merger"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
+		Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
+		Tools:       []string{pullsGet.ID, pullsMerge.ID}}
+	core := application.New(registry(t), cfg, resolver(red, nil), red)
+
+	result, err := invoke(t, core, "github.pullrequests.merge", "merger",
+		fmt.Sprintf(`{"number":70,"sha":%q,"method":"squash"}`, head), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var merged struct {
+		Number int    `json:"number"`
+		Merged bool   `json:"merged"`
+		SHA    string `json:"sha"`
+	}
+	if err := json.Unmarshal(result, &merged); err != nil || !merged.Merged || merged.SHA == "" {
+		t.Fatalf("merge = %s, %v", result, err)
+	}
+	if requests := f.recorded(); requests[len(requests)-1].method != http.MethodPut ||
+		requests[len(requests)-1].body["merge_method"] != "squash" {
+		t.Errorf("merge request = %+v, want merge_method squash", requests[len(requests)-1])
+	}
+
+	// Already merged with exactly this head commit is idempotent success without another request.
+	before := len(f.recorded())
+	again, err := invoke(t, core, "github.pullrequests.merge", "merger",
+		fmt.Sprintf(`{"number":70,"sha":%q}`, head), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var repeated struct {
+		Merged bool   `json:"merged"`
+		SHA    string `json:"sha"`
+	}
+	if err := json.Unmarshal(again, &repeated); err != nil || !repeated.Merged || repeated.SHA != merged.SHA {
+		t.Fatalf("repeated merge = %s, %v, want the same merge commit", again, err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 1 || requests[0].method != http.MethodGet {
+		t.Errorf("a repeated merge with the same head sent %d requests, want only the read", len(requests))
+	}
+
+	// Already merged with a different head commit is refused as an invalid request naming both.
+	before = len(f.recorded())
+	other := strings.Repeat("d", 40)
+	_, err = invoke(t, core, "github.pullrequests.merge", "merger", fmt.Sprintf(`{"number":70,"sha":%q}`, other), true)
+	if !isInvalidRequest(err) || !strings.Contains(err.Error(), head) || !strings.Contains(err.Error(), other) {
+		t.Errorf("merge with the wrong head = %v, want an invalid request naming both commits", err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 1 {
+		t.Errorf("a mismatched already-merged check sent %d requests, want only the read", len(requests))
+	}
+
+	// A fresh, unmerged pull request whose head changed since it was read answers 409, which becomes an
+	// invalid request naming the expected and the now-current head.
+	stale, current := strings.Repeat("e", 40), strings.Repeat("f", 40)
+	p.pulls = append(p.pulls, fakePull{number: 71, title: "y", state: "open", headSHA: current})
+	_, err = invoke(t, core, "github.pullrequests.merge", "merger", fmt.Sprintf(`{"number":71,"sha":%q}`, stale), true)
+	if !isInvalidRequest(err) || !strings.Contains(err.Error(), stale) || !strings.Contains(err.Error(), current) {
+		t.Errorf("a changed head = %v, want an invalid request naming the expected and the current head", err)
+	}
+
+	// A pull request GitHub cannot merge answers 405 with a clear provider message naming likely reasons; it
+	// is never retried automatically.
+	before = len(f.recorded())
+	p.notMergeable = true
+	_, err = invoke(t, core, "github.pullrequests.merge", "merger", fmt.Sprintf(`{"number":71,"sha":%q}`, current), true)
+	if classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "not mergeable") {
+		t.Errorf("a not-mergeable pull request = %v, want a clear provider refusal", err)
+	}
+	if requests := f.recorded()[before:]; len(requests) != 2 {
+		t.Errorf("a refused merge sent %d requests, want a read and exactly one attempt, never a retry", len(requests))
+	}
+
+	// A connection whose tools list does not name the merge neither discovers nor runs it.
+	before = len(f.recorded())
+	_, err = invoke(t, core, "github.pullrequests.merge", "repo", fmt.Sprintf(`{"number":70,"sha":%q}`, head), true)
+	if _, ok := err.(*capability.UnsupportedError); !ok {
+		t.Errorf("merge on a connection without the tool listed = %T %v, want unsupported", err, err)
+	}
+	if len(f.recorded()) != before {
+		t.Error("an unsupported merge reached GitHub")
+	}
+}
+
+// Every pull request change tool satisfies its output contract through the application core and is audited
+// as one successful change.
+func TestPullRequestChangesSatisfyTheirContractThroughTheApplicationCoreWithAudit(t *testing.T) {
+	_, p, base := servePulls(t)
+	sha := strings.Repeat("1", 40)
+	p.pulls = append(p.pulls,
+		fakePull{number: 80, title: "x", state: "open", headSHA: sha},
+		fakePull{number: 81, title: "y", state: "closed"},
+		fakePull{number: 82, title: "z", state: "open", headSHA: strings.Repeat("2", 40)},
+	)
+	red := &redact.Redactor{}
+	cfg := coreChangeConfig(base)
+	cfg.Connections["merger"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
+		Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
+		Tools:       []string{pullsGet.ID, pullsMerge.ID}}
+	core := application.New(registry(t), cfg, resolver(red, nil), red)
+	var audit strings.Builder
+	core.SetAudit(&audit)
+
+	for _, request := range []application.InvokeRequest{
+		{Operation: "github.pullrequests.create", Connection: "repo",
+			Arguments: json.RawMessage(`{"title":"New feature","head":"feature/new","base":"main"}`)},
+		{Operation: "github.pullrequests.update", Connection: "repo",
+			Arguments: json.RawMessage(`{"number":80,"title":"Updated title"}`)},
+		{Operation: "github.pullrequests.close", Connection: "repo", Arguments: json.RawMessage(`{"number":80}`)},
+		{Operation: "github.pullrequests.reopen", Connection: "repo", Arguments: json.RawMessage(`{"number":81}`)},
+		{Operation: "github.pullrequestbranches.update", Connection: "repo",
+			Arguments: json.RawMessage(fmt.Sprintf(`{"number":82,"expected_head_sha":%q}`, strings.Repeat("2", 40)))},
+		{Operation: "github.pullrequests.merge", Connection: "merger",
+			Arguments: json.RawMessage(fmt.Sprintf(`{"number":82,"sha":%q}`, strings.Repeat("2", 40)))},
+	} {
+		request.Confirmed = true
+		response, err := core.Invoke(context.Background(), request)
+		if err != nil {
+			t.Errorf("%s %s = %v", request.Operation, request.Arguments, err)
+			continue
+		}
+		if strings.Contains(string(response.Result), tokenValue) {
+			t.Errorf("%s answered with the token: %s", request.Operation, response.Result)
+		}
+	}
+	if strings.Count(audit.String(), `"result":"success"`) != 6 {
+		t.Errorf("audit = %s, want one success event per confirmed change", audit.String())
 	}
 }

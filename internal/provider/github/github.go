@@ -24,9 +24,13 @@
 // by the not-recommended setup profile pull-requests, read the pull requests of a repository: their list, one
 // pull request, its changed files, its commits, its diff, and the checks at its head commit; the project
 // items still see a pull request only as an item, and the issue and comment tools still refuse a pull request
-// number. A tool that touches a project and a repository checks both. Nothing here accepts a free filter
-// expression, a GraphQL document, or a route from an agent, and every target is checked against the
-// allow-list before a credential is resolved.
+// number. The not-recommended setup profile pull-requests-operator adds the changes: it creates, updates,
+// closes, and reopens a pull request, and updates its head branch with its base while the head is still a
+// given commit; only merging is not in it, because a merge into the wrong repository's default branch is the
+// costliest mistake there, so only a connection whose tools list names github.pullrequests.merge offers it,
+// and it always needs the pull request's current head commit and its own confirmation. A tool that touches a
+// project and a repository checks both. Nothing here accepts a free filter expression, a GraphQL document, or
+// a route from an agent, and every target is checked against the allow-list before a credential is resolved.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -319,7 +323,9 @@ func Register(reg *capability.Registry) error {
 				"changes need repo and workflow, or Contents and Workflows: read and write, and the Actions " +
 				"settings Administration: read and write; pull request reads need repo or public_repo on a " +
 				"classic token, or Pull requests: read, Checks: read, and Commit statuses: read on a " +
-				"fine-grained token; keep those in a credential of their own",
+				"fine-grained token; pull request changes need repo on a classic token, or Pull requests: " +
+				"read and write on a fine-grained token; a merge additionally needs Contents: read and " +
+				"write; keep those in a credential of their own",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -405,6 +411,15 @@ func Register(reg *capability.Registry) error {
 				"commit; changes nothing",
 			Tools: []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID,
 				pullChecksList.ID},
+		}, {
+			ID: "pull-requests-operator", Title: "Pull requests operator",
+			Description: "reads the pull requests of a repository and creates, updates, closes, and reopens " +
+				"them, and updates a pull request's head branch with its base while the head is still a given " +
+				"commit; every change needs its own confirmation, and merging stays unticked, since it is " +
+				"offered only where a connection's tools list names github.pullrequests.merge",
+			Tools: []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID,
+				pullChecksList.ID, pullsCreate.ID, pullsUpdate.ID, pullsClose.ID, pullsReopen.ID,
+				pullBranchesUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -1372,8 +1387,9 @@ func (c *Client) statusError(op string, response *http.Response, change bool) er
 
 // Messages of the refusals a tool may rename to say what the refusal means for its own request.
 const (
-	conflictMessage = "GitHub refused the request in the current state of the resource"
-	rejectedMessage = "GitHub rejected the request as invalid"
+	conflictMessage         = "GitHub refused the request in the current state of the resource"
+	rejectedMessage         = "GitHub rejected the request as invalid"
+	methodNotAllowedMessage = "GitHub does not allow this request for the resource in its current state"
 )
 
 func (c *Client) classifyStatus(op string, response *http.Response, change bool) *provider.Error {
@@ -1407,6 +1423,8 @@ func (c *Client) classifyStatus(op string, response *http.Response, change bool)
 			Message: "GitHub answered with a redirect, which Qatlas does not follow; the resource may have moved"}
 	case status == http.StatusConflict:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: conflictMessage}
+	case status == http.StatusMethodNotAllowed:
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: methodNotAllowedMessage}
 	case status == http.StatusBadRequest || status == http.StatusUnprocessableEntity:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: rejectedMessage}
 	case status == http.StatusGatewayTimeout:

@@ -106,7 +106,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[78]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[84]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.projectitems.get,Get a GitHub project item,read,", "github.projectitems.list,List GitHub project items,read,", "github.comments.list,List comments of a GitHub issue,read,",
 		"github.issues.create,Create a GitHub issue,create,", "github.issues.update,Update a GitHub issue,update,", "github.issues.close,Close a GitHub issue,update,",
 		"github.issues.reopen,Reopen a GitHub issue,update,", "github.comments.create,Comment on a GitHub issue,create,", "github.projectitems.update,Update GitHub project item fields,update,",

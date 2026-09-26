@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning, GitHub Actions, and pull request reads: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request, file, commit, diff, and check reads, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning, GitHub Actions, and pull request reads and changes: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -16,13 +16,17 @@ its views, and its status updates, changes its collaborators and teams, reads an
 automations, reads and maintains issues,
 comments, project items, and draft issues, and it observes and, when allowed, operates the
 GitHub Actions of a repository.
-On a connection that names them explicitly, it also maintains workflow files and Actions settings, and, on
-the not-recommended profile `pull-requests`, it reads the pull requests of a repository: their list, one
-pull request, its changed files, its commits, its diff, and the checks at its head commit. Its project items
-still see a pull request only as an item, and its issue and comment tools still refuse a pull request number.
-It never accepts a free filter expression, a GraphQL document, or a
-REST route from the caller. A `repository`, `project`, or `owner` argument names exactly one target, and it
-must lie inside the connection's targets when the connection lists any.
+On a connection that names them explicitly, it also maintains workflow files and Actions settings. On the
+not-recommended profile `pull-requests` it reads the pull requests of a repository: their list, one pull
+request, its changed files, its commits, its diff, and the checks at its head commit. The not-recommended
+profile `pull-requests-operator` adds their changes: it creates, updates, closes, and reopens a pull request,
+and updates its head branch with its base while the head is still a given commit. Only the merge is not in
+any profile: a connection offers it only while its `tools` list names it, because a merge into the wrong
+repository's default branch is the costliest mistake there. Its project items still see a pull request only
+as an item, and its issue and comment tools still refuse a pull request number. It never accepts a free
+filter expression, a GraphQL document, or a REST route from the caller. A `repository`, `project`, or `owner`
+argument names exactly one target, and it must lie inside the connection's targets when the connection lists
+any.
 
 ## Configuration
 
@@ -38,8 +42,9 @@ The credential provides `token`, a personal access token. A read-only setup uses
 access to issues and to projects. Changes need `project` instead of `read:project`, or write access to issues
 and projects for a fine-grained token. User-owned projects need a classic token. The Actions tools have
 their own requirements, listed under [GitHub Actions](#github-actions), and so have the tools of
-[workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration). A
-successful `qatlas connection test` shows only that the token can read the first project or repository the
+[workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration) and of
+[pull requests](#tokens-for-pull-requests). A successful `qatlas connection test` shows only that the token
+can read the first project or repository the
 connection's targets name exactly, or, without such a target, its own user; GitHub checks every resource and
 scope again on each call, so a passing test does not authorize every tool.
 
@@ -181,7 +186,8 @@ and restoring stay unticked. The profile
 `github.projectworkflows.list` of the [automations](#project-automations); no profile ticks a tool with the
 effect `delete` or one that changes access. The
 profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions), and
-the not-recommended profile `pull-requests` under [Pull requests](#pull-requests). A profile is a
+the not-recommended profiles `pull-requests` and `pull-requests-operator` under
+[Pull requests](#pull-requests). A profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
 
@@ -861,10 +867,14 @@ token needs the `workflow` scope only to change workflow files, which only the l
 ## Pull requests
 
 GitHub's project items and its issue and comment tools still see a pull request only as an item, or refuse
-its number as an `invalid-request`; these six tools read the pull requests of a repository themselves. They
-offer no way to create, change, close, merge, or review a pull request, or to comment on one, and they are
-offered only by the not-recommended setup profile `pull-requests`, never by the recommended profile `read`.
-Every route lies below the chosen repository; no tool accepts an owner or a free REST path.
+its number as an `invalid-request`; the tools of this section read, create, change, close, reopen, and merge
+the pull requests of a repository themselves. They offer no way to review a pull request or to comment on
+one. The six reads are offered by the not-recommended setup profile `pull-requests`; the not-recommended
+profile `pull-requests-operator` adds the changes, described under [Changes](#changes-1) below, but never the
+merge, described under [Merge and conflicts](#merge-and-conflicts): it is offered only where a connection's
+`tools` list names `github.pullrequests.merge`, because a merge into the wrong repository's default branch is
+the costliest mistake there. Neither profile is offered by the recommended profile `read`. Every route lies
+below the chosen repository; no tool accepts an owner or a free REST path.
 
 | Tool | Effect | Idempotency | Confirmation | Does |
 | --- | --- | --- | --- | --- |
@@ -917,12 +927,103 @@ the same vocabulary, with `pending` becoming `in_progress` without a conclusion.
 did, and `none` when nothing reported a check for the commit. `truncated` says when GitHub held more than the
 100 check runs or 100 statuses read per call.
 
+### Changes
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.pullrequests.create` | create | non-idempotent | required | opens one pull request with `title`, `head`, `base`, `body`, `draft`, `maintainer_can_modify` |
+| `github.pullrequests.update` | update | idempotent | required | replaces `title`, `body`, or `base`, marks it ready for review or a draft, or changes `maintainer_can_modify`; left-out fields stay |
+| `github.pullrequests.close` | update | idempotent | required | closes it without merging; a pull request already closed, merged or not, is left as it is |
+| `github.pullrequests.reopen` | update | idempotent | required | opens a closed pull request again; a merged one is refused |
+| `github.pullrequestbranches.update` | update | non-idempotent | required | merges the base branch into the head branch while the head is still `expected_head_sha` |
+
+`github.pullrequests.create` and `github.pullrequests.update` write `title` and `body` through REST, exactly
+as the issue tools do; `head` is a branch, or `LOGIN:branch` for a fork. `github.pullrequests.update` writes a
+`draft` change through a separate GraphQL mutation, `markPullRequestReadyForReview` or
+`convertPullRequestToDraft`, because GitHub's REST route has no field for it; when both a REST field and
+`draft` are given, the REST change is sent first, then the draft change, and the pull request is read once
+more only then, so the answer never reports a draft state the REST answer could not have known about.
+`github.pullrequests.close` and `github.pullrequests.reopen` read the pull request first: a repeated call on
+a pull request already in the state asked for changes nothing and is success, like the issue tools; reopening
+a pull request GitHub reports as merged is refused before a request is sent, because GitHub has no way to
+reopen a merged pull request.
+
+```sh
+echo '{"title":"Add retry logic","head":"feature/retry","base":"main"}' |
+  qatlas invoke github.pullrequests.create --connection pull-operator --confirm
+echo '{"number":42,"draft":false}' | qatlas invoke github.pullrequests.update --connection pull-operator --confirm
+qatlas invoke github.pullrequests.close --connection pull-operator --arg number=42 --confirm
+```
+
+`github.pullrequestbranches.update` requires `expected_head_sha`, the pull request's current head commit as
+`github.pullrequests.get` reports it, so a head that changed since it was last read is never merged into
+blindly; GitHub queues the merge of the base branch into the head branch and answers `accepted: true` before
+it finishes, so the new head commit shows up only on a later read. A stale `expected_head_sha` is refused
+without queuing anything.
+
+### Merge and conflicts
+
+`github.pullrequests.merge` merges one pull request with a REST `PUT`. It is high risk, on the scale of the
+[listed-only workflow maintenance tools](#workflow-maintenance-and-actions-administration): a connection
+offers it only while its `tools` list names it, whatever its permissions, and no profile a new connection
+starts with, recommended or not, may select it.
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.pullrequests.merge` | update | idempotent | required | merges with `sha`, and optionally `method` (`merge`, `squash`, or `rebase`), `commit_title`, `commit_message`; offered only where a connection's `tools` list names it |
+
+`sha` is required: the pull request's current head commit, exactly as `github.pullrequests.get` reports it.
+Qatlas reads the pull request first. Already merged with exactly that head commit is success without another
+request, so a repeated merge with the same `sha` never fails; already merged with a different head commit is
+refused as `invalid-request`, naming both commits. Otherwise Qatlas sends the merge exactly once and never
+retries it:
+
+- **409 Conflict** means GitHub compared `sha` against a head that changed since it was read. Qatlas reads
+  the pull request again to name its now-current head and refuses as `invalid-request`, naming the expected
+  and the current commit, so the next call can read the pull request again and merge with the head it now
+  has, or accept it and merge again.
+- **405 Method Not Allowed** means GitHub cannot merge the pull request in its current state, for example
+  branch protection, a missing required review, or a failing check. Qatlas answers `provider-error` with that
+  reason; the merge is never repeated automatically, since GitHub's decision only changes once whatever
+  blocks the merge is resolved.
+
+```yaml
+connections:
+  pull-operator:
+    service: github
+    credential: github-operator
+    target: repos/octo-org/example
+    permissions: [read, create, update]
+    tools: [github.pullrequests.list, github.pullrequests.get, github.pullrequestfiles.list,
+      github.pullrequestcommits.list, github.pullrequestdiffs.get, github.pullrequestchecks.list,
+      github.pullrequests.create, github.pullrequests.update, github.pullrequests.close,
+      github.pullrequests.reopen, github.pullrequestbranches.update]
+  pull-merger:
+    service: github
+    credential: github-operator
+    target: repos/octo-org/example
+    permissions: [read, update]
+    tools: [github.pullrequests.get, github.pullrequests.merge]
+```
+
+```sh
+qatlas invoke github.pullrequests.get --connection pull-merger --arg number=42
+echo '{"number":42,"sha":"6cb1a1e...","method":"squash"}' |
+  qatlas invoke github.pullrequests.merge --connection pull-merger --confirm
+```
+
+`pull-operator` never offers the merge, whatever its permissions, because its `tools` list does not name it;
+`pull-merger` offers only the read `github.pullrequests.get` and the merge, so a caller reads the current head
+commit and merges with it in two calls on the same connection.
+
 ### Tokens for pull requests
 
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
 | `github.pullrequests.list`, `get`, `github.pullrequestfiles.list`, `github.pullrequestcommits.list`, `github.pullrequestdiffs.get` | `repo` for a private repository; `public_repo` for a public one | Pull requests: read |
 | `github.pullrequestchecks.list` | `repo` | Checks: read, and Commit statuses: read |
+| `github.pullrequests.create`, `update`, `close`, `reopen`, `github.pullrequestbranches.update` | `repo` | Pull requests: read and write |
+| `github.pullrequests.merge` | `repo` | Pull requests: read and write, plus Contents: read and write |
 
 ## Workflow maintenance and Actions administration
 

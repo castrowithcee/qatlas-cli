@@ -181,7 +181,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",78,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",84,0,0\n", ",\"\",3,0,0\n",
 		",\"\",6,0,0\n", ",\"\",7,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -390,8 +390,10 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.projectstatus.update", "github.projectteams.list", "github.projecttemplates.mark", "github.projecttemplates.unmark",
 			"github.projectviews.create", "github.projectviews.delete", "github.projectviews.list",
 			"github.projectviews.update", "github.projectworkflows.delete", "github.projectworkflows.list",
-			"github.pullrequestchecks.list", "github.pullrequestcommits.list", "github.pullrequestdiffs.get",
-			"github.pullrequestfiles.list", "github.pullrequests.get", "github.pullrequests.list",
+			"github.pullrequestbranches.update", "github.pullrequestchecks.list", "github.pullrequestcommits.list",
+			"github.pullrequestdiffs.get", "github.pullrequestfiles.list", "github.pullrequests.close",
+			"github.pullrequests.create", "github.pullrequests.get", "github.pullrequests.list",
+			"github.pullrequests.merge", "github.pullrequests.reopen", "github.pullrequests.update",
 			"github.repositories.list",
 			"github.workflowartifacts.list", "github.workflowfiles.create",
 			"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowfiles.update",

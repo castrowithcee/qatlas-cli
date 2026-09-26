@@ -3,6 +3,8 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -220,6 +222,177 @@ var pullChecksList = capability.Descriptor{
 	Examples: []capability.Example{{Description: "List the checks of a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
 }
 
+var pullsCreate = capability.Descriptor{
+	ID:      Provider + ".pullrequests.create",
+	Version: 1,
+	Title:   "Create a GitHub pull request",
+	Description: "Open one pull request in a repository an explicit connection allows; a repeated call opens " +
+		"a second pull request",
+	Tags:                       []string{"github", "pulls", "pullrequests", "create"},
+	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema: inputSchema(`"title":`+titleSchema+`,"head":`+headSchema+`,"base":`+refSchema+`,"body":`+
+		bodySchema+`,"draft":{"type":"boolean"},"maintainer_can_modify":{"type":"boolean"}`, "title", "head", "base"),
+	OutputSchema: pullsGet.OutputSchema,
+	Arguments: []capability.Argument{
+		{Name: "title", Description: "Pull request title, 1 to 256 characters", Required: true},
+		{Name: "head", Description: "Branch to merge, or LOGIN:branch for a fork", Required: true},
+		{Name: "base", Description: "Branch to merge into", Required: true},
+		{Name: "body", Description: "Pull request body in Markdown, at most 65536 characters; stored as given"},
+		{Name: "draft", Description: "true opens it as a draft; false when omitted"},
+		{Name: "maintainer_can_modify", Description: "true lets maintainers of the base repository push to " +
+			"the head branch of a fork; GitHub's default when omitted"},
+	},
+	Fields: pullsGet.Fields,
+	Examples: []capability.Example{{
+		Description: "Open a pull request from a feature branch",
+		Arguments:   json.RawMessage(`{"title":"Add retry logic","head":"feature/retry","base":"main"}`),
+	}},
+}
+
+var pullsUpdate = capability.Descriptor{
+	ID:      Provider + ".pullrequests.update",
+	Version: 1,
+	Title:   "Update a GitHub pull request",
+	Description: "Replace the title, body, or base branch of one pull request of a repository an explicit " +
+		"connection allows, mark it ready for review or convert it to a draft, or change whether maintainers " +
+		"of the base repository may push to its head branch; fields left out stay unchanged",
+	Tags:                       []string{"github", "pulls", "pullrequests", "update"},
+	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema: inputSchema(`"number":`+numberSchema+`,"title":`+titleSchema+`,"body":`+bodySchema+`,"base":`+
+		refSchema+`,"draft":{"type":"boolean"},"maintainer_can_modify":{"type":"boolean"}`, "number"),
+	OutputSchema: pullsGet.OutputSchema,
+	Arguments: []capability.Argument{
+		{Name: "number", Description: "Pull request number in the repository", Required: true},
+		{Name: "title", Description: "New pull request title, 1 to 256 characters"},
+		{Name: "body", Description: "New pull request body in Markdown, at most 65536 characters; stored as given"},
+		{Name: "base", Description: "New branch to merge into"},
+		{Name: "draft", Description: "false marks it ready for review, true converts it to a draft"},
+		{Name: "maintainer_can_modify", Description: "true lets maintainers of the base repository push to " +
+			"the head branch of a fork, false revokes it"},
+	},
+	Fields: pullsGet.Fields,
+	Examples: []capability.Example{{
+		Description: "Mark a pull request ready for review",
+		Arguments:   json.RawMessage(`{"number":42,"draft":false}`),
+	}},
+}
+
+var pullsClose = capability.Descriptor{
+	ID:      Provider + ".pullrequests.close",
+	Version: 1,
+	Title:   "Close a GitHub pull request",
+	Description: "Close one pull request of a repository an explicit connection allows without merging it; a " +
+		"pull request already closed, merged or not, is left as it is and reported with its current state",
+	Tags:                       []string{"github", "pulls", "pullrequests", "close", "update"},
+	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema:                inputSchema(`"number":`+numberSchema, "number"),
+	OutputSchema:               pullsGet.OutputSchema,
+	Arguments: []capability.Argument{
+		{Name: "number", Description: "Pull request number in the repository", Required: true},
+	},
+	Fields:   pullsGet.Fields,
+	Examples: []capability.Example{{Description: "Close a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
+}
+
+var pullsReopen = capability.Descriptor{
+	ID:      Provider + ".pullrequests.reopen",
+	Version: 1,
+	Title:   "Reopen a GitHub pull request",
+	Description: "Open one closed pull request of a repository an explicit connection allows again; a pull " +
+		"request already open is left as it is, and a merged pull request is refused with a clear message",
+	Tags:                       []string{"github", "pulls", "pullrequests", "reopen", "update"},
+	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema:                inputSchema(`"number":`+numberSchema, "number"),
+	OutputSchema:               pullsGet.OutputSchema,
+	Arguments: []capability.Argument{
+		{Name: "number", Description: "Pull request number in the repository", Required: true},
+	},
+	Fields:   pullsGet.Fields,
+	Examples: []capability.Example{{Description: "Reopen a pull request", Arguments: json.RawMessage(`{"number":42}`)}},
+}
+
+const pullBranchUpdateOutput = `{"type":"object","properties":{"number":{"type":"integer"},` +
+	`"accepted":{"type":"boolean"}},"required":["number","accepted"],"additionalProperties":false}`
+
+var pullBranchesUpdate = capability.Descriptor{
+	ID:      Provider + ".pullrequestbranches.update",
+	Version: 1,
+	Title:   "Update the head branch of a GitHub pull request",
+	Description: "Merge the base branch into the head branch of one pull request of a repository an explicit " +
+		"connection allows, only while its head is still the given commit, so a head that changed since is " +
+		"never merged into blindly; GitHub queues the merge and answers before it finishes",
+	Tags:                       []string{"github", "pulls", "pullrequests", "branches", "update"},
+	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema: inputSchema(`"number":`+numberSchema+`,"expected_head_sha":`+blobSHASchema, "number",
+		"expected_head_sha"),
+	OutputSchema: json.RawMessage(pullBranchUpdateOutput),
+	Arguments: []capability.Argument{
+		{Name: "number", Description: "Pull request number in the repository", Required: true},
+		{Name: "expected_head_sha", Description: "Head commit the branch must still be at; " +
+			"github.pullrequests.get reports the current one", Required: true},
+	},
+	Fields: []capability.Field{
+		{Name: "accepted", Description: "True once GitHub queued the update; it runs asynchronously, read the " +
+			"pull request again to see its new head commit"},
+	},
+	Examples: []capability.Example{{
+		Description: "Update a pull request's branch with its base",
+		Arguments:   json.RawMessage(`{"number":42,"expected_head_sha":"ebca79b1db4fcbb136e6094c13e8451428c8a6ab"}`),
+	}},
+}
+
+const pullMergeOutput = `{"type":"object","properties":{"number":{"type":"integer"},"merged":{"type":"boolean"},` +
+	`"sha":{"type":"string"}},"required":["number","merged"],"additionalProperties":false}`
+
+var pullsMerge = capability.Descriptor{
+	ID:      Provider + ".pullrequests.merge",
+	Version: 1,
+	Title:   "Merge a GitHub pull request",
+	Description: "Merge one pull request of a repository an explicit connection allows, only while its head " +
+		"is still the given commit; offered only where a connection's tools list names it, because a merge " +
+		"into the wrong repository's default branch is the costliest mistake there. Already merged with " +
+		"exactly this head commit is success; a head that changed since ends as an invalid request naming " +
+		"both commits; a pull request GitHub cannot merge, for example one blocked by branch protection, " +
+		"missing reviews, or failing checks, ends with the reason",
+	Tags:                       []string{"github", "pulls", "pullrequests", "merge"},
+	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, dataSensitivity),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	RequiresToolAllowList:      true,
+	InputSchema: inputSchema(`"number":`+numberSchema+`,"sha":`+blobSHASchema+`,"method":{"type":"string",`+
+		`"enum":["merge","squash","rebase"]},"commit_title":`+titleSchema+`,"commit_message":`+bodySchema,
+		"number", "sha"),
+	OutputSchema: json.RawMessage(pullMergeOutput),
+	Arguments: []capability.Argument{
+		{Name: "number", Description: "Pull request number in the repository", Required: true},
+		{Name: "sha", Description: "Head commit the pull request must still be at; github.pullrequests.get " +
+			"reports the current one", Required: true},
+		{Name: "method", Description: "merge, squash, or rebase; the repository's default when omitted"},
+		{Name: "commit_title", Description: "Title of the merge commit, 1 to 256 characters; GitHub's default " +
+			"when omitted"},
+		{Name: "commit_message", Description: "Extra detail for the merge commit, at most 65536 characters"},
+	},
+	Fields: []capability.Field{
+		{Name: "merged", Description: "True once the pull request is merged"},
+		{Name: "sha", Description: "SHA of the merge commit"},
+	},
+	Examples: []capability.Example{{
+		Description: "Merge a pull request by squashing",
+		Arguments: json.RawMessage(`{"number":42,"sha":"ebca79b1db4fcbb136e6094c13e8451428c8a6ab",` +
+			`"method":"squash"}`),
+	}},
+}
+
 // pullRequestOperations binds every pull request tool to its handler.
 func pullRequestOperations() []capability.Operation {
 	bind := func(descriptor capability.Descriptor, check func(*pullArguments, target) error,
@@ -245,11 +418,31 @@ func pullRequestOperations() []capability.Operation {
 		bind(pullChecksList, checkPullNumberArgument, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
 			return c.pullRequestChecks(ctx, a.Number)
 		}),
+		bind(pullsCreate, checkPullCreateArguments, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
+			return c.createPullRequest(ctx, a)
+		}),
+		bind(pullsUpdate, checkPullUpdateArguments, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
+			return c.updatePullRequest(ctx, a)
+		}),
+		bind(pullsClose, checkPullNumberArgument, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
+			return c.closePullRequest(ctx, a.Number)
+		}),
+		bind(pullsReopen, checkPullNumberArgument, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
+			return c.reopenPullRequest(ctx, a.Number)
+		}),
+		bind(pullBranchesUpdate, checkPullBranchUpdateArguments, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
+			return c.updatePullRequestBranch(ctx, a.Number, a.ExpectedHeadSHA)
+		}),
+		bind(pullsMerge, checkPullMergeArguments, func(ctx context.Context, c *Client, a *pullArguments) (any, error) {
+			return c.mergePullRequest(ctx, a)
+		}),
 	}
 }
 
 // pullArguments holds the arguments of every pull request tool; the input schema of each tool admits only
-// its own. page and perPage are derived by the checks.
+// its own. page and perPage are derived by the checks. A boolean is a pointer, so a value left out stays
+// apart from false, and an empty string always stays apart from an omitted one: no pull request field this
+// provider writes accepts an empty string as a set value.
 type pullArguments struct {
 	Number int    `json:"number"`
 	State  string `json:"state"`
@@ -257,6 +450,17 @@ type pullArguments struct {
 	Head   string `json:"head"`
 	Limit  int    `json:"limit"`
 	Cursor string `json:"cursor"`
+
+	// The arguments of the change tools.
+	Title               string  `json:"title"`
+	Body                *string `json:"body"`
+	Draft               *bool   `json:"draft"`
+	MaintainerCanModify *bool   `json:"maintainer_can_modify"`
+	SHA                 string  `json:"sha"`
+	Method              string  `json:"method"`
+	CommitTitle         string  `json:"commit_title"`
+	CommitMessage       string  `json:"commit_message"`
+	ExpectedHeadSHA     string  `json:"expected_head_sha"`
 
 	page, perPage int
 	binding       []byte
@@ -333,8 +537,121 @@ func checkPullSubList(list string) func(*pullArguments, target) error {
 	}
 }
 
+// checkBoundedText refuses text over max runes; empty is always fine, since a caller uses it to mean "leave
+// this to GitHub's default."
+func checkBoundedText(name, value string, max int) error {
+	if utf8.RuneCountInString(value) > max {
+		return invalidRequest(fmt.Sprintf("%s must hold at most %d characters", name, max))
+	}
+	return nil
+}
+
+// checkPullTitle refuses a blank or oversized pull request or commit title.
+func checkPullTitle(name, title string) error {
+	if strings.TrimSpace(title) == "" {
+		return invalidRequest(name + " must not be blank")
+	}
+	return checkBoundedText(name, title, maxTitleLength)
+}
+
+func checkPullCreateArguments(a *pullArguments, _ target) error {
+	if err := checkPullTitle("title", a.Title); err != nil {
+		return err
+	}
+	if a.Head == "" || !validHead(a.Head) {
+		return invalidRequest("head must be a branch, or LOGIN:branch for a fork")
+	}
+	if a.Base == "" || !validRef(a.Base) {
+		return invalidRequest("base must be a branch name")
+	}
+	if a.Body != nil {
+		if err := checkBoundedText("body", *a.Body, maxBodyLength); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkPullUpdateArguments(a *pullArguments, bound target) error {
+	if err := checkPullNumberArgument(a, bound); err != nil {
+		return err
+	}
+	if a.Title == "" && a.Body == nil && a.Base == "" && a.MaintainerCanModify == nil && a.Draft == nil {
+		return invalidRequest("name at least one of title, body, base, draft, or maintainer_can_modify to change")
+	}
+	if a.Title != "" {
+		if err := checkPullTitle("title", a.Title); err != nil {
+			return err
+		}
+	}
+	if a.Body != nil {
+		if err := checkBoundedText("body", *a.Body, maxBodyLength); err != nil {
+			return err
+		}
+	}
+	if a.Base != "" && !validRef(a.Base) {
+		return invalidRequest("base must be a branch name")
+	}
+	return nil
+}
+
+func checkPullBranchUpdateArguments(a *pullArguments, bound target) error {
+	if err := checkPullNumberArgument(a, bound); err != nil {
+		return err
+	}
+	if !validCommitSHA(a.ExpectedHeadSHA) {
+		return invalidRequest("expected_head_sha must be a full commit SHA")
+	}
+	return nil
+}
+
+// mergeMethods are the merge strategies GitHub accepts.
+var mergeMethods = []string{"merge", "squash", "rebase"}
+
+func checkPullMergeArguments(a *pullArguments, bound target) error {
+	if err := checkPullNumberArgument(a, bound); err != nil {
+		return err
+	}
+	if !validCommitSHA(a.SHA) {
+		return invalidRequest("sha must be a full commit SHA")
+	}
+	if a.Method != "" && !containsFold(mergeMethods, a.Method) {
+		return invalidRequest("method must be merge, squash, or rebase")
+	}
+	if a.CommitTitle != "" {
+		if err := checkPullTitle("commit_title", a.CommitTitle); err != nil {
+			return err
+		}
+	}
+	if a.CommitMessage != "" {
+		if err := checkBoundedText("commit_message", a.CommitMessage, maxBodyLength); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (a *pullArguments) query() url.Values {
 	return url.Values{"per_page": {strconv.Itoa(a.perPage)}, "page": {strconv.Itoa(a.page)}}
+}
+
+// pullUpdatePayload is the REST body an update sends: only the fields set travel, and draft travels through
+// a GraphQL mutation instead, because GitHub's REST route has none for it.
+func (a *pullArguments) pullUpdatePayload() map[string]any {
+	payload := map[string]any{}
+	if a.Title != "" {
+		payload["title"] = a.Title
+	}
+	if a.Body != nil {
+		payload["body"] = *a.Body
+	}
+	if a.Base != "" {
+		payload["base"] = a.Base
+	}
+	if a.MaintainerCanModify != nil {
+		payload["maintainer_can_modify"] = *a.MaintainerCanModify
+	}
+	return payload
 }
 
 // morePage reports whether a REST list without a total count continues after the page just read, based on
@@ -368,6 +685,20 @@ func validSHA(value string) bool {
 	return true
 }
 
+// validCommitSHA accepts only a full commit SHA, the length a merge or a branch update compares exactly,
+// unlike validSHA which also accepts an abbreviated one for a read.
+func validCommitSHA(value string) bool {
+	if len(value) != 40 && len(value) != 64 {
+		return false
+	}
+	for _, r := range value {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+			return false
+		}
+	}
+	return true
+}
+
 // Permission messages of the pull request tools. GitHub decides on every request; a message names what such
 // a request needs without claiming what the configured token holds.
 const (
@@ -376,6 +707,10 @@ const (
 		"requests: read on a fine-grained token"
 	checksReadPermission = "GitHub refused this token the checks of this repository; reading them needs repo " +
 		"on a classic token, or Checks: read and Commit statuses: read on a fine-grained token"
+	pullsChangePermission = "GitHub refused this change of a pull request of this repository; it needs repo " +
+		"on a classic token, or Pull requests: read and write on a fine-grained token"
+	pullsMergePermission = "GitHub refused this merge of a pull request of this repository; it needs repo on " +
+		"a classic token, or Pull requests: read and write plus Contents: read and write on a fine-grained token"
 )
 
 // pullRead performs one bounded REST read of a pull request resource of the bound repository.
@@ -387,6 +722,12 @@ func (c *Client) pullRead(ctx context.Context, op, path string, out any) error {
 func (c *Client) pullReadPage(ctx context.Context, op, path string, query url.Values, out any) (bool, error) {
 	hasNext, err := c.restPage(ctx, op, path, query, out)
 	return hasNext, actionsFailure(err, pullsReadPermission)
+}
+
+// pullChange sends one bounded REST change of a pull request resource of the bound repository, once, with the
+// change permission message of a refusal.
+func (c *Client) pullChange(ctx context.Context, op, method, path string, body, out any) error {
+	return actionsFailure(c.restChange(ctx, op, method, path, body, out), pullsChangePermission)
 }
 
 // PullRequestList is one batch of pull requests.
@@ -441,9 +782,11 @@ type PullRequest struct {
 }
 
 // pullJSON is the part of a REST pull request this provider reads. mergeable, mergeable_state, commits, and
-// changed_files arrive only on the single-pull-request route; the list route leaves them out.
+// changed_files arrive only on the single-pull-request route; the list route leaves them out. NodeID is the
+// GraphQL identifier a draft change needs; it arrives on every route.
 type pullJSON struct {
 	Number int     `json:"number"`
+	NodeID string  `json:"node_id"`
 	Title  string  `json:"title"`
 	Body   *string `json:"body"`
 	State  string  `json:"state"`
@@ -846,4 +1189,246 @@ func (c *Client) pullRequestChecks(ctx context.Context, number int) (*PullReques
 	}
 	return &PullRequestChecks{Number: number, HeadSHA: sha, Checks: checks, Overall: overallState(checks),
 		Truncated: runs.TotalCount > len(runs.CheckRuns) || combined.TotalCount > len(combined.Statuses)}, nil
+}
+
+// createPullRequest opens one pull request in the bound repository with exactly one request, which is never
+// repeated.
+func (c *Client) createPullRequest(ctx context.Context, a *pullArguments) (*PullRequest, error) {
+	const op = "create pull request"
+	payload := map[string]any{"title": a.Title, "head": a.Head, "base": a.Base}
+	if a.Body != nil {
+		payload["body"] = *a.Body
+	}
+	if a.Draft != nil {
+		payload["draft"] = *a.Draft
+	}
+	if a.MaintainerCanModify != nil {
+		payload["maintainer_can_modify"] = *a.MaintainerCanModify
+	}
+	var raw pullJSON
+	if err := c.pullChange(ctx, op, http.MethodPost, c.repoPath("pulls"), payload, &raw); err != nil {
+		return nil, err
+	}
+	return raw.full(), nil
+}
+
+// The GraphQL mutations of a draft change. GitHub has no REST field for draft; both take the pull request's
+// node identifier and answer whether it is a draft afterwards.
+const (
+	markReadyForReviewMutation = `mutation($id:ID!){ready:markPullRequestReadyForReview(` +
+		`input:{pullRequestId:$id}){pullRequest{id isDraft}}}`
+	convertToDraftMutation = `mutation($id:ID!){draft:convertPullRequestToDraft(` +
+		`input:{pullRequestId:$id}){pullRequest{id isDraft}}}`
+)
+
+// setPullRequestDraft marks the pull request the node identifier names ready for review, or converts it to a
+// draft, in one mutation that is never repeated.
+func (c *Client) setPullRequestDraft(ctx context.Context, op, nodeID string, draft bool) error {
+	if nodeID == "" {
+		return invalidResponse(op, true)
+	}
+	document := markReadyForReviewMutation
+	if draft {
+		document = convertToDraftMutation
+	}
+	var answer struct {
+		Ready *json.RawMessage `json:"ready"`
+		Draft *json.RawMessage `json:"draft"`
+	}
+	if err := c.mutate(ctx, op, document, map[string]any{"id": nodeID}, &answer); err != nil {
+		return err
+	}
+	if answer.Ready == nil && answer.Draft == nil {
+		return invalidResponse(op, true)
+	}
+	return nil
+}
+
+// updatePullRequest replaces the named REST fields of one pull request in one request, sends the draft
+// change of a separate GraphQL mutation when one was named, and reads the pull request again only when a
+// draft change leaves its REST answer stale.
+func (c *Client) updatePullRequest(ctx context.Context, a *pullArguments) (*PullRequest, error) {
+	const op = "update pull request"
+	current, err := c.pullRequest(ctx, op, a.Number)
+	if err != nil {
+		return nil, err
+	}
+	if payload := a.pullUpdatePayload(); len(payload) > 0 {
+		var raw pullJSON
+		if err := c.pullChange(ctx, op, http.MethodPatch, c.repoPath("pulls/"+strconv.Itoa(a.Number)), payload,
+			&raw); err != nil {
+			return nil, err
+		}
+		current = raw
+	}
+	if a.Draft != nil {
+		if err := c.setPullRequestDraft(ctx, op, current.NodeID, *a.Draft); err != nil {
+			return nil, err
+		}
+		refreshed, err := c.pullRequest(ctx, op, a.Number)
+		if err != nil {
+			return nil, err
+		}
+		current = refreshed
+	}
+	return current.full(), nil
+}
+
+// closePullRequest closes one open pull request. A pull request already closed, merged or not, is reported
+// unchanged without a request, so a repeated close never fails.
+func (c *Client) closePullRequest(ctx context.Context, number int) (*PullRequest, error) {
+	const op = "close pull request"
+	current, err := c.pullRequest(ctx, op, number)
+	if err != nil {
+		return nil, err
+	}
+	if current.State == "closed" {
+		return current.full(), nil
+	}
+	var raw pullJSON
+	if err := c.pullChange(ctx, op, http.MethodPatch, c.repoPath("pulls/"+strconv.Itoa(number)),
+		map[string]any{"state": "closed"}, &raw); err != nil {
+		return nil, err
+	}
+	return raw.full(), nil
+}
+
+// reopenPullRequest opens one closed pull request again. A pull request already open is reported unchanged
+// without a request; a merged pull request cannot be reopened and is refused before one is sent.
+func (c *Client) reopenPullRequest(ctx context.Context, number int) (*PullRequest, error) {
+	const op = "reopen pull request"
+	current, err := c.pullRequest(ctx, op, number)
+	if err != nil {
+		return nil, err
+	}
+	if current.State == "open" {
+		return current.full(), nil
+	}
+	if current.Merged {
+		return nil, invalidRequest(fmt.Sprintf("pull request #%d is already merged and cannot be reopened", number))
+	}
+	var raw pullJSON
+	if err := c.pullChange(ctx, op, http.MethodPatch, c.repoPath("pulls/"+strconv.Itoa(number)),
+		map[string]any{"state": "open"}, &raw); err != nil {
+		return nil, err
+	}
+	return raw.full(), nil
+}
+
+// PullRequestBranchUpdate is the answer of a head branch update: GitHub queues the merge of the base branch
+// into the head branch and answers before it finishes.
+type PullRequestBranchUpdate struct {
+	Number   int  `json:"number"`
+	Accepted bool `json:"accepted"`
+}
+
+// pullBranchUpdateFailure names what a refused branch update most likely means; every other failure keeps
+// its own message.
+func pullBranchUpdateFailure(err error, number int) error {
+	var failure *provider.Error
+	if !errors.As(err, &failure) || failure.Message != rejectedMessage {
+		return err
+	}
+	refused := *failure
+	refused.Message = fmt.Sprintf("GitHub rejected the update of pull request #%d's head branch, so nothing "+
+		"was queued; expected_head_sha may no longer be its current head commit, read the pull request again",
+		number)
+	return &refused
+}
+
+// updatePullRequestBranch merges the base branch into the head branch of one pull request, only while its
+// head is still expectedHeadSHA, in one request that is never repeated; GitHub applies it asynchronously.
+func (c *Client) updatePullRequestBranch(ctx context.Context, number int, expectedHeadSHA string) (*PullRequestBranchUpdate, error) {
+	const op = "update pull request branch"
+	if _, err := c.pullRequest(ctx, op, number); err != nil {
+		return nil, err
+	}
+	err := c.pullChange(ctx, op, http.MethodPut, c.repoPath("pulls/"+strconv.Itoa(number)+"/update-branch"),
+		map[string]any{"expected_head_sha": expectedHeadSHA}, nil)
+	if err != nil {
+		return nil, pullBranchUpdateFailure(err, number)
+	}
+	return &PullRequestBranchUpdate{Number: number, Accepted: true}, nil
+}
+
+// PullRequestMerge is the answer of a merge: the pull request is merged with the reported merge commit SHA.
+type PullRequestMerge struct {
+	Number int    `json:"number"`
+	Merged bool   `json:"merged"`
+	SHA    string `json:"sha,omitempty"`
+}
+
+// mergeFailure names what a refused merge most likely means. Its own permission message names the write
+// access a merge needs beside a pull request change, Contents included. A conflict means GitHub compared sha
+// against a head that has since moved; the pull request is read again to name the current one, and the
+// refusal becomes an invalid request that names both, since the caller must read the current state before
+// merging again. A pull request GitHub refuses to merge in its current state, for example branch protection,
+// a missing review, or a failing check, keeps its own provider message naming likely reasons. Every other
+// failure keeps its own message.
+func (c *Client) mergeFailure(ctx context.Context, op string, number int, expected string, err error) error {
+	var failure *provider.Error
+	if !errors.As(err, &failure) {
+		return err
+	}
+	if failure.Class == provider.ClassPermission {
+		refused := *failure
+		refused.Message = pullsMergePermission
+		return &refused
+	}
+	switch failure.Message {
+	case conflictMessage:
+		current := "unknown"
+		if pull, readErr := c.pullRequest(ctx, op, number); readErr == nil {
+			current = pull.Head.SHA
+		}
+		return invalidRequest(fmt.Sprintf("GitHub refused to merge pull request #%d because its head branch "+
+			"changed: expected head commit %s, now %s; read the pull request again and merge with its current "+
+			"head commit, or accept the current one and merge again", number, expected, current))
+	case methodNotAllowedMessage:
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: fmt.Sprintf(
+			"GitHub refused to merge pull request #%d because it is not mergeable in its current state, for "+
+				"example branch protection, a missing required review, or a failing check; check its merge "+
+				"state and checks before trying again", number)}
+	}
+	return err
+}
+
+// mergePullRequest merges one pull request, only while its head is still sha, in one request that is never
+// repeated. A pull request already merged with exactly this head commit is reported as merged without a
+// request, so a repeated merge with the same sha never fails.
+func (c *Client) mergePullRequest(ctx context.Context, a *pullArguments) (*PullRequestMerge, error) {
+	const op = "merge pull request"
+	current, err := c.pullRequest(ctx, op, a.Number)
+	if err != nil {
+		return nil, err
+	}
+	if current.Merged {
+		if current.Head.SHA == a.SHA {
+			return &PullRequestMerge{Number: a.Number, Merged: true, SHA: current.MergeCommitSHA}, nil
+		}
+		return nil, invalidRequest(fmt.Sprintf("pull request #%d is already merged with head commit %s, not %s",
+			a.Number, current.Head.SHA, a.SHA))
+	}
+	payload := map[string]any{"sha": a.SHA}
+	if a.Method != "" {
+		payload["merge_method"] = a.Method
+	}
+	if a.CommitTitle != "" {
+		payload["commit_title"] = a.CommitTitle
+	}
+	if a.CommitMessage != "" {
+		payload["commit_message"] = a.CommitMessage
+	}
+	var raw struct {
+		SHA    string `json:"sha"`
+		Merged bool   `json:"merged"`
+	}
+	if err := c.restChange(ctx, op, http.MethodPut, c.repoPath("pulls/"+strconv.Itoa(a.Number)+"/merge"), payload,
+		&raw); err != nil {
+		return nil, c.mergeFailure(ctx, op, a.Number, a.SHA, err)
+	}
+	if !raw.Merged {
+		return nil, invalidResponse(op, true)
+	}
+	return &PullRequestMerge{Number: a.Number, Merged: true, SHA: raw.SHA}, nil
 }

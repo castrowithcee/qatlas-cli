@@ -218,8 +218,12 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 	deletes := map[string]bool{projectsDelete.ID: true, fieldsDelete.ID: true, fieldOptionsDelete.ID: true,
 		iterationsReplace.ID: true, viewsDelete.ID: true, itemsDelete.ID: true, statusDelete.ID: true,
 		projectWorkflowsDelete.ID: true, collaboratorsUpdate.ID: true, teamsLink.ID: true, teamsUnlink.ID: true}
+	// github.pullrequests.merge is guarded on its own: it is neither a maintainer or administrator tool nor a
+	// delete, but it is offered only where a connection's tools list names it, because merging into the wrong
+	// repository's default branch is the costliest mistake there.
 	for _, descriptor := range reg.Provider(Provider) {
-		if descriptor.RequiresToolAllowList != (guarded[descriptor.ID] || deletes[descriptor.ID]) {
+		want := guarded[descriptor.ID] || deletes[descriptor.ID] || descriptor.ID == pullsMerge.ID
+		if descriptor.RequiresToolAllowList != want {
 			t.Errorf("%s requires an allow-list = %t", descriptor.ID, descriptor.RequiresToolAllowList)
 		}
 	}
@@ -230,8 +234,9 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 			marked++
 		}
 	}
-	if marked != len(guardedTools)+len(deletes) || len(guardedTools) != 10 {
-		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools, the eight deletes, and the three access tools", marked)
+	if marked != len(guardedTools)+len(deletes)+1 || len(guardedTools) != 10 {
+		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools, the eight deletes, "+
+			"the three access tools, and the merge", marked)
 	}
 	profiles := map[string]config.ToolProfile{}
 	for _, profile := range metadata.Profiles {
