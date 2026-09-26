@@ -315,6 +315,12 @@ var issuesGet = capability.Descriptor{
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
+		// Reusing endpointsOf here, instead of a separate form check, keeps validation and the transport it
+		// validates from ever drifting apart: a base URL that passes here is one Open can actually use.
+		ValidateBaseURL: func(raw string) error {
+			_, err := endpointsOf(raw)
+			return err
+		},
 		Description:        "Code hosting and software collaboration platform",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{

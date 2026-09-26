@@ -69,6 +69,12 @@ var testProviders ProviderCatalog = testProviderCatalog{
 	},
 	"github": {
 		ID: "github", Name: "GitHub", DefaultBaseURL: "https://api.github.com",
+		ValidateBaseURL: func(raw string) error {
+			if strings.HasPrefix(raw, "https://api.") || strings.HasSuffix(raw, "/api/v3") {
+				return nil
+			}
+			return errors.New("a GitHub base URL must be an API host or end in /api/v3")
+		},
 		SecretRoles: []SecretRole{{Name: "token", Description: "GitHub personal access token"}},
 		Target: TargetMetadata{Label: "project or repository", Required: true, Multiple: true,
 			Validate: func(target string) error {
@@ -269,6 +275,64 @@ defaults: {}
 	if err == nil || strings.Contains(err.Error(), "several GitHub targets") ||
 		!strings.Contains(err.Error(), "must name a project or a repository") {
 		t.Fatalf("malformed target list error = %v, want only the form refusal", err)
+	}
+}
+
+// A connection's targets list gets one path per entry, so several bad entries in one list are all visible at
+// once and each points at the entry that caused it. A single target keeps the plain target path.
+func TestTargetListErrorsNameTheIndex(t *testing.T) {
+	const document = `version: 1
+services:
+  main: {provider: github, base_url: https://api.github.com}
+credentials:
+  reader: {type: keyring}
+connections:
+  route:
+    service: main
+    credential: reader
+    targets: ["repos/octo-org/example", "", "repos/octo-org/example", "bad"]
+defaults: {}
+`
+	_, err := Decode(strings.NewReader(document), testProviders)
+	if err == nil {
+		t.Fatal("Decode() = nil, want an error")
+	}
+	for _, want := range []string{
+		"connections.route.targets[1]: targets must not be empty",
+		"connections.route.targets[2]: a target is listed more than once",
+		"connections.route.targets[3]: a GitHub target must name",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error is missing %q:\n%s", want, err)
+		}
+	}
+	if strings.Contains(err.Error(), "connections.route.target:") {
+		t.Errorf("a list error still used the singular target path:\n%s", err)
+	}
+}
+
+// A provider's ValidateBaseURL runs against the effective base URL, default included, and its refusal is
+// reported under the service, not the connection.
+func TestProviderMetadataValidatesTheServiceBaseURL(t *testing.T) {
+	const document = `version: 1
+services:
+  main:
+    provider: github
+    base_url: BASEURL
+credentials:
+  reader: {type: keyring}
+connections:
+  route: {service: main, credential: reader, target: repos/octo-org/example}
+defaults: {}
+`
+	if _, err := Decode(strings.NewReader(strings.Replace(document, "BASEURL", "https://api.github.com", 1)),
+		testProviders); err != nil {
+		t.Fatalf("valid base_url = %v", err)
+	}
+	_, err := Decode(strings.NewReader(strings.Replace(document, "BASEURL", "https://github.example.com", 1)),
+		testProviders)
+	if err == nil || !strings.Contains(err.Error(), "services.main.base_url: a GitHub base URL must be an API host") {
+		t.Fatalf("invalid base_url error = %v", err)
 	}
 }
 

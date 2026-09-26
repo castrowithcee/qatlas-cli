@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-09-26
+updated: 2026-09-27
 ---
 
 # GitHub
@@ -43,6 +43,10 @@ Cloud with data residency, or `https://HOST/api/v3` for GitHub Enterprise Server
 `qatlas config validate` accepts `provider: github` alone. Qatlas derives the GraphQL
 endpoint from it (`/graphql`, or `https://HOST/api/graphql` on Enterprise Server). Filtered project items
 need a server that supports the `query` argument of `ProjectV2.items`.
+
+`qatlas config validate` checks the base URL against these same forms, so a host that is not an
+`https://api.…` API host and does not end in `/api/v3`, or one that is not even `https`, fails validation
+with `config-invalid` instead of only at the first call.
 
 The credential provides `token`, a personal access token. A read-only setup uses a classic token with
 `read:project` plus `repo` (or `public_repo` for public repositories only), or a fine-grained token with read

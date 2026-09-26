@@ -357,14 +357,22 @@ func (c *Config) Validate() error {
 	for _, name := range sortedKeys(c.Services) {
 		s := c.Services[name]
 		checkName("services", "service name", name)
+		metadata, metaOK := providers.ProviderMetadata(s.Provider)
 		if s.Provider == "" {
 			report("services.%s: provider must not be empty", name)
-		} else if _, ok := providers.ProviderMetadata(s.Provider); !ok {
+		} else if !metaOK {
 			report("services.%s: unknown provider %q, known providers are %s",
 				name, s.Provider, strings.Join(c.Providers(), ", "))
 		}
 		if err := validateBaseURL(c.ServiceBaseURL(s)); err != nil {
 			report("services.%s.base_url: %v", name, err)
+		} else if metaOK && metadata.ValidateBaseURL != nil {
+			// The generic check above already ensured a well-formed http(s) URL; this second, provider-owned
+			// check catches a base URL that its own client would still refuse, such as a GitHub host without
+			// /api/v3, before the first call instead of at it.
+			if err := metadata.ValidateBaseURL(c.ServiceBaseURL(s)); err != nil {
+				report("services.%s.base_url: %v", name, err)
+			}
 		}
 	}
 
@@ -476,19 +484,27 @@ func (c *Config) Validate() error {
 			}
 			seenTargets := map[string]bool{}
 			formsValid := true
-			for _, target := range targets {
+			// A connection using the targets list gets one path per entry, so several bad entries are all
+			// visible at once and each points at the entry that caused it; a single target keeps the plain
+			// target path, since there is only ever one entry to point at.
+			usesTargetList := len(conn.Targets) > 0
+			for i, target := range targets {
 				target = strings.TrimSpace(target)
+				path := "target"
+				if usesTargetList {
+					path = fmt.Sprintf("targets[%d]", i)
+				}
 				if target == "" {
-					report("connections.%s.targets: targets must not be empty", name)
+					report("connections.%s.%s: targets must not be empty", name, path)
 					formsValid = false
 					continue
 				}
 				if seenTargets[target] {
-					report("connections.%s.targets: a target is listed more than once", name)
+					report("connections.%s.%s: a target is listed more than once", name, path)
 				}
 				if metadata.Target.Validate != nil {
 					if err := metadata.Target.Validate(target); err != nil {
-						report("connections.%s.target: %v", name, err)
+						report("connections.%s.%s: %v", name, path, err)
 						formsValid = false
 					}
 				}

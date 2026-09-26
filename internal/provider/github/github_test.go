@@ -766,6 +766,49 @@ connections:
 	}
 }
 
+// The configuration refuses a base URL Open would also refuse, before any call, and accepts one it omits in
+// favor of the provider default.
+func TestConfigurationValidatesTheServiceBaseURL(t *testing.T) {
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	document := func(service string) string {
+		return `version: 1
+services:
+  gh:
+` + service + `
+credentials:
+  gh-reader:
+    provider: github
+    type: env
+    values:
+      token: QATLAS_GH_TOKEN
+connections:
+  planning: {service: gh, credential: gh-reader}
+`
+	}
+	for _, service := range []string{
+		"    provider: github\n    base_url: https://api.github.com\n",
+		"    provider: github\n    base_url: https://ghe.example.invalid/api/v3\n",
+		"    provider: github\n", // no base_url: the provider default applies
+	} {
+		if _, err := config.Decode(strings.NewReader(document(service)), reg); err != nil {
+			t.Errorf("service %q was refused: %v", service, err)
+		}
+	}
+	for _, tc := range []struct{ service, want string }{
+		{"    provider: github\n    base_url: http://api.github.com\n", "a GitHub service must use https"},
+		{"    provider: github\n    base_url: https://github.example.com\n",
+			"a GitHub service is https://api.github.com"},
+	} {
+		_, err := config.Decode(strings.NewReader(document(tc.service)), reg)
+		if err == nil || !strings.Contains(err.Error(), "services.gh.base_url: "+tc.want) {
+			t.Errorf("service %q: err = %v, want services.gh.base_url: %s", tc.service, err, tc.want)
+		}
+	}
+}
+
 func TestEndpointsFollowGitHubAndEnterpriseServer(t *testing.T) {
 	tests := map[string]endpoints{
 		"https://api.github.com":   {"https://api.github.com", "https://api.github.com/graphql"},

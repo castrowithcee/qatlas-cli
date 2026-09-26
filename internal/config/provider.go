@@ -124,11 +124,17 @@ type ToolProfile struct {
 //
 // Description is one English line on what kind of system the provider is, the same for every
 // installation. Discovery publishes it beside the note a user maintains in ProviderNotes, and searches both.
+//
+// ValidateBaseURL, when set, checks the effective base URL of one configured service against the transport
+// boundary this provider actually opens with, so a base URL its own client would refuse fails configuration
+// validation instead of the first call. It runs the same logic the provider uses to open a connection, and
+// its error may not quote the value.
 type ProviderMetadata struct {
 	ID                   string
 	Name                 string
 	Description          string
 	DefaultBaseURL       string
+	ValidateBaseURL      func(string) error
 	DefaultPermissions   []Permission
 	SupportedPermissions []Permission
 	Tools                []ToolMetadata

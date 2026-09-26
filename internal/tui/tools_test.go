@@ -29,7 +29,13 @@ func toolsModel(t *testing.T, reg *capability.Registry, connections map[string]c
 	store := config.NewStore(path, reg)
 	cfg := store.New()
 	provider := reg.ProviderMetadataAll()[0].ID
-	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: provider, BaseURL: "https://wiki.example.invalid"}))
+	// GitHub now validates its base URL at Validate() time, so the shared placeholder host only works for
+	// providers that do not; GitHub tests need one its own client would actually accept.
+	baseURL := "https://wiki.example.invalid"
+	if provider == github.Provider {
+		baseURL = "https://api.github.com"
+	}
+	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: provider, BaseURL: baseURL}))
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Provider: provider, Type: config.CredentialTypeKeyring}))
 	for name, connection := range connections {
 		mustNoError(t, cfg.SetConnection(name, connection))

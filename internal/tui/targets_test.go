@@ -426,7 +426,7 @@ func knownTargetsModel(t *testing.T) (*Model, string, *capability.Registry) {
 			Targets: []string{"repos/octo/a", "repos/octo/b", "users/octo/projects/2"}},
 	})
 	mustNoError(t, m.cfg.SetService("zeta", config.Service{Provider: github.Provider,
-		BaseURL: "https://zeta.example.invalid"}))
+		BaseURL: "https://zeta.example.invalid/api/v3"}))
 	mustNoError(t, m.cfg.SetConnection("gh-z", config.Connection{Service: "zeta", Credential: "reader",
 		Target: "repos/elsewhere/x"}))
 	return m, path, reg
