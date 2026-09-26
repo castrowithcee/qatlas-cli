@@ -16,8 +16,8 @@ import (
 //
 // It opens the terminal itself rather than reading the process's own standard input, so it still works
 // when standard input carries something else, such as the secret 'qatlas credential set' reads from a
-// pipe. It reports ErrNoTerminal when no terminal can be opened for the prompt, which is how a headless
-// session, and an agent talking to qatlas over MCP, are told apart from an interactive one.
+// pipe. It reports ErrNoTerminal when the process is not interactive or no terminal can be opened for the
+// prompt, which is how a headless session, a CI job, and an agent are told apart from a person.
 func ReadPassphrase(prompt string) (string, error) {
 	in, out, closeTTY, err := openTTY()
 	if err != nil {
@@ -61,10 +61,27 @@ func ReadConfirm(prompt string) (bool, error) {
 	return answer == "y" || answer == "yes", nil
 }
 
+// interactive reports whether a person can be at a terminal for this process: at least one of its standard
+// streams is one. A process whose streams are all redirected, such as an agent, a CI job, or an MCP server,
+// is not, even when a console or a controlling terminal happens to be reachable; opening that one anyway
+// would wait for an answer nobody gives. It is a variable only so a test can decide it.
+var interactive = func() bool {
+	for _, f := range []*os.File{os.Stdin, os.Stdout, os.Stderr} {
+		if term.IsTerminal(int(f.Fd())) {
+			return true
+		}
+	}
+	return false
+}
+
 // openTTY opens the controlling terminal for reading and writing a prompt, independently of the process's
-// own stdin and stdout. On Windows the console device is two files; everywhere else /dev/tty is both. When
-// neither is available, the process's own stdin is used as a last resort, if it is itself a terminal.
+// own stdin and stdout, and only for an interactive process. On Windows the console device is two files;
+// everywhere else /dev/tty is both. When neither is available, the process's own stdin is used as a last
+// resort, if it is itself a terminal.
 func openTTY() (in, out *os.File, closeAll func(), err error) {
+	if !interactive() {
+		return nil, nil, nil, fmt.Errorf("no standard stream is a terminal")
+	}
 	if runtime.GOOS == "windows" {
 		in, err = os.OpenFile("CONIN$", os.O_RDWR, 0)
 		if err != nil {
