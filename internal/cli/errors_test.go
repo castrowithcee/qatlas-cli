@@ -15,6 +15,8 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 func TestCodeFor(t *testing.T) {
@@ -40,6 +42,8 @@ func TestCodeFor(t *testing.T) {
 		{"provider timeout", &provider.Error{Class: provider.ClassTimeout}, output.CodeTimeout},
 		{"provider invalid response", &provider.Error{Class: provider.ClassInvalidResponse}, output.CodeInvalidProviderResult},
 		{"unsupported capability", &capability.UnsupportedError{Capability: "x"}, output.CodeUnsupportedCapability},
+		{"vault locked", &secret.VaultLockedError{Credential: "c", Role: "token"}, output.CodeVaultLocked},
+		{"vault file too open", &vault.PermissionError{Path: "/x/vault/secrets.json"}, output.CodeConfigInvalid},
 		{"projection", &output.ProjectionError{Field: "x"}, output.CodeUsage},
 		{"plain usage error", &UsageError{errors.New("unknown flag")}, output.CodeUsage},
 		{"anything else", errors.New("io failure"), output.CodeRuntime},
@@ -156,6 +160,10 @@ func TestNextStepByCodeAndRoute(t *testing.T) {
 			routeMCP, ""},
 		{"configured name", &config.SelectionError{Name: "absent"}, routeCLI,
 			"list the configured connections with 'qatlas connections'"},
+		{"CLI vault locked", &secret.VaultLockedError{Credential: "c", Role: "token"}, routeCLI,
+			"run 'qatlas vault unlock' in a terminal, or press ctrl+l in 'qatlas tui'"},
+		{"MCP vault locked", &secret.VaultLockedError{Credential: "c", Role: "token"}, routeMCP,
+			"agents cannot unlock the vault; ask the user to unlock it"},
 	} {
 		if got := nextStep(tt.err, tt.r); got != tt.want {
 			t.Errorf("%s: step = %q, want %q", tt.name, got, tt.want)

@@ -9,6 +9,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // codeFor maps an error to its provider-independent code. Agents branch on the code instead of parsing
@@ -44,6 +45,11 @@ const (
 // or a tool the request asked about.
 func nextStep(err error, r route) string {
 	switch codeFor(err) {
+	case output.CodeVaultLocked:
+		if r == routeMCP {
+			return "agents cannot unlock the vault; ask the user to unlock it"
+		}
+		return "run 'qatlas vault unlock' in a terminal, or press ctrl+l in 'qatlas tui'"
 	case output.CodeAuth:
 		// Some providers answer a credential that lacks access with auth as well, so the step does not
 		// claim which of the two happened.
@@ -201,15 +207,16 @@ func classifyUserError(err error) error {
 		confirmation *application.ConfirmationRequiredError
 		denied       *application.PolicyDeniedError
 
-		missingSecret *secret.MissingSecretError
-		permission    *secret.PermissionError
+		missingSecret   *secret.MissingSecretError
+		permission      *secret.PermissionError
+		vaultPermission *vault.PermissionError
 	)
 	switch {
 	case errors.As(err, &notFound), errors.As(err, &invalid), errors.As(err, &selection),
 		errors.As(err, &unknownConn), errors.As(err, &unsupported), errors.As(err, &projection),
-		errors.As(err, &missingSecret), errors.As(err, &permission), errors.As(err, &invalidReq),
-		errors.As(err, &unknownOp), errors.As(err, &ambiguous), errors.As(err, &confirmation),
-		errors.As(err, &appSelection), errors.As(err, &denied):
+		errors.As(err, &missingSecret), errors.As(err, &permission), errors.As(err, &vaultPermission),
+		errors.As(err, &invalidReq), errors.As(err, &unknownOp), errors.As(err, &ambiguous),
+		errors.As(err, &confirmation), errors.As(err, &appSelection), errors.As(err, &denied):
 		return &UsageError{err}
 	}
 	return err

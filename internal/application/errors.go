@@ -12,6 +12,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // InvalidRequestError reports malformed JSON or arguments that do not satisfy the input schema. The message
@@ -178,9 +179,11 @@ func ErrorCode(err error) output.Code {
 		denied        *PolicyDeniedError
 		invalidResult *InvalidProviderResponseError
 
-		missingSecret *secret.MissingSecretError
-		permission    *secret.PermissionError
-		providerErr   *provider.Error
+		missingSecret   *secret.MissingSecretError
+		permission      *secret.PermissionError
+		vaultPermission *vault.PermissionError
+		vaultLocked     *secret.VaultLockedError
+		providerErr     *provider.Error
 	)
 	switch {
 	case errors.As(err, &notFound):
@@ -211,13 +214,18 @@ func ErrorCode(err error) output.Code {
 		return output.CodePolicyDenied
 	case errors.As(err, &invalidResult):
 		return output.CodeInvalidProviderResult
-	case errors.As(err, &permission):
+	case errors.As(err, &permission), errors.As(err, &vaultPermission):
 		// A credential file others can read is one state with one fix, whichever operation ran into it.
 		// It is named before the missing secret it causes, so reading, writing, and deleting all report
-		// the file rather than three different things.
+		// the file rather than three different things. A vault file that is too open follows the same
+		// rule.
 		return output.CodeConfigInvalid
 	case errors.As(err, &missingSecret):
 		return output.CodeMissingSecret
+	case errors.As(err, &vaultLocked):
+		// A locked vault is a runtime state, not a configuration mistake: unlocking it and retrying needs
+		// no change to the file, unlike every code above.
+		return output.CodeVaultLocked
 	case errors.As(err, &providerErr):
 		return providerCode(providerErr.Class)
 	}

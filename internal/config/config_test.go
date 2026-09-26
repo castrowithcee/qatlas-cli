@@ -74,6 +74,37 @@ func TestLoadValidFixture(t *testing.T) {
 	}
 }
 
+// Vault joins env and keyring as a supported credential type, and defaults.secret_store, left out of a
+// file, keeps meaning what it always meant: a new credential starts as a keyring credential.
+func TestVaultCredentialTypeAndSecretStoreDefault(t *testing.T) {
+	if got := CredentialTypes(); !reflect.DeepEqual(got, []string{"env", "keyring", "vault"}) {
+		t.Errorf("CredentialTypes() = %v, want [env keyring vault]", got)
+	}
+
+	cfg, err := Decode(strings.NewReader(minimal), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() = %v, want nil", err)
+	}
+	if got := cfg.SecretStore(); got != CredentialTypeKeyring {
+		t.Errorf("SecretStore() = %q, want %q for a file that leaves defaults.secret_store out", got, CredentialTypeKeyring)
+	}
+
+	withVault := strings.Replace(minimal, "defaults:\n  connections:", "defaults:\n  secret_store: vault\n  connections:", 1)
+	cfg, err = Decode(strings.NewReader(withVault), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() = %v, want nil", err)
+	}
+	if got := cfg.SecretStore(); got != CredentialTypeVault {
+		t.Errorf("SecretStore() = %q, want %q", got, CredentialTypeVault)
+	}
+
+	withCred := strings.Replace(minimal, "type: env", "type: vault", 1)
+	withCred = strings.Replace(withCred, "values:\n      token-id: WIKI_TOKEN_ID\n      token-secret: WIKI_TOKEN_SECRET", "", 1)
+	if _, err := Decode(strings.NewReader(withCred), testProviders); err != nil {
+		t.Fatalf("Decode() of a vault credential = %v, want nil", err)
+	}
+}
+
 // The connection description is optional prose the user maintains and discovery publishes. It arrives in
 // one normalized form, it stays one short line, and a refusal never quotes what was written.
 func TestConnectionDescriptionIsOneShortNormalizedLine(t *testing.T) {
@@ -265,8 +296,8 @@ func TestDecodeRejects(t *testing.T) {
 		},
 		{
 			name:    "unknown credential type",
-			replace: [2]string{"type: env", "type: vault"},
-			wantIn:  `type must be one of env, keyring, got "vault"`,
+			replace: [2]string{"type: env", "type: bogus"},
+			wantIn:  `type must be one of env, keyring, vault, got "bogus"`,
 		},
 		{
 			// A keyring credential that carries values is the accident this type exists to prevent:
@@ -274,6 +305,17 @@ func TestDecodeRejects(t *testing.T) {
 			name:    "keyring credential with values",
 			replace: [2]string{"type: env", "type: keyring"},
 			wantIn:  "credentials.reader.values: must be absent for a keyring credential",
+		},
+		{
+			// Same accident, for a vault credential.
+			name:    "vault credential with values",
+			replace: [2]string{"type: env", "type: vault"},
+			wantIn:  "credentials.reader.values: must be absent for a vault credential",
+		},
+		{
+			name:    "unknown default secret store",
+			replace: [2]string{"defaults:\n  connections:", "defaults:\n  secret_store: bogus\n  connections:"},
+			wantIn:  `defaults.secret_store: must be keyring or vault, got "bogus"`,
 		},
 		{
 			name:    "invalid environment variable name",

@@ -118,9 +118,23 @@ func (c Connection) MarshalYAML() (any, error) {
 		Description: c.Description, Permissions: permissions, Tools: tools}, nil
 }
 
-// Defaults holds the connection chosen for a domain when no connection is given explicitly.
+// Defaults holds the connection chosen for a domain when no connection is given explicitly, and the
+// credential type a new credential starts from.
 type Defaults struct {
 	Connections map[string]string `yaml:"connections,omitempty"`
+	// SecretStore is the credential type a new credential is created with unless the person picks another
+	// one: CredentialTypeKeyring or CredentialTypeVault. Left empty, it means CredentialTypeKeyring, so an
+	// existing file without this field keeps the behaviour it already had.
+	SecretStore string `yaml:"secret_store,omitempty"`
+}
+
+// SecretStore returns the effective default credential type, CredentialTypeKeyring when Defaults.SecretStore
+// is left empty.
+func (c *Config) SecretStore() string {
+	if c.Defaults.SecretStore == "" {
+		return CredentialTypeKeyring
+	}
+	return c.Defaults.SecretStore
 }
 
 // The supported credential types.
@@ -131,10 +145,17 @@ const (
 	// beside this file when that fallback was switched on. Both are overridden by a derived environment
 	// variable, so the same credential still works in a container.
 	CredentialTypeKeyring = "keyring"
+	// CredentialTypeVault resolves from the vault directory beside this file, unencrypted or encrypted to
+	// a passphrase. Like CredentialTypeKeyring it is overridden by a derived environment variable, and it
+	// consults no other stage: a vault credential either names its variable or keeps its secrets in the
+	// vault, never in the system keyring.
+	CredentialTypeVault = "vault"
 )
 
 // CredentialTypes lists the supported credential types, in the order the documentation shows them.
-func CredentialTypes() []string { return []string{CredentialTypeEnv, CredentialTypeKeyring} }
+func CredentialTypes() []string {
+	return []string{CredentialTypeEnv, CredentialTypeKeyring, CredentialTypeVault}
+}
 
 // NotFoundError reports that no configuration file exists at the resolved path.
 type NotFoundError struct{ Path string }
@@ -346,6 +367,11 @@ func (c *Config) Validate() error {
 			if len(cred.Values) > 0 {
 				report("credentials.%s.values: %s", name, keyringValuesRule)
 			}
+		case CredentialTypeVault:
+			// Same rule, and the same reason: a value here is most likely the secret itself.
+			if len(cred.Values) > 0 {
+				report("credentials.%s.values: %s", name, vaultValuesRule)
+			}
 		default:
 			report("credentials.%s: type must be one of %s, got %q",
 				name, strings.Join(CredentialTypes(), ", "), cred.Type)
@@ -461,6 +487,11 @@ func (c *Config) Validate() error {
 		if _, ok := c.Connections[conn]; !ok {
 			report("defaults.connections.%s: unknown connection %q", domain, conn)
 		}
+	}
+
+	if store := c.Defaults.SecretStore; store != "" && store != CredentialTypeKeyring && store != CredentialTypeVault {
+		report("defaults.secret_store: must be %s or %s, got %q",
+			CredentialTypeKeyring, CredentialTypeVault, store)
 	}
 
 	return errors.Join(problems...)
@@ -763,6 +794,10 @@ const envNameRule = "must be the name of an environment variable, written with l
 // the input: whatever stands under a keyring credential is most likely the secret itself.
 const keyringValuesRule = "must be absent for a keyring credential, whose secrets live in the credential " +
 	"store; set them with 'qatlas credential set'"
+
+// vaultValuesRule is keyringValuesRule's counterpart for a vault credential.
+const vaultValuesRule = "must be absent for a vault credential, whose secrets live in the vault; " +
+	"set them with 'qatlas credential set'"
 
 // maxDescriptionLength bounds a connection description and a provider note. Each labels a route or a
 // provider for the person choosing one, neither is documentation, and discovery repeats them, so they stay

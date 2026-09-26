@@ -32,6 +32,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // Source names the stage of the cascade that delivered a secret. The value is what a user sees, so it is
@@ -43,6 +44,7 @@ const (
 	SourceEnv       Source = "environment variable"
 	SourceStore     Source = "credential store"
 	SourcePlaintext Source = "plaintext file"
+	SourceVault     Source = "vault"
 	SourceMissing   Source = "missing"
 )
 
@@ -75,10 +77,10 @@ type MissingSecretError struct {
 }
 
 func (e *MissingSecretError) Error() string {
-	// A keyring credential has no values section, so naming one would send the user to a key that does
-	// not exist in their file.
+	// A keyring or vault credential has no values section, so naming one would send the user to a key that
+	// does not exist in their file.
 	key := fmt.Sprintf("credentials.%s.values.%s", e.Credential, e.Role)
-	if e.Type == config.CredentialTypeKeyring {
+	if e.Type == config.CredentialTypeKeyring || e.Type == config.CredentialTypeVault {
 		key = fmt.Sprintf("credentials.%s, secret role %s", e.Credential, e.Role)
 	}
 
@@ -114,8 +116,35 @@ func (e *MissingSecretError) remedy() string {
 		return fmt.Sprintf("store it in the system keyring with 'qatlas credential set %s %s', or export %s",
 			e.Credential, e.Role, env)
 	}
+	if e.Type == config.CredentialTypeVault {
+		env := DerivedEnvName(e.Credential, e.Role)
+		return fmt.Sprintf("store it in the vault with 'qatlas credential set %s %s', or export %s",
+			e.Credential, e.Role, env)
+	}
 	return fmt.Sprintf("set the environment variable that credentials.%s.values.%s names, or change that "+
 		"credential to type keyring and use 'qatlas credential set'", e.Credential, e.Role)
+}
+
+// VaultLockedError reports that a vault is encrypted and locked, and no terminal was attached to ask for
+// its passphrase. It is its own type, kept apart from MissingSecretError, so it keeps the runtime exit code
+// the process already leaves for a locked credential store, rather than the usage exit code a missing
+// secret gets: a locked vault is not a configuration problem, and a person who unlocks it and retries needs
+// no configuration change.
+//
+// Credential and Role name the secret an access was resolving when the vault turned out to be locked; both
+// are empty when the locked vault itself, rather than one secret in it, was the target, for example
+// 'qatlas vault unlock' run without a terminal.
+type VaultLockedError struct {
+	Credential string
+	Role       string
+}
+
+func (e *VaultLockedError) Error() string {
+	if e.Credential == "" {
+		return "the vault is locked, and no terminal is attached to ask for its passphrase"
+	}
+	return fmt.Sprintf("the vault holding the secret of %s.%s is locked, and no terminal is attached to ask "+
+		"for its passphrase", e.Credential, e.Role)
 }
 
 // Errors a Store reports. Anything else from a store is treated like ErrUnavailable, because a store that
@@ -239,7 +268,11 @@ type Resolver struct {
 	env       func(string) string
 	store     Store
 	plaintext *File
-	redactor  *redact.Redactor
+	vault     *vault.Vault
+	// passphrase asks for the vault's passphrase interactively; see WithVault. It is never consulted while
+	// Unattended.
+	passphrase vault.PassphraseFunc
+	redactor   *redact.Redactor
 
 	mu         sync.Mutex
 	unattended bool
@@ -255,14 +288,15 @@ type Resolver struct {
 const storeRetry = time.Minute
 
 // New returns the resolver of a normal run: the process environment, the credential store of the
-// platform, and the plaintext fallback file in dir, which is the directory holding config.yaml. It fails
-// only when the store was selected with an unrecognised value.
+// platform, the plaintext fallback file, and the vault, all below dir, the directory holding config.yaml.
+// It fails only when the store was selected with an unrecognised value.
 func New(dir string, red *redact.Redactor) (*Resolver, error) {
 	store, err := SystemStore()
 	if err != nil {
 		return nil, err
 	}
-	return NewWith(os.Getenv, store, NewFile(filepath.Join(dir, FileName)), red), nil
+	r := NewWith(os.Getenv, store, NewFile(filepath.Join(dir, FileName)), red)
+	return r.WithVault(vault.New(dir), vault.ReadPassphrase), nil
 }
 
 // NewWith returns a resolver over an explicit environment, store, and fallback file. A nil file means the
@@ -277,8 +311,19 @@ func NewWith(env func(string) string, store Store, plaintext *File, red *redact.
 	return &Resolver{env: env, store: store, plaintext: plaintext, redactor: red}
 }
 
+// WithVault attaches the vault v is resolved from, and ask, which prompts interactively for its
+// passphrase. A resolver built with NewWith alone has no vault: a credential of type vault then reports its
+// secret unavailable rather than panicking, which is what every test that does not exercise the vault
+// wants. It returns r so it chains onto NewWith.
+func (r *Resolver) WithVault(v *vault.Vault, ask vault.PassphraseFunc) *Resolver {
+	r.vault = v
+	r.passphrase = ask
+	return r
+}
+
 // Unattended prepares the resolver for a server that answers requests nobody watches, such as the MCP
-// broker: the store never waits for an unlock prompt, which nobody would answer.
+// broker: the store never waits for an unlock prompt, which nobody would answer, and the vault, if any, is
+// never asked for its passphrase, which nobody would type.
 func (r *Resolver) Unattended() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -308,6 +353,24 @@ func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.C
 	// the CI and headless case this type exists for.
 	if cred.Type == config.CredentialTypeEnv {
 		return Value{}, missing(credential, cred, role, checked, nil)
+	}
+
+	// A vault credential is resolved from the vault alone: it never falls through to the system keyring or
+	// to the plaintext fallback, the same way env stops after stage one.
+	if cred.Type == config.CredentialTypeVault {
+		value, found, err := r.fromVault(credential, role)
+		switch {
+		case err != nil && errors.Is(err, vault.ErrNoTerminal):
+			return Value{}, &VaultLockedError{Credential: credential, Role: role}
+		case err != nil:
+			checked = append(checked, stage(SourceVault, "unavailable"))
+			return Value{}, missing(credential, cred, role, checked, err)
+		case found:
+			return r.deliver(value, SourceVault, checked), nil
+		default:
+			checked = append(checked, stage(SourceVault, "no entry"))
+			return Value{}, missing(credential, cred, role, checked, nil)
+		}
 	}
 
 	// A machine without a running secret service must not be a dead end, so an unreachable store is one
@@ -377,6 +440,27 @@ func (r *Resolver) storeAnswered() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.failed = StoreNotAsked
+}
+
+// fromVault asks the vault for one credential role, unlocking it interactively when it is encrypted and
+// locked. A resolver built without WithVault reports the vault unavailable rather than reaching into a nil
+// pointer, which is every test that never sets up a vault.
+func (r *Resolver) fromVault(credential, role string) (string, bool, error) {
+	if r.vault == nil {
+		return "", false, errors.New("no vault is configured for this resolver")
+	}
+	ask := r.passphrase
+	r.mu.Lock()
+	unattended := r.unattended
+	r.mu.Unlock()
+	if unattended {
+		ask = nil
+	}
+	value, found, _, err := r.vault.Get(credential, role, ask)
+	if err != nil {
+		return "", false, err
+	}
+	return value, found, nil
 }
 
 func missing(credential string, cred config.Credential, role string, checked []string, cause error) error {
@@ -479,6 +563,50 @@ func (r *Resolver) SetPlaintext(credential, role, value string) error {
 	r.register(value)
 	return r.plaintext.Set(credential, role, value)
 }
+
+// SetVault stores a secret for one (credential, role) pair in the vault. offer is asked for a passphrase
+// only when this is the vault's first secret, and only then decides whether the vault becomes encrypted; a
+// nil offer, or one that returns an empty passphrase, creates it unencrypted. Every later Set of any
+// credential, including while the vault is encrypted and locked, needs no passphrase: it either writes the
+// entry directly or queues it as a pending entry merged in on the next unlock.
+func (r *Resolver) SetVault(credential, role, value string, offer vault.PassphraseFunc) error {
+	if r.vault == nil {
+		return ErrUnavailable
+	}
+	r.register(value)
+	return r.vault.Set(credential, role, value, offer)
+}
+
+// DeleteVault removes one credential role from the vault. Like a vault read, it needs the passphrase when
+// the vault is encrypted and locked, asked the same interactive way and never while Unattended.
+func (r *Resolver) DeleteVault(credential, role string) error {
+	if r.vault == nil {
+		return ErrUnavailable
+	}
+	ask := r.passphrase
+	r.mu.Lock()
+	unattended := r.unattended
+	r.mu.Unlock()
+	if unattended {
+		ask = nil
+	}
+	removed, err := r.vault.Delete(credential, role, ask)
+	switch {
+	case errors.Is(err, vault.ErrNoTerminal):
+		// Deleting from an encrypted vault needs the entry to remove, which sits inside secrets.age: like a
+		// read, it cannot proceed without the passphrase.
+		return &VaultLockedError{Credential: credential, Role: role}
+	case err != nil:
+		return err
+	case !removed:
+		return ErrNoEntry
+	}
+	return nil
+}
+
+// Vault returns the vault this resolver reads and writes, so a caller can show its status or unlock it. It
+// is nil when no vault is configured, which happens only in a test built directly with NewWith.
+func (r *Resolver) Vault() *vault.Vault { return r.vault }
 
 // Delete removes a secret from the credential store and from the plaintext fallback and reports where it
 // was actually removed. ErrNoEntry means nothing was stored anywhere.

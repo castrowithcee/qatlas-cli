@@ -41,8 +41,9 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"With --secrets it additionally resolves the secrets of every connection and reports which\n" +
 			"source delivers each of them, so an environment variable that overrides the credential store\n" +
 			"is visible instead of silent. It prints where a secret comes from, never what it is, and it\n" +
-			"may ask the credential store to unlock, which is why it is not the default. The report always\n" +
-			"covers every connection; --fields restricts which columns it shows, in the order given.",
+			"may ask the credential store to unlock, or an encrypted vault for its passphrase, which is why\n" +
+			"it is not the default. The report always covers every connection; --fields restricts which\n" +
+			"columns it shows, in the order given.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			path, err := config.Path(opts.Config)

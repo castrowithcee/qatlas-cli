@@ -94,6 +94,17 @@ credentials:
     provider: bookstack
     type: keyring
 
+  # type: vault keeps the secrets in the vault instead: a directory named vault beside this file,
+  # unencrypted or encrypted to a passphrase, for a machine without a usable system keyring. Fill it the
+  # same way, with `qatlas credential set`; storing the vault's very first secret offers a passphrase on
+  # the terminal, and leaving it empty keeps the vault unencrypted. `qatlas vault status` shows whether it
+  # exists, is encrypted, and is unlocked; `qatlas vault unlock` opens it for the current process. Storing
+  # a secret never needs the passphrase, even while the vault is locked: it is queued and merged in on the
+  # next unlock. QATLAS_WIKI_STANDBY_TOKEN_ID and QATLAS_WIKI_STANDBY_TOKEN_SECRET still override it.
+  wiki-standby:
+    provider: bookstack
+    type: vault
+
   # type: env names the variables instead, which is the way for CI and for headless machines. Such a
   # credential is resolved from those variables alone: no store and no file stands in for one that is
   # unset, so a missing secret stays a visible failure.
@@ -507,10 +518,15 @@ provider_notes:
   bookstack: team wiki
   twentycrm: CRM of the sales team
 
-# Defaults are useful for read operations. The key is a tool namespace such as bookstack, or a complete
-# tool ID such as bookstack.pages.list when one tool needs its own route. Confirmed Telegram sends and
-# the Lexware, Twenty CRM, SeaTable, Nextcloud, GitHub and Todoist tools deliberately ignore defaults and
-# require the connection in the exact invoke request.
+# Defaults are useful for read operations. The key under connections is a tool namespace such as
+# bookstack, or a complete tool ID such as bookstack.pages.list when one tool needs its own route.
+# Confirmed Telegram sends and the Lexware, Twenty CRM, SeaTable, Nextcloud, GitHub and Todoist tools
+# deliberately ignore defaults and require the connection in the exact invoke request.
+#
+# secret_store names the credential type `qatlas tui` and `qatlas credential set` start a new credential
+# from: keyring, this default, or vault, for a machine without a usable system keyring. Leaving it out
+# means keyring; it is shown here only to name the field, and a person still picks the type themselves.
 defaults:
   connections:
     bookstack: wiki
+  secret_store: keyring

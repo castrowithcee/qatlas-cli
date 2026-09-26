@@ -70,6 +70,7 @@ func (c *Config) Clone() *Config {
 	if c.Defaults.Connections != nil {
 		out.Defaults.Connections = cloneStrings(c.Defaults.Connections)
 	}
+	out.Defaults.SecretStore = c.Defaults.SecretStore
 	return out
 }
 

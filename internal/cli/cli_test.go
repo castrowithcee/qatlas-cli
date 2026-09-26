@@ -12,6 +12,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
 func TestRun(t *testing.T) {
@@ -166,6 +167,9 @@ func TestExitCode(t *testing.T) {
 		{"wrapped runtime error", errors.Join(errors.New("read config"), errors.New("io failure")), exitRuntime},
 		{"usage error", &UsageError{errors.New("unknown flag")}, exitUsage},
 		{"wrapped usage error", errors.Join(errors.New("context"), &UsageError{errors.New("bad value")}), exitUsage},
+		// A locked vault is a runtime state a person clears by unlocking and retrying, not a configuration
+		// mistake, so it keeps the runtime exit code rather than becoming a usage error.
+		{"vault locked", &secret.VaultLockedError{Credential: "c", Role: "token"}, exitRuntime},
 	}
 
 	for _, tt := range tests {

@@ -834,6 +834,7 @@ func TestAuditRecordsTheCodeOfAFailure(t *testing.T) {
 		{&InvalidProviderResponseError{Operation: "x"}, "invalid-provider-response"},
 		{fmt.Errorf("check: %w", &InvalidRequestError{Message: "cursor"}), "invalid-request"},
 		{&secret.MissingSecretError{Credential: "c", Role: "token"}, "missing-secret"},
+		{&secret.VaultLockedError{Credential: "c", Role: "token"}, "vault-locked"},
 		{&capability.UnsupportedError{Capability: "x"}, "unsupported-capability"},
 		{errors.New("io failure"), "runtime"},
 	} {
