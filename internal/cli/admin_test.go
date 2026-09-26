@@ -17,10 +17,21 @@ import (
 // something 'go test' can be relied on to have, in a developer's shell or in CI alike. The handful of tests
 // that exercise the admin check turn this back off for their own duration with withInteractive, the same
 // seam a real run leaves at vault.Interactive.
+//
+// It also keeps 'vault unlock' from starting a vault process: such a process is this test binary started
+// anew, which a test enables with withVaultProcess alone. The binary started that way runs as qatlas
+// itself, selected by runAsQatlasEnv, instead of running the tests.
 func TestMain(m *testing.M) {
+	if os.Getenv(runAsQatlasEnv) == "1" {
+		os.Exit(Run(os.Args[1:], os.Stdout, os.Stderr))
+	}
 	checkInteractive = func() bool { return true }
+	vaultProcessSupported = false
 	os.Exit(m.Run())
 }
+
+// runAsQatlasEnv makes the test binary run as qatlas, the way a vault process it starts runs.
+const runAsQatlasEnv = "QATLAS_CLI_TEST_RUN_AS_QATLAS"
 
 // withInteractive overrides checkInteractive for the duration of a test.
 func withInteractive(t *testing.T, ok bool) {

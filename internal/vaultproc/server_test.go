@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"filippo.io/age"
 )
 
 // allow and refuse stand in for VerifyProgram wherever the test is about the protocol rather than about
@@ -17,10 +19,34 @@ import (
 func allow(net.Conn) error  { return nil }
 func refuse(net.Conn) error { return ErrRefused }
 
+// testKey is the vault key of every test server, and testRecipient its public half, which every test
+// client challenges with. otherKey stands for the key of another vault.
+var (
+	testKey       = mustKey()
+	testRecipient = testKey.Recipient().String()
+	otherKey      = mustKey()
+)
+
+func mustKey() *age.X25519Identity {
+	key, err := age.GenerateX25519Identity()
+	if err != nil {
+		panic(err)
+	}
+	return key
+}
+
+func testSecrets() map[string]map[string]string {
+	return map[string]map[string]string{"wiki-reader": {"token": "synthetic-token"}}
+}
+
 func testServer() *Server {
-	s := NewServer(map[string]map[string]string{"wiki-reader": {"token": "synthetic-token"}})
+	s := NewServer(testKey, testSecrets())
 	s.Verify = allow
 	return s
+}
+
+func testClient() *Client {
+	return &Client{Recipient: testRecipient, Verify: allow}
 }
 
 // exchangeOverPipe runs one client request against s over net.Pipe.
@@ -42,7 +68,7 @@ func exchangeOverPipe(t *testing.T, s *Server, c *Client, req request) (response
 
 func TestServerAnswersEveryOperation(t *testing.T) {
 	s := testServer()
-	c := &Client{Verify: allow}
+	c := testClient()
 
 	resp, err := exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "wiki-reader", Role: "token"})
 	if err != nil || !resp.Found || resp.Value != "synthetic-token" {
@@ -85,7 +111,7 @@ func TestServerAnswersEveryOperation(t *testing.T) {
 func TestServerRefusesAnUncheckedPeer(t *testing.T) {
 	s := testServer()
 	s.Verify = refuse
-	c := &Client{Verify: allow}
+	c := testClient()
 
 	for _, req := range []request{
 		{Op: opGet, Credential: "wiki-reader", Role: "token"},
@@ -113,7 +139,7 @@ func TestClientSendsNothingToAnUncheckedServer(t *testing.T) {
 		received <- data
 	}()
 
-	c := &Client{Verify: refuse}
+	c := &Client{Recipient: testRecipient, Verify: refuse}
 	ctx := context.Background()
 	_, err := c.exchange(ctx, clientEnd, c.deadline(ctx), request{Op: opGet, Credential: "wiki-reader", Role: "token"})
 	_ = clientEnd.Close()
@@ -193,13 +219,13 @@ func TestClientStopsWaitingAtItsDeadline(t *testing.T) {
 			clientEnd, serverEnd := net.Pipe()
 			defer clientEnd.Close()
 			defer serverEnd.Close()
-			// The server reads the request and never answers.
+			// The server reads the challenge and never answers.
 			go func() {
-				var req request
-				_ = readMessage(serverEnd, &req)
+				var h hello
+				_ = readMessage(serverEnd, &h)
 			}()
 
-			c := &Client{Verify: allow, Timeout: tc.timeout}
+			c := &Client{Recipient: testRecipient, Verify: allow, Timeout: tc.timeout}
 			ctx, cancel := context.WithTimeout(context.Background(), tc.ctx)
 			defer cancel()
 			start := time.Now()
@@ -219,11 +245,11 @@ func TestClientStopsWhenTheCallerCancels(t *testing.T) {
 	defer clientEnd.Close()
 	defer serverEnd.Close()
 	go func() {
-		var req request
-		_ = readMessage(serverEnd, &req)
+		var h hello
+		_ = readMessage(serverEnd, &h)
 	}()
 
-	c := &Client{Verify: allow, Timeout: time.Minute}
+	c := &Client{Recipient: testRecipient, Verify: allow, Timeout: time.Minute}
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(50*time.Millisecond, cancel)
 	_, err := c.exchange(ctx, clientEnd, c.deadline(ctx), request{Op: opStatus})
@@ -233,7 +259,7 @@ func TestClientStopsWhenTheCallerCancels(t *testing.T) {
 }
 
 func TestClientReportsAMissingProcess(t *testing.T) {
-	c := NewClient(filepath.Join(t.TempDir(), "absent.sock"))
+	c := NewClient(filepath.Join(t.TempDir(), "absent.sock"), testRecipient)
 	if _, err := c.Status(context.Background()); !errors.Is(err, ErrNotRunning) {
 		t.Fatalf("Status() without a process error = %v, want ErrNotRunning", err)
 	}
@@ -250,8 +276,11 @@ func TestLockOverwritesTheSecrets(t *testing.T) {
 		t.Fatalf("get while locking = %+v, want %q", resp, codeLocked)
 	}
 	s.wipe()
-	if s.secrets != nil {
-		t.Fatalf("wipe() kept the secrets")
+	if s.secrets != nil || s.key != nil {
+		t.Fatalf("wipe() kept the secrets or the key")
+	}
+	if resp := s.solve(nil); resp.Error != codeLocked {
+		t.Fatalf("a challenge after wipe() = %+v, want %q", resp, codeLocked)
 	}
 	for _, b := range held {
 		if b != 0 {
@@ -302,8 +331,177 @@ func TestSocketPath(t *testing.T) {
 	if _, err := SocketPath(vaultDir); !errors.As(err, &tooLong) {
 		t.Fatalf("SocketPath() of an overlong path error = %v, want PathTooLongError", err)
 	}
-	c := NewClient("/" + strings.Repeat("s", maxSocketPath))
+	c := NewClient("/"+strings.Repeat("s", maxSocketPath), testRecipient)
 	if _, err := c.Status(context.Background()); !errors.As(err, &tooLong) {
 		t.Fatalf("Status() at an overlong path error = %v, want PathTooLongError", err)
+	}
+}
+
+// fakeServer answers a client's challenge over net.Pipe with whatever answer builds from it, and reports
+// everything the client sent after the challenge: nothing, when the answer is not a valid proof.
+func fakeServer(t *testing.T, answer func(challenge []byte) response) (clientEnd net.Conn, challenge <-chan []byte, rest <-chan []byte) {
+	t.Helper()
+	clientEnd, serverEnd := net.Pipe()
+	challenges := make(chan []byte, 1)
+	after := make(chan []byte, 1)
+	go func() {
+		defer serverEnd.Close()
+		var h hello
+		if err := readMessage(serverEnd, &h); err != nil {
+			challenges <- nil
+			after <- nil
+			return
+		}
+		challenges <- h.Challenge
+		_ = writeMessage(serverEnd, answer(h.Challenge))
+		_ = serverEnd.SetReadDeadline(time.Now().Add(time.Second))
+		data, _ := io.ReadAll(serverEnd)
+		after <- data
+	}()
+	t.Cleanup(func() { _ = clientEnd.Close() })
+	return clientEnd, challenges, after
+}
+
+func solvedWith(key age.Identity) func([]byte) response {
+	return func(challenge []byte) response {
+		proof, ok := solveChallenge(key, challenge)
+		if !ok {
+			return response{V: Version, Error: codeChallenge}
+		}
+		return response{V: Version, Proof: proof}
+	}
+}
+
+// A server without the vault's key, with another vault's key, or with an answer that proves nothing is
+// told nothing after the challenge: the request, and the credential name in it, is never sent.
+func TestClientSendsNothingAfterAFailedChallenge(t *testing.T) {
+	for name, answer := range map[string]func([]byte) response{
+		"no key":      solvedWith(nil),
+		"another key": solvedWith(otherKey),
+		"another vault's proof": func(challenge []byte) response {
+			// Solving with the other key fails; a server of another vault can at best hash a nonce of its own.
+			return response{V: Version, Proof: proofOf(make([]byte, nonceSize))}
+		},
+		"no proof":         func([]byte) response { return response{V: Version} },
+		"echoed challenge": func(c []byte) response { return response{V: Version, Proof: c} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			conn, _, rest := fakeServer(t, answer)
+			c := testClient()
+			ctx := context.Background()
+			_, err := c.exchange(ctx, conn, c.deadline(ctx), request{Op: opGet, Credential: "wiki-reader", Role: "token"})
+			_ = conn.Close()
+			if !errors.Is(err, ErrRefused) {
+				t.Fatalf("exchange error = %v, want ErrRefused", err)
+			}
+			if data := <-rest; len(data) != 0 {
+				t.Fatalf("the client sent %q after a failed challenge", data)
+			}
+		})
+	}
+}
+
+// Every connection carries a nonce of its own, so a proof recorded on one connection proves nothing on the
+// next, even to the very client that saw it.
+func TestChallengeIsFreshPerConnection(t *testing.T) {
+	c := testClient()
+	ctx := context.Background()
+
+	var recorded []byte
+	conn, first, _ := fakeServer(t, func(challenge []byte) response {
+		resp := solvedWith(testKey)(challenge)
+		recorded = resp.Proof
+		return resp
+	})
+	done := make(chan error, 1)
+	go func() {
+		_, err := c.exchange(ctx, conn, c.deadline(ctx), request{Op: opStatus})
+		done <- err
+	}()
+	firstChallenge := <-first
+	// The fake server stops after the proof; the client's request then finds nobody to answer it.
+	<-done
+	if recorded == nil {
+		t.Fatalf("the first connection was not answered with a proof")
+	}
+
+	conn, second, rest := fakeServer(t, func([]byte) response { return response{V: Version, Proof: recorded} })
+	_, err := c.exchange(ctx, conn, c.deadline(ctx), request{Op: opGet, Credential: "wiki-reader", Role: "token"})
+	_ = conn.Close()
+	if !errors.Is(err, ErrRefused) {
+		t.Fatalf("exchange with a replayed proof error = %v, want ErrRefused", err)
+	}
+	if data := <-rest; len(data) != 0 {
+		t.Fatalf("the client sent %q after a replayed proof", data)
+	}
+	if secondChallenge := <-second; string(secondChallenge) == string(firstChallenge) {
+		t.Fatalf("two connections carried the same challenge")
+	}
+}
+
+// The real server fails the challenge without the vault's key, and does nothing a request asks for.
+func TestServerWithoutTheKeyFailsTheChallenge(t *testing.T) {
+	for name, key := range map[string]age.Identity{"no key": nil, "another key": otherKey} {
+		t.Run(name, func(t *testing.T) {
+			s := NewServer(key, testSecrets())
+			s.Verify = allow
+			c := testClient()
+			for _, req := range []request{
+				{Op: opGet, Credential: "wiki-reader", Role: "token"},
+				{Op: opSet, Credential: "wiki-reader", Role: "token", Value: "planted"},
+				{Op: opLock},
+			} {
+				resp, err := exchangeOverPipe(t, s, c, req)
+				if !errors.Is(err, ErrRefused) || resp.Value != "" {
+					t.Fatalf("%s = %+v, %v, want ErrRefused", req.Op, resp, err)
+				}
+			}
+			if got := string(s.secrets["wiki-reader"]["token"]); got != "synthetic-token" || s.stopping() {
+				t.Fatalf("a request after a failed challenge changed the server")
+			}
+		})
+	}
+}
+
+// The server only ever answers with a hash of a nonce, never with what it decrypted, and only for a
+// message that holds exactly one nonce: it is no way to decrypt anything else encrypted to the vault.
+func TestSolveChallengeIsNoDecryptionOracle(t *testing.T) {
+	recipient, err := age.ParseX25519Recipient(testRecipient)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce, challenge, err := newChallenge(recipient)
+	if err != nil {
+		t.Fatalf("newChallenge() error = %v", err)
+	}
+	proof, ok := solveChallenge(testKey, challenge)
+	if !ok || !checkProof(nonce, proof) || strings.Contains(string(proof), string(nonce)) {
+		t.Fatalf("solveChallenge() = %x, %v, want the proof of the nonce and not the nonce", proof, ok)
+	}
+
+	for _, plain := range []string{"", "synthetic-secret", strings.Repeat("x", nonceSize+1)} {
+		var buf strings.Builder
+		w, err := age.Encrypt(&buf, recipient)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.WriteString(w, plain)
+		_ = w.Close()
+		if _, ok := solveChallenge(testKey, []byte(buf.String())); ok {
+			t.Fatalf("solveChallenge() answered a message of %d bytes", len(plain))
+		}
+	}
+	if _, ok := solveChallenge(testKey, []byte("not an age message")); ok {
+		t.Fatalf("solveChallenge() answered garbage")
+	}
+}
+
+// A client without the vault's recipient sends nothing and does not even connect.
+func TestClientWithoutARecipientSendsNothing(t *testing.T) {
+	for _, recipient := range []string{"", "not a recipient"} {
+		c := NewClient(filepath.Join(t.TempDir(), "absent.sock"), recipient)
+		if _, err := c.Status(context.Background()); err == nil || errors.Is(err, ErrNotRunning) {
+			t.Fatalf("Status() with recipient %q error = %v, want a refusal before connecting", recipient, err)
+		}
 	}
 }

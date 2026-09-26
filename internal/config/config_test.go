@@ -7,6 +7,9 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	yaml "go.yaml.in/yaml/v3"
 )
 
 const validFixture = "testdata/valid.yaml"
@@ -102,6 +105,40 @@ func TestVaultCredentialTypeAndSecretStoreDefault(t *testing.T) {
 	withCred = strings.Replace(withCred, "values:\n      token-id: WIKI_TOKEN_ID\n      token-secret: WIKI_TOKEN_SECRET", "", 1)
 	if _, err := Decode(strings.NewReader(withCred), testProviders); err != nil {
 		t.Fatalf("Decode() of a vault credential = %v, want nil", err)
+	}
+}
+
+// vault.idle_timeout is a positive Go duration, 12h when it is left out, and survives a save; anything else
+// is refused by its key.
+func TestVaultIdleTimeout(t *testing.T) {
+	cfg, err := Decode(strings.NewReader(minimal), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if got := cfg.VaultIdleTimeout(); got != 12*time.Hour {
+		t.Errorf("VaultIdleTimeout() without a setting = %v, want 12h", got)
+	}
+
+	cfg, err = Decode(strings.NewReader(minimal+"vault:\n  idle_timeout: 90m\n"), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() with idle_timeout = %v", err)
+	}
+	if got := cfg.VaultIdleTimeout(); got != 90*time.Minute {
+		t.Errorf("VaultIdleTimeout() = %v, want 90m", got)
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil || !strings.Contains(string(data), "vault:\n    idle_timeout: 90m") {
+		t.Errorf("the setting does not survive encoding: %s, %v", data, err)
+	}
+
+	for _, value := range []string{"0", "0s", "-1h", "12", "twelve hours", "1d"} {
+		_, err := Decode(strings.NewReader(minimal+"vault:\n  idle_timeout: \""+value+"\"\n"), testProviders)
+		if err == nil || !strings.Contains(err.Error(), "vault.idle_timeout: ") {
+			t.Errorf("Decode() with idle_timeout %q error = %v, want it refused by its key", value, err)
+		}
+	}
+	if _, err := Decode(strings.NewReader(minimal+"vault:\n  unknown: 1\n"), testProviders); err == nil {
+		t.Errorf("Decode() accepted an unknown key under vault")
 	}
 }
 

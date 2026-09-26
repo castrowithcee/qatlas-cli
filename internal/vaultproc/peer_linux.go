@@ -18,38 +18,71 @@ import (
 // replaced, as an update does.
 const deletedSuffix = " (deleted)"
 
-// VerifyProgram checks the process at the other end of conn, a Unix socket connection, on either side: it
-// must run under the same user id as this process, and it must run this very program, the file
-// /proc/self/exe points to. The kernel reports the peer through SO_PEERCRED: the process that connected,
-// seen from the server, and the process that listens, seen from the client.
+// VerifyProgram checks the process at the other end of conn, a Unix socket connection, as the server
+// checks every client: it must run under the same user id as this process, and it must run this very
+// program, the file /proc/self/exe points to. The kernel reports the process that connected through
+// SO_PEERCRED.
 //
 // The program is compared by the path the kernel reports and by the file itself, so neither another file
 // at the same path nor the same file under another name passes. A program whose file was removed or
-// replaced since it started is refused on either side: it is a process an update left behind, and nothing
-// says what it runs any more.
+// replaced since it started is refused: it is a process an update left behind, and nothing says what it
+// runs any more.
 //
 // The check keeps secrets away from other programs of the same user, such as a script an agent runs. It
 // cannot stop a process of the same user that deliberately impersonates qatlas, and does not claim to.
 func VerifyProgram(conn net.Conn) error {
+	cred, err := peerCred(conn)
+	if err != nil {
+		return err
+	}
+	return checkProcess(int(cred.Pid), cred.Uid)
+}
+
+// VerifyUser checks that the process at the other end of conn runs under the same user id as this one, as
+// the client checks the server before it sends its challenge. The program of the vault process cannot be
+// checked from outside: Harden closes its /proc entries to this user as well.
+func VerifyUser(conn net.Conn) error {
+	cred, err := peerCred(conn)
+	if err != nil {
+		return err
+	}
+	if cred.Uid != uint32(os.Getuid()) {
+		return fmt.Errorf("%w: it runs as another user", ErrRefused)
+	}
+	return nil
+}
+
+// peerPID returns the process id of the peer of conn, or 0 when it cannot be told.
+func peerPID(conn net.Conn) int {
+	cred, err := peerCred(conn)
+	if err != nil {
+		return 0
+	}
+	return int(cred.Pid)
+}
+
+// peerCred asks the kernel who is at the other end of conn: the process that connected, seen from the
+// server, and the process that listens, seen from the client.
+func peerCred(conn net.Conn) (*syscall.Ucred, error) {
 	unix, ok := conn.(*net.UnixConn)
 	if !ok {
-		return fmt.Errorf("%w: not a Unix socket connection", ErrRefused)
+		return nil, fmt.Errorf("%w: not a Unix socket connection", ErrRefused)
 	}
 	raw, err := unix.SyscallConn()
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrRefused, err)
+		return nil, fmt.Errorf("%w: %w", ErrRefused, err)
 	}
 	var cred *syscall.Ucred
 	var credErr error
 	if err := raw.Control(func(fd uintptr) {
 		cred, credErr = syscall.GetsockoptUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
 	}); err != nil {
-		return fmt.Errorf("%w: %w", ErrRefused, err)
+		return nil, fmt.Errorf("%w: %w", ErrRefused, err)
 	}
 	if credErr != nil {
-		return fmt.Errorf("%w: the peer's credentials are unavailable: %w", ErrRefused, credErr)
+		return nil, fmt.Errorf("%w: the peer's credentials are unavailable: %w", ErrRefused, credErr)
 	}
-	return checkProcess(int(cred.Pid), cred.Uid)
+	return cred, nil
 }
 
 // checkProcess compares the process pid, running as uid, with this one. It is VerifyProgram without the
@@ -97,8 +130,9 @@ func programOf(link string) (string, fs.FileInfo, error) {
 // writing it to a core dump: it clears the dumpable flag, which puts /proc/<pid>/mem and ptrace out of
 // their reach. The vault process calls it before it takes any secret.
 //
-// The flag hides /proc/<pid>/exe from the same user as well, so a client cannot check a hardened server
-// with VerifyProgram: the link cannot be read, and the check refuses.
+// The flag hides /proc/<pid>/exe from the same user as well, so a client checks the vault process with
+// VerifyUser and the challenge instead of VerifyProgram. The process itself still reads its own entries,
+// which is all VerifyProgram needs on the server's side.
 func Harden() error {
 	if _, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, syscall.PR_SET_DUMPABLE, 0, 0); errno != 0 {
 		return fmt.Errorf("cannot protect the vault process's memory: %w", errno)

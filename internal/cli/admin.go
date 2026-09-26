@@ -34,7 +34,10 @@ func requireAdminTerminal() error {
 // process, so the write that follows goes straight into it instead of a pending entry nobody has opened yet.
 //
 // This runs for every management command whatever credential it targets, because the vault's passphrase
-// here is proof of an admin session, not merely the key to one particular secret.
+// here is proof of an admin session, not merely the key to one particular secret. 'vault status', 'vault
+// unlock', and 'vault lock' are not management commands and run neither check: status shows no secret,
+// unlock asks for the passphrase itself, and lock only takes access away. Nor does the hidden 'vault
+// serve', which 'vault unlock' starts without a terminal.
 func requireAdmin(opts *Options) error {
 	if err := requireAdminTerminal(); err != nil {
 		return err

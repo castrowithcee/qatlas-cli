@@ -768,6 +768,9 @@ func commandNames(cmd *cobra.Command) []string {
 		}
 		names = append(names, sub.Name())
 		for _, child := range sub.Commands() {
+			if child.Hidden {
+				continue
+			}
 			names = append(names, sub.Name()+" "+child.Name())
 		}
 	}
@@ -811,7 +814,7 @@ func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 	want := []string{
 		"config", "config validate", "connections", "credential", "credential delete", "credential set",
 		"describe", "invoke", "mcp", "providers", "tools", "tui", "update", "vault", "vault decrypt",
-		"vault encrypt", "vault migrate", "vault passphrase", "vault status", "vault unlock",
+		"vault encrypt", "vault lock", "vault migrate", "vault passphrase", "vault status", "vault unlock",
 	}
 	if got := commandNames(root); !reflect.DeepEqual(got, want) {
 		t.Errorf("commands = %v, want %v", got, want)

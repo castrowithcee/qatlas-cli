@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"filippo.io/age"
 )
 
 // These tests run the real peer check. Client and server share the test binary's process, so the program
@@ -37,7 +39,8 @@ func TestHelperProcess(t *testing.T) {
 	case "sleep":
 		time.Sleep(time.Minute)
 	case "listen":
-		// Listens like a server, reports the bytes a client sent, and answers nothing.
+		// Listens like a server without the vault's key: answers the challenge with a forged proof and
+		// reports how many bytes the client sent after it.
 		l, err := net.Listen("unix", path)
 		if err != nil {
 			fmt.Println("error", err)
@@ -49,23 +52,63 @@ func TestHelperProcess(t *testing.T) {
 			os.Exit(1)
 		}
 		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+		var h hello
+		if err := readMessage(conn, &h); err != nil || len(h.Challenge) == 0 {
+			fmt.Println("error no challenge", err)
+			os.Exit(1)
+		}
+		_ = writeMessage(conn, response{V: Version, Proof: proofOf(make([]byte, nonceSize))})
 		data, _ := io.ReadAll(conn)
 		fmt.Println("received", len(data))
 	case "get":
-		// Connects like a client without checking the server, and reports the answer's error code.
+		// Connects like a client with a valid challenge, without checking the server, and reports the
+		// answer's error code and whether it carried a proof.
 		conn, err := net.Dial("unix", path)
 		if err != nil {
 			fmt.Println("error", err)
 			os.Exit(1)
 		}
 		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
-		_ = writeMessage(conn, request{V: Version, Op: opGet, Credential: "wiki-reader", Role: "token"})
+		recipient, err := age.ParseX25519Recipient(os.Getenv(helperEnv + "_RECIPIENT"))
+		if err != nil {
+			fmt.Println("error", err)
+			os.Exit(1)
+		}
+		_, challenge, err := newChallenge(recipient)
+		if err != nil {
+			fmt.Println("error", err)
+			os.Exit(1)
+		}
+		_ = writeMessage(conn, hello{V: Version, Challenge: challenge})
 		var resp response
 		if err := readMessage(conn, &resp); err != nil {
 			fmt.Println("error", err)
 			os.Exit(1)
 		}
-		fmt.Printf("answer %q %q\n", resp.Error, resp.Value)
+		fmt.Printf("answer %q %d\n", resp.Error, len(resp.Proof))
+	case "serve-hardened":
+		// Serves like the real vault process: hardened first, the key read from standard input.
+		if err := Harden(); err != nil {
+			fmt.Println("error", err)
+			os.Exit(1)
+		}
+		text, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		key, err := age.ParseX25519Identity(strings.TrimSpace(text))
+		if err != nil {
+			fmt.Println("error", err)
+			os.Exit(1)
+		}
+		l, err := Listen(path)
+		if err != nil {
+			fmt.Println("error", err)
+			os.Exit(1)
+		}
+		fmt.Println("listening")
+		if err := NewServer(key, testSecrets()).Serve(l); err != nil {
+			fmt.Println("error", err)
+			os.Exit(1)
+		}
+		fmt.Println("locked")
 	case "harden":
 		if err := Harden(); err != nil {
 			fmt.Println("error", err)
@@ -100,7 +143,8 @@ func otherProgram(t *testing.T) string {
 func helper(t *testing.T, program, mode, socket string) (*exec.Cmd, *bufio.Reader) {
 	t.Helper()
 	cmd := exec.Command(program, "-test.run=^TestHelperProcess$")
-	cmd.Env = append(os.Environ(), helperEnv+"="+mode, helperEnv+"_SOCKET="+socket)
+	cmd.Env = append(os.Environ(), helperEnv+"="+mode, helperEnv+"_SOCKET="+socket,
+		helperEnv+"_RECIPIENT="+testRecipient)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("StdoutPipe() error = %v", err)
@@ -163,9 +207,9 @@ func TestSocketRoundTrip(t *testing.T) {
 		}
 	}
 
-	s := NewServer(map[string]map[string]string{"wiki-reader": {"token": "synthetic-token"}})
+	s := NewServer(testKey, testSecrets())
 	done := serve(t, s, l)
-	c := NewClient(path)
+	c := NewClient(path, testRecipient)
 	ctx := context.Background()
 
 	value, found, err := c.Get(ctx, "wiki-reader", "token")
@@ -210,10 +254,10 @@ func TestIdleLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Listen() error = %v", err)
 	}
-	s := NewServer(map[string]map[string]string{"wiki-reader": {"token": "synthetic-token"}})
+	s := NewServer(testKey, testSecrets())
 	s.IdleTimeout = 500 * time.Millisecond
 	done := serve(t, s, l)
-	c := NewClient(path)
+	c := NewClient(path, testRecipient)
 
 	// Each get restarts the idle period, so the server outlives several of them.
 	for range 5 {
@@ -260,7 +304,7 @@ func TestListenReplacesADeadSocket(t *testing.T) {
 	dead.SetUnlinkOnClose(false)
 	_ = dead.Close()
 
-	if _, err := NewClient(path).Status(context.Background()); !errors.Is(err, ErrNotRunning) {
+	if _, err := NewClient(path, testRecipient).Status(context.Background()); !errors.Is(err, ErrNotRunning) {
 		t.Fatalf("Status() at a dead socket error = %v, want ErrNotRunning", err)
 	}
 	l, err := Listen(path)
@@ -284,7 +328,7 @@ func TestListenLeavesAForeignFileAlone(t *testing.T) {
 	if data, err := os.ReadFile(path); err != nil || string(data) != "not a socket" {
 		t.Fatalf("the file at the socket path changed: %q, %v", data, err)
 	}
-	if _, err := NewClient(path).Status(context.Background()); !errors.Is(err, ErrNotRunning) {
+	if _, err := NewClient(path, testRecipient).Status(context.Background()); !errors.Is(err, ErrNotRunning) {
 		t.Fatalf("Status() at a regular file error = %v, want ErrNotRunning", err)
 	}
 }
@@ -366,12 +410,12 @@ func TestClientRefusesAnotherProgramAsServer(t *testing.T) {
 		t.Fatalf("the helper process said %q", got)
 	}
 
-	_, _, err := NewClient(path).Get(context.Background(), "wiki-reader", "token")
-	if !errors.Is(err, ErrRefused) {
-		t.Fatalf("Get() from another program error = %v, want ErrRefused", err)
+	_, _, err := NewClient(path, testRecipient).Get(context.Background(), "wiki-reader", "token")
+	if !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "process ") {
+		t.Fatalf("Get() from another program error = %v, want ErrRefused naming its process", err)
 	}
 	if got := line(t, out); got != "received 0" {
-		t.Fatalf("the client sent something to another program: %s", got)
+		t.Fatalf("the client sent something after the challenge to another program: %s", got)
 	}
 }
 
@@ -381,11 +425,12 @@ func TestServerRefusesAnotherProgramAsClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Listen() error = %v", err)
 	}
-	s := NewServer(map[string]map[string]string{"wiki-reader": {"token": "synthetic-token"}})
+	s := NewServer(testKey, testSecrets())
 	serve(t, s, l)
 
+	// Another program does not even get the challenge answered: the key does not work for it.
 	_, out := helper(t, otherProgram(t), "get", path)
-	if got := line(t, out); got != fmt.Sprintf("answer %q %q", codeRefused, "") {
+	if got := line(t, out); got != fmt.Sprintf("answer %q 0", codeRefused) {
 		t.Fatalf("another program got %s", got)
 	}
 }
@@ -394,5 +439,51 @@ func TestHarden(t *testing.T) {
 	_, out := helper(t, os.Args[0], "harden", "")
 	if got := line(t, out); got != "dumpable 0 errno 0" {
 		t.Fatalf("the hardened helper process said %q", got)
+	}
+}
+
+// A hardened vault process cannot be checked by its program from outside, but it passes the client's check
+// of its user and its key, and it still checks its own clients by their program.
+func TestClientReachesAHardenedServer(t *testing.T) {
+	path := socketIn(t)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
+	cmd.Env = append(os.Environ(), helperEnv+"=serve-hardened", helperEnv+"_SOCKET="+path)
+	cmd.Stdin = strings.NewReader(testKey.String() + "\n")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Skipf("cannot start a helper process: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	out := bufio.NewReader(stdout)
+	if got := line(t, out); got != "listening" {
+		t.Fatalf("the helper process said %q", got)
+	}
+
+	if err := checkProcess(cmd.Process.Pid, uint32(os.Getuid())); !errors.Is(err, ErrRefused) {
+		t.Fatalf("checkProcess() of a hardened process error = %v, want ErrRefused", err)
+	}
+	c := NewClient(path, testRecipient)
+	ctx := context.Background()
+	status, err := c.Status(ctx)
+	if err != nil || status.PID != cmd.Process.Pid {
+		t.Fatalf("Status() = %+v, %v, want the helper's pid", status, err)
+	}
+	if value, found, err := c.Get(ctx, "wiki-reader", "token"); err != nil || !found || value != "synthetic-token" {
+		t.Fatalf("Get() = %q, %v, %v", value, found, err)
+	}
+	if _, err := NewClient(path, otherKey.Recipient().String()).Status(ctx); !errors.Is(err, ErrRefused) {
+		t.Fatalf("Status() challenged for another vault error = %v, want ErrRefused", err)
+	}
+	if err := c.Lock(ctx); err != nil {
+		t.Fatalf("Lock() error = %v", err)
+	}
+	if got := line(t, out); got != "locked" {
+		t.Fatalf("the helper process said %q after Lock()", got)
 	}
 }

@@ -8,8 +8,8 @@ import (
 // ErrAlreadyEncrypted reports that Encrypt was called on a vault that already is one.
 var ErrAlreadyEncrypted = errors.New("the vault is already encrypted")
 
-// ErrNotEncrypted reports that Decrypt or ChangePassphrase was called on a vault that has no passphrase to
-// change or remove.
+// ErrNotEncrypted reports that Decrypt, ChangePassphrase, or Recipient was called on a vault that has no
+// passphrase to change or remove, and no recipient.
 var ErrNotEncrypted = errors.New("the vault is not encrypted")
 
 // ErrEmptyPassphrase reports a passphrase of "", refused wherever an empty passphrase would silently turn

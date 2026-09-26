@@ -8,24 +8,43 @@ import (
 	"io/fs"
 	"net"
 	"os"
+	"strings"
 	"syscall"
 	"time"
+
+	"filippo.io/age"
 )
 
 // Client reaches the vault process at one socket. Every call opens a connection of its own, checks the
 // process that listens, and only then sends its request.
+//
+// The check has two steps. The process that listens must run as this user, which the kernel reports
+// through SO_PEERCRED; its program cannot be checked the way the server checks its clients, since the
+// vault process is hardened and its /proc entries are closed to this user too. It must then prove that it
+// holds the vault's key: the client sends a fresh random nonce encrypted to the vault's public recipient,
+// and the process answers with a hash of what it decrypted. Nothing else is sent before both steps
+// passed, not even the credential name a get asks for.
 type Client struct {
 	// Path is the socket, usually from SocketPath.
 	Path string
+	// Recipient is the vault's public recipient as age text, the content of its recipient file. The
+	// challenge is encrypted to it; a client without one sends nothing at all.
+	Recipient string
 	// Timeout bounds one call; the context a call gets bounds it too, and the earlier limit wins. Zero
 	// means DefaultRequestTimeout.
 	Timeout time.Duration
-	// Verify checks the server before anything is sent. Nil means VerifyProgram; a test passes its own.
+	// Verify checks the process that listens before the challenge is sent. Nil means VerifyUser; a test
+	// passes its own. The challenge is never skipped.
 	Verify Verifier
 }
 
-// NewClient returns a client for the socket at path.
-func NewClient(path string) *Client { return &Client{Path: path} }
+// NewClient returns a client for the socket at path, checking the process there against the vault
+// recipient.
+func NewClient(path, recipient string) *Client { return &Client{Path: path, Recipient: recipient} }
+
+// ErrNoRecipient reports a client that has no vault recipient to challenge the process with, which is a
+// vault that is not encrypted: such a vault has no key, and therefore no vault process.
+var ErrNoRecipient = errors.New("the vault has no recipient to check the vault process with; it is not encrypted")
 
 // Status is what a running vault process reports about itself. It holds no secret and no credential name.
 type Status struct {
@@ -83,6 +102,9 @@ func (c *Client) call(ctx context.Context, req request) (response, error) {
 	if err := checkPathLength(c.Path); err != nil {
 		return response{}, err
 	}
+	if _, err := c.recipient(); err != nil {
+		return response{}, err
+	}
 	deadline := c.deadline(ctx)
 	dialer := net.Dialer{Deadline: deadline}
 	conn, err := dialer.DialContext(ctx, "unix", c.Path)
@@ -109,9 +131,22 @@ func (c *Client) deadline(ctx context.Context) time.Time {
 	return deadline
 }
 
-// exchange runs one request on an open connection. The server is checked before the request is written,
-// so an unchecked server learns nothing, not even which credential was asked for. A context that ends
-// early ends the exchange at once rather than at the deadline.
+// recipient parses the vault recipient the challenge is encrypted to.
+func (c *Client) recipient() (age.Recipient, error) {
+	text := strings.TrimSpace(c.Recipient)
+	if text == "" {
+		return nil, ErrNoRecipient
+	}
+	recipient, err := age.ParseX25519Recipient(text)
+	if err != nil {
+		return nil, errors.New("the vault recipient cannot be read; the vault process is not asked")
+	}
+	return recipient, nil
+}
+
+// exchange runs one request on an open connection. The server is checked, its user and then its key,
+// before the request is written, so an unchecked server learns nothing, not even which credential was
+// asked for. A context that ends early ends the exchange at once rather than at the deadline.
 func (c *Client) exchange(ctx context.Context, conn net.Conn, deadline time.Time, req request) (response, error) {
 	if err := conn.SetDeadline(deadline); err != nil {
 		return response{}, err
@@ -121,9 +156,12 @@ func (c *Client) exchange(ctx context.Context, conn net.Conn, deadline time.Time
 
 	verify := c.Verify
 	if verify == nil {
-		verify = VerifyProgram
+		verify = VerifyUser
 	}
 	if err := verify(conn); err != nil {
+		return response{}, err
+	}
+	if err := c.challenge(ctx, conn); err != nil {
 		return response{}, err
 	}
 
@@ -131,6 +169,42 @@ func (c *Client) exchange(ctx context.Context, conn net.Conn, deadline time.Time
 	if err := writeMessage(conn, req); err != nil {
 		return response{}, c.failed(ctx, err)
 	}
+	return c.answer(ctx, conn)
+}
+
+// challenge asks the server to prove that it holds the vault's key, with a nonce of its own for this one
+// connection, so no earlier answer can be replayed.
+func (c *Client) challenge(ctx context.Context, conn net.Conn) error {
+	recipient, err := c.recipient()
+	if err != nil {
+		return err
+	}
+	nonce, challenge, err := newChallenge(recipient)
+	if err != nil {
+		return err
+	}
+	defer clear(nonce)
+	if err := writeMessage(conn, hello{V: Version, Challenge: challenge}); err != nil {
+		return c.failed(ctx, err)
+	}
+	resp, err := c.answer(ctx, conn)
+	switch {
+	case err == nil && checkProof(nonce, resp.Proof):
+		return nil
+	case err == nil, errors.Is(err, errUnproven):
+		// The process id is no secret, and it is what a person needs to find a process that holds another
+		// key, such as one left from before the vault was encrypted anew.
+		if pid := peerPID(conn); pid > 0 {
+			return fmt.Errorf("%w (process %d)", errUnproven, pid)
+		}
+		return errUnproven
+	default:
+		return err
+	}
+}
+
+// answer reads one answer and turns its error code into the client's error.
+func (c *Client) answer(ctx context.Context, conn net.Conn) (response, error) {
 	var resp response
 	if err := readMessage(conn, &resp); err != nil {
 		return response{}, c.failed(ctx, err)

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // readVaultPassphrase is the terminal prompt every vault passphrase is asked with: the offer of the
@@ -29,6 +31,11 @@ var readVaultPassphrase vault.PassphraseFunc = vault.ReadPassphrase
 // is a seam for a test.
 var readVaultConfirm = vault.ReadConfirm
 
+// vaultProcessSupported reports whether 'vault unlock' hands the unlocked vault to a vault process on this
+// platform, and whether 'vault status' and 'vault lock' ask one. It is a variable only so a test can keep
+// a run to this process; a real run always leaves it at vaultProcessPlatform.
+var vaultProcessSupported = vaultProcessPlatform
+
 func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "vault",
@@ -38,8 +45,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"offers a passphrase the first time it stores a secret there. 'vault encrypt', 'vault passphrase',\n" +
 			"and 'vault decrypt' set, change, and remove that passphrase; 'vault migrate' carries the entries\n" +
 			"of a plaintext credentials.yaml left over from an earlier version into the vault and removes it.\n\n" +
-			"'qatlas credential set', 'qatlas credential delete', and every 'vault' command but status and\n" +
-			"unlock manage a credential or the vault, keyring credentials included, and run only from an\n" +
+			"'qatlas credential set', 'qatlas credential delete', and every 'vault' command but status,\n" +
+			"unlock, and lock manage a credential or the vault, keyring credentials included, and run only from an\n" +
 			"interactive terminal; where the vault is encrypted they ask for its passphrase there too, once per\n" +
 			"command and before doing anything, whatever credential they target. No terminal at all, or a wrong\n" +
 			"passphrase, fails with the code admin-required; an agent never manages a credential or the vault.\n\n" +
@@ -48,8 +55,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"a terminal to ask on, such as an agent talking to qatlas over MCP, such an access fails with the\n" +
 			"code vault-locked; a person runs 'qatlas vault unlock' to open it, or presses ctrl+l in 'qatlas\n" +
 			"tui'.\n\n" +
-			"Unlocking only lasts for the current process: the next qatlas invocation asks again, until a\n" +
-			"long-lived vault process exists to hold it open. No command ever shows a stored secret back.",
+			"On Linux 'vault unlock' hands the unlocked vault to a vault process that holds it open until it\n" +
+			"is idle for vault.idle_timeout (12h unless the configuration says otherwise), 'vault lock' ends\n" +
+			"it, or the machine restarts; elsewhere unlocking only lasts for the current process. No command\n" +
+			"ever shows a stored secret back.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
@@ -60,7 +69,9 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Long: "Reports the vault's state (absent, unencrypted, locked, or unlocked), how many credentials it\n" +
 			"holds, and how many entries are queued in pending, added or changed while it was locked. The\n" +
 			"entry count is unknown while the vault is locked: counting it needs the passphrase, the same\n" +
-			"way reading a secret does. It asks for no passphrase and shows no secret value.",
+			"way reading a secret does. For an encrypted vault it also reports whether a vault process holds\n" +
+			"it unlocked (process running, with its pid and when it locks itself, or none). It asks for no\n" +
+			"passphrase and shows no secret value.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultStatus(c, opts)
@@ -69,14 +80,41 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 
 	unlock := &cobra.Command{
 		Use:   "unlock",
-		Short: "Unlock the vault for this process and merge its pending entries",
+		Short: "Unlock the vault, merge its pending entries, and keep it open in a vault process",
 		Long: "Asks for the vault's passphrase on the terminal and, once it opens the vault, merges every\n" +
-			"entry that was queued in pending while it was locked. The vault stays unlocked only for this\n" +
-			"process: it is asked again on the next qatlas invocation. Run against a vault that is not\n" +
-			"encrypted and locked, it asks for nothing and just reports the vault's status.",
+			"entry that was queued in pending while it was locked. On Linux it then starts a vault process\n" +
+			"that holds the unlocked vault in memory, detached from the terminal, so it outlives the session\n" +
+			"that started it; it locks itself after vault.idle_timeout without a read, on 'qatlas vault lock',\n" +
+			"or when the machine restarts. A vault process that is already running is reported, not started a\n" +
+			"second time, and nothing is asked. Where systemd-logind would end the process at logout or remove\n" +
+			"its socket, a warning names the setting, such as 'loginctl enable-linger'. On other platforms the\n" +
+			"vault stays unlocked only for this process. Run against a vault that is not encrypted and locked,\n" +
+			"it asks for nothing and just reports the vault's status.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			return runVaultUnlock(c, opts)
+			return runVaultUnlock(c, opts, reg)
+		},
+	}
+
+	lock := &cobra.Command{
+		Use:   "lock",
+		Short: "Lock the vault: end the vault process that holds it unlocked",
+		Long: "Asks the vault process to overwrite the secrets it holds and end. Without a vault process the\n" +
+			"vault is already locked, which is reported as success, so locking twice is no mistake. Locking\n" +
+			"only takes access away, so it needs neither a terminal nor the passphrase.",
+		Args: noArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			return runVaultLock(c, opts)
+		},
+	}
+
+	serve := &cobra.Command{
+		Use:    "serve",
+		Short:  "Hold the unlocked vault open; started by 'qatlas vault unlock'",
+		Hidden: true,
+		Args:   noArgs,
+		RunE: func(*cobra.Command, []string) error {
+			return runVaultServe(opts, reg)
 		},
 	}
 
@@ -134,7 +172,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"stores each one in the vault the same way 'qatlas credential set' does: the vault's very first\n" +
 			"secret offers a passphrase on the terminal, leaving it empty keeps the vault unencrypted. Managing\n" +
 			"an already encrypted vault needs its passphrase up front instead, asked by the admin check every\n" +
-			"'vault' command but status and unlock runs before it does anything.\n\n" +
+			"'vault' command but status, unlock, and lock runs before it does anything.\n\n" +
 			"Every credential that had an entry and is still of type keyring is switched to type vault, which\n" +
 			"stops it reading the system keyring; every one of its secret roles is therefore resolved once\n" +
 			"more, the way the keyring-then-plaintext cascade always did: the keyring first, credentials.yaml\n" +
@@ -162,7 +200,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(status, unlock, encrypt, passphrase, decrypt, migrate)
+	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate)
 	return cmd
 }
 
@@ -190,14 +228,71 @@ func runVaultStatus(c *cobra.Command, opts *Options) error {
 		return classifyUserError(err)
 	}
 	if legacyCredentialsExist(v) {
-		hint := "credentials.yaml still holds plaintext secrets; run 'qatlas vault migrate' to move them into the vault"
-		if status.Warning == "" {
-			status.Warning = hint
-		} else {
-			status.Warning += "; " + hint
+		addWarning(&status.Warning,
+			"credentials.yaml still holds plaintext secrets; run 'qatlas vault migrate' to move them into the vault")
+	}
+	process := vaultProcessOf(c.Context(), v, status.State, &status.Warning)
+	return emit(c, opts, vaultStatusObject(status, process))
+}
+
+func addWarning(warning *string, text string) {
+	if *warning == "" {
+		*warning = text
+	} else {
+		*warning += "; " + text
+	}
+}
+
+// vaultProcessState is what 'vault status' reports about the vault process.
+type vaultProcessState struct {
+	// State is running, none, unsupported, or unknown; empty for a vault that is not encrypted, which has
+	// no vault process.
+	State  string
+	Status vaultproc.Status
+}
+
+// vaultProcessOf asks the vault process of v how it is. A process that cannot be asked, or does not pass
+// the check, is reported as unknown, with the reason added to warning; it never fails the status.
+func vaultProcessOf(ctx context.Context, v *vault.Vault, state vault.State, warning *string) vaultProcessState {
+	if state != vault.StateLocked && state != vault.StateUnlocked {
+		return vaultProcessState{}
+	}
+	if !vaultProcessSupported {
+		return vaultProcessState{State: "unsupported"}
+	}
+	client, err := vaultProcessClient(v)
+	if err == nil {
+		var status vaultproc.Status
+		status, err = client.Status(contextOrBackground(ctx))
+		if err == nil {
+			return vaultProcessState{State: "running", Status: status}
 		}
 	}
-	return emit(c, opts, vaultStatusObject(status))
+	if errors.Is(err, vaultproc.ErrNotRunning) {
+		return vaultProcessState{State: "none"}
+	}
+	addWarning(warning, "the vault process cannot be asked: "+err.Error())
+	return vaultProcessState{State: "unknown"}
+}
+
+// vaultProcessClient returns the client of the vault process that serves v, checked against v's recipient.
+func vaultProcessClient(v *vault.Vault) (*vaultproc.Client, error) {
+	recipient, err := v.Recipient()
+	if err != nil {
+		return nil, err
+	}
+	path, err := vaultproc.SocketPath(v.Dir())
+	if err != nil {
+		return nil, err
+	}
+	return vaultproc.NewClient(path, recipient), nil
+}
+
+func contextOrBackground(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 // legacyCredentialsExist reports whether a plaintext credentials.yaml, left over from an earlier version,
@@ -207,7 +302,14 @@ func legacyCredentialsExist(v *vault.Vault) bool {
 	return fileExists(filepath.Join(filepath.Dir(v.Dir()), secret.FileName))
 }
 
-func runVaultUnlock(c *cobra.Command, opts *Options) error {
+// runVaultUnlock unlocks the vault and, where the platform runs one, hands it to a vault process.
+//
+// Both ways share their first half, which is the unlock this command always did: the passphrase opens
+// the vault in this process and merges the pending entries into secrets.age for good. Where a vault
+// process runs, this process then hands it the result through an inherited pipe and ends; elsewhere the
+// unlock stays with this process and ends with it. A vault process that fails to start leaves the merge in
+// place and reports the failure.
+func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) error {
 	v, err := vaultOf(opts)
 	if err != nil {
 		return err
@@ -221,6 +323,33 @@ func runVaultUnlock(c *cobra.Command, opts *Options) error {
 		// Nothing needs a passphrase: an absent or unencrypted vault has none, and one already unlocked in
 		// this process stays that way. Reporting the status is more useful than asking for nothing.
 		return runVaultStatus(c, opts)
+	}
+
+	ctx := contextOrBackground(c.Context())
+	var client *vaultproc.Client
+	var configPath string
+	if vaultProcessSupported {
+		if client, err = vaultProcessClient(v); err != nil {
+			return classifyUserError(err)
+		}
+		// A running process already holds the vault: nothing is asked, and no second one is started.
+		status, err := client.Status(ctx)
+		if err == nil {
+			fmt.Fprintf(c.OutOrStdout(), "the vault is already unlocked in a vault process (pid %d) until %s, "+
+				"later when it is read before; 'qatlas vault lock' locks it at once\n",
+				status.PID, formatLocksAt(status.LocksAt))
+			return nil
+		}
+		if !errors.Is(err, vaultproc.ErrNotRunning) {
+			return err
+		}
+		// The configuration the process reads its idle timeout from is checked before anything is asked.
+		if configPath, err = absConfigPath(opts); err != nil {
+			return err
+		}
+		if _, err := vaultIdleTimeout(configPath, reg); err != nil {
+			return err
+		}
 	}
 
 	passphrase, err := readVaultPassphrase("vault passphrase: ")
@@ -239,9 +368,100 @@ func runVaultUnlock(c *cobra.Command, opts *Options) error {
 		}
 		return err
 	}
+	mergedText := fmt.Sprintf("merged %d pending %s", merged, plural(merged, "entry", "entries"))
 
-	fmt.Fprintf(c.OutOrStdout(), "the vault is unlocked; merged %d pending %s\n", merged, plural(merged, "entry", "entries"))
+	if !vaultProcessSupported {
+		fmt.Fprintf(c.OutOrStdout(), "the vault is unlocked; %s\n", mergedText)
+		return nil
+	}
+
+	snap, err := v.Snapshot()
+	if err != nil {
+		return err
+	}
+	status, err := startVaultProcess(ctx, configPath, snap, client)
+	if err != nil {
+		return fmt.Errorf("%s, but the vault stays locked for later invocations: %w", mergedText, err)
+	}
+	fmt.Fprintf(c.OutOrStdout(), "the vault is unlocked in a vault process (pid %d) until %s, later when it is "+
+		"read before; 'qatlas vault lock' locks it at once; %s\n", status.PID, formatLocksAt(status.LocksAt), mergedText)
+	for _, warning := range sessionWarnings(client.Path) {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+	}
 	return nil
+}
+
+// runVaultLock ends the vault process. No process to end is the vault already locked, not a failure.
+func runVaultLock(c *cobra.Command, opts *Options) error {
+	v, err := vaultOf(opts)
+	if err != nil {
+		return err
+	}
+	state, err := v.State()
+	if err != nil {
+		return classifyUserError(err)
+	}
+	out := c.OutOrStdout()
+	switch {
+	case state != vault.StateLocked && state != vault.StateUnlocked:
+		fmt.Fprintln(out, "the vault is not encrypted, so there is nothing to lock")
+		return nil
+	case !vaultProcessSupported:
+		fmt.Fprintln(out, "the vault is already locked: no vault process runs on this platform")
+		return nil
+	}
+
+	client, err := vaultProcessClient(v)
+	if err != nil {
+		return classifyUserError(err)
+	}
+	ctx := contextOrBackground(c.Context())
+	err = client.Lock(ctx)
+	if errors.Is(err, vaultproc.ErrNotRunning) {
+		fmt.Fprintln(out, "the vault is already locked: no vault process is running")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	// The process answers before it closes its socket; the command returns once it did, so the next
+	// command already finds the vault locked.
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		if _, err := client.Status(ctx); errors.Is(err, vaultproc.ErrNotRunning) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	fmt.Fprintln(out, "the vault is locked: the vault process overwrote its secrets and ended")
+	return nil
+}
+
+// absConfigPath returns the configuration file of this run as an absolute path, the form a vault process
+// started in another working directory is handed.
+func absConfigPath(opts *Options) (string, error) {
+	path, err := config.Path(opts.Config)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(path)
+}
+
+// vaultIdleTimeout returns vault.idle_timeout of the configuration at path, the default when there is no
+// configuration file yet.
+func vaultIdleTimeout(path string, reg *capability.Registry) (time.Duration, error) {
+	cfg, err := config.Load(path, reg)
+	var missing *config.NotFoundError
+	if errors.As(err, &missing) {
+		return config.DefaultVaultIdleTimeout, nil
+	}
+	if err != nil {
+		return 0, classifyUserError(err)
+	}
+	return cfg.VaultIdleTimeout(), nil
+}
+
+func formatLocksAt(t time.Time) string {
+	return t.Local().Format(time.RFC3339)
 }
 
 func plural(n int, singular, plural string) string {
@@ -251,7 +471,7 @@ func plural(n int, singular, plural string) string {
 	return plural
 }
 
-func vaultStatusObject(status vault.Status) output.Object {
+func vaultStatusObject(status vault.Status, process vaultProcessState) output.Object {
 	entries := "unknown, locked"
 	if status.Entries >= 0 {
 		entries = strconv.Itoa(status.Entries)
@@ -260,6 +480,14 @@ func vaultStatusObject(status vault.Status) output.Object {
 		{Name: "state", Value: string(status.State)},
 		{Name: "entries", Value: entries},
 		{Name: "pending", Value: int64(status.Pending)},
+	}
+	if process.State != "" {
+		fields = append(fields, output.Field{Name: "process", Value: process.State})
+	}
+	if process.State == "running" {
+		fields = append(fields,
+			output.Field{Name: "pid", Value: int64(process.Status.PID)},
+			output.Field{Name: "locks_at", Value: formatLocksAt(process.Status.LocksAt)})
 	}
 	if status.Warning != "" {
 		fields = append(fields, output.Field{Name: "warning", Value: status.Warning})

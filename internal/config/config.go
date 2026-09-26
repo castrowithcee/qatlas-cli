@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	yaml "go.yaml.in/yaml/v3"
@@ -40,6 +41,7 @@ type Config struct {
 	Connections   map[string]Connection `yaml:"connections,omitempty"`
 	ProviderNotes map[string]string     `yaml:"provider_notes,omitempty"`
 	Defaults      Defaults              `yaml:"defaults"`
+	Vault         VaultSettings         `yaml:"vault,omitempty"`
 	providers     ProviderCatalog       `yaml:"-"`
 }
 
@@ -135,6 +137,42 @@ func (c *Config) SecretStore() string {
 		return CredentialTypeKeyring
 	}
 	return c.Defaults.SecretStore
+}
+
+// DefaultVaultIdleTimeout is how long the vault process holds the unlocked vault without a read before it
+// locks itself, unless vault.idle_timeout says otherwise.
+const DefaultVaultIdleTimeout = 12 * time.Hour
+
+// VaultSettings holds the settings of the vault that are not secret.
+type VaultSettings struct {
+	// IdleTimeout is how long the vault process holds the unlocked vault without a read before it locks
+	// itself, as a Go duration such as "12h" or "30m". Left empty, it means DefaultVaultIdleTimeout. It must
+	// be positive: a vault process that never locks itself is not offered, and 'qatlas vault lock' locks it
+	// at once.
+	IdleTimeout string `yaml:"idle_timeout,omitempty"`
+}
+
+// VaultIdleTimeout returns the effective idle timeout of the vault process. A configuration that passed
+// Validate always has one; an unparseable value falls back to DefaultVaultIdleTimeout.
+func (c *Config) VaultIdleTimeout() time.Duration {
+	if d, err := parseIdleTimeout(c.Vault.IdleTimeout); err == nil && d > 0 {
+		return d
+	}
+	return DefaultVaultIdleTimeout
+}
+
+func parseIdleTimeout(text string) (time.Duration, error) {
+	if text == "" {
+		return DefaultVaultIdleTimeout, nil
+	}
+	d, err := time.ParseDuration(text)
+	if err != nil {
+		return 0, errors.New(`must be a duration such as "12h" or "30m"`)
+	}
+	if d <= 0 {
+		return 0, errors.New("must be positive; run 'qatlas vault lock' to lock the vault at once")
+	}
+	return d, nil
 }
 
 // The supported credential types.
@@ -492,6 +530,10 @@ func (c *Config) Validate() error {
 	if store := c.Defaults.SecretStore; store != "" && store != CredentialTypeKeyring && store != CredentialTypeVault {
 		report("defaults.secret_store: must be %s or %s, got %q",
 			CredentialTypeKeyring, CredentialTypeVault, store)
+	}
+
+	if _, err := parseIdleTimeout(c.Vault.IdleTimeout); err != nil {
+		report("vault.idle_timeout: %v", err)
 	}
 
 	return errors.Join(problems...)

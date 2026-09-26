@@ -6,9 +6,11 @@
 // in size, and every connection has a deadline, so a peer that hangs cannot hold either side.
 //
 // A secret leaves the process only for this very program run by this very user. Both ends check each
-// other: the server checks the process that connected before it answers anything, and the client checks
-// the process that listens before it sends anything, not even a credential name. See VerifyProgram for
-// what the check compares.
+// other. The server checks the process that connected, its user and its program, before it answers
+// anything; see VerifyProgram. The client checks the user of the process that listens and then challenges
+// it to prove that it holds the vault's key, before it sends anything else, not even a credential name;
+// see Client. A connection therefore carries two exchanges: the challenge and its proof, then the request
+// and its answer.
 //
 // Nothing here logs, and no error or answer other than a successful get carries a secret value. The
 // process locks itself after a period without a get, when asked to, or when it ends; locking overwrites the
@@ -28,7 +30,7 @@ import (
 
 // Version is the protocol version a request carries and an answer repeats. A server refuses a request of
 // another version rather than guessing what it meant.
-const Version = 1
+const Version = 2
 
 // MaxMessage bounds one request or answer, newline included. It leaves room for any token or key a
 // credential holds, and keeps a peer from making the other side buffer without end.

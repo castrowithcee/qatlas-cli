@@ -6,6 +6,8 @@ import (
 	"os"
 	"sync"
 	"time"
+
+	"filippo.io/age"
 )
 
 // Server holds an unlocked vault's secrets in memory and answers the clients on one listener. The zero
@@ -22,6 +24,7 @@ type Server struct {
 	Verify Verifier
 
 	mu      sync.Mutex
+	key     age.Identity                 // the vault's key, which answers a client's challenge
 	secrets map[string]map[string][]byte // credential name, role, value
 	locked  bool
 	locksAt time.Time
@@ -33,10 +36,12 @@ type Server struct {
 	handlers sync.WaitGroup
 }
 
-// NewServer returns a server holding secrets, keyed by credential name and then by role, the shape of a
-// decrypted vault document. The server keeps copies of its own; the caller drops its map once the server
-// holds them, since only the copies can be overwritten when the server locks.
-func NewServer(secrets map[string]map[string]string) *Server {
+// NewServer returns a server holding key, the vault's own key, and secrets, keyed by credential name and
+// then by role, the shape of a decrypted vault document. The key proves to every client that this process
+// holds the vault; a server without one, or with another vault's, fails every client's challenge and is
+// told nothing. The server keeps copies of the secrets; the caller drops its map once the server holds
+// them, since only the copies can be overwritten when the server locks.
+func NewServer(key age.Identity, secrets map[string]map[string]string) *Server {
 	held := make(map[string]map[string][]byte, len(secrets))
 	for credential, roles := range secrets {
 		held[credential] = make(map[string][]byte, len(roles))
@@ -44,7 +49,7 @@ func NewServer(secrets map[string]map[string]string) *Server {
 			held[credential][role] = []byte(value)
 		}
 	}
-	return &Server{secrets: held, stopped: make(chan struct{})}
+	return &Server{key: key, secrets: held, stopped: make(chan struct{})}
 }
 
 // Serve answers connections on l until the server locks: on a lock request, after IdleTimeout without a
@@ -122,11 +127,13 @@ func (s *Server) stop() {
 	})
 }
 
-// wipe overwrites every value the server holds and forgets them. Any request still arriving is answered as
-// locked.
+// wipe overwrites every value the server holds and forgets them and the key. The key's own bytes belong to
+// the age library and cannot be overwritten from here; they are only dropped. Any request still arriving
+// is answered as locked.
 func (s *Server) wipe() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.key = nil
 	for _, roles := range s.secrets {
 		for _, value := range roles {
 			clear(value)
@@ -136,9 +143,10 @@ func (s *Server) wipe() {
 	s.locked = true
 }
 
-// serveConn answers the one request of a connection. The peer is checked after its request was read and
-// before anything is done with it, so nothing an unchecked peer sends changes the server and no answer
-// reaches it but the refusal.
+// serveConn answers the challenge and then the one request of a connection. The peer is checked after its
+// first line was read and before anything is done with it, so an unchecked peer neither gets the vault key
+// to answer a challenge nor changes the server, and no answer reaches it but the refusal. The deadline
+// covers the whole connection.
 func (s *Server) serveConn(conn net.Conn) {
 	defer conn.Close()
 	timeout := s.RequestTimeout
@@ -149,8 +157,8 @@ func (s *Server) serveConn(conn net.Conn) {
 		return
 	}
 
-	var req request
-	if err := readMessage(conn, &req); err != nil {
+	var h hello
+	if err := readMessage(conn, &h); err != nil {
 		if errors.Is(err, ErrTooLarge) {
 			_ = writeMessage(conn, response{V: Version, Error: codeBadRequest})
 		}
@@ -165,6 +173,22 @@ func (s *Server) serveConn(conn net.Conn) {
 		_ = writeMessage(conn, response{V: Version, Error: codeRefused})
 		return
 	}
+	// A client of another build sends its own first line; whatever it is, its version tells.
+	if h.V != Version {
+		_ = writeMessage(conn, response{V: Version, Error: codeVersion})
+		return
+	}
+	if resp := s.solve(h.Challenge); writeMessage(conn, resp) != nil || resp.Error != "" {
+		return
+	}
+
+	var req request
+	if err := readMessage(conn, &req); err != nil {
+		if errors.Is(err, ErrTooLarge) {
+			_ = writeMessage(conn, response{V: Version, Error: codeBadRequest})
+		}
+		return
+	}
 	if req.V != Version {
 		_ = writeMessage(conn, response{V: Version, Error: codeVersion})
 		return
@@ -175,6 +199,22 @@ func (s *Server) serveConn(conn net.Conn) {
 	if req.Op == opLock && resp.Error == "" {
 		s.stop()
 	}
+}
+
+// solve answers a checked client's challenge with the proof that this server holds the vault's key.
+func (s *Server) solve(challenge []byte) response {
+	s.mu.Lock()
+	key := s.key
+	locked := s.locked || s.stopping()
+	s.mu.Unlock()
+	if locked {
+		return response{V: Version, Error: codeLocked}
+	}
+	proof, ok := solveChallenge(key, challenge)
+	if !ok {
+		return response{V: Version, Error: codeChallenge}
+	}
+	return response{V: Version, Proof: proof}
 }
 
 // answer carries out one checked request.
