@@ -39,6 +39,11 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"off for a run.\n\n" +
 			"These commands write and remove the entries. No command ever shows a stored secret back, not\n" +
 			"even masked; 'qatlas config validate --secrets' shows which source delivers each role.\n\n" +
+			"Both commands manage a credential's secret and run only from an interactive terminal, keyring\n" +
+			"credentials included; where the vault this configuration uses is encrypted they also ask for its\n" +
+			"passphrase there, once per command and before doing anything, whatever credential they target. No\n" +
+			"terminal fails with the code admin-required, a wrong passphrase with usage, both before anything\n" +
+			"is touched; an agent never runs them.\n\n" +
 			"Every call into the system keyring ends within 10 seconds, and within the 60 seconds of an\n" +
 			"invoke. On Linux a session without a desktop, such as SSH, or the MCP broker never waits for\n" +
 			"an unlock prompt: a locked keyring ends at once as locked, and one without a reachable session\n" +
@@ -62,8 +67,9 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"what to do on this platform, or points at the vault as the way out on a machine without one.\n\n" +
 			"A vault credential's secret goes into the vault. Storing the very first secret the vault ever\n" +
 			"holds asks, on the terminal, for a passphrase to encrypt it with; leaving that empty keeps the\n" +
-			"vault unencrypted. Every later secret needs no passphrase to store, even while the vault is\n" +
-			"encrypted and locked: it is queued and merged in on the next 'qatlas vault unlock'.\n\n" +
+			"vault unencrypted. Every later secret still needs that passphrase to store, asked once by the\n" +
+			"admin check every management command runs before it does anything, and goes straight into the\n" +
+			"unlocked vault rather than a pending entry.\n\n" +
 			"Success is silent, except for a warning when an environment variable would override what was\n" +
 			"just stored.",
 		Args: exactlyTwoArgs,
@@ -76,11 +82,11 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 		Use:   "delete <credential> <role>",
 		Short: "Remove the secret of one credential role",
 		Long: "For a keyring credential, the entry is removed from the system keyring, and from a plaintext\n" +
-			"credentials.yaml left over from an earlier version, if any. For a vault credential, it is\n" +
-			"removed from the vault, which needs the vault unlocked the same way reading it does. An\n" +
-			"environment variable is not touched: it belongs to the shell, not to qatlas. When the keyring\n" +
-			"is locked or cannot be reached, or the vault is locked, the command says so and what to do, and\n" +
-			"never reports a secret as removed that may still be stored.",
+			"credentials.yaml left over from an earlier version, if any. For a vault credential, it is removed\n" +
+			"from the vault, unlocked first by this command's own admin check if it was encrypted and locked.\n" +
+			"An environment variable is not touched: it belongs to the shell, not to qatlas. When the keyring\n" +
+			"is locked or cannot be reached, the command says so and what to do, and never reports a secret\n" +
+			"as removed that may still be stored.",
 		Args: exactlyTwoArgs,
 		RunE: func(c *cobra.Command, args []string) error {
 			return deleteCredential(c, opts, reg, args[0], args[1])
@@ -92,6 +98,9 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 }
 
 func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, name, role string) error {
+	if err := requireAdmin(opts); err != nil {
+		return err
+	}
 	cred, err := storableCredential(opts, reg, name, role)
 	if err != nil {
 		return err
@@ -159,6 +168,9 @@ func offerVaultPassphrase(prompt string) (string, error) {
 }
 
 func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry, name, role string) error {
+	if err := requireAdmin(opts); err != nil {
+		return err
+	}
 	cred, err := storableCredential(opts, reg, name, role)
 	if err != nil {
 		return err

@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -170,6 +171,9 @@ func TestExitCode(t *testing.T) {
 		// A locked vault is a runtime state a person clears by unlocking and retrying, not a configuration
 		// mistake, so it keeps the runtime exit code rather than becoming a usage error.
 		{"vault locked", &secret.VaultLockedError{Credential: "c", Role: "token"}, exitRuntime},
+		// A management command refused for lack of an interactive terminal is a usage problem: the very
+		// next invocation, from a terminal, is expected to work with nothing else changed.
+		{"admin required", &UsageError{&application.AdminRequiredError{}}, exitUsage},
 	}
 
 	for _, tt := range tests {

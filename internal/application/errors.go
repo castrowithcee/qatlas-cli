@@ -161,6 +161,18 @@ func (e *InvalidProviderResponseError) Error() string {
 	return fmt.Sprintf("tool %q returned an invalid provider response", e.Operation)
 }
 
+// AdminRequiredError reports that a CLI command managing a credential or the vault was refused before it
+// did anything: storing or removing a credential's secret of any type, and switching the vault's encryption
+// on, off, or to a new passphrase, all run only when a person is at an interactive terminal, checked before
+// any file, credential store, or vault access the command would otherwise make. An agent never manages a
+// credential or the vault, whatever route it reaches qatlas by; it asks the user to run the command
+// themselves instead.
+type AdminRequiredError struct{}
+
+func (e *AdminRequiredError) Error() string {
+	return "managing a credential or the vault needs a person at an interactive terminal"
+}
+
 // ErrorCode maps an error of the core, the configuration, the secrets, or a provider to its
 // provider-independent code, and anything else to runtime. Agents branch on the code instead of parsing the
 // message, and the audit event of a failed change records the same code.
@@ -178,6 +190,7 @@ func ErrorCode(err error) output.Code {
 		confirmation  *ConfirmationRequiredError
 		denied        *PolicyDeniedError
 		invalidResult *InvalidProviderResponseError
+		adminReq      *AdminRequiredError
 
 		missingSecret   *secret.MissingSecretError
 		permission      *secret.PermissionError
@@ -214,6 +227,8 @@ func ErrorCode(err error) output.Code {
 		return output.CodePolicyDenied
 	case errors.As(err, &invalidResult):
 		return output.CodeInvalidProviderResult
+	case errors.As(err, &adminReq):
+		return output.CodeAdminRequired
 	case errors.As(err, &permission), errors.As(err, &vaultPermission):
 		// A credential file others can read is one state with one fix, whichever operation ran into it.
 		// It is named before the missing secret it causes, so reading, writing, and deleting all report

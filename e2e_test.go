@@ -1169,16 +1169,40 @@ defaults:
 		}
 	})
 
-	t.Run("the store switch does not touch a vault credential", func(t *testing.T) {
-		// QATLAS_CREDENTIAL_STORE=none switches off the system keyring; a vault credential never consults
-		// it, so storing still succeeds and the vault is created on the first secret, unencrypted since no
-		// terminal is attached to offer a passphrase on.
+	t.Run("credential set without a terminal is refused and writes nothing", func(t *testing.T) {
+		// This harness pipes the secret over standard input and captures standard output and standard
+		// error in buffers, none of them a terminal, the same shape an agent's own invocation has. The
+		// admin check refuses the command before it reads the secret from standard input or ever touches
+		// the vault: no vault directory exists afterward at all, encrypted or not.
 		code, stdout, stderr := pipe(t, storedID, "credential", "set", "vault-reader", "token-id")
-		if code != 0 {
-			t.Fatalf("exit %d, stderr %q", code, stderr)
+		if code != 2 {
+			t.Fatalf("exit %d, want 2 (stderr %q)", code, stderr)
 		}
-		if stdout != "" || stderr != "" {
-			t.Errorf("stdout = %q, stderr = %q, want a silent success", stdout, stderr)
+		if stdout != "" {
+			t.Errorf("stdout = %q, want empty", stdout)
+		}
+		if !strings.Contains(stderr, "admin-required") {
+			t.Errorf("stderr = %q, want the admin-required code", stderr)
+		}
+		if strings.Contains(stderr, storedID) {
+			t.Errorf("stderr = %q, want the secret kept out", stderr)
+		}
+		if _, err := os.Stat(vaultDir); !os.IsNotExist(err) {
+			t.Fatalf("the vault was created although the run was refused: %v", err)
+		}
+	})
+
+	t.Run("the vault carries the run", func(t *testing.T) {
+		// QATLAS_CREDENTIAL_STORE=none switches off the system keyring; a vault credential never consults
+		// it, unaffected by the check above. What a real 'qatlas credential set' would have written, from a
+		// terminal, is seeded directly through the vault package instead: an unencrypted vault, exactly what
+		// storing the vault's very first secret with an empty passphrase produces.
+		v := vault.New(dir)
+		if err := v.Set("vault-reader", "token-id", storedID, nil); err != nil {
+			t.Fatalf("seed token-id: %v", err)
+		}
+		if err := v.Set("vault-reader", "token-secret", storedSecret, nil); err != nil {
+			t.Fatalf("seed token-secret: %v", err)
 		}
 		info, err := os.Stat(vaultSecrets)
 		if err != nil {
@@ -1187,12 +1211,6 @@ defaults:
 		// Windows synthesises the mode from the read-only attribute, so 0600 cannot show there.
 		if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 			t.Errorf("mode = %v, want 0600", info.Mode().Perm())
-		}
-	})
-
-	t.Run("the vault carries the run", func(t *testing.T) {
-		if code, _, stderr := pipe(t, storedSecret, "credential", "set", "vault-reader", "token-secret"); code != 0 {
-			t.Fatalf("storing token-secret: exit %d (stderr %q)", code, stderr)
 		}
 
 		code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
@@ -1241,7 +1259,11 @@ defaults:
 		}
 	})
 
-	t.Run("a delete that cannot clear the vault says so", func(t *testing.T) {
+	// A delete that would find the vault file too open is refused for the same reason 'credential set' was
+	// above, before it ever gets far enough to look at the file's mode: this harness offers no terminal.
+	// internal/cli.TestCredentialDeleteVaultFileTooOpenIsRefused covers the widened-mode message itself,
+	// with a terminal injected.
+	t.Run("a delete without a terminal is refused whatever the vault file's mode", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("file modes do not carry on Windows")
 		}
@@ -1262,11 +1284,8 @@ defaults:
 		if stdout != "" {
 			t.Errorf("stdout = %q, want empty", stdout)
 		}
-		if !strings.Contains(stderr, "holds vault data but its mode is 0644") {
-			t.Errorf("stderr = %q, want the widened mode reported", stderr)
-		}
-		if !strings.Contains(stderr, "chmod 600 "+vaultSecrets) {
-			t.Errorf("stderr = %q, want the command that fixes it", stderr)
+		if !strings.Contains(stderr, "admin-required") {
+			t.Errorf("stderr = %q, want the admin-required code", stderr)
 		}
 	})
 
@@ -1306,9 +1325,12 @@ defaults:
 	})
 
 	t.Run("deleting the last entry empties the vault", func(t *testing.T) {
+		// A real delete needs a terminal this harness does not have; the two entries seeded above are
+		// cleared the same way they were written, directly through the vault package.
+		v := vault.New(dir)
 		for _, role := range []string{"token-id", "token-secret"} {
-			if code, _, stderr := c.run(t, "credential", "delete", "vault-reader", role); code != 0 {
-				t.Fatalf("deleting %s: exit %d (stderr %q)", role, code, stderr)
+			if removed, err := v.Delete("vault-reader", role, nil); err != nil || !removed {
+				t.Fatalf("deleting %s: removed %v, err %v", role, removed, err)
 			}
 		}
 		// Unlike the plaintext fallback of an earlier version, an emptied vault stays: it is the

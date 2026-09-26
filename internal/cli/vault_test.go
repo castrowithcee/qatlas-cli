@@ -159,6 +159,39 @@ func TestCredentialDeleteVault(t *testing.T) {
 	}
 }
 
+// A vault file others can read is refused the same way for a delete as it is for a read, once the admin
+// check has already let the command through: the widened mode is named, and so is the fix.
+func TestCredentialDeleteVaultFileTooOpenIsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes do not carry on Windows")
+	}
+	dir := vaultCredentialFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, nil); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	secretsPath := filepath.Join(v.Dir(), "secrets.json")
+	if err := os.Chmod(secretsPath, 0o644); err != nil {
+		t.Fatalf("Chmod() = %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(secretsPath, 0o600) })
+
+	code, stdout, stderr := runWithInput(t, &Options{}, "",
+		"credential", "delete", "wiki-vault", "token-id", "--config", configIn(dir))
+	if code != exitUsage {
+		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitUsage, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty", stdout)
+	}
+	if !strings.Contains(stderr, "holds vault data but its mode is 0644") {
+		t.Errorf("stderr = %q, want the widened mode reported", stderr)
+	}
+	if !strings.Contains(stderr, "chmod 600 "+secretsPath) {
+		t.Errorf("stderr = %q, want the command that fixes it", stderr)
+	}
+}
+
 // A vault unlock of anything but a locked vault reports its status instead of asking for a passphrase: a
 // vault that does not exist yet needs no unlocking.
 func TestVaultUnlockOfAnAbsentVault(t *testing.T) {
@@ -302,7 +335,9 @@ func TestVaultEncryptRefusesAnAlreadyEncryptedVault(t *testing.T) {
 		t.Fatalf("vault Set() = %v", err)
 	}
 
-	withVaultPassphrase(t, sequencedPassphrases("another-phrase", "another-phrase"))
+	// The admin check asks for the vault's current passphrase first, before 'vault encrypt' ever looks at
+	// its state; only once it unlocks does the command's own already-encrypted check run.
+	withVaultPassphrase(t, sequencedPassphrases("s3cret-phrase"))
 	code, _, stderr := runWithInput(t, &Options{}, "", "vault", "encrypt", "--config", configIn(dir))
 	if code != exitUsage {
 		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitUsage, stderr)
@@ -715,9 +750,9 @@ func TestVaultStatusAndConfigValidateNameMigrate(t *testing.T) {
 	}
 }
 
-// A second run that has to check an encrypted, locked vault for what it already holds, and finds no
-// terminal to ask the passphrase on, fails with vault-locked before it writes anything at all: not the
-// configuration, not the vault, not credentials.yaml.
+// A second run whose admin check has to unlock an encrypted, locked vault, and finds no terminal to ask
+// its passphrase on, fails with admin-required before it writes anything at all: not the configuration,
+// not the vault, not credentials.yaml.
 func TestVaultMigrateRerunLockedVaultWithoutTerminalWritesNothing(t *testing.T) {
 	dir := migrationFixture(t)
 	writeLegacyCredentials(t, dir, true)
@@ -743,15 +778,15 @@ func TestVaultMigrateRerunLockedVaultWithoutTerminalWritesNothing(t *testing.T) 
 	vaultBefore := vaultFiles(t, dir)
 
 	// The second run is a fresh process, so the vault is locked again; no terminal is attached to unlock
-	// it while checking what it already holds.
+	// it for the admin check that runs before 'vault migrate' looks at anything it already holds.
 	withVaultPassphrase(t, func(string) (string, error) { return "", vault.ErrNoTerminal })
 
 	code, stdout, stderr := runWithInput(t, migrateOptions(t, dir, store), "", "vault", "migrate", "--config", configIn(dir))
-	if code != exitRuntime {
-		t.Fatalf("exit code = %d, want %d (stdout: %s, stderr: %s)", code, exitRuntime, stdout, stderr)
+	if code != exitUsage {
+		t.Fatalf("exit code = %d, want %d (stdout: %s, stderr: %s)", code, exitUsage, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "qatlas: vault-locked:") {
-		t.Errorf("stderr = %q, want the vault-locked code", stderr)
+	if !strings.Contains(stderr, "qatlas: admin-required:") {
+		t.Errorf("stderr = %q, want the admin-required code", stderr)
 	}
 
 	configAfter, err := os.ReadFile(configIn(dir))
@@ -759,14 +794,14 @@ func TestVaultMigrateRerunLockedVaultWithoutTerminalWritesNothing(t *testing.T) 
 		t.Fatalf("read config.yaml: %v", err)
 	}
 	if string(configBefore) != string(configAfter) {
-		t.Error("config.yaml changed although the run aborted with vault-locked")
+		t.Error("config.yaml changed although the run aborted with admin-required")
 	}
 	legacyAfter, err := os.ReadFile(filepath.Join(dir, "credentials.yaml"))
 	if err != nil {
 		t.Fatalf("read credentials.yaml: %v", err)
 	}
 	if string(legacyBefore) != string(legacyAfter) {
-		t.Error("credentials.yaml changed although the run aborted with vault-locked")
+		t.Error("credentials.yaml changed although the run aborted with admin-required")
 	}
 	vaultAfter := vaultFiles(t, dir)
 	if len(vaultBefore) != len(vaultAfter) {
@@ -774,7 +809,7 @@ func TestVaultMigrateRerunLockedVaultWithoutTerminalWritesNothing(t *testing.T) 
 	}
 	for name, data := range vaultBefore {
 		if string(data) != string(vaultAfter[name]) {
-			t.Errorf("%s changed although the run aborted with vault-locked", name)
+			t.Errorf("%s changed although the run aborted with admin-required", name)
 		}
 	}
 }

@@ -37,6 +37,8 @@ func TestCodeFor(t *testing.T) {
 		{"confirmation required", &application.ConfirmationRequiredError{Operation: "x"}, output.CodeConfirmationRequired},
 		{"policy denied", &application.PolicyDeniedError{Operation: "x"}, output.CodePolicyDenied},
 		{"invalid provider result", &application.InvalidProviderResponseError{Operation: "x"}, output.CodeInvalidProviderResult},
+		{"admin required", &application.AdminRequiredError{}, output.CodeAdminRequired},
+		{"admin required wrapped in usage", &UsageError{&application.AdminRequiredError{}}, output.CodeAdminRequired},
 		{"provider permission", &provider.Error{Class: provider.ClassPermission}, output.CodePermission},
 		{"provider not found", &provider.Error{Class: provider.ClassNotFound}, output.CodeNotFound},
 		{"provider timeout", &provider.Error{Class: provider.ClassTimeout}, output.CodeTimeout},
@@ -164,6 +166,10 @@ func TestNextStepByCodeAndRoute(t *testing.T) {
 			"run 'qatlas vault unlock' in a terminal, or press ctrl+l in 'qatlas tui'"},
 		{"MCP vault locked", &secret.VaultLockedError{Credential: "c", Role: "token"}, routeMCP,
 			"agents cannot unlock the vault; ask the user to unlock it"},
+		{"CLI admin required", &UsageError{&application.AdminRequiredError{}}, routeCLI,
+			"run the command in a terminal and enter the passphrase, or manage it in 'qatlas tui'"},
+		{"MCP admin required", &UsageError{&application.AdminRequiredError{}}, routeMCP,
+			"agents do not manage credentials or the vault; ask the user"},
 	} {
 		if got := nextStep(tt.err, tt.r); got != tt.want {
 			t.Errorf("%s: step = %q, want %q", tt.name, got, tt.want)

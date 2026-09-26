@@ -98,9 +98,11 @@ credentials:
   # unencrypted or encrypted to a passphrase, for a machine without a usable system keyring. Fill it the
   # same way, with `qatlas credential set`; storing the vault's very first secret offers a passphrase on
   # the terminal, and leaving it empty keeps the vault unencrypted. `qatlas vault status` shows whether it
-  # exists, is encrypted, and is unlocked; `qatlas vault unlock` opens it for the current process. Storing
-  # a secret never needs the passphrase, even while the vault is locked: it is queued and merged in on the
-  # next unlock. QATLAS_WIKI_STANDBY_TOKEN_ID and QATLAS_WIKI_STANDBY_TOKEN_SECRET still override it.
+  # exists, is encrypted, and is unlocked; `qatlas vault unlock` opens it for the current process. `credential
+  # set`, `credential delete`, and `vault encrypt`/`passphrase`/`decrypt`/`migrate` manage a credential or the
+  # vault and run only from an interactive terminal; where the vault is encrypted they also ask for its
+  # passphrase there, once per command. QATLAS_WIKI_STANDBY_TOKEN_ID and QATLAS_WIKI_STANDBY_TOKEN_SECRET
+  # still override it.
   wiki-standby:
     provider: bookstack
     type: vault

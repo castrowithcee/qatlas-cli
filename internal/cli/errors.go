@@ -45,6 +45,11 @@ const (
 // or a tool the request asked about.
 func nextStep(err error, r route) string {
 	switch codeFor(err) {
+	case output.CodeAdminRequired:
+		if r == routeMCP {
+			return "agents do not manage credentials or the vault; ask the user"
+		}
+		return "run the command in a terminal and enter the passphrase, or manage it in 'qatlas tui'"
 	case output.CodeVaultLocked:
 		if r == routeMCP {
 			return "agents cannot unlock the vault; ask the user to unlock it"

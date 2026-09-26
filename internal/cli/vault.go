@@ -38,12 +38,16 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"offers a passphrase the first time it stores a secret there. 'vault encrypt', 'vault passphrase',\n" +
 			"and 'vault decrypt' set, change, and remove that passphrase; 'vault migrate' carries the entries\n" +
 			"of a plaintext credentials.yaml left over from an earlier version into the vault and removes it.\n\n" +
-			"An encrypted vault needs its passphrase to answer a read, a delete, or 'vault unlock', and asks\n" +
-			"for it on the terminal, never as a command line argument, an environment variable, or a file.\n" +
-			"Without a terminal to ask on, such as an agent talking to qatlas over MCP, such an access fails\n" +
-			"with the code vault-locked; a person runs 'qatlas vault unlock' to open it, or presses ctrl+l in\n" +
-			"'qatlas tui'. Storing a secret needs no passphrase, even while the vault is locked: it is queued\n" +
-			"and merged in on the next unlock.\n\n" +
+			"'qatlas credential set', 'qatlas credential delete', and every 'vault' command but status and\n" +
+			"unlock manage a credential or the vault, keyring credentials included, and run only from an\n" +
+			"interactive terminal; where the vault is encrypted they ask for its passphrase there too, once per\n" +
+			"command and before doing anything, whatever credential they target. No terminal at all, or a wrong\n" +
+			"passphrase, fails with the code admin-required; an agent never manages a credential or the vault.\n\n" +
+			"An encrypted vault also needs its passphrase to answer a read outside such a command, and asks for\n" +
+			"it on the terminal, never as a command line argument, an environment variable, or a file. Without\n" +
+			"a terminal to ask on, such as an agent talking to qatlas over MCP, such an access fails with the\n" +
+			"code vault-locked; a person runs 'qatlas vault unlock' to open it, or presses ctrl+l in 'qatlas\n" +
+			"tui'.\n\n" +
 			"Unlocking only lasts for the current process: the next qatlas invocation asks again, until a\n" +
 			"long-lived vault process exists to hold it open. No command ever shows a stored secret back.",
 		Args: noArgs,
@@ -128,9 +132,9 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Short: "Carry the entries of a plaintext credentials.yaml into the vault",
 		Long: "Reads every entry credentials.yaml still holds, regardless of whether it was switched on, and\n" +
 			"stores each one in the vault the same way 'qatlas credential set' does: the vault's very first\n" +
-			"secret offers a passphrase on the terminal, leaving it empty keeps the vault unencrypted, and an\n" +
-			"already encrypted, locked vault takes every entry as a pending write that needs no passphrase and\n" +
-			"is merged in on the next unlock.\n\n" +
+			"secret offers a passphrase on the terminal, leaving it empty keeps the vault unencrypted. Managing\n" +
+			"an already encrypted vault needs its passphrase up front instead, asked by the admin check every\n" +
+			"'vault' command but status and unlock runs before it does anything.\n\n" +
 			"Every credential that had an entry and is still of type keyring is switched to type vault, which\n" +
 			"stops it reading the system keyring; every one of its secret roles is therefore resolved once\n" +
 			"more, the way the keyring-then-plaintext cascade always did: the keyring first, credentials.yaml\n" +
@@ -142,9 +146,9 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"switched, its deletion question answered no or never asked — is never touched that way: a role it\n" +
 			"already holds in the vault, from that earlier run or from 'qatlas credential set', keeps its value,\n" +
 			"and only a role still missing is added from credentials.yaml. Checking what the vault already\n" +
-			"holds needs it unlocked exactly like any other read: an encrypted, locked vault asks for the\n" +
-			"passphrase on the terminal, and without one to ask on the command fails with the code vault-locked\n" +
-			"before anything is written.\n\n" +
+			"holds needs it unlocked exactly like any other read, which the admin check already did before\n" +
+			"credentials.yaml was even opened; without a terminal the command fails there instead, with the\n" +
+			"code admin-required, and with a wrong passphrase with usage, before anything is written.\n\n" +
 			"The configuration file is backed up first as config.yaml.bak (mode 0600, written atomically); a\n" +
 			"failed backup stops the command before config.yaml is touched. Once every entry is written and,\n" +
 			"where the vault was not locked, verified back, deleting credentials.yaml is asked for on the\n" +
@@ -285,6 +289,9 @@ func askNewPassphrase(prompt string) (string, error) {
 }
 
 func runVaultEncrypt(c *cobra.Command, opts *Options) error {
+	if err := requireAdmin(opts); err != nil {
+		return err
+	}
 	v, err := vaultOf(opts)
 	if err != nil {
 		return err
@@ -314,6 +321,11 @@ func runVaultEncrypt(c *cobra.Command, opts *Options) error {
 }
 
 func runVaultPassphrase(c *cobra.Command, opts *Options) error {
+	// requireAdminTerminal alone: this command's own next line is already the passphrase check requireAdmin
+	// would otherwise repeat.
+	if err := requireAdminTerminal(); err != nil {
+		return err
+	}
 	v, err := vaultOf(opts)
 	if err != nil {
 		return err
@@ -350,6 +362,11 @@ func runVaultPassphrase(c *cobra.Command, opts *Options) error {
 }
 
 func runVaultDecrypt(c *cobra.Command, opts *Options, confirmed bool) error {
+	// requireAdminTerminal alone: this command's own passphrase prompt below is already the check
+	// requireAdmin would otherwise repeat.
+	if err := requireAdminTerminal(); err != nil {
+		return err
+	}
 	v, err := vaultOf(opts)
 	if err != nil {
 		return err
@@ -411,6 +428,9 @@ type migrationEntry struct{ name, role, value string }
 // overwritten by the plaintext file's copy of it: see planMigration for how an already-held role is told
 // apart from one still missing, and what a locked vault does to that check.
 func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) error {
+	if err := requireAdmin(opts); err != nil {
+		return err
+	}
 	path, err := config.Path(opts.Config)
 	if err != nil {
 		return err

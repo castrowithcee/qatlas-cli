@@ -74,6 +74,14 @@ var interactive = func() bool {
 	return false
 }
 
+// Interactive reports whether a person can be at this process's terminal, the same rule ReadPassphrase and
+// ReadConfirm use before they open one. It is exported so a caller can decide the same way before it asks
+// for anything at all: the CLI's admin check for a management command refuses one outright, with no file or
+// credential store ever touched, when this reports false.
+func Interactive() bool {
+	return interactive()
+}
+
 // openTTY opens the controlling terminal for reading and writing a prompt, independently of the process's
 // own stdin and stdout, and only for an interactive process. On Windows the console device is two files;
 // everywhere else /dev/tty is both. When neither is available, the process's own stdin is used as a last
