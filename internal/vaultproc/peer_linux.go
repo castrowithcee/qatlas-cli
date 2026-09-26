@@ -1,0 +1,107 @@
+//go:build linux
+
+package vaultproc
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"net"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
+)
+
+// deletedSuffix is what the kernel appends to /proc/<pid>/exe once the program file was removed or
+// replaced, as an update does.
+const deletedSuffix = " (deleted)"
+
+// VerifyProgram checks the process at the other end of conn, a Unix socket connection, on either side: it
+// must run under the same user id as this process, and it must run this very program, the file
+// /proc/self/exe points to. The kernel reports the peer through SO_PEERCRED: the process that connected,
+// seen from the server, and the process that listens, seen from the client.
+//
+// The program is compared by the path the kernel reports and by the file itself, so neither another file
+// at the same path nor the same file under another name passes. A program whose file was removed or
+// replaced since it started is refused on either side: it is a process an update left behind, and nothing
+// says what it runs any more.
+//
+// The check keeps secrets away from other programs of the same user, such as a script an agent runs. It
+// cannot stop a process of the same user that deliberately impersonates qatlas, and does not claim to.
+func VerifyProgram(conn net.Conn) error {
+	unix, ok := conn.(*net.UnixConn)
+	if !ok {
+		return fmt.Errorf("%w: not a Unix socket connection", ErrRefused)
+	}
+	raw, err := unix.SyscallConn()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrRefused, err)
+	}
+	var cred *syscall.Ucred
+	var credErr error
+	if err := raw.Control(func(fd uintptr) {
+		cred, credErr = syscall.GetsockoptUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+	}); err != nil {
+		return fmt.Errorf("%w: %w", ErrRefused, err)
+	}
+	if credErr != nil {
+		return fmt.Errorf("%w: the peer's credentials are unavailable: %w", ErrRefused, credErr)
+	}
+	return checkProcess(int(cred.Pid), cred.Uid)
+}
+
+// checkProcess compares the process pid, running as uid, with this one. It is VerifyProgram without the
+// socket, so a test can reach every refusal with a real process.
+func checkProcess(pid int, uid uint32) error {
+	if uid != uint32(os.Getuid()) {
+		return fmt.Errorf("%w: it runs as another user", ErrRefused)
+	}
+	// A peer in another PID namespace is reported as pid 0: nothing can be checked about it.
+	if pid <= 0 {
+		return fmt.Errorf("%w: its process cannot be identified", ErrRefused)
+	}
+	own, ownInfo, err := programOf("/proc/self/exe")
+	if err != nil {
+		return fmt.Errorf("%w: this program %w", ErrRefused, err)
+	}
+	peer, peerInfo, err := programOf(filepath.Join("/proc", strconv.Itoa(pid), "exe"))
+	if err != nil {
+		return fmt.Errorf("%w: its program %w", ErrRefused, err)
+	}
+	if peer != own || !os.SameFile(peerInfo, ownInfo) {
+		return fmt.Errorf("%w: it runs another program", ErrRefused)
+	}
+	return nil
+}
+
+// programOf reads the program a /proc/<pid>/exe link points to, both as the path the kernel reports and as
+// the file.
+func programOf(link string) (string, fs.FileInfo, error) {
+	path, err := os.Readlink(link)
+	if err != nil {
+		return "", nil, errors.New("cannot be read")
+	}
+	if strings.HasSuffix(path, deletedSuffix) {
+		return "", nil, errors.New("was removed or replaced since it started")
+	}
+	info, err := os.Stat(link)
+	if err != nil {
+		return "", nil, errors.New("cannot be read")
+	}
+	return path, info, nil
+}
+
+// Harden keeps other processes of the same user from reading this process's memory and the system from
+// writing it to a core dump: it clears the dumpable flag, which puts /proc/<pid>/mem and ptrace out of
+// their reach. The vault process calls it before it takes any secret.
+//
+// The flag hides /proc/<pid>/exe from the same user as well, so a client cannot check a hardened server
+// with VerifyProgram: the link cannot be read, and the check refuses.
+func Harden() error {
+	if _, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, syscall.PR_SET_DUMPABLE, 0, 0); errno != 0 {
+		return fmt.Errorf("cannot protect the vault process's memory: %w", errno)
+	}
+	return nil
+}
