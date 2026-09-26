@@ -678,6 +678,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
 		"github.pullrequestchecks.list", "github.pullrequestcommits.list", "github.pullrequestdiffs.get",
 		"github.pullrequestfiles.list", "github.pullrequests.get", "github.pullrequests.list",
+		"github.releaseassets.list", "github.releases.get", "github.releases.list",
 		"github.repositories.list", "github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
 		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
@@ -685,7 +686,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 84 {
+	if len(metadata.Tools) != 90 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

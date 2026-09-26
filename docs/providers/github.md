@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning, GitHub Actions, and pull request reads and changes: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, and release reads and changes: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, release reads and confirmed changes, the listed-only delete, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -23,10 +23,13 @@ profile `pull-requests-operator` adds their changes: it creates, updates, closes
 and updates its head branch with its base while the head is still a given commit. Only the merge is not in
 any profile: a connection offers it only while its `tools` list names it, because a merge into the wrong
 repository's default branch is the costliest mistake there. Its project items still see a pull request only
-as an item, and its issue and comment tools still refuse a pull request number. It never accepts a free
-filter expression, a GraphQL document, or a REST route from the caller. A `repository`, `project`, or `owner`
-argument names exactly one target, and it must lie inside the connection's targets when the connection lists
-any.
+as an item, and its issue and comment tools still refuse a pull request number. On the not-recommended profile
+`releases` it also lists the releases of a repository, reads one by identifier, tag, or as the latest
+published one, lists the metadata of a release's assets, and creates and updates releases; only a connection
+whose `tools` list names it deletes a release, because the tag it was cut from stays behind. It never accepts
+a free filter expression, a GraphQL document, or a REST route from the caller. A `repository`, `project`, or
+`owner` argument names exactly one target, and it must lie inside the connection's targets when the connection
+lists any.
 
 ## Configuration
 
@@ -185,9 +188,10 @@ and restoring stay unticked. The profile
 `github.projectteams.list` of the [teams](#project-collaborators-and-teams), and
 `github.projectworkflows.list` of the [automations](#project-automations); no profile ticks a tool with the
 effect `delete` or one that changes access. The
-profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions), and
-the not-recommended profiles `pull-requests` and `pull-requests-operator` under
-[Pull requests](#pull-requests). A profile is a
+profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions), the
+not-recommended profiles `pull-requests` and `pull-requests-operator` under
+[Pull requests](#pull-requests), and the not-recommended profile `releases` under [Releases](#releases). A
+profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
 
@@ -1024,6 +1028,98 @@ commit and merges with it in two calls on the same connection.
 | `github.pullrequestchecks.list` | `repo` | Checks: read, and Commit statuses: read |
 | `github.pullrequests.create`, `update`, `close`, `reopen`, `github.pullrequestbranches.update` | `repo` | Pull requests: read and write |
 | `github.pullrequests.merge` | `repo` | Pull requests: read and write, plus Contents: read and write |
+
+## Releases
+
+The tools of this section list, read, and change the releases of a repository and the metadata of their
+assets; asset content, tags, and release-notes generation without a release stay out of scope. The five reads
+and changes are offered by the not-recommended setup profile `releases`; deleting is in no profile, since it
+is offered only where a connection's `tools` list names `github.releases.delete`. Every route lies below the
+chosen repository; no tool accepts an owner or a free REST path.
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.releases.list` | read | safe | none | lists compact releases, in GitHub's own order |
+| `github.releases.get` | read | safe | none | reads one release by `id`, `tag`, or `latest` |
+| `github.releaseassets.list` | read | safe | none | lists the asset metadata of one release |
+| `github.releases.create` | create | non-idempotent | required | cuts one release from `tag` |
+| `github.releases.update` | update | idempotent | required | replaces fields of one release; left-out fields stay |
+
+```yaml
+connections:
+  release-reader:
+    service: github
+    credential: github-reader
+    target: repos/octo-org/example
+    permissions: [read]
+    tools: [github.releases.list, github.releases.get, github.releaseassets.list]
+```
+
+`github.releases.list` pages by GitHub's `Link` response header, like the Actions and pull request lists that
+carry no total count; a release carries its `id`, `tag`, `name` (untrusted data), whether it is a draft or a
+prerelease, its author, its times, and its URL. A draft appears only while the configured token can see it.
+`github.releases.get` takes exactly one of `id`, `tag`, or `latest`; a lookup by `tag` never finds a draft,
+because GitHub does not index a draft's tag, so a draft is only reachable by `id`. It adds the full body
+(untrusted data), `target_commitish`, and `assets_count`.
+
+```sh
+qatlas invoke github.releases.list --connection release-reader --arg limit=10
+qatlas invoke github.releases.get --connection release-reader --arg tag=v1.2.0
+qatlas invoke github.releaseassets.list --connection release-reader --arg id=1
+```
+
+`github.releaseassets.list` reads only metadata: name and label (untrusted data), size in bytes, content
+type, a digest when GitHub reports one, the download count, and times; an asset's content is never read.
+
+### Changes
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.releases.create` | create | non-idempotent | required | `tag`, `target`, `name`, `body`, `draft`, `prerelease`, `generate_notes`, `make_latest` |
+| `github.releases.update` | update | idempotent | required | replaces `name`, `body`, `tag`, `target`, `draft`, `prerelease`, or `make_latest`; left-out fields stay |
+
+`github.releases.create` requires `tag`; when the tag does not exist yet, GitHub creates it at `target` (a
+branch or a commit) once the release is published. A second create for a tag that already has a release is
+refused as `invalid-request` naming the tag, without a second attempt, since GitHub holds at most one release
+per tag. `github.releases.update` writes only the fields given; `draft: false` publishes a draft, and
+`draft: true` converts a published release back to one. `make_latest` takes `"true"`, `"false"`, or
+`"legacy"`, exactly as GitHub's REST field does.
+
+```sh
+echo '{"tag":"v1.2.0","name":"v1.2.0","draft":true}' |
+  qatlas invoke github.releases.create --connection release-operator --confirm
+echo '{"id":1,"draft":false}' | qatlas invoke github.releases.update --connection release-operator --confirm
+```
+
+`github.releases.delete` deletes one release by `id`, with its release notes and asset attachments; the tag
+it was cut from stays. It is high risk, on the scale of the [pull request merge](#merge-and-conflicts): a
+connection offers it only while its `tools` list names it, whatever its permissions, and no profile a new
+connection starts with, recommended or not, may select it. A release already deleted answers `not-found`
+naming it, like the other delete tools in this provider.
+
+```yaml
+connections:
+  release-operator:
+    service: github
+    credential: github-operator
+    target: repos/octo-org/example
+    permissions: [read, create, update]
+    tools: [github.releases.list, github.releases.get, github.releaseassets.list, github.releases.create,
+      github.releases.update]
+  release-deleter:
+    service: github
+    credential: github-operator
+    target: repos/octo-org/example
+    permissions: [read, delete]
+    tools: [github.releases.get, github.releases.delete]
+```
+
+### Tokens for releases
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.releases.list`, `get`, `github.releaseassets.list` | `repo` for a private repository; `public_repo` for a public one | Contents: read |
+| `github.releases.create`, `update`, `delete` | `repo` | Contents: read and write |
 
 ## Workflow maintenance and Actions administration
 

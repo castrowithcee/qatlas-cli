@@ -28,9 +28,13 @@
 // closes, and reopens a pull request, and updates its head branch with its base while the head is still a
 // given commit; only merging is not in it, because a merge into the wrong repository's default branch is the
 // costliest mistake there, so only a connection whose tools list names github.pullrequests.merge offers it,
-// and it always needs the pull request's current head commit and its own confirmation. A tool that touches a
-// project and a repository checks both. Nothing here accepts a free filter expression, a GraphQL document, or
-// a route from an agent, and every target is checked against the allow-list before a credential is resolved.
+// and it always needs the pull request's current head commit and its own confirmation. The not-recommended
+// setup profile releases lists releases, reads one by identifier, tag, or as the latest published one, lists
+// the metadata of a release's assets, and creates and updates releases; only a connection whose tools list
+// names it deletes a release, because the tag it was cut from stays behind and the notes and attachments do
+// not. A tool that touches a project and a repository checks both. Nothing here accepts a free filter
+// expression, a GraphQL document, or a route from an agent, and every target is checked against the
+// allow-list before a credential is resolved.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -325,7 +329,9 @@ func Register(reg *capability.Registry) error {
 				"classic token, or Pull requests: read, Checks: read, and Commit statuses: read on a " +
 				"fine-grained token; pull request changes need repo on a classic token, or Pull requests: " +
 				"read and write on a fine-grained token; a merge additionally needs Contents: read and " +
-				"write; keep those in a credential of their own",
+				"write; release reads need repo or public_repo on a classic token, or Contents: read on a " +
+				"fine-grained token; release changes, including delete, need repo on a classic token, or " +
+				"Contents: read and write on a fine-grained token; keep those in a credential of their own",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -420,6 +426,14 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID,
 				pullChecksList.ID, pullsCreate.ID, pullsUpdate.ID, pullsClose.ID, pullsReopen.ID,
 				pullBranchesUpdate.ID},
+		}, {
+			ID: "releases", Title: "Releases",
+			Description: "lists releases and their asset metadata, reads one release by identifier, tag, or " +
+				"as the latest published one, and creates and updates releases; every change needs its own " +
+				"confirmation, and deleting stays unticked, since it is offered only where a connection's " +
+				"tools list names github.releases.delete",
+			Tools: []string{releasesList.ID, releasesGet.ID, releaseAssetsList.ID, releasesCreate.ID,
+				releasesUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -444,7 +458,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
 	}, slices.Concat(itemOperations(), lifecycleOperations(), fieldOperations(), viewOperations(),
 		statusOperations(), accessOperations(), automationOperations(), actionsOperations(),
-		maintenanceOperations(), pullRequestOperations())...)
+		maintenanceOperations(), pullRequestOperations(), releaseOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1154,6 +1168,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := pullsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := releasesSubject(parts[2]); what != "" {
 			s.what = what
 		}
 	}
