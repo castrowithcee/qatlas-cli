@@ -87,9 +87,9 @@ credentials:
   #     printf %s "$TOKEN_SECRET" | qatlas credential set wiki-reader token-secret
   #
   # QATLAS_WIKI_READER_TOKEN_ID and QATLAS_WIKI_READER_TOKEN_SECRET still override the keyring when
-  # they are set; the derived name is always QATLAS_<CREDENTIAL>_<ROLE>. Without a usable keyring,
-  # `qatlas credential set --plaintext` writes an unencrypted file beside this one instead, and only
-  # when asked for; QATLAS_CREDENTIAL_STORE=none switches the keyring off for a run, for example in CI.
+  # they are set; the derived name is always QATLAS_<CREDENTIAL>_<ROLE>. Without a usable keyring, use
+  # type: vault below instead; QATLAS_CREDENTIAL_STORE=none switches the keyring off for a run, for
+  # example in CI.
   wiki-reader:
     provider: bookstack
     type: keyring

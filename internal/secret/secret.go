@@ -3,11 +3,15 @@
 //
 //  1. the environment variable
 //  2. the system credential store
-//  3. the plaintext fallback file, and only when it was switched on explicitly
+//  3. the plaintext fallback file, read for compatibility while it still exists, and only when it was
+//     switched on; nothing in this build writes it any more, and 'qatlas vault migrate' carries its
+//     content into the vault and removes it
 //
-// The order follows the rule that the more explicit and the more short-lived source wins, the same order
-// gh, the AWS CLI and kubectl use. Because overriding is allowed, every caller is told which stage
-// delivered: otherwise a forgotten environment variable would shadow the credential store silently.
+// A credential of type vault is resolved from the vault alone, unencrypted or encrypted to a passphrase, and
+// never falls through to the store or the plaintext file; see WithVault. The order otherwise follows the
+// rule that the more explicit and the more short-lived source wins, the same order gh, the AWS CLI and
+// kubectl use. Because overriding is allowed, every caller is told which stage delivered: otherwise a
+// forgotten environment variable would shadow the credential store silently.
 //
 // The cascade describes how a credential is resolved that does not say where its secrets are. A credential
 // of type env does say it: it names its variable, and that description is exhaustive. Resolution for such a
@@ -501,6 +505,16 @@ type Placement struct {
 // Settled reports whether every place could be asked, so Holding is the whole truth.
 func (p Placement) Settled() bool { return len(p.Unknown) == 0 }
 
+// StoreValue reads one (credential, role) pair directly from the system credential store, bypassing the
+// environment variable and the plaintext fallback. It answers "what does the store hold", the value Stored
+// deliberately discards, for a caller that has to move that exact value elsewhere: 'qatlas vault migrate'
+// uses it to resolve the value the keyring-then-plaintext cascade used to deliver for a role, the one a
+// type change to vault must carry over, without letting a set environment variable — which would win
+// regardless of where the secret used to sit — decide what moves.
+func (r *Resolver) StoreValue(ctx context.Context, credential, role string) (string, StoreState) {
+	return r.fromStore(ctx, StoreKey(credential, role))
+}
+
 // Stored reports which places keep an entry for one (credential, role) pair.
 //
 // The environment is deliberately not consulted. A variable lives in the user's shell, it is not something
@@ -543,7 +557,7 @@ func (r *Resolver) Stored(credential, role string) Placement {
 }
 
 // Set stores a secret for one (credential, role) pair in the system credential store. It never writes the
-// plaintext fallback: that needs SetPlaintext and therefore an explicit decision.
+// plaintext fallback: nothing in this build does any more, that file is read-only compatibility now.
 func (r *Resolver) Set(credential, role, value string) error {
 	r.register(value)
 	if err := r.store.Set(StoreKey(credential, role), value); err != nil {
@@ -551,17 +565,6 @@ func (r *Resolver) Set(credential, role, value string) error {
 	}
 	r.storeAnswered()
 	return nil
-}
-
-// SetPlaintext writes a secret into the plaintext fallback file and switches that fallback on. It is the
-// named way out for a machine without a credential store, and the only way the file ever comes into
-// existence.
-func (r *Resolver) SetPlaintext(credential, role, value string) error {
-	if r.plaintext == nil {
-		return ErrUnavailable
-	}
-	r.register(value)
-	return r.plaintext.Set(credential, role, value)
 }
 
 // SetVault stores a secret for one (credential, role) pair in the vault. offer is asked for a passphrase

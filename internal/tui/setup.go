@@ -161,7 +161,7 @@ func (m *Model) setupPage(step int) []field {
 		fields := []field{
 			choiceField("credential", credentials, credentials[0]).withHint(setupCredentialHint),
 			textField("name", "", false).withHint(nameHint),
-			storageField(storageKeyring),
+			storageField(storageKeyring, false),
 		}
 		// Every role has a masked row and a row for the name of a variable. Only one of them is shown, so
 		// what was typed as a secret is never shown as a variable name after a change of mind.
@@ -267,12 +267,6 @@ func (m *Model) setupNext() {
 			return
 		}
 		w.candidate, w.plan = candidate, plan
-	}
-	if w.step == stepCredential && w.plan.storage == storagePlaintext {
-		// Consent to an unencrypted file is asked for on its own, like in the credential form.
-		m.screen = screenPlaintextConfirm
-		m.clearMessages()
-		return
 	}
 	m.setupShow(w.step + 1)
 }
@@ -485,13 +479,7 @@ func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, plan 
 		if !ok {
 			continue
 		}
-		var err error
-		if plan.storage == storagePlaintext {
-			err = secrets.SetPlaintext(plan.credential, role, value)
-		} else {
-			err = secrets.Set(plan.credential, role, value)
-		}
-		if err != nil {
+		if err := secrets.Set(plan.credential, role, value); err != nil {
 			return rollbackSecrets(secrets, plan.credential, written,
 				fmt.Errorf("storing the secret for %s.%s: %w", plan.credential, role, err))
 		}
@@ -547,8 +535,7 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 func (m *Model) setupError(err error) string {
 	if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
 		return fmt.Sprintf("%v; nothing was saved. %s, then press enter again, or press ctrl+b to go back "+
-			"and choose %s or %s", err, secret.StoreAdvice(secret.StoreStateOf(err), platform), storageEnv,
-			storagePlaintext)
+			"and choose %s instead", err, secret.StoreAdvice(secret.StoreStateOf(err), platform), storageEnv)
 	}
 	return err.Error() + "; the configuration was not changed"
 }
@@ -575,19 +562,6 @@ func (m *Model) setupHeading(dense bool) string {
 	return heading + "\n"
 }
 
-// setupPlaintextView asks for consent to the unencrypted file before the setup moves on with it.
-func (m *Model) setupPlaintextView() string {
-	var b strings.Builder
-	b.WriteString(titleStyle.Render("Store these secrets unencrypted?") + "\n\n")
-	b.WriteString(m.wrapped(failStyle, fmt.Sprintf("This does not use the system keyring. When you save in the "+
-		"last step, the secrets of %s are written as readable text for your user account into %s.",
-		m.wizard.plan.credential, m.plaintextPath())) + "\n")
-	b.WriteString(m.indented("Choose no to stay on this step and pick the system keyring or environment "+
-		"variables.") + "\n")
-	b.WriteString(m.hint("y continue · n/esc stay on this step"))
-	return b.String()
-}
-
 // summaryView shows what the setup saves. It names where every secret goes, never what it is.
 func (m *Model) summaryView() string {
 	w := m.wizard
@@ -598,10 +572,6 @@ func (m *Model) summaryView() string {
 	}
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
 		b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
-	}
-	if w.plan.storage == storagePlaintext && w.saved == "" {
-		b.WriteString(m.indentedWith(warningStyle, "warning: the secrets are written unencrypted into "+
-			m.plaintextPath()) + "\n")
 	}
 	keys := "enter save · ctrl+b back · esc cancel setup · alt+1-4 section"
 	switch {
@@ -641,8 +611,6 @@ func (m *Model) summaryRows() []string {
 			names[i] = role + " from $" + cfg.Credentials[plan.credential].Values[role]
 		}
 		secrets = placeEnv + ": " + strings.Join(names, ", ")
-	case plan.storage == storagePlaintext:
-		secrets = placePlaintext + ": " + roles
 	default:
 		secrets = placeKeyring + ": " + roles
 	}

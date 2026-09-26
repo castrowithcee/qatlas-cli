@@ -53,9 +53,7 @@ func TestCascadeOrder(t *testing.T) {
 		if err := store.Set(StoreKey(credName, role), canaryStore); err != nil {
 			t.Fatalf("Set() = %v", err)
 		}
-		if err := file.Set(credName, role, canaryPlaintext); err != nil {
-			t.Fatalf("Set() = %v", err)
-		}
+		setFixture(t, file, credName, role, canaryPlaintext)
 
 		got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
@@ -72,9 +70,7 @@ func TestCascadeOrder(t *testing.T) {
 		if err := store.Set(StoreKey(credName, role), canaryStore); err != nil {
 			t.Fatalf("Set() = %v", err)
 		}
-		if err := file.Set(credName, role, canaryPlaintext); err != nil {
-			t.Fatalf("Set() = %v", err)
-		}
+		setFixture(t, file, credName, role, canaryPlaintext)
 
 		got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
@@ -91,9 +87,7 @@ func TestCascadeOrder(t *testing.T) {
 
 	t.Run("the switched-on file delivers when nothing else does", func(t *testing.T) {
 		r, _, file, _ := fixture(t, nil)
-		if err := file.Set(credName, role, canaryPlaintext); err != nil {
-			t.Fatalf("Set() = %v", err)
-		}
+		setFixture(t, file, credName, role, canaryPlaintext)
 
 		got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
@@ -110,9 +104,7 @@ func TestCascadeOrder(t *testing.T) {
 func TestUnavailableStoreFallsThrough(t *testing.T) {
 	r, store, file, _ := fixture(t, nil)
 	store.Fail(ErrUnavailable)
-	if err := file.Set(credName, role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
+	setFixture(t, file, credName, role, canaryPlaintext)
 
 	got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
@@ -448,7 +440,7 @@ func TestDeliveredValuesAreRedacted(t *testing.T) {
 			_ = s.Set(StoreKey(credName, role), canaryStore)
 		}, nil},
 		{"plaintext file", canaryPlaintext, func(_ *Resolver, _ *MemoryStore, f *File) {
-			_ = f.Set(credName, role, canaryPlaintext)
+			setFixture(t, f, credName, role, canaryPlaintext)
 		}, nil},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -490,7 +482,7 @@ func TestStatus(t *testing.T) {
 	}
 }
 
-// Writing goes to the store; only SetPlaintext ever touches the file.
+// Writing goes to the store; nothing in this build writes the plaintext file any more.
 func TestSetAndDelete(t *testing.T) {
 	r, store, file, red := fixture(t, nil)
 
@@ -546,9 +538,7 @@ func TestEnvCredentialNeverFallsThrough(t *testing.T) {
 	if err := store.Set(StoreKey("reader", role), canaryStore); err != nil {
 		t.Fatalf("Set() = %v", err)
 	}
-	if err := file.Set("reader", role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
+	setFixture(t, file, "reader", role, canaryPlaintext)
 
 	value, err := r.Resolve(context.Background(), "reader", envCred("WIKI_TOKEN_ID"), role)
 
@@ -581,9 +571,7 @@ func TestPlaintextRefusesAWidenedMode(t *testing.T) {
 		t.Skip("file modes do not carry on Windows")
 	}
 	f := tempFile(t)
-	if err := f.Set(credName, role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
+	setFixture(t, f, credName, role, canaryPlaintext)
 	if err := os.Chmod(f.Path(), 0o644); err != nil {
 		t.Fatalf("Chmod() = %v", err)
 	}
@@ -611,10 +599,10 @@ func TestPlaintextRefusesAWidenedMode(t *testing.T) {
 		t.Errorf("error = %v, want the permission problem to be reachable", err)
 	}
 
-	// Writing through the same file reports the fix instead of quietly repairing it.
+	// Deleting through the same file reports the fix instead of quietly repairing it.
 	var perm *PermissionError
-	if err := f.Set(credName, role, canaryPlaintext); !errors.As(err, &perm) {
-		t.Fatalf("Set() = %v, want a *PermissionError", err)
+	if err := f.Delete(credName, role); !errors.As(err, &perm) {
+		t.Fatalf("Delete() = %v, want a *PermissionError", err)
 	}
 	if !strings.Contains(perm.Error(), "chmod 600 "+f.Path()) {
 		t.Errorf("error = %q, want the command to fix it", perm)
@@ -708,9 +696,7 @@ func TestDeleteReportsWhatItCouldNotClear(t *testing.T) {
 	widened := func(t *testing.T) *File {
 		t.Helper()
 		f := tempFile(t)
-		if err := f.Set(credName, role, canaryPlaintext); err != nil {
-			t.Fatalf("Set() = %v", err)
-		}
+		setFixture(t, f, credName, role, canaryPlaintext)
 		if err := os.Chmod(f.Path(), 0o644); err != nil {
 			t.Fatalf("Chmod() = %v", err)
 		}
@@ -887,9 +873,7 @@ func TestStoreDeadline(t *testing.T) {
 		store.Fail(fmt.Errorf("%w: %w", ErrUnavailable, ErrTimedOut))
 		r, _, file, _ := fixture(t, nil)
 		r = NewWith(nil, store, file, nil)
-		if err := file.Set(credName, role, canaryPlaintext); err != nil {
-			t.Fatalf("Set() = %v", err)
-		}
+		setFixture(t, file, credName, role, canaryPlaintext)
 
 		got, err := r.Resolve(context.Background(), credName, keyringCred(), role)
 
@@ -1054,9 +1038,7 @@ func TestStoredAsksThePlacesNotTheCascade(t *testing.T) {
 			t.Skip("the mode check does not apply on this platform")
 		}
 		r, _, file, _ := fixture(t, nil)
-		if err := file.Set(credName, role, canaryPlaintext); err != nil {
-			t.Fatalf("Set() = %v", err)
-		}
+		setFixture(t, file, credName, role, canaryPlaintext)
 		if err := os.Chmod(file.Path(), 0o644); err != nil {
 			t.Fatalf("chmod: %v", err)
 		}
@@ -1074,9 +1056,7 @@ func TestStoredAsksThePlacesNotTheCascade(t *testing.T) {
 
 	t.Run("a fallback that was never switched on still holds what is in it", func(t *testing.T) {
 		r, _, file, _ := fixture(t, nil)
-		if err := file.Set(credName, role, canaryPlaintext); err != nil {
-			t.Fatalf("Set() = %v", err)
-		}
+		setFixture(t, file, credName, role, canaryPlaintext)
 		// Switching the fallback off makes it deliver nothing, but the secret is still on disk.
 		body, err := os.ReadFile(file.Path())
 		if err != nil {

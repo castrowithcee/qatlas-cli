@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
 func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
@@ -60,6 +63,10 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 				if warning := cfg.IdleWarning(name); warning != "" {
 					fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
 				}
+			}
+			if legacyPath := filepath.Join(filepath.Dir(path), secret.FileName); fileExists(legacyPath) {
+				fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s still holds plaintext secrets; run 'qatlas "+
+					"vault migrate' to move them into the vault\n", opts.Redactor.Apply(legacyPath))
 			}
 			if !secrets {
 				if opts.Format == output.FormatTable {
@@ -131,6 +138,13 @@ func sortedConnections(cfg *config.Config) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// fileExists reports whether path names a file or directory that is there, without saying anything about
+// its content: the caller of this helper only ever asks whether something must still be migrated away.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func noArgs(_ *cobra.Command, args []string) error {

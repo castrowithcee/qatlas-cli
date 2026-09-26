@@ -22,10 +22,8 @@ type Secrets interface {
 	Status(credential string, cred config.Credential, role string) (secret.Source, []string)
 	Stored(credential, role string) secret.Placement
 	Set(credential, role, value string) error
-	SetPlaintext(credential, role, value string) error
 	Delete(credential, role string) ([]secret.Source, error)
 	Lookup(envName string) bool
-	Plaintext() *secret.File
 }
 
 // ErrNoResolver reports an editor that was started without a credential resolver. The configuration stays
@@ -39,10 +37,8 @@ func (noSecrets) Status(string, config.Credential, string) (secret.Source, []str
 	return secret.SourceMissing, []string{"no credential resolver"}
 }
 func (noSecrets) Set(string, string, string) error               { return ErrNoResolver }
-func (noSecrets) SetPlaintext(string, string, string) error      { return ErrNoResolver }
 func (noSecrets) Delete(string, string) ([]secret.Source, error) { return nil, ErrNoResolver }
 func (noSecrets) Lookup(string) bool                             { return false }
-func (noSecrets) Plaintext() *secret.File                        { return nil }
 
 // Stored reports both places as unasked, because without a resolver neither can be asked. A caller that
 // must not orphan a secret therefore stops, which is the right answer under total ignorance.
@@ -61,8 +57,10 @@ const (
 )
 
 // What the row of a keyring role says once the resolver has answered. The system keyring is the
-// recommended place, so each state is said in its terms; the environment and the unencrypted file are
-// named as what they are, an override and a fallback.
+// recommended place, so each state is said in its terms; the environment is named as what it is, an
+// override. unencrypted file is shown only for a role that still resolves from a plaintext credentials.yaml
+// left over from an earlier version: this editor offers no way to write one any more, so the state is read
+// only, a nudge towards 'qatlas vault migrate' rather than a place a role can be sent to.
 const (
 	stateStored      = "in system keyring"
 	stateOverride    = "environment variable, overrides keyring"
@@ -75,36 +73,47 @@ const (
 
 // Where the secrets of a credential are kept. The guided setup and the credential form offer the same row,
 // in the same order and with the same hint, and say it in these words rather than as the type the file
-// stores: the system keyring and the unencrypted file are both type keyring there, environment variables
-// type env.
+// stores: system keyring and environment variables are the only places a new secret can be sent to. vault
+// is not offered there: it is shown only as the unchanged, not newly choosable state of a credential that
+// is already of type vault, for example after 'qatlas vault migrate', so opening and saving its form here
+// never silently turns it into a keyring credential. Setting up or changing a vault credential itself stays
+// outside this editor for now.
 const (
 	storageLabel = "secrets"
 
 	placeKeyring   = "system keyring"
 	placeEnv       = "environment variables"
 	placePlaintext = "unencrypted file"
+	placeVault     = "vault"
 
-	storageKeyring   = placeKeyring + " (recommended)"
-	storageEnv       = placeEnv
-	storagePlaintext = placePlaintext + " (asks first)"
+	storageKeyring = placeKeyring + " (recommended)"
+	storageEnv     = placeEnv
+	storageVault   = placeVault
 )
 
 // storageHint says what each place for new secrets is for. The system keyring is named as this platform
 // calls it, so a user recognises it as something the machine already has rather than something to set up.
 var storageHint = "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
-	"machine, with nothing to set up or export; environment variables suit CI and containers; unencrypted " +
-	"file is the last resort without a keyring and asks first"
+	"machine, with nothing to set up or export; environment variables suit CI and containers"
 
-// storageField is the row that chooses where the secrets of a credential are kept.
-func storageField(value string) field {
-	return choiceField(storageLabel, []string{storageKeyring, storageEnv, storagePlaintext}, value).
-		withHint(storageHint)
+// storageField is the row that chooses where the secrets of a credential are kept. vaultCurrent is true
+// only for a credential that is already of type vault: the row then offers vault too, so it keeps showing
+// as the current, unchanged value, but a new or non-vault credential never offers it.
+func storageField(value string, vaultCurrent bool) field {
+	choices := []string{storageKeyring, storageEnv}
+	if vaultCurrent {
+		choices = []string{storageVault, storageKeyring, storageEnv}
+	}
+	return choiceField(storageLabel, choices, value).withHint(storageHint)
 }
 
 // storageType is the credential type the file stores for a choice of the storage row.
 func storageType(choice string) string {
-	if choice == storageEnv {
+	switch choice {
+	case storageEnv:
 		return config.CredentialTypeEnv
+	case storageVault:
+		return config.CredentialTypeVault
 	}
 	return config.CredentialTypeKeyring
 }
@@ -113,8 +122,11 @@ func storageType(choice string) string {
 // as kept in the unencrypted file once a role of it resolves from there, by the resolver's last answer; the
 // question is never asked here, because that would block the editor on the store.
 func (m *Model) storagePlace(name string, cred config.Credential) string {
-	if cred.Type == config.CredentialTypeEnv {
+	switch cred.Type {
+	case config.CredentialTypeEnv:
 		return placeEnv
+	case config.CredentialTypeVault:
+		return placeVault
 	}
 	for _, role := range m.credentialRoles(m.credentialProvider(name, cred)) {
 		if m.sources[secret.StoreKey(name, role)] == secret.SourcePlaintext {
@@ -124,13 +136,16 @@ func (m *Model) storagePlace(name string, cred config.Credential) string {
 	return placeKeyring
 }
 
-// storageChoice is the choice of the storage row that stands for a place.
+// storageChoice is the choice of the storage row that stands for a place. A role that currently resolves
+// from a leftover plaintext credentials.yaml still shows as system keyring here: that file's entries belong
+// to a keyring credential, and writing a new secret for it goes to the keyring, the only place this row can
+// still send it to.
 func storageChoice(place string) string {
 	switch place {
 	case placeEnv:
 		return storageEnv
-	case placePlaintext:
-		return storagePlaintext
+	case placeVault:
+		return storageVault
 	}
 	return storageKeyring
 }
@@ -269,7 +284,7 @@ func (m *Model) handleWritten(msg writtenMsg) tea.Cmd {
 
 // askSecret opens the masked prompt for one role. The typed value lives in this one input and nowhere else
 // in the model, it is drawn masked, and it is dropped the moment the prompt closes.
-func (m *Model) askSecret(role string, plaintext bool) {
+func (m *Model) askSecret(role string) {
 	in := textinput.New()
 	in.Prompt = ""
 	in.EchoMode = textinput.EchoPassword
@@ -278,35 +293,8 @@ func (m *Model) askSecret(role string, plaintext bool) {
 
 	m.secretInput = in
 	m.secretRole = role
-	m.secretPlain = plaintext
 	m.screen = screenSecret
 	m.clearMessages()
-}
-
-// confirmPlaintext separates curiosity about the unencrypted file from consent to write an unencrypted secret. The
-// confirmation itself writes nothing and does not even ask for the value.
-func (m *Model) confirmPlaintext(role string) {
-	m.secretRole = role
-	m.screen = screenPlaintextConfirm
-	m.clearMessages()
-}
-
-func (m *Model) updatePlaintextConfirm(key tea.KeyMsg) tea.Cmd {
-	switch key.String() {
-	case "y":
-		if m.wizard != nil {
-			// The guided setup asks as its credential step is left and writes the secrets only on save.
-			m.setupShow(stepCredential + 1)
-			return nil
-		}
-		m.askSecret(m.secretRole, true)
-	case "n", "esc":
-		m.screen = screenForm
-		m.status = "Cancelled; nothing was written"
-	case "ctrl+c":
-		return m.quit()
-	}
-	return nil
 }
 
 // updateSecret handles the masked prompt.
@@ -330,7 +318,7 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 			m.fail = "nothing was typed, so nothing was stored"
 			return nil
 		}
-		return m.storeSecret(m.editing, m.secretRole, value, m.secretPlain)
+		return m.storeSecret(m.editing, m.secretRole, value)
 	}
 
 	var cmd tea.Cmd
@@ -340,26 +328,18 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 
 // storeSecret hands one secret to the resolver. The write may reach the platform store, so it runs as a
 // command and the editor stays usable while it does.
-func (m *Model) storeSecret(credential, role, value string, plaintext bool) tea.Cmd {
+func (m *Model) storeSecret(credential, role, value string) tea.Cmd {
 	where := "system keyring"
-	if plaintext {
-		where = placePlaintext
-	}
 	m.writes++
 	m.busy = fmt.Sprintf("storing the secret for %s.%s in the %s", credential, role, where)
 
 	secrets := m.secrets
 	return func() tea.Msg {
-		msg := writtenMsg{
+		return writtenMsg{
 			credential: credential, role: role,
 			done: fmt.Sprintf("Stored %s.%s in the %s", credential, role, where),
+			err:  secrets.Set(credential, role, value),
 		}
-		if plaintext {
-			msg.err = secrets.SetPlaintext(credential, role, value)
-		} else {
-			msg.err = secrets.Set(credential, role, value)
-		}
-		return msg
 	}
 }
 
@@ -391,9 +371,8 @@ func joinSources(sources []secret.Source) string {
 // explain turns a store failure into the way out.
 //
 // A machine without a running secret service must not be a dead end in the editor either. The message says
-// what the keyring's state means on this platform and how to fix it, names the derived variable as the
-// other way, and names the plaintext file only as a deliberate last resort behind its own confirmation.
-// It is built from the class of the failure and never carries a value.
+// what the keyring's state means on this platform and how to fix it, and names the derived variable as the
+// other way. It is built from the class of the failure and never carries a value.
 func (m *Model) explain(err error, credential, role string) string {
 	if errors.Is(err, secret.ErrNoEntry) {
 		return fmt.Sprintf("no stored secret for %s.%s", credential, role)
@@ -414,16 +393,7 @@ func (m *Model) explain(err error, credential, role string) string {
 	if state != secret.StoreOff {
 		text += ", then retry " + retry
 	}
-	return fmt.Sprintf("%s. Alternatively export %s. Only if you deliberately accept an unencrypted file, "+
-		"choose %s in the %s row and press s; it asks again before writing %s", text,
-		secret.DerivedEnvName(credential, role), storagePlaintext, storageLabel, m.plaintextPath())
-}
-
-func (m *Model) plaintextPath() string {
-	if f := m.secrets.Plaintext(); f != nil {
-		return f.Path()
-	}
-	return secret.FileName
+	return fmt.Sprintf("%s. Alternatively export %s.", text, secret.DerivedEnvName(credential, role))
 }
 
 // guardTypeChange refuses to turn a keyring credential into an env credential behind the user's back while
@@ -599,9 +569,6 @@ func (m *Model) secretNextStep(credential, role string) string {
 		return ""
 	}
 	env := secret.DerivedEnvName(credential, role)
-	if source == secret.SourceMissing && m.fieldValue(storageLabel) == storagePlaintext {
-		return "next: press s to store it in the " + placePlaintext + "; it asks first"
-	}
 	switch source {
 	case secret.SourceEnv:
 		// The override stays visible: it wins over the keyring for as long as it is set.
@@ -644,11 +611,11 @@ func (m *Model) secretRowHint(credential, role string, lead bool) string {
 	return strings.Join(parts, "; ")
 }
 
-// secretKeys names the keys of a secret row. s stores where the storage row says, so the unencrypted file
-// is reached by choosing it there, the same way the guided setup reaches it, and still asks first.
+// secretKeys names the keys of a secret row: s always stores into the system keyring, the only place a new
+// secret can be sent to from here.
 func (m *Model) secretKeys() string {
-	if m.fieldValue(storageLabel) == storagePlaintext {
-		return "s store in " + storagePlaintext + " · x remove"
+	if m.credentialType() == config.CredentialTypeVault {
+		return "s/x managed with 'qatlas credential set/delete'"
 	}
 	return "s store in " + storageKeyring + " · x remove"
 }
@@ -663,18 +630,23 @@ func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 		// A secret stored under a name that was never saved would sit in the store with nothing pointing
 		// at it, which is the orphaning this editor exists to avoid.
 		m.fail = "save the credential first, then store its secrets: a credential kept in the " +
-			placeKeyring + " or an " + placePlaintext + " saves without any value, and its secrets are added " +
-			"afterwards"
+			placeKeyring + " saves without any value, and its secrets are added afterwards"
+		return nil
+	}
+	if m.credentialType() == config.CredentialTypeVault {
+		// A vault credential's secrets are not this editor's to write or remove yet: setting up or
+		// changing the vault itself stays outside it, so s and x point at the CLI instead of reaching for
+		// the system keyring, which would be the wrong place entirely.
+		verb := map[string]string{"s": "set", "x": "delete"}[action]
+		m.clearMessages()
+		m.status = fmt.Sprintf("its secrets are managed outside this editor; run 'qatlas credential %s %s %s'",
+			verb, m.editing, role)
 		return nil
 	}
 
 	switch action {
 	case "s":
-		if m.fieldValue(storageLabel) == storagePlaintext {
-			m.confirmPlaintext(role)
-			return nil
-		}
-		m.askSecret(role, false)
+		m.askSecret(role)
 	case "x":
 		// Removing a stored secret is irreversible, so it is confirmed like every other deletion here.
 		m.confirmRole = role

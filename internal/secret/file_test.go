@@ -14,16 +14,38 @@ func tempFile(t *testing.T) *File {
 	return NewFile(filepath.Join(t.TempDir(), FileName))
 }
 
-// The file comes into existence only through an explicit write, with the switch set and mode 0600.
+// setFixture writes one entry the way the removed Set once did, switch turned on. Nothing in this build
+// writes credentials.yaml any more; this stands in for that legacy writer so the tests can still build the
+// fixtures the compatibility reader, Delete, and Holds are checked against.
+func setFixture(t *testing.T, f *File, credential, role, value string) {
+	t.Helper()
+	c, err := f.load()
+	if err != nil && !errors.Is(err, ErrDisabled) && !errors.Is(err, ErrNoEntry) {
+		t.Fatalf("load fixture: %v", err)
+	}
+	if c.Credentials == nil {
+		c.Credentials = map[string]map[string]string{}
+	}
+	if c.Credentials[credential] == nil {
+		c.Credentials[credential] = map[string]string{}
+	}
+	c.Credentials[credential][role] = value
+	c.Version = fileVersion
+	c.AllowPlaintext = true
+	if err := f.write(c); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+}
+
+// The compatibility reader delivers only what setFixture, standing in for the removed writer, put on disk
+// with the switch set, at mode 0600.
 func TestFileSet(t *testing.T) {
 	f := tempFile(t)
 
 	if _, err := os.Stat(f.Path()); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("the file exists before anything was written: %v", err)
 	}
-	if err := f.Set(credName, role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
+	setFixture(t, f, credName, role, canaryPlaintext)
 
 	info, err := os.Stat(f.Path())
 	if err != nil {
@@ -72,9 +94,7 @@ func TestFileGetStates(t *testing.T) {
 
 	t.Run("a switched-on file without the entry", func(t *testing.T) {
 		f := tempFile(t)
-		if err := f.Set(credName, "token-secret", canaryPlaintext); err != nil {
-			t.Fatalf("Set() = %v", err)
-		}
+		setFixture(t, f, credName, "token-secret", canaryPlaintext)
 		if _, err := f.Get(credName, role); !errors.Is(err, ErrNoEntry) {
 			t.Errorf("Get() = %v, want ErrNoEntry", err)
 		}
@@ -98,12 +118,8 @@ func TestFileGetStates(t *testing.T) {
 // Deleting the last entry removes the file, so no switched-on plaintext file stays behind empty.
 func TestFileDelete(t *testing.T) {
 	f := tempFile(t)
-	if err := f.Set(credName, role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
-	if err := f.Set(credName, "token-secret", canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
+	setFixture(t, f, credName, role, canaryPlaintext)
+	setFixture(t, f, credName, "token-secret", canaryPlaintext)
 
 	if err := f.Delete(credName, role); err != nil {
 		t.Fatalf("Delete() = %v", err)
@@ -140,12 +156,8 @@ func switchOff(t *testing.T, f *File) {
 // it can be cleaned up: an entry named as present that nothing can remove is a dead end.
 func TestInertFileCanStillBeCleanedUp(t *testing.T) {
 	f := tempFile(t)
-	if err := f.Set(credName, role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
-	if err := f.Set("other", role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
+	setFixture(t, f, credName, role, canaryPlaintext)
+	setFixture(t, f, "other", role, canaryPlaintext)
 	switchOff(t, f)
 
 	// It delivers nothing, and it does hold something: two different questions, two different answers.
@@ -177,42 +189,14 @@ func TestInertFileCanStillBeCleanedUp(t *testing.T) {
 	}
 }
 
-// A write must not drop what the file already holds, whatever the switch says.
-func TestSetKeepsWhatTheFileAlreadyHolds(t *testing.T) {
-	f := tempFile(t)
-	if err := f.Set(credName, role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
-	if err := f.Set("other", role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
-	switchOff(t, f)
-
-	if err := f.Set(credName, "token-secret", canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
-
-	for _, pair := range [][2]string{{credName, role}, {credName, "token-secret"}, {"other", role}} {
-		if holds, err := f.Holds(pair[0], pair[1]); err != nil || !holds {
-			t.Errorf("Holds(%s, %s) = %v, %v; want the entry kept", pair[0], pair[1], holds, err)
-		}
-	}
-	// Writing is the explicit decision that switches the fallback back on, so it delivers again.
-	if _, err := f.Get(credName, role); err != nil {
-		t.Errorf("Get() = %v, want the switch turned on by the write", err)
-	}
-}
-
-// The mode check governs every operation, not only reading: a file others can read is not written to and
-// not deleted from either, and the refusal names the fix.
+// The mode check governs every read and delete: a file others can read is not read from and not deleted
+// from either, and the refusal names the fix.
 func TestWidenedModeRefusesEveryOperation(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("file modes do not carry on Windows")
 	}
 	f := tempFile(t)
-	if err := f.Set(credName, role, canaryPlaintext); err != nil {
-		t.Fatalf("Set() = %v", err)
-	}
+	setFixture(t, f, credName, role, canaryPlaintext)
 	if err := os.Chmod(f.Path(), 0o644); err != nil {
 		t.Fatalf("chmod: %v", err)
 	}
@@ -220,9 +204,6 @@ func TestWidenedModeRefusesEveryOperation(t *testing.T) {
 	var tooOpen *PermissionError
 	if _, err := f.Get(credName, role); !errors.As(err, &tooOpen) {
 		t.Errorf("Get() = %v, want the mode refusal", err)
-	}
-	if err := f.Set(credName, role, canaryPlaintext); !errors.As(err, &tooOpen) {
-		t.Errorf("Set() = %v, want the mode refusal", err)
 	}
 	if err := f.Delete(credName, role); !errors.As(err, &tooOpen) {
 		t.Errorf("Delete() = %v, want the mode refusal", err)
@@ -233,4 +214,44 @@ func TestWidenedModeRefusesEveryOperation(t *testing.T) {
 	if !strings.Contains(tooOpen.Error(), "chmod 600") {
 		t.Errorf("error = %q, want it to name the fix", tooOpen)
 	}
+}
+
+// All is how 'qatlas vault migrate' reads what to carry over: every entry on disk, regardless of the
+// switch, and nothing for a file that was never written.
+func TestFileAll(t *testing.T) {
+	t.Run("absent file", func(t *testing.T) {
+		all, err := tempFile(t).All()
+		if err != nil || len(all) != 0 {
+			t.Fatalf("All() = %v, %v, want none, nil", all, err)
+		}
+	})
+
+	t.Run("switched off still returns every entry", func(t *testing.T) {
+		f := tempFile(t)
+		setFixture(t, f, credName, role, canaryPlaintext)
+		setFixture(t, f, credName, "token-secret", "second-"+canaryPlaintext)
+		setFixture(t, f, "other", role, "other-"+canaryPlaintext)
+		switchOff(t, f)
+
+		all, err := f.All()
+		if err != nil {
+			t.Fatalf("All() error = %v", err)
+		}
+		want := map[string]map[string]string{
+			credName: {role: canaryPlaintext, "token-secret": "second-" + canaryPlaintext},
+			"other":  {role: "other-" + canaryPlaintext},
+		}
+		if len(all) != len(want) || all[credName][role] != want[credName][role] ||
+			all[credName]["token-secret"] != want[credName]["token-secret"] ||
+			all["other"][role] != want["other"][role] {
+			t.Errorf("All() = %v, want %v", all, want)
+		}
+
+		// The map handed out is a copy: mutating it must not reach back into the file.
+		all[credName][role] = "mutated"
+		again, err := f.All()
+		if err != nil || again[credName][role] != canaryPlaintext {
+			t.Errorf("All() after mutating an earlier result = %v, %v, want the original value unchanged", again, err)
+		}
+	})
 }

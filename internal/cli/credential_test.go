@@ -81,6 +81,19 @@ func keyringFixture(t *testing.T) string {
 
 func configIn(dir string) string { return filepath.Join(dir, "config.yaml") }
 
+// writeLegacyPlaintext writes one entry into a plaintext credentials.yaml directly, switch turned on.
+// Nothing in this build writes such a file any more; this stands in for a version that still did, so a
+// test can build the compatibility state 'qatlas credential delete' and 'config validate --secrets' still
+// read and clear.
+func writeLegacyPlaintext(t *testing.T, dir, credential, role, value string) {
+	t.Helper()
+	body := fmt.Sprintf("version: 1\nallow_plaintext: true\ncredentials:\n  %s:\n    %s: %s\n",
+		credential, role, value)
+	if err := os.WriteFile(filepath.Join(dir, secret.FileName), []byte(body), 0o600); err != nil {
+		t.Fatalf("write legacy plaintext fixture: %v", err)
+	}
+}
+
 // runWithInput drives the command surface with a secret on standard input.
 func runWithInput(t *testing.T, opts *Options, stdin string, args ...string) (int, string, string) {
 	t.Helper()
@@ -141,8 +154,9 @@ func TestCredentialSet(t *testing.T) {
 	}
 }
 
-// The plaintext fallback never comes into existence on its own. Proven on disk, not in the code path.
-func TestCredentialSetNeedsThePlaintextSwitch(t *testing.T) {
+// A keyring that cannot be reached names type vault as the way out, and writes nothing anywhere: there is
+// no plaintext write path left to fall back to.
+func TestCredentialSetNamesVaultAsTheWayOutWhenTheKeyringFails(t *testing.T) {
 	dir := keyringFixture(t)
 	store := secret.NewMemoryStore()
 	store.Fail(secret.ErrUnavailable)
@@ -157,14 +171,14 @@ func TestCredentialSetNeedsThePlaintextSwitch(t *testing.T) {
 	if stdout != "" {
 		t.Errorf("stdout = %q, want empty", stdout)
 	}
-	if !strings.Contains(stderr, "--plaintext") {
+	if !strings.Contains(stderr, "type vault") {
 		t.Errorf("stderr = %q, want the named way out", stderr)
 	}
 	if strings.Contains(stderr, canaryPlaintext) {
 		t.Errorf("stderr = %q, want the secret kept out", stderr)
 	}
 	if _, err := os.Stat(filepath.Join(dir, secret.FileName)); !os.IsNotExist(err) {
-		t.Fatalf("the plaintext file exists without the switch: %v", err)
+		t.Fatalf("a plaintext file was created: %v", err)
 	}
 	if len(filesIn(t, dir)) != 1 {
 		t.Errorf("files = %v, want only the configuration", filesIn(t, dir))
@@ -185,7 +199,7 @@ func TestCredentialCommandsExplainALockedKeyring(t *testing.T) {
 	if code != exitUsage || stdout != "" {
 		t.Fatalf("set: exit %d, stdout %q, want a usage error", code, stdout)
 	}
-	for _, want := range []string{advice, secret.DerivedEnvName("vault-reader", "token-id"), "--plaintext"} {
+	for _, want := range []string{advice, secret.DerivedEnvName("vault-reader", "token-id"), "type vault"} {
 		if !strings.Contains(stderr, want) {
 			t.Errorf("set: stderr = %q, want %q", stderr, want)
 		}
@@ -219,58 +233,12 @@ func TestCredentialHelpRecommendsTheSystemKeyring(t *testing.T) {
 	words := strings.Join(strings.Fields(stdout.String()), " ")
 	for _, want := range []string{
 		"system keyring", "recommended", "Secret Service on Linux", "macOS Keychain",
-		"Windows Credential Manager", "QATLAS_<CREDENTIAL>_<ROLE> overrides", "unencrypted file",
+		"Windows Credential Manager", "QATLAS_<CREDENTIAL>_<ROLE> overrides", "type vault",
 		secret.StoreSelector + "=" + secret.StoreNone,
 	} {
 		if !strings.Contains(words, want) {
 			t.Errorf("credential help does not contain %q:\n%s", want, stdout.String())
 		}
-	}
-}
-
-// With the switch the fallback is written, once, with the switch recorded in it and mode 0600.
-func TestCredentialSetPlaintext(t *testing.T) {
-	dir := keyringFixture(t)
-	store := secret.NewMemoryStore()
-	store.Fail(secret.ErrUnavailable)
-	opts := testOptionsIn(t, dir, store)
-
-	code, stdout, stderr := runWithInput(t, opts, canaryPlaintext,
-		"credential", "set", "vault-reader", "token-id", "--plaintext", "--config", configIn(dir))
-
-	if code != exitOK {
-		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr)
-	}
-	if stdout != "" || stderr != "" {
-		t.Errorf("stdout = %q, stderr = %q, want a silent success", stdout, stderr)
-	}
-
-	path := filepath.Join(dir, secret.FileName)
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("Stat() = %v", err)
-	}
-	// Windows synthesises the mode from the read-only attribute, so 0600 cannot show there.
-	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
-		t.Errorf("mode = %v, want 0600", info.Mode().Perm())
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("ReadFile() = %v", err)
-	}
-	if !strings.Contains(string(data), "allow_plaintext: true") {
-		t.Errorf("fallback = %q, want the switch recorded", data)
-	}
-	// The one file that is allowed to hold the secret is this one, and only because it was asked for.
-	if !strings.Contains(string(data), canaryPlaintext) {
-		t.Errorf("fallback = %q, want the secret stored", data)
-	}
-	cfg, err := os.ReadFile(configIn(dir))
-	if err != nil {
-		t.Fatalf("ReadFile() = %v", err)
-	}
-	if strings.Contains(string(cfg), canaryPlaintext) {
-		t.Error("the canary reached the configuration file")
 	}
 }
 
@@ -350,10 +318,9 @@ func TestCredentialDelete(t *testing.T) {
 		"credential", "set", "vault-reader", "token-id", "--config", configIn(dir)); code != exitOK {
 		t.Fatalf("set: exit code = %d (stderr: %s)", code, stderr)
 	}
-	if code, _, stderr := runWithInput(t, opts, canaryPlaintext,
-		"credential", "set", "vault-reader", "token-secret", "--plaintext", "--config", configIn(dir)); code != exitOK {
-		t.Fatalf("set --plaintext: exit code = %d (stderr: %s)", code, stderr)
-	}
+	// A leftover plaintext credentials.yaml from an earlier version still gets its entry cleared by a
+	// delete, and the emptied file removed with it.
+	writeLegacyPlaintext(t, dir, "vault-reader", "token-secret", canaryPlaintext)
 
 	code, stdout, stderr := runWithInput(t, opts, "",
 		"credential", "delete", "vault-reader", "token-id", "--config", configIn(dir))
@@ -392,10 +359,9 @@ func TestCredentialDeleteNamesTheStoreItSkipped(t *testing.T) {
 		Secrets:  secret.NewWith(os.Getenv, nil, secret.NewFile(filepath.Join(dir, secret.FileName)), red),
 	}
 
-	if code, _, stderr := runWithInput(t, opts, canaryPlaintext,
-		"credential", "set", "vault-reader", "token-id", "--plaintext", "--config", configIn(dir)); code != exitOK {
-		t.Fatalf("set --plaintext: exit code = %d (stderr: %s)", code, stderr)
-	}
+	// A leftover plaintext credentials.yaml from an earlier version, so the delete has something to clear
+	// besides the switched-off store.
+	writeLegacyPlaintext(t, dir, "vault-reader", "token-id", canaryPlaintext)
 
 	code, stdout, stderr := runWithInput(t, opts, "",
 		"credential", "delete", "vault-reader", "token-id", "--config", configIn(dir))
@@ -557,10 +523,8 @@ func TestCredentialDeleteReportsARetainedEntry(t *testing.T) {
 		"credential", "set", "vault-reader", "token-id", "--config", configIn(dir)); code != exitOK {
 		t.Fatalf("set: exit %d (stderr %q)", code, stderr)
 	}
-	if code, _, stderr := runWithInput(t, opts, canaryPlaintext,
-		"credential", "set", "vault-reader", "token-id", "--plaintext", "--config", configIn(dir)); code != exitOK {
-		t.Fatalf("set --plaintext: exit %d (stderr %q)", code, stderr)
-	}
+	// A leftover plaintext credentials.yaml from an earlier version holds a second copy of the same entry.
+	writeLegacyPlaintext(t, dir, "vault-reader", "token-id", canaryPlaintext)
 	if err := os.Chmod(fallback, 0o644); err != nil {
 		t.Fatalf("Chmod() = %v", err)
 	}
@@ -597,37 +561,6 @@ func TestCredentialDeleteReportsARetainedEntry(t *testing.T) {
 	}
 	if _, err := os.Stat(fallback); !os.IsNotExist(err) {
 		t.Errorf("the fallback survived the successful delete: %v", err)
-	}
-}
-
-// Writing into a fallback others can read is refused with the same code, not with a runtime error.
-func TestCredentialSetPlaintextRefusesAWidenedFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("file modes do not carry on Windows")
-	}
-	dir := keyringFixture(t)
-	opts := testOptionsIn(t, dir, secret.NewMemoryStore())
-	fallback := filepath.Join(dir, secret.FileName)
-
-	if code, _, stderr := runWithInput(t, opts, canaryPlaintext,
-		"credential", "set", "vault-reader", "token-id", "--plaintext", "--config", configIn(dir)); code != exitOK {
-		t.Fatalf("set --plaintext: exit %d (stderr %q)", code, stderr)
-	}
-	if err := os.Chmod(fallback, 0o644); err != nil {
-		t.Fatalf("Chmod() = %v", err)
-	}
-
-	code, _, stderr := runWithInput(t, opts, canaryPlaintext,
-		"credential", "set", "vault-reader", "token-secret", "--plaintext", "--config", configIn(dir))
-
-	if code != exitUsage {
-		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitUsage, stderr)
-	}
-	if !strings.HasPrefix(stderr, "qatlas: config-invalid: ") {
-		t.Errorf("stderr = %q, want the config-invalid code", stderr)
-	}
-	if !strings.Contains(stderr, "chmod 600 "+fallback) {
-		t.Errorf("stderr = %q, want the fix named", stderr)
 	}
 }
 

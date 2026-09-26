@@ -797,8 +797,8 @@ func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 	root := DocumentationCommand("test")
 	want := []string{
 		"config", "config validate", "connections", "credential", "credential delete", "credential set",
-		"describe", "invoke", "mcp", "providers", "tools", "tui", "update", "vault", "vault status",
-		"vault unlock",
+		"describe", "invoke", "mcp", "providers", "tools", "tui", "update", "vault", "vault decrypt",
+		"vault encrypt", "vault migrate", "vault passphrase", "vault status", "vault unlock",
 	}
 	if got := commandNames(root); !reflect.DeepEqual(got, want) {
 		t.Errorf("commands = %v, want %v", got, want)

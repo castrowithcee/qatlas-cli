@@ -1,9 +1,11 @@
 package vault
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	"golang.org/x/term"
 )
@@ -32,6 +34,31 @@ func ReadPassphrase(prompt string) (string, error) {
 		return "", ErrNoTerminal
 	}
 	return string(passphrase), nil
+}
+
+// ReadConfirm asks a yes-or-no question on the controlling terminal and reads a plain, visible line back. It
+// is how 'qatlas vault decrypt' and 'qatlas vault migrate' ask for the explicit confirmation a destructive
+// step needs, kept apart from ReadPassphrase because the answer is not a secret and is shown as typed. Only
+// "y" or "yes", ignoring case and surrounding space, counts as yes; anything else, including an empty line,
+// is no. It reports ErrNoTerminal exactly like ReadPassphrase when no terminal can be opened.
+func ReadConfirm(prompt string) (bool, error) {
+	in, out, closeTTY, err := openTTY()
+	if err != nil {
+		return false, ErrNoTerminal
+	}
+	defer closeTTY()
+
+	if _, err := fmt.Fprint(out, prompt); err != nil {
+		return false, ErrNoTerminal
+	}
+	// bufio, not Fscanln: an empty line, plain enter for no, is not itself an error worth turning into
+	// ErrNoTerminal the way a real I/O failure is.
+	line, err := bufio.NewReader(in).ReadString('\n')
+	if err != nil && line == "" {
+		return false, ErrNoTerminal
+	}
+	answer := strings.ToLower(strings.TrimSpace(line))
+	return answer == "y" || answer == "yes", nil
 }
 
 // openTTY opens the controlling terminal for reading and writing a prompt, independently of the process's

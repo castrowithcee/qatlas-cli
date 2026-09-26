@@ -31,11 +31,12 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"lands in the configuration file.\n\n" +
 			"A credential of type vault keeps its secrets in the vault instead: a directory beside the\n" +
 			"configuration, unencrypted or encrypted to a passphrase, for a machine without a usable system\n" +
-			"keyring. 'qatlas vault status' shows whether it exists, is encrypted, and is unlocked.\n\n" +
+			"keyring. 'qatlas vault status' shows whether it exists, is encrypted, and is unlocked; 'qatlas\n" +
+			"vault encrypt', 'qatlas vault passphrase', and 'qatlas vault decrypt' switch its encryption on,\n" +
+			"change its passphrase, and switch it off again.\n\n" +
 			"The other sources stay separate. A set variable QATLAS_<CREDENTIAL>_<ROLE> overrides a stored\n" +
-			"secret, which suits CI and containers. The plaintext fallback is an unencrypted file beside\n" +
-			"the configuration and is written only when --plaintext asks for it, for a keyring credential.\n" +
-			"QATLAS_CREDENTIAL_STORE=none switches the system keyring off for a run.\n\n" +
+			"secret, which suits CI and containers. QATLAS_CREDENTIAL_STORE=none switches the system keyring\n" +
+			"off for a run.\n\n" +
 			"These commands write and remove the entries. No command ever shows a stored secret back, not\n" +
 			"even masked; 'qatlas config validate --secrets' shows which source delivers each role.\n\n" +
 			"Every call into the system keyring ends within 10 seconds, and within the 60 seconds of an\n" +
@@ -49,7 +50,6 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
 
-	var plaintext bool
 	set := &cobra.Command{
 		Use:   "set <credential> <role>",
 		Short: "Store the secret of one credential role",
@@ -57,10 +57,9 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"shell history:\n\n" +
 			"    printf %s \"$TOKEN\" | qatlas credential set wiki-reader token-id\n" +
 			"    qatlas credential set wiki-reader token-id < token.txt\n\n" +
-			"A keyring credential's secret goes into the system keyring, unless --plaintext asks for the\n" +
-			"unencrypted fallback file instead. When the keyring is locked, cannot be reached, or is\n" +
-			"switched off, the command fails rather than falling back silently, and says what to do on\n" +
-			"this platform.\n\n" +
+			"A keyring credential's secret goes into the system keyring. When the keyring is locked, cannot\n" +
+			"be reached, or is switched off, the command fails rather than falling back silently, and says\n" +
+			"what to do on this platform, or points at the vault as the way out on a machine without one.\n\n" +
 			"A vault credential's secret goes into the vault. Storing the very first secret the vault ever\n" +
 			"holds asks, on the terminal, for a passphrase to encrypt it with; leaving that empty keeps the\n" +
 			"vault unencrypted. Every later secret needs no passphrase to store, even while the vault is\n" +
@@ -69,21 +68,19 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"just stored.",
 		Args: exactlyTwoArgs,
 		RunE: func(c *cobra.Command, args []string) error {
-			return setCredential(c, opts, reg, args[0], args[1], plaintext)
+			return setCredential(c, opts, reg, args[0], args[1])
 		},
 	}
-	set.Flags().BoolVar(&plaintext, "plaintext", false,
-		"for a keyring credential, store the secret unencrypted in the plaintext fallback file beside the configuration instead, and switch that fallback on")
 
 	remove := &cobra.Command{
 		Use:   "delete <credential> <role>",
 		Short: "Remove the secret of one credential role",
-		Long: "For a keyring credential, the entry is removed from the system keyring and from the\n" +
-			"plaintext fallback. For a vault credential, it is removed from the vault, which needs the\n" +
-			"vault unlocked the same way reading it does. An environment variable is not touched: it\n" +
-			"belongs to the shell, not to qatlas. When the keyring is locked or cannot be reached, or the\n" +
-			"vault is locked, the command says so and what to do, and never reports a secret as removed\n" +
-			"that may still be stored.",
+		Long: "For a keyring credential, the entry is removed from the system keyring, and from a plaintext\n" +
+			"credentials.yaml left over from an earlier version, if any. For a vault credential, it is\n" +
+			"removed from the vault, which needs the vault unlocked the same way reading it does. An\n" +
+			"environment variable is not touched: it belongs to the shell, not to qatlas. When the keyring\n" +
+			"is locked or cannot be reached, or the vault is locked, the command says so and what to do, and\n" +
+			"never reports a secret as removed that may still be stored.",
 		Args: exactlyTwoArgs,
 		RunE: func(c *cobra.Command, args []string) error {
 			return deleteCredential(c, opts, reg, args[0], args[1])
@@ -94,14 +91,10 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 	return cmd
 }
 
-func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, name, role string, plaintext bool) error {
+func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, name, role string) error {
 	cred, err := storableCredential(opts, reg, name, role)
 	if err != nil {
 		return err
-	}
-	if plaintext && cred.Type != config.CredentialTypeKeyring {
-		return &UsageError{fmt.Errorf(
-			"credential %q has type %q: --plaintext applies only to a keyring credential", name, cred.Type)}
 	}
 	secrets, err := opts.resolver()
 	if err != nil {
@@ -120,18 +113,14 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 		if err := secrets.SetVault(name, role, value, offerVaultPassphrase); err != nil {
 			return classifyUserError(err)
 		}
-	case plaintext:
-		if err := secrets.SetPlaintext(name, role, value); err != nil {
-			return classifyUserError(err)
-		}
 	default:
 		if err := secrets.Set(name, role, value); err != nil {
 			if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
 				// The advice is built from the class of the failure, never from what the platform said.
 				return &UsageError{fmt.Errorf("cannot store the secret for %s.%s: %s, then run the command "+
-					"again; or export %s; or, only if an unencrypted file is acceptable, store it in %s with "+
-					"--plaintext", name, role, secret.StoreAdvice(secret.StoreStateOf(err), runtime.GOOS),
-					secret.DerivedEnvName(name, role), fallbackPath(secrets))}
+					"again; or export %s; or, on a machine without a usable keyring, change this credential to "+
+					"type vault in 'qatlas tui' or config.yaml and store it there", name, role,
+					secret.StoreAdvice(secret.StoreStateOf(err), runtime.GOOS), secret.DerivedEnvName(name, role))}
 			}
 			return classifyUserError(err)
 		}

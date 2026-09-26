@@ -67,7 +67,6 @@ const (
 	screenList
 	screenForm
 	screenConfirm
-	screenPlaintextConfirm
 	screenSecret
 	// screenPicker is the searchable list of one choice row of the form, over the form it was opened from.
 	screenPicker
@@ -369,7 +368,6 @@ type Model struct {
 	guardID     int
 	secretInput textinput.Model
 	secretRole  string
-	secretPlain bool
 
 	// Connection test state. Raw responses never enter the model, only the class and a redacted message.
 	tester     Tester
@@ -514,8 +512,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateForm(msg)
 		case screenConfirm:
 			cmd = m.updateConfirm(msg)
-		case screenPlaintextConfirm:
-			cmd = m.updatePlaintextConfirm(msg)
 		case screenSecret:
 			cmd = m.updateSecret(msg)
 		case screenPicker:
@@ -1902,7 +1898,7 @@ func (m *Model) buildFields(name string) []field {
 		provider := m.credentialProvider(name, cred)
 		fields = append(fields,
 			providerField(m.credentialProviders(provider), provider).withHint(credentialProviderHint),
-			storageField(choice),
+			storageField(choice, cred.Type == config.CredentialTypeVault),
 		)
 		fields = append(fields, m.roleFields(cred, fields[1].value(), storageType(choice))...)
 	case sectionConnections:
@@ -1967,9 +1963,10 @@ func (m *Model) save(name string) tea.Cmd {
 	m.configExists = true
 	if wasNewKeyring {
 		cmd := m.openForm(name)
-		// Nothing is stored yet, so the reopened form cannot tell the unencrypted file from the keyring;
-		// it keeps the place that was chosen.
-		*m.field(storageLabel) = storageField(choice)
+		// Nothing is stored yet, so the reopened form cannot rediscover the choice from the resolver; it
+		// keeps the one that was made. wasNewKeyring is true only for a credential of type keyring, so
+		// vault is never offered here.
+		*m.field(storageLabel) = storageField(choice, false)
 		m.pristine = m.formState()
 		for i := range m.fields {
 			if m.fields[i].kind == fieldSecret {
@@ -1979,9 +1976,6 @@ func (m *Model) save(name string) tea.Cmd {
 		}
 		m.applyFocus()
 		where := secret.StoreLabel(platform) + " (recommended)"
-		if choice == storagePlaintext {
-			where = "the " + storagePlaintext
-		}
 		m.status = "Credential saved. Add the required provider secrets below: press s on each role to " +
 			"store it in " + where + "."
 		return cmd
@@ -2191,8 +2185,10 @@ func (m *Model) roleField(role, envName, credType string, lead bool) field {
 	f := textField(role, envName, false)
 	f.roleLead = lead
 	f.kind, f.hint = fieldEnvName, m.roleHint(role, lead)
-	if credType == config.CredentialTypeKeyring {
-		// A secret row builds its hint from what the resolver reported, so it carries none itself.
+	if credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault {
+		// A secret row builds its hint from what the resolver reported, so it carries none itself. A
+		// vault credential's row is drawn the same way, even though s and x on it lead to the CLI instead
+		// of the system keyring: it is a masked secret, never a variable name to type.
 		f.kind, f.hint = fieldSecret, ""
 	}
 	return f
@@ -2459,24 +2455,8 @@ func (m *Model) buildEditorView(dense bool) string {
 			keys = strings.Replace(keys, choiceFormKeys, setupKeys(m.wizard.step, "ctrl+s"), 1)
 		}
 		b.WriteString(m.hint(keys))
-	case screenPlaintextConfirm:
-		if m.wizard != nil {
-			b.WriteString(m.setupPlaintextView())
-			break
-		}
-		b.WriteString(titleStyle.Render("Store this secret unencrypted?") + "\n\n")
-		b.WriteString(m.wrapped(failStyle,
-			fmt.Sprintf("This does not use the system keyring. It writes %s.%s as readable text for your "+
-				"user account into %s.", m.editing, m.secretRole, m.plaintextPath())) + "\n")
-		b.WriteString(m.indented("Choose no if you want the "+placeKeyring+": choose "+storageKeyring+
-			" in the "+storageLabel+" row, unlock or configure "+secret.StoreLabel(platform)+
-			" if needed, and press s.") + "\n")
-		b.WriteString(m.hint("y continue to masked input · n/esc cancel without writing"))
 	case screenSecret:
 		where := secret.StoreLabel(platform) + " of this machine"
-		if m.secretPlain {
-			where = "the " + placePlaintext + " " + m.plaintextPath()
-		}
 		b.WriteString(titleStyle.Render(fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole)) + "\n\n")
 		b.WriteString("  " + m.secretInput.View() + "\n")
 		b.WriteString(m.indented(
@@ -2490,8 +2470,9 @@ func (m *Model) buildEditorView(dense bool) string {
 		if m.confirmRole != "" {
 			b.WriteString(fmt.Sprintf("Remove the stored secret for %s.%s?\n", m.editing, m.confirmRole))
 			b.WriteString(m.indented(
-				"it is removed from the system keyring and from the unencrypted file; an environment "+
-					"variable is not touched, because it belongs to your shell") + "\n")
+				"it is removed from the system keyring, and from a plaintext credentials.yaml left over "+
+					"from an earlier version, if any; an environment variable is not touched, because it "+
+					"belongs to your shell") + "\n")
 		} else {
 			name, _ := m.selected()
 			b.WriteString(fmt.Sprintf("Delete %q?\n", name))
@@ -3263,7 +3244,7 @@ var sectionColumns = map[section][]column{
 	sectionServices: {{title: "NAME"}, {title: "PROVIDER", optional: true}, {title: "BASE URL", flex: true}},
 	sectionCredentials: {{title: "NAME"}, {title: "PROVIDER", optional: true},
 		{title: "STORAGE", optional: true, short: map[string]string{
-			placeKeyring: "keyring", placeEnv: "env", placePlaintext: "file"}},
+			placeKeyring: "keyring", placeEnv: "env", placePlaintext: "file", placeVault: "vault"}},
 		{title: "SECRETS", flex: true}},
 	sectionConnections: {{title: "NAME"}, {title: "SERVICE"}, {title: "EFFECTS", optional: true},
 		{title: "TOOLS", optional: true}, {title: "TARGETS", optional: true}, {title: "DESCRIPTION", flex: true}},

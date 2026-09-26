@@ -46,27 +46,25 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"only what the chosen provider defines, and offers the configured services and credentials of that\n" +
 			"provider first, so they are reused instead of duplicated; the same checks as every other save\n" +
 			"refuse a step before the next one opens, and a refused step keeps its input. A new credential\n" +
-			"keeps its secrets in the system keyring (recommended), names environment variables, or, after an\n" +
-			"explicit confirmation, writes them to an unencrypted file. Secrets are typed masked and never\n" +
-			"shown. Nothing is written before the summary is saved: esc cancels, asking first once a provider\n" +
-			"is chosen, ctrl+b goes back one step, and should the configuration fail to save, the secrets just\n" +
-			"stored are removed again.\n\n" +
+			"keeps its secrets in the system keyring (recommended) or names environment variables. Secrets\n" +
+			"are typed masked and never shown. Nothing is written before the summary is saved: esc cancels,\n" +
+			"asking first once a provider is chosen, ctrl+b goes back one step, and should the configuration\n" +
+			"fail to save, the secrets just stored are removed again.\n\n" +
 			"The sections remain for direct editing. The editor manages services, credentials, connections,\n" +
 			"and domain defaults, can test a selected connection, and stores the secrets of a credential in\n" +
 			"a masked field. It never displays a stored secret back: what it shows is which source delivers\n" +
 			"a role. The secrets row of a credential offers the same places as the guided setup, in the same\n" +
-			"order and words: system keyring (recommended), environment variables, and unencrypted file\n" +
-			"(asks first).\n\n" +
+			"order and words: system keyring (recommended) and environment variables.\n\n" +
 			"The system keyring is the recommended local place for secrets: the credential store the\n" +
 			"operating system already provides, Secret Service on Linux (for example GNOME Keyring or\n" +
 			"KWallet), the macOS Keychain, or the Windows Credential Manager. It needs no setup and no\n" +
-			"exported variable, and qatlas keeps no secret store of its own. On a role row, s stores the\n" +
-			"secret in the place the secrets row names. The role row says in system keyring, not stored yet,\n" +
-			"keyring locked, keyring unreachable, or keyring switched off (QATLAS_CREDENTIAL_STORE=none),\n" +
-			"and for each blocked case what to do next on this platform. A set variable\n" +
-			"QATLAS_<CREDENTIAL>_<ROLE> still wins and the row says environment variable, overrides keyring;\n" +
-			"that is the way for CI and containers. With unencrypted file chosen, s writes the secret to that\n" +
-			"file instead, and only after a warning that has to be confirmed.\n\n" +
+			"exported variable; a machine without one uses a credential of type vault instead, the encrypted\n" +
+			"directory beside the configuration 'qatlas vault' manages, which this editor does not set up\n" +
+			"yet. On a role row, s stores the secret in the place the secrets row names. The role row says\n" +
+			"in system keyring, not stored yet, keyring locked, keyring unreachable, or keyring switched off\n" +
+			"(QATLAS_CREDENTIAL_STORE=none), and for each blocked case what to do next on this platform. A\n" +
+			"set variable QATLAS_<CREDENTIAL>_<ROLE> still wins and the row says environment variable,\n" +
+			"overrides keyring; that is the way for CI and containers.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +

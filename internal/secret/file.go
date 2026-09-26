@@ -13,9 +13,10 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 )
 
-// FileName is the plaintext fallback. It lives beside config.yaml, in the same directory the
-// configuration was resolved from, and never inside it: the configuration file must stay a file that can
-// be read, diffed, and shared without exposing a secret.
+// FileName is the plaintext fallback of earlier versions. It lives beside config.yaml, in the same
+// directory the configuration was resolved from, and never inside it: the configuration file must stay a
+// file that can be read, diffed, and shared without exposing a secret. Nothing in this build creates it any
+// more; 'qatlas vault migrate' is the way to carry its content into the vault and remove it.
 const FileName = "credentials.yaml"
 
 // fileVersion is the schema version of the fallback file.
@@ -67,26 +68,26 @@ func (f *File) Get(credential, role string) (string, error) {
 	return "", ErrNoEntry
 }
 
-// Set stores a secret and switches the fallback on. This is the only place the file is created.
-//
-// It reads what is on disk, not what may be delivered. Reading through the switch would hand back an empty
-// file whenever the fallback was off, and writing that back would drop every entry the file already had:
-// silent loss of secrets, at the one place in this project where they sit in clear text.
-func (f *File) Set(credential, role, value string) error {
+// All returns every credential and role this file holds on disk, regardless of whether the fallback is
+// switched on: an absent or empty file holds none. It is how 'qatlas vault migrate' reads what to carry
+// into the vault, because the switch decides what Get may deliver, never what is there to migrate away.
+func (f *File) All() (map[string]map[string]string, error) {
 	c, err := f.load()
-	if err != nil && !errors.Is(err, ErrDisabled) && !errors.Is(err, ErrNoEntry) {
-		return err
+	if err != nil {
+		if errors.Is(err, ErrDisabled) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	if c.Credentials == nil {
-		c.Credentials = map[string]map[string]string{}
+	out := make(map[string]map[string]string, len(c.Credentials))
+	for credential, roles := range c.Credentials {
+		copied := make(map[string]string, len(roles))
+		for role, value := range roles {
+			copied[role] = value
+		}
+		out[credential] = copied
 	}
-	if c.Credentials[credential] == nil {
-		c.Credentials[credential] = map[string]string{}
-	}
-	c.Credentials[credential][role] = value
-	c.Version = fileVersion
-	c.AllowPlaintext = true
-	return f.write(c)
+	return out, nil
 }
 
 // Delete removes a secret. When the last entry is gone the file is removed as well, so no switched-on

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,6 +34,18 @@ func newStoreModel(t *testing.T) (*Model, *config.Store, string, *secret.Resolve
 	return m, store, path, secrets, mem
 }
 
+// writeLegacyPlaintext writes one entry into a plaintext credentials.yaml directly, switch turned on.
+// Nothing in this build writes such a file any more; this stands in for a version that still did, so a
+// test can build the compatibility state the resolver still reads and this editor still shows, read only.
+func writeLegacyPlaintext(t *testing.T, dir, credential, role, value string) {
+	t.Helper()
+	body := fmt.Sprintf("version: 1\nallow_plaintext: true\ncredentials:\n  %s:\n    %s: %s\n",
+		credential, role, value)
+	if err := os.WriteFile(filepath.Join(dir, secret.FileName), []byte(body), 0o600); err != nil {
+		t.Fatalf("write legacy plaintext fixture: %v", err)
+	}
+}
+
 // focusRole moves the form focus onto the row of one secret role.
 func focusRole(t *testing.T, m *Model, role string) {
 	t.Helper()
@@ -44,19 +58,13 @@ func focusRole(t *testing.T, m *Model, role string) {
 	t.Fatalf("the form has no row for role %q", role)
 }
 
-// setSecret types a secret into the masked prompt of one role, the way a person does: the storage row
-// decides where s stores it.
-func setSecret(t *testing.T, m *Model, role, value string, plaintext bool) {
+// setSecret types a secret into the masked prompt of one role, the way a person does: s always stores into
+// the system keyring, the only place this editor can still send a new secret to.
+func setSecret(t *testing.T, m *Model, role, value string) {
 	t.Helper()
-	chooseStorage(t, m, plaintext)
+	chooseStorage(t, m)
 	focusRole(t, m, role)
 	press(t, m, "s")
-	if plaintext {
-		if m.screen != screenPlaintextConfirm {
-			t.Fatalf("s did not open the plaintext confirmation: screen %v, error %q", m.screen, m.fail)
-		}
-		press(t, m, "y")
-	}
 	if m.screen != screenSecret {
 		t.Fatalf("s did not open the prompt: screen %v, error %q", m.screen, m.fail)
 	}
@@ -64,15 +72,11 @@ func setSecret(t *testing.T, m *Model, role, value string, plaintext bool) {
 	pump(t, m, "enter")
 }
 
-// chooseStorage picks the system keyring or the unencrypted file in the storage row of the open form.
-func chooseStorage(t *testing.T, m *Model, plaintext bool) {
+// chooseStorage picks the system keyring in the storage row of the open form.
+func chooseStorage(t *testing.T, m *Model) {
 	t.Helper()
 	focusField(t, m, storageLabel)
-	if plaintext {
-		selectChoice(t, m, storagePlaintext)
-	} else {
-		selectChoice(t, m, storageKeyring)
-	}
+	selectChoice(t, m, storageKeyring)
 }
 
 // editEntry opens the form of the named entry in the current section.
@@ -104,8 +108,8 @@ func TestKeyringSetupHappensEntirelyInTheEditor(t *testing.T) {
 	addKeyringCredential(t, m, "reader")
 
 	editEntry(t, m, "reader")
-	setSecret(t, m, "token-id", canaryTokenID, false)
-	setSecret(t, m, "token-secret", canaryTokenSecret, false)
+	setSecret(t, m, "token-id", canaryTokenID)
+	setSecret(t, m, "token-secret", canaryTokenSecret)
 	rendered.WriteString(screenOf(m))
 	if m.fail != "" {
 		t.Fatalf("storing reported %q", m.fail)
@@ -231,6 +235,79 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 	}
 	if source, _ := secrets.Status("reader", saved.Credentials["reader"], "token-id"); source != secret.SourceStore {
 		t.Errorf("the stored secret was orphaned: %q", source)
+	}
+}
+
+// A credential of type vault, the normal state after 'qatlas vault migrate', keeps that type when its form
+// is opened and saved without any change. Before this, the storage row defaulted to system keyring for any
+// type it did not know, and saving silently turned the credential into a keyring one, orphaning whatever
+// the vault held for it.
+func TestVaultCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
+	_, store, path, secrets, mem := newStoreModel(t)
+
+	cfg := newTestConfig(t)
+	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
+	mustNoError(t, cfg.SetCredential("reader", config.Credential{Provider: "bookstack", Type: config.CredentialTypeVault}))
+	mustNoError(t, cfg.SetConnection("wiki", config.Connection{Service: "wiki", Credential: "reader"}))
+	mustNoError(t, store.Save(cfg))
+
+	// The editor is started on that file, the way a user finds it.
+	m, err := New(store, nil, secrets, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+
+	openSectionByName(t, m, sectionCredentials)
+	if view := screenOf(m); !strings.Contains(view, placeVault) {
+		t.Errorf("the list does not show the vault as where the secrets are kept:\n%s", view)
+	}
+
+	pump(t, m, "enter")
+	if got := m.credentialType(); got != config.CredentialTypeVault {
+		t.Errorf("the form shows type %q, want vault", got)
+	}
+	if got := m.fieldValue(storageLabel); got != storageVault {
+		t.Errorf("the storage row shows %q, want %q", got, storageVault)
+	}
+	for _, role := range m.cfg.SecretRoles() {
+		f := m.fields[fieldIndex(t, m, role)]
+		if f.kind != fieldSecret {
+			t.Errorf("role %q is drawn as a variable name, not as a stored secret", role)
+		}
+	}
+
+	// s on a vault credential's role must never reach the system keyring: setting up or changing the
+	// vault itself stays outside this editor.
+	focusRole(t, m, "token-id")
+	press(t, m, "s")
+	if m.screen != screenForm {
+		t.Fatalf("s opened screen %v, want the form to stay", m.screen)
+	}
+	if !strings.Contains(m.status, "qatlas credential set reader token-id") {
+		t.Errorf("status = %q, want the CLI command named", m.status)
+	}
+	press(t, m, "x")
+	if m.screen != screenForm {
+		t.Fatalf("x opened screen %v, want the form to stay", m.screen)
+	}
+	if !strings.Contains(m.status, "qatlas credential delete reader token-id") {
+		t.Errorf("status = %q, want the CLI command named", m.status)
+	}
+
+	// Saving without touching anything must go through and change nothing.
+	pump(t, m, "enter")
+	if m.fail != "" {
+		t.Fatalf("an unchanged vault credential does not save: %q", m.fail)
+	}
+	saved, err := loadTestConfig(t, path)
+	if err != nil {
+		t.Fatalf("Load() = %v", err)
+	}
+	if got := saved.Credentials["reader"]; got.Type != config.CredentialTypeVault || len(got.Values) != 0 {
+		t.Errorf("the credential turned into %+v", got)
+	}
+	if got, err := mem.Get(context.Background(), secret.StoreKey("reader", "token-id")); !errors.Is(err, secret.ErrNoEntry) {
+		t.Errorf("the system keyring holds %q (%v), want s to never have reached it", got, err)
 	}
 }
 
@@ -390,81 +467,32 @@ func TestCancellingThePromptStoresNothing(t *testing.T) {
 	}
 }
 
-// A machine without a running secret service names the keyring as the primary fix. Plaintext remains an
-// explicitly confirmed way out, never an automatic or equivalent recommendation.
-func TestPlaintextIsTheNamedWayOutWithoutAStore(t *testing.T) {
+// A machine without a running secret service names the keyring as the primary fix, and the derived
+// variable as the other way. The editor offers no plaintext write path any more: the message no longer
+// names one, and there is no confirmation screen to reach it through.
+func TestNamedWayOutWithoutAStore(t *testing.T) {
 	const canary = "canary-plaintext-2c9a"
 
-	m, _, _, secrets, mem := newStoreModel(t)
+	m, _, _, _, mem := newStoreModel(t)
 	mem.Fail(secret.ErrUnavailable)
 
 	addKeyringCredential(t, m, "reader")
 	editEntry(t, m, "reader")
-	setSecret(t, m, "token-id", canary, false)
+	setSecret(t, m, "token-id", canary)
 
-	for _, want := range []string{"cannot be reached", "retry s", "deliberately accept an unencrypted file"} {
+	for _, want := range []string{"cannot be reached", "retry s"} {
 		if !strings.Contains(m.fail, want) {
 			t.Fatalf("error = %q, want it to contain %q", m.fail, want)
 		}
 	}
-	if !strings.Contains(m.fail, secret.FileName) {
-		t.Errorf("error = %q, want it to name the file", m.fail)
+	if strings.Contains(m.fail, "unencrypted file") {
+		t.Errorf("error = %q, want no mention of an unencrypted file", m.fail)
 	}
 	if !strings.Contains(m.fail, secret.DerivedEnvName("reader", "token-id")) {
 		t.Errorf("error = %q, want it to name the variable", m.fail)
 	}
 	if strings.Contains(screenOf(m), canary) {
 		t.Errorf("the failed write shows the secret:\n%s", screenOf(m))
-	}
-
-	// The fallback is reached by asking for it, never by falling back silently.
-	setSecret(t, m, "token-id", canary, true)
-	if m.fail != "" {
-		t.Fatalf("storing in the plaintext file reported %q", m.fail)
-	}
-	source, checked := secrets.Status("reader", config.Credential{Type: config.CredentialTypeKeyring}, "token-id")
-	if source != secret.SourcePlaintext {
-		t.Errorf("the role resolves from %q (%v), want the plaintext file", source, checked)
-	}
-	if view := screenOf(m); !strings.Contains(view, "("+statePlaintext+")") {
-		t.Errorf("the form does not say the fallback delivers:\n%s", view)
-	}
-}
-
-func TestPlaintextNeedsAWarningAndConfirmationBeforeInput(t *testing.T) {
-	m, _, path, _, _ := newStoreModel(t)
-	addKeyringCredential(t, m, "reader")
-	editEntry(t, m, "reader")
-	chooseStorage(t, m, true)
-	focusRole(t, m, "token-id")
-
-	press(t, m, "s")
-	if m.screen != screenPlaintextConfirm {
-		t.Fatalf("screen = %v, want plaintext confirmation", m.screen)
-	}
-	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{
-		"does not use the system keyring",
-		"readable text",
-		"press s",
-		"cancel without writing",
-	} {
-		if !strings.Contains(view, want) {
-			t.Errorf("confirmation does not contain %q:\n%s", want, screenOf(m))
-		}
-	}
-	press(t, m, "n")
-	if m.screen != screenForm || m.status != "Cancelled; nothing was written" {
-		t.Errorf("cancel left screen %v with status %q", m.screen, m.status)
-	}
-	if _, err := os.Stat(filepath.Join(filepath.Dir(path), secret.FileName)); !os.IsNotExist(err) {
-		t.Errorf("pressing s and cancelling created a plaintext file: %v", err)
-	}
-
-	press(t, m, "s", "y")
-	if m.screen != screenSecret || !m.secretPlain {
-		t.Errorf("confirmed plaintext did not open its masked prompt: screen %v plaintext %v",
-			m.screen, m.secretPlain)
 	}
 }
 
@@ -473,7 +501,7 @@ func TestRemovingAStoredSecret(t *testing.T) {
 	m, _, _, secrets, _ := newStoreModel(t)
 	addKeyringCredential(t, m, "reader")
 	editEntry(t, m, "reader")
-	setSecret(t, m, "token-id", "canary-removed-6a12", false)
+	setSecret(t, m, "token-id", "canary-removed-6a12")
 
 	focusRole(t, m, "token-id")
 	press(t, m, "x")
@@ -604,13 +632,11 @@ func (b blockingSecrets) Set(string, string, string) error {
 	<-b.writes
 	return nil
 }
-func (b blockingSecrets) SetPlaintext(string, string, string) error { return nil }
 func (b blockingSecrets) Delete(string, string) ([]secret.Source, error) {
 	<-b.writes
 	return []secret.Source{secret.SourceStore}, nil
 }
-func (b blockingSecrets) Lookup(string) bool      { return false }
-func (b blockingSecrets) Plaintext() *secret.File { return nil }
+func (b blockingSecrets) Lookup(string) bool { return false }
 
 // A store that takes its time must not freeze the editor: it has thirty seconds to answer, and the event
 // loop keeps working meanwhile.
@@ -739,7 +765,7 @@ func TestLongMessagesStayReadable(t *testing.T) {
 
 	addKeyringCredential(t, m, "reader")
 	editEntry(t, m, "reader")
-	setSecret(t, m, "token-id", "canary-wrapped-9e21", false)
+	setSecret(t, m, "token-id", "canary-wrapped-9e21")
 	if len(m.fail) <= 100 {
 		t.Fatalf("the message is short enough to fit anyway: %q", m.fail)
 	}
@@ -751,7 +777,7 @@ func TestLongMessagesStayReadable(t *testing.T) {
 	for _, width := range []int{40, 60, 80, 100} {
 		m.Update(tea.WindowSizeMsg{Width: width, Height: 80})
 		// Leaving a screen clears its message, so the failure is produced again at every width.
-		setSecret(t, m, "token-id", "canary-wrapped-9e21", false)
+		setSecret(t, m, "token-id", "canary-wrapped-9e21")
 		views := map[string]string{"form": screenOf(m)}
 		press(t, m, "esc")
 		views["list"] = screenOf(m)
@@ -786,7 +812,7 @@ func TestWithoutAResolver(t *testing.T) {
 
 	addKeyringCredential(t, m, "reader")
 	editEntry(t, m, "reader")
-	setSecret(t, m, "token-id", "canary-no-resolver", false)
+	setSecret(t, m, "token-id", "canary-no-resolver")
 
 	if !strings.Contains(m.fail, ErrNoResolver.Error()) {
 		t.Errorf("error = %q, want %q", m.fail, ErrNoResolver)
@@ -868,7 +894,7 @@ func TestTypeChangeGuardAsksWhatIsStoredNotWhatDelivers(t *testing.T) {
 				if runtime.GOOS == "windows" {
 					t.Skip("file modes do not carry on Windows")
 				}
-				mustNoError(t, secrets.SetPlaintext("reader", "token-id", "canary-too-open"))
+				writeLegacyPlaintext(t, dir, "reader", "token-id", "canary-too-open")
 				if err := os.Chmod(filepath.Join(dir, secret.FileName), 0o644); err != nil {
 					t.Fatalf("chmod: %v", err)
 				}
@@ -878,8 +904,8 @@ func TestTypeChangeGuardAsksWhatIsStoredNotWhatDelivers(t *testing.T) {
 		},
 		{
 			name: "what was found and what could not be asked are said together",
-			arrange: func(t *testing.T, _ string, secrets *secret.Resolver, mem *secret.MemoryStore) Secrets {
-				mustNoError(t, secrets.SetPlaintext("reader", "token-id", "canary-both-1a7f"))
+			arrange: func(t *testing.T, dir string, secrets *secret.Resolver, mem *secret.MemoryStore) Secrets {
+				writeLegacyPlaintext(t, dir, "reader", "token-id", "canary-both-1a7f")
 				mem.Fail(secret.ErrUnavailable)
 				return secrets
 			},
@@ -954,15 +980,10 @@ func (s scriptedSecrets) Set(_, role, _ string) error {
 	<-s.gate[role]
 	return s.err[role]
 }
-func (s scriptedSecrets) SetPlaintext(_, role, _ string) error {
-	<-s.gate[role]
-	return s.err[role]
-}
 func (s scriptedSecrets) Delete(string, string) ([]secret.Source, error) {
 	return nil, secret.ErrNoEntry
 }
-func (s scriptedSecrets) Lookup(string) bool      { return false }
-func (s scriptedSecrets) Plaintext() *secret.File { return nil }
+func (s scriptedSecrets) Lookup(string) bool { return false }
 
 // D3: a second write must not swallow the outcome of the first. The two are really in flight together here,
 // and the one that finishes second is the one that failed.
@@ -1095,14 +1116,14 @@ func TestRowsAreAskedAgainAfterAFailedWrite(t *testing.T) {
 	m, _, _, _, mem := newStoreModel(t)
 	addKeyringCredential(t, m, "reader")
 	editEntry(t, m, "reader")
-	setSecret(t, m, "token-id", "canary-a2-4c81", true)
+	setSecret(t, m, "token-id", "canary-a2-4c81")
 
 	key := secret.StoreKey("reader", "token-id")
-	if got := m.sources[key]; got != secret.SourcePlaintext {
-		t.Fatalf("source = %q, want the plaintext file", got)
+	if got := m.sources[key]; got != secret.SourceStore {
+		t.Fatalf("source = %q, want the system keyring", got)
 	}
 
-	// The store stops answering, so the delete can clear the file but not the store.
+	// The store stops answering, so the delete cannot clear it, even though it still holds the secret.
 	mem.Fail(secret.ErrUnavailable)
 	focusRole(t, m, "token-id")
 	press(t, m, "x")
@@ -1111,7 +1132,7 @@ func TestRowsAreAskedAgainAfterAFailedWrite(t *testing.T) {
 	if m.fail == "" {
 		t.Fatal("a delete that could not clear every place reported success")
 	}
-	if got := m.sources[key]; got == secret.SourcePlaintext {
+	if got := m.sources[key]; got == secret.SourceStore {
 		t.Errorf("source = %q, want the row to be asked again after the failure", got)
 	}
 }
@@ -1165,7 +1186,7 @@ func switchOffFallback(t *testing.T, dir string) {
 // very key it points at, and the type change must go through afterwards.
 func TestTheGuardsWayOutReallyLeadsOut(t *testing.T) {
 	dir, store, path, secrets, _ := storedCredential(t, nil)
-	mustNoError(t, secrets.SetPlaintext("reader", "token-id", "canary-inert-9f2c"))
+	writeLegacyPlaintext(t, dir, "reader", "token-id", "canary-inert-9f2c")
 	// A fallback that no longer delivers still holds its entry, and that is what the guard reports.
 	switchOffFallback(t, dir)
 

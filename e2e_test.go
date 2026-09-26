@@ -18,6 +18,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // Canary values stand in for real tokens. No part of the acceptance run needs a real secret or a real
@@ -1115,7 +1116,7 @@ services:
     base_url: %s
 credentials:
   vault-reader:
-    type: keyring
+    type: vault
 connections:
   wiki:
     service: wiki
@@ -1136,7 +1137,8 @@ defaults:
 		secret.StoreSelector + "=none",
 	}
 	c := &runner{bin: bin, env: baseEnv, seen: &seen}
-	fallback := filepath.Join(dir, secret.FileName)
+	vaultSecrets := filepath.Join(dir, vault.DirName, "secrets.json")
+	vaultDir := filepath.Join(dir, vault.DirName)
 
 	// pipe runs the binary with a secret on standard input, the way the command documents.
 	pipe := func(t *testing.T, in string, args ...string) (int, string, string) {
@@ -1167,36 +1169,30 @@ defaults:
 		}
 	})
 
-	t.Run("without a store and without the switch nothing is written", func(t *testing.T) {
+	t.Run("the store switch does not touch a vault credential", func(t *testing.T) {
+		// QATLAS_CREDENTIAL_STORE=none switches off the system keyring; a vault credential never consults
+		// it, so storing still succeeds and the vault is created on the first secret, unencrypted since no
+		// terminal is attached to offer a passphrase on.
 		code, stdout, stderr := pipe(t, storedID, "credential", "set", "vault-reader", "token-id")
-
-		if code != 2 {
-			t.Errorf("exit %d, want 2 (stderr %q)", code, stderr)
+		if code != 0 {
+			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		if stdout != "" {
-			t.Errorf("stdout = %q, want empty", stdout)
+		if stdout != "" || stderr != "" {
+			t.Errorf("stdout = %q, stderr = %q, want a silent success", stdout, stderr)
 		}
-		if !strings.Contains(stderr, "--plaintext") {
-			t.Errorf("stderr = %q, want the named way out", stderr)
-		}
-		if _, err := os.Stat(fallback); !os.IsNotExist(err) {
-			t.Fatalf("the plaintext fallback exists without the switch: %v", err)
-		}
-	})
-
-	t.Run("the named fallback carries the run", func(t *testing.T) {
-		for role, value := range map[string]string{"token-id": storedID, "token-secret": storedSecret} {
-			if code, _, stderr := pipe(t, value, "credential", "set", "vault-reader", role, "--plaintext"); code != 0 {
-				t.Fatalf("storing %s: exit %d (stderr %q)", role, code, stderr)
-			}
-		}
-		info, err := os.Stat(fallback)
+		info, err := os.Stat(vaultSecrets)
 		if err != nil {
-			t.Fatalf("the fallback was not written: %v", err)
+			t.Fatalf("the vault was not written: %v", err)
 		}
 		// Windows synthesises the mode from the read-only attribute, so 0600 cannot show there.
 		if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 			t.Errorf("mode = %v, want 0600", info.Mode().Perm())
+		}
+	})
+
+	t.Run("the vault carries the run", func(t *testing.T) {
+		if code, _, stderr := pipe(t, storedSecret, "credential", "set", "vault-reader", "token-secret"); code != 0 {
+			t.Fatalf("storing token-secret: exit %d (stderr %q)", code, stderr)
 		}
 
 		code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
@@ -1208,7 +1204,7 @@ defaults:
 			t.Errorf("stdout = %q, want the page", stdout)
 		}
 
-		// The same secret, handed back by the provider: the file delivered it, and the redactor still
+		// The same secret, handed back by the provider: the vault delivered it, and the redactor still
 		// has to keep it out of the message.
 		_, _, stderr = c.runInput(t, `{"id":`+echoPageID+`}`, "invoke", "bookstack.pages.get")
 		if !strings.Contains(stderr, redact.Marker) {
@@ -1216,15 +1212,15 @@ defaults:
 		}
 	})
 
-	t.Run("a fallback others can read is refused", func(t *testing.T) {
+	t.Run("a vault file others can read is refused", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("file modes do not carry on Windows")
 		}
-		if err := os.Chmod(fallback, 0o644); err != nil {
+		if err := os.Chmod(vaultSecrets, 0o644); err != nil {
 			t.Fatalf("Chmod() = %v", err)
 		}
 		defer func() {
-			if err := os.Chmod(fallback, 0o600); err != nil {
+			if err := os.Chmod(vaultSecrets, 0o600); err != nil {
 				t.Fatalf("Chmod() = %v", err)
 			}
 		}()
@@ -1237,27 +1233,23 @@ defaults:
 		if stdout != "" {
 			t.Errorf("stdout = %q, want empty", stdout)
 		}
-		if !strings.Contains(stderr, "plaintext file (readable by others)") {
+		if !strings.Contains(stderr, "holds vault data but its mode is 0644") {
 			t.Errorf("stderr = %q, want the widened mode reported", stderr)
 		}
-		if !strings.Contains(stderr, "chmod 600 "+fallback) {
+		if !strings.Contains(stderr, "chmod 600 "+vaultSecrets) {
 			t.Errorf("stderr = %q, want the command that fixes it", stderr)
-		}
-		// One state, one code: reading, writing and deleting all report the file.
-		if !strings.HasPrefix(stderr, "qatlas: config-invalid: ") {
-			t.Errorf("stderr = %q, want the config-invalid code", stderr)
 		}
 	})
 
-	t.Run("a delete that cannot clear the file says so", func(t *testing.T) {
+	t.Run("a delete that cannot clear the vault says so", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("file modes do not carry on Windows")
 		}
-		if err := os.Chmod(fallback, 0o644); err != nil {
+		if err := os.Chmod(vaultSecrets, 0o644); err != nil {
 			t.Fatalf("Chmod() = %v", err)
 		}
 		defer func() {
-			if err := os.Chmod(fallback, 0o600); err != nil {
+			if err := os.Chmod(vaultSecrets, 0o600); err != nil {
 				t.Fatalf("Chmod() = %v", err)
 			}
 		}()
@@ -1270,17 +1262,11 @@ defaults:
 		if stdout != "" {
 			t.Errorf("stdout = %q, want empty", stdout)
 		}
-		if !strings.HasPrefix(stderr, "qatlas: config-invalid: ") {
-			t.Errorf("stderr = %q, want the same code the file gets when it is read", stderr)
+		if !strings.Contains(stderr, "holds vault data but its mode is 0644") {
+			t.Errorf("stderr = %q, want the widened mode reported", stderr)
 		}
-		for _, want := range []string{"may still be stored in the plaintext file", "chmod 600 " + fallback} {
-			if !strings.Contains(stderr, want) {
-				t.Errorf("stderr = %q, want it to contain %q", stderr, want)
-			}
-		}
-		// The store the user switched off is not what this is about, and it is not what is reported.
-		if strings.Contains(stderr, "switched off") {
-			t.Errorf("stderr = %q, want the real blocker rather than the store", stderr)
+		if !strings.Contains(stderr, "chmod 600 "+vaultSecrets) {
+			t.Errorf("stderr = %q, want the command that fixes it", stderr)
 		}
 	})
 
@@ -1291,8 +1277,8 @@ defaults:
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
 		want := "connection|credential|role|source|checked\n" +
-			"wiki|vault-reader|token-id|plaintext file|environment variable (not set), credential store (switched off)\n" +
-			"wiki|vault-reader|token-secret|plaintext file|environment variable (not set), credential store (switched off)\n"
+			"wiki|vault-reader|token-id|vault|environment variable (not set)\n" +
+			"wiki|vault-reader|token-secret|vault|environment variable (not set)\n"
 		if stdout != want {
 			t.Errorf("stdout = %q,\nwant %q", stdout, want)
 		}
@@ -1307,7 +1293,7 @@ defaults:
 		if code != 0 {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		want := "role|source\ntoken-id|environment variable\ntoken-secret|plaintext file\n"
+		want := "role|source\ntoken-id|environment variable\ntoken-secret|vault\n"
 		if stdout != want {
 			t.Errorf("stdout = %q, want %q", stdout, want)
 		}
@@ -1319,14 +1305,23 @@ defaults:
 		}
 	})
 
-	t.Run("deleting the last entry removes the fallback", func(t *testing.T) {
+	t.Run("deleting the last entry empties the vault", func(t *testing.T) {
 		for _, role := range []string{"token-id", "token-secret"} {
 			if code, _, stderr := c.run(t, "credential", "delete", "vault-reader", role); code != 0 {
 				t.Fatalf("deleting %s: exit %d (stderr %q)", role, code, stderr)
 			}
 		}
-		if _, err := os.Stat(fallback); !os.IsNotExist(err) {
-			t.Errorf("the emptied fallback was kept: %v", err)
+		// Unlike the plaintext fallback of an earlier version, an emptied vault stays: it is the
+		// permanent store for a vault credential, not a file created only while one holds something.
+		if _, err := os.Stat(vaultDir); err != nil {
+			t.Errorf("the vault directory is gone: %v", err)
+		}
+		code, stdout, stderr := c.run(t, "vault", "status", "--output", "json")
+		if code != 0 {
+			t.Fatalf("exit %d, stderr %q", code, stderr)
+		}
+		if !strings.Contains(stdout, `"entries":"0"`) {
+			t.Errorf("stdout = %q, want the vault reported empty", stdout)
 		}
 	})
 
@@ -1336,7 +1331,7 @@ defaults:
 				t.Errorf("the canary %q reached the output", canary)
 			}
 		}
-		// The fallback file is the one place a secret may live, and it is gone by now anyway.
+		// The vault is the one place a secret may live, and it holds no entry by now anyway.
 		for path, data := range filesUnder(t, dir) {
 			for _, canary := range []string{storedID, storedSecret, overrideID} {
 				if strings.Contains(data, canary) {

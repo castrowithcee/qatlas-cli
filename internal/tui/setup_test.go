@@ -10,8 +10,6 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -218,7 +216,7 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 	assertNoStoredSecret(t, mem, filepath.Dir(path))
 }
 
-// Leaving the setup at any step, the plaintext confirmation included, writes nothing anywhere.
+// Leaving the setup at any step writes nothing anywhere.
 func TestCancellingTheGuidedSetupWritesNothing(t *testing.T) {
 	for step := stepProvider; step <= stepSummary; step++ {
 		t.Run(setupTitles[step], func(t *testing.T) {
@@ -241,43 +239,6 @@ func TestCancellingTheGuidedSetupWritesNothing(t *testing.T) {
 			assertNoStoredSecret(t, mem, filepath.Dir(path))
 		})
 	}
-
-	t.Run("plaintext confirmation", func(t *testing.T) {
-		m, _, path, _, mem := newStoreModel(t)
-		walkSetup(t, m, stepCredential)
-		press(t, m, "tab")
-		typeText(t, m, "reader")
-		press(t, m, "tab")
-		selectChoice(t, m, storagePlaintext)
-		press(t, m, "tab")
-		typeText(t, m, canaryID)
-		press(t, m, "tab")
-		typeText(t, m, canarySecret)
-		press(t, m, "enter")
-		if m.screen != screenPlaintextConfirm {
-			t.Fatalf("an unencrypted file was chosen without asking: screen %v", m.screen)
-		}
-		assertNoCanary(t, "the confirmation", screenOf(m))
-		m.Update(tea.WindowSizeMsg{Width: 20, Height: 5})
-		// The first escape closes the question and keeps the step; the next one asks before it drops the
-		// setup.
-		press(t, m, "esc")
-		if m.screen != screenForm || m.wizard == nil || m.wizard.step != stepCredential {
-			t.Fatalf("esc from a question too small did not return to its step: screen %v", m.screen)
-		}
-		press(t, m, "esc")
-		if view := m.View(); m.screen != screenLeave || !strings.Contains(view, "d discard setup") {
-			t.Fatalf("esc from a screen too small did not ask: screen %v\n%s", m.screen, view)
-		}
-		press(t, m, "d")
-		if m.wizard != nil || m.screen != screenList {
-			t.Fatalf("esc from a screen too small did not leave the setup: screen %v", m.screen)
-		}
-		if _, err := os.Stat(path); err == nil {
-			t.Error("the configuration was written")
-		}
-		assertNoStoredSecret(t, mem, filepath.Dir(path))
-	})
 }
 
 // A step the core refuses stays open with everything typed into it, and so do the steps before it.
@@ -401,7 +362,7 @@ func TestAFailedSaveLeavesNothingBehind(t *testing.T) {
 	})
 }
 
-// Environment variables and the unencrypted file stay reachable, the file only after explicit consent.
+// Environment variables stay reachable as the other place a new credential's secrets can go.
 func TestGuidedSetupOtherSecretSources(t *testing.T) {
 	t.Run("environment variables", func(t *testing.T) {
 		m, store, path, _, mem := newStoreModel(t)
@@ -429,45 +390,6 @@ func TestGuidedSetupOtherSecretSources(t *testing.T) {
 			t.Errorf("credential = %+v", cred)
 		}
 		assertNoStoredSecret(t, mem, filepath.Dir(path))
-	})
-
-	t.Run("unencrypted file", func(t *testing.T) {
-		m, _, path, secrets, mem := newStoreModel(t)
-		walkSetup(t, m, stepCredential)
-		press(t, m, "tab")
-		typeText(t, m, "reader")
-		press(t, m, "tab")
-		selectChoice(t, m, storagePlaintext)
-		press(t, m, "tab")
-		typeText(t, m, canaryID)
-		press(t, m, "tab")
-		typeText(t, m, canarySecret)
-		press(t, m, "enter", "n")
-		if m.screen != screenForm || m.wizard.step != stepCredential || m.fieldValue("name") != "reader" {
-			t.Fatalf("no did not return to the credential step: screen %v", m.screen)
-		}
-		press(t, m, "enter", "y")
-		if m.wizard.step != stepScope {
-			t.Fatalf("yes did not continue: step %d, error %q", m.wizard.step, m.fail)
-		}
-		if _, err := os.Stat(filepath.Join(filepath.Dir(path), secret.FileName)); err == nil {
-			t.Fatal("the unencrypted file was written before the setup was saved")
-		}
-		press(t, m, "enter", "ctrl+s")
-		if !strings.Contains(screenOf(m), "unencrypted") {
-			t.Errorf("summary does not warn about the unencrypted file:\n%s", screenOf(m))
-		}
-		pump(t, m, "enter")
-		if m.fail != "" {
-			t.Fatalf("save failed: %q", m.fail)
-		}
-		if source, _ := secrets.Status("reader", config.Credential{Type: config.CredentialTypeKeyring},
-			"token-secret"); source != secret.SourcePlaintext {
-			t.Errorf("token-secret resolves from %q, want the plaintext file", source)
-		}
-		if _, err := mem.Get(context.Background(), secret.StoreKey("reader", "token-id")); !errors.Is(err, secret.ErrNoEntry) {
-			t.Errorf("the credential store was written: %v", err)
-		}
 	})
 }
 
@@ -519,7 +441,7 @@ func TestSetupAndEditorOfferTheSameStorageRow(t *testing.T) {
 		t.Fatalf("the credential form has no %q row: %v", storageLabel, labelsOf(e.fields))
 	}
 
-	want := []string{storageKeyring, storageEnv, storagePlaintext}
+	want := []string{storageKeyring, storageEnv}
 	for what, row := range map[string]field{"setup": setupRow, "editor": *editorRow} {
 		if !reflect.DeepEqual(row.choices, want) || row.value() != storageKeyring || row.hint != storageHint {
 			t.Errorf("the %s row offers %v at %q with hint %q, want %v at %q with the shared hint", what,
@@ -545,7 +467,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 	m, _, _, _, _ := newStoreModel(t)
 	walkSetup(t, m, stepCredential)
 	focusField(t, m, storageLabel)
-	for _, choice := range []string{storageKeyring, storageEnv, storagePlaintext} {
+	for _, choice := range []string{storageKeyring, storageEnv} {
 		selectChoice(t, m, choice)
 		assertNoRawStorageTerm(t, "the setup credential step under "+choice, screenOf(m))
 	}
@@ -586,7 +508,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 	e, _, _, _, _ := newStoreModel(t)
 	openSectionByName(t, e, sectionCredentials)
 	press(t, e, "n")
-	for _, choice := range []string{storageKeyring, storageEnv, storagePlaintext} {
+	for _, choice := range []string{storageKeyring, storageEnv} {
 		focusField(t, e, storageLabel)
 		selectChoice(t, e, choice)
 		assertNoRawStorageTerm(t, "the credential form under "+choice, screenOf(e))
@@ -630,7 +552,7 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 		return []string{canaryID, canarySecret}
 	}
 
-	for _, choice := range []string{storageKeyring, storageEnv, storagePlaintext} {
+	for _, choice := range []string{storageKeyring, storageEnv} {
 		t.Run(choice, func(t *testing.T) {
 			// The guided setup.
 			m, _, path, secrets, _ := newStoreModel(t)
@@ -644,9 +566,6 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 				typeText(t, m, value)
 			}
 			press(t, m, "enter")
-			if choice == storagePlaintext {
-				press(t, m, "y")
-			}
 			press(t, m, "enter", "ctrl+s")
 			pump(t, m, "enter")
 			if m.fail != "" {
@@ -675,7 +594,7 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 					t.Fatalf("the saved credential reopened on %q, want %q", got, choice)
 				}
 				for i, role := range []string{"token-id", "token-secret"} {
-					setSecret(t, e, role, values(choice)[i], choice == storagePlaintext)
+					setSecret(t, e, role, values(choice)[i])
 				}
 			}
 			if e.fail != "" {
@@ -688,7 +607,6 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 			}
 			want := map[string]secret.Source{
 				storageKeyring: secret.SourceStore, storageEnv: secret.SourceMissing,
-				storagePlaintext: secret.SourcePlaintext,
 			}[choice]
 			if viaSetup.cred.Type != storageType(choice) || viaSetup.sources[0] != want {
 				t.Errorf("%s left %+v, want type %s resolving from %s", choice, viaSetup, storageType(choice), want)
