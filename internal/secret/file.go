@@ -31,9 +31,9 @@ const (
 // header explains the file to whoever finds it later. It is a comment, so reading it back is unaffected.
 const header = `# Qatlas CLI plaintext credential fallback.
 #
-# This file holds secrets in clear text. It exists only because it was switched on explicitly, and it is
-# read only while allow_plaintext is true. It is the named way out for a machine without a working system
-# credential store; on a machine that has one, delete this file and keep the secrets there.
+# This file holds secrets in clear text. An earlier version wrote it when it was switched on explicitly,
+# and it is read only while allow_plaintext is true. Nothing writes new secrets here any more: run
+# 'qatlas vault migrate' to move its entries into the vault and remove this file.
 #
 # The file must stay readable by its owner alone (mode 0600).
 `
