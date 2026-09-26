@@ -331,7 +331,14 @@ func Register(reg *capability.Registry) error {
 				"read and write on a fine-grained token; a merge additionally needs Contents: read and " +
 				"write; release reads need repo or public_repo on a classic token, or Contents: read on a " +
 				"fine-grained token; release changes, including delete, need repo on a classic token, or " +
-				"Contents: read and write on a fine-grained token; keep those in a credential of their own",
+				"Contents: read and write on a fine-grained token; pull request review and line comment " +
+				"reads need repo or public_repo on a classic token, or Pull requests: read on a " +
+				"fine-grained token; submitting a review, replying to a line comment, resolving or " +
+				"unresolving a thread, and requesting or removing reviewers need repo on a classic token, " +
+				"or Pull requests: read and write on a fine-grained token; pull request conversation " +
+				"comments need the same scopes as github.comments.*: repo or public_repo on a classic " +
+				"token, or Pull requests or Issues: read, and read and write for a comment, on a " +
+				"fine-grained token; keep those in a credential of their own",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -434,6 +441,18 @@ func Register(reg *capability.Registry) error {
 				"tools list names github.releases.delete",
 			Tools: []string{releasesList.ID, releasesGet.ID, releaseAssetsList.ID, releasesCreate.ID,
 				releasesUpdate.ID},
+		}, {
+			ID: "pull-request-reviews", Title: "Pull request reviews",
+			Description: "reads and writes the conversation comments, reviews with line comments, replies, " +
+				"and requested reviewers of a pull request, and reads, resolves, and unresolves its review " +
+				"threads; every change needs its own confirmation, and approving stays unticked, since it is " +
+				"offered only where a connection's tools list names github.pullrequestreviews.approve",
+			MutationReason: "reviewing a pull request needs to write comments and reviews; approving is kept " +
+				"out of every profile so it always needs its own tools list entry",
+			Tools: []string{pullRequestCommentsList.ID, pullRequestCommentsCreate.ID, pullRequestReviewsList.ID,
+				pullRequestReviewsCreate.ID, pullRequestReviewCommentsList.ID, pullRequestReviewCommentsReply.ID,
+				pullRequestReviewThreadsList.ID, pullRequestReviewThreadsResolve.ID,
+				pullRequestReviewThreadsUnresolve.ID, pullRequestReviewersRequest.ID, pullRequestReviewersRemove.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -458,7 +477,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
 	}, slices.Concat(itemOperations(), lifecycleOperations(), fieldOperations(), viewOperations(),
 		statusOperations(), accessOperations(), automationOperations(), actionsOperations(),
-		maintenanceOperations(), pullRequestOperations(), releaseOperations())...)
+		maintenanceOperations(), pullRequestOperations(), releaseOperations(), pullRequestCommentOperations(),
+		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
+		pullRequestReviewerOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1168,6 +1189,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := pullsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := reviewsSubject(parts[2]); what != "" {
 			s.what = what
 		}
 		if what := releasesSubject(parts[2]); what != "" {

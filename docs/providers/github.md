@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, and release reads and changes: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, release reads and confirmed changes, the listed-only delete, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, and release reads and changes: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -24,6 +24,10 @@ and updates its head branch with its base while the head is still a given commit
 any profile: a connection offers it only while its `tools` list names it, because a merge into the wrong
 repository's default branch is the costliest mistake there. Its project items still see a pull request only
 as an item, and its issue and comment tools still refuse a pull request number. On the not-recommended profile
+`pull-request-reviews` it also reads and writes the pull request's conversation comments, reads and submits
+reviews with their line comments bundled in, replies to a line comment, reads, resolves, and unresolves review
+threads, and requests or removes reviewers; only approving is not in any profile, offered only while a
+connection's `tools` list names `github.pullrequestreviews.approve`. On the not-recommended profile
 `releases` it also lists the releases of a repository, reads one by identifier, tag, or as the latest
 published one, lists the metadata of a release's assets, and creates and updates releases; only a connection
 whose `tools` list names it deletes a release, because the tag it was cut from stays behind. It never accepts
@@ -190,7 +194,9 @@ and restoring stay unticked. The profile
 effect `delete` or one that changes access. The
 profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions), the
 not-recommended profiles `pull-requests` and `pull-requests-operator` under
-[Pull requests](#pull-requests), and the not-recommended profile `releases` under [Releases](#releases). A
+[Pull requests](#pull-requests), the not-recommended profile `pull-request-reviews` under
+[Pull request reviews and comments](#pull-request-reviews-and-comments), and the not-recommended profile
+`releases` under [Releases](#releases). A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -621,7 +627,10 @@ and never interpreted. `github.issues.get`, `github.issues.update`, `github.issu
 request as `invalid-request` and name the number and the repository, with a classic and a fine-grained token
 alike; a change is never sent. A fine-grained token without access to pull requests is refused by GitHub on
 such a number; only then Qatlas looks the number up once, and a refusal that names no pull request stays
-`permission`.
+`permission`. A pull request's own conversation comments are read and written by
+`github.pullrequestcomments.list` and `.create`, described under
+[Pull request reviews and comments](#pull-request-reviews-and-comments); the mirror image holds there, an
+issue number given to either is refused as `invalid-request`.
 
 ```text
 qatlas: invalid-request: number 39 in repository octo-org/example is a pull request; issue tools do not handle pull requests
@@ -872,8 +881,9 @@ token needs the `workflow` scope only to change workflow files, which only the l
 
 GitHub's project items and its issue and comment tools still see a pull request only as an item, or refuse
 its number as an `invalid-request`; the tools of this section read, create, change, close, reopen, and merge
-the pull requests of a repository themselves. They offer no way to review a pull request or to comment on
-one. The six reads are offered by the not-recommended setup profile `pull-requests`; the not-recommended
+the pull requests of a repository themselves. Reviewing a pull request, commenting on its conversation, and
+line comments are a separate group of tools, described under
+[Pull request reviews and comments](#pull-request-reviews-and-comments). The six reads are offered by the not-recommended setup profile `pull-requests`; the not-recommended
 profile `pull-requests-operator` adds the changes, described under [Changes](#changes-1) below, but never the
 merge, described under [Merge and conflicts](#merge-and-conflicts): it is offered only where a connection's
 `tools` list names `github.pullrequests.merge`, because a merge into the wrong repository's default branch is
@@ -1028,6 +1038,118 @@ commit and merges with it in two calls on the same connection.
 | `github.pullrequestchecks.list` | `repo` | Checks: read, and Commit statuses: read |
 | `github.pullrequests.create`, `update`, `close`, `reopen`, `github.pullrequestbranches.update` | `repo` | Pull requests: read and write |
 | `github.pullrequests.merge` | `repo` | Pull requests: read and write, plus Contents: read and write |
+
+## Pull request reviews and comments
+
+The tools of this section read and write a pull request's conversation comments, its reviews, the line
+comments a review bundles in, replies to an existing line comment, its review threads, and its requested
+reviewers. `github.comments.*` is unchanged and keeps refusing a pull request number; the two conversation
+comment tools of this section are its mirror image, refusing an issue number instead, described below. A
+line comment is never written on its own: it exists only bundled into the one review
+that creates it, in `github.pullrequestreviews.create` or `.approve`, or as a reply to an existing one in
+`github.pullrequestreviewcomments.reply`. The eleven reads and changes below `approve` are offered by the
+not-recommended setup profile `pull-request-reviews`; approving is in no profile, offered only while a
+connection's `tools` list names `github.pullrequestreviews.approve`, because an approval given on the
+connection's behalf is the one outcome no other review tool can reach.
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.pullrequestcomments.list` | read | safe | none | lists the conversation comments of a pull request, oldest first |
+| `github.pullrequestcomments.create` | create | non-idempotent | required | writes exactly one conversation comment |
+| `github.pullrequestreviews.list` | read | safe | none | lists the reviews of a pull request |
+| `github.pullrequestreviews.create` | create | non-idempotent | required | submits a review as `comment` or `request_changes`, with its `line_notes` bundled in |
+| `github.pullrequestreviews.approve` | create | non-idempotent | required | approves, with an optional body and `line_notes`; offered only where a connection's `tools` list names it |
+| `github.pullrequestreviewcomments.list` | read | safe | none | lists the line comments of a pull request, across every review |
+| `github.pullrequestreviewcomments.reply` | create | non-idempotent | required | writes exactly one reply in the thread of one line comment |
+| `github.pullrequestreviewthreads.list` | read | safe | none | lists the review threads of a pull request, each with its resolved state and its comments |
+| `github.pullrequestreviewthreads.resolve` | update | idempotent | required | marks one review thread resolved |
+| `github.pullrequestreviewthreads.unresolve` | update | idempotent | required | opens one resolved review thread again |
+| `github.pullrequestreviewers.request` | update | idempotent | required | requests the given users, teams, or both as reviewers |
+| `github.pullrequestreviewers.remove` | update | idempotent | required | removes the given users, teams, or both from the requested reviewers |
+
+```yaml
+connections:
+  pull-reviewer:
+    service: github
+    credential: github-operator
+    target: repos/octo-org/example
+    permissions: [read, create, update]
+    tools: [github.pullrequestcomments.list, github.pullrequestcomments.create,
+      github.pullrequestreviews.list, github.pullrequestreviews.create,
+      github.pullrequestreviewcomments.list, github.pullrequestreviewcomments.reply,
+      github.pullrequestreviewthreads.list, github.pullrequestreviewthreads.resolve,
+      github.pullrequestreviewthreads.unresolve, github.pullrequestreviewers.request,
+      github.pullrequestreviewers.remove]
+  pull-approver:
+    service: github
+    credential: github-operator
+    target: repos/octo-org/example
+    permissions: [read, create]
+    tools: [github.pullrequestreviews.approve]
+```
+
+`github.pullrequestcomments.list` and `.create` read and write a pull request's conversation comments through
+the same Issue Comments REST route `github.comments.*` uses; an issue number is refused as `invalid-request`,
+naming the number and the repository, the mirror image of the refusal `github.comments.*` gives a pull
+request number.
+
+```sh
+echo '{"limit":10}' | qatlas invoke github.pullrequestcomments.list --connection pull-reviewer --arg number=42
+echo '{"number":42,"body":"Looks good to me."}' |
+  qatlas invoke github.pullrequestcomments.create --connection pull-reviewer --confirm
+```
+
+`github.pullrequestreviews.create` and `.approve` require `sha`, the pull request's head commit exactly as
+`github.pullrequests.get` reports it, sent to GitHub as `commit_id`, so a review never lands on a head the
+caller did not see. `event` (`comment` or `request_changes`, required for `.create`; always an approval for
+`.approve`) and an optional `body` are the review itself; `line_notes` bundles its line comments into this one
+call, each with `path`, `line`, `side` (`left` or `right` of the diff), optionally `start_line` and
+`start_side` for a multi-line comment, and `body`, at most 50. The argument is named `line_notes`, not
+`comments`, because a change tool's input schema may not offer an argument by that name. A head that changed
+since it was read, GitHub reviewing one's own pull request, an unknown commit, or a line comment naming a
+line outside the diff all answer 422; Qatlas re-reads the pull request once to tell a changed head apart
+and refuses `invalid-request` naming the expected and the current commit, or, for another reason, answers
+`provider-error` naming the likely causes. Neither is ever retried automatically.
+
+```sh
+echo '{"number":42,"sha":"6cb1a1e...","event":"request_changes","body":"One thing to fix.",
+  "line_notes":[{"path":"a.go","line":10,"side":"right","body":"Use the existing helper here."}]}' |
+  qatlas invoke github.pullrequestreviews.create --connection pull-reviewer --confirm
+echo '{"number":42,"sha":"6cb1a1e..."}' | qatlas invoke github.pullrequestreviews.approve --connection pull-approver --confirm
+```
+
+`github.pullrequestreviewcomments.list` reads a pull request's line comments across every review, with path,
+line, side, commit, the comment they reply to when any, author, and body. `github.pullrequestreviewcomments.reply`
+takes `comment_id`, as the list reports it, and writes exactly one reply in its thread; a `comment_id` GitHub
+does not hold answers not found, naming the review comment.
+
+GitHub keeps whether a review thread is resolved only in GraphQL, never in the REST line comments read
+above, so `github.pullrequestreviewthreads.list`, `.resolve`, and `.unresolve` read and change that state on
+their own, by the thread's `id` as the list reports it. `.resolve` and `.unresolve` also take `number`: before
+either changes anything, Qatlas reads the thread node itself and confirms it is a thread of `number` in the
+bound repository; a `thread_id` of another pull request or another repository is refused not found, naming
+"this review thread", and nothing is sent. Resolving an already-resolved thread, or unresolving an
+already-open one, is left as it is and reported in its current state.
+
+```sh
+qatlas invoke github.pullrequestreviewthreads.list --connection pull-reviewer --arg number=42
+qatlas invoke github.pullrequestreviewthreads.resolve --connection pull-reviewer --arg number=42 \
+  --arg thread_id=PRRT_kwABC --confirm
+```
+
+`github.pullrequestreviewers.request` and `.remove` take `reviewers` (logins), `team_reviewers` (team slugs of
+the repository's organization), or both, at least one and at most 15 together, and answer with the pull
+request itself, the same shape `github.pullrequests.get` reports, so `requested_reviewers` is read back after
+the change. A reviewer already requested, one not requested, and the pull request's own author are all left
+as they are.
+
+### Tokens for pull request reviews and comments
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.pullrequestreviews.list`, `github.pullrequestreviewcomments.list`, `github.pullrequestreviewthreads.list` | `repo` for a private repository; `public_repo` for a public one | Pull requests: read |
+| `github.pullrequestreviews.create`, `.approve`, `github.pullrequestreviewcomments.reply`, `github.pullrequestreviewthreads.resolve`, `.unresolve`, `github.pullrequestreviewers.request`, `.remove` | `repo` | Pull requests: read and write |
+| `github.pullrequestcomments.list`, `.create` | as `github.comments.*`: `repo` or `public_repo` | Pull requests or Issues: read; read and write for `.create` |
 
 ## Releases
 

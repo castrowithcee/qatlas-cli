@@ -676,8 +676,10 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	equalIDs(t, ids, []string{"github.actionspermissions.get", "github.comments.list", "github.issues.get",
 		"github.issues.list", "github.projectfields.list", "github.projectitems.get", "github.projectitems.list", "github.projects.list",
 		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
-		"github.pullrequestchecks.list", "github.pullrequestcommits.list", "github.pullrequestdiffs.get",
-		"github.pullrequestfiles.list", "github.pullrequests.get", "github.pullrequests.list",
+		"github.pullrequestchecks.list", "github.pullrequestcomments.list", "github.pullrequestcommits.list",
+		"github.pullrequestdiffs.get", "github.pullrequestfiles.list", "github.pullrequestreviewcomments.list",
+		"github.pullrequestreviews.list", "github.pullrequestreviewthreads.list", "github.pullrequests.get",
+		"github.pullrequests.list",
 		"github.releaseassets.list", "github.releases.get", "github.releases.list",
 		"github.repositories.list", "github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
@@ -686,7 +688,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 90 {
+	if len(metadata.Tools) != 102 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

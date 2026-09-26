@@ -276,6 +276,21 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.releases.update":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.releases.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
 			dataSensitivity),
+		"github.pullrequestcomments.list":   readRisk,
+		"github.pullrequestcomments.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.pullrequestreviews.list":    readRisk,
+		"github.pullrequestreviews.create":  changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.pullrequestreviews.approve": guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent,
+			dataSensitivity),
+		"github.pullrequestreviewcomments.list":  readRisk,
+		"github.pullrequestreviewcomments.reply": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.pullrequestreviewthreads.list":   readRisk,
+		"github.pullrequestreviewthreads.resolve": changeRisk(capability.EffectUpdate,
+			capability.IdempotencyIdempotent),
+		"github.pullrequestreviewthreads.unresolve": changeRisk(capability.EffectUpdate,
+			capability.IdempotencyIdempotent),
+		"github.pullrequestreviewers.request": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.pullrequestreviewers.remove":  changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {

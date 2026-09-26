@@ -181,7 +181,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",90,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",102,0,0\n", ",\"\",3,0,0\n",
 		",\"\",6,0,0\n", ",\"\",7,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -390,8 +390,15 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.projectstatus.update", "github.projectteams.list", "github.projecttemplates.mark", "github.projecttemplates.unmark",
 			"github.projectviews.create", "github.projectviews.delete", "github.projectviews.list",
 			"github.projectviews.update", "github.projectworkflows.delete", "github.projectworkflows.list",
-			"github.pullrequestbranches.update", "github.pullrequestchecks.list", "github.pullrequestcommits.list",
-			"github.pullrequestdiffs.get", "github.pullrequestfiles.list", "github.pullrequests.close",
+			"github.pullrequestbranches.update", "github.pullrequestchecks.list", "github.pullrequestcomments.create",
+			"github.pullrequestcomments.list", "github.pullrequestcommits.list",
+			"github.pullrequestdiffs.get", "github.pullrequestfiles.list",
+			"github.pullrequestreviewcomments.list", "github.pullrequestreviewcomments.reply",
+			"github.pullrequestreviewers.remove", "github.pullrequestreviewers.request",
+			"github.pullrequestreviews.approve", "github.pullrequestreviews.create", "github.pullrequestreviews.list",
+			"github.pullrequestreviewthreads.list", "github.pullrequestreviewthreads.resolve",
+			"github.pullrequestreviewthreads.unresolve",
+			"github.pullrequests.close",
 			"github.pullrequests.create", "github.pullrequests.get", "github.pullrequests.list",
 			"github.pullrequests.merge", "github.pullrequests.reopen", "github.pullrequests.update",
 			"github.releaseassets.list", "github.releases.create", "github.releases.delete",
