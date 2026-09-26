@@ -20,9 +20,13 @@
 // the issue tools read, create, and change issues of a repository and read or write the comments of one issue on explicit
 // request. The Actions tools observe the GitHub Actions of a repository and, only with the execute permission,
 // dispatch, re-run, or cancel one named workflow or run. Only a connection whose tools list names them
-// maintains workflow files below .github/workflows/ and Actions settings. A tool that touches a project and a
-// repository checks both. Nothing here accepts a free filter expression, a GraphQL document, or a route from an
-// agent, and every target is checked against the allow-list before a credential is resolved.
+// maintains workflow files below .github/workflows/ and Actions settings. The pull request tools, offered only
+// by the not-recommended setup profile pull-requests, read the pull requests of a repository: their list, one
+// pull request, its changed files, its commits, its diff, and the checks at its head commit; the project
+// items still see a pull request only as an item, and the issue and comment tools still refuse a pull request
+// number. A tool that touches a project and a repository checks both. Nothing here accepts a free filter
+// expression, a GraphQL document, or a route from an agent, and every target is checked against the
+// allow-list before a credential is resolved.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -313,7 +317,9 @@ func Register(reg *capability.Registry) error {
 				"on a fine-grained token, and dispatches, re-runs, and cancels need repo on a classic token or " +
 				"Actions: read and write plus Contents: read on a fine-grained one; the listed-only workflow file " +
 				"changes need repo and workflow, or Contents and Workflows: read and write, and the Actions " +
-				"settings Administration: read and write; keep those in a credential of their own",
+				"settings Administration: read and write; pull request reads need repo or public_repo on a " +
+				"classic token, or Pull requests: read, Checks: read, and Commit statuses: read on a " +
+				"fine-grained token; keep those in a credential of their own",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -392,6 +398,13 @@ func Register(reg *capability.Registry) error {
 				"actions they may use, and the default rights of its GITHUB_TOKEN; a connection offers these tools " +
 				"only while its tools list names them, and every change needs its own confirmation",
 			Tools: append([]string{}, adminTools...),
+		}, {
+			ID: "pull-requests", Title: "Pull requests",
+			Description: "reads the pull requests of a repository: their list, one pull request with its " +
+				"body and merge state, its changed files, its commits, its diff, and the checks at its head " +
+				"commit; changes nothing",
+			Tools: []string{pullsList.ID, pullsGet.ID, pullFilesList.ID, pullCommitsList.ID, pullDiffsGet.ID,
+				pullChecksList.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -416,7 +429,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: projectIssuesCreate, Handler: capability.Handler(invokeProjectIssuesCreate)},
 	}, slices.Concat(itemOperations(), lifecycleOperations(), fieldOperations(), viewOperations(),
 		statusOperations(), accessOperations(), automationOperations(), actionsOperations(),
-		maintenanceOperations())...)
+		maintenanceOperations(), pullRequestOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -943,7 +956,7 @@ func (c *Client) post(ctx context.Context, op, document string, variables map[st
 	if err != nil {
 		return envelope, providerError(op, "the request could not be built")
 	}
-	err = c.do(ctx, op, http.MethodPost, c.endpoints.graphql, payload, &envelope, change)
+	err = c.do(ctx, op, http.MethodPost, c.endpoints.graphql, payload, &envelope, change, nil)
 	return envelope, err
 }
 
@@ -1125,8 +1138,31 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := contentsSubject(parts[2], request.URL.Query().Get("ref")); what != "" {
 			s.what = what
 		}
+		if what := pullsSubject(parts[2]); what != "" {
+			s.what = what
+		}
 	}
 	return s
+}
+
+// pullsSubject names the pull request or the commit a pull request path below a repository addresses:
+// pulls/N, pulls/N/files, pulls/N/commits, commits/SHA/check-runs, or commits/SHA/status. It names only a
+// number of the characters the input schema allows or a hex commit SHA, and is empty otherwise.
+func pullsSubject(path string) string {
+	if rest, ok := strings.CutPrefix(path, "pulls/"); ok {
+		digits, _, _ := strings.Cut(rest, "/")
+		if number, err := strconv.Atoi(digits); err == nil && number > 0 {
+			return "pull request #" + strconv.Itoa(number)
+		}
+		return ""
+	}
+	if rest, ok := strings.CutPrefix(path, "commits/"); ok {
+		sha, tail, _ := strings.Cut(rest, "/")
+		if (tail == "check-runs" || tail == "status") && validSHA(sha) {
+			return "commit " + sha
+		}
+	}
+	return ""
 }
 
 // contentsSubject names the workflow file or the workflow directory a Contents path below a repository
@@ -1198,7 +1234,32 @@ func invalidResponse(op string, change bool) *provider.Error {
 
 // rest performs one bounded REST read below the configured REST root.
 func (c *Client) rest(ctx context.Context, op, path string, out any) error {
-	return c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false)
+	return c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, nil)
+}
+
+// restPage performs one bounded REST list read below the configured REST root and reports whether GitHub
+// announced a following page through the Link response header, for the plain array list routes that carry
+// no total count.
+func (c *Client) restPage(ctx context.Context, op, path string, query url.Values, out any) (bool, error) {
+	if len(query) > 0 {
+		path += "?" + query.Encode()
+	}
+	var header http.Header
+	if err := c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, &header); err != nil {
+		return false, err
+	}
+	return hasNextPage(header), nil
+}
+
+// hasNextPage reads the Link response header GitHub sends on its plain array list routes and reports
+// whether it names a following page: <url>; rel="next", possibly among further comma-separated links.
+func hasNextPage(header http.Header) bool {
+	for _, part := range strings.Split(header.Get("Link"), ",") {
+		if fields := strings.SplitN(part, ";", 2); len(fields) == 2 && strings.TrimSpace(fields[1]) == `rel="next"` {
+			return true
+		}
+	}
+	return false
 }
 
 // restChange sends one REST change below the configured REST root, once, and decodes the answer.
@@ -1207,13 +1268,15 @@ func (c *Client) restChange(ctx context.Context, op, method, path string, body a
 	if err != nil {
 		return providerError(op, "the request could not be built")
 	}
-	return c.do(ctx, op, method, c.endpoints.rest+path, payload, out, true)
+	return c.do(ctx, op, method, c.endpoints.rest+path, payload, out, true, nil)
 }
 
 // do sends one request with the shared authentication, version, and size rules and decodes the answer. A
 // change is never repeated: every failure after its request may have reached GitHub says so, and the next
-// request of this token waits mutationInterval.
-func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []byte, out any, change bool) error {
+// request of this token waits mutationInterval. header, when not nil, receives the response header of a
+// successful request, so a caller may read a pagination header without changing what is decoded.
+func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []byte, out any, change bool,
+	header *http.Header) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "GitHub", err)
 	}
@@ -1247,6 +1310,9 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return c.statusError(op, response, change)
+	}
+	if header != nil {
+		*header = response.Header
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil || len(data) > maxResponseBytes {

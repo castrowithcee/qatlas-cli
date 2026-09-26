@@ -261,7 +261,7 @@ defaults:
 		for provider, want := range map[string][3]string{
 			"bookstack": {"5", "2", "2"}, "telegram": {"3", "0", "0"}, "lexware": {"3", "0", "0"},
 			"twentycrm": {"5", "0", "0"}, "seatable": {"7", "0", "0"}, "nextcloud": {"6", "0", "0"},
-			"github": {"72", "0", "0"}, "todoist": {"39", "0", "0"},
+			"github": {"78", "0", "0"}, "todoist": {"39", "0", "0"},
 		} {
 			if rows[provider] != want {
 				t.Errorf("%s = %v tools and connections, want %v:\n%s", provider, rows[provider], want, stdout)

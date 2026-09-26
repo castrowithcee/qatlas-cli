@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes GitHub project and issue planning and GitHub Actions: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning, GitHub Actions, and pull request reads: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request, file, commit, diff, and check reads, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-09-25
+updated: 2026-09-26
 ---
 
 # GitHub
@@ -16,8 +16,11 @@ its views, and its status updates, changes its collaborators and teams, reads an
 automations, reads and maintains issues,
 comments, project items, and draft issues, and it observes and, when allowed, operates the
 GitHub Actions of a repository.
-On a connection that names them explicitly, it also maintains workflow files and Actions settings. It sees
-pull requests only as project items, and it never accepts a free filter expression, a GraphQL document, or a
+On a connection that names them explicitly, it also maintains workflow files and Actions settings, and, on
+the not-recommended profile `pull-requests`, it reads the pull requests of a repository: their list, one
+pull request, its changed files, its commits, its diff, and the checks at its head commit. Its project items
+still see a pull request only as an item, and its issue and comment tools still refuse a pull request number.
+It never accepts a free filter expression, a GraphQL document, or a
 REST route from the caller. A `repository`, `project`, or `owner` argument names exactly one target, and it
 must lie inside the connection's targets when the connection lists any.
 
@@ -131,8 +134,10 @@ its target as `project`.
 GitHub answers a repository, project, issue, or item it does not hold exactly like one the token may not see:
 a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested project or issue out. Qatlas reports all of them as
 `not-found` and names the target the request addressed, including a target a default chose, with what to
-check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, and the
-workflow file or `.github/workflows` directory with the ref it was read at, where the call named one:
+check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, the
+workflow file or `.github/workflows` directory with the ref it was read at, the pull request by its number,
+or, for `github.pullrequestchecks.list` once the pull request itself was found, the commit its checks were
+asked for, where the call named one:
 
 ```text
 qatlas: not-found: list issues: GitHub does not hold repository octo-org/example or does not show it to this token; check the name, and that the token can see it (classic: scope repo for a private repository; fine-grained: access to this repository)
@@ -140,6 +145,7 @@ qatlas: not-found: list project items: GitHub does not hold project users/octoca
 qatlas: not-found: get issue: GitHub does not hold issue #5 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: dispatch workflow: GitHub does not hold workflow file .github/workflows/release.yml at ref other in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: list repositories: GitHub does not hold owner orgs/octocat or does not show it to this token; check the login, and users/ for a user or orgs/ for an organization
+qatlas: not-found: get pull request: GitHub does not hold pull request #99 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: permission: list projects: this GitHub token may not read the projects of owner users/octocat; check its scopes or permissions; classic: scope read:project; fine-grained: Projects: read of the organization, as the projects of a user need a classic token
 qatlas: auth: list issues: GitHub rejected the token; check or renew the credential of this connection with 'qatlas credential set <credential> <role>' or in 'qatlas tui'
 ```
@@ -174,7 +180,8 @@ and restoring stay unticked. The profile
 `github.projectteams.list` of the [teams](#project-collaborators-and-teams), and
 `github.projectworkflows.list` of the [automations](#project-automations); no profile ticks a tool with the
 effect `delete` or one that changes access. The
-profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions). A profile is a
+profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions), and
+the not-recommended profile `pull-requests` under [Pull requests](#pull-requests). A profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
 
@@ -701,6 +708,12 @@ caller pages can move an older run onto the next batch, where it appears again; 
 GitHub answers at most 1000 runs of a run list filtered by `status`, `branch`, `event`, `actor`, or time;
 `has_more` turns false there, and a narrower filter reaches older runs.
 
+`github.pullrequests.list`, `github.pullrequestfiles.list`, and `github.pullrequestcommits.list` page by
+number as well, but GitHub answers these plain array routes without a total count, so `has_more` follows
+whether GitHub's `Link` response header names a following page instead. `github.pullrequestchecks.list`
+answers no cursor at all: it reads up to 100 check runs and 100 legacy statuses at the head commit in one
+call and reports `truncated` when GitHub held more of either.
+
 ## GitHub Actions
 
 A connection can observe the GitHub Actions of a repository it allows and, separately, operate them. The two
@@ -844,6 +857,72 @@ claims what the configured token holds.
 A repository or organization policy may forbid an execution although the token would allow it. A classic
 token needs the `workflow` scope only to change workflow files, which only the listed-only
 `github.workflowfiles.create` and `github.workflowfiles.update` do.
+
+## Pull requests
+
+GitHub's project items and its issue and comment tools still see a pull request only as an item, or refuse
+its number as an `invalid-request`; these six tools read the pull requests of a repository themselves. They
+offer no way to create, change, close, merge, or review a pull request, or to comment on one, and they are
+offered only by the not-recommended setup profile `pull-requests`, never by the recommended profile `read`.
+Every route lies below the chosen repository; no tool accepts an owner or a free REST path.
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.pullrequests.list` | read | safe | none | lists compact pull requests, filtered by `state`, `base`, and `head` |
+| `github.pullrequests.get` | read | safe | none | reads one pull request with its body, merge state, and requested reviewers |
+| `github.pullrequestfiles.list` | read | safe | none | lists its changed files with a bounded patch excerpt |
+| `github.pullrequestcommits.list` | read | safe | none | lists its commits |
+| `github.pullrequestdiffs.get` | read | safe | none | reads its unified diff, cut to at most 65536 bytes from its start |
+| `github.pullrequestchecks.list` | read | safe | none | reads the check runs and the combined commit status at its head commit |
+
+```yaml
+connections:
+  pull-reader:
+    service: github
+    credential: github-reader
+    target: repos/octo-org/example
+    permissions: [read]
+    tools: [github.pullrequests.list, github.pullrequests.get, github.pullrequestfiles.list,
+      github.pullrequestcommits.list, github.pullrequestdiffs.get, github.pullrequestchecks.list]
+```
+
+`github.pullrequests.list` filters by `state` (`open`, `closed`, or `all`; `open` when omitted), `base` (a
+branch name), and `head` (a branch name, or `LOGIN:branch` for a fork), in GitHub's own order; a pull request
+carries its number, title, state, whether it is a draft, its author, its head and base branch, its head
+commit, its labels, whether it is merged, its times, and its URL. Title, body, branch names, and commit
+messages are untrusted data. `github.pullrequests.get` adds the full body, `mergeable` (absent while GitHub
+is still computing it), `mergeable_state`, `merge_commit_sha`, the base commit, the requested reviewers, and
+the number of commits and changed files.
+
+```sh
+echo '{"state":"open","base":"main","limit":10}' | qatlas invoke github.pullrequests.list --connection pull-reader
+qatlas invoke github.pullrequests.get --connection pull-reader --arg number=42
+```
+
+`github.pullrequestfiles.list` reads the changed files with path, status, additions, deletions, changes, the
+previous path for a rename, and a patch excerpt: at most 4096 bytes of it, cut at a valid character boundary,
+with `patch_truncated` when GitHub's patch held more; a file GitHub sends no patch for, such as a binary
+file, carries none. `github.pullrequestcommits.list` reads each commit's SHA, its author (the linked GitHub
+login when GitHub reports one, otherwise the commit's author name), its message, and its time; the message is
+untrusted data. `github.pullrequestdiffs.get` reads the unified diff through GitHub's diff media type, from
+its start, up to the hard limit of 65536 bytes; `truncated` says when the diff held more. None of the three is
+ever read unbounded.
+
+`github.pullrequestchecks.list` takes `number` alone: it reads the pull request to resolve its head commit,
+then the check runs (the GitHub Checks API, which Actions and most third-party CI systems report through) and
+the combined legacy commit status (the older Status API) at that commit, and merges them into one compact
+list with name, status, conclusion, the most recent time, and a details URL; a legacy status is mapped into
+the same vocabulary, with `pending` becoming `in_progress` without a conclusion. `overall` summarises them:
+`pending` while a check still runs, `failure` once a finished check did not succeed, `success` when every one
+did, and `none` when nothing reported a check for the commit. `truncated` says when GitHub held more than the
+100 check runs or 100 statuses read per call.
+
+### Tokens for pull requests
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.pullrequests.list`, `get`, `github.pullrequestfiles.list`, `github.pullrequestcommits.list`, `github.pullrequestdiffs.get` | `repo` for a private repository; `public_repo` for a public one | Pull requests: read |
+| `github.pullrequestchecks.list` | `repo` | Checks: read, and Commit statuses: read |
 
 ## Workflow maintenance and Actions administration
 

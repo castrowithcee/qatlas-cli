@@ -255,6 +255,12 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 			actionsSettingSensitivity),
 		"github.workflowpermissions.update": guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent,
 			actionsSettingSensitivity),
+		"github.pullrequests.list":       readRisk,
+		"github.pullrequests.get":        readRisk,
+		"github.pullrequestfiles.list":   readRisk,
+		"github.pullrequestcommits.list": readRisk,
+		"github.pullrequestdiffs.get":    readRisk,
+		"github.pullrequestchecks.list":  readRisk,
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {

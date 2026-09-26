@@ -66,7 +66,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[22]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
+		"tools[28]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
 		"  github.projectitems.list,List GitHub project items,read,code planning roadmap\n", "  github.projectitems.update,Update GitHub project item fields,update,roadmap\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -106,7 +106,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[72]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[78]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.projectitems.get,Get a GitHub project item,read,", "github.projectitems.list,List GitHub project items,read,", "github.comments.list,List comments of a GitHub issue,read,",
 		"github.issues.create,Create a GitHub issue,create,", "github.issues.update,Update a GitHub issue,update,", "github.issues.close,Close a GitHub issue,update,",
 		"github.issues.reopen,Reopen a GitHub issue,update,", "github.comments.create,Comment on a GitHub issue,create,", "github.projectitems.update,Update GitHub project item fields,update,",
@@ -272,8 +272,8 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, toolResultFrom(t, responses[`"search"`]).Structured, &searched)
-	if len(searched.Operations) != 22 || searched.Operations[0].ID != "github.comments.list" ||
-		searched.Operations[21].ID != "github.workflows.list" {
+	if len(searched.Operations) != 28 || searched.Operations[0].ID != "github.comments.list" ||
+		searched.Operations[27].ID != "github.workflows.list" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 	describedByCLI := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--config", path, "--output", "json")
