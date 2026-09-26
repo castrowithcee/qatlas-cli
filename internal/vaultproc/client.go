@@ -46,6 +46,19 @@ func NewClient(path, recipient string) *Client { return &Client{Path: path, Reci
 // vault that is not encrypted: such a vault has no key, and therefore no vault process.
 var ErrNoRecipient = errors.New("the vault has no recipient to check the vault process with; it is not encrypted")
 
+// PeerError is a failure at the vault socket where a process did listen, together with the id of that
+// process. The id is no secret, and it is what a person needs to find and end a process that cannot be
+// used: one that holds another key, left from before the vault was encrypted anew, or one whose program an
+// update replaced, which refuses every client from then on.
+type PeerError struct {
+	PID int
+	Err error
+}
+
+func (e *PeerError) Error() string { return fmt.Sprintf("%v (process %d)", e.Err, e.PID) }
+
+func (e *PeerError) Unwrap() error { return e.Err }
+
 // Status is what a running vault process reports about itself. It holds no secret and no credential name.
 type Status struct {
 	// PID is the process id of the vault process.
@@ -115,7 +128,13 @@ func (c *Client) call(ctx context.Context, req request) (response, error) {
 		return response{}, c.failed(ctx, err)
 	}
 	defer conn.Close()
-	return c.exchange(ctx, conn, deadline, req)
+	resp, err := c.exchange(ctx, conn, deadline, req)
+	if err != nil && !errors.Is(err, ErrNotRunning) && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
+		if pid := peerPID(conn); pid > 0 {
+			err = &PeerError{PID: pid, Err: err}
+		}
+	}
+	return resp, err
 }
 
 // deadline is the earlier of the client's own limit and the end of ctx.
@@ -192,11 +211,6 @@ func (c *Client) challenge(ctx context.Context, conn net.Conn) error {
 	case err == nil && checkProof(nonce, resp.Proof):
 		return nil
 	case err == nil, errors.Is(err, errUnproven):
-		// The process id is no secret, and it is what a person needs to find a process that holds another
-		// key, such as one left from before the vault was encrypted anew.
-		if pid := peerPID(conn); pid > 0 {
-			return fmt.Errorf("%w (process %d)", errUnproven, pid)
-		}
 		return errUnproven
 	default:
 		return err

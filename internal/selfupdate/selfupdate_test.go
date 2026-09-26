@@ -136,9 +136,18 @@ func TestUpdateReplacesBinaryAndManpage(t *testing.T) {
 		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0",
 		GOOS: "linux", GOARCH: "amd64", Executable: executable,
 	}
+	// The hook runs once, with the old program still in place.
+	calls := 0
+	client.BeforeReplace = func(context.Context) {
+		calls++
+		assertFile(t, executable, "old-binary")
+	}
 	result, err := client.Update(context.Background())
 	if err != nil {
 		t.Fatal(err)
+	}
+	if calls != 1 {
+		t.Fatalf("BeforeReplace ran %d times, want once", calls)
 	}
 	if !result.UpdateAvailable || !result.Updated || result.Latest != "v1.1.0" {
 		t.Fatalf("Update() = %+v", result)
@@ -170,6 +179,7 @@ func TestUpdateLeavesInstallationUntouchedOnChecksumMismatch(t *testing.T) {
 	client := &Client{
 		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0",
 		GOOS: "linux", GOARCH: "amd64", Executable: executable,
+		BeforeReplace: func(context.Context) { t.Error("BeforeReplace ran although nothing is replaced") },
 	}
 	if _, err := client.Update(context.Background()); err == nil {
 		t.Fatal("Update() = nil error, want checksum failure")
@@ -183,7 +193,8 @@ func TestUpdateLeavesInstallationUntouchedOnChecksumMismatch(t *testing.T) {
 func TestUpdateDoesNotDowngrade(t *testing.T) {
 	server := releaseServer(t, "v1.0.0", nil, "")
 	defer server.Close()
-	client := &Client{BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.1.0"}
+	client := &Client{BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.1.0",
+		BeforeReplace: func(context.Context) { t.Error("BeforeReplace ran although nothing is replaced") }}
 	result, err := client.Update(context.Background())
 	if err != nil {
 		t.Fatal(err)

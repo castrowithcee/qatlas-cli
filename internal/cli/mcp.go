@@ -493,7 +493,7 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 			return nil, nil, err
 		}
 		if request.List != "" {
-			response, err := s.list(core, raw, request.List, request.Provider)
+			response, err := s.list(ctx, core, raw, request.List, request.Provider)
 			return response, nil, err
 		}
 		response, err := core.Search(request.SearchRequest)
@@ -524,7 +524,8 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 // list answers the overview mode of qatlas.search: the providers 'qatlas providers' lists, or the
 // connections 'qatlas connections [provider]' lists, as the same data. It is a mode of its own, so the
 // arguments of the tool search are refused beside it, and provider is only the filter of connections.
-func (s *mcpServer) list(core *application.Core, raw json.RawMessage, list, provider string) (any, error) {
+func (s *mcpServer) list(ctx context.Context, core *application.Core, raw json.RawMessage, list,
+	provider string) (any, error) {
 	var arguments map[string]json.RawMessage
 	_ = json.Unmarshal(raw, &arguments)
 	names := make([]string, 0, len(arguments))
@@ -548,7 +549,15 @@ func (s *mcpServer) list(core *application.Core, raw json.RawMessage, list, prov
 				"; leave the provider out to list every connection"}
 		}
 	}
-	return core.Connections(provider), nil
+	// The resolver lives as long as the server and is built under the same lock as the core; the vault's
+	// state is asked anew for every listing, so a vault unlocked or locked since is reported as it is now.
+	locked := func() bool {
+		s.coreMu.Lock()
+		secrets, err := s.opts.resolver()
+		s.coreMu.Unlock()
+		return err == nil && secrets.VaultLocked(ctx)
+	}
+	return core.Connections(provider, locked), nil
 }
 
 func decodeMCPArguments(raw json.RawMessage, target any) error {
@@ -611,7 +620,9 @@ func mcpTools() []mcpTool {
 				"list returns an overview instead: providers lists every provider with its description, note, " +
 				"and counts of tools, connections that can run them, and configured connections; connections " +
 				"lists the configured connections, of provider when given, each with its description, " +
-				"permitted effects, and tools list. list takes no other argument than provider with connections.",
+				"permitted effects, and tools list, and, while the vault is locked, unusable: vault-locked for a " +
+				"connection that cannot be used until a person unlocks it, empty for the others. list takes no " +
+				"other argument than provider with connections.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"list":{"type":"string","enum":["providers","connections"],"description":"Return the providers or the configured connections instead of tools; only provider may accompany connections"},"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},
 		{

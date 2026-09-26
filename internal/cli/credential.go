@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // maxSecretBytes bounds what a piped secret may be, so a wrong redirection cannot pull a whole file into
@@ -69,7 +71,9 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 			"holds asks, on the terminal, for a passphrase to encrypt it with; leaving that empty keeps the\n" +
 			"vault unencrypted. Every later secret still needs that passphrase to store, asked once by the\n" +
 			"admin check every management command runs before it does anything, and goes straight into the\n" +
-			"unlocked vault rather than a pending entry.\n\n" +
+			"unlocked vault rather than a pending entry. Where a vault process holds the vault unlocked, it\n" +
+			"is handed the new secret too, only once it proved that it holds the vault's key; should that\n" +
+			"fail, the secret stays stored and a warning says how to reload the process.\n\n" +
 			"Success is silent, except for a warning when an environment variable would override what was\n" +
 			"just stored.",
 		Args: exactlyTwoArgs,
@@ -83,7 +87,8 @@ func newCredentialCommand(opts *Options, reg *capability.Registry) *cobra.Comman
 		Short: "Remove the secret of one credential role",
 		Long: "For a keyring credential, the entry is removed from the system keyring, and from a plaintext\n" +
 			"credentials.yaml left over from an earlier version, if any. For a vault credential, it is removed\n" +
-			"from the vault, unlocked first by this command's own admin check if it was encrypted and locked.\n" +
+			"from the vault, unlocked first by this command's own admin check if it was encrypted and locked,\n" +
+			"and from a vault process that holds the vault unlocked.\n" +
 			"An environment variable is not touched: it belongs to the shell, not to qatlas. When the keyring\n" +
 			"is locked or cannot be reached, the command says so and what to do, and never reports a secret\n" +
 			"as removed that may still be stored.",
@@ -122,6 +127,9 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 		if err := secrets.SetVault(name, role, value, offerVaultPassphrase); err != nil {
 			return classifyUserError(err)
 		}
+		syncVaultProcess(c, secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
+			return client.Set(ctx, name, role, value)
+		})
 	default:
 		if err := secrets.Set(name, role, value); err != nil {
 			if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
@@ -187,6 +195,9 @@ func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry,
 			}
 			return classifyUserError(err)
 		}
+		syncVaultProcess(c, secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
+			return client.Delete(ctx, name, role)
+		})
 		if env := secret.DerivedEnvName(name, role); secrets.Lookup(env) {
 			fmt.Fprintf(c.ErrOrStderr(),
 				"qatlas: warning: %s is still set and keeps delivering the secret for %s.%s\n", env, name, role)

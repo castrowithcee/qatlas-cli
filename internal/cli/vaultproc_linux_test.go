@@ -325,3 +325,10 @@ func TestSessionWarnings(t *testing.T) {
 		t.Fatalf("sessionWarnings() with a drop-in in /etc switching it off = %v, want none", got)
 	}
 }
+
+// The next steps of vault-locked where a vault process keeps the vault unlocked for later calls.
+const (
+	vaultLockedStep    = "run 'qatlas vault unlock' in a terminal, which keeps it unlocked for later commands, then try again"
+	vaultLockedMCPStep = "agents cannot unlock the vault; ask the user to run 'qatlas vault unlock' in a terminal, " +
+		"which keeps it unlocked for later calls, then try again"
+)

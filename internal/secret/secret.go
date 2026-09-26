@@ -8,7 +8,8 @@
 //     content into the vault and removes it
 //
 // A credential of type vault is resolved from the vault alone, unencrypted or encrypted to a passphrase, and
-// never falls through to the store or the plaintext file; see WithVault. The order otherwise follows the
+// never falls through to the store or the plaintext file; see WithVault. An encrypted vault that is locked
+// here is read from the vault process that holds it unlocked, where one runs; see VaultProcessError. The order otherwise follows the
 // rule that the more explicit and the more short-lived source wins, the same order gh, the AWS CLI and
 // kubectl use. Because overriding is allowed, every caller is told which stage delivered: otherwise a
 // forgotten environment variable would shadow the credential store silently.
@@ -37,6 +38,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // Source names the stage of the cascade that delivered a secret. The value is what a user sees, so it is
@@ -129,8 +131,8 @@ func (e *MissingSecretError) remedy() string {
 		"credential to type keyring and use 'qatlas credential set'", e.Credential, e.Role)
 }
 
-// VaultLockedError reports that a vault is encrypted and locked, and no terminal was attached to ask for
-// its passphrase. It is its own type, kept apart from MissingSecretError, so it keeps the runtime exit code
+// VaultLockedError reports that a vault is encrypted and locked, no vault process holds it unlocked, and no
+// terminal was attached to ask for its passphrase. It is its own type, kept apart from MissingSecretError, so it keeps the runtime exit code
 // the process already leaves for a locked credential store, rather than the usage exit code a missing
 // secret gets: a locked vault is not a configuration problem, and a person who unlocks it and retries needs
 // no configuration change.
@@ -149,6 +151,47 @@ func (e *VaultLockedError) Error() string {
 	}
 	return fmt.Sprintf("the vault holding the secret of %s.%s is locked, and no terminal is attached to ask "+
 		"for its passphrase", e.Credential, e.Role)
+}
+
+// VaultProcessError reports a vault process that listens for the vault but cannot deliver a secret: it did
+// not prove that it holds this vault's key, it refused this program, it speaks another protocol version, or
+// it failed to answer. The resolver never falls back to asking for the passphrase then. A process that
+// fails a check is not the vault process this program started, or no longer passes for it, and asking
+// instead would hide that; a process that stays silent would make every access wait for a prompt.
+//
+// The message names the process by its id where it is known and how to end it. It never carries a secret:
+// neither the process nor the client puts one into an error.
+type VaultProcessError struct {
+	Credential string
+	Role       string
+	Err        error
+}
+
+func (e *VaultProcessError) Error() string {
+	return fmt.Sprintf("the vault process cannot deliver the secret of %s.%s: %v; %s", e.Credential, e.Role,
+		e.Err, VaultProcessRemedy(e.Err))
+}
+
+func (e *VaultProcessError) Unwrap() error { return e.Err }
+
+// VaultProcessRemedy names the way out of err, a failure of a running vault process. A process that fails a
+// check or speaks another version cannot be asked to lock either, so it has to be ended by its process id;
+// any other failure is fixed by locking the vault and unlocking it again.
+func VaultProcessRemedy(err error) string {
+	if errors.Is(err, vaultproc.ErrRefused) || errors.Is(err, vaultproc.ErrVersion) {
+		return EndVaultProcess(err) + ", then run 'qatlas vault unlock'"
+	}
+	return "run 'qatlas vault lock', then 'qatlas vault unlock'"
+}
+
+// EndVaultProcess says how to end the vault process err came from: by its id where the error carries one,
+// otherwise by finding it first.
+func EndVaultProcess(err error) string {
+	var peer *vaultproc.PeerError
+	if errors.As(err, &peer) {
+		return fmt.Sprintf("end it with 'kill %d'", peer.PID)
+	}
+	return "find it with 'pgrep -af \"vault serve\"' and end it with 'kill <pid>'"
 }
 
 // Errors a Store reports. Anything else from a store is treated like ErrUnavailable, because a store that
@@ -276,7 +319,10 @@ type Resolver struct {
 	// passphrase asks for the vault's passphrase interactively; see WithVault. It is never consulted while
 	// Unattended.
 	passphrase vault.PassphraseFunc
-	redactor   *redact.Redactor
+	// process is whether an encrypted vault locked here is read from its vault process; New switches it on
+	// where the platform runs one.
+	process  bool
+	redactor *redact.Redactor
 
 	mu         sync.Mutex
 	unattended bool
@@ -300,6 +346,7 @@ func New(dir string, red *redact.Redactor) (*Resolver, error) {
 		return nil, err
 	}
 	r := NewWith(os.Getenv, store, NewFile(filepath.Join(dir, FileName)), red)
+	r.process = vaultproc.Supported
 	return r.WithVault(vault.New(dir), vault.ReadPassphrase), nil
 }
 
@@ -362,10 +409,13 @@ func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.C
 	// A vault credential is resolved from the vault alone: it never falls through to the system keyring or
 	// to the plaintext fallback, the same way env stops after stage one.
 	if cred.Type == config.CredentialTypeVault {
-		value, found, err := r.fromVault(credential, role)
+		value, found, err := r.fromVault(ctx, credential, role)
+		var process *VaultProcessError
 		switch {
 		case err != nil && errors.Is(err, vault.ErrNoTerminal):
 			return Value{}, &VaultLockedError{Credential: credential, Role: role}
+		case errors.As(err, &process):
+			return Value{}, err
 		case err != nil:
 			checked = append(checked, stage(SourceVault, "unavailable"))
 			return Value{}, missing(credential, cred, role, checked, err)
@@ -446,12 +496,25 @@ func (r *Resolver) storeAnswered() {
 	r.failed = StoreNotAsked
 }
 
-// fromVault asks the vault for one credential role, unlocking it interactively when it is encrypted and
-// locked. A resolver built without WithVault reports the vault unavailable rather than reaching into a nil
-// pointer, which is every test that never sets up a vault.
-func (r *Resolver) fromVault(credential, role string) (string, bool, error) {
+// fromVault asks the vault for one credential role. An encrypted vault locked in this process is asked of
+// its vault process first; only where none runs is it unlocked interactively. A resolver built without
+// WithVault reports the vault unavailable rather than reaching into a nil pointer, which is every test that
+// never sets up a vault.
+func (r *Resolver) fromVault(ctx context.Context, credential, role string) (string, bool, error) {
 	if r.vault == nil {
 		return "", false, errors.New("no vault is configured for this resolver")
+	}
+	if client := r.processClient(); client != nil {
+		// The client sends nothing, not even the credential name, before the process proved that it holds
+		// this vault's key. Every call is a connection of its own, so a process started or locked after
+		// this resolver was built is found as it is now.
+		value, found, err := client.Get(ctx, credential, role)
+		switch {
+		case err == nil:
+			return value, found, nil
+		case !errors.Is(err, vaultproc.ErrNotRunning):
+			return "", false, &VaultProcessError{Credential: credential, Role: role, Err: err}
+		}
 	}
 	ask := r.passphrase
 	r.mu.Lock()
@@ -465,6 +528,47 @@ func (r *Resolver) fromVault(credential, role string) (string, bool, error) {
 		return "", false, err
 	}
 	return value, found, nil
+}
+
+// processClient returns the client of the vault process that would hold r's vault unlocked, or nil where
+// none can: the resolver does not use one, or the vault is not encrypted and locked in this process. An
+// unencrypted vault has no vault process, and one unlocked here answers itself. A vault whose recipient or
+// socket path cannot be told has no process to ask either, and is read the way it would be without one.
+func (r *Resolver) processClient() *vaultproc.Client {
+	if !r.process || r.vault == nil {
+		return nil
+	}
+	if state, err := r.vault.State(); err != nil || state != vault.StateLocked {
+		return nil
+	}
+	recipient, err := r.vault.Recipient()
+	if err != nil {
+		return nil
+	}
+	path, err := vaultproc.SocketPath(r.vault.Dir())
+	if err != nil {
+		return nil
+	}
+	return vaultproc.NewClient(path, recipient)
+}
+
+// VaultLocked reports whether a credential of type vault cannot be read now without a passphrase: the
+// vault is encrypted, it was not unlocked in this process, and no vault process that passes the check
+// answers for it. It asks for no passphrase and reads no secret; a running vault process is asked for its
+// status alone, which ends with ctx at the latest.
+func (r *Resolver) VaultLocked(ctx context.Context) bool {
+	if r.vault == nil {
+		return false
+	}
+	if state, err := r.vault.State(); err != nil || state != vault.StateLocked {
+		return false
+	}
+	client := r.processClient()
+	if client == nil {
+		return true
+	}
+	_, err := client.Status(ctx)
+	return err != nil
 }
 
 func missing(credential string, cred config.Credential, role string, checked []string, cause error) error {

@@ -12,6 +12,9 @@ import (
 	"syscall"
 )
 
+// Supported reports whether a vault process runs on this platform.
+const Supported = true
+
 // Modes of the socket and of the directory it lives in: both are reachable by their owner alone.
 const (
 	socketMode = 0o600

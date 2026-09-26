@@ -57,6 +57,11 @@ type Client struct {
 	GOOS       string
 	GOARCH     string
 	Executable string
+	// BeforeReplace, when set, runs once the release is downloaded and verified, right before the
+	// installed files are replaced, and not at all when nothing is replaced. A process of the old program
+	// that has to be stopped while it still passes for this program, such as the vault process, is stopped
+	// there.
+	BeforeReplace func(ctx context.Context)
 }
 
 // New returns the production updater for version.
@@ -117,6 +122,9 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 	payload, err := extractPayload(archiveName, archive, goos)
 	if err != nil {
 		return Result{}, err
+	}
+	if c.BeforeReplace != nil {
+		c.BeforeReplace(ctx)
 	}
 	if err := c.install(payload, goos); err != nil {
 		return Result{}, err

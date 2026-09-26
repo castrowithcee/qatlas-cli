@@ -1296,14 +1296,58 @@ func TestConnectionsListTheRoutesWithoutTheirEndpoints(t *testing.T) {
 		{Name: "reader", Provider: "fake", Permissions: "read", Tools: ToolsAllPermitted},
 		{Name: "writer", Provider: "fake", Description: "writes pages", Permissions: "read delete", Tools: ToolsListed},
 	}
-	if got := core.Connections("").Connections; !reflect.DeepEqual(got, want) {
+	if got := core.Connections("", nil).Connections; !reflect.DeepEqual(got, want) {
 		t.Errorf("Connections() = %+v, want %+v", got, want)
 	}
-	if got := core.Connections("chat").Connections; !reflect.DeepEqual(got, want[:1]) {
+	if got := core.Connections("chat", nil).Connections; !reflect.DeepEqual(got, want[:1]) {
 		t.Errorf("Connections(chat) = %+v, want %+v", got, want[:1])
 	}
-	if got := core.Connections("absent").Connections; got == nil || len(got) != 0 {
+	if got := core.Connections("absent", nil).Connections; got == nil || len(got) != 0 {
 		t.Errorf("Connections(absent) = %#v, want an empty list", got)
+	}
+}
+
+// While the vault is locked, the listing names every connection that reads its secrets from the vault as
+// unusable with vault-locked, and asks about the vault only when a listed connection reads from it.
+func TestConnectionsNameTheLockedVault(t *testing.T) {
+	cfg := config.New()
+	cfg.Services["wiki"] = config.Service{Provider: "fake", BaseURL: "https://wiki.example.invalid"}
+	cfg.Services["chat"] = config.Service{Provider: "chat", BaseURL: "https://chat.example.invalid"}
+	cfg.Credentials["sealed"] = config.Credential{Type: config.CredentialTypeVault}
+	cfg.Credentials["shared"] = config.Credential{
+		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
+	}
+	cfg.Connections["reader"] = config.Connection{Service: "wiki", Credential: "sealed"}
+	cfg.Connections["writer"] = config.Connection{Service: "wiki", Credential: "shared"}
+	cfg.Connections["alerts"] = config.Connection{Service: "chat", Credential: "shared"}
+	core := New(capability.NewRegistry(), cfg, nil, nil)
+
+	asked := 0
+	locked := func() bool { asked++; return true }
+	unusable := func(got []ConnectionSummary) map[string]string {
+		states := map[string]string{}
+		for _, c := range got {
+			if c.Unusable == nil {
+				states[c.Name] = "<absent>"
+			} else {
+				states[c.Name] = *c.Unusable
+			}
+		}
+		return states
+	}
+
+	got := unusable(core.Connections("", locked).Connections)
+	want := map[string]string{"alerts": "", "reader": "vault-locked", "writer": ""}
+	if !reflect.DeepEqual(got, want) || asked != 1 {
+		t.Errorf("Connections() while locked = %v after %d questions, want %v after one", got, asked, want)
+	}
+	got = unusable(core.Connections("chat", locked).Connections)
+	if !reflect.DeepEqual(got, map[string]string{"alerts": "<absent>"}) || asked != 1 {
+		t.Errorf("Connections(chat) = %v after %d questions, want no field and no question", got, asked)
+	}
+	got = unusable(core.Connections("", func() bool { return false }).Connections)
+	if !reflect.DeepEqual(got, map[string]string{"alerts": "<absent>", "reader": "<absent>", "writer": "<absent>"}) {
+		t.Errorf("Connections() while unlocked = %v, want no field", got)
 	}
 }
 

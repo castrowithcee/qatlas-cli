@@ -238,7 +238,7 @@ func TestVaultUnlockWithoutTerminalIsVaultLocked(t *testing.T) {
 	if !strings.Contains(stderr, "qatlas: vault-locked:") {
 		t.Errorf("stderr = %q, want the vault-locked code", stderr)
 	}
-	if !strings.Contains(stderr, "run 'qatlas vault unlock' in a terminal, or press ctrl+l in 'qatlas tui'") {
+	if !strings.Contains(stderr, vaultLockedStep) {
 		t.Errorf("stderr = %q, want the human next step", stderr)
 	}
 }

@@ -4,6 +4,9 @@ package vaultproc
 
 import "net"
 
+// Supported reports whether a vault process runs on this platform. It does not here yet.
+const Supported = false
+
 // VerifyProgram refuses every peer on this platform: nothing checks here yet what runs at the other end.
 func VerifyProgram(net.Conn) error { return ErrUnsupported }
 

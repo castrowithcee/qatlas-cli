@@ -118,8 +118,9 @@ Discover in small steps, in this order, then invoke. Discovery writes TOON; --ou
                                     connections that can run them, and of
                                     all configured connections
   qatlas connections <provider>     the configured connections: description,
-                                    permitted effects, and whether a tools
-                                    list narrows them
+                                    permitted effects, whether a tools list
+                                    narrows them, and which ones a locked
+                                    vault keeps unusable
   qatlas tools <provider>           the tools those connections offer, each
                                     with the connections that offer it
   qatlas describe <tool-id>         one compact contract: the arguments and
@@ -169,7 +170,7 @@ Exit code 2 is a problem of the request or the configuration:
 
 Exit code 1 is a runtime or provider failure:
 
-- vault-locked: the credential's secret sits in an encrypted vault, and no terminal is attached to ask for its passphrase; agents cannot unlock a vault, so stop and ask the user to run 'qatlas vault unlock' in a terminal, or press ctrl+l in 'qatlas tui'.
+- vault-locked: the credential's secret sits in an encrypted vault that no vault process holds unlocked, and no terminal is attached to ask for its passphrase; agents cannot unlock a vault, so stop and ask the user to run 'qatlas vault unlock' in a terminal, which on Linux keeps it unlocked for later calls. 'qatlas connections' marks the connections this affects as unusable.
 - unreachable: the provider host did not answer.
 - tls: the TLS connection to the provider failed.
 - auth: the provider rejected the credential; stop and report the code.

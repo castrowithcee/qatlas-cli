@@ -238,12 +238,17 @@ const (
 // provider it reaches, the line its owner maintains, the effects its permissions allow, separated by single
 // spaces, and how its tools list shapes what it offers. It never names a service, a URL, a credential, a
 // target, or a secret source.
+//
+// Unusable is present exactly while the vault is locked and a listed connection reads its secrets from it:
+// the error code an invoke through such a connection ends with, vault-locked, and empty for every other
+// connection of the list.
 type ConnectionSummary struct {
-	Name        string `json:"name"`
-	Provider    string `json:"provider"`
-	Description string `json:"description"`
-	Permissions string `json:"permissions"`
-	Tools       string `json:"tools"`
+	Name        string  `json:"name"`
+	Provider    string  `json:"provider"`
+	Description string  `json:"description"`
+	Permissions string  `json:"permissions"`
+	Tools       string  `json:"tools"`
+	Unusable    *string `json:"unusable,omitempty"`
 }
 
 // ConnectionsResponse is the payload inside the CLI envelope.
@@ -252,14 +257,29 @@ type ConnectionsResponse struct {
 }
 
 // Connections lists the configured routes, of one provider when provider is not empty, sorted by provider
-// and then by name. It answers from the configuration alone.
-func (c *Core) Connections(provider string) ConnectionsResponse {
+// and then by name. It answers from the configuration and, only when a listed connection reads its secrets
+// from the vault, from vaultLocked, which reports whether the vault is locked without reading a secret. A
+// nil vaultLocked stands for a vault that is never locked.
+func (c *Core) Connections(provider string, vaultLocked func() bool) ConnectionsResponse {
+	listed := func(name string) bool {
+		return provider == "" || c.config.Services[c.config.Connections[name].Service].Provider == provider
+	}
+	locked := false
+	if vaultLocked != nil {
+		for name, connection := range c.config.Connections {
+			if listed(name) && c.config.Credentials[connection.Credential].Type == config.CredentialTypeVault {
+				locked = vaultLocked()
+				break
+			}
+		}
+	}
+
 	connections := make([]ConnectionSummary, 0)
 	for name, connection := range c.config.Connections {
-		owner := c.config.Services[connection.Service].Provider
-		if provider != "" && owner != provider {
+		if !listed(name) {
 			continue
 		}
+		owner := c.config.Services[connection.Service].Provider
 		permitted := map[config.Permission]bool{}
 		for _, permission := range c.config.ConnectionPermissions(name) {
 			permitted[permission] = true
@@ -277,10 +297,18 @@ func (c *Core) Connections(provider string) ConnectionsResponse {
 		case connection.Tools != nil:
 			tools = ToolsListed
 		}
-		connections = append(connections, ConnectionSummary{
+		summary := ConnectionSummary{
 			Name: name, Provider: owner, Description: connection.Description,
 			Permissions: strings.Join(effects, " "), Tools: tools,
-		})
+		}
+		if locked {
+			unusable := ""
+			if c.config.Credentials[connection.Credential].Type == config.CredentialTypeVault {
+				unusable = string(output.CodeVaultLocked)
+			}
+			summary.Unusable = &unusable
+		}
+		connections = append(connections, summary)
 	}
 	sort.Slice(connections, func(i, j int) bool {
 		if connections[i].Provider != connections[j].Provider {

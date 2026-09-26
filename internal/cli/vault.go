@@ -50,14 +50,20 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"interactive terminal; where the vault is encrypted they ask for its passphrase there too, once per\n" +
 			"command and before doing anything, whatever credential they target. No terminal at all, or a wrong\n" +
 			"passphrase, fails with the code admin-required; an agent never manages a credential or the vault.\n\n" +
-			"An encrypted vault also needs its passphrase to answer a read outside such a command, and asks for\n" +
-			"it on the terminal, never as a command line argument, an environment variable, or a file. Without\n" +
-			"a terminal to ask on, such as an agent talking to qatlas over MCP, such an access fails with the\n" +
-			"code vault-locked; a person runs 'qatlas vault unlock' to open it, or presses ctrl+l in 'qatlas\n" +
-			"tui'.\n\n" +
+			"An encrypted vault also needs its passphrase to answer a read outside such a command, unless a\n" +
+			"vault process holds it unlocked, and asks for it on the terminal, never as a command line\n" +
+			"argument, an environment variable, or a file. Without a terminal to ask on, such as an agent\n" +
+			"talking to qatlas over MCP, such an access fails with the code vault-locked, and 'qatlas\n" +
+			"connections' marks the connections it affects; a person runs 'qatlas vault unlock' to open it, or\n" +
+			"presses ctrl+l in 'qatlas tui' to open it for the editor alone.\n\n" +
 			"On Linux 'vault unlock' hands the unlocked vault to a vault process that holds it open until it\n" +
 			"is idle for vault.idle_timeout (12h unless the configuration says otherwise), 'vault lock' ends\n" +
-			"it, or the machine restarts; elsewhere unlocking only lasts for the current process. No command\n" +
+			"it, or the machine restarts; elsewhere unlocking only lasts for the current process. Every later\n" +
+			"command and the MCP broker, one started before included, read their secrets from that process\n" +
+			"without asking for anything. 'credential set', 'credential delete', and 'vault migrate' hand it\n" +
+			"what they changed; 'vault passphrase', 'vault decrypt', and 'qatlas update' lock it first. A\n" +
+			"process at the vault's socket that fails the check or does not answer is reported with its\n" +
+			"process id and how to end it, never answered by asking for the passphrase instead. No command\n" +
 			"ever shows a stored secret back.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
@@ -140,7 +146,9 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"re-encrypts only key.age with it. Every stored secret, the key pair, and the recipient stay\n" +
 			"exactly as they were. A wrong current passphrase, an empty new one, or a mismatch between the\n" +
 			"two new entries aborts without touching any file. Run against a vault that is not encrypted, it\n" +
-			"refuses and says to use 'qatlas vault encrypt' instead.",
+			"refuses and says to use 'qatlas vault encrypt' instead. A vault process that holds the vault\n" +
+			"unlocked with the old passphrase is locked once all three entries are made, and the command\n" +
+			"says so; 'qatlas vault unlock' opens the vault again.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultPassphrase(c, opts)
@@ -156,7 +164,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"recipient, and secrets.age. --confirm is required, and a wrong passphrase aborts without\n" +
 			"touching any file. Afterwards 'qatlas vault status' warns that the vault is unencrypted, the same\n" +
 			"way it does for a vault that was never encrypted at all. Run against a vault that is not\n" +
-			"encrypted, it refuses and says there is nothing to decrypt.",
+			"encrypted, it refuses and says there is nothing to decrypt. A vault process that holds the vault\n" +
+			"unlocked is locked once the passphrase is entered, since it could not be reached afterwards.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultDecrypt(c, opts, decryptConfirm)
@@ -193,7 +202,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"terminal; without a terminal to ask on the file is kept and the message names this command as the\n" +
 			"next step to run again. Run with nothing left to migrate, it says so and changes nothing. Run\n" +
 			"again after a partial or a complete migration, it repeats safely: a role already in the vault\n" +
-			"keeps its value, and only a role still missing is written.",
+			"keeps its value, and only a role still missing is written. A vault process that holds the vault\n" +
+			"unlocked is handed every entry written, the same way 'qatlas credential set' hands it one.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultMigrate(c, opts, reg)
@@ -273,6 +283,16 @@ func vaultProcessOf(ctx context.Context, v *vault.Vault, state vault.State, warn
 	}
 	addWarning(warning, "the vault process cannot be asked: "+err.Error())
 	return vaultProcessState{State: "unknown"}
+}
+
+// vaultLockedCheck returns how a listing learns whether the vault is locked, asked only when it lists a
+// connection that reads from the vault. A run whose resolver cannot be built lists without the state; the
+// invoke that needs a secret reports that problem itself.
+func vaultLockedCheck(ctx context.Context, opts *Options) func() bool {
+	return func() bool {
+		secrets, err := opts.resolver()
+		return err == nil && secrets.VaultLocked(contextOrBackground(ctx))
+	}
 }
 
 // vaultProcessClient returns the client of the vault process that serves v, checked against v's recipient.
@@ -424,16 +444,82 @@ func runVaultLock(c *cobra.Command, opts *Options) error {
 	if err != nil {
 		return err
 	}
-	// The process answers before it closes its socket; the command returns once it did, so the next
-	// command already finds the vault locked.
+	awaitLocked(ctx, client)
+	fmt.Fprintln(out, "the vault is locked: the vault process overwrote its secrets and ended")
+	return nil
+}
+
+// awaitLocked waits a moment for a vault process that answered a lock to close its socket, which it does
+// right after answering, so the next command already finds the vault locked.
+func awaitLocked(ctx context.Context, client *vaultproc.Client) {
 	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
 		if _, err := client.Status(ctx); errors.Is(err, vaultproc.ErrNotRunning) {
-			break
+			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	fmt.Fprintln(out, "the vault is locked: the vault process overwrote its secrets and ended")
-	return nil
+}
+
+// lockVaultProcess locks the vault process that holds v unlocked, ahead of a change after which it would
+// serve what the vault no longer holds, or could not be reached to lock at all: an update replaces the
+// program it passes for, 'vault decrypt' removes the key a client checks it with, and 'vault passphrase'
+// retires the passphrase it was unlocked with. The change goes ahead either way.
+//
+// It returns what to tell the person once the change is done: that the process was locked, followed by
+// next, or that it could not be, with its process id and how to end it; "" when no vault process runs.
+func lockVaultProcess(ctx context.Context, v *vault.Vault, why, next string) string {
+	if !vaultProcessSupported || v == nil {
+		return ""
+	}
+	client, err := vaultProcessClient(v)
+	if err != nil {
+		// A vault that is not encrypted has no vault process, and one whose recipient cannot be read has
+		// none this program can reach either.
+		return ""
+	}
+	ctx = contextOrBackground(ctx)
+	switch err := client.Lock(ctx); {
+	case errors.Is(err, vaultproc.ErrNotRunning):
+		return ""
+	case err != nil:
+		return fmt.Sprintf("qatlas: warning: the vault process could not be locked %s: %s; it keeps the "+
+			"secrets it holds until it locks itself, unless you %s", why, err, secret.EndVaultProcess(err))
+	}
+	awaitLocked(ctx, client)
+	return fmt.Sprintf("qatlas: the vault process was locked %s; %s", why, next)
+}
+
+// lockVaultProcessOf is lockVaultProcess for the vault of this run. A run that has no vault to find, such
+// as one whose configuration cannot be located, has no vault process to lock either.
+func lockVaultProcessOf(ctx context.Context, opts *Options, why, next string) string {
+	v, err := vaultOf(opts)
+	if err != nil {
+		return ""
+	}
+	return lockVaultProcess(ctx, v, why, next)
+}
+
+// syncVaultProcess hands a change just written to the vault on to the vault process that holds it
+// unlocked, so the process keeps answering what the vault holds. The client checks the process, its user
+// and its key, before it sends anything, the secret included. Without a vault process there is nothing to
+// update. Any other failure is a warning: the vault already holds the change and keeps it.
+func syncVaultProcess(c *cobra.Command, v *vault.Vault, change func(context.Context, *vaultproc.Client) error) {
+	if !vaultProcessSupported || v == nil {
+		return
+	}
+	client, err := vaultProcessClient(v)
+	if errors.Is(err, vault.ErrNotEncrypted) {
+		return
+	}
+	if err == nil {
+		err = change(contextOrBackground(c.Context()), client)
+	}
+	if err == nil || errors.Is(err, vaultproc.ErrNotRunning) {
+		return
+	}
+	fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: the vault holds the change, but the vault process that "+
+		"holds it unlocked could not take it and still answers with what it held before: %s; %s\n",
+		err, secret.VaultProcessRemedy(err))
 }
 
 // absConfigPath returns the configuration file of this run as an absolute path, the form a vault process
@@ -579,6 +665,11 @@ func runVaultPassphrase(c *cobra.Command, opts *Options) error {
 		return err
 	}
 
+	// A passphrase is changed because the old one should no longer open the vault; a vault process
+	// unlocked with it would keep the vault open regardless, so it is locked first.
+	note := lockVaultProcess(c.Context(), v, "before the passphrase changed",
+		"run 'qatlas vault unlock' to unlock the vault again")
+	defer printNote(c, note)
 	if err := v.ChangePassphrase(oldPassphrase, newPassphrase); err != nil {
 		if errors.Is(err, vault.ErrWrongPassphrase) {
 			return &UsageError{err}
@@ -587,6 +678,14 @@ func runVaultPassphrase(c *cobra.Command, opts *Options) error {
 	}
 	fmt.Fprintln(c.OutOrStdout(), "the vault's passphrase is changed")
 	return nil
+}
+
+// printNote writes what lockVaultProcess had to say to standard error, where it stays apart from the
+// command's own output.
+func printNote(c *cobra.Command, note string) {
+	if note != "" {
+		fmt.Fprintln(c.ErrOrStderr(), note)
+	}
 }
 
 func runVaultDecrypt(c *cobra.Command, opts *Options, confirmed bool) error {
@@ -618,6 +717,11 @@ func runVaultDecrypt(c *cobra.Command, opts *Options, confirmed bool) error {
 		return err
 	}
 
+	// Once the vault is decrypted, its recipient is gone and a vault process could not be checked, nor
+	// therefore asked to lock, any more; it would hold the secrets until its idle timeout.
+	note := lockVaultProcess(c.Context(), v, "before the vault was decrypted",
+		"the unencrypted vault needs no unlocking")
+	defer printNote(c, note)
 	if err := v.Decrypt(passphrase); err != nil {
 		if errors.Is(err, vault.ErrWrongPassphrase) {
 			return &UsageError{err}
@@ -719,6 +823,14 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 			return classifyUserError(err)
 		}
 	}
+	syncVaultProcess(c, v, func(ctx context.Context, client *vaultproc.Client) error {
+		for _, p := range plan {
+			if err := client.Set(ctx, p.name, p.role, p.value); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 
 	// The take-over is verified back wherever that needs no passphrase this run never asked for: a locked
 	// vault took every entry as a pending write, unreadable without unlocking it. It checks exactly what

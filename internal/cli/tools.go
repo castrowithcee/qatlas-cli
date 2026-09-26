@@ -72,9 +72,15 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			"                 contract says requires_tool_allow_list\n" +
 			"  listed         only the tools its tools list names\n" +
 			"  none           an empty tools list: no tool at all\n\n" +
-			"It is answered from the local configuration alone: no provider is contacted and no secret is\n" +
-			"read. No URL, credential, target, or secret source is published. The tools one connection\n" +
-			"offers are one 'qatlas tools <provider> --connection <name>' away.\n\n" +
+			"While the vault is encrypted and locked, a connection whose credential is of type vault cannot\n" +
+			"be used, and every row gets a column unusable: vault-locked for such a connection, the code its\n" +
+			"invoke would end with, and empty for the others. Locked means that no vault process holds the\n" +
+			"vault unlocked; 'qatlas vault unlock' starts one. Without such a connection, or with the vault\n" +
+			"unlocked, the column is left out.\n\n" +
+			"It is answered from the local configuration and the vault's state alone: no provider is\n" +
+			"contacted, no secret is read, and no passphrase is asked for. No URL, credential, target, or\n" +
+			"secret source is published. The tools one connection offers are one 'qatlas tools <provider>\n" +
+			"--connection <name>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
 			"JSON.",
 		Args: atMostOneArg("provider"),
@@ -96,7 +102,7 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			if err != nil {
 				return err
 			}
-			return emitDocument(c, format, core.Connections(provider))
+			return emitDocument(c, format, core.Connections(provider, vaultLockedCheck(c.Context(), opts)))
 		},
 	}
 }

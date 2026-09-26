@@ -405,13 +405,15 @@ func TestClientRefusesAnotherProgramAsServer(t *testing.T) {
 	if err := privateDir(filepath.Dir(path)); err != nil {
 		t.Fatalf("privateDir() error = %v", err)
 	}
-	_, out := helper(t, otherProgram(t), "listen", path)
+	cmd, out := helper(t, otherProgram(t), "listen", path)
 	if got := line(t, out); got != "listening" {
 		t.Fatalf("the helper process said %q", got)
 	}
 
 	_, _, err := NewClient(path, testRecipient).Get(context.Background(), "wiki-reader", "token")
-	if !errors.Is(err, ErrRefused) || !strings.Contains(err.Error(), "process ") {
+	var peer *PeerError
+	if !errors.Is(err, ErrRefused) || !errors.As(err, &peer) || peer.PID != cmd.Process.Pid ||
+		!strings.Contains(err.Error(), fmt.Sprintf("(process %d)", cmd.Process.Pid)) {
 		t.Fatalf("Get() from another program error = %v, want ErrRefused naming its process", err)
 	}
 	if got := line(t, out); got != "received 0" {
@@ -432,6 +434,28 @@ func TestServerRefusesAnotherProgramAsClient(t *testing.T) {
 	_, out := helper(t, otherProgram(t), "get", path)
 	if got := line(t, out); got != fmt.Sprintf("answer %q 0", codeRefused) {
 		t.Fatalf("another program got %s", got)
+	}
+}
+
+// A server that refuses this program, as the process an update left behind does, is named by its process
+// id, so a person can end what cannot be asked to lock.
+func TestClientNamesAServerThatRefusesIt(t *testing.T) {
+	path := socketIn(t)
+	l, err := Listen(path)
+	if err != nil {
+		t.Fatalf("Listen() error = %v", err)
+	}
+	s := NewServer(testKey, testSecrets())
+	s.Verify = func(net.Conn) error { return fmt.Errorf("%w: it runs another program", ErrRefused) }
+	serve(t, s, l)
+
+	err = NewClient(path, testRecipient).Lock(context.Background())
+	var peer *PeerError
+	if !errors.Is(err, ErrRefused) || !errors.As(err, &peer) || peer.PID != os.Getpid() {
+		t.Fatalf("Lock() refused by the server error = %v, want ErrRefused naming process %d", err, os.Getpid())
+	}
+	if s.stopping() {
+		t.Fatalf("a refused lock stopped the server")
 	}
 }
 

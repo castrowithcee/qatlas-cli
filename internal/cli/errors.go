@@ -51,7 +51,16 @@ func nextStep(err error, r route) string {
 		}
 		return "run the command in a terminal and enter the passphrase, or manage it in 'qatlas tui'"
 	case output.CodeVaultLocked:
-		if r == routeMCP {
+		// Where a vault process runs, 'vault unlock' keeps the vault open for every later call, the
+		// broker's included; elsewhere it only opens it for itself.
+		switch {
+		case vaultProcessPlatform && r == routeMCP:
+			return "agents cannot unlock the vault; ask the user to run 'qatlas vault unlock' in a terminal, " +
+				"which keeps it unlocked for later calls, then try again"
+		case vaultProcessPlatform:
+			return "run 'qatlas vault unlock' in a terminal, which keeps it unlocked for later commands, " +
+				"then try again"
+		case r == routeMCP:
 			return "agents cannot unlock the vault; ask the user to unlock it"
 		}
 		return "run 'qatlas vault unlock' in a terminal, or press ctrl+l in 'qatlas tui'"
