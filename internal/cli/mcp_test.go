@@ -14,10 +14,12 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -62,13 +64,13 @@ func TestMCPDiscoveryAndFixedTools(t *testing.T) {
 	if _, ok := capabilities["tools"]; !ok {
 		t.Fatalf("capabilities = %s", capabilities)
 	}
-	// A client that only speaks MCP reads the same guide 'qatlas agents' prints, as the server instructions.
+	// A client that only speaks MCP reads the short MCP guide as the server instructions, not 'qatlas agents'.
 	var instructions struct {
 		Instructions string `json:"instructions"`
 	}
 	decodeRaw(t, discover, &instructions)
-	if instructions.Instructions != topicText(t, "agents") {
-		t.Errorf("server/discover instructions = %q, want the agents guide", instructions.Instructions)
+	if instructions.Instructions != helptopics.MCP().Text {
+		t.Errorf("server/discover instructions = %q, want the MCP guide", instructions.Instructions)
 	}
 
 	var listed struct {
@@ -187,8 +189,8 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 
 // A client of a handshake-based protocol version opens with initialize and then speaks without per-request
 // metadata. It gets the requested version when the server speaks it and the newest one otherwise, the same
-// guide as instructions, and the same fixed tools; a request that declares a version is still served per
-// request.
+// short MCP guide as instructions, and the same fixed tools; a request that declares a version is still
+// served per request.
 func TestMCPInitializeNegotiatesLegacyVersions(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
@@ -230,7 +232,7 @@ func TestMCPInitializeNegotiatesLegacyVersions(t *testing.T) {
 		}
 		decodeRaw(t, responses["1"].Result, &result)
 		if _, ok := result.Capabilities["tools"]; result.ProtocolVersion != tt.want || !ok ||
-			result.ServerInfo.Name != "qatlas" || result.Instructions != topicText(t, "agents") {
+			result.ServerInfo.Name != "qatlas" || result.Instructions != helptopics.MCP().Text {
 			t.Errorf("%s: initialize = %s, want version %s", tt.requested, responses["1"].Result, tt.want)
 		}
 		var listed struct{ Tools []mcpTool }
@@ -1351,5 +1353,61 @@ func TestMisspelledNamesSuggestTheClosestOneOverCLIAndMCP(t *testing.T) {
 	if got, want := mcp("qatlas.search", `{"provider":"fak"}`), `invalid-request: unknown provider "fak" `+
 		`(did you mean "fake"?); leave the provider out to search every provider`; got != want {
 		t.Errorf("MCP search = %q, want %q", got, want)
+	}
+}
+
+// The MCP guide is what server/discover and initialize hand a client as instructions instead of the much
+// longer 'qatlas agents'; it must fit inside the roughly 2,048 characters such a client keeps, name the
+// three fixed tools and the fields a caller branches or confirms on, and only document argument names the
+// fixed tools' schemas actually have.
+func TestMCPGuideFitsAndMatchesTheSchemas(t *testing.T) {
+	guide := helptopics.MCP().Text
+	if length := utf8.RuneCountInString(guide); length > 2000 {
+		t.Fatalf("MCP guide is %d characters, want at most 2000", length)
+	}
+	for _, tool := range []string{"qatlas.search", "qatlas.describe", "qatlas.invoke"} {
+		if !strings.Contains(guide, tool) {
+			t.Errorf("MCP guide does not name %s", tool)
+		}
+	}
+	for _, want := range []string{"connection", "confirm", "isError", "structuredContent"} {
+		if !strings.Contains(guide, want) {
+			t.Errorf("MCP guide does not mention %q", want)
+		}
+	}
+
+	// Gathered from the fixed tools' own schemas, not hardcoded, so a renamed or removed argument is caught
+	// here rather than only in a client's hands.
+	properties := map[string]bool{}
+	var required []string
+	for _, tool := range mcpTools() {
+		var schema struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+			Required   []string                   `json:"required"`
+		}
+		if err := json.Unmarshal(tool.InputSchema, &schema); err != nil {
+			t.Fatalf("%s schema: %v", tool.Name, err)
+		}
+		for name := range schema.Properties {
+			properties[name] = true
+		}
+		required = append(required, schema.Required...)
+	}
+	// The arguments this guide documents by name; every one must be a real property of a fixed tool, and
+	// every required argument of the three tools must be named here.
+	documented := []string{"query", "provider", "connection", "effect", "all", "limit", "cursor", "list",
+		"operation", "full", "arguments", "confirm"}
+	for _, name := range documented {
+		if !properties[name] {
+			t.Errorf("MCP guide documents %q, which is not a property of any fixed tool's input schema", name)
+		}
+		if !strings.Contains(guide, name) {
+			t.Errorf("MCP guide claims to document %q but does not name it", name)
+		}
+	}
+	for _, name := range required {
+		if !contains(documented, name) {
+			t.Errorf("MCP guide does not name the required argument %q", name)
+		}
 	}
 }

@@ -49,46 +49,8 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 	return &cobra.Command{
 		Use:   "mcp",
 		Short: "Serve the fixed agent tools over MCP stdio",
-		Long: "The server offers the fixed MCP tools qatlas.search, qatlas.describe, and qatlas.invoke\n" +
-			"over stdio, one JSON-RPC message per line. It speaks MCP 2026-07-28, where every request\n" +
-			"declares io.modelcontextprotocol/protocolVersion and io.modelcontextprotocol/clientCapabilities\n" +
-			"in params._meta, and MCP 2025-11-25 and 2025-06-18, which an initialize request negotiates\n" +
-			"once for the process; initialize answers any other version with 2025-11-25. server/discover and\n" +
-			"the initialize result return the guide 'qatlas agents' prints as their instructions, so a\n" +
-			"client that only speaks MCP reads the same guide. qatlas.describe and qatlas.invoke take the\n" +
-			"tool ID as operation. Arguments outside a tool's input schema fail with invalid-request naming\n" +
-			"the field, such as '$.tool is not allowed'.\n\n" +
-			"qatlas.describe returns the compact contract 'qatlas describe' prints as operation, beside the\n" +
-			"connections that can run it; full set to true returns the complete descriptor with both\n" +
-			"schemas instead, as 'qatlas describe --full' does.\n\n" +
-			"qatlas.search answers from the local configuration alone: no provider is contacted and no\n" +
-			"secret is read. Like 'qatlas tools' it returns only the tools a configured connection offers,\n" +
-			"or with connection the tools that connection offers; all set to true adds the others, each\n" +
-			"with the reason 'qatlas tools --all' names. It filters by query, provider, connection, and\n" +
-			"effect and returns at most limit tools in stable ID order; an omitted, non-positive, or larger\n" +
-			"limit becomes 50. The response carries the tools as operations, has_more, which is true\n" +
-			"exactly when another match follows, and next_cursor, which is present only then. Each tool is\n" +
-			"the entry 'qatlas tools' prints: id, title, effect, and connections, here a list of the\n" +
-			"connection names that offer it, plus reason with all; qatlas.describe returns the rest.\n" +
-			"Passing next_cursor back as cursor with the same filters returns the following page; a\n" +
-			"request without cursor returns the first. A cursor that is malformed or belongs to other\n" +
-			"filters fails with invalid-request.\n\n" +
-			"list turns qatlas.search into an overview of what it searches: list providers returns the\n" +
-			"providers 'qatlas providers' lists, and list connections the configured connections 'qatlas\n" +
-			"connections' lists, of provider when given, as the same data in the same order. Beside list only\n" +
-			"provider is allowed, and only with connections; any other argument fails with invalid-request.\n\n" +
-			"A failed tool call is a result with isError set to true whose text is '<code>: <message>' and\n" +
-			"whose structuredContent is an object with at least code and message, such as\n" +
-			"{\"code\":\"unknown-operation\",\"message\":\"...\"}. Some codes add fields. A qatlas.invoke\n" +
-			"refused with connection-ambiguous adds operation and connections: every candidate route with its\n" +
-			"name and its description, which is empty where none is maintained. Nothing is chosen for the\n" +
-			"caller; the next request names one of them as connection. A qatlas.invoke refused with\n" +
-			"connection-selection adds the same fields; connections names the routes that offer the tool, and\n" +
-			"is empty when none does. The text names the same candidates, each with its description shortened\n" +
-			"to 80 characters, for a client that shows only the text. A request refused with\n" +
-			"unsupported-capability adds operation, connection, and reason. Where a message points to\n" +
-			"discovery, it names qatlas.search or qatlas.describe instead of a command.",
-		Args: noArgs,
+		Long:  mcpCommandLong(),
+		Args:  noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			// Nobody watches the requests of a server, so the keyring must not wait for an unlock prompt.
 			opts.unattended = true
@@ -96,6 +58,54 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			return server.serve(c.Context(), c.InOrStdin())
 		},
 	}
+}
+
+// mcpCommandLong is the long help of 'qatlas mcp'. It ends with the exact guide server/discover and
+// initialize hand the client as instructions, so a person reads over its shoulder what a client sees.
+func mcpCommandLong() string {
+	return "The server offers the fixed MCP tools qatlas.search, qatlas.describe, and qatlas.invoke\n" +
+		"over stdio, one JSON-RPC message per line. It speaks MCP 2026-07-28, where every request\n" +
+		"declares io.modelcontextprotocol/protocolVersion and io.modelcontextprotocol/clientCapabilities\n" +
+		"in params._meta, and MCP 2025-11-25 and 2025-06-18, which an initialize request negotiates\n" +
+		"once for the process; initialize answers any other version with 2025-11-25. server/discover and\n" +
+		"the initialize result return the shorter guide below as their instructions, short enough for a\n" +
+		"client that truncates them; 'qatlas agents' remains the one guide for the CLI, at CLI length.\n" +
+		"qatlas.describe and qatlas.invoke take the\n" +
+		"tool ID as operation. Arguments outside a tool's input schema fail with invalid-request naming\n" +
+		"the field, such as '$.tool is not allowed'.\n\n" +
+		"qatlas.describe returns the compact contract 'qatlas describe' prints as operation, beside the\n" +
+		"connections that can run it; full set to true returns the complete descriptor with both\n" +
+		"schemas instead, as 'qatlas describe --full' does.\n\n" +
+		"qatlas.search answers from the local configuration alone: no provider is contacted and no\n" +
+		"secret is read. Like 'qatlas tools' it returns only the tools a configured connection offers,\n" +
+		"or with connection the tools that connection offers; all set to true adds the others, each\n" +
+		"with the reason 'qatlas tools --all' names. It filters by query, provider, connection, and\n" +
+		"effect and returns at most limit tools in stable ID order; an omitted, non-positive, or larger\n" +
+		"limit becomes 50. The response carries the tools as operations, has_more, which is true\n" +
+		"exactly when another match follows, and next_cursor, which is present only then. Each tool is\n" +
+		"the entry 'qatlas tools' prints: id, title, effect, and connections, here a list of the\n" +
+		"connection names that offer it, plus reason with all; qatlas.describe returns the rest.\n" +
+		"Passing next_cursor back as cursor with the same filters returns the following page; a\n" +
+		"request without cursor returns the first. A cursor that is malformed or belongs to other\n" +
+		"filters fails with invalid-request.\n\n" +
+		"list turns qatlas.search into an overview of what it searches: list providers returns the\n" +
+		"providers 'qatlas providers' lists, and list connections the configured connections 'qatlas\n" +
+		"connections' lists, of provider when given, as the same data in the same order. Beside list only\n" +
+		"provider is allowed, and only with connections; any other argument fails with invalid-request.\n\n" +
+		"A failed tool call is a result with isError set to true whose text is '<code>: <message>' and\n" +
+		"whose structuredContent is an object with at least code and message, such as\n" +
+		"{\"code\":\"unknown-operation\",\"message\":\"...\"}. Some codes add fields. A qatlas.invoke\n" +
+		"refused with connection-ambiguous adds operation and connections: every candidate route with its\n" +
+		"name and its description, which is empty where none is maintained. Nothing is chosen for the\n" +
+		"caller; the next request names one of them as connection. A qatlas.invoke refused with\n" +
+		"connection-selection adds the same fields; connections names the routes that offer the tool, and\n" +
+		"is empty when none does. The text names the same candidates, each with its description shortened\n" +
+		"to 80 characters, for a client that shows only the text. A request refused with\n" +
+		"unsupported-capability adds operation, connection, and reason. Where a message points to\n" +
+		"discovery, it names qatlas.search or qatlas.describe instead of a command.\n\n" +
+		"The guide below is exactly what server/discover and initialize hand the client as instructions;\n" +
+		"'qatlas agents' covers the same ground, and more, at CLI length.\n\n" +
+		helptopics.MCP().Text
 }
 
 type mcpServer struct {
@@ -244,7 +254,7 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 			"capabilities":      map[string]any{"tools": map[string]any{}},
 			"ttlMs":             mcpCacheTTLMillis,
 			"cacheScope":        "public",
-			"instructions":      helptopics.Agents().Text,
+			"instructions":      helptopics.MCP().Text,
 			"_meta":             mcpServerMeta(),
 		}))
 	case "tools/list":
@@ -331,7 +341,7 @@ func (s *mcpServer) initialize(message mcpMessage) mcpResponse {
 		"protocolVersion": s.legacy,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
 		"serverInfo":      map[string]string{"name": "qatlas", "version": version},
-		"instructions":    helptopics.Agents().Text,
+		"instructions":    helptopics.MCP().Text,
 	})
 }
 

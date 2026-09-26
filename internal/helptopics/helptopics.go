@@ -27,10 +27,18 @@ func All() []Topic {
 	}
 }
 
-// Agents returns the guide for agents. 'qatlas agents' prints it, and 'qatlas mcp' hands the same text to
-// every client as its server instructions, so both ways read one guide.
+// Agents returns the guide for agents. 'qatlas agents' prints it; it is the one guide for the CLI, and MCP
+// clients read the shorter guide MCP returns instead, drawn from the same source.
 func Agents() Topic {
 	return Topic{Name: "agents", Short: "Let an agent discover and invoke tools through qatlas", Text: agents}
+}
+
+// MCP returns the guide 'qatlas mcp' hands its client as server instructions: a copy the client cannot
+// truncate, describing only the three MCP tools, their arguments, and their error codes. It is not listed by
+// All, since only the MCP server and 'qatlas mcp --help' show it; 'qatlas agents' stays the one guide for
+// the CLI and covers the full catalog, including MCP, in more depth.
+func MCP() Topic {
+	return Topic{Name: "mcp", Short: "The MCP tools qatlas.search, qatlas.describe, and qatlas.invoke", Text: mcpGuide}
 }
 
 // listMarker is the start of a numbered or bulleted item; a wrapped item continues under its text.
@@ -182,7 +190,7 @@ Exit code 1 is a runtime or provider failure:
 - provider-error: the provider answered with something unusable.
 - runtime: anything else failed.
 
-MCP: 'qatlas mcp' serves the same catalog over stdio as three fixed MCP tools, with the same connections, rules, and error codes. qatlas.search finds tools like 'qatlas tools' and names the connections that offer each one; all set to true adds the others with their reason. qatlas.describe returns one compact contract like 'qatlas describe', or with full set to true the complete one like 'qatlas describe --full', and qatlas.invoke runs one like 'qatlas invoke', with confirm for --confirm. qatlas.describe and qatlas.invoke take the tool ID as operation and a connection name as connection; qatlas.invoke takes the arguments object as arguments. A failed call is a tool result with isError and structuredContent carrying the code. The server hands this guide to its client as instructions. Add the command "qatlas mcp" as a stdio server to the agent's client; it speaks MCP 2026-07-28 with the protocol version and client capabilities in the _meta of every request, and MCP 2025-11-25 and 2025-06-18 after an initialize request.
+MCP: 'qatlas mcp' serves the same catalog over stdio as three fixed MCP tools, with the same connections, rules, and error codes. qatlas.search finds tools like 'qatlas tools' and names the connections that offer each one; all set to true adds the others with their reason. qatlas.describe returns one compact contract like 'qatlas describe', or with full set to true the complete one like 'qatlas describe --full', and qatlas.invoke runs one like 'qatlas invoke', with confirm for --confirm. qatlas.describe and qatlas.invoke take the tool ID as operation and a connection name as connection; qatlas.invoke takes the arguments object as arguments. A failed call is a tool result with isError and structuredContent carrying the code. The server hands its client a shorter MCP guide as instructions instead of this one; the help of 'qatlas mcp' shows that guide too. Add the command "qatlas mcp" as a stdio server to the agent's client; it speaks MCP 2026-07-28 with the protocol version and client capabilities in the _meta of every request, and MCP 2025-11-25 and 2025-06-18 after an initialize request.
 
 Tell the agent which connections it may use and what each one is for, and whether it may change data. Never hand it a token, password, or key: qatlas reads the secrets itself.
 
@@ -210,3 +218,15 @@ Provider notes say what a provider stands for here, one optional line per provid
 Defaults say which connection a tool uses without --connection, keyed by a provider or a tool ID. They apply only to tools that do not require an explicit connection, and many providers require one for every tool. Without a default, a tool runs through the single connection that offers it and asks for --connection when several do.
 
 The sections stay apart so that a secret is stored once and used by several routes, each route carries only the rights its purpose needs, for example a read-only connection beside one that may create pages, and discovery shows an agent connection names, descriptions, and permitted effects only, never a URL, a credential, a target, or a secret. Give each connection a one-line description so an agent can choose between them. Discovery publishes descriptions and provider notes and searches them, so they must never hold a secret or personal data.`
+
+// mcpGuide is what 'qatlas mcp' hands its client as server instructions, and 'qatlas mcp --help' shows: a
+// guide of its own, short enough for a client that truncates instructions, covering only the three MCP
+// tools, their arguments, and their error codes. 'qatlas agents' stays the one guide for the CLI and covers
+// the same ground, and more, at CLI length.
+const mcpGuide = `This server offers three fixed MCP tools with the connections, rules, and error codes 'qatlas agents' explains in full; read it for every detail this guide leaves out.
+
+qatlas.search finds tools like 'qatlas tools': query, provider, connection, and effect filter them; all also returns the tools no connection offers, each with its reason. limit pages the result (default 50); pass next_cursor back as cursor for the next page. Set list to providers or connections for an overview instead: providers lists every provider, connections the configured connections (of provider when given), each carrying unusable: vault-locked while its vault is locked.
+
+qatlas.describe and qatlas.invoke take a tool ID as operation and a route name as connection. describe returns the compact contract, or with full the complete input and output schemas. invoke runs the tool with arguments as its input object; a tool that changes data also needs confirm set to true.
+
+A failed call has isError true and structuredContent with at least code and message; content holds the same text as "<code>: <message>". Key codes: confirmation-required (retry with confirm), vault-locked (ask the person to run 'qatlas vault unlock' in a terminal), admin-required (only a person manages a credential or the vault), connection-selection and connection-ambiguous (structuredContent adds the candidate connections), unknown-operation, unknown-connection, unsupported-capability, auth, permission, not-found, timeout, rate-limited.`
