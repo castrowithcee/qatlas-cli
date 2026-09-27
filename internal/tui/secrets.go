@@ -12,6 +12,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // Secrets is what the editor needs from the credential resolver: it hands a secret in, it removes one, and
@@ -24,6 +25,15 @@ type Secrets interface {
 	Set(credential, role, value string) error
 	Delete(credential, role string) ([]secret.Source, error)
 	Lookup(envName string) bool
+	// Vault returns the vault a vault credential's secrets are kept in, or nil where none is configured for
+	// this run. State and Status on it are answered synchronously wherever this editor calls them: both are
+	// a handful of local file checks, never a round trip to a platform service the way the system keyring is.
+	Vault() *vault.Vault
+	// SetVault stores one secret in the vault, creating it when this is the vault's very first secret. offer
+	// is asked for a passphrase only then, exactly as vault.Vault.Set defines it.
+	SetVault(credential, role, value string, offer vault.PassphraseFunc) error
+	// DeleteVault removes one secret from the vault.
+	DeleteVault(credential, role string) error
 }
 
 // ErrNoResolver reports an editor that was started without a credential resolver. The configuration stays
@@ -36,9 +46,12 @@ type noSecrets struct{}
 func (noSecrets) Status(string, config.Credential, string) (secret.Source, []string) {
 	return secret.SourceMissing, []string{"no credential resolver"}
 }
-func (noSecrets) Set(string, string, string) error               { return ErrNoResolver }
-func (noSecrets) Delete(string, string) ([]secret.Source, error) { return nil, ErrNoResolver }
-func (noSecrets) Lookup(string) bool                             { return false }
+func (noSecrets) Set(string, string, string) error                            { return ErrNoResolver }
+func (noSecrets) Delete(string, string) ([]secret.Source, error)              { return nil, ErrNoResolver }
+func (noSecrets) Lookup(string) bool                                          { return false }
+func (noSecrets) Vault() *vault.Vault                                         { return nil }
+func (noSecrets) SetVault(string, string, string, vault.PassphraseFunc) error { return ErrNoResolver }
+func (noSecrets) DeleteVault(string, string) error                            { return ErrNoResolver }
 
 // Stored reports both places as unasked, because without a resolver neither can be asked. A caller that
 // must not orphan a secret therefore stops, which is the right answer under total ignorance.
@@ -56,13 +69,14 @@ const (
 	sourceUnnamed = "no variable named"
 )
 
-// What the row of a keyring role says once the resolver has answered. The system keyring is the
-// recommended place, so each state is said in its terms; the environment is named as what it is, an
-// override. unencrypted file is shown only for a role that still resolves from a plaintext credentials.yaml
-// left over from an earlier version: this editor offers no way to write one any more, so the state is read
-// only, a nudge towards 'qatlas vault migrate' rather than a place a role can be sent to.
+// What the row of a keyring role says once the resolver has answered. The environment is named as what it
+// is, an override. unencrypted file is shown only for a role that still resolves from a plaintext
+// credentials.yaml left over from an earlier version: this editor offers no way to write one any more, so
+// the state is read only, a nudge towards 'qatlas vault migrate' rather than a place a role can be sent to.
 const (
 	stateStored      = "in system keyring"
+	stateStoredVault = "in the vault"
+	stateVaultLocked = "vault locked"
 	stateOverride    = "environment variable, overrides keyring"
 	statePlaintext   = "unencrypted file"
 	stateEmpty       = "not stored yet"
@@ -73,11 +87,9 @@ const (
 
 // Where the secrets of a credential are kept. The guided setup and the credential form offer the same row,
 // in the same order and with the same hint, and say it in these words rather than as the type the file
-// stores: system keyring and environment variables are the only places a new secret can be sent to. vault
-// is not offered there: it is shown only as the unchanged, not newly choosable state of a credential that
-// is already of type vault, for example after 'qatlas vault migrate', so opening and saving its form here
-// never silently turns it into a keyring credential. Setting up or changing a vault credential itself stays
-// outside this editor for now.
+// stores: system keyring, vault, and environment variables are the three places a new secret can be sent
+// to, whichever the credential is now. None is called out as the recommendation; defaults.secret_store
+// decides only which one is preselected for a new credential.
 const (
 	storageLabel = "secrets"
 
@@ -86,25 +98,24 @@ const (
 	placePlaintext = "unencrypted file"
 	placeVault     = "vault"
 
-	storageKeyring = placeKeyring + " (recommended)"
-	storageEnv     = placeEnv
+	// storageKeyring, storageVault, and storageEnv are the choices of the storage row: exactly the place
+	// names above, kept under these names because they are what the row's tests and helpers refer to.
+	storageKeyring = placeKeyring
 	storageVault   = placeVault
+	storageEnv     = placeEnv
 )
 
 // storageHint says what each place for new secrets is for. The system keyring is named as this platform
 // calls it, so a user recognises it as something the machine already has rather than something to set up.
 var storageHint = "system keyring keeps the secrets in " + secret.StoreLabel(platform) + " of this " +
-	"machine, with nothing to set up or export; environment variables suit CI and containers"
+	"machine, with nothing to set up or export; vault keeps them in a file beside the configuration, " +
+	"unencrypted unless a passphrase is set for it; environment variables suit CI and containers"
 
-// storageField is the row that chooses where the secrets of a credential are kept. vaultCurrent is true
-// only for a credential that is already of type vault: the row then offers vault too, so it keeps showing
-// as the current, unchanged value, but a new or non-vault credential never offers it.
-func storageField(value string, vaultCurrent bool) field {
-	choices := []string{storageKeyring, storageEnv}
-	if vaultCurrent {
-		choices = []string{storageVault, storageKeyring, storageEnv}
-	}
-	return choiceField(storageLabel, choices, value).withHint(storageHint)
+// storageField is the row that chooses where the secrets of a credential are kept: the system keyring, the
+// vault, or environment variables. Every credential offers the same three choices in the same order,
+// whichever it is now, so moving a secret from one place to another is one change to this row.
+func storageField(value string) field {
+	return choiceField(storageLabel, []string{storageKeyring, storageVault, storageEnv}, value).withHint(storageHint)
 }
 
 // storageType is the credential type the file stores for a choice of the storage row.
@@ -138,16 +149,13 @@ func (m *Model) storagePlace(name string, cred config.Credential) string {
 
 // storageChoice is the choice of the storage row that stands for a place. A role that currently resolves
 // from a leftover plaintext credentials.yaml still shows as system keyring here: that file's entries belong
-// to a keyring credential, and writing a new secret for it goes to the keyring, the only place this row can
-// still send it to.
+// to a keyring credential, and writing a new secret for it goes to the keyring, the only such place the
+// row still offers.
 func storageChoice(place string) string {
-	switch place {
-	case placeEnv:
-		return storageEnv
-	case placeVault:
-		return storageVault
+	if place == placePlaintext {
+		return storageKeyring
 	}
-	return storageKeyring
+	return place
 }
 
 // platform is the operating system whose keyring the texts name. The names themselves are checked for
@@ -178,12 +186,15 @@ type placedMsg struct {
 
 // writtenMsg carries the outcome of one store write or delete back into the event loop. It carries no
 // generation: every write has its own effect, so every outcome has to reach the user, even when a later
-// write finished first.
+// write finished first. vault marks an outcome that came from the vault, the only kind that clears
+// vaultBusy: a keyring outcome that happened to land while a vault write of another credential is still in
+// flight must not release a guard that is not its own.
 type writtenMsg struct {
 	credential string
 	role       string
 	done       string
 	err        error
+	vault      bool
 }
 
 // refreshSources asks where the secrets of the given credentials resolve from.
@@ -264,6 +275,9 @@ func (m *Model) handleWritten(msg writtenMsg) tea.Cmd {
 	if m.writes == 0 {
 		m.busy = ""
 	}
+	if msg.vault {
+		m.vaultBusy = false
+	}
 
 	if msg.err != nil {
 		text := m.redactor.Apply(m.explain(msg.err, msg.credential, msg.role))
@@ -274,6 +288,11 @@ func (m *Model) handleWritten(msg writtenMsg) tea.Cmd {
 		}
 	} else if m.fail == "" {
 		m.status = msg.done
+	}
+	if msg.vault {
+		// A vault role is never asked about here: its state comes from vaultRoleState, a synchronous local
+		// file check, never from this asynchronous keyring refresh.
+		return nil
 	}
 	// The rows are refreshed after a failure too: a delete that only cleared one place, or a write that
 	// went nowhere, is exactly when the shown source must no longer be the one from before.
@@ -318,6 +337,9 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 			m.fail = "nothing was typed, so nothing was stored"
 			return nil
 		}
+		if m.credentialType() == config.CredentialTypeVault {
+			return m.beginVaultSecret(m.editing, m.secretRole, value)
+		}
 		return m.storeSecret(m.editing, m.secretRole, value)
 	}
 
@@ -358,6 +380,164 @@ func (m *Model) removeSecret(credential, role string) tea.Cmd {
 		}
 		return msg
 	}
+}
+
+// vaultOffer is the state of the passphrase offer that follows a vault's very first secret, in the pattern
+// of the masked secret prompt: one input, reused for the entry and, once it was not left empty, for typing
+// it again to confirm. resume is called once the offer is answered, with the offer to hand to the vault:
+// nil to skip it, or one that hands back the passphrase just confirmed. cancel is called on esc, before
+// anything reaches the vault; both return the command, if any, that continues whatever asked for the offer.
+type vaultOffer struct {
+	input      textinput.Model
+	first      string
+	confirming bool
+	resume     func(offer vault.PassphraseFunc) tea.Cmd
+	cancel     func() tea.Cmd
+}
+
+// openVaultOffer opens the passphrase offer. It never touches the vault itself: resume decides what happens
+// once it is answered, so the same offer serves a single role of the credential form and the several roles
+// a guided setup commits at once.
+func (m *Model) openVaultOffer(resume func(vault.PassphraseFunc) tea.Cmd, cancel func() tea.Cmd) {
+	in := textinput.New()
+	in.Prompt = ""
+	in.EchoMode = textinput.EchoPassword
+	in.Cursor.SetMode(cursor.CursorStatic)
+	in.Focus()
+
+	m.vaultOffer = &vaultOffer{input: in, resume: resume, cancel: cancel}
+	m.screen = screenVaultOffer
+	m.clearMessages()
+}
+
+// updateVaultOffer handles the masked entry of the passphrase offer: the first time through it takes a
+// passphrase, empty or not, and the second time it asks for the same one again to confirm it. A mismatch is
+// an error that leaves the offer open, back at the first entry, rather than closing it or writing anything.
+func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
+	o := m.vaultOffer
+	switch key.String() {
+	case "ctrl+c":
+		m.vaultOffer = nil
+		return m.quit()
+	case "esc":
+		cancel := o.cancel
+		m.vaultOffer = nil
+		return cancel()
+	case "enter":
+		typed := o.input.Value()
+		o.input.Reset()
+		m.clearMessages()
+		if !o.confirming {
+			if typed == "" {
+				// Leaving it empty and continuing is the offer declined: the vault stays, or becomes,
+				// unencrypted, the same as 'qatlas credential set' answered the same way on the terminal.
+				resume := o.resume
+				m.vaultOffer = nil
+				return resume(nil)
+			}
+			o.first, o.confirming = typed, true
+			return nil
+		}
+		if typed != o.first {
+			o.first, o.confirming = "", false
+			m.fail = "the two passphrases did not match; type the passphrase again"
+			return nil
+		}
+		passphrase, resume := o.first, o.resume
+		m.vaultOffer = nil
+		return resume(func(string) (string, error) { return passphrase, nil })
+	}
+
+	var cmd tea.Cmd
+	o.input, cmd = o.input.Update(key)
+	return cmd
+}
+
+// beginVaultSecret decides whether the role's secret would be the vault's very first: only then is a
+// passphrase offered, exactly as vault.Vault.Set defines it. Deciding needs nothing but the vault's local
+// files, so it happens right here, never inside the command the write itself runs as.
+func (m *Model) beginVaultSecret(credential, role, value string) tea.Cmd {
+	v := m.secrets.Vault()
+	if v == nil {
+		m.fail = "no vault is configured for this run"
+		return nil
+	}
+	state, err := v.State()
+	if err != nil {
+		m.fail = m.redactor.Apply(err.Error())
+		return nil
+	}
+	if state != vault.StateAbsent {
+		return m.writeVaultSecret(credential, role, value, nil)
+	}
+	m.openVaultOffer(
+		func(offer vault.PassphraseFunc) tea.Cmd {
+			m.screen = screenForm
+			return m.writeVaultSecret(credential, role, value, offer)
+		},
+		func() tea.Cmd {
+			m.screen = screenForm
+			m.status = "Cancelled"
+			return nil
+		},
+	)
+	return nil
+}
+
+// writeVaultSecret hands one secret to the vault. Like storeSecret it runs as a command, so the scrypt work
+// that turns on encryption for the vault's first secret never runs on the event loop; vaultBusy blocks a
+// second vault write or offer from starting before this one is done.
+func (m *Model) writeVaultSecret(credential, role, value string, offer vault.PassphraseFunc) tea.Cmd {
+	m.vaultBusy = true
+	m.writes++
+	m.busy = fmt.Sprintf("storing the secret for %s.%s in the vault", credential, role)
+
+	secrets := m.secrets
+	return func() tea.Msg {
+		return writtenMsg{
+			credential: credential, role: role, vault: true,
+			done: fmt.Sprintf("Stored %s.%s in the vault", credential, role),
+			err:  secrets.SetVault(credential, role, value, offer),
+		}
+	}
+}
+
+// removeVaultSecret clears one stored secret from the vault.
+func (m *Model) removeVaultSecret(credential, role string) tea.Cmd {
+	m.vaultBusy = true
+	m.writes++
+	m.busy = fmt.Sprintf("removing the stored secret for %s.%s from the vault", credential, role)
+
+	secrets := m.secrets
+	return func() tea.Msg {
+		err := secrets.DeleteVault(credential, role)
+		msg := writtenMsg{credential: credential, role: role, vault: true, err: err}
+		if err == nil {
+			msg.done = fmt.Sprintf("Removed %s.%s from the vault", credential, role)
+		}
+		return msg
+	}
+}
+
+// vaultOfferView draws the passphrase offer, in the pattern of the masked secret prompt: a title, the
+// masked line, an explanation, and a footer of enter and esc. It has two shapes, the first entry and its
+// confirmation, told apart by vaultOffer.confirming.
+func (m *Model) vaultOfferView() string {
+	o := m.vaultOffer
+	var b strings.Builder
+	if !o.confirming {
+		b.WriteString(titleStyle.Render("Set a passphrase for the vault?") + "\n\n")
+		b.WriteString("  " + o.input.View() + "\n")
+		b.WriteString(m.indented(
+			"this is the vault's very first secret; a passphrase encrypts it, typed masked and twice, or "+
+				"leave this empty and press enter to keep the vault unencrypted") + "\n")
+	} else {
+		b.WriteString(titleStyle.Render("Confirm the vault passphrase") + "\n\n")
+		b.WriteString("  " + o.input.View() + "\n")
+		b.WriteString(m.indented("type it again to confirm it") + "\n")
+	}
+	b.WriteString(m.hint("enter continue · esc cancel, nothing is saved"))
+	return b.String()
 }
 
 func joinSources(sources []secret.Source) string {
@@ -546,16 +726,72 @@ func (m *Model) storedSource(credential, role string) string {
 	return string(source)
 }
 
+// vaultLocked reports whether the vault is encrypted and locked, the one state a vault write or read must
+// not proceed into here: finding or removing an entry inside secrets.age needs the passphrase, and this
+// editor never asks its own terminal for one (see tuiSecrets in internal/cli). Storing a new secret is
+// unaffected: it always queues as a pending entry the vault's public key can take, whatever state the
+// vault is in, so this guard has no reason to block it.
+func (m *Model) vaultLocked() bool {
+	v := m.secrets.Vault()
+	if v == nil {
+		return false
+	}
+	state, err := v.State()
+	return err == nil && state == vault.StateLocked
+}
+
+// vaultRoleState reports where a role of a vault credential's secret currently sits. It never asks for a
+// passphrase: an encrypted, locked vault answers "vault locked" instead, since the entry cannot be read
+// without one, and asking would block the whole editor on it.
+func (m *Model) vaultRoleState(credential, role string) string {
+	v := m.secrets.Vault()
+	if v == nil {
+		return stateUnreachable
+	}
+	state, err := v.State()
+	if err != nil {
+		return errorText(err)
+	}
+	if state == vault.StateAbsent {
+		return stateEmpty
+	}
+	if state == vault.StateLocked {
+		return stateVaultLocked
+	}
+	_, found, _, err := v.Get(credential, role, nil)
+	if err != nil {
+		return errorText(err)
+	}
+	if found {
+		return stateStoredVault
+	}
+	return stateEmpty
+}
+
+// roleState reports where a role of the credential being edited currently sits, whichever place the form's
+// storage row now names.
+func (m *Model) roleState(credential, role, credType string) string {
+	if credential == "" {
+		return sourceUnsaved
+	}
+	if credType == config.CredentialTypeVault {
+		return m.vaultRoleState(credential, role)
+	}
+	return m.storedSource(credential, role)
+}
+
 // secretState is the short form of where a secret role resolves from: a mark when the secret is where the
 // credential keeps it, and otherwise the state that needs attention.
 func secretState(source string) string {
 	switch source {
-	case stateStored, statePlaintext, string(secret.SourceEnv):
+	case stateStored, stateStoredVault, statePlaintext, string(secret.SourceEnv):
 		return "✓"
 	case stateEmpty, string(secret.SourceMissing):
 		return "missing"
 	case stateOverride:
 		return "env override"
+	case stateVaultLocked:
+		return "locked"
 	}
 	return source
 }
@@ -579,7 +815,7 @@ func (m *Model) secretNextStep(credential, role string) string {
 	}
 	switch state := secret.StoreStage(m.checked[key]); state {
 	case secret.StoreEmpty:
-		return "next: press s to store it in " + secret.StoreLabel(platform) + " (recommended)"
+		return "next: press s to store it in " + secret.StoreLabel(platform)
 	case secret.StoreLocked, secret.StoreUnavailable, secret.StoreTimedOut:
 		return fmt.Sprintf("next: %s, then press s; or export %s", secret.StoreAdvice(state, platform), env)
 	case secret.StoreOff:
@@ -611,11 +847,10 @@ func (m *Model) secretRowHint(credential, role string, lead bool) string {
 	return strings.Join(parts, "; ")
 }
 
-// secretKeys names the keys of a secret row: s always stores into the system keyring, the only place a new
-// secret can be sent to from here.
+// secretKeys names the keys of a secret row: s stores the value into the place the storage row now names.
 func (m *Model) secretKeys() string {
 	if m.credentialType() == config.CredentialTypeVault {
-		return "s/x managed with 'qatlas credential set/delete'"
+		return "s store in the " + placeVault + " · x remove"
 	}
 	return "s store in " + storageKeyring + " · x remove"
 }
@@ -630,17 +865,14 @@ func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 		// A secret stored under a name that was never saved would sit in the store with nothing pointing
 		// at it, which is the orphaning this editor exists to avoid.
 		m.fail = "save the credential first, then store its secrets: a credential kept in the " +
-			placeKeyring + " saves without any value, and its secrets are added afterwards"
+			placeKeyring + " or the " + placeVault + " saves without any value, and its secrets are added " +
+			"afterwards"
 		return nil
 	}
-	if m.credentialType() == config.CredentialTypeVault {
-		// A vault credential's secrets are not this editor's to write or remove yet: setting up or
-		// changing the vault itself stays outside it, so s and x point at the CLI instead of reaching for
-		// the system keyring, which would be the wrong place entirely.
-		verb := map[string]string{"s": "set", "x": "delete"}[action]
-		m.clearMessages()
-		m.status = fmt.Sprintf("its secrets are managed outside this editor; run 'qatlas credential %s %s %s'",
-			verb, m.editing, role)
+	if m.credentialType() == config.CredentialTypeVault && m.vaultBusy {
+		// A second vault write, or a second passphrase offer, must not start before the one already in
+		// flight is done: either could still be deciding whether this is the vault's very first secret.
+		m.status = "a vault write is already in progress; wait for it to finish"
 		return nil
 	}
 
@@ -648,6 +880,14 @@ func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	case "s":
 		m.askSecret(role)
 	case "x":
+		if m.credentialType() == config.CredentialTypeVault && m.vaultLocked() {
+			// Removing a vault secret needs the passphrase to find the entry inside secrets.age, which
+			// this editor never asks its own terminal for (see tuiSecrets in internal/cli): asking here
+			// would try to prompt on the very terminal bubbletea holds in raw mode for its own screen.
+			m.status = ""
+			m.fail = "vault is locked; run 'qatlas vault unlock' first"
+			return nil
+		}
 		// Removing a stored secret is irreversible, so it is confirmed like every other deletion here.
 		m.confirmRole = role
 		m.screen = screenConfirm

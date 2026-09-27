@@ -441,7 +441,7 @@ func TestSetupAndEditorOfferTheSameStorageRow(t *testing.T) {
 		t.Fatalf("the credential form has no %q row: %v", storageLabel, labelsOf(e.fields))
 	}
 
-	want := []string{storageKeyring, storageEnv}
+	want := []string{storageKeyring, storageVault, storageEnv}
 	for what, row := range map[string]field{"setup": setupRow, "editor": *editorRow} {
 		if !reflect.DeepEqual(row.choices, want) || row.value() != storageKeyring || row.hint != storageHint {
 			t.Errorf("the %s row offers %v at %q with hint %q, want %v at %q with the shared hint", what,

@@ -10,6 +10,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 	"github.com/castrowithcee/qatlas-cli/internal/tui"
 )
@@ -46,24 +47,30 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"only what the chosen provider defines, and offers the configured services and credentials of that\n" +
 			"provider first, so they are reused instead of duplicated; the same checks as every other save\n" +
 			"refuse a step before the next one opens, and a refused step keeps its input. A new credential\n" +
-			"keeps its secrets in the system keyring (recommended) or names environment variables. Secrets\n" +
-			"are typed masked and never shown. Nothing is written before the summary is saved: esc cancels,\n" +
-			"asking first once a provider is chosen, F3 goes back one step, and should the configuration\n" +
-			"fail to save, the secrets just stored are removed again.\n\n" +
+			"keeps its secrets in the system keyring, in the vault, or names environment variables;\n" +
+			"defaults.secret_store decides which of the first two is preselected, and none is called a\n" +
+			"recommendation. Secrets are typed masked and never shown. Storing the vault's very first\n" +
+			"secret offers a passphrase, typed masked and twice; leaving it empty keeps the vault\n" +
+			"unencrypted. Nothing is written before the summary is saved: esc cancels, asking first once a\n" +
+			"provider is chosen, F3 goes back one step, and should the configuration fail to save, the\n" +
+			"secrets just stored are removed again.\n\n" +
 			"The sections remain for direct editing. The editor manages services, credentials, connections,\n" +
 			"and domain defaults, can test a selected connection, and stores the secrets of a credential in\n" +
 			"a masked field. It never displays a stored secret back: what it shows is which source delivers\n" +
 			"a role. The secrets row of a credential offers the same places as the guided setup, in the same\n" +
-			"order and words: system keyring (recommended) and environment variables.\n\n" +
-			"The system keyring is the recommended local place for secrets: the credential store the\n" +
-			"operating system already provides, Secret Service on Linux (for example GNOME Keyring or\n" +
-			"KWallet), the macOS Keychain, or the Windows Credential Manager. It needs no setup and no\n" +
-			"exported variable; a machine without one uses a credential of type vault instead, the encrypted\n" +
-			"directory beside the configuration 'qatlas vault' manages, which this editor does not set up\n" +
-			"yet. On a role row, s stores the secret in the place the secrets row names. The role row says\n" +
-			"in system keyring, not stored yet, keyring locked, keyring unreachable, or keyring switched off\n" +
-			"(QATLAS_CREDENTIAL_STORE=none), and for each blocked case what to do next on this platform. A\n" +
-			"set variable QATLAS_<CREDENTIAL>_<ROLE> still wins and the row says environment variable,\n" +
+			"order and words: system keyring, vault, and environment variables, whichever is now chosen; none\n" +
+			"is a recommendation.\n\n" +
+			"The system keyring is the credential store the operating system already provides: Secret\n" +
+			"Service on Linux (for example GNOME Keyring or KWallet), the macOS Keychain, or the Windows\n" +
+			"Credential Manager. It needs no setup and no exported variable. The vault is a directory beside\n" +
+			"the configuration, unencrypted or encrypted to a passphrase, for a machine without a usable\n" +
+			"keyring; storing its very first secret, here or with 'qatlas credential set', offers one, typed\n" +
+			"masked and twice, and leaving it empty keeps the vault unencrypted. On a role row, s stores the\n" +
+			"secret in the place the secrets row names; x removes it. A keyring role says in system keyring,\n" +
+			"not stored yet, keyring locked, keyring unreachable, or keyring switched off\n" +
+			"(QATLAS_CREDENTIAL_STORE=none), and for each blocked case what to do next on this platform; a\n" +
+			"vault role says in the vault, not stored yet, or vault locked. A set variable\n" +
+			"QATLAS_<CREDENTIAL>_<ROLE> still wins over either one and the row says environment variable,\n" +
 			"overrides keyring; that is the way for CI and containers.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
@@ -148,7 +155,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			}
 			// The editor resolves secrets through the same cascade every command uses; it owns no
 			// resolution path of its own.
-			secrets, err := opts.resolver()
+			secrets, err := tuiSecrets(opts)
 			if err != nil {
 				return err
 			}
@@ -157,6 +164,27 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 				tuiUpdater(opts, buildVersion), os.Stdin, os.Stdout))
 		},
 	}
+}
+
+// tuiSecrets returns the resolver 'qatlas tui' reads and writes secrets through. Unlike every other command
+// it never asks a vault passphrase on this process's terminal: bubbletea holds that terminal in raw mode
+// for its own screen, so a term.ReadPassword prompt there would corrupt it instead of being seen, and
+// inputs would race between the prompt and the editor. A locked, encrypted vault therefore answers
+// vault-locked wherever it is read or a role's secret removed from it, the same code an agent gets over
+// MCP; a person unlocks it first with 'qatlas vault unlock'. Storing a new secret is unaffected: it always
+// queues as a pending entry the vault's public key can take, whatever state the vault is in, and the
+// editor's own credential form offers a passphrase for a vault it is creating itself without ever asking
+// this terminal either. opts.resolver caches its result, so this is the same instance connectionTester's
+// own opts.resolver() call reads back, and both stay free of the terminal ask.
+func tuiSecrets(opts *Options) (*secret.Resolver, error) {
+	secrets, err := opts.resolver()
+	if err != nil {
+		return nil, err
+	}
+	if v := secrets.Vault(); v != nil {
+		secrets.WithVault(v, nil)
+	}
+	return secrets, nil
 }
 
 // connectionTester binds the editor to the shared core function. The editor itself knows no provider.

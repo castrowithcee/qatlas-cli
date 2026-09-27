@@ -10,6 +10,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // The guided setup leads from a provider to a saved and optionally tested connection. It is a sequence of
@@ -158,10 +159,14 @@ func (m *Model) setupPage(step int) []field {
 		}
 	case stepCredential:
 		credentials := append(m.providerCredentials(provider), newCredential)
+		storage := storageKeyring
+		if m.cfg.SecretStore() == config.CredentialTypeVault {
+			storage = storageVault
+		}
 		fields := []field{
 			choiceField("credential", credentials, credentials[0]).withHint(setupCredentialHint),
 			textField("name", "", false).withHint(nameHint),
-			storageField(storageKeyring, false),
+			storageField(storage),
 		}
 		// Every role has a masked row and a row for the name of a variable. Only one of them is shown, so
 		// what was typed as a secret is never shown as a variable name after a change of mind.
@@ -447,55 +452,94 @@ func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 	case "f3":
 		m.setupBack()
 	case "enter":
-		return m.saveSetup()
+		return m.startSetupSave()
 	}
 	return nil
 }
 
+// startSetupSave saves the setup, first offering a passphrase when the new credential's first secret would
+// create the vault: nothing before this point ever touched it, and the offer, answered or cancelled, is the
+// only thing that decides whether it does.
+func (m *Model) startSetupSave() tea.Cmd {
+	plan := m.wizard.plan
+	if !plan.newCredential || storageType(plan.storage) != config.CredentialTypeVault {
+		return m.saveSetup(nil)
+	}
+	v := m.secrets.Vault()
+	if v == nil {
+		return m.saveSetup(nil)
+	}
+	if state, err := v.State(); err != nil || state != vault.StateAbsent {
+		return m.saveSetup(nil)
+	}
+	m.openVaultOffer(
+		func(offer vault.PassphraseFunc) tea.Cmd { return m.saveSetup(offer) },
+		func() tea.Cmd { m.screen = screenSummary; m.status = "Cancelled"; return nil },
+	)
+	return nil
+}
+
 // saveSetup writes what the steps decided. The store may take its time, so the write runs as a command.
-func (m *Model) saveSetup() tea.Cmd {
+// offer is asked for a passphrase only when the new credential's secret would be the vault's very first.
+func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 	w := m.wizard
 	candidate, plan := w.candidate, w.plan
 	w.saving = true
+	m.screen = screenSummary
 	m.clearMessages()
 	m.busy = "saving " + plan.connection
 	store, secrets := m.store, m.secrets
 	return func() tea.Msg {
-		return setupSavedMsg{cfg: candidate, name: plan.connection, err: commitSetup(store, secrets, candidate, plan)}
+		return setupSavedMsg{
+			cfg: candidate, name: plan.connection, err: commitSetup(store, secrets, candidate, plan, offer),
+		}
 	}
 }
 
 // commitSetup stores the secrets of a new credential and then saves the configuration.
 //
-// The secrets go first because the configuration is the commit point: a keyring that is locked or missing is
-// the common failure, and it then leaves the file untouched instead of a saved connection whose credential
-// has nothing behind it. The configuration was checked before anything was written, so what can still fail
-// after the secrets is writing the file; the secrets written for it are removed again then, so no store
-// entry is left without a credential that names it.
-func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, plan setupPlan) error {
+// The secrets go first because the configuration is the commit point: a keyring or vault that is locked or
+// missing is the common failure, and it then leaves the file untouched instead of a saved connection whose
+// credential has nothing behind it. The configuration was checked before anything was written, so what can
+// still fail after the secrets is writing the file; the secrets written for it are removed again then, so
+// no store entry is left without a credential that names it.
+func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, plan setupPlan, offer vault.PassphraseFunc) error {
+	toVault := storageType(plan.storage) == config.CredentialTypeVault
 	var written []string
 	for _, role := range plan.roles {
 		value, ok := plan.secrets[role]
 		if !ok {
 			continue
 		}
-		if err := secrets.Set(plan.credential, role, value); err != nil {
-			return rollbackSecrets(secrets, plan.credential, written,
+		var err error
+		if toVault {
+			err = secrets.SetVault(plan.credential, role, value, offer)
+		} else {
+			err = secrets.Set(plan.credential, role, value)
+		}
+		if err != nil {
+			return rollbackSecrets(secrets, plan.credential, toVault, written,
 				fmt.Errorf("storing the secret for %s.%s: %w", plan.credential, role, err))
 		}
 		written = append(written, role)
 	}
 	if err := store.Save(cfg); err != nil {
-		return rollbackSecrets(secrets, plan.credential, written, err)
+		return rollbackSecrets(secrets, plan.credential, toVault, written, err)
 	}
 	return nil
 }
 
 // rollbackSecrets removes the secrets a failed setup wrote and says which ones stayed behind.
-func rollbackSecrets(secrets Secrets, credential string, roles []string, cause error) error {
+func rollbackSecrets(secrets Secrets, credential string, toVault bool, roles []string, cause error) error {
 	var left []string
 	for _, role := range roles {
-		if _, err := secrets.Delete(credential, role); err != nil && !errors.Is(err, secret.ErrNoEntry) {
+		var err error
+		if toVault {
+			err = secrets.DeleteVault(credential, role)
+		} else {
+			_, err = secrets.Delete(credential, role)
+		}
+		if err != nil && !errors.Is(err, secret.ErrNoEntry) {
 			left = append(left, role)
 		}
 	}
@@ -614,7 +658,8 @@ func (m *Model) summaryRows() []string {
 		}
 		secrets = placeEnv + ": " + strings.Join(names, ", ")
 	default:
-		secrets = placeKeyring + ": " + roles
+		// plan.storage is already exactly the place chosen: system keyring or vault.
+		secrets = plan.storage + ": " + roles
 	}
 
 	permissions := config.FormatPermissions(conn.Permissions)

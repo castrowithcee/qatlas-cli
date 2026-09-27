@@ -245,6 +245,23 @@ func TestConnectionTestExplainsAMissingKeyringSecretInEditorTerms(t *testing.T) 
 	}
 }
 
+// A vault locked when the connection test needs a secret from it is reported clearly and at once: the
+// resolver never asks this editor's own terminal for the passphrase, so the test never hangs on it.
+func TestConnectionTestExplainsALockedVaultInEditorTerms(t *testing.T) {
+	m := newTestableModel(t, func(context.Context, string) (provider.Class, error) {
+		return "", &secret.VaultLockedError{Credential: "wiki-reader", Role: "token-secret"}
+	}, nil)
+
+	runTest(t, m)
+
+	words := strings.Join(strings.Fields(screenOf(m)), " ")
+	for _, want := range []string{"Connection test could not run", "locked", "qatlas vault unlock"} {
+		if !strings.Contains(words, want) {
+			t.Errorf("locked-vault result does not contain %q:\n%s", want, screenOf(m))
+		}
+	}
+}
+
 // Testing is only offered where it makes sense, and never crashes without a tester or an entry.
 func TestConnectionTestGuards(t *testing.T) {
 	t.Run("other sections ignore the key", func(t *testing.T) {

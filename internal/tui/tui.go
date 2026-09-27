@@ -68,6 +68,9 @@ const (
 	screenForm
 	screenConfirm
 	screenSecret
+	// screenVaultOffer is the passphrase offer that follows a vault's very first secret, over the form or
+	// the guided setup summary that led to it.
+	screenVaultOffer
 	// screenPicker is the searchable list of one choice row of the form, over the form it was opened from.
 	screenPicker
 	// screenSummary is the last step of the guided setup: what will be saved, and after saving, the test.
@@ -366,6 +369,11 @@ type Model struct {
 	guardID     int
 	secretInput textinput.Model
 	secretRole  string
+	// vaultOffer holds the passphrase offer that follows a vault's very first secret while it is open, and
+	// nil otherwise. vaultBusy is true while a vault write, or the offer that may lead to one, is in flight,
+	// so a second one cannot start before it is done.
+	vaultOffer *vaultOffer
+	vaultBusy  bool
 
 	// Connection test state. Raw responses never enter the model, only the class and a redacted message.
 	tester     Tester
@@ -510,6 +518,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateConfirm(msg)
 		case screenSecret:
 			cmd = m.updateSecret(msg)
+		case screenVaultOffer:
+			cmd = m.updateVaultOffer(msg)
 		case screenPicker:
 			cmd = m.updatePicker(msg)
 		case screenProviders:
@@ -736,6 +746,13 @@ func (m *Model) leaveScreen() tea.Cmd {
 	// into it; nothing it was about is written.
 	m.secretInput.Reset()
 	m.confirmRole, m.pendingProfile = "", ""
+	if m.vaultOffer != nil {
+		// The offer's own cancel decides where this returns to: the form for a single role, or the setup
+		// summary that was about to save several at once.
+		cancel := m.vaultOffer.cancel
+		m.vaultOffer = nil
+		return cancel()
+	}
 	m.screen = screenForm
 	return nil
 }
@@ -1506,6 +1523,9 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		if role := m.confirmRole; role != "" {
 			m.confirmRole = ""
 			m.screen = screenForm
+			if m.credentialType() == config.CredentialTypeVault {
+				return m.removeVaultSecret(m.editing, role)
+			}
 			return m.removeSecret(m.editing, role)
 		}
 		return m.delete()
@@ -1563,17 +1583,27 @@ func (m *Model) testConnection(name string) tea.Cmd {
 	}
 }
 
-// connectionTestError turns a missing credential role into an editor action. Other errors stay intact for
-// redaction, but receive context when they are displayed by finishTest.
+// connectionTestError turns a missing credential role or a locked vault into an editor action. Other
+// errors stay intact for redaction, but receive context when they are displayed by finishTest.
 func connectionTestError(err error) string {
+	var locked *secret.VaultLockedError
+	if errors.As(err, &locked) {
+		// The resolver never asked this editor's own terminal for the passphrase (see tuiSecrets in
+		// internal/cli); it just reported the vault locked, the same as an agent gets over MCP.
+		return err.Error() + "; run 'qatlas vault unlock' first"
+	}
 	var missing *secret.MissingSecretError
 	if !errors.As(err, &missing) {
 		return err.Error()
 	}
-	if missing.Type == config.CredentialTypeKeyring {
+	switch missing.Type {
+	case config.CredentialTypeKeyring:
 		return fmt.Sprintf("credential %q is missing %s; open Credentials, edit it, select %s, and press s "+
 			"to store it in the system keyring; the row says what to do if the keyring is locked or "+
 			"unreachable", missing.Credential, missing.Role, missing.Role)
+	case config.CredentialTypeVault:
+		return fmt.Sprintf("credential %q is missing %s; open Credentials, edit it, select %s, and press s "+
+			"to store it in the vault", missing.Credential, missing.Role, missing.Role)
 	}
 	return fmt.Sprintf("credential %q is missing %s; open Credentials and set the environment variable "+
 		"named for that role", missing.Credential, missing.Role)
@@ -1797,25 +1827,27 @@ func (m *Model) credentialType() string { return storageType(m.fieldValue(storag
 // credentialTypeChosen switches the role rows to the type that is now selected.
 //
 // The same row means a different thing under each type: under env it holds the NAME of a variable, under
-// keyring it stands for an entry in the credential store. Drawing them alike is what let a keyring
-// credential look like an env credential and turn into one on the next save. A variable name that was
-// already typed survives a switch back, so trying out both types costs nothing.
+// keyring or vault it stands for a masked secret. Drawing them alike is what let a keyring credential look
+// like an env credential and turn into one on the next save. A variable name that was already typed
+// survives a switch back, so trying out every type costs nothing.
 func (m *Model) credentialTypeChosen() tea.Cmd {
-	keyring := m.credentialType() == config.CredentialTypeKeyring
+	credType := m.credentialType()
+	stored := credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault
 	for i := range m.fields {
 		f := &m.fields[i]
 		if f.kind != fieldEnvName && f.kind != fieldSecret {
 			continue
 		}
-		if keyring {
-			// A secret row builds its hint from what the resolver reported, so it carries none itself.
+		if stored {
+			// A secret row builds its hint from where it resolves; a vault row never asks the store to
+			// learn it, but the row still carries none of its own to make room for that.
 			f.kind, f.hint = fieldSecret, ""
 		} else {
 			f.kind, f.hint = fieldEnvName, m.roleHint(f.label, f.roleLead)
 		}
 	}
 	m.applyFocus()
-	if keyring {
+	if credType == config.CredentialTypeKeyring {
 		return m.refreshSources(m.editedQuery())
 	}
 	return nil
@@ -1850,16 +1882,18 @@ func (m *Model) buildFields(name string) []field {
 			withHint(providerNoteHint))
 	case sectionCredentials:
 		cred := m.cfg.Credentials[name]
-		// A new credential starts in the system keyring: that is the place this editor can complete on its
-		// own, while environment variables need a shell the editor cannot reach.
+		// A new credential starts on defaults.secret_store; an existing one keeps showing where it is now.
 		choice := storageKeyring
+		if m.cfg.SecretStore() == config.CredentialTypeVault {
+			choice = storageVault
+		}
 		if cred.Type != "" {
 			choice = storageChoice(m.storagePlace(name, cred))
 		}
 		provider := m.credentialProvider(name, cred)
 		fields = append(fields,
 			providerField(m.credentialProviders(provider), provider).withHint(credentialProviderHint),
-			storageField(choice, cred.Type == config.CredentialTypeVault),
+			storageField(choice),
 		)
 		fields = append(fields, m.roleFields(cred, fields[1].value(), storageType(choice))...)
 	case sectionConnections:
@@ -1908,8 +1942,9 @@ func (m *Model) submit() tea.Cmd {
 // save applies the form to a copy of the configuration and saves it. The editor keeps the change only when
 // the store accepted it.
 func (m *Model) save(name string) tea.Cmd {
-	wasNewKeyring := m.section == sectionCredentials && m.editing == "" &&
-		m.credentialType() == config.CredentialTypeKeyring
+	credType := m.credentialType()
+	wasNewStorable := m.section == sectionCredentials && m.editing == "" &&
+		(credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault)
 	choice := m.fieldValue(storageLabel)
 	candidate := m.cfg.Clone()
 	if err := m.apply(candidate, name); err != nil {
@@ -1922,12 +1957,11 @@ func (m *Model) save(name string) tea.Cmd {
 	}
 	m.cfg = candidate
 	m.configExists = true
-	if wasNewKeyring {
+	if wasNewStorable {
 		cmd := m.openForm(name)
 		// Nothing is stored yet, so the reopened form cannot rediscover the choice from the resolver; it
-		// keeps the one that was made. wasNewKeyring is true only for a credential of type keyring, so
-		// vault is never offered here.
-		*m.field(storageLabel) = storageField(choice, false)
+		// keeps the one that was made.
+		*m.field(storageLabel) = storageField(choice)
 		m.pristine = m.formState()
 		for i := range m.fields {
 			if m.fields[i].kind == fieldSecret {
@@ -1936,7 +1970,10 @@ func (m *Model) save(name string) tea.Cmd {
 			}
 		}
 		m.applyFocus()
-		where := secret.StoreLabel(platform) + " (recommended)"
+		where := placeKeyring
+		if credType == config.CredentialTypeVault {
+			where = placeVault
+		}
 		m.status = "Credential saved. Add the required provider secrets below: press s on each role to " +
 			"store it in " + where + "."
 		return cmd
@@ -2408,11 +2445,16 @@ func (m *Model) editorView() string {
 		b.WriteString(m.hint(keys))
 	case screenSecret:
 		where := secret.StoreLabel(platform) + " of this machine"
+		if m.credentialType() == config.CredentialTypeVault {
+			where = "the vault"
+		}
 		b.WriteString(titleStyle.Render(fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole)) + "\n\n")
 		b.WriteString("  " + m.secretInput.View() + "\n")
 		b.WriteString(m.indented(
 			"the value is masked while you type, is never shown back, and goes into "+where) + "\n")
 		b.WriteString(m.hint("enter store · esc cancel"))
+	case screenVaultOffer:
+		b.WriteString(m.vaultOfferView())
 	case screenConfirm:
 		if m.pendingProfile != "" {
 			b.WriteString(m.profileConfirmView())
@@ -2420,15 +2462,20 @@ func (m *Model) editorView() string {
 		}
 		if m.confirmRole != "" {
 			b.WriteString(fmt.Sprintf("Remove the stored secret for %s.%s?\n", m.editing, m.confirmRole))
-			b.WriteString(m.indented(
-				"it is removed from the system keyring, and from a plaintext credentials.yaml left over "+
-					"from an earlier version, if any; an environment variable is not touched, because it "+
-					"belongs to your shell") + "\n")
+			if m.credentialType() == config.CredentialTypeVault {
+				b.WriteString(m.indented("it is removed from the vault") + "\n")
+			} else {
+				b.WriteString(m.indented(
+					"it is removed from the system keyring, and from a plaintext credentials.yaml left over "+
+						"from an earlier version, if any; an environment variable is not touched, because it "+
+						"belongs to your shell") + "\n")
+			}
 		} else {
 			name, _ := m.selected()
 			b.WriteString(fmt.Sprintf("Delete %q?\n", name))
+			credType := m.cfg.Credentials[name].Type
 			if m.section == sectionCredentials &&
-				m.cfg.Credentials[name].Type == config.CredentialTypeKeyring {
+				(credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault) {
 				b.WriteString(m.indented(
 					"its stored secrets are not removed with it; remove them first with x on the role, "+
 						"or later with 'qatlas credential delete'") + "\n")
@@ -3231,8 +3278,8 @@ func (m *Model) cells(name string) []string {
 		roles := make([]string, 0, len(credentialRoles))
 		for _, role := range credentialRoles {
 			source := m.envSource(cred.Values[role])
-			if cred.Type == config.CredentialTypeKeyring {
-				source = m.storedSource(name, role)
+			if cred.Type == config.CredentialTypeKeyring || cred.Type == config.CredentialTypeVault {
+				source = m.roleState(name, role, cred.Type)
 			}
 			roles = append(roles, role+" "+secretState(source))
 		}
@@ -3278,7 +3325,7 @@ func (m *Model) renderField(f field, focused bool) string {
 	case f.kind == fieldSecret:
 		// A secret row shows where the role resolves from and nothing else: there is no value to draw,
 		// and the resolver would not hand one out.
-		value = "(" + m.storedSource(m.editing, f.label) + ")"
+		value = "(" + m.roleState(m.editing, f.label, m.credentialType()) + ")"
 	case f.kind == fieldMasked && focused:
 		// The input draws one mask character per typed character and never the characters themselves.
 		value = f.input.View()

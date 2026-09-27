@@ -15,6 +15,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // Canary values prove that a secret in the environment never reaches the editor or the file.
@@ -85,6 +86,32 @@ func newResolver(t *testing.T, dir string, env map[string]string) (*secret.Resol
 	store := secret.NewMemoryStore()
 	file := secret.NewFile(filepath.Join(dir, secret.FileName))
 	return secret.NewWith(func(name string) string { return env[name] }, store, file, nil), store
+}
+
+// newVaultResolver is newResolver plus a real vault below dir, so a test can exercise an actual vault
+// write and its passphrase without touching anything of the machine: everything lives under the test's own
+// temporary directory. No passphrase is ever asked interactively; nothing here needs one unless the test
+// itself types one into the editor.
+func newVaultResolver(t *testing.T, dir string) (*secret.Resolver, *secret.MemoryStore) {
+	t.Helper()
+	secrets, mem := newResolver(t, dir, nil)
+	return secrets.WithVault(vault.New(dir), nil), mem
+}
+
+// addVaultCredential creates a credential whose secrets live in the vault. It names nothing: the roles are
+// filled afterwards, through the masked prompt, the same way addKeyringCredential does for the keyring.
+func addVaultCredential(t *testing.T, m *Model, name string) {
+	t.Helper()
+	openSectionByName(t, m, sectionCredentials)
+	press(t, m, "n")
+	typeText(t, m, name)
+	press(t, m, "tab")
+	press(t, m, "tab")
+	selectChoice(t, m, storageVault)
+	pump(t, m, "f2")
+	if m.fail != "" {
+		t.Fatalf("creating the vault credential reported %q", m.fail)
+	}
 }
 
 // keyMsg is the event a terminal sends for one key.
@@ -1627,10 +1654,13 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 		t.Fatalf("focused field kind = %v, want a secret role", m.fields[m.focus].kind)
 	}
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"Credential saved", "press s on each role", "system keyring", "(recommended)"} {
+	for _, want := range []string{"Credential saved", "press s on each role", "system keyring"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("continued credential form does not contain %q:\n%s", want, view)
 		}
+	}
+	if strings.Contains(view, "(recommended)") {
+		t.Errorf("continued credential form still recommends a place:\n%s", view)
 	}
 	if strings.Contains(view, "created on first save") {
 		t.Errorf("the saved file is still described as not created:\n%s", view)

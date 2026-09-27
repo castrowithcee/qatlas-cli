@@ -16,6 +16,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // newStoreModel builds an editor whose configuration, credential store and plaintext fallback all live in
@@ -239,11 +240,19 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 }
 
 // A credential of type vault, the normal state after 'qatlas vault migrate', keeps that type when its form
-// is opened and saved without any change. Before this, the storage row defaulted to system keyring for any
-// type it did not know, and saving silently turned the credential into a keyring one, orphaning whatever
-// the vault held for it.
+// is opened and saved without any change, and s and x on its roles reach the vault directly, never the
+// system keyring. Before this, the storage row defaulted to system keyring for any type it did not know,
+// saving silently turned the credential into a keyring one, and s and x on a vault role only pointed at the
+// CLI instead of writing anything.
 func TestVaultCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
-	_, store, path, secrets, mem := newStoreModel(t)
+	const canary = "canary-vault-role-7c2e"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	path := filepath.Join(dir, "config.yaml")
+	store := newTestStore(t, path)
+	secrets, mem := newVaultResolver(t, dir)
+	// The vault already holds an unrelated entry, so storing this credential's role below is not the
+	// vault's very first secret and asks for no passphrase; that offer has its own tests.
+	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", nil))
 
 	cfg := newTestConfig(t)
 	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
@@ -276,25 +285,41 @@ func TestVaultCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 		}
 	}
 
-	// s on a vault credential's role must never reach the system keyring: setting up or changing the
-	// vault itself stays outside this editor.
+	// s on a vault credential's role stores it in the vault.
 	focusRole(t, m, "token-id")
 	press(t, m, "s")
-	if m.screen != screenForm {
-		t.Fatalf("s opened screen %v, want the form to stay", m.screen)
+	if m.screen != screenSecret {
+		t.Fatalf("s did not open the prompt: screen %v, error %q", m.screen, m.fail)
 	}
-	if !strings.Contains(m.status, "qatlas credential set reader token-id") {
-		t.Errorf("status = %q, want the CLI command named", m.status)
+	typeText(t, m, canary)
+	pump(t, m, "enter")
+	if m.fail != "" {
+		t.Fatalf("storing in the vault reported %q", m.fail)
 	}
-	press(t, m, "x")
-	if m.screen != screenForm {
-		t.Fatalf("x opened screen %v, want the form to stay", m.screen)
+	if !strings.HasPrefix(m.status, "Stored") || !strings.Contains(m.status, "vault") {
+		t.Errorf("status = %q, want the vault write confirmed", m.status)
 	}
-	if !strings.Contains(m.status, "qatlas credential delete reader token-id") {
-		t.Errorf("status = %q, want the CLI command named", m.status)
+	if got, found, _, err := secrets.Vault().Get("reader", "token-id", nil); err != nil || !found || got != canary {
+		t.Errorf("Get() = %q, %v, %v, want the value just stored", got, found, err)
+	}
+	if strings.Contains(screenOf(m), canary) {
+		t.Errorf("the typed secret reached the screen:\n%s", screenOf(m))
 	}
 
-	// Saving without touching anything must go through and change nothing.
+	// x removes it again, confirmed first.
+	press(t, m, "x")
+	if m.screen != screenConfirm {
+		t.Fatalf("x did not ask to confirm: screen %v", m.screen)
+	}
+	pump(t, m, "y")
+	if m.fail != "" {
+		t.Fatalf("removing from the vault reported %q", m.fail)
+	}
+	if _, found, _, err := secrets.Vault().Get("reader", "token-id", nil); err != nil || found {
+		t.Errorf("Get() found = %v, %v, want it removed", found, err)
+	}
+
+	// Saving without touching anything more must go through and change nothing.
 	pump(t, m, "enter")
 	if m.fail != "" {
 		t.Fatalf("an unchanged vault credential does not save: %q", m.fail)
@@ -640,7 +665,16 @@ func (b blockingSecrets) Delete(string, string) ([]secret.Source, error) {
 	<-b.writes
 	return []secret.Source{secret.SourceStore}, nil
 }
-func (b blockingSecrets) Lookup(string) bool { return false }
+func (b blockingSecrets) Lookup(string) bool  { return false }
+func (b blockingSecrets) Vault() *vault.Vault { return nil }
+func (b blockingSecrets) SetVault(string, string, string, vault.PassphraseFunc) error {
+	<-b.writes
+	return nil
+}
+func (b blockingSecrets) DeleteVault(string, string) error {
+	<-b.writes
+	return nil
+}
 
 // A store that takes its time must not freeze the editor: it has thirty seconds to answer, and the event
 // loop keeps working meanwhile.
@@ -987,7 +1021,12 @@ func (s scriptedSecrets) Set(_, role, _ string) error {
 func (s scriptedSecrets) Delete(string, string) ([]secret.Source, error) {
 	return nil, secret.ErrNoEntry
 }
-func (s scriptedSecrets) Lookup(string) bool { return false }
+func (s scriptedSecrets) Lookup(string) bool  { return false }
+func (s scriptedSecrets) Vault() *vault.Vault { return nil }
+func (s scriptedSecrets) SetVault(string, string, string, vault.PassphraseFunc) error {
+	return secret.ErrUnavailable
+}
+func (s scriptedSecrets) DeleteVault(string, string) error { return secret.ErrNoEntry }
 
 // D3: a second write must not swallow the outcome of the first. The two are really in flight together here,
 // and the one that finishes second is the one that failed.
