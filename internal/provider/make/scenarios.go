@@ -3,11 +3,13 @@ package makeapi
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"strconv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -62,6 +64,13 @@ var makeReadRisk = capability.Risk{
 	Confirmation:    capability.ConfirmationNone,
 	OpenWorld:       true,
 	DataSensitivity: dataSensitivity,
+}
+
+// makeChangeRisk is the contract every confirmed change of this provider shares: it always needs its own
+// confirmation, whatever its idempotency, and it reaches the open world of one Make zone's scenarios.
+func makeChangeRisk(effect capability.Effect, idempotency capability.Idempotency) capability.Risk {
+	return capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired,
+		OpenWorld: true, DataSensitivity: dataSensitivity}
 }
 
 var scenariosList = capability.Descriptor{
@@ -257,7 +266,7 @@ func (c *Client) ListScenarios(ctx context.Context, offset, limit int, isActive 
 		query.Set("name", name)
 	}
 	var page scenariosPageJSON
-	if err := c.get(ctx, op, "/scenarios", query, &page); err != nil {
+	if err := c.get(ctx, op, "/scenarios", query, &page, needRead); err != nil {
 		return nil, err
 	}
 	summaries := make([]ScenarioSummary, 0, len(page.Scenarios))
@@ -307,7 +316,7 @@ func (c *Client) fetchScenario(ctx context.Context, op string, scenarioID int64)
 	var wrapper struct {
 		Scenario scenarioJSON `json:"scenario"`
 	}
-	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10), nil, &wrapper); err != nil {
+	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10), nil, &wrapper, needRead); err != nil {
 		return nil, err
 	}
 	if wrapper.Scenario.ID != scenarioID {
@@ -327,6 +336,21 @@ func (c *Client) verifyScenarioScope(scenario *scenarioJSON) error {
 	}
 	if !c.scope.allowsScenario(scenario.ID) {
 		return invalidRequest("scenario_id is outside the targets of this connection")
+	}
+	return nil
+}
+
+// verifyScopeAfterChange re-applies the bound team and, defensively, this connection's scenario allow-list
+// to a scenario after one changing request (create, update, start, or stop) has already been sent. Unlike
+// verifyScenarioScope's pre-request refusal, a mismatch here can no longer mean "never sent": it is reported
+// as a provider error, not an invalid request, because the change has already taken effect and this
+// milestone offers no delete tool to undo it, the same distinction n8n's own verifyPlacement draws for its
+// own create and update.
+func (c *Client) verifyScopeAfterChange(op string, scenario *scenarioJSON) error {
+	if !c.scope.allowsTeam(scenario.TeamID) || !c.scope.allowsScenario(scenario.ID) {
+		return &provider.Error{Class: provider.ClassProviderError, Op: op,
+			Message: "Make did not keep the result inside this connection's targets; the change already " +
+				"took effect and this milestone has no delete tool to undo it"}
 	}
 	return nil
 }
@@ -414,11 +438,356 @@ func (c *Client) GetBlueprint(ctx context.Context, scenarioID int64, draft bool,
 	var wrapper struct {
 		Blueprint json.RawMessage `json:"blueprint"`
 	}
-	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10)+"/blueprint", query, &wrapper); err != nil {
+	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10)+"/blueprint", query, &wrapper, needRead); err != nil {
 		return nil, err
 	}
 	if len(wrapper.Blueprint) == 0 {
 		return nil, invalidResponse(op, "Make did not report a blueprint")
 	}
 	return &Blueprint{ScenarioID: scenarioID, Blueprint: wrapper.Blueprint}, nil
+}
+
+// schedulingWriteSchema is the JSON Schema of a scheduling argument scenarios.create and scenarios.update
+// accept: an object with at least a "type" field, the only part of the shape Make documents at all
+// (developers.make.com's own scheduling object shows "type" and "interval"). additionalProperties stays
+// true deliberately: Make's own scheduling types each carry further, undocumented fields of their own (for
+// example an interval's own unit, or a specific day and time for other types), and closing the schema to
+// only "type" and "interval" would silently reject every one of those instead of letting Make's own PATCH or
+// POST validate them.
+var schedulingWriteSchema = `{"type":"object","properties":{"type":{"type":"string","minLength":1,` +
+	`"maxLength":64}},"required":["type"],"additionalProperties":true}`
+
+var scenariosCreate = capability.Descriptor{
+	ID:      Provider + ".scenarios.create",
+	Version: 1,
+	Title:   "Create a Make scenario",
+	Description: "Create one scenario in the bound team from a blueprint and a scheduling configuration; a " +
+		"repeated call creates a second scenario, never replaces the first. Always creates in the " +
+		"connection's own bound team, never a caller-named one, and is refused outright on a connection " +
+		"restricted by a scenario allow-list, since a scenario that does not exist yet can never already be " +
+		"on that list",
+	Tags:                       []string{"make", "scenarios", "create", "automation"},
+	Risk:                       makeChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"blueprint":{"type":"object"},"scheduling":` + schedulingWriteSchema + `,` +
+		`"folder_id":` + idSchema + `,"description":{"type":"string","maxLength":` +
+		strconv.Itoa(maxDescriptionLength) + `},"confirm_new_app":{"type":"boolean"}},` +
+		`"required":["blueprint","scheduling"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(scenarioSummarySchema),
+	Arguments: []capability.Argument{
+		{Name: "blueprint", Description: "The scenario's modules, their wiring, and their configuration, as " +
+			"a JSON object; Make validates every module and any connection, key, or webhook reference itself", Required: true},
+		{Name: "scheduling", Description: "Scheduling configuration, a JSON object with at least a \"type\" " +
+			"field; further, type-specific fields are undocumented here and passed through unvalidated beyond " +
+			"a size and nesting limit", Required: true},
+		{Name: "folder_id", Description: "Folder to file the new scenario under, when this zone uses folders"},
+		{Name: "description", Description: "Scenario description, up to " + strconv.Itoa(maxDescriptionLength) + " characters"},
+		{Name: "confirm_new_app", Description: "Set true to confirm creating this scenario when its blueprint " +
+			"uses an app for the first time in this organization; Make otherwise refuses the create"},
+	},
+	Fields: scenarioSummaryFields,
+	Examples: []capability.Example{{Description: "Create a minimal on-demand scenario",
+		Arguments: json.RawMessage(`{"blueprint":{"name":"My scenario","flow":[]},"scheduling":{"type":"on-demand"}}`)}},
+}
+
+type scenariosCreateArguments struct {
+	Blueprint     json.RawMessage `json:"blueprint"`
+	Scheduling    json.RawMessage `json:"scheduling"`
+	FolderID      int64           `json:"folder_id"`
+	Description   string          `json:"description"`
+	ConfirmNewApp bool            `json:"confirm_new_app"`
+}
+
+func invokeScenariosCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "create scenario"
+	var input scenariosCreateArguments
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if len(bound.scenarios) > 0 {
+		return nil, invalidRequest("this connection restricts scenarios by an allow-list, so it cannot " +
+			"create one: a newly created scenario can never already be on that list")
+	}
+	if err := validJSONObject(input.Blueprint, maxBlueprintWriteBytes, maxBlueprintDepth, "blueprint"); err != nil {
+		return nil, err
+	}
+	if err := validJSONObject(input.Scheduling, maxSchedulingWriteBytes, maxSchedulingDepth, "scheduling"); err != nil {
+		return nil, err
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.CreateScenario(ctx, input.Blueprint, input.Scheduling, input.FolderID, input.Description,
+		input.ConfirmNewApp)
+}
+
+// CreateScenario sends the one changing POST /scenarios request, teamId always the connection's own bound
+// team, never a caller-supplied one, and blueprint and scheduling encoded to the JSON strings Make's own
+// request body wants (see the package doc). Make's own create response already carries the full created
+// scenario, unlike n8n's own createWorkflow, so this reads it directly instead of a second, separate GET, and
+// re-applies the bound team and scenario allow-list to it before returning.
+func (c *Client) CreateScenario(ctx context.Context, blueprint, scheduling json.RawMessage, folderID int64,
+	description string, confirmNewApp bool) (*ScenarioSummary, error) {
+	const op = "create scenario"
+	body := map[string]any{
+		"teamId":     c.scope.teamID,
+		"blueprint":  string(blueprint),
+		"scheduling": string(scheduling),
+	}
+	if folderID > 0 {
+		body["folderId"] = folderID
+	}
+	if description != "" {
+		body["description"] = description
+	}
+	var query url.Values
+	if confirmNewApp {
+		query = url.Values{"confirmed": {"true"}}
+	}
+	var wrapper struct {
+		Scenario scenarioJSON `json:"scenario"`
+	}
+	if err := c.change(ctx, op, http.MethodPost, "/scenarios", query, body, &wrapper, needWrite, uncertain); err != nil {
+		return nil, err
+	}
+	if wrapper.Scenario.ID == 0 {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "Make did not report the created scenario" + uncertain}
+	}
+	if err := c.verifyScopeAfterChange(op, &wrapper.Scenario); err != nil {
+		return nil, err
+	}
+	summary := summaryOf(wrapper.Scenario)
+	return &summary, nil
+}
+
+var scenariosUpdate = capability.Descriptor{
+	ID:      Provider + ".scenarios.update",
+	Version: 1,
+	Title:   "Replace parts of a Make scenario",
+	Description: "Replace one scenario's name, blueprint, scheduling, or folder in the bound team; only the " +
+		"fields given are changed, exactly as Make's own partial PATCH is. Never changes the active state; " +
+		"scenarios.start and scenarios.stop own that",
+	Tags:                       []string{"make", "scenarios", "update", "automation"},
+	Risk:                       makeChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `,` +
+		`"name":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxScenarioNameLength) + `},` +
+		`"blueprint":{"type":"object"},"scheduling":` + schedulingWriteSchema + `,` +
+		`"folder_id":` + idSchema + `,"clear_folder":{"type":"boolean"},` +
+		`"confirm_new_app":{"type":"boolean"}},"required":["scenario_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(scenarioSummarySchema),
+	Arguments: []capability.Argument{scenarioIDArgument,
+		{Name: "name", Description: "New scenario name, 1 to " + strconv.Itoa(maxScenarioNameLength) + " characters"},
+		{Name: "blueprint", Description: "Replacement blueprint, as a JSON object; Make validates every " +
+			"module and any connection, key, or webhook reference itself"},
+		{Name: "scheduling", Description: "Replacement scheduling configuration, a JSON object with at least " +
+			"a \"type\" field"},
+		{Name: "folder_id", Description: "Folder to move the scenario into; mutually exclusive with clear_folder"},
+		{Name: "clear_folder", Description: "Set true to remove the scenario's folder assignment; mutually " +
+			"exclusive with folder_id"},
+		{Name: "confirm_new_app", Description: "Set true to confirm this update when the replacement " +
+			"blueprint uses an app for the first time in this organization"},
+	},
+	Fields: scenarioSummaryFields,
+	Examples: []capability.Example{{Description: "Rename a scenario",
+		Arguments: json.RawMessage(`{"scenario_id":1,"name":"Renamed"}`)}},
+}
+
+type scenariosUpdateArguments struct {
+	ScenarioID    int64           `json:"scenario_id"`
+	Name          string          `json:"name"`
+	Blueprint     json.RawMessage `json:"blueprint"`
+	Scheduling    json.RawMessage `json:"scheduling"`
+	FolderID      *int64          `json:"folder_id"`
+	ClearFolder   bool            `json:"clear_folder"`
+	ConfirmNewApp bool            `json:"confirm_new_app"`
+}
+
+func invokeScenariosUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "update scenario"
+	var input scenariosUpdateArguments
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if err := selectScenario(resolved, input.ScenarioID); err != nil {
+		return nil, err
+	}
+	if input.FolderID != nil && input.ClearFolder {
+		return nil, invalidRequest("folder_id and clear_folder cannot both be set")
+	}
+	if input.Name == "" && len(input.Blueprint) == 0 && len(input.Scheduling) == 0 && input.FolderID == nil &&
+		!input.ClearFolder {
+		return nil, invalidRequest("scenarios.update needs at least one of name, blueprint, scheduling, " +
+			"folder_id, or clear_folder to change")
+	}
+	if len(input.Blueprint) > 0 {
+		if err := validJSONObject(input.Blueprint, maxBlueprintWriteBytes, maxBlueprintDepth, "blueprint"); err != nil {
+			return nil, err
+		}
+	}
+	if len(input.Scheduling) > 0 {
+		if err := validJSONObject(input.Scheduling, maxSchedulingWriteBytes, maxSchedulingDepth, "scheduling"); err != nil {
+			return nil, err
+		}
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	scenario, err := client.fetchScenario(ctx, op, input.ScenarioID)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.verifyScenarioScope(scenario); err != nil {
+		return nil, err
+	}
+	return client.UpdateScenario(ctx, input.ScenarioID, input.Name, input.Blueprint, input.Scheduling,
+		input.FolderID, input.ClearFolder, input.ConfirmNewApp)
+}
+
+// UpdateScenario sends the one changing PATCH /scenarios/{id} request with only the fields the caller gave,
+// blueprint and scheduling encoded to the JSON strings Make's own request body wants (see the package doc),
+// then re-reads the scenario, exactly as every other change of this provider does, to answer with the same
+// scope-checked summary scenarios.get would and to defensively re-apply this connection's targets to it.
+func (c *Client) UpdateScenario(ctx context.Context, scenarioID int64, name string, blueprint, scheduling json.RawMessage,
+	folderID *int64, clearFolder, confirmNewApp bool) (*ScenarioSummary, error) {
+	const op = "update scenario"
+	body := map[string]any{}
+	if name != "" {
+		body["name"] = name
+	}
+	if len(blueprint) > 0 {
+		body["blueprint"] = string(blueprint)
+	}
+	if len(scheduling) > 0 {
+		body["scheduling"] = string(scheduling)
+	}
+	switch {
+	case clearFolder:
+		body["folderId"] = nil
+	case folderID != nil:
+		body["folderId"] = *folderID
+	}
+	var query url.Values
+	if confirmNewApp {
+		query = url.Values{"confirmed": {"true"}}
+	}
+	if err := c.change(ctx, op, http.MethodPatch, "/scenarios/"+strconv.FormatInt(scenarioID, 10), query, body,
+		nil, needWrite, uncertain); err != nil {
+		return nil, err
+	}
+	scenario, err := c.fetchScenario(ctx, op, scenarioID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.verifyScopeAfterChange(op, scenario); err != nil {
+		return nil, err
+	}
+	summary := summaryOf(*scenario)
+	return &summary, nil
+}
+
+// scenarioActivationDescriptor builds the shared shape of scenarios.start and scenarios.stop: both take only
+// scenario_id and answer the same re-read ScenarioSummary scenarios.get would.
+func scenarioActivationDescriptor(action, title, description string) capability.Descriptor {
+	return capability.Descriptor{
+		ID:                         Provider + ".scenarios." + action,
+		Version:                    1,
+		Title:                      title,
+		Description:                description,
+		Tags:                       []string{"make", "scenarios", action, "automation"},
+		Risk:                       makeChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		Provider:                   Provider,
+		RequiresExplicitConnection: true,
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `},` +
+			`"required":["scenario_id"],"additionalProperties":false}`),
+		OutputSchema: json.RawMessage(scenarioSummarySchema),
+		Arguments:    []capability.Argument{scenarioIDArgument},
+		Fields:       scenarioSummaryFields,
+		Examples:     []capability.Example{{Description: title, Arguments: json.RawMessage(`{"scenario_id":1}`)}},
+	}
+}
+
+var scenariosStart = scenarioActivationDescriptor("start", "Start a Make scenario",
+	"Turn on one scenario's scheduling in the bound team, so its triggers run automatically again; "+
+		"repeating it on an already active scenario leaves it active. Does not itself run the scenario; "+
+		"scenarios.run does that on demand, independent of the scheduling this tool controls")
+
+var scenariosStop = scenarioActivationDescriptor("stop", "Stop a Make scenario",
+	"Turn off one scenario's scheduling in the bound team; repeating it on an already inactive scenario "+
+		"leaves it inactive")
+
+func invokeScenariosStart(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeScenarioActivation(ctx, resolved, secrets, red, raw, true)
+}
+
+func invokeScenariosStop(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeScenarioActivation(ctx, resolved, secrets, red, raw, false)
+}
+
+func invokeScenarioActivation(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage, active bool) (any, error) {
+	op := "stop scenario"
+	if active {
+		op = "start scenario"
+	}
+	var input scenarioArguments
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if err := selectScenario(resolved, input.ScenarioID); err != nil {
+		return nil, err
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	scenario, err := client.fetchScenario(ctx, op, input.ScenarioID)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.verifyScenarioScope(scenario); err != nil {
+		return nil, err
+	}
+	return client.SetScenarioActive(ctx, input.ScenarioID, active)
+}
+
+// SetScenarioActive sends the one changing POST to Make's start or stop endpoint, then re-reads the scenario
+// to confirm the active state actually changed, to answer with the same scope-checked summary scenarios.get
+// would, and to defensively re-apply this connection's targets to it.
+func (c *Client) SetScenarioActive(ctx context.Context, scenarioID int64, active bool) (*ScenarioSummary, error) {
+	op, suffix := "stop scenario", "/stop"
+	if active {
+		op, suffix = "start scenario", "/start"
+	}
+	if err := c.change(ctx, op, http.MethodPost, "/scenarios/"+strconv.FormatInt(scenarioID, 10)+suffix, nil,
+		nil, nil, needWrite, uncertain); err != nil {
+		return nil, err
+	}
+	scenario, err := c.fetchScenario(ctx, op, scenarioID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.verifyScopeAfterChange(op, scenario); err != nil {
+		return nil, err
+	}
+	if scenario.IsActive != active {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "Make did not report the requested active state after the change" + uncertain}
+	}
+	summary := summaryOf(*scenario)
+	return &summary, nil
 }

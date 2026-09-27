@@ -150,6 +150,15 @@ func (e *environment) invoke(operation, connection, arguments string) (string, e
 	return string(response.Result), err
 }
 
+// confirmed invokes a change operation with the confirmation every one of this provider's five change tools
+// requires.
+func (e *environment) confirmed(operation, connection, arguments string) (string, error) {
+	response, err := e.core.Invoke(context.Background(), application.InvokeRequest{
+		Operation: operation, Connection: connection, Arguments: json.RawMessage(arguments), Confirmed: true,
+	})
+	return string(response.Result), err
+}
+
 func classOf(err error) provider.Class {
 	var providerErr *provider.Error
 	if errors.As(err, &providerErr) {
@@ -163,6 +172,11 @@ func isInvalidRequest(err error) bool {
 	return errors.As(err, &invalid)
 }
 
+func isConfirmationRequired(err error) bool {
+	var confirmation *application.ConfirmationRequiredError
+	return errors.As(err, &confirmation)
+}
+
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	reg := registry(t)
 	metadata, ok := reg.ProviderMetadata(Provider)
@@ -171,8 +185,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 5 {
-		t.Fatalf("tools = %+v, want 5", metadata.Tools)
+	if len(metadata.Tools) != 10 {
+		t.Fatalf("tools = %+v, want 10", metadata.Tools)
 	}
 }
 

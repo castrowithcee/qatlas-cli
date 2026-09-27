@@ -3,7 +3,8 @@ description: >
   Describes the Make provider: zone and API token setup, the required team target plus the optional
   organization and scenario allow-lists and their live team-membership check, the scenario and blueprint
   reads, the run (Make's own "logs") reads and their offset pagination, the bounded best-effort run error,
-  and the scope and plan boundaries of a Make API token.
+  the confirmed scenario create/update/start/stop/run tools and their contracts, and the scope and plan
+  boundaries of a Make API token.
 type: knowledge
 edit: shared
 created: 2026-09-27
@@ -13,10 +14,12 @@ updated: 2026-09-27
 # Make
 
 Make is a provider for one Make (make.com) zone's REST API (`/api/v2`). It lists and reads scenarios, reads
-a scenario's blueprint, and lists and reads its run history.
+a scenario's blueprint, lists and reads its run history, and, with confirmation, creates a scenario, replaces
+a scenario's blueprint, scheduling, name, or folder, starts and stops it, and runs it on demand.
 
-**There is no tool yet to create or change a scenario, activate or deactivate it, or run it on demand.**
-Those, and scenario deletion, cloning, and every other write, are a later milestone.
+**There is deliberately no tool to delete, clone, or replay a scenario, and no generic webhook call.** A
+Make scenario, once created, cannot be removed again by this provider; deleting one still requires the Make
+UI or a direct API call outside Qatlas.
 
 ## Configuration
 
@@ -28,11 +31,12 @@ before a secret is read, and never falls back to a free-form origin the way a se
 URL can be.
 
 The credential provides `api-token`, a Make API token created under the profile avatar, Profile, API, Add
-token, with at least the `scenarios:read` scope. A Make token belongs to exactly one zone: Make's own
-guidance is to create a separate token for each zone a person has access to, so a token created for a
-different zone than this connection's own is rejected here the same way as any other invalid token. Within
-its zone, a token reaches every team its owner belongs to, which is why this connection's own team target,
-not the token, decides what is exposed.
+token. The read profile needs `scenarios:read`; the manage profile's create, update, start, and stop tools
+additionally need `scenarios:write`, and its run tool additionally needs `scenarios:run`. A Make token
+belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
+access to, so a token created for a different zone than this connection's own is rejected here the same way
+as any other invalid token. Within its zone, a token reaches every team its owner belongs to, which is why
+this connection's own team target, not the token, decides what is exposed.
 
 ```yaml
 services:
@@ -70,28 +74,46 @@ team target is the only boundary that exists at all, not an extra layer on top o
 
 A `scenario_id` argument outside a configured scenario allow-list is refused locally, as an invalid request,
 before any request is sent. A scenario's team membership is checked live, against Make's own answer, never
-against local configuration alone: `make.scenarios.get`, `make.scenarios.blueprint`, `make.runs.list`, and
-`make.runs.get` all read the named scenario from Make first and confirm its reported `teamId` matches the
-bound team before any of that scenario's content, blueprint, or run history is returned. A scenario of
-another team is refused the same way as one outside the allow-list, and the refusal never names the
-scenario's real team.
+against local configuration alone: every tool that names a scenario_id directly (`make.scenarios.get`,
+`make.scenarios.blueprint`, `make.scenarios.update`, `make.scenarios.start`, `make.scenarios.stop`,
+`make.scenarios.run`, `make.runs.list`, and `make.runs.get`) reads the named scenario from Make first and
+confirms its reported `teamId` matches the bound team before any content is read or any changing request is
+sent. A scenario of another team is refused the same way as one outside the allow-list, and the refusal
+never names the scenario's real team.
 
 A scenario object itself reports no `organizationId`, only `teamId`, so a configured organization target
 cannot be checked against a scenario directly. `make.runs.list` and `make.runs.get` can check it: a run's
 own answer carries both `teamId` and `organizationId`, and both are defensively re-applied to every run this
 provider returns, even though the up-front scenario check already covers the team on its own.
 
+`make.scenarios.create` cannot name a scenario_id at all: it always creates in the connection's own bound
+team, never a caller-supplied one, and it is refused outright on a connection restricted by a scenario
+allow-list, since a scenario that does not exist yet can never already be on that list.
+`make.scenarios.create`, `make.scenarios.update`, `make.scenarios.start`, and `make.scenarios.stop` all
+re-read the scenario after their one changing request and re-apply the bound team and scenario allow-list to
+it; a mismatch is reported as a `provider-error`, not an invalid request, because the change has already
+happened and this provider has no delete tool to undo it. `make.scenarios.run` is never followed by a
+re-read: its own answer carries no scope of its own to re-verify (see "Runs and their errors" below).
+
 ## Tools
 
-| Tool | Effect | Does |
-| --- | --- | --- |
-| `make.scenarios.list` | read | lists the scenarios of the bound team, filtered to the scenario allow-list, page by page |
-| `make.scenarios.get` | read | reads one scenario, with its team membership confirmed live |
-| `make.scenarios.blueprint` | read | reads one scenario's blueprint (modules, wiring, configuration) |
-| `make.runs.list` | read | lists one scenario's run history, page by page |
-| `make.runs.get` | read | reads one run's status, timings, operations, data volume, and a bounded best-effort error |
+| Tool | Effect | Confirmation | Does |
+| --- | --- | --- | --- |
+| `make.scenarios.list` | read | none | lists the scenarios of the bound team, filtered to the scenario allow-list, page by page |
+| `make.scenarios.get` | read | none | reads one scenario, with its team membership confirmed live |
+| `make.scenarios.blueprint` | read | none | reads one scenario's blueprint (modules, wiring, configuration) |
+| `make.scenarios.create` | create | required | creates one scenario in the bound team from a blueprint and scheduling |
+| `make.scenarios.update` | update | required | replaces a scenario's name, blueprint, scheduling, or folder; partial, only the fields given |
+| `make.scenarios.start` | update | required | turns a scenario's scheduling on |
+| `make.scenarios.stop` | update | required | turns a scenario's scheduling off |
+| `make.scenarios.run` | execute | required | starts exactly one new execution of a scenario on demand |
+| `make.runs.list` | read | none | lists one scenario's run history, page by page |
+| `make.runs.get` | read | none | reads one run's status, timings, operations, data volume, and a bounded best-effort error |
 
-Every tool of this milestone is `read`, safe, and needs no confirmation.
+Every read is safe and needs no confirmation. Every change of the manage profile needs its own confirmation,
+sends exactly one changing request, and is never retried by this provider itself: a failure that could mean
+the request nonetheless reached Make (a timeout, a connection reset, or a 5xx) is reported as uncertain
+instead, naming what to check before trying again.
 
 ## Pagination
 
@@ -115,6 +137,40 @@ rather than any secret. This provider's own scope check still runs first: the sc
 membership confirmed before the blueprint itself is ever requested, since a blueprint answer carries no
 `teamId` of its own to check.
 
+`make.scenarios.create` and `make.scenarios.update` accept `blueprint` and `scheduling` as ordinary JSON
+objects, up to 4 MiB and 8 KiB respectively, nested no deeper than 64 and 8 levels; both limits are this
+provider's own local ceiling, not one Make documents. Make's own OpenAPI schema declares both fields as
+request-body **strings**, not nested objects
+(developers.make.com/api-documentation/api-reference/scenarios): this provider encodes each one to a compact
+JSON string exactly once before it is placed in the request body, so a caller never has to double-encode
+anything itself. This encoding was checked through this package's own documentation-query tooling during
+this session (2026-09-27), not against a live create or update call; verify it against a real zone before
+relying on it in a new setting. `scenarios.run`'s own `data` argument is documented differently, as a plain
+nested object, and is sent as one, unencoded (see "Runs and their errors" below).
+
+`scheduling` must be a JSON object with at least a `type` field (a string, 1 to 64 characters); Make
+documents `type` and `interval` but no exhaustive list of valid `type` values or their further, type-specific
+fields (for example a specific weekday or time), so this provider does not enumerate or restrict them beyond
+that: it lets Make's own create and update validate them. A module's connection, key, or webhook reference
+inside a blueprint is validated by Make itself, the same as a read; this provider does not and cannot check
+whether a referenced connection actually exists or belongs to the bound team.
+
+`make.scenarios.create` sends `teamId` as the connection's own bound team on every call; it is never an
+argument a caller can set. `make.scenarios.update` never moves a scenario between teams: Make's own PATCH
+does not accept a `teamId` field at all.
+
+## Starting, stopping, and folders
+
+`make.scenarios.start` and `make.scenarios.stop` each send Make's own `POST /scenarios/{id}/start` or
+`/stop`, then re-read the scenario to confirm the active state actually changed. Repeating either on a
+scenario already in that state leaves it unchanged; both are idempotent. Starting a scenario turns its own
+scheduling on; it does not itself run the scenario, which `make.scenarios.run` does independently.
+
+`make.scenarios.update`'s `folder_id` moves a scenario into a folder; `clear_folder` removes its folder
+assignment instead (Make's own PATCH accepts `folderId: null` for that). The two are mutually exclusive, and
+`make.scenarios.update` refuses a call that gives neither `folder_id`, `clear_folder`, `name`, `blueprint`,
+nor `scheduling`: there would be nothing left to change.
+
 ## Runs and their errors
 
 `make.runs.get` reads one run's status, timings, operations, and data volume from Make's own log entry, and,
@@ -125,6 +181,39 @@ versioned scenario-history change Make attaches to a "modify"-type log entry, is
 passed through raw, and never guessed at. A run never returns a bundle's actual input or output data, which
 this endpoint does not expose in the first place.
 
+`make.scenarios.run` starts exactly one new execution of a scenario on demand (`POST
+/scenarios/{id}/run`), needing the `scenarios:read`, `scenarios:write`, and `scenarios:run` scopes together.
+Its `data` argument, when given, is the run's input parameters as a JSON object, up to 64 KiB, nested no
+deeper than 16 levels; unlike `blueprint` and `scheduling` above, Make documents `data` as a plain nested
+object, so this provider sends it as one, unencoded. `callback_url` is never offered as an argument at all:
+accepting a caller-chosen URL here would place it directly into an outbound webhook call this provider does
+not control, the same reasoning no provider in this codebase offers a generic webhook call.
+
+`responsive` defaults to **false**, even though Make's own default is also false: this provider is explicit
+about it because setting it true makes the one run request block until the scenario finishes, which could
+easily outlast this provider's own request timeout for a long-running scenario and then be reported as
+merely uncertain when the run in fact started successfully and needs no repeating.
+
+`make.scenarios.run` answers with `execution_id` and, when Make reports one immediately, `status`; `status`
+is passed through opaquely and untyped, since Make's own documentation was not internally consistent about
+its shape during this session's research (a numeric code in one place, a string elsewhere). Use
+`make.runs.get` or `make.runs.list` afterward to learn a run's outcome: Make documents a run's own
+`executionId` identically, word for word, as the identifier a scenario's log entry reports under its own
+`id` key, for both its "Get execution log" and its separate "Get scenario execution details" endpoints, which
+is the basis for pointing a caller at `make.runs.get` (built on the logs endpoint this provider already
+implements) rather than at that separate, undocumented-here `executions` endpoint, which this provider does
+not add a tool for. Whether a still-running execution is already visible through the logs endpoint before it
+finishes is not documented either way and is not assumed; this is a known gap, not a confirmed guarantee.
+
+Unlike every other change of this provider, `make.scenarios.run` is never followed by a re-read: its own
+answer carries no `teamId` or `organizationId` of its own for this provider to re-verify. A timeout, a
+connection reset, or a 5xx after the one run request is reported with a note that names `make.runs.list`
+specifically, not "the current state" of a resource this provider would otherwise show directly.
+
+Running a scenario that is currently inactive (its scheduling turned off) is not specially handled: Make's
+exact error shape for that case was not confirmed during this session's research, so it surfaces through
+this provider's ordinary status classification below rather than a fabricated, scenario-specific one.
+
 ## Errors
 
 Errors keep stable classes and never carry the API token or a raw provider response body:
@@ -132,27 +221,30 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; it needs the `scenarios:read` scope |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run |
 | `not-found` | Make does not hold the resource or does not show it to this token |
-| `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names |
+| `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
 | `unreachable` | Make is unavailable, in maintenance, or could not be reached |
-| `invalid-provider-response` | the answer was unreadable, too large, or named a different resource than the one requested |
-| `provider-error` | every other rejection, including a redirect on an endpoint that must not answer with one |
+| `invalid-provider-response` | the answer was unreadable, too large, named a different resource than the one requested, or, for a change, did not confirm the change actually took effect |
+| `provider-error` | every other rejection, including a redirect on an endpoint that must not answer with one, and a create, update, start, or stop whose re-read result fell outside this connection's own team or scenario allow-list after the one changing request already reached Make |
 
-A `scenario_id` outside the connection's allow-list, and a scenario, or a run, the live team or organization
-check finds outside the bound scope, are invalid requests, never provider errors, so a scope refusal is
-never mistaken for a missing scenario or run.
+A `scenario_id` outside the connection's allow-list, and a scenario the live team or organization check finds
+outside the bound scope, are invalid requests, never provider errors, so a scope refusal is never mistaken
+for a missing scenario or run; the same is true of an unconfirmed call to any change tool, and of a
+`make.scenarios.update` call that gives nothing to change or gives both `folder_id` and `clear_folder`.
 
 ## Untrusted data
 
-Scenario names, descriptions, scheduling configuration, blueprint content, and every other value a listing
-or a read answers with come from the zone and are untrusted data. Qatlas normalises them into a stable
-envelope and never renders them, follows a link inside them, or executes anything derived from them.
+Scenario names, descriptions, scheduling configuration, blueprint content, run status, and every other value
+a listing, a read, or a change answers with come from the zone and are untrusted data, whether this provider
+read it or a caller supplied it for a create, update, or run. Qatlas normalises it into a stable envelope and
+never renders it, follows a link inside it, or executes anything derived from it.
 
 ## Boundary
 
-This provider lists and reads scenarios, reads a scenario's blueprint, and lists and reads its run history.
-It does not, and has no tool to, create or update a scenario, activate or deactivate one, run one on demand,
-delete or clone a scenario, manage folders, labels, data stores, hooks, keys, connections, teams, or
-organizations, or read team or organization variables; those are deliberately out of this milestone.
+This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
+a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
+deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
+call, manage labels, data stores, hooks, keys, connections, teams, or organizations, or read team or
+organization variables; those are out of scope.

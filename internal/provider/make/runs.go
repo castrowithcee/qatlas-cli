@@ -3,12 +3,14 @@ package makeapi
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -266,7 +268,7 @@ func (c *Client) ListRuns(ctx context.Context, scenarioID int64, offset, limit, 
 		query.Set("to", strconv.FormatInt(toMS, 10))
 	}
 	var page runsPageJSON
-	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10)+"/logs", query, &page); err != nil {
+	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10)+"/logs", query, &page, needRead); err != nil {
 		return nil, err
 	}
 	summaries := make([]RunSummary, 0, len(page.ScenarioLogs))
@@ -325,7 +327,7 @@ func (c *Client) GetRun(ctx context.Context, scenarioID int64, executionID strin
 		ScenarioLog runJSON `json:"scenarioLog"`
 	}
 	path := "/scenarios/" + strconv.FormatInt(scenarioID, 10) + "/logs/" + url.PathEscape(executionID)
-	if err := c.get(ctx, op, path, nil, &wrapper); err != nil {
+	if err := c.get(ctx, op, path, nil, &wrapper, needRead); err != nil {
 		return nil, err
 	}
 	run := wrapper.ScenarioLog
@@ -382,4 +384,123 @@ func validExecutionID(value string) bool {
 		}
 	}
 	return true
+}
+
+var scenarioRunSchema = `{"type":"object","properties":{` +
+	`"scenario_id":{"type":"integer"},"execution_id":{"type":"string"},"status":{}},` +
+	`"required":["scenario_id","execution_id"],"additionalProperties":false}`
+
+var scenariosRun = capability.Descriptor{
+	ID:      Provider + ".scenarios.run",
+	Version: 1,
+	Title:   "Run a Make scenario",
+	Description: "Run one scenario of the bound team on demand, starting exactly one new execution; a " +
+		"repeated call starts another execution every time, never the same one again. Needs the " +
+		"scenarios:read, scenarios:write, and scenarios:run scopes. Offers no callback_url argument: this " +
+		"provider never places a caller-chosen URL into an outbound call it does not control. responsive " +
+		"defaults to false, so this one request returns as soon as the run starts instead of blocking until " +
+		"it finishes; use make.runs.get or make.runs.list afterward to learn the run's outcome",
+	Tags:                       []string{"make", "scenarios", "run", "automation", "execute"},
+	Risk:                       makeChangeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
+	Provider:                   Provider,
+	RequiresExplicitConnection: true,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `,` +
+		`"data":{"type":"object"},"responsive":{"type":"boolean"}},` +
+		`"required":["scenario_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(scenarioRunSchema),
+	Arguments: []capability.Argument{scenarioIDArgument,
+		{Name: "data", Description: "Input parameters for a scenario that expects them, as a JSON object, " +
+			"up to " + strconv.Itoa(maxRunDataBytes) + " bytes"},
+		{Name: "responsive", Description: "When true, this one request waits until the run finishes instead " +
+			"of returning as soon as it starts; false when omitted, since a long-running scenario could " +
+			"easily outlast this request's own timeout and then be reported as merely uncertain"},
+	},
+	Fields: []capability.Field{
+		{Name: "scenario_id", Description: "The scenario this run belongs to"},
+		{Name: "execution_id", Description: "Identifier of the new run; Make documents this as the same " +
+			"identifier make.runs.get and make.runs.list read under their own id"},
+		{Name: "status", Description: "Present only when Make reports one immediately; its exact shape is " +
+			"not documented consistently, so it is passed through opaquely, untyped, and never interpreted here"},
+	},
+	Examples: []capability.Example{{Description: "Run a scenario with no input",
+		Arguments: json.RawMessage(`{"scenario_id":1}`)}},
+}
+
+type scenariosRunArguments struct {
+	ScenarioID int64           `json:"scenario_id"`
+	Data       json.RawMessage `json:"data"`
+	Responsive bool            `json:"responsive"`
+}
+
+func invokeScenariosRun(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "run scenario"
+	var input scenariosRunArguments
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if err := selectScenario(resolved, input.ScenarioID); err != nil {
+		return nil, err
+	}
+	if len(input.Data) > 0 {
+		if err := validJSONObject(input.Data, maxRunDataBytes, maxRunDataDepth, "data"); err != nil {
+			return nil, err
+		}
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	scenario, err := client.fetchScenario(ctx, op, input.ScenarioID)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.verifyScenarioScope(scenario); err != nil {
+		return nil, err
+	}
+	return client.RunScenario(ctx, input.ScenarioID, input.Data, input.Responsive)
+}
+
+// ScenarioRun is the answer of one confirmed scenarios.run: the new run's own identifier, and, when Make
+// reports one right away, its status. See the package doc for why this is never followed by a re-read the
+// way every other change of this provider is.
+type ScenarioRun struct {
+	ScenarioID  int64           `json:"scenario_id"`
+	ExecutionID string          `json:"execution_id"`
+	Status      json.RawMessage `json:"status,omitempty"`
+}
+
+// RunScenario sends the one changing POST /scenarios/{id}/run request. data, when given, is sent as an
+// ordinary nested JSON object, unlike blueprint and scheduling elsewhere in this package, which Make's own
+// schema documents as strings instead (see the package doc). callback_url is never offered as an argument at
+// all, so this method never builds one into the request; responsive is sent only when the caller asked for
+// it, since Make itself already defaults it to false. A timeout, a connection reset, or a 5xx after this
+// request is marked with runUncertain, not the generic uncertain every other change of this provider uses,
+// since a run is never followed by a re-read this provider could point a caller back to instead.
+func (c *Client) RunScenario(ctx context.Context, scenarioID int64, data json.RawMessage, responsive bool) (*ScenarioRun, error) {
+	const op = "run scenario"
+	body := map[string]any{}
+	if len(data) > 0 {
+		body["data"] = data
+	}
+	if responsive {
+		body["responsive"] = true
+	}
+	var result struct {
+		ExecutionID string          `json:"executionId"`
+		Status      json.RawMessage `json:"status"`
+	}
+	if err := c.change(ctx, op, http.MethodPost, "/scenarios/"+strconv.FormatInt(scenarioID, 10)+"/run", nil,
+		body, &result, needRun, runUncertain); err != nil {
+		return nil, err
+	}
+	if result.ExecutionID == "" {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "Make did not report an execution id for the run" + runUncertain}
+	}
+	run := &ScenarioRun{ScenarioID: scenarioID, ExecutionID: bounded(result.ExecutionID)}
+	if len(result.Status) > 0 {
+		run.Status = result.Status
+	}
+	return run, nil
 }

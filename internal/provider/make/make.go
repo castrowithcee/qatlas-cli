@@ -1,9 +1,45 @@
-// Package make implements controlled, read-only access to one Make (make.com) zone's scenarios through its
-// public REST API (developers.make.com/api-documentation, base path /api/v2). Milestone A lists and reads
-// scenarios, reads a scenario's blueprint, and lists and reads its execution history ("logs" in Make's own
-// naming, exposed here as runs); it changes nothing and starts nothing. Creating or replacing a scenario,
-// activating or deactivating it, running it on demand, and every other write are a later milestone, which
-// this package's Client, error classes, and target model are built to extend without a rewrite.
+// Package make implements controlled access to one Make (make.com) zone's scenarios through its public REST
+// API (developers.make.com/api-documentation, base path /api/v2). Milestone A lists and reads scenarios,
+// reads a scenario's blueprint, and lists and reads its execution history ("logs" in Make's own naming,
+// exposed here as runs). Milestone B adds confirmed changes: creating a scenario, replacing its blueprint,
+// scheduling, name, or folder, starting and stopping it, and running it on demand. There is still no tool to
+// delete, clone, or replay a scenario, and no generic webhook call: those are deliberately left out of this
+// milestone.
+//
+// Every tool that changes something needs its own confirmation, sends exactly one changing request, and is
+// never retried by this provider: a failure that could mean the request nonetheless reached Make (a timeout,
+// a connection reset, or a 5xx) is reported as uncertain instead, see (*Client).do. scenarios.create always
+// sends the connection's own bound team as teamId, never a caller-supplied one, and refuses outright on a
+// connection restricted by a scenario allow-list, since a scenario that does not exist yet can never already
+// be on that list. scenarios.create, scenarios.update, scenarios.start, and scenarios.stop all re-read the
+// scenario after their one changing request and re-apply the bound team and scenario allow-list to it; a
+// mismatch is reported as a provider error, not an invalid request, because the change has already happened
+// and this milestone has no delete tool to undo it.
+//
+// Make's own OpenAPI schema declares a scenario's "blueprint" and "scheduling" as request-body strings, not
+// nested objects, for both creating and updating a scenario (developers.make.com/api-documentation/api-
+// reference/scenarios, checked 2026-09-27 through this package's own documentation tooling, not a live
+// account): this provider accepts both as ordinary JSON objects from a caller and encodes each one to a
+// compact JSON string before it is placed in the request body, exactly once, so a caller never has to double-
+// encode anything itself. scenarios.run's own "data" argument is not documented the same way: Make's schema
+// shows it as a plain nested object, so it is sent as one, unencoded. This asymmetry rests on documentation
+// tooling, not a confirmed live call; verify it against a real zone before depending on it in a new setting.
+//
+// scenarios.run never offers a callback_url argument: Make's own "callbackUrl" body field would have this
+// provider place a caller-chosen URL directly into an outbound webhook call it never controls, which this
+// milestone refuses to expose the same way no provider here offers a generic webhook call. responsive
+// defaults to false: Make's own "responsive": true makes this one request block until the run finishes,
+// which could easily outlast this provider's own request timeout for a long-running scenario and then be
+// reported as an uncertain run that in fact never even needed retrying. Make's own run response never
+// carries a resource this provider can re-verify against the bound team, so, unlike every other change of
+// this provider, running a scenario is not followed by a re-read.
+//
+// Make documents a run's own "executionId" identically, word for word, as the identifier a scenario's log
+// entry reports under its own "id" key, for both its "Get execution log" and its "Get scenario execution
+// details" endpoints: this is the basis for pointing a caller at runs.get (built on the logs endpoint) to
+// learn a run's outcome, rather than at Make's separate, undocumented-here scenarios/{id}/executions/{id}
+// endpoint, which this milestone does not add a tool for. Whether a still-running execution is already
+// visible through the logs endpoint before it finishes is not documented either way and is not assumed.
 //
 // The Go package identifier is deliberately "makeapi", not "make": Go predeclares a builtin function named
 // make, and an unaliased import of a package literally named make would shadow it in every file that
@@ -23,14 +59,15 @@
 // that exists at all.
 //
 // A scenario_id argument outside a configured scenario allow-list is refused locally, before any request is
-// sent. Every operation that names a scenario_id directly (scenarios.get, scenarios.blueprint, runs.list,
-// runs.get) also reads that scenario from Make itself, in one extra request when the operation's own answer
-// would not already carry it, and confirms live that its reported teamId matches the bound team before any
-// content is returned; a scenario of another team is refused the same way as one outside the allow-list, an
-// invalid request, never a provider error, and the refusal never names the scenario's real team. A run's
-// list and get answers additionally carry their own teamId and organizationId, which this provider
-// defensively re-checks against the bound team and, when configured, the bound organization, even though
-// the scenario check above already proved the same boundary: a scenario object itself reports no
+// sent. Every operation that names a scenario_id directly (scenarios.get, scenarios.blueprint,
+// scenarios.update, scenarios.start, scenarios.stop, scenarios.run, runs.list, runs.get) also reads that
+// scenario from Make itself, in one extra request when the operation's own answer would not already carry
+// it, and confirms live that its reported teamId matches the bound team before any content is returned or
+// any changing request is sent; a scenario of another team is refused the same way as one outside the
+// allow-list, an invalid request, never a provider error, and the refusal never names the scenario's real
+// team. A run's list and get answers additionally carry their own teamId and organizationId, which this
+// provider defensively re-checks against the bound team and, when configured, the bound organization, even
+// though the scenario check above already proved the same boundary: a scenario object itself reports no
 // organizationId at all (only teamId), so a configured organization target can only ever be verified this
 // way, against a run's own report, never against a scenario directly.
 //
@@ -75,6 +112,14 @@ import (
 // Provider is the provider name used in the configuration and as the operation namespace.
 const Provider = "make"
 
+// The scope phrases a 403's message names, one per group of operations this provider sends, so a caller
+// learns exactly what to add to the token instead of only that it was refused.
+const (
+	needRead  = "the scenarios:read scope"
+	needWrite = "the scenarios:write scope"
+	needRun   = "the scenarios:read, scenarios:write, and scenarios:run scopes"
+)
+
 // roleAPIToken is the single secret role a Make credential must supply. It is sent as the Authorization
 // header's Token scheme (developers.make.com/api-documentation/authentication/create-authentication-token),
 // never as a Bearer token.
@@ -116,6 +161,31 @@ const (
 	// not a value Make itself declares.
 	defaultListLimit = 50
 	maxListLimit     = 200
+	// maxBlueprintWriteBytes bounds a blueprint argument of scenarios.create and scenarios.update before it
+	// is encoded to the JSON string Make's own request body wants. It reuses maxResponseBytes: a blueprint
+	// this provider writes is bounded the same as one it would read back.
+	maxBlueprintWriteBytes = maxResponseBytes
+	// maxBlueprintDepth bounds how deeply nested a blueprint argument's modules and their parameters may be,
+	// well above any realistic Make scenario, so a malformed or adversarial payload is refused on its shape
+	// alone before any request is built. It is a local ceiling this process enforces, not a limit Make
+	// itself documents.
+	maxBlueprintDepth = 64
+	// maxSchedulingWriteBytes and maxSchedulingDepth bound a scheduling argument the same way, sized for the
+	// small type/interval object Make documents plus headroom for the further, undocumented per-type fields
+	// a real scheduling configuration carries.
+	maxSchedulingWriteBytes = 8 << 10
+	maxSchedulingDepth      = 8
+	// maxRunDataBytes and maxRunDataDepth bound scenarios.run's own "data" argument, the input parameters of
+	// one on-demand run, deliberately far smaller than a blueprint: Make documents no limit of its own for
+	// it, so this is a local ceiling on what this process ever sends, not a belief about what Make would
+	// accept.
+	maxRunDataBytes = 64 << 10
+	maxRunDataDepth = 16
+	// maxScenarioNameLength and maxDescriptionLength bound the two plain-text arguments scenarios.create and
+	// scenarios.update accept beyond blueprint and scheduling. Make documents no length of its own for
+	// either, so both are a local, conservative choice.
+	maxScenarioNameLength = 256
+	maxDescriptionLength  = 2048
 )
 
 // limiters holds the rate-limit budget of every API token this process has used. Make documents no fixed
@@ -218,74 +288,166 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// get sends one bounded GET below the API root and decodes its body into out.
-func (c *Client) get(ctx context.Context, op, path string, query url.Values, out any) error {
+// uncertain is appended to a failure of a change request whose request may have reached Make: the change
+// may have taken effect although no confirmation ever arrived. Qatlas never repeats such a request by
+// itself; a caller is told to read the current state before deciding whether to try again.
+const uncertain = "; this change may have taken effect, read the current state before repeating it"
+
+// runUncertain is scenarios.run's own uncertain note: unlike every other change of this provider, a run is
+// never followed by a re-read (see the package doc), so a caller is pointed at runs.list instead of at "the
+// current state" of a resource this provider would otherwise show directly.
+const runUncertain = "; the run may have started; check make.runs.list before running again"
+
+// get sends one bounded GET below the API root and decodes its body into out. need names the scope this
+// read needs, for a 403's message.
+func (c *Client) get(ctx context.Context, op, path string, query url.Values, out any, need string) error {
+	return c.do(ctx, op, http.MethodGet, path, query, nil, out, need, "")
+}
+
+// change sends one bounded, state-changing request below the API root, once, with a JSON body when body is
+// not nil, and decodes the answer into out when out is not nil. It is never retried by this provider; every
+// failure of it that could mean the request nonetheless reached Make is marked with note instead. need names
+// the scope this change needs, for a 403's message.
+func (c *Client) change(ctx context.Context, op, method, path string, query url.Values, body, out any,
+	need, note string) error {
+	return c.do(ctx, op, method, path, query, body, out, need, note)
+}
+
+// do sends one bounded request below the API root, with a JSON body when body is not nil, and decodes the
+// answer into out when out is not nil. need names the scope this request needs, so a permission refusal
+// tells a caller what to add to the token instead of only that it was refused. note marks this as a
+// changing request when it is not empty: every failure of it that could mean the request nonetheless arrived
+// has note appended, so this provider never repeats it by itself, the same contract n8n and infomaniakchat
+// give their own change requests.
+func (c *Client) do(ctx context.Context, op, method, path string, query url.Values, body, out any,
+	need, note string) error {
+	changing := note != ""
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "Make", err)
+	}
+	var payload []byte
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return providerError(op, "the request could not be built")
+		}
+		payload = encoded
 	}
 	endpoint := c.origin + apiPath + path
 	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	var reqBody io.Reader
+	if payload != nil {
+		reqBody = bytes.NewReader(payload)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reqBody)
 	if err != nil {
 		return providerError(op, "the request could not be built")
 	}
 	req.Header.Set("Authorization", "Token "+c.token)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "qatlas-cli")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return provider.Transport(op, "Make", err)
+		failure := provider.Transport(op, "Make", err)
+		if changing && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
+			failure.Cause == provider.CauseUnknown) {
+			failure.Message += note
+		}
+		return failure
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return c.statusError(op, response)
+		failure := c.statusError(op, response, need)
+		if changing && response.StatusCode >= 500 {
+			failure.Message += note
+		}
+		return failure
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, int64(maxResponseBytes)+1))
 	if err != nil || len(data) > maxResponseBytes {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-			Message: "the Make response could not be read within the size limit"}
+		message := "the Make response could not be read within the size limit"
+		if changing {
+			message += note
+		}
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 	}
 	if out == nil || len(bytes.TrimSpace(data)) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(data, out); err != nil {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Make returned an invalid response"}
+		message := "Make returned an invalid response"
+		if changing {
+			message += note
+		}
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 	}
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class. The provider body is never read into the message. need
-// names the scope this operation needs, so a permission refusal tells a caller what to add to the token
-// instead of only that it was refused.
-func (c *Client) statusError(op string, response *http.Response) *provider.Error {
+// pausedErrorCode reads a small, bounded prefix of a 429 response body and extracts only its "code" field,
+// never its message or any other value: the provider body is otherwise never read into an error, so this is
+// the one exception, kept to the single classification value Make documents (IM310, an organization or team
+// that is paused, not a transient rate limit), which is itself never surfaced verbatim, only recognised.
+func pausedErrorCode(body io.Reader) string {
+	const maxPeekBytes = 4096
+	data, _ := io.ReadAll(io.LimitReader(body, maxPeekBytes))
+	var parsed struct {
+		Code string `json:"code"`
+	}
+	_ = json.Unmarshal(data, &parsed)
+	return parsed.Code
+}
+
+// statusError maps an HTTP status to a stable class. The provider body is never read into the message,
+// except the one bounded peek pausedErrorCode takes of a 429 to tell a paused organization or team apart
+// from an ordinary rate limit. need names the scope this operation needs, so a permission refusal tells a
+// caller what to add to the token instead of only that it was refused.
+func (c *Client) statusError(op string, response *http.Response, need string) *provider.Error {
 	status := response.StatusCode
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 	switch {
 	case status == http.StatusUnauthorized:
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Make rejected the API token; a " +
 			"token created for a different zone is rejected here the same way as any other invalid token"}
 	case status == http.StatusForbidden:
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: "this Make API token may " +
-			"not perform this operation; it needs the scenarios:read scope, added under Profile, API, when " +
-			"the token was created"}
+			"not perform this operation; it needs " + need + ", added under Profile, API, when the token was created"}
 	case status == http.StatusNotFound:
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassNotFound, Op: op,
 			Message: "Make does not hold this resource or does not show it to this token"}
 	case status == http.StatusTooManyRequests:
+		// IM310 is Make's own code for an organization or team that is paused: waiting out a Retry-After
+		// will not fix that, unlike every other 429 this provider still holds its own limiter for.
+		code := pausedErrorCode(response.Body)
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		c.limiter.HoldFor(retryAfter(response.Header))
+		if code == "IM310" {
+			return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Make reports this " +
+				"organization or team is paused (IM310); this is not a transient rate limit, and repeating " +
+				"the request will not help until it is reactivated"}
+		}
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Make rate-limited the operation"}
 	case status == http.StatusServiceUnavailable:
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "Make is unavailable or in maintenance"}
 	case status == http.StatusGatewayTimeout:
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "Make did not answer in time"}
 	case status >= 300 && status < 400:
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: "Make answered with a redirect, which Qatlas does not follow for this request"}
 	default:
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("Make rejected the operation (HTTP %d)", status)}
 	}
@@ -341,6 +503,58 @@ func bounded(value string) string {
 	return value
 }
 
+// jsonDepth reports how deeply nested a JSON value is: a scalar is depth 0, and an object or array is one
+// more than its deepest child. raw must already be known-valid JSON; the central schema validator proves
+// that before any of this package's write handlers ever call this, so a decode failure here can only be this
+// process's own size accounting, never a malformed caller value.
+func jsonDepth(raw json.RawMessage) (int, error) {
+	var value any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&value); err != nil {
+		return 0, err
+	}
+	return depthOf(value), nil
+}
+
+func depthOf(value any) int {
+	switch v := value.(type) {
+	case map[string]any:
+		deepest := 0
+		for _, child := range v {
+			if d := depthOf(child) + 1; d > deepest {
+				deepest = d
+			}
+		}
+		return deepest
+	case []any:
+		deepest := 0
+		for _, child := range v {
+			if d := depthOf(child) + 1; d > deepest {
+				deepest = d
+			}
+		}
+		return deepest
+	default:
+		return 0
+	}
+}
+
+// validJSONObject checks a caller-supplied JSON object argument (a blueprint, a scheduling configuration, or
+// a run's data) against a local size and nesting-depth ceiling before it is ever placed in a request body.
+// Neither ceiling is a limit Make documents; both are this process's own protection against a malformed or
+// adversarial payload, well above what any realistic value of that kind needs.
+func validJSONObject(raw json.RawMessage, maxBytes, maxDepth int, label string) error {
+	if len(raw) > maxBytes {
+		return invalidRequest(fmt.Sprintf("%s is larger than the %d byte limit", label, maxBytes))
+	}
+	depth, err := jsonDepth(raw)
+	if err != nil || depth > maxDepth {
+		return invalidRequest(fmt.Sprintf("%s is nested deeper than %d levels", label, maxDepth))
+	}
+	return nil
+}
+
 // TestConnection performs the smallest safe authenticated read: one page of at most one scenario of the
 // bound team. It proves that the API token is accepted and holds the scenarios:read scope for this zone; it
 // says nothing about an organization or scenario allow-list narrower than that, because every scenario and
@@ -358,7 +572,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	const op = "test connection"
 	var page scenariosPageJSON
 	query := url.Values{"teamId": {strconv.FormatInt(client.scope.teamID, 10)}, "pg[limit]": {"1"}}
-	if err := client.get(ctx, op, "/scenarios", query, &page); err != nil {
+	if err := client.get(ctx, op, "/scenarios", query, &page, needRead); err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {
 			return providerErr.Class, nil
@@ -368,24 +582,24 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds Make metadata, its read-only connection test, and its read operations. There is no manage
-// profile yet: every tool of Milestone A is a read, and a later milestone adds a manage profile the same
-// way n8n's own does, once it has a change tool to offer.
+// Register adds Make metadata, its connection test, and its read and change operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Make", DefaultPermissions: []config.Permission{config.PermissionRead},
-		Description: "Visual automation platform, scenarios and their run history read through its zone-" +
-			"scoped REST API",
+		Description: "Visual automation platform, scenarios and their run history read, created, changed, " +
+			"started, stopped, and run through its zone-scoped REST API",
 		ValidateBaseURL: func(raw string) error {
 			_, err := parseInstance(raw)
 			return err
 		},
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIToken,
-			Description: "Make API token, created in Make under the profile avatar, Profile, API, Add token, " +
-				"with at least the scenarios:read scope; a token belongs to one zone only, so a token of a " +
-				"different zone than the connection's own is rejected as invalid, and it reaches every team " +
-				"its owner belongs to, which is why this connection's own team target decides what is exposed",
+			Description: "Make API token, created in Make under the profile avatar, Profile, API, Add token; " +
+				"scenarios:read for the read profile, plus scenarios:write for the manage profile's create, " +
+				"update, start, and stop tools, plus scenarios:run for its run tool. A token belongs to one " +
+				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
+				"and it reaches every team its owner belongs to, which is why this connection's own team " +
+				"target decides what is exposed",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "team, organization, and scenarios",
@@ -398,7 +612,9 @@ func Register(reg *capability.Registry) error {
 				"locally, before any request is sent; every operation that names a scenario_id also confirms " +
 				"live, against Make's own report, that the scenario belongs to the bound team, and a run's own " +
 				"answer is defensively re-checked the same way against the bound team and, when configured, " +
-				"the bound organization",
+				"the bound organization. scenarios.create always creates in the bound team and refuses outright " +
+				"on a connection restricted by a scenario allow-list, since a scenario that does not exist yet " +
+				"can never already be on that list",
 			Kinds: []config.TargetKind{{
 				Name: "team",
 				Description: "the Make team this connection may reach; required, exactly one; find it as the " +
@@ -423,6 +639,14 @@ func Register(reg *capability.Registry) error {
 			Description: "lists and reads the scenarios of the bound team, reads a scenario's blueprint, " +
 				"and lists and reads its run history; changes nothing and starts nothing",
 			Tools: readTools,
+		}, {
+			ID: "manage", Title: "Manage scenarios and runs",
+			Description: "reads what the read profile reads, creates a scenario, replaces a scenario's " +
+				"blueprint, scheduling, name, or folder, starts and stops it, and runs it on demand; every " +
+				"change needs its own confirmation. There is still no tool to delete, clone, or replay a " +
+				"scenario, and no generic webhook call: those are deliberately left out of this milestone",
+			Tools: append(append([]string{}, readTools...), scenariosCreate.ID, scenariosUpdate.ID,
+				scenariosStart.ID, scenariosStop.ID, scenariosRun.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -433,9 +657,13 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: scenariosBlueprint, Handler: capability.Handler(invokeScenariosBlueprint)},
 		capability.Operation{Descriptor: runsList, Handler: capability.Handler(invokeRunsList)},
 		capability.Operation{Descriptor: runsGet, Handler: capability.Handler(invokeRunsGet)},
+		capability.Operation{Descriptor: scenariosCreate, Handler: capability.Handler(invokeScenariosCreate)},
+		capability.Operation{Descriptor: scenariosUpdate, Handler: capability.Handler(invokeScenariosUpdate)},
+		capability.Operation{Descriptor: scenariosStart, Handler: capability.Handler(invokeScenariosStart)},
+		capability.Operation{Descriptor: scenariosStop, Handler: capability.Handler(invokeScenariosStop)},
+		capability.Operation{Descriptor: scenariosRun, Handler: capability.Handler(invokeScenariosRun)},
 	)
 }
 
-// readTools are the five tools of Milestone A. A future manage profile reuses this list instead of
-// repeating it, the same way n8n's own manage profile does.
+// readTools are the five tools of Milestone A. The manage profile reuses this list instead of repeating it.
 var readTools = []string{scenariosList.ID, scenariosGet.ID, scenariosBlueprint.ID, runsList.ID, runsGet.ID}
