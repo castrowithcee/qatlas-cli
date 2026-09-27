@@ -7,6 +7,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider/infomaniakchat"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/infomaniakdrive"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/lexware"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/n8n"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/nextcloud"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/seatable"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/telegram"
@@ -47,6 +48,9 @@ func defaultRegistry() *capability.Registry {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := infomaniakchat.Register(reg); err != nil {
+		panic("provider registration is static and must not fail: " + err.Error())
+	}
+	if err := n8n.Register(reg); err != nil {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	// Tool profiles name registered tools, so they are checked once every provider has registered its own.
