@@ -81,6 +81,32 @@ type fakeGitHub struct {
 	views string
 	// noTeams refuses the team list like GitHub does for a token without read:org.
 	noTeams bool
+	// orgTeamsForbidden refuses the organization team and team member routes like GitHub does for a token
+	// without read:org.
+	orgTeamsForbidden bool
+	// orgTeams are the teams of octo-org the organization team list answers.
+	orgTeams []fakeTeam
+	// teamMembers are the members of a team of octo-org, by slug.
+	teamMembers map[string][]string
+	// starred holds every repository currently starred by the account, by full name in lower case.
+	starred map[string]bool
+	// starList orders the repositories github.stars.list answers.
+	starList []fakeStar
+	// searchRateLimited makes every search route answer like GitHub's secondary rate limit.
+	searchRateLimited bool
+	// searchHasNextPage makes every search route announce a following page through the Link header.
+	searchHasNextPage bool
+}
+
+// fakeTeam is one team of an organization.
+type fakeTeam struct {
+	slug, name, description, privacy string
+}
+
+// fakeStar is one repository of the star list, with the owner login GitHub reports alongside it.
+type fakeStar struct {
+	fullName, owner, visibility string
+	archived                    bool
 }
 
 func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +172,109 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/api/v3/repos/octo-org/example/issues/7":
 		fmt.Fprint(w, `{"number":7,"title":"A change","state":"open","body":"pr body",`+
 			`"pull_request":{"url":"https://api.github.com/repos/octo-org/example/pulls/7"}}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user":
+		fmt.Fprint(w, `{"login":"octocat","name":"The Octocat","type":"User","plan":{"name":"pro"}}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/orgs/octo-org/teams":
+		if f.orgTeamsForbidden {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"Must have admin rights to Repository."}`)
+			return
+		}
+		teams := []string{}
+		for _, team := range f.orgTeams {
+			teams = append(teams, fmt.Sprintf(`{"slug":%q,"name":%q,"description":%q,"privacy":%q}`,
+				team.slug, team.name, team.description, team.privacy))
+		}
+		fmt.Fprint(w, "["+strings.Join(teams, ",")+"]")
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/orgs/octo-org/teams/") &&
+		strings.HasSuffix(r.URL.Path, "/members"):
+		if f.orgTeamsForbidden {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"Must have admin rights to Repository."}`)
+			return
+		}
+		slug := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v3/orgs/octo-org/teams/"), "/members")
+		members, ok := f.teamMembers[slug]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message":"Not Found"}`)
+			return
+		}
+		logins := []string{}
+		for _, login := range members {
+			logins = append(logins, fmt.Sprintf(`{"login":%q}`, login))
+		}
+		fmt.Fprint(w, "["+strings.Join(logins, ",")+"]")
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user/starred":
+		repos := []string{}
+		for _, star := range f.starList {
+			repos = append(repos, fmt.Sprintf(`{"full_name":%q,"visibility":%q,"archived":%t,"owner":{"login":%q}}`,
+				star.fullName, star.visibility, star.archived, star.owner))
+		}
+		fmt.Fprint(w, "["+strings.Join(repos, ",")+"]")
+	case strings.HasPrefix(r.URL.Path, "/api/v3/user/starred/"):
+		repo := strings.ToLower(strings.TrimPrefix(r.URL.Path, "/api/v3/user/starred/"))
+		switch r.Method {
+		case http.MethodGet:
+			if f.starred[repo] {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, `{"message":"Not Found"}`)
+			}
+		case http.MethodPut:
+			if f.starred == nil {
+				f.starred = map[string]bool{}
+			}
+			f.starred[repo] = true
+			w.WriteHeader(http.StatusNoContent)
+		case http.MethodDelete:
+			delete(f.starred, repo)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/repos/octo-org/example/contents"):
+		f.contents(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/repos/octo-org/example/git/trees/"):
+		f.tree(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/search/"):
+		if f.searchRateLimited {
+			w.Header().Set("X-RateLimit-Remaining", "0")
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(2*time.Second).Unix(), 10))
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"API rate limit exceeded for installation."}`)
+			return
+		}
+		if f.searchHasNextPage {
+			w.Header().Set("Link", `<https://example.invalid/next>; rel="next"`)
+		}
+		switch strings.TrimPrefix(r.URL.Path, "/api/v3/search/") {
+		case "repositories":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"full_name":"octo-org/example",`+
+				`"description":"An example","visibility":"public","language":"Go","stargazers_count":3,"fork":false,`+
+				`"archived":false,"updated_at":"2026-01-01T00:00:00Z","html_url":"https://github.com/octo-org/example"}]}`)
+		case "code":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"path":"main.go","sha":"deadbeef",`+
+				`"html_url":"https://github.com/octo-org/example/blob/main/main.go",`+
+				`"repository":{"full_name":"octo-org/example"}}]}`)
+		case "issues":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"number":42,"title":"Crash on start",`+
+				`"state":"open","draft":false,"updated_at":"2026-01-02T00:00:00Z",`+
+				`"html_url":"https://github.com/octo-org/example/issues/42","labels":[{"name":"bug"}],`+
+				`"assignees":[{"login":"hubot"}],"repository_url":"https://api.github.com/repos/octo-org/example"}]}`)
+		case "commits":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"sha":"deadbeef",`+
+				`"html_url":"https://github.com/octo-org/example/commit/deadbeef",`+
+				`"repository":{"full_name":"octo-org/example"},`+
+				`"commit":{"message":"Fix the crash","author":{"name":"octocat","date":"2026-01-01T00:00:00Z"}}}]}`)
+		case "users":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"login":"octocat","type":"User",`+
+				`"html_url":"https://github.com/octocat"}]}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message":"Not Found"}`)
+		}
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(w, `{"message":"Not Found"}`)
@@ -160,6 +289,7 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 	case f.itemChange(w, document, variables):
 	case f.statusChange(w, document, variables):
 	case f.accessChange(w, document, variables):
+	case f.blame(w, document, variables):
 	case strings.Contains(document, "projectsV2(first") || strings.Contains(document, "repositories(first"):
 		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
@@ -666,29 +796,37 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			t.Errorf("descriptor %s = %+v, want a safe read requiring an explicit connection", descriptor.ID, descriptor.Risk)
 		}
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "comments"} {
-			// Only the owner lists take an owner, as their target.
-			owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID
+			// Only the owner lists and the organization tools take an owner, as their target.
+			owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
+				descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("descriptor %s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
 		}
 	}
-	equalIDs(t, ids, []string{"github.actionspermissions.get", "github.comments.list", "github.issues.get",
-		"github.issues.list", "github.projectfields.list", "github.projectitems.get", "github.projectitems.list", "github.projects.list",
+	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.blame.get",
+		"github.branches.list", "github.code.search",
+		"github.comments.list", "github.commits.get", "github.commits.list", "github.commits.search",
+		"github.contents.get", "github.issues.get",
+		"github.issues.list", "github.issues.search", "github.organizations.search", "github.projectfields.list",
+		"github.projectitems.get", "github.projectitems.list", "github.projects.list",
 		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
 		"github.pullrequestchecks.list", "github.pullrequestcomments.list", "github.pullrequestcommits.list",
 		"github.pullrequestdiffs.get", "github.pullrequestfiles.list", "github.pullrequestreviewcomments.list",
 		"github.pullrequestreviews.list", "github.pullrequestreviewthreads.list", "github.pullrequests.get",
-		"github.pullrequests.list",
+		"github.pullrequests.list", "github.pullrequests.search",
 		"github.releaseassets.list", "github.releases.get", "github.releases.list",
-		"github.repositories.list", "github.workflowartifacts.list",
+		"github.repositories.list", "github.repositories.search", "github.stars.list", "github.tags.get",
+		"github.tags.list", "github.teammembers.list",
+		"github.teams.list", "github.trees.get", "github.users.search",
+		"github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
 		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
 		"github.workflowruns.list", "github.workflows.get", "github.workflows.list"})
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 102 {
+	if len(metadata.Tools) != 123 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }
@@ -1300,21 +1438,58 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
-	for _, request := range []application.InvokeRequest{
-		{Operation: "github.projectitems.list", Connection: "planning", Arguments: json.RawMessage(`{}`)},
-		{Operation: "github.projectitems.list", Connection: "planning",
-			Arguments: json.RawMessage(`{"status":["Todo"],"type":"issue","limit":2}`)},
-		{Operation: "github.projectitems.get", Connection: "planning", Arguments: json.RawMessage(`{"item_id":"PVTI_item02"}`)},
-		{Operation: "github.issues.list", Connection: "repo", Arguments: json.RawMessage(`{"state":"all","limit":2}`)},
-		{Operation: "github.issues.get", Connection: "repo", Arguments: json.RawMessage(`{"number":42}`)},
+	// The list tools of contract version 2 leave out the URL of each entry, derivable from the repository
+	// and the number or identifier; the detail tools, still at version 1, keep it. A repository-bound list
+	// also names the repository once at the result level, through the target argument every tool adds.
+	for _, tt := range []struct {
+		request  application.InvokeRequest
+		list     string
+		urlAtTop bool
+	}{
+		{application.InvokeRequest{Operation: "github.projectitems.list", Connection: "planning",
+			Arguments: json.RawMessage(`{}`)}, "items", false},
+		{application.InvokeRequest{Operation: "github.projectitems.list", Connection: "planning",
+			Arguments: json.RawMessage(`{"status":["Todo"],"type":"issue","limit":2}`)}, "items", false},
+		{application.InvokeRequest{Operation: "github.projectitems.get", Connection: "planning",
+			Arguments: json.RawMessage(`{"item_id":"PVTI_item00"}`)}, "", true},
+		{application.InvokeRequest{Operation: "github.issues.list", Connection: "repo",
+			Arguments: json.RawMessage(`{"state":"all","limit":2}`)}, "issues", false},
+		{application.InvokeRequest{Operation: "github.issues.get", Connection: "repo",
+			Arguments: json.RawMessage(`{"number":42}`)}, "", true},
 	} {
-		response, err := core.Invoke(context.Background(), request)
+		response, err := core.Invoke(context.Background(), tt.request)
 		if err != nil {
-			t.Errorf("%s %s = %v", request.Operation, request.Arguments, err)
+			t.Errorf("%s %s = %v", tt.request.Operation, tt.request.Arguments, err)
 			continue
 		}
 		if strings.Contains(string(response.Result), "comments") {
-			t.Errorf("%s answered with comments: %s", request.Operation, response.Result)
+			t.Errorf("%s answered with comments: %s", tt.request.Operation, response.Result)
+		}
+		var result map[string]any
+		if err := json.Unmarshal(response.Result, &result); err != nil {
+			t.Fatalf("%s result = %s: %v", tt.request.Operation, response.Result, err)
+		}
+		if tt.urlAtTop {
+			if _, ok := result["url"]; !ok {
+				t.Errorf("%s = %s, want a url", tt.request.Operation, response.Result)
+			}
+			continue
+		}
+		entries, _ := result[tt.list].([]any)
+		if len(entries) == 0 {
+			t.Fatalf("%s = %s, want at least one entry", tt.request.Operation, response.Result)
+		}
+		for _, entry := range entries {
+			if fields, ok := entry.(map[string]any); ok {
+				if _, ok := fields["url"]; ok {
+					t.Errorf("%s entry carries a url: %v", tt.request.Operation, fields)
+				}
+			}
+		}
+		if tt.request.Operation == "github.issues.list" {
+			if _, ok := result["repository"]; !ok {
+				t.Errorf("%s = %s, want the repository named at the result level", tt.request.Operation, response.Result)
+			}
 		}
 	}
 

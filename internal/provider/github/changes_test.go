@@ -291,6 +291,27 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 			capability.IdempotencyIdempotent),
 		"github.pullrequestreviewers.request": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.pullrequestreviewers.remove":  changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.accounts.me":                  readRisk,
+		"github.teams.list":                   readRisk,
+		"github.teammembers.list":             readRisk,
+		"github.stars.list":                   readRisk,
+		"github.stars.add":                    changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+		"github.stars.remove":                 changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"github.repositories.search":          readRisk,
+		"github.code.search":                  readRisk,
+		"github.issues.search":                readRisk,
+		"github.pullrequests.search":          readRisk,
+		"github.commits.search":               readRisk,
+		"github.users.search":                 readRisk,
+		"github.organizations.search":         readRisk,
+		"github.contents.get":                 readRisk,
+		"github.trees.get":                    readRisk,
+		"github.blame.get":                    readRisk,
+		"github.commits.list":                 readRisk,
+		"github.commits.get":                  readRisk,
+		"github.branches.list":                readRisk,
+		"github.tags.list":                    readRisk,
+		"github.tags.get":                     readRisk,
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {
@@ -305,7 +326,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 			t.Errorf("%s changes without confirmation", descriptor.ID)
 		}
 		owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
-			descriptor.ID == projectsCreate.ID || descriptor.ID == projectsCopy.ID
+			descriptor.ID == projectsCreate.ID || descriptor.ID == projectsCopy.ID ||
+			descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "document"} {
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("%s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)

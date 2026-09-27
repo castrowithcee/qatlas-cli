@@ -66,8 +66,27 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[35]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
+		"tools[54]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
+		"  github.contents.get,Get GitHub repository contents,read,code\n",
+		"  github.trees.get,Get a GitHub repository tree,read,code\n",
+		"  github.blame.get,Get the GitHub blame of a file,read,code\n",
+		"  github.commits.list,List GitHub commits,read,code\n",
+		"  github.commits.get,Get a GitHub commit,read,code\n",
+		"  github.branches.list,List GitHub branches,read,code\n",
+		"  github.tags.list,List GitHub tags,read,code\n",
+		"  github.tags.get,Get a GitHub tag,read,code\n",
 		"  github.projectitems.list,List GitHub project items,read,code planning roadmap\n", "  github.projectitems.update,Update GitHub project item fields,update,roadmap\n",
+		"  github.accounts.me,Get the GitHub account behind this connection,read,code\n",
+		"  github.stars.list,List the GitHub repositories starred by this account,read,code\n",
+		"  github.teams.list,List the teams of a GitHub organization,read,code\n",
+		"  github.teammembers.list,List the members of a GitHub team,read,code\n",
+		"  github.repositories.search,Search GitHub repositories,read,code\n",
+		"  github.code.search,Search GitHub code,read,code\n",
+		"  github.issues.search,Search GitHub issues,read,code\n",
+		"  github.pullrequests.search,Search GitHub pull requests,read,code\n",
+		"  github.commits.search,Search GitHub commits,read,code\n",
+		"  github.users.search,Search GitHub users,read,code\n",
+		"  github.organizations.search,Search GitHub organizations,read,code\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -106,7 +125,17 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[102]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[123]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
+		"github.blame.get,Get the GitHub blame of a file,read,",
+		"github.commits.list,List GitHub commits,read,", "github.commits.get,Get a GitHub commit,read,",
+		"github.branches.list,List GitHub branches,read,", "github.tags.list,List GitHub tags,read,",
+		"github.tags.get,Get a GitHub tag,read,",
+		"github.accounts.me,Get the GitHub account behind this connection,read,",
+		"github.teams.list,List the teams of a GitHub organization,read,",
+		"github.teammembers.list,List the members of a GitHub team,read,",
+		"github.stars.list,List the GitHub repositories starred by this account,read,",
+		"github.stars.add,Star a GitHub repository,create,", "github.stars.remove,Unstar a GitHub repository,delete,",
 		"github.projectitems.get,Get a GitHub project item,read,", "github.projectitems.list,List GitHub project items,read,", "github.comments.list,List comments of a GitHub issue,read,",
 		"github.issues.create,Create a GitHub issue,create,", "github.issues.update,Update a GitHub issue,update,", "github.issues.close,Close a GitHub issue,update,",
 		"github.issues.reopen,Reopen a GitHub issue,update,", "github.comments.create,Comment on a GitHub issue,create,", "github.projectitems.update,Update GitHub project item fields,update,",
@@ -254,7 +283,8 @@ func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 	}
 }
 
-// The MCP broker finds and describes the same GitHub tools as the CLI.
+// The MCP broker finds and describes the same GitHub tools as the CLI. github.projectitems.list carries
+// contract version 2, so its former version 1 is no longer callable.
 func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	path := githubConfig(t)
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
@@ -262,7 +292,10 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.search","arguments":{"provider":"github"}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.describe","arguments":{"operation":"github.projectitems.list","version":1}}}`,
+			`,"name":"qatlas.describe","arguments":{"operation":"github.projectitems.list","version":2}}}`,
+		`{"jsonrpc":"2.0","id":"stale","method":"tools/call","params":{` + mcpTestMeta +
+			`,"name":"qatlas.invoke","arguments":{"operation":"github.projectitems.list","version":1,` +
+			`"connection":"planning"}}}`,
 	}, "\n") + "\n"
 	responses, stderr := runMCPWithOptions(t, defaultRegistry(), input, options)
 	if stderr != "" {
@@ -270,16 +303,23 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	}
 	var searched struct {
 		Operations []application.SearchHit `json:"operations"`
+		HasMore    bool                    `json:"has_more"`
 	}
 	decodeRaw(t, toolResultFrom(t, responses[`"search"`]).Structured, &searched)
-	if len(searched.Operations) != 35 || searched.Operations[0].ID != "github.comments.list" ||
-		searched.Operations[34].ID != "github.workflows.list" {
-		t.Fatalf("search operations = %+v", searched.Operations)
+	// The connection offers 54 read tools, one more page than the search default of 50, which this call
+	// leaves unbounded; only the first page and its continuation are asserted here.
+	if len(searched.Operations) != 50 || !searched.HasMore || searched.Operations[0].ID != "github.accounts.me" {
+		t.Fatalf("search operations = %+v, has_more = %t", searched.Operations, searched.HasMore)
 	}
 	describedByCLI := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--config", path, "--output", "json")
 	describe := toolResultFrom(t, responses[`"describe"`])
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
+
+	stale := toolResultFrom(t, responses[`"stale"`])
+	if !stale.IsError || !strings.Contains(stale.Content[0].Text, "unknown-operation:") {
+		t.Fatalf("invoke at version 1 = %+v, want unknown-operation now that the tool is version 2", stale)
+	}
 }
 
 // Without a repository argument and without exactly one repository in the targets, a GitHub call is the

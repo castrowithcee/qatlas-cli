@@ -48,12 +48,23 @@ var projectField = capability.Field{Name: "project", Description: "Project the t
 // target the tool acted on in a field of the same name; the project tools that add or create an issue or link
 // a repository also name that repository, and a project copy the owner of the copy, which they take as well.
 func withTargetArgument(d capability.Descriptor) capability.Descriptor {
+	// The account tool, the star list, and the search tools name no repository, project, or owner: they read
+	// or, for the star list and the search tools, narrow by the connection's targets as a whole, not by a
+	// target argument of their own.
+	switch d.ID {
+	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
+		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID:
+		return d
+	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument
 	fields := []capability.Field{repositoryField}
 	switch {
 	case d.ID == projectsList.ID || d.ID == repositoriesList.ID:
 		name, schema, argument = "owner", ownerSchema, ownerArgument
 		fields = []capability.Field{ownerField}
+	case d.ID == organizationTeamsList.ID || d.ID == teamMembersList.ID:
+		name, schema, argument = "owner", ownerSchema, organizationArgument
+		fields = []capability.Field{organizationField}
 	case d.ID == projectsCreate.ID:
 		name, schema, argument = "owner", ownerSchema, newOwnerArgument
 		fields = []capability.Field{newOwnerField}
@@ -195,6 +206,35 @@ func (a allowlist) names(kind targetKind) bool {
 	return false
 }
 
+// ownerNames reports whether the list names one owner by login, ignoring its scope and whatever repository
+// or project it may also name: used to filter an account-wide result, such as the starred repositories, down
+// to what an owner target of the list allows, rather than down to a repository or a project of it.
+func (a allowlist) ownerNames(login string) bool {
+	if len(a) == 0 {
+		return true
+	}
+	for _, entry := range a {
+		if entry.kind == kindOwner && strings.EqualFold(entry.owner, login) {
+			return true
+		}
+	}
+	return false
+}
+
+// accountWideAllowed refuses a tool that reads data of the account behind the connection's token as a whole,
+// rather than of one repository or project it names, when the connection's targets name a repository or a
+// project: such a connection is scoped to those, and the account behind its token may belong to a different
+// customer than the one its targets name. Targets that name only owners, or no targets at all, still allow
+// it; an owner target then narrows what an account-wide list shows, as ownerNames applies.
+func accountWideAllowed(allowed allowlist) error {
+	if allowed.names(kindRepository) || allowed.names(kindProject) {
+		return invalidRequest("this connection's targets name a repository or a project, so it may not read " +
+			"data of the account behind its token as a whole; use a connection without such targets, or one " +
+			"whose targets name only owners")
+	}
+	return nil
+}
+
 // chooseOwner returns the owner whose projects or repositories an owner tool lists, or, for kindOwner, the
 // owner a new project is created in. An explicit argument wins; without one, only an owner the list names
 // exactly, and no other, is the default. A listed owner must be one the list lets the tool list; the owner of
@@ -305,6 +345,23 @@ func selectOwner(resolved *config.Resolved, kind targetKind, raw json.RawMessage
 		return target{}, unreadable("select owner")
 	}
 	return allowed.chooseOwner(kind, arguments.Owner)
+}
+
+// selectOrganization reads the owner argument of an organization-wide tool, such as the organization team
+// lists, and resolves it against the connection's targets exactly as selectOwner does for a tool that
+// creates a project: the organization must be a target the connection names as an owner itself, not merely
+// implied by a project or a repository target of it. A user owner is then refused, because teams belong to
+// an organization. It runs before a credential is resolved.
+func selectOrganization(resolved *config.Resolved, raw json.RawMessage) (target, error) {
+	owner, err := selectOwner(resolved, kindOwner, raw)
+	if err != nil {
+		return target{}, err
+	}
+	if owner.scope != "orgs" {
+		return target{}, invalidRequest("owner must be an organization, as orgs/LOGIN; teams belong to an " +
+			"organization, not a user")
+	}
+	return owner, nil
 }
 
 // selectTarget reads the repository or project argument of a tool and resolves the target it acts on

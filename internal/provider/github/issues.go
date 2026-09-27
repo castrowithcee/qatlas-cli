@@ -57,7 +57,7 @@ func (o *IssueListOptions) binding(bound target) []byte {
 const issuesQuery = `query($owner:String!,$name:String!,$first:Int!,$after:String,$filter:IssueFilters!){` +
 	`repository(owner:$owner,name:$name){issues(first:$first,after:$after,` +
 	`orderBy:{field:CREATED_AT,direction:DESC},filterBy:$filter){` +
-	`pageInfo{hasNextPage endCursor} nodes{number title state url updatedAt ` +
+	`pageInfo{hasNextPage endCursor} nodes{number title state updatedAt ` +
 	`assignees(first:10){nodes{login}} labels(first:20){nodes{name}}}}}}`
 
 // IssueList is the normalised batch of repository issues.
@@ -67,14 +67,14 @@ type IssueList struct {
 	HasMore    bool           `json:"has_more"`
 }
 
-// IssueSummary is the compact list view of one issue.
+// IssueSummary is the compact list view of one issue. The URL is left out because it is derivable from the
+// repository and the number; github.issues.get adds it back.
 type IssueSummary struct {
 	Number    int      `json:"number"`
 	Title     string   `json:"title"`
 	State     string   `json:"state"`
 	Assignees []string `json:"assignees"`
 	Labels    []string `json:"labels"`
-	URL       string   `json:"url,omitempty"`
 	UpdatedAt string   `json:"updated_at,omitempty"`
 }
 
@@ -89,7 +89,6 @@ type issuesPageJSON struct {
 				Number    int           `json:"number"`
 				Title     string        `json:"title"`
 				State     string        `json:"state"`
-				URL       string        `json:"url"`
 				UpdatedAt string        `json:"updatedAt"`
 				Assignees countedLogins `json:"assignees"`
 				Labels    countedLabels `json:"labels"`
@@ -143,7 +142,7 @@ func (c *Client) listIssues(ctx context.Context, options IssueListOptions, after
 				Message: "GitHub returned an issue without a usable number"}
 		}
 		issue := IssueSummary{Number: node.Number, Title: node.Title, State: strings.ToLower(node.State),
-			Assignees: []string{}, Labels: []string{}, URL: node.URL, UpdatedAt: node.UpdatedAt}
+			Assignees: []string{}, Labels: []string{}, UpdatedAt: node.UpdatedAt}
 		for _, assignee := range node.Assignees.Nodes {
 			issue.Assignees = append(issue.Assignees, assignee.Login)
 		}

@@ -32,9 +32,23 @@
 // setup profile releases lists releases, reads one by identifier, tag, or as the latest published one, lists
 // the metadata of a release's assets, and creates and updates releases; only a connection whose tools list
 // names it deletes a release, because the tag it was cut from stays behind and the notes and attachments do
-// not. A tool that touches a project and a repository checks both. Nothing here accepts a free filter
-// expression, a GraphQL document, or a route from an agent, and every target is checked against the
-// allow-list before a credential is resolved.
+// not. A tool that touches a project and a repository checks both. The account tool reads the login, name,
+// type, and plan of the account behind the connection's token; it and the star list, which reads the
+// account's starred repositories, name no repository, project, or owner and are offered only by a connection
+// whose targets name neither a repository nor a project. The star tools also star and unstar one repository
+// an explicit connection allows. The organization tools read the teams of an organization and the members of
+// one of its teams, an organization the connection's targets must allow as an owner. The repository tools
+// read the contents of a file or a directory, the Git tree of a ref, through GraphQL the blame of a file
+// over a bounded line range, the commits of a repository or one commit with its stats and changed files, and
+// the branches and the tags of a repository or one tag resolved through the Git refs and Git tags APIs;
+// none of them writes, diffs two refs, or downloads an archive. The search
+// tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
+// organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
+// argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
+// forces ahead of the caller's terms, so it never searches beyond them, and a term list that could escape
+// that narrowing, such as a repeated repo:, org:, user:, or owner: qualifier, or OR and parentheses, is
+// refused. Nothing here accepts a free filter expression, a GraphQL document, or a route from an agent, and
+// every target is checked against the allow-list before a credential is resolved.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -141,17 +155,21 @@ const cursorSchema = `{"type":"string","minLength":1,"maxLength":1024,"pattern":
 
 const stringListSchema = `{"type":"array","items":{"type":"string"}}`
 
-// itemProperties is the compact item projection shared by the list and the detail.
-const itemProperties = `"id":{"type":"string"},"type":{"type":"string"},"title":{"type":"string"},` +
+// itemPropertiesCommon is the compact item projection of the list. The list omits the URL because it is
+// derivable from the repository and the number; the detail below adds it back.
+const itemPropertiesCommon = `"id":{"type":"string"},"type":{"type":"string"},"title":{"type":"string"},` +
 	`"number":{"type":"integer"},"repository":{"type":"string"},"state":{"type":"string"},` +
 	`"status":{"type":"string"},"fields":{"type":"object"},"assignees":` + stringListSchema + `,` +
-	`"labels":` + stringListSchema + `,"url":{"type":"string"}`
+	`"labels":` + stringListSchema
+
+// itemProperties is the item projection of the detail: itemPropertiesCommon plus the URL.
+const itemProperties = itemPropertiesCommon + `,"url":{"type":"string"}`
 
 const itemRequired = `"required":["id","type","fields","assignees","labels"],"additionalProperties":false`
 
 var itemsList = capability.Descriptor{
 	ID:      Provider + ".projectitems.list",
-	Version: 1,
+	Version: 2,
 	Title:   "List GitHub project items",
 	Description: "List one bounded, server-side filtered batch of compact items of " +
 		"a GitHub project an explicit connection allows; without a status filter only items whose status is not Done are listed",
@@ -168,7 +186,7 @@ var itemsList = capability.Descriptor{
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"items":{"type":"array","items":{"type":"object","properties":{` + itemProperties + `},` + itemRequired + `}},` +
+		`"items":{"type":"array","items":{"type":"object","properties":{` + itemPropertiesCommon + `},` + itemRequired + `}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["items","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -232,13 +250,17 @@ var itemsGet = capability.Descriptor{
 	}},
 }
 
-const issueProperties = `"number":{"type":"integer"},"title":{"type":"string"},"state":{"type":"string"},` +
-	`"assignees":` + stringListSchema + `,"labels":` + stringListSchema + `,"url":{"type":"string"},` +
-	`"updated_at":{"type":"string"}`
+// issuePropertiesCommon is the compact issue projection of the list. The list omits the URL because it is
+// derivable from the repository and the number; the detail below adds it back.
+const issuePropertiesCommon = `"number":{"type":"integer"},"title":{"type":"string"},"state":{"type":"string"},` +
+	`"assignees":` + stringListSchema + `,"labels":` + stringListSchema + `,"updated_at":{"type":"string"}`
+
+// issueProperties is the issue projection of the detail: issuePropertiesCommon plus the URL.
+const issueProperties = issuePropertiesCommon + `,"url":{"type":"string"}`
 
 var issuesList = capability.Descriptor{
 	ID:      Provider + ".issues.list",
-	Version: 1,
+	Version: 2,
 	Title:   "List GitHub issues",
 	Description: "List one bounded batch of compact issues of a repository an explicit connection allows, " +
 		"newest first, without bodies, comments, or pull requests",
@@ -253,7 +275,7 @@ var issuesList = capability.Descriptor{
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"issues":{"type":"array","items":{"type":"object","properties":{` + issueProperties + `},` +
+		`"issues":{"type":"array","items":{"type":"object","properties":{` + issuePropertiesCommon + `},` +
 		`"required":["number","title","state","assignees","labels"],"additionalProperties":false}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["issues","has_more"],"additionalProperties":false}`),
@@ -308,10 +330,11 @@ var issuesGet = capability.Descriptor{
 }
 
 // Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the item and
-// draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, and the listed-only
-// workflow maintainer and Actions administrator tools. Only reads are a connection's default: every change
-// and every execution needs a permission of its own, and a listed-only tool also its name in the
-// connection's tools list.
+// draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, the listed-only
+// workflow maintainer and Actions administrator tools, the account, organization, and star tools, and the
+// contents, tree, and blame tools. Only
+// reads are a connection's default: every change and every execution needs a permission of its own, and a
+// listed-only tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
@@ -344,7 +367,20 @@ func Register(reg *capability.Registry) error {
 				"or Pull requests: read and write on a fine-grained token; pull request conversation " +
 				"comments need the same scopes as github.comments.*: repo or public_repo on a classic " +
 				"token, or Pull requests or Issues: read, and read and write for a comment, on a " +
-				"fine-grained token; keep those in a credential of their own",
+				"fine-grained token; keep those in a credential of their own; reading the account behind the " +
+				"token needs no scope beyond its own identity, classic or fine-grained; organization team " +
+				"reads need read:org on a classic token, or Members: read of the organization on a " +
+				"fine-grained token; reading the account's starred repositories needs no scope for public " +
+				"ones, or repo as well for private ones, or Starring: read on a fine-grained token; starring " +
+				"and unstarring need public_repo on a classic token, repo as well for a private repository, " +
+				"or Starring: read and write on a fine-grained token; repository, code, issue, pull request, " +
+				"and commit search need no scope for public results, or repo on a classic token, or " +
+				"Contents: read, and for issue and pull request search also Issues: read or Pull requests: " +
+				"read, on a fine-grained token, for private ones; code search also needs Contents: read for " +
+				"private repositories; user and organization search need no scope beyond the token's own " +
+				"identity; reading repository contents, a Git tree, a file's blame, commits, branches, or tags " +
+				"needs no scope for a public repository, or repo on a classic token, or Contents: read on a " +
+				"fine-grained token, for a private one",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -459,6 +495,25 @@ func Register(reg *capability.Registry) error {
 				pullRequestReviewsCreate.ID, pullRequestReviewCommentsList.ID, pullRequestReviewCommentsReply.ID,
 				pullRequestReviewThreadsList.ID, pullRequestReviewThreadsResolve.ID,
 				pullRequestReviewThreadsUnresolve.ID, pullRequestReviewersRequest.ID, pullRequestReviewersRemove.ID},
+		}, {
+			ID: "discovery", Title: "Discovery", Description: "reads the account behind the connection's " +
+				"token, the teams of an organization and their members, the account's starred repositories, " +
+				"and GitHub's search index for repositories, code, issues, pull requests, commits, users, and " +
+				"organizations; changes nothing",
+			Tools: []string{accountsMe.ID, organizationTeamsList.ID, teamMembersList.ID, starsList.ID,
+				repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID, pullRequestsSearch.ID, commitsSearch.ID,
+				usersSearch.ID, organizationsSearch.ID},
+		}, {
+			ID: "stars", Title: "Stars", Description: "reads the account's starred repositories and stars " +
+				"or unstars a repository; every change needs its own confirmation",
+			Tools: []string{starsList.ID, starsAdd.ID, starsRemove.ID},
+		}, {
+			ID: "repository-reader", Title: "Repository reader",
+			Description: "reads the contents of a file or a directory, the Git tree of a ref, the blame of a " +
+				"file over a bounded line range, the commits of a repository or one commit, and the branches " +
+				"and the tags of a repository or one tag; changes nothing",
+			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID, commitsList.ID, commitsGet.ID,
+				branchesList.ID, tagsList.ID, tagsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -485,7 +540,8 @@ func Register(reg *capability.Registry) error {
 		statusOperations(), accessOperations(), automationOperations(), actionsOperations(),
 		maintenanceOperations(), pullRequestOperations(), releaseOperations(), pullRequestCommentOperations(),
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
-		pullRequestReviewerOperations())...)
+		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
+		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1159,13 +1215,26 @@ func pathSegment(path []any, i int) string {
 
 // restSubject names what a REST request addressed. A path below /repos/OWNER/REPO names that repository, which
 // differs from the bound target where a project tool creates the issue it plans; an issue path names the
-// issue. Any other path names a resource of the bound target.
+// issue. A path below /orgs/OWNER names that organization or one of its teams; a path below /user names the
+// account behind the token or, below /user/starred, its stars; a path below /search/ names the search kind
+// it ran, since a search result names no bound target of its own. Any other path names a resource of the
+// bound target.
 func (c *Client) restSubject(request *http.Request) subject {
 	fallback := subject{in: c.target, what: "this resource"}
 	if request == nil || request.URL == nil {
 		return fallback
 	}
-	tail, ok := strings.CutPrefix(request.URL.String(), c.endpoints.rest+"/repos/")
+	full := request.URL.String()
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/search/"); ok {
+		return searchSubject(tail)
+	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/orgs/"); ok {
+		return organizationSubject(tail)
+	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/user"); ok {
+		return accountSubject(tail)
+	}
+	tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/repos/")
 	if !ok {
 		return fallback
 	}
@@ -1194,6 +1263,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := contentsSubject(parts[2], request.URL.Query().Get("ref")); what != "" {
 			s.what = what
 		}
+		if what := treesSubject(parts[2]); what != "" {
+			s.what = what
+		}
 		if what := pullsSubject(parts[2]); what != "" {
 			s.what = what
 		}
@@ -1203,8 +1275,71 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := releasesSubject(parts[2]); what != "" {
 			s.what = what
 		}
+		if what := commitsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := refsSubject(parts[2]); what != "" {
+			s.what = what
+		}
 	}
 	return s
+}
+
+// organizationSubject names the organization or the team a path below /orgs/OWNER addresses: OWNER,
+// OWNER/teams, or OWNER/teams/SLUG with or without /members. It names only a login or a slug of the
+// characters the input schema allows, and names the organization alone otherwise.
+func organizationSubject(tail string) subject {
+	tail, _, _ = strings.Cut(strings.TrimPrefix(tail, "/"), "?")
+	parts := strings.SplitN(tail, "/", 4)
+	owner, err := url.PathUnescape(parts[0])
+	if err != nil || !validLogin(owner) {
+		return subject{what: "this resource"}
+	}
+	if len(parts) >= 3 && parts[1] == "teams" && parts[2] != "" {
+		if slug, err := url.PathUnescape(parts[2]); err == nil && validLogin(slug) {
+			return subject{what: "team " + slug + " of orgs/" + owner}
+		}
+	}
+	return subject{in: target{kind: kindOwner, scope: "orgs", owner: owner}}
+}
+
+// searchSubject names the search a path below /search/ ran: repositories, code, issues (also named by
+// github.pullrequests.search, which shares the route), commits, or users (also named by
+// github.organizations.search, which shares it too). A search result names no repository, project, or
+// owner, so this is the whole subject.
+func searchSubject(tail string) subject {
+	kind, _, _ := strings.Cut(tail, "?")
+	if kind == "" {
+		return subject{what: "this search"}
+	}
+	return subject{what: "the " + kind + " search"}
+}
+
+// accountSubject names the account behind the token or one of its stars a path below /user addresses: the
+// empty tail, /starred, or /starred/OWNER/REPO. It names only an owner and a repository of the characters the
+// input schema allows, and the account otherwise.
+func accountSubject(tail string) subject {
+	switch {
+	case tail == "":
+		return subject{what: "the account behind this token"}
+	case tail == "/starred":
+		return subject{what: "the account's starred repositories"}
+	}
+	rest, ok := strings.CutPrefix(tail, "/starred/")
+	if !ok {
+		return subject{what: "this resource"}
+	}
+	rest, _, _ = strings.Cut(rest, "?")
+	parts := strings.SplitN(rest, "/", 2)
+	if len(parts) != 2 {
+		return subject{what: "this resource"}
+	}
+	owner, errOwner := url.PathUnescape(parts[0])
+	name, errName := url.PathUnescape(parts[1])
+	if errOwner != nil || errName != nil || !validLogin(owner) || !validRepoName(name) {
+		return subject{what: "this resource"}
+	}
+	return subject{in: target{kind: kindRepository, owner: owner, repo: name}, what: "this star"}
 }
 
 // pullsSubject names the pull request or the commit a pull request path below a repository addresses:
@@ -1227,14 +1362,16 @@ func pullsSubject(path string) string {
 	return ""
 }
 
-// contentsSubject names the workflow file or the workflow directory a Contents path below a repository
-// addresses and the ref it was read at, if any. It names only a path and a ref of the characters the input
-// schema allows, and is empty otherwise.
+// contentsSubject names the workflow file, the workflow directory, or, for github.contents.get, the general
+// repository path a Contents path below a repository addresses, and the ref it was read at, if any. It
+// names only a path and a ref of the characters the input schema of some tool allows, and is empty
+// otherwise.
 func contentsSubject(path, ref string) string {
-	rest, ok := strings.CutPrefix(path, "contents/")
+	rest, ok := strings.CutPrefix(path, "contents")
 	if !ok {
 		return ""
 	}
+	rest = strings.TrimPrefix(rest, "/")
 	rest, err := url.PathUnescape(rest)
 	if err != nil {
 		return ""
@@ -1245,6 +1382,10 @@ func contentsSubject(path, ref string) string {
 		what = "workflow file " + rest
 	case rest+"/" == workflowsDir:
 		what = "directory " + rest
+	case rest == "":
+		what = "the repository root"
+	case validContentsPath(rest):
+		what = "path " + rest
 	default:
 		return ""
 	}
@@ -1252,6 +1393,21 @@ func contentsSubject(path, ref string) string {
 		what += " at ref " + ref
 	}
 	return what
+}
+
+// treesSubject names the ref a Git tree path below a repository addresses. It names only a ref of the
+// characters the input schema allows, and is empty otherwise.
+func treesSubject(path string) string {
+	rest, ok := strings.CutPrefix(path, "git/trees/")
+	if !ok {
+		return ""
+	}
+	ref, _, _ := strings.Cut(rest, "?")
+	ref, err := url.PathUnescape(ref)
+	if err != nil || !validRef(ref) {
+		return ""
+	}
+	return "tree at ref " + ref
 }
 
 // actionsSubject names the workflow run, job, or workflow an Actions path below a repository addresses:

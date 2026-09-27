@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, and release reads and changes: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, release reads and changes, the account behind a connection's token, organization teams and their members, and the account's starred repositories: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the account and organization discovery tools, starring and unstarring, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -30,7 +30,9 @@ threads, and requests or removes reviewers; only approving is not in any profile
 connection's `tools` list names `github.pullrequestreviews.approve`. On the not-recommended profile
 `releases` it also lists the releases of a repository, reads one by identifier, tag, or as the latest
 published one, lists the metadata of a release's assets, and creates and updates releases; only a connection
-whose `tools` list names it deletes a release, because the tag it was cut from stays behind. It never accepts
+whose `tools` list names it deletes a release, because the tag it was cut from stays behind. It also reads the
+account behind the connection's token, the teams of an organization and their members, and the account's
+starred repositories, and it stars and unstars a repository. It never accepts
 a free filter expression, a GraphQL document, or a REST route from the caller. A `repository`, `project`, or
 `owner` argument names exactly one target, and it must lie inside the connection's targets when the connection
 lists any.
@@ -53,8 +55,9 @@ The credential provides `token`, a personal access token. A read-only setup uses
 access to issues and to projects. Changes need `project` instead of `read:project`, or write access to issues
 and projects for a fine-grained token. User-owned projects need a classic token. The Actions tools have
 their own requirements, listed under [GitHub Actions](#github-actions), and so have the tools of
-[workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration) and of
-[pull requests](#tokens-for-pull-requests). A successful `qatlas connection test` shows only that the token
+[workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration), of
+[pull requests](#tokens-for-pull-requests), and of
+[account, organization teams, and stars](#discovery-account-organization-teams-and-stars). A successful `qatlas connection test` shows only that the token
 can read the first project or repository the
 connection's targets name exactly, or, without such a target, its own user; GitHub checks every resource and
 scope again on each call, so a passing test does not authorize every tool.
@@ -151,17 +154,26 @@ GitHub answers a repository, project, issue, or item it does not hold exactly li
 a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested project or issue out. Qatlas reports all of them as
 `not-found` and names the target the request addressed, including a target a default chose, with what to
 check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, the
-workflow file or `.github/workflows` directory with the ref it was read at, the pull request by its number,
-or, for `github.pullrequestchecks.list` once the pull request itself was found, the commit its checks were
-asked for, where the call named one:
+workflow file or `.github/workflows` directory with the ref it was read at, `github.contents.get`'s path or
+the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s ref or its path at that ref,
+`github.commits.get`'s ref, `github.tags.get`'s tag, the pull request by its number, or, for
+`github.pullrequestchecks.list` once the pull request itself was found, the commit its checks were asked
+for, where the call named one:
 
 ```text
 qatlas: not-found: list issues: GitHub does not hold repository octo-org/example or does not show it to this token; check the name, and that the token can see it (classic: scope repo for a private repository; fine-grained: access to this repository)
+qatlas: not-found: get repository contents: GitHub does not hold path docs/missing.md at ref main in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: get repository tree: GitHub does not hold tree at ref ghost in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: get file blame: GitHub does not hold ref ghost in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: get commit: GitHub does not hold commit ghost in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: get tag: GitHub does not hold tag ghost in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: list project items: GitHub does not hold project users/octocat/projects/3 or does not show it to this token; check the name, and that the token can see it (classic: scope read:project; fine-grained: Projects access of its organization, as a user-owned project needs a classic token)
 qatlas: not-found: get issue: GitHub does not hold issue #5 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: dispatch workflow: GitHub does not hold workflow file .github/workflows/release.yml at ref other in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: list repositories: GitHub does not hold owner orgs/octocat or does not show it to this token; check the login, and users/ for a user or orgs/ for an organization
 qatlas: not-found: get pull request: GitHub does not hold pull request #99 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: list team members: GitHub does not hold team ghost-team of orgs/octo-org or does not show it to this token
+qatlas: not-found: star repository: GitHub does not hold this star in repository octo-org/ghost or does not show it to this token; check the name, and that the token can see it (...)
 qatlas: permission: list projects: this GitHub token may not read the projects of owner users/octocat; check its scopes or permissions; classic: scope read:project; fine-grained: Projects: read of the organization, as the projects of a user need a classic token
 qatlas: auth: list issues: GitHub rejected the token; check or renew the credential of this connection with 'qatlas credential set <credential> <role>' or in 'qatlas tui'
 ```
@@ -199,8 +211,11 @@ effect `delete` or one that changes access. The
 profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions), the
 not-recommended profiles `pull-requests` and `pull-requests-operator` under
 [Pull requests](#pull-requests), the not-recommended profile `pull-request-reviews` under
-[Pull request reviews and comments](#pull-request-reviews-and-comments), and the not-recommended profile
-`releases` under [Releases](#releases). A
+[Pull request reviews and comments](#pull-request-reviews-and-comments), the not-recommended profile
+`releases` under [Releases](#releases), the not-recommended profiles `discovery` and `stars` under
+[account, organization teams, and stars](#discovery-account-organization-teams-and-stars), and the
+not-recommended profile `repository-reader` under
+[repository contents, tree, blame, commits, branches, and tags](#repository-contents-tree-blame-commits-branches-and-tags). A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -254,6 +269,255 @@ Reading the projects needs `read:project` on a classic token. A fine-grained tok
 organization with Projects read access, but not the projects of a user; GitHub refuses that with
 `permission`. The repositories need no scope for public ones, `repo` on a classic token for private ones, or
 access to the repositories on a fine-grained token.
+
+## Discovery: account, organization teams, and stars
+
+`github.accounts.me` reads the login, display name, account type, and billing plan of the account behind the
+connection's token; `github.teams.list` and `github.teammembers.list` read the teams of an organization and
+the members of one of them; `github.stars.list` reads the account's starred repositories, and
+`github.stars.add` and `github.stars.remove` star and unstar one:
+
+```sh
+qatlas invoke github.accounts.me --connection discovery
+qatlas invoke github.teams.list --connection discovery --arg owner=orgs/octo-org
+qatlas invoke github.teammembers.list --connection discovery --arg owner=orgs/octo-org --arg team=design
+qatlas invoke github.stars.list --connection discovery
+echo '{"repository":"octo-org/example"}' | qatlas invoke github.stars.add --connection stars --confirm
+```
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.accounts.me` | read | safe | reads the account behind the connection's token; no repository, project, or owner argument |
+| `github.teams.list` | read | safe | lists the teams of an organization, in batches, with slug, name, description, and privacy |
+| `github.teammembers.list` | read | safe | lists the members of one team of an organization, in batches, by login |
+| `github.stars.list` | read | safe | lists the repositories the account has starred, in batches; no repository or project argument |
+| `github.stars.add` | create | idempotent | stars one repository; a repository already starred is left as it is |
+| `github.stars.remove` | delete | idempotent | unstars one repository; a repository that is not starred is left as it is |
+
+`github.teams.list` and `github.teammembers.list` take `owner` as `orgs/LOGIN`: the organization must be a
+target the connection names as an owner itself, exactly as `github.projects.create` requires, since a project
+or a repository pattern of the organization is not enough. `owner` may be left out only when the targets name
+exactly one owner entry; `users/LOGIN` is refused with `invalid-request`, because teams belong to an
+organization, not a user. `github.teammembers.list` also takes `team`, the slug `github.teams.list` reports.
+Both follow the [cursor contract](#cursor-contract), a `github.teams.list` cursor bound to the organization and
+a `github.teammembers.list` cursor bound to the organization and the team together.
+
+`github.accounts.me` and `github.stars.list` take no `repository`, `project`, or `owner` argument: they read
+data of the account behind the token as a whole. A connection whose targets name a repository or a project is
+refused with `invalid-request` before a secret is read, because such a connection is scoped to those, and the
+account behind its token may belong to a customer other than the one its targets name. A connection without
+targets, or whose targets name only owners, is allowed; on such a connection, `github.stars.list` narrows its
+answer to the starred repositories of the owners the targets name, when it names any. `github.stars.add` and
+`github.stars.remove` take `repository` like every other repository tool and check it against the targets
+before a secret is read.
+
+Starring and unstarring are naturally idempotent: GitHub answers both with no content whatever the
+repository's previous state. Before sending either, Qatlas reads whether the repository is already starred;
+a repository already in the requested state is reported with `changed: false` and nothing further is sent.
+Otherwise the change travels once, as every change here does, and the answer names the state afterward.
+
+Reading the account behind the token needs no scope beyond its own identity, classic or fine-grained. The
+organization team reads need `read:org` on a classic token, or Members read access of the organization on a
+fine-grained one. Reading the account's starred repositories needs no scope for public ones, `repo` as well
+for private ones, or Starring read access on a fine-grained token. Starring and unstarring need `public_repo`
+on a classic token, `repo` as well for a private repository, or Starring read and write access on a
+fine-grained token.
+
+The terminal editor's setup profile `discovery` ticks `[read]` with `github.accounts.me`,
+`github.teams.list`, `github.teammembers.list`, `github.stars.list`, and the seven
+[search tools](#search-repositories-code-issues-pull-requests-commits-users-and-organizations); it changes
+nothing. The setup profile
+`stars` ticks `[read, create, delete]` with `github.stars.list`, `github.stars.add`, and
+`github.stars.remove`; every star or unstar needs its own confirmation. Neither is the recommended profile,
+which stays `read`, unchanged.
+
+## Search: repositories, code, issues, pull requests, commits, users, and organizations
+
+`github.repositories.search`, `github.code.search`, `github.issues.search`, `github.pullrequests.search`,
+`github.commits.search`, `github.users.search`, and `github.organizations.search` read GitHub's own search
+index with `terms`: search terms and GitHub qualifiers, such as `language:go` or `is:merged`, never a `query`
+argument or a route of an agent's own:
+
+```sh
+qatlas invoke github.repositories.search --connection discovery --arg terms="qatlas language:go"
+qatlas invoke github.code.search --connection discovery --arg terms="handleRequest language:go"
+qatlas invoke github.issues.search --connection discovery --arg terms="is:open label:bug"
+qatlas invoke github.pullrequests.search --connection discovery --arg terms="is:merged base:main"
+qatlas invoke github.commits.search --connection discovery --arg terms="author:octocat"
+qatlas invoke github.users.search --connection discovery --arg terms="location:berlin"
+qatlas invoke github.organizations.search --connection discovery --arg terms="octo in:name"
+```
+
+| Tool | Searches | Forces | Each entry |
+| --- | --- | --- | --- |
+| `github.repositories.search` | repositories | the target qualifiers below | `repository`, `description`, `visibility`, `language`, `stars`, `fork`, `archived`, `updated_at`, `url` |
+| `github.code.search` | code, without file bodies or fragments | the target qualifiers below | `path`, `repository`, `sha`, `url` |
+| `github.issues.search` | issues, never pull requests | `is:issue` and the target qualifiers below | `number`, `title`, `repository`, `state`, `labels`, `assignees`, `updated_at`, `url` |
+| `github.pullrequests.search` | pull requests, never plain issues | `is:pr` and the target qualifiers below | `number`, `title`, `repository`, `state`, `draft`, `labels`, `assignees`, `updated_at`, `url` |
+| `github.commits.search` | commits | the target qualifiers below | `sha`, `message`, `repository`, `author`, `committed_at`, `url` |
+| `github.users.search` | personal accounts, never organizations | `type:user`, and, with one organization owner target, `org:LOGIN` of it | `login`, `type`, `url` |
+| `github.organizations.search` | organizations, never personal accounts | `type:org` | `login`, `url` |
+
+None of the seven takes a `repository`, `project`, or `owner` argument: they are narrowed by the connection's
+targets as a whole, exactly like `github.stars.list`. Every batch also names `total_count` and
+`incomplete_results` as GitHub answers them, and pages through the [cursor contract](#cursor-contract), a
+cursor bound to the tool, the forced qualifiers, and the exact `terms`, so a continuation never silently
+searches something else.
+
+### Target scoping
+
+`github.repositories.search`, `github.code.search`, `github.issues.search`, `github.pullrequests.search`, and
+`github.commits.search` force a `repo:` or `org:`/`user:` qualifier ahead of `terms` from every target the
+connection names, so the search never reaches beyond them:
+
+| Target | Forces |
+| --- | --- |
+| `repos/OWNER/REPO` | `repo:OWNER/REPO` |
+| `users/LOGIN` owner target | `user:LOGIN` |
+| `orgs/LOGIN` owner target | `org:LOGIN` |
+| `repos/OWNER/*` | refused with `invalid-request`: a repository pattern names no owner kind to force `org:` or `user:` with; add the owner as `users/LOGIN` or `orgs/LOGIN`, or list its repositories one by one, to search inside it |
+| `users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`, alone | refused with `invalid-request`: GitHub's search grammar has no qualifier for a project, and, exactly as a project pattern is not enough to stand for its owner when creating a project, a project target here forces nothing and never widens the search to its owner either; add a repository or an owner target, or use a connection without targets |
+| a project target beside a repository or an owner target | the repository's or the owner's qualifier only; the project itself still forces nothing |
+| several repository or owner targets | every qualifier they force, once per distinct owner; GitHub unions repeated `repo:` and `org:`/`user:` qualifiers of the same name, so the search reaches their combined targets and never beyond them |
+| none | unscoped, whatever the token reaches |
+
+Whatever mix of targets a connection names, a search that would still force no qualifier at all is always
+refused this way: none of the five ever sends a request a target list could not narrow.
+
+`github.users.search` and `github.organizations.search` reach GitHub's whole index unless the targets narrow
+them, since a repository, a repository pattern, or a project target gives neither an account to narrow a
+user or an organization search by:
+
+| Targets | `github.users.search` | `github.organizations.search` |
+| --- | --- | --- |
+| none | unscoped, `type:user` only | unscoped, `type:org` only |
+| exactly one `orgs/LOGIN` owner target | `type:user org:LOGIN`, its members only | refused: no qualifier restricts organization search to one target |
+| exactly one `users/LOGIN` owner target | refused: a personal owner gives it no members to narrow by | refused |
+| a repository or a project target, or several owner targets | refused | refused |
+
+A term list that could escape a forced qualifier is refused with `invalid-request` before a secret is
+resolved, wherever a target forces one: a positive `repo:`, `org:`, `user:`, or `owner:` qualifier in any
+case, since GitHub unions a repeated qualifier of the same name with the one Qatlas forces and could widen
+the search back open; the `OR` operator; and parentheses, since either could change which terms a forced
+qualifier binds to. A negated qualifier, such as `-repo:`, only narrows further and stays allowed everywhere,
+and `in:`, `fork:`, `is:`, and every other qualifier that does not pick an owner or a repository stay
+unrestricted. None of this applies to a connection without targets, which has no boundary to protect.
+
+### Errors and rate limits
+
+Search never answers `not-found`: an empty batch, not a refusal, is how GitHub reports that nothing matched.
+`github.code.search` shares GitHub's separate, lower search rate limit; it and the other search tools report
+GitHub's rate limit as `rate-limited`, naming the wait, through the same [status handling](#errors) as every
+other tool.
+
+### Tokens for search
+
+Repository, code, issue, pull request, and commit search need no scope for public results, or `repo` on a
+classic token, or Contents read access, and for issue and pull request search also Issues or Pull requests
+read access, on a fine-grained token, for private ones; code search also needs Contents read access for
+private repositories. User and organization search need no scope beyond the token's own identity.
+
+## Repository contents, tree, blame, commits, branches, and tags
+
+`github.contents.get` reads one file or one directory listing of a repository an explicit connection allows
+at a ref; `github.trees.get` reads its Git tree at a ref, optionally every entry below every directory;
+`github.blame.get` reads, through GraphQL, the commit that last changed each line of one file over a bounded
+line range; `github.commits.list` and `github.commits.get` read its commits, filtered and paged, or one by
+branch, tag, or commit SHA with its stats and its changed files; `github.branches.list` and
+`github.tags.list` read its branches and its tags, paged; `github.tags.get` reads one tag, lightweight or
+annotated, resolved through the Git refs and Git tags APIs. None of the seven writes, diffs two arbitrary
+refs, or downloads an archive:
+
+```sh
+qatlas invoke github.contents.get --connection code
+qatlas invoke github.contents.get --connection code --arg path=README.md
+qatlas invoke github.trees.get --connection code --arg ref=main --arg recursive=true
+qatlas invoke github.blame.get --connection code --arg path=internal/app.go --arg start_line=1 --arg end_line=100
+qatlas invoke github.commits.list --connection code --arg ref=main --arg path=internal/app.go --arg since=2026-01-01
+qatlas invoke github.commits.get --connection code --arg ref=ebca79b1db4fcbb136e6094c13e8451428c8a6ab
+qatlas invoke github.branches.list --connection code
+qatlas invoke github.tags.list --connection code
+qatlas invoke github.tags.get --connection code --arg tag=v1.0.0
+```
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.contents.get` | read | safe | reads one file or one directory listing of a repository at a ref |
+| `github.trees.get` | read | safe | reads the Git tree of a repository at a ref, optionally every entry below every directory |
+| `github.blame.get` | read | safe | reads the commit behind each line of one file over a bounded line range |
+| `github.commits.list` | read | safe | lists the commits of a repository, filtered by ref, path, author, and a commit date range |
+| `github.commits.get` | read | safe | reads one commit by branch, tag, or commit SHA, with its stats and its changed files |
+| `github.branches.list` | read | safe | lists the branches of a repository with their protection status and their latest commit SHA |
+| `github.tags.list` | read | safe | lists the tags of a repository with the commit SHA each points at |
+| `github.tags.get` | read | safe | reads one tag, lightweight or annotated |
+
+`path` is a repository-relative path with no leading or trailing `/` and no empty, `.`, or `..` segment, in
+valid UTF-8 without a control character; every segment is escaped on its own before it reaches GitHub, so it
+can only ever address the path itself. `github.contents.get` leaves it out, or takes `""`, for the
+repository root, a directory listing; `github.blame.get` requires it. `ref` is a branch, a tag, or a commit
+SHA; `github.contents.get` and `github.blame.get` read the default branch, or its tip, when it is left out,
+and `github.trees.get` requires it.
+
+`github.contents.get` on a directory answers `entries`: `name`, `path`, `type` (`file`, `dir`, `symlink`, or
+`submodule`), `size`, and `sha`, bounded to 1000 entries with `entries_truncated` visible past that. On a
+file it answers `path`, `type`, `size`, and `sha`; a text file within 256 KiB is returned in full as
+`content`, with `bytes` its length; past that bound the content is cut from its start to 256 KiB with
+`truncated: true`, `bytes` naming what was kept and `size` the file's real size. A binary file, detected by a
+NUL byte or invalid UTF-8 once its content is decoded, and a file past GitHub's own inline content limit of
+about 1 MiB are metadata only, with `omitted` naming which: `binary` or `too_large`. A symlink and a
+submodule are metadata only as well, with `target` naming the symlink's target path or the commit a
+submodule points at.
+
+`github.trees.get` answers `sha`, the tree GitHub read, and `entries`: `path`, `type` (`blob`, `tree`, or
+`commit` for a submodule), `sha`, and, for a blob, `size`. `recursive: true` reads every entry below every
+directory, not only the top level. GitHub itself may truncate a very large recursive tree, and Qatlas cuts
+one past 2000 entries on its own; `truncated` is true whichever applied.
+
+`github.blame.get` takes `start_line` and `end_line`, bounding the line range: 1 and `start_line`+99 when
+either is left out, and the range may never exceed 2000 lines. GitHub's own blame carries no file content at
+all, only the commit behind each line, so `ranges` never does either: each one names `start_line`,
+`end_line`, the commit `sha`, `author` (the login when GitHub reports one, the commit author's name
+otherwise), and `date`, clipped to the requested range on both sides. A ref GitHub cannot resolve, and a path
+with no blame at that ref, both answer `not-found`.
+
+`github.commits.list` filters by `ref` (a branch, a tag, or a commit SHA, GitHub's `sha` parameter), `path`
+(a repository path commits must touch), `author` (a GitHub login), and `since`/`until` (a commit date, as
+`YYYY-MM-DD` or a UTC time as `YYYY-MM-DDTHH:MM:SSZ`; a date becomes midnight UTC for `since` or the last
+second of that day for `until`); `since` must not lie after `until`. It pages by GitHub's Link header since
+the plain array route carries no total count, a cursor bound to the repository and every filter. Each entry
+answers `sha`, `message` (untrusted data, cut to its first line and at most 200 characters), `author` and
+`committer` (a login when GitHub reports one, a name otherwise), `date` (the commit date `since` and `until`
+filter by), and `parents`, the number of parent commits; it carries no patch.
+
+`github.commits.get` reads one commit by `ref` (a branch, a tag, or a commit SHA) with its full `message`
+(untrusted data, cut to at most 4096 characters with `message_truncated`), `author`, `committer`, `date`,
+`parents` (every parent's SHA), `additions`, `deletions`, and `total`, and `files`: `path`, `status`,
+`additions`, `deletions`, `changes`, `previous_filename` for a rename, and `patch` (untrusted data, cut to at
+most 4096 bytes with `patch_truncated`); a file GitHub sends no patch for carries none. GitHub's own route
+already caps the files it returns at 300 without ever saying whether more exist, so Qatlas treats a batch
+that reaches the same bound as cut as well, with `files_truncated` visible.
+
+`github.branches.list` and `github.tags.list` page the same way, by GitHub's Link header with a cursor bound
+to the repository; neither takes a filter. Each branch answers `name`, `protected`, and `sha`, its latest
+commit; each tag answers `name` and `sha`, the commit it points at, since GitHub's plain tags list already
+dereferences an annotated tag to the commit it tags.
+
+`github.tags.get` takes `tag`, the tag name, and resolves it through the Git refs API rather than the plain
+tags list, since only the Git refs and Git tags APIs name a lightweight tag's own object type and an
+annotated tag's tagger and message. It answers `name`, `type` (`lightweight` or `annotated`), and `sha`: the
+commit a lightweight tag points at, or an annotated tag's own tag object SHA. An annotated tag also answers
+`target_sha` and `target_type` (the object, usually a commit, the tag object points at), `tagger`,
+`tagged_at`, and `message` (untrusted data, cut to at most 4096 characters with `message_truncated`).
+
+Reading contents, a tree, a file's blame, commits, branches, or tags needs no scope for a public repository,
+or the following for a private one:
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.contents.get`, `github.trees.get`, `github.blame.get`, `github.commits.list`, `github.commits.get`, `github.branches.list`, `github.tags.list`, `github.tags.get` | `repo` | Contents: read |
+
+The terminal editor's setup profile `repository-reader` ticks `[read]` with the eight; it is not the
+recommended profile, which stays `read`, unchanged.
 
 ## Project lifecycle
 
@@ -580,21 +844,24 @@ echo '{"status":["In progress"],"type":"issue"}' | qatlas invoke github.projecti
 qatlas invoke github.projectitems.get --connection planning --arg item_id=PVTI_...
 ```
 
-`github.projectitems.list` returns compact items: identifier, type, title, number, repository, state, Status,
-the other single-select, multi-select, text, number, date, and iteration values by field name, a multi-select
-value as the list of its option names, assignees, labels, and URL.
-It never returns bodies or comments. Without `status` and `status_not` it lists at most 30 items whose Status
-is not `Done`; `status_not: []` lists every status. The filters `status`, `status_not`, `type`
-(`issue`, `pull_request`, `draft_issue`), `repository` (`owner/name`), `assignee`, and `labels` (any of) are
-translated into quoted terms of the project filter syntax and applied by GitHub. Qatlas verifies each
-returned item against the same filters. A `status` value must be an option of the project's Status field.
+`github.projectitems.list` (contract version 2) returns compact items: identifier, type, title, number,
+repository, state, Status, the other single-select, multi-select, text, number, date, and iteration values by
+field name, a multi-select value as the list of its option names, assignees, and labels; the URL is left out
+because it is derivable from the repository and the number. It never returns bodies or comments. Without
+`status` and `status_not` it lists at most 30 items whose Status is not `Done`; `status_not: []` lists every
+status. The filters `status`, `status_not`, `type` (`issue`, `pull_request`, `draft_issue`), `repository`
+(`owner/name`), `assignee`, and `labels` (any of) are translated into quoted terms of the project filter
+syntax and applied by GitHub. Qatlas verifies each returned item against the same filters. A `status` value
+must be an option of the project's Status field.
 
-`github.projectitems.get` reads one item of the chosen project with its fields and, for an issue or a draft
-issue, the full body. An item of another project is refused. Bodies and titles are untrusted data.
+`github.projectitems.get` reads one item of the chosen project with its fields, its URL, and, for an issue or
+a draft issue, the full body. An item of another project is refused. Bodies and titles are untrusted data.
 
-`github.issues.list` and `github.issues.get` read the issues of the chosen repository: issues only, newest
-first, filtered by `state` (`open` by default), `labels` (any of), and `assignee`, without comments.
-`github.comments.list` reads the comments of one issue, oldest first, and is the only tool that returns
+`github.issues.list` (contract version 2) and `github.issues.get` read the issues of the chosen repository:
+issues only, newest first, filtered by `state` (`open` by default), `labels` (any of), and `assignee`,
+without comments. `github.issues.list` names the repository once at the result level and leaves the URL out
+of each issue, derivable from the repository and the number; `github.issues.get` reads one issue with its
+URL. `github.comments.list` reads the comments of one issue, oldest first, and is the only tool that returns
 comments.
 
 ## Changes
@@ -804,15 +1071,18 @@ qatlas invoke github.workflowjobs.list --connection ci-observer --arg run_id=304
 qatlas invoke github.workflowjobs.log --connection ci-observer --arg job_id=399444496 --arg lines=40
 ```
 
-`github.workflowruns.list` filters by `workflow` (identifier or file name), `status` (a status or a
-conclusion: `completed`, `action_required`, `cancelled`, `failure`, `neutral`, `skipped`, `stale`,
+`github.workflowruns.list` (contract version 2) filters by `workflow` (identifier or file name), `status` (a
+status or a conclusion: `completed`, `action_required`, `cancelled`, `failure`, `neutral`, `skipped`, `stale`,
 `success`, `timed_out`, `in_progress`, `queued`, `requested`, `waiting`, `pending`), `branch`, `event`
 (such as `push` or `workflow_dispatch`), `actor` (a login, `[bot]` allowed), and `created_from` /
-`created_to` (a date `YYYY-MM-DD` or a UTC time `YYYY-MM-DDTHH:MM:SSZ`, both inclusive). A run carries its
-identifier, workflow name and identifier, title, run number, attempt, event, status, conclusion, branch,
-commit, actor, times, and URL; pull requests, the repository, and the commit message are left out. The title
-is untrusted data. `github.workflowjobs.list` takes `filter`: `latest` (default) for the latest attempt or
-`all` for every attempt.
+`created_to` (a date `YYYY-MM-DD` or a UTC time `YYYY-MM-DDTHH:MM:SSZ`, both inclusive). It names the
+repository once at the result level and gives each run its identifier, workflow name and identifier, title,
+run number, attempt, event, status, conclusion, branch, commit, and actor, and times; pull requests, the
+per-run repository, the commit message, and the URL are left out, the URL because it is derivable from the
+repository and the identifier. The title is untrusted data. `github.workflowruns.get` reads one run,
+including its URL. `github.workflowjobs.list` (contract version 2) takes `filter`: `latest` (default) for the
+latest attempt or `all` for every attempt, names the repository once at the result level the same way, and
+leaves the URL out of each job; `github.workflowjobs.get` reads one job with its compact steps and its URL.
 
 ### Logs and artifacts
 

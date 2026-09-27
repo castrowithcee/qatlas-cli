@@ -186,8 +186,15 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 		}
 		names := []string{"repository"}
 		switch {
+		case descriptor.ID == accountsMe.ID || descriptor.ID == starsList.ID ||
+			descriptor.ID == repositoriesSearch.ID || descriptor.ID == codeSearch.ID ||
+			descriptor.ID == issuesSearch.ID || descriptor.ID == pullRequestsSearch.ID ||
+			descriptor.ID == commitsSearch.ID || descriptor.ID == usersSearch.ID ||
+			descriptor.ID == organizationsSearch.ID:
+			names = []string{}
 		case descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
-			descriptor.ID == projectsCreate.ID:
+			descriptor.ID == projectsCreate.ID || descriptor.ID == organizationTeamsList.ID ||
+			descriptor.ID == teamMembersList.ID:
 			names = []string{"owner"}
 		case descriptor.ID == projectsCopy.ID:
 			names = []string{"project", "owner"}

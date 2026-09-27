@@ -419,7 +419,7 @@ func TestRunsAreFilteredPagedAndCompact(t *testing.T) {
 		if err := json.Unmarshal(result, &top); err != nil || string(top["repository"]) != `"octo-org/example"` {
 			t.Fatalf("a run list names repository %s, want octo-org/example", top["repository"])
 		}
-		for _, forbidden := range []string{"pull_requests", "repository", "head_commit", bodyCanary} {
+		for _, forbidden := range []string{"pull_requests", "repository", "head_commit", bodyCanary, "url"} {
 			if strings.Contains(string(top["runs"]), forbidden) {
 				t.Fatalf("a run list carries %q: %s", forbidden, result)
 			}
@@ -527,11 +527,14 @@ func TestActionsMetadataIsCompact(t *testing.T) {
 		{"github.workflows.list", `{"limit":3}`, []string{`"path":".github/workflows/ci.yml"`, `"has_more":true`},
 			nil},
 		{"github.workflows.get", `{"workflow":"release.yml"}`, []string{`"id":2`, `"state":"active"`}, nil},
-		{"github.workflowruns.get", `{"run_id":5000}`, []string{`"conclusion":"failure"`, `"actor":"octocat"`},
+		{"github.workflowruns.get", `{"run_id":5000}`,
+			[]string{`"conclusion":"failure"`, `"actor":"octocat"`, `"url":"https://github.com/octo-org/example/actions/runs/5000"`},
 			[]string{"pull_requests", bodyCanary}},
-		{"github.workflowjobs.list", `{"run_id":5000}`, []string{`"name":"build 0"`, `"has_more":false`},
-			[]string{"steps", "runner_name"}},
-		{"github.workflowjobs.get", `{"job_id":7001}`, []string{`"steps":[`, `"name":"test"`, `"attempt":2`},
+		{"github.workflowjobs.list", `{"run_id":5000}`,
+			[]string{`"name":"build 0"`, `"has_more":false`, `"repository":"octo-org/example"`},
+			[]string{"steps", "runner_name", "url"}},
+		{"github.workflowjobs.get", `{"job_id":7001}`,
+			[]string{`"steps":[`, `"name":"test"`, `"attempt":2`, `"url":"https://github.com/j/1"`},
 			[]string{"labels"}},
 		{"github.workflowartifacts.list", `{"run_id":5000}`, []string{`"size_bytes":99999999`, `"expired":true`},
 			[]string{"archive_download_url", "/zip"}},
