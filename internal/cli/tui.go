@@ -66,7 +66,11 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"the configuration, unencrypted or encrypted to a passphrase, for a machine without a usable\n" +
 			"keyring; storing its very first secret, here or with 'qatlas credential set', offers one, typed\n" +
 			"masked and twice, and leaving it empty keeps the vault unencrypted. On a role row, s stores the\n" +
-			"secret in the place the secrets row names; x removes it. A keyring role says in system keyring,\n" +
+			"secret in the place the secrets row names; x removes it. On Linux, storing or removing a vault\n" +
+			"secret here, or through the guided setup's own save, is handed on to a vault process that holds\n" +
+			"the vault unlocked outside this run, exactly the way 'qatlas credential set' and 'qatlas\n" +
+			"credential delete' already do; elsewhere, or when no such process runs, there is nothing to tell.\n" +
+			"A keyring role says in system keyring,\n" +
 			"not stored yet, keyring locked, keyring unreachable, or keyring switched off\n" +
 			"(QATLAS_CREDENTIAL_STORE=none), and for each blocked case what to do next on this platform; a\n" +
 			"vault role says in the vault, not stored yet, or vault locked. A set variable\n" +
@@ -79,7 +83,10 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"passphrase, then an explicit confirmation that every secret ends up unencrypted on disk). The\n" +
 			"current passphrase is verified before anything else is asked; a wrong one reopens that very\n" +
 			"prompt with error: wrong passphrase instead of asking for a new passphrase or the confirmation\n" +
-			"for nothing, and nothing is ever asked on this process's own terminal. While a plaintext\n" +
+			"for nothing, and nothing is ever asked on this process's own terminal. On Linux, changing the\n" +
+			"passphrase or turning encryption off also locks a vault process that holds the vault unlocked\n" +
+			"with the old identity, the same way 'qatlas vault passphrase' and 'qatlas vault decrypt' already\n" +
+			"do, and says so once the change is done. While a plaintext\n" +
 			"credentials.yaml left over from an earlier version still holds an entry, migrate\n" +
 			"credentials.yaml carries every one of them into the vault the way 'qatlas vault migrate' does:\n" +
 			"an overview names every entry by credential and role, never a value, before asking to confirm;\n" +

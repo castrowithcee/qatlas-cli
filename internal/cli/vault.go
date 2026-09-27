@@ -463,22 +463,16 @@ func lockVaultProcess(ctx context.Context, v *vault.Vault, why, next string) str
 	if !vaultProcessSupported || v == nil {
 		return ""
 	}
-	client, err := vaultProcessClient(v)
-	if err != nil {
-		// A vault that is not encrypted has no vault process, and one whose recipient cannot be read has
-		// none this program can reach either.
-		return ""
-	}
-	ctx = contextOrBackground(ctx)
-	switch err := client.Lock(ctx); {
-	case errors.Is(err, vaultproc.ErrNotRunning):
-		return ""
+	locked, err := vaultmigrate.LockProcess(contextOrBackground(ctx), v)
+	switch {
 	case err != nil:
 		return fmt.Sprintf("qatlas: warning: the vault process could not be locked %s: %s; it keeps the "+
 			"secrets it holds until it locks itself, unless you %s", why, err, secret.EndVaultProcess(err))
+	case locked:
+		return fmt.Sprintf("qatlas: the vault process was locked %s; %s", why, next)
+	default:
+		return ""
 	}
-	awaitLocked(ctx, client)
-	return fmt.Sprintf("qatlas: the vault process was locked %s; %s", why, next)
 }
 
 // lockVaultProcessOf is lockVaultProcess for the vault of this run. A run that has no vault to find, such
@@ -499,19 +493,11 @@ func syncVaultProcess(c *cobra.Command, v *vault.Vault, change func(context.Cont
 	if !vaultProcessSupported || v == nil {
 		return
 	}
-	client, err := vaultProcessClient(v)
-	if errors.Is(err, vault.ErrNotEncrypted) {
-		return
+	if err := vaultmigrate.SyncChange(contextOrBackground(c.Context()), v, change); err != nil {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: the vault holds the change, but the vault process that "+
+			"holds it unlocked could not take it and still answers with what it held before: %s; %s\n",
+			err, secret.VaultProcessRemedy(err))
 	}
-	if err == nil {
-		err = change(contextOrBackground(c.Context()), client)
-	}
-	if err == nil || errors.Is(err, vaultproc.ErrNotRunning) {
-		return
-	}
-	fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: the vault holds the change, but the vault process that "+
-		"holds it unlocked could not take it and still answers with what it held before: %s; %s\n",
-		err, secret.VaultProcessRemedy(err))
 }
 
 // absConfigPath returns the configuration file of this run as an absolute path, the form a vault process

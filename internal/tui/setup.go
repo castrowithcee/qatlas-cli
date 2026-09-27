@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // The guided setup leads from a provider to a saved and optionally tested connection. It is a sequence of
@@ -93,11 +95,14 @@ type setupPlan struct {
 	secrets                         map[string]string
 }
 
-// setupSavedMsg carries the outcome of the final save back into the event loop.
+// setupSavedMsg carries the outcome of the final save back into the event loop. warning is set only when a
+// new vault credential's secrets could not be handed on to a vault process that holds the vault unlocked
+// outside this run (see commitSetup); "" the rest of the time.
 type setupSavedMsg struct {
-	cfg  *config.Config
-	name string
-	err  error
+	cfg     *config.Config
+	name    string
+	err     error
+	warning string
 }
 
 // startSetup opens the first step of the guided setup.
@@ -494,9 +499,8 @@ func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 	m.busy = "saving " + plan.connection
 	store, secrets := m.store, m.secrets
 	return func() tea.Msg {
-		return setupSavedMsg{
-			cfg: candidate, name: plan.connection, err: commitSetup(store, secrets, candidate, plan, offer),
-		}
+		warning, err := commitSetup(store, secrets, candidate, plan, offer)
+		return setupSavedMsg{cfg: candidate, name: plan.connection, err: err, warning: warning}
 	}
 }
 
@@ -507,7 +511,12 @@ func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 // credential has nothing behind it. The configuration was checked before anything was written, so what can
 // still fail after the secrets is writing the file; the secrets written for it are removed again then, so
 // no store entry is left without a credential that names it.
-func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, plan setupPlan, offer vault.PassphraseFunc) error {
+//
+// Once the configuration is saved, a new vault credential's secrets are handed on to a vault process that
+// holds the vault unlocked outside this run, the same way 'qatlas credential set' already does for each one
+// it writes (see syncVaultProcess in vaultsettings.go); the warning that returns, if any, is not a reason to
+// roll anything back, since the vault and the configuration already agree by then.
+func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, plan setupPlan, offer vault.PassphraseFunc) (string, error) {
 	toVault := storageType(plan.storage) == config.CredentialTypeVault
 	var written []string
 	for _, role := range plan.roles {
@@ -522,15 +531,26 @@ func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, plan 
 			err = secrets.Set(plan.credential, role, value)
 		}
 		if err != nil {
-			return rollbackSecrets(secrets, plan.credential, toVault, written,
+			return "", rollbackSecrets(secrets, plan.credential, toVault, written,
 				fmt.Errorf("storing the secret for %s.%s: %w", plan.credential, role, err))
 		}
 		written = append(written, role)
 	}
 	if err := store.Save(cfg); err != nil {
-		return rollbackSecrets(secrets, plan.credential, toVault, written, err)
+		return "", rollbackSecrets(secrets, plan.credential, toVault, written, err)
 	}
-	return nil
+	if !toVault || len(written) == 0 {
+		return "", nil
+	}
+	warning := syncVaultProcess(secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
+		for _, role := range written {
+			if err := client.Set(ctx, plan.credential, role, plan.secrets[role]); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return warning, nil
 }
 
 // rollbackSecrets removes the secrets a failed setup wrote and says which ones stayed behind.
@@ -572,6 +592,9 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 	// The secrets are where they belong now, and the editor drops its only copy of them.
 	w.plan.secrets, w.pages, m.fields = nil, nil, nil
 	m.status = "Saved " + msg.name
+	if msg.warning != "" {
+		m.status += "; " + msg.warning
+	}
 	if m.tester != nil {
 		m.status += ". Press t to test it now."
 	}

@@ -261,8 +261,13 @@ func TestVaultChangePassphrase(t *testing.T) {
 		rendered.WriteString(screenOf(m))
 		rendered.WriteString(m.fail)
 
-		if m.fail != "error: wrong passphrase" {
+		if m.fail != "wrong passphrase" {
 			t.Fatalf("error = %q, want the short wrong-passphrase message", m.fail)
+		}
+		if view := screenOf(m); strings.Count(view, "error: wrong passphrase") != 1 ||
+			strings.Contains(view, "error: error:") {
+			t.Fatalf("the view does not show the wrong-passphrase message exactly once, with one error: "+
+				"prefix:\n%s", view)
 		}
 		if m.screen != screenVaultOffer {
 			t.Fatalf("screen = %v, want the current passphrase prompt to stay open", m.screen)
@@ -363,7 +368,7 @@ func TestVaultDecrypt(t *testing.T) {
 		// instead of moving on to a confirmation that would turn off encryption for nothing.
 		pump(t, m, "enter")
 
-		if m.fail != "error: wrong passphrase" {
+		if m.fail != "wrong passphrase" {
 			t.Fatalf("error = %q, want the short wrong-passphrase message", m.fail)
 		}
 		if m.screen != screenVaultOffer || m.decryptConfirm {

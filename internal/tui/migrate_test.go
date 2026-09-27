@@ -211,7 +211,7 @@ func TestVaultMigrateWithALockedVaultAndDeclinedDelete(t *testing.T) {
 	}
 	typeText(t, m, "not the real passphrase")
 	pump(t, m, "enter")
-	if m.fail != "error: wrong passphrase" || m.screen != screenVaultOffer {
+	if m.fail != "wrong passphrase" || m.screen != screenVaultOffer {
 		t.Fatalf("wrong passphrase = fail %q screen %v, want the same prompt reopened", m.fail, m.screen)
 	}
 

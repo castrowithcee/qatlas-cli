@@ -128,7 +128,7 @@ func (m *Model) handlePlannedVaultMigrate(msg planVaultMigrateMsg) tea.Cmd {
 	m.vaultBusy, m.busy = false, ""
 	if msg.err != nil {
 		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
-			m.fail = "error: wrong passphrase"
+			m.fail = "wrong passphrase"
 		} else {
 			m.fail = m.redactor.Apply(msg.err.Error())
 		}
@@ -249,34 +249,21 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 }
 
 // vaultMigrateSync hands the entries a migrate action just wrote on to a vault process that holds v
-// unlocked outside this run, exactly the way 'qatlas vault migrate' does for the same plan (see
-// vaultmigrate.ProcessClientOf): a process that cannot be reached at all, is not running, or this platform
-// runs none, needs nothing said. Any other failure is worth a warning, written to *warning rather than
-// printed, since this editor has no terminal of its own to print to: the vault already holds the change and
-// keeps it.
+// unlocked outside this run, exactly the way 'qatlas vault migrate' does for the same plan, through the
+// same syncVaultProcess every other vault write in this editor uses (see vaultsettings.go): a process that
+// cannot be reached at all, is not running, or this platform runs none, needs nothing said. Any other
+// failure is worth a warning, written to *warning rather than printed, since this editor has no terminal of
+// its own to print to: the vault already holds the change and keeps it.
 func vaultMigrateSync(v *vault.Vault, warning *string) vaultmigrate.Sync {
 	return func(plan []vaultmigrate.Entry) {
-		if !vaultproc.Supported || v == nil {
-			return
-		}
-		client, err := vaultmigrate.ProcessClientOf(v)
-		if errors.Is(err, vault.ErrNotEncrypted) {
-			return
-		}
-		if err == nil {
-			ctx := context.Background()
+		*warning = syncVaultProcess(v, func(ctx context.Context, client *vaultproc.Client) error {
 			for _, p := range plan {
-				if err = client.Set(ctx, p.Name, p.Role, p.Value); err != nil {
-					break
+				if err := client.Set(ctx, p.Name, p.Role, p.Value); err != nil {
+					return err
 				}
 			}
-		}
-		if err == nil || errors.Is(err, vaultproc.ErrNotRunning) {
-			return
-		}
-		*warning = fmt.Sprintf("the vault holds the change, but the vault process that holds it unlocked "+
-			"could not take it and still answers with what it held before: %s; %s",
-			err, secret.VaultProcessRemedy(err))
+			return nil
+		})
 	}
 }
 
@@ -297,7 +284,7 @@ func (m *Model) handleVaultMigrateWritten(msg vaultMigrateWrittenMsg) tea.Cmd {
 	m.migrate = nil
 	if msg.err != nil {
 		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
-			m.fail = "error: wrong passphrase"
+			m.fail = "wrong passphrase"
 		} else {
 			m.fail = m.redactor.Apply(msg.err.Error())
 		}
