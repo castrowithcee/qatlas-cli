@@ -72,7 +72,11 @@ func sortedCopy(names []string) []string {
 // vault is encrypted and locked, asks for its passphrase first and verifies it, since planning has to read
 // what the vault already holds for a credential no longer of type keyring (see vaultmigrate.Plan). A wrong
 // passphrase reopens that very prompt, the same way startVaultCurrentPassphrase always does, rather than
-// planning anything.
+// planning anything. Migrating credentials into the vault is a managing action too: where the
+// vault is already unlocked in this process but this window has no admin session of its own yet,
+// requireAdmin asks for it before planning goes ahead; a locked vault is covered by the passphrase check
+// above already, which also starts the session (see handleVaultPassphraseVerified), so requireAdmin has
+// nothing left to gate there.
 func (m *Model) startVaultMigrate() tea.Cmd {
 	entries := m.legacyEntries()
 	if len(entries) == 0 {
@@ -89,7 +93,7 @@ func (m *Model) startVaultMigrate() tea.Cmd {
 			},
 		)
 	}
-	return m.planVaultMigrate(entries, nil)
+	return m.requireAdmin(func() tea.Cmd { return m.planVaultMigrate(entries, nil) })
 }
 
 // planVaultMigrateMsg carries vaultmigrate.Plan's outcome back into the event loop.

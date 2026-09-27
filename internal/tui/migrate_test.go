@@ -251,3 +251,45 @@ func TestVaultMigrateWithALockedVaultAndDeclinedDelete(t *testing.T) {
 		t.Errorf("Get(token-secret) = %q, %v, %v, want the migrated value", got, found, err)
 	}
 }
+
+// Migrating credentials.yaml is a managing action like any other: where the vault is already unlocked in
+// this process but this window has no admin session of its own yet, planning the migration asks for it
+// first, through the same admin dialog every other action opens, distinct from the vault's own
+// passphrase-offer screen a locked vault uses (see TestVaultMigrateWithALockedVaultAndDeclinedDelete).
+func TestVaultMigrateAsksForAdminSessionWhenTheVaultIsAlreadyUnlocked(t *testing.T) {
+	const passphrase = "hunter2"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
+	secrets, _ := newVaultResolver(t, dir)
+	// The vault already holds an unrelated entry, encrypted, and this same resolver instance is the one the
+	// model uses: its vault.Vault stays unlocked in this process from here on.
+	mustNoError(t, secrets.SetVault("other", "role", "canary-seed",
+		func(string) (string, error) { return passphrase, nil }))
+
+	cfg := newTestConfig(t)
+	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeKeyring}))
+	mustNoError(t, store.Save(cfg))
+	writeLegacyCredentialsYAML(t, dir, map[string]map[string]string{"reader": {"token-id": "canary-4b8e"}})
+
+	m, err := New(store, nil, secrets, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	openVaultSection(t, m)
+	focusRole(t, m, "migrate credentials.yaml")
+	press(t, m, "enter")
+	if m.screen != screenAdminAuth || m.adminAuth == nil || m.adminAuth.locked {
+		t.Fatalf("migrating against an unlocked, session-less vault did not open the admin-only dialog: "+
+			"screen %v", m.screen)
+	}
+
+	typeText(t, m, passphrase)
+	pump(t, m, "enter")
+	if m.screen != screenConfirm || !m.migratePlanConfirm {
+		t.Fatalf("the right passphrase did not reach the overview: screen %v fail %q", m.screen, m.fail)
+	}
+	pump(t, m, "y")
+	if m.fail != "" {
+		t.Fatalf("writing the plan reported %q", m.fail)
+	}
+}

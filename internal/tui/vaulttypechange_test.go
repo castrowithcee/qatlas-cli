@@ -84,10 +84,11 @@ func TestVaultTypeChangeRefusedWhileASecretIsStored(t *testing.T) {
 	}
 }
 
-// A vault that is encrypted and locked cannot be checked for what it still holds, and this editor never
-// asks its own terminal for the passphrase to do so: the save is refused with that explained, rather than
-// silently guessing or leaving the secret orphaned.
-func TestVaultTypeChangeRefusedWhileTheVaultIsLockedAndCannotBeChecked(t *testing.T) {
+// A vault that is encrypted and locked is unlocked first, through the same combined unlock-and-admin dialog
+// every managing action opens on a locked vault; once unlocked, the very same orphaning guard as an
+// already-unlocked vault applies, because unlocking only answers "may this be checked at all", never "is it
+// safe to change".
+func TestVaultTypeChangeUnlocksThenAppliesTheSameGuard(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
@@ -109,20 +110,29 @@ func TestVaultTypeChangeRefusedWhileTheVaultIsLockedAndCannotBeChecked(t *testin
 	editEntry(t, m, "reader")
 	focusField(t, m, storageLabel)
 	selectChoice(t, m, storageKeyring)
-	pump(t, m, "f2")
+	press(t, m, "f2")
+	if m.screen != screenAdminAuth || m.adminAuth == nil || !m.adminAuth.locked {
+		t.Fatalf("f2 on a locked vault did not open the unlock dialog: screen %v", m.screen)
+	}
 
-	if !strings.Contains(m.fail, "locked") || !strings.Contains(m.fail, "qatlas vault unlock") {
-		t.Fatalf("error = %q, want the locked vault explained with its way out", m.fail)
+	typeText(t, m, "hunter2")
+	pump(t, m, "enter")
+
+	if !strings.Contains(m.fail, "token-id") || !strings.Contains(m.fail, "still stored in the vault") {
+		t.Fatalf("error = %q, want the same orphaning guard an already-unlocked vault already uses", m.fail)
 	}
 	saved, err := loadTestConfig(t, path)
 	if err != nil {
 		t.Fatalf("Load() = %v", err)
 	}
 	if got := saved.Credentials["reader"].Type; got != config.CredentialTypeVault {
-		t.Errorf("the type changed to %q although the vault could not be checked", got)
+		t.Errorf("the type changed to %q although the vault still holds a secret of it", got)
 	}
+	// Only this process's own vault.Vault was unlocked, in memory, by the passphrase just typed; a fresh one
+	// over the same directory still finds it locked on disk: nothing but this window's own admin session,
+	// and this process's own unlocked vault, ever comes of it.
 	if state, err := vault.New(dir).State(); err != nil || state != vault.StateLocked {
-		t.Fatalf("State() = %v, %v, want the vault untouched", state, err)
+		t.Fatalf("State() = %v, %v, want a fresh process to still find it locked", state, err)
 	}
 }
 

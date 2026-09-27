@@ -390,11 +390,11 @@ func TestVaultWriteIsAsyncAndNotDoubleTriggered(t *testing.T) {
 	}
 }
 
-// x on a vault role refuses to run against an encrypted, locked vault: removing an entry needs the
-// passphrase to find it inside secrets.age, and this editor never asks its own terminal for one (see
-// tuiSecrets in internal/cli). The editor says so at once and never calls DeleteVault, which would have
-// had to ask for it.
-func TestVaultRoleDeleteRefusedWhileLocked(t *testing.T) {
+// x on a vault role, while the vault is locked, opens the same combined unlock-and-admin dialog every
+// managing action opens on a locked vault: a wrong passphrase reopens it with the error shown and changes
+// nothing, esc cancels the whole pending delete without unlocking or removing anything, and the right
+// passphrase unlocks the vault and this window's admin session together, then removes the entry at once.
+func TestVaultRoleDeleteUnlocksTheVaultThenRemoves(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
@@ -420,23 +420,53 @@ func TestVaultRoleDeleteRefusedWhileLocked(t *testing.T) {
 	editEntry(t, m, "reader")
 	focusRole(t, m, "token-id")
 	press(t, m, "x")
-
-	if m.screen != screenForm {
-		t.Fatalf("x opened screen %v, want the form to stay: a delete that cannot succeed is never confirmed",
-			m.screen)
+	if m.screen != screenConfirm {
+		t.Fatalf("x did not ask to confirm: screen %v", m.screen)
 	}
-	if !strings.Contains(m.fail, "vault is locked") || !strings.Contains(m.fail, "qatlas vault unlock") {
-		t.Errorf("error = %q, want the locked vault explained with its way out", m.fail)
+	press(t, m, "y")
+	if m.screen != screenAdminAuth || m.adminAuth == nil || !m.adminAuth.locked {
+		t.Fatalf("confirming a delete on a locked vault did not open the unlock dialog: screen %v", m.screen)
 	}
 
-	// Nothing was asked and nothing changed: the entry is still there, still only readable with the
-	// passphrase.
+	// A wrong passphrase reopens the same dialog with the error shown, and changes nothing.
+	typeText(t, m, "wrong")
+	pump(t, m, "enter")
+	if !strings.Contains(m.fail, "wrong passphrase") || m.screen != screenAdminAuth {
+		t.Fatalf("a wrong passphrase = screen %v fail %q, want the dialog reopened with the error",
+			m.screen, m.fail)
+	}
+	if state, err := vault.New(dir).State(); err != nil || state != vault.StateLocked {
+		t.Fatalf("State() = %v, %v, want the vault still locked after a wrong passphrase", state, err)
+	}
+
+	// esc cancels the whole pending delete: nothing is unlocked, nothing is removed, and the confirmation
+	// itself is gone too, since a cancelled or abandoned check must not leave anything behind.
+	press(t, m, "esc")
+	if m.screen != screenForm || m.adminAuth != nil || m.confirmRole != "" {
+		t.Fatalf("esc did not cancel cleanly: screen %v, dialog %v, confirmRole %q",
+			m.screen, m.adminAuth, m.confirmRole)
+	}
 	fresh := vault.New(dir)
 	if state, err := fresh.State(); err != nil || state != vault.StateLocked {
-		t.Fatalf("State() = %v, %v, want the vault still locked", state, err)
+		t.Fatalf("State() = %v, %v, want the vault untouched by the cancelled attempt", state, err)
 	}
 	got, found, _, err := fresh.Get("reader", "token-id", func(string) (string, error) { return "hunter2", nil })
 	if err != nil || !found || got != "canary-locked-4d21" {
-		t.Errorf("Get() = %q, %v, %v, want the entry untouched", got, found, err)
+		t.Errorf("Get() = %q, %v, %v, want the entry untouched by the cancelled attempt", got, found, err)
+	}
+
+	// The right passphrase unlocks the vault and admin mode together, then removes the entry at once.
+	press(t, m, "x")
+	press(t, m, "y")
+	typeText(t, m, "hunter2")
+	pump(t, m, "enter")
+	if m.fail != "" {
+		t.Fatalf("removing after unlocking reported %q", m.fail)
+	}
+	// A new vault.Vault, reading only from disk: fresh's own in-memory copy was cached by the read just
+	// above and would otherwise still show the entry it read before this removal.
+	if _, found, _, err := vault.New(dir).Get("reader", "token-id",
+		func(string) (string, error) { return "hunter2", nil }); err != nil || found {
+		t.Errorf("Get() found = %v, %v, want the entry removed", found, err)
 	}
 }

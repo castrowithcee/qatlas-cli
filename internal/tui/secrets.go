@@ -350,17 +350,22 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 	case "enter":
 		value := m.secretInput.Value()
 		// The value leaves the model in the same event that submitted it: from here on it exists only
-		// inside the command that hands it to the resolver.
+		// inside the closure requireAdmin may hold onto briefly, and then the command that hands it to the
+		// resolver.
 		m.secretInput.Reset()
 		m.screen = screenForm
 		if value == "" {
 			m.fail = "nothing was typed, so nothing was stored"
 			return nil
 		}
-		if m.credentialType() == config.CredentialTypeVault {
-			return m.beginVaultSecret(m.editing, m.secretRole, value)
-		}
-		return m.storeSecret(m.editing, m.secretRole, value)
+		// Storing a secret is a managing action: requireAdmin gates it behind this window's admin
+		// session first.
+		return m.requireAdmin(func() tea.Cmd {
+			if m.credentialType() == config.CredentialTypeVault {
+				return m.beginVaultSecret(m.editing, m.secretRole, value)
+			}
+			return m.storeSecret(m.editing, m.secretRole, value)
+		})
 	}
 
 	var cmd tea.Cmd
@@ -997,15 +1002,10 @@ func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	case "s":
 		m.askSecret(role)
 	case "x":
-		if m.credentialType() == config.CredentialTypeVault && m.vaultLocked() {
-			// Removing a vault secret needs the passphrase to find the entry inside secrets.age, which
-			// this editor never asks its own terminal for (see tuiSecrets in internal/cli): asking here
-			// would try to prompt on the very terminal bubbletea holds in raw mode for its own screen.
-			m.status = ""
-			m.fail = "vault is locked; run 'qatlas vault unlock' first"
-			return nil
-		}
-		// Removing a stored secret is irreversible, so it is confirmed like every other deletion here.
+		// Removing a stored secret is irreversible, so it is confirmed like every other deletion here. A
+		// vault locked at this point is unlocked, masked and never on this process's own terminal, only once
+		// that confirmation is given and the removal itself is about to run (see requireAdmin in
+		// updateConfirm): asking for the passphrase before even asking "remove it?" would be asking too soon.
 		m.confirmRole = role
 		m.screen = screenConfirm
 		m.clearMessages()

@@ -462,10 +462,15 @@ func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// startSetupSave saves the setup, first offering a passphrase when the new credential's first secret would
-// create the vault: nothing before this point ever touched it, and the offer, answered or cancelled, is the
-// only thing that decides whether it does.
+// startSetupSave saves the setup. Committing it is a managing action: requireAdmin gates the
+// whole save first, the same way submit does for an ordinary form, before finishSetupSave offers a
+// passphrase when the new credential's first secret would create the vault; nothing before this point ever
+// touched it, and that offer, answered or cancelled, is the only thing that decides whether it does.
 func (m *Model) startSetupSave() tea.Cmd {
+	return m.requireAdmin(m.finishSetupSave)
+}
+
+func (m *Model) finishSetupSave() tea.Cmd {
 	plan := m.wizard.plan
 	if !plan.newCredential || storageType(plan.storage) != config.CredentialTypeVault {
 		return m.saveSetup(nil)

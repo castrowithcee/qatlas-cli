@@ -25,11 +25,14 @@ const (
 const (
 	vaultIdleTimeoutHint = "how long a vault process that holds the vault unlocked does so without a read " +
 		"before it locks itself, as a Go duration such as \"12h\" or \"30m\"; empty means 12h"
-	// vaultAdminTimeoutHint says plainly that this setting has no effect yet: an editor that claimed
-	// otherwise would be lying about behaviour it does not have.
-	vaultAdminTimeoutHint = "sets vault.admin_timeout for a future admin session of this editor; that " +
-		"session is not built yet, so this setting has no effect so far. A Go duration such as \"10m\", or " +
-		"\"0\" to ask for the passphrase on every change once it exists; empty means 10m"
+	// vaultAdminTimeoutHint says what this window's own admin session actually does with the value (see
+	// requireAdmin in admin.go): the editor always opens read-only, and the first managing action of this
+	// window asks for the vault's passphrase, masked, and keeps this window alone in admin mode for this
+	// long without a key press before it asks again.
+	vaultAdminTimeoutHint = "how long this window's own admin session (see the first managing action of a " +
+		"run) stays open without a key press before it asks for the vault's passphrase again; other windows " +
+		"are unaffected. A Go duration such as \"10m\", or \"0\" to ask for the passphrase on every change; " +
+		"empty means 10m"
 )
 
 // vaultActionMsg carries the outcome of Encrypt, ChangePassphrase, or Decrypt back into the event loop.
@@ -289,7 +292,9 @@ func (m *Model) verifyVaultPassphrase(current, title, hint string, next func(str
 // handleVaultPassphraseVerified decides what startVaultCurrentPassphrase's caller asked for once the check
 // answers. A wrong passphrase reopens the same prompt with the short error every wrong vault passphrase is
 // reported with; any other failure, such as an unreadable key.age, ends the flow on the form the same way
-// every other vault action failure does. The right passphrase runs next with it.
+// every other vault action failure does. The right passphrase starts, or renews, this window's admin session
+// (see startAdminSession) and runs next with it: this check is every bit the proof of admin requireAdmin's
+// own dialog would ask for, and asking twice over would only add friction, not security.
 func (m *Model) handleVaultPassphraseVerified(msg vaultPassphraseVerifiedMsg) tea.Cmd {
 	m.vaultBusy = false
 	m.busy = ""
@@ -302,6 +307,7 @@ func (m *Model) handleVaultPassphraseVerified(msg vaultPassphraseVerifiedMsg) te
 		m.fail = m.redactor.Apply(msg.err.Error())
 		return nil
 	}
+	m.startAdminSession()
 	return msg.next(msg.passphrase)
 }
 
@@ -442,6 +448,11 @@ func (m *Model) handleVaultAction(msg vaultActionMsg) tea.Cmd {
 		if msg.procNote != "" {
 			m.status += "; " + msg.procNote
 		}
+		// Encrypting the vault, changing its passphrase, or verifying it before turning encryption off is
+		// every bit the proof of admin requireAdmin's own dialog asks for (see startAdminSession): a person
+		// who just typed the vault's passphrase for one of these must not be asked for it again a moment
+		// later for an unrelated save.
+		m.startAdminSession()
 	}
 
 	if m.section != sectionVault || m.screen != screenForm {

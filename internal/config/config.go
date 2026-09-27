@@ -143,9 +143,9 @@ func (c *Config) SecretStore() string {
 // locks itself, unless vault.idle_timeout says otherwise.
 const DefaultVaultIdleTimeout = 12 * time.Hour
 
-// DefaultVaultAdminTimeout is how long an admin session of the TUI editor stays open before it asks for
-// the vault's passphrase again, unless vault.admin_timeout says otherwise. Nothing in this build reads it
-// yet: the admin session itself is a later addition, and this setting only prepares the value it will use.
+// DefaultVaultAdminTimeout is how long an admin session of the TUI editor (internal/tui, see requireAdmin)
+// stays open, without a key press in that window, before it asks for the vault's passphrase again, unless
+// vault.admin_timeout says otherwise.
 const DefaultVaultAdminTimeout = 10 * time.Minute
 
 // VaultSettings holds the settings of the vault that are not secret.
@@ -155,10 +155,10 @@ type VaultSettings struct {
 	// be positive: a vault process that never locks itself is not offered, and 'qatlas vault lock' locks it
 	// at once.
 	IdleTimeout string `yaml:"idle_timeout,omitempty"`
-	// AdminTimeout is how long a future admin session of the TUI editor stays open before it asks for the
-	// vault's passphrase again, as a Go duration such as "10m". Left empty, it means DefaultVaultAdminTimeout.
-	// "0" is allowed and means asking for the passphrase on every change once that session exists; it must
-	// not be negative. Nothing in this build reads it yet.
+	// AdminTimeout is how long the TUI editor's admin session (internal/tui, see requireAdmin) stays open,
+	// without a key press in that window, before it asks for the vault's passphrase again, as a Go duration
+	// such as "10m". Left empty, it means DefaultVaultAdminTimeout. "0" is allowed and means asking for the
+	// passphrase on every managing action instead of keeping a session at all; it must not be negative.
 	AdminTimeout string `yaml:"admin_timeout,omitempty"`
 }
 
@@ -185,9 +185,11 @@ func parseIdleTimeout(text string) (time.Duration, error) {
 	return d, nil
 }
 
-// VaultAdminTimeout returns the effective admin session timeout, prepared here for the session a later
-// version adds. A configuration that passed Validate always has one; an unparseable value falls back to
-// DefaultVaultAdminTimeout. Unlike VaultIdleTimeout, "0" is a real, valid value, not a fallback trigger.
+// VaultAdminTimeout returns the effective admin session timeout the TUI editor's requireAdmin reads (see
+// internal/tui/admin.go). A configuration that passed Validate always has one; an unparseable value falls
+// back to DefaultVaultAdminTimeout. Unlike VaultIdleTimeout, "0" is a real, valid value, not a fallback
+// trigger: it tells requireAdmin to never keep a session at all, asking for the passphrase on every managing
+// action instead.
 func (c *Config) VaultAdminTimeout() time.Duration {
 	if d, err := parseAdminTimeout(c.Vault.AdminTimeout); err == nil {
 		return d

@@ -60,6 +60,17 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"a role. The secrets row of a credential offers the same places as the guided setup, in the same\n" +
 			"order and words: system keyring, vault, and environment variables, whichever is now chosen; none\n" +
 			"is a recommendation.\n\n" +
+			"While the vault is encrypted, the editor opens read-only: saving a form, deleting an entry,\n" +
+			"storing or removing a secret, and every action of 5 Vault (see below) each ask for the vault's\n" +
+			"passphrase the first time, masked in a screen of their own, never on this terminal. Answering it\n" +
+			"unlocks the vault where it was locked, and either way starts an admin session bound to this\n" +
+			"window: further managing actions run at once until vault.admin_timeout passes without a key\n" +
+			"press, after which the next one asks again; vault.admin_timeout: 0 asks every time instead of\n" +
+			"keeping a session. A wrong passphrase reopens the same prompt with error: wrong passphrase; esc\n" +
+			"cancels only that one action, leaving the form exactly as typed so it can be tried again. No\n" +
+			"other window, and no vault process a Linux build may hold unlocked outside this run, ever shares\n" +
+			"the session: the passphrase proves it, not merely an unlocked vault. An unencrypted vault, or\n" +
+			"one that does not exist yet, needs none of this and manages exactly as before.\n\n" +
 			"The system keyring is the credential store the operating system already provides: Secret\n" +
 			"Service on Linux (for example GNOME Keyring or KWallet), the macOS Keychain, or the Windows\n" +
 			"Credential Manager. It needs no setup and no exported variable. The vault is a directory beside\n" +
@@ -93,7 +104,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"the result then names what moved and which credentials switched to type vault, and a separate\n" +
 			"question asks whether to delete credentials.yaml, kept on no. The form also edits\n" +
 			"vault.idle_timeout and vault.admin_timeout, saved with F2 like any other setting; admin_timeout\n" +
-			"only prepares a value for a future admin session of this editor and has no effect yet.\n\n" +
+			"sets how long this window's own admin session above stays open (see the read-only\n" +
+			"paragraph further up), 0 asking for the passphrase on every managing action instead.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +

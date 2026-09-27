@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -77,6 +78,9 @@ const (
 	// screenVaultOffer is the passphrase offer that follows a vault's very first secret, over the form or
 	// the guided setup summary that led to it.
 	screenVaultOffer
+	// screenAdminAuth is the masked admin passphrase dialog requireAdmin opens over whatever screen a
+	// managing action was attempted from, gating it behind this window's admin session; see admin.go.
+	screenAdminAuth
 	// screenPicker is the searchable list of one choice row of the form, over the form it was opened from.
 	screenPicker
 	// screenSummary is the last step of the guided setup: what will be saved, and after saving, the test.
@@ -394,6 +398,12 @@ type Model struct {
 	// so a second one cannot start before it is done.
 	vaultOffer *vaultOffer
 	vaultBusy  bool
+	// adminAuth holds the masked admin passphrase dialog while requireAdmin has one open, and nil otherwise.
+	// adminSessionUntil is this window's own admin session idle deadline: the zero value means no session is
+	// active, whether none was ever started or vault.admin_timeout is 0, which never keeps one at all. See
+	// admin.go.
+	adminAuth         *adminAuth
+	adminSessionUntil time.Time
 	// decryptConfirm is the explicit y/n question before the vault's encryption is switched off, holding the
 	// already-verified current passphrase to run the switch with once it is answered y. It is cleared, and
 	// the passphrase dropped, the moment the question is answered either way.
@@ -507,6 +517,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleVaultAction(msg)
 	case vaultPassphraseVerifiedMsg:
 		return m, m.handleVaultPassphraseVerified(msg)
+	case adminVerifiedMsg:
+		return m, m.handleAdminVerified(msg)
 	case planVaultMigrateMsg:
 		return m, m.handlePlannedVaultMigrate(msg)
 	case vaultMigrateWrittenMsg:
@@ -547,6 +559,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		// Every key is activity for this window's admin session, whichever screen it lands on; the dialog
+		// that starts one runs its own check on "enter" instead, never through this.
+		m.touchAdminSessionIfActive()
 		var cmd tea.Cmd
 		switch m.screen {
 		case screenNav:
@@ -561,6 +576,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateSecret(msg)
 		case screenVaultOffer:
 			cmd = m.updateVaultOffer(msg)
+		case screenAdminAuth:
+			cmd = m.updateAdminAuth(msg)
 		case screenPicker:
 			cmd = m.updatePicker(msg)
 		case screenProviders:
@@ -792,6 +809,15 @@ func (m *Model) leaveScreen() tea.Cmd {
 	// into it; nothing it was about is written.
 	m.secretInput.Reset()
 	m.confirmRole, m.pendingProfile = "", ""
+	if m.adminAuth != nil {
+		// The admin dialog returns to whatever screen requireAdmin was called from, not always the form; see
+		// openAdminPrompt.
+		back := m.adminAuth.back
+		m.adminAuth = nil
+		m.status = "Cancelled"
+		m.screen = back
+		return nil
+	}
 	if m.vaultOffer != nil {
 		// The offer's own cancel decides where this returns to: the form for a single role, or the setup
 		// summary that was about to save several at once.
@@ -895,25 +921,29 @@ func (m *Model) saveAndLeave() tea.Cmd {
 	m.screen = m.leaveFrom
 	m.trimFields()
 	if m.section == sectionVault {
-		return m.saveVault()
+		return m.requireAdmin(m.saveVault)
 	}
-	if reason := m.guardVaultTypeChange(); reason != "" {
-		m.status, m.fail = "", reason
-		return nil
-	}
-	if cmd := m.guardTypeChange(); cmd != nil {
-		// This save has to ask the credential stores first and completes, or explains itself, when they
-		// answered; the form stays open until then.
+	// requireAdmin gates the whole save, guards included: a locked vault must be unlocked before
+	// guardVaultTypeChange can even check what it already holds (see requireAdmin's own comment).
+	return m.requireAdmin(func() tea.Cmd {
+		if reason := m.guardVaultTypeChange(); reason != "" {
+			m.status, m.fail = "", reason
+			return nil
+		}
+		if cmd := m.guardTypeChange(); cmd != nil {
+			// This save has to ask the credential stores first and completes, or explains itself, when they
+			// answered; the form stays open until then.
+			return cmd
+		}
+		name := m.fields[0].value()
+		cmd := m.save(name)
+		if m.fail != "" {
+			return cmd
+		}
+		cmd = m.returnToList(name)
+		m.status = "Saved " + name
 		return cmd
-	}
-	name := m.fields[0].value()
-	cmd := m.save(name)
-	if m.fail != "" {
-		return cmd
-	}
-	cmd = m.returnToList(name)
-	m.status = "Saved " + name
-	return cmd
+	})
 }
 
 func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
@@ -1624,15 +1654,20 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 	}
 	switch key.String() {
 	case "y":
+		// Deleting an entry, or a stored secret, is a managing action: requireAdmin gates the
+		// actual removal behind this window's admin session, run only once the confirmation itself is given.
 		if role := m.confirmRole; role != "" {
 			m.confirmRole = ""
 			m.screen = screenForm
-			if m.credentialType() == config.CredentialTypeVault {
-				return m.removeVaultSecret(m.editing, role)
-			}
-			return m.removeSecret(m.editing, role)
+			return m.requireAdmin(func() tea.Cmd {
+				if m.credentialType() == config.CredentialTypeVault {
+					return m.removeVaultSecret(m.editing, role)
+				}
+				return m.removeSecret(m.editing, role)
+			})
 		}
-		return m.delete()
+		m.screen = screenList
+		return m.requireAdmin(m.delete)
 	case "n", "esc":
 		if m.confirmRole != "" {
 			m.confirmRole = ""
@@ -2058,22 +2093,25 @@ func (m *Model) buildFields(name string) []field {
 }
 
 // submit saves the form, unless the change first has to be checked against the places that keep secrets.
+// Saving is a managing action: requireAdmin gates it behind this window's admin session first.
 func (m *Model) submit() tea.Cmd {
 	m.trimFields()
 	if m.section == sectionVault {
 		// The vault form has no name field, and its action rows already ran on their own enter, never
 		// deferred to here; F2 and enter on a text row save only the two timeouts (see vaultsettings.go).
-		return m.saveVault()
+		return m.requireAdmin(m.saveVault)
 	}
-	if reason := m.guardVaultTypeChange(); reason != "" {
-		m.status, m.fail = "", reason
-		return nil
-	}
-	if cmd := m.guardTypeChange(); cmd != nil {
-		return cmd
-	}
-	// The core owns every rule, including that a name must not be empty.
-	return m.save(m.fields[0].value())
+	return m.requireAdmin(func() tea.Cmd {
+		if reason := m.guardVaultTypeChange(); reason != "" {
+			m.status, m.fail = "", reason
+			return nil
+		}
+		if cmd := m.guardTypeChange(); cmd != nil {
+			return cmd
+		}
+		// The core owns every rule, including that a name must not be empty.
+		return m.save(m.fields[0].value())
+	})
 }
 
 // save applies the form to a copy of the configuration and saves it. The editor keeps the change only when
@@ -2596,6 +2634,8 @@ func (m *Model) editorView() string {
 		b.WriteString(m.hint("enter store · esc cancel"))
 	case screenVaultOffer:
 		b.WriteString(m.vaultOfferView())
+	case screenAdminAuth:
+		b.WriteString(m.adminAuthView())
 	case screenConfirm:
 		if m.decryptConfirm {
 			b.WriteString(titleStyle.Render("Turn the vault's encryption off?") + "\n\n")

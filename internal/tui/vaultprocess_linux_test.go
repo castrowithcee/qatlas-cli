@@ -99,6 +99,11 @@ func TestVaultRoleWriteAndRemoveSyncTheVaultProcess(t *testing.T) {
 	press(t, m, "s")
 	typeText(t, m, canary)
 	pump(t, m, "enter")
+	if m.screen != screenAdminAuth {
+		t.Fatalf("the encrypted vault did not ask for the admin passphrase: screen %v", m.screen)
+	}
+	typeText(t, m, passphrase)
+	pump(t, m, "enter")
 	if m.fail != "" {
 		t.Fatalf("storing in the vault reported %q", m.fail)
 	}
@@ -180,6 +185,11 @@ func TestVaultRoleWriteWarnsWhenTheVaultProcessRefuses(t *testing.T) {
 	const canary = "canary-refused-3d4e"
 	press(t, m, "s")
 	typeText(t, m, canary)
+	pump(t, m, "enter")
+	if m.screen != screenAdminAuth {
+		t.Fatalf("the encrypted vault did not ask for the admin passphrase: screen %v", m.screen)
+	}
+	typeText(t, m, passphrase)
 	pump(t, m, "enter")
 	if m.fail != "" {
 		t.Fatalf("storing in the vault reported %q, want the write itself to still succeed", m.fail)
