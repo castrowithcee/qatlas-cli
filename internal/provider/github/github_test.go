@@ -234,6 +234,10 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/repos/octo-org/example/contents"):
+		f.contents(w, r)
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/repos/octo-org/example/git/trees/"):
+		f.tree(w, r)
 	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/search/"):
 		if f.searchRateLimited {
 			w.Header().Set("X-RateLimit-Remaining", "0")
@@ -285,6 +289,7 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 	case f.itemChange(w, document, variables):
 	case f.statusChange(w, document, variables):
 	case f.accessChange(w, document, variables):
+	case f.blame(w, document, variables):
 	case strings.Contains(document, "projectsV2(first") || strings.Contains(document, "repositories(first"):
 		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
@@ -799,8 +804,9 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			}
 		}
 	}
-	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.code.search",
-		"github.comments.list", "github.commits.search", "github.issues.get",
+	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.blame.get",
+		"github.code.search",
+		"github.comments.list", "github.commits.search", "github.contents.get", "github.issues.get",
 		"github.issues.list", "github.issues.search", "github.organizations.search", "github.projectfields.list",
 		"github.projectitems.get", "github.projectitems.list", "github.projects.list",
 		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
@@ -810,7 +816,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		"github.pullrequests.list", "github.pullrequests.search",
 		"github.releaseassets.list", "github.releases.get", "github.releases.list",
 		"github.repositories.list", "github.repositories.search", "github.stars.list", "github.teammembers.list",
-		"github.teams.list", "github.users.search",
+		"github.teams.list", "github.trees.get", "github.users.search",
 		"github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
 		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
@@ -818,7 +824,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 115 {
+	if len(metadata.Tools) != 118 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

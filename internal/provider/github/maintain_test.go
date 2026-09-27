@@ -877,15 +877,17 @@ func TestGuardedToolsSatisfyTheirContractThroughTheApplicationCore(t *testing.T)
 	}
 }
 
-// A Contents path names the workflow file or the workflow directory and the ref, and nothing that is not of
-// the form the input schema allows.
+// A Contents path names the workflow file or the workflow directory, or, for github.contents.get, a general
+// repository path or the repository root, and the ref, and nothing that is not of a form some tool's input
+// schema allows.
 func TestContentsSubjectNamesOnlyCheckedPathsAndRefs(t *testing.T) {
 	for _, tt := range []struct{ path, ref, want string }{
 		{"contents/.github/workflows/ci.yml", "", "workflow file .github/workflows/ci.yml"},
 		{"contents/.github/workflows/ci.yml", "release/v1", "workflow file .github/workflows/ci.yml at ref release/v1"},
 		{"contents/.github/workflows", "main", "directory .github/workflows at ref main"},
 		{"contents/.github/workflows/ci.yml", "bad..ref", "workflow file .github/workflows/ci.yml"},
-		{"contents/README.md", "main", ""},
+		{"contents/README.md", "main", "path README.md at ref main"},
+		{"contents", "main", "the repository root at ref main"},
 		{"contents/.github/workflows/%2e%2e/ci.yml", "", ""},
 		{"actions/workflows/ci.yml", "", ""},
 	} {

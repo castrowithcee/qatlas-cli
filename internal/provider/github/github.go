@@ -37,8 +37,10 @@
 // account's starred repositories, name no repository, project, or owner and are offered only by a connection
 // whose targets name neither a repository nor a project. The star tools also star and unstar one repository
 // an explicit connection allows. The organization tools read the teams of an organization and the members of
-// one of its teams, an organization the connection's targets must allow as an owner. The search tools read
-// GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
+// one of its teams, an organization the connection's targets must allow as an owner. The repository tools
+// read the contents of a file or a directory, the Git tree of a ref, and, through GraphQL, the blame of a
+// file over a bounded line range; none of them writes, diffs two refs, or downloads an archive. The search
+// tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
 // forces ahead of the caller's terms, so it never searches beyond them, and a term list that could escape
@@ -327,7 +329,8 @@ var issuesGet = capability.Descriptor{
 
 // Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the item and
 // draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, the listed-only
-// workflow maintainer and Actions administrator tools, and the account, organization, and star tools. Only
+// workflow maintainer and Actions administrator tools, the account, organization, and star tools, and the
+// contents, tree, and blame tools. Only
 // reads are a connection's default: every change and every execution needs a permission of its own, and a
 // listed-only tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
@@ -373,7 +376,9 @@ func Register(reg *capability.Registry) error {
 				"Contents: read, and for issue and pull request search also Issues: read or Pull requests: " +
 				"read, on a fine-grained token, for private ones; code search also needs Contents: read for " +
 				"private repositories; user and organization search need no scope beyond the token's own " +
-				"identity",
+				"identity; reading repository contents, a Git tree, or a file's blame needs no scope for a " +
+				"public repository, or repo on a classic token, or Contents: read on a fine-grained token, " +
+				"for a private one",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -500,6 +505,11 @@ func Register(reg *capability.Registry) error {
 			ID: "stars", Title: "Stars", Description: "reads the account's starred repositories and stars " +
 				"or unstars a repository; every change needs its own confirmation",
 			Tools: []string{starsList.ID, starsAdd.ID, starsRemove.ID},
+		}, {
+			ID: "repository-reader", Title: "Repository reader",
+			Description: "reads the contents of a file or a directory, the Git tree of a ref, and the " +
+				"blame of a file over a bounded line range; changes nothing",
+			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -527,7 +537,7 @@ func Register(reg *capability.Registry) error {
 		maintenanceOperations(), pullRequestOperations(), releaseOperations(), pullRequestCommentOperations(),
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
-		searchOperations())...)
+		searchOperations(), contentsOperations(), blameOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1249,6 +1259,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := contentsSubject(parts[2], request.URL.Query().Get("ref")); what != "" {
 			s.what = what
 		}
+		if what := treesSubject(parts[2]); what != "" {
+			s.what = what
+		}
 		if what := pullsSubject(parts[2]); what != "" {
 			s.what = what
 		}
@@ -1339,14 +1352,16 @@ func pullsSubject(path string) string {
 	return ""
 }
 
-// contentsSubject names the workflow file or the workflow directory a Contents path below a repository
-// addresses and the ref it was read at, if any. It names only a path and a ref of the characters the input
-// schema allows, and is empty otherwise.
+// contentsSubject names the workflow file, the workflow directory, or, for github.contents.get, the general
+// repository path a Contents path below a repository addresses, and the ref it was read at, if any. It
+// names only a path and a ref of the characters the input schema of some tool allows, and is empty
+// otherwise.
 func contentsSubject(path, ref string) string {
-	rest, ok := strings.CutPrefix(path, "contents/")
+	rest, ok := strings.CutPrefix(path, "contents")
 	if !ok {
 		return ""
 	}
+	rest = strings.TrimPrefix(rest, "/")
 	rest, err := url.PathUnescape(rest)
 	if err != nil {
 		return ""
@@ -1357,6 +1372,10 @@ func contentsSubject(path, ref string) string {
 		what = "workflow file " + rest
 	case rest+"/" == workflowsDir:
 		what = "directory " + rest
+	case rest == "":
+		what = "the repository root"
+	case validContentsPath(rest):
+		what = "path " + rest
 	default:
 		return ""
 	}
@@ -1364,6 +1383,21 @@ func contentsSubject(path, ref string) string {
 		what += " at ref " + ref
 	}
 	return what
+}
+
+// treesSubject names the ref a Git tree path below a repository addresses. It names only a ref of the
+// characters the input schema allows, and is empty otherwise.
+func treesSubject(path string) string {
+	rest, ok := strings.CutPrefix(path, "git/trees/")
+	if !ok {
+		return ""
+	}
+	ref, _, _ := strings.Cut(rest, "?")
+	ref, err := url.PathUnescape(ref)
+	if err != nil || !validRef(ref) {
+		return ""
+	}
+	return "tree at ref " + ref
 }
 
 // actionsSubject names the workflow run, job, or workflow an Actions path below a repository addresses:

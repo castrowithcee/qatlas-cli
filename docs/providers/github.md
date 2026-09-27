@@ -154,12 +154,16 @@ GitHub answers a repository, project, issue, or item it does not hold exactly li
 a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested project or issue out. Qatlas reports all of them as
 `not-found` and names the target the request addressed, including a target a default chose, with what to
 check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, the
-workflow file or `.github/workflows` directory with the ref it was read at, the pull request by its number,
-or, for `github.pullrequestchecks.list` once the pull request itself was found, the commit its checks were
-asked for, where the call named one:
+workflow file or `.github/workflows` directory with the ref it was read at, `github.contents.get`'s path or
+the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s ref or its path at that ref,
+the pull request by its number, or, for `github.pullrequestchecks.list` once the pull request itself was
+found, the commit its checks were asked for, where the call named one:
 
 ```text
 qatlas: not-found: list issues: GitHub does not hold repository octo-org/example or does not show it to this token; check the name, and that the token can see it (classic: scope repo for a private repository; fine-grained: access to this repository)
+qatlas: not-found: get repository contents: GitHub does not hold path docs/missing.md at ref main in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: get repository tree: GitHub does not hold tree at ref ghost in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: get file blame: GitHub does not hold ref ghost in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: list project items: GitHub does not hold project users/octocat/projects/3 or does not show it to this token; check the name, and that the token can see it (classic: scope read:project; fine-grained: Projects access of its organization, as a user-owned project needs a classic token)
 qatlas: not-found: get issue: GitHub does not hold issue #5 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: dispatch workflow: GitHub does not hold workflow file .github/workflows/release.yml at ref other in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
@@ -205,8 +209,10 @@ profiles `actions-observer` and `actions-operator` are described under [GitHub A
 not-recommended profiles `pull-requests` and `pull-requests-operator` under
 [Pull requests](#pull-requests), the not-recommended profile `pull-request-reviews` under
 [Pull request reviews and comments](#pull-request-reviews-and-comments), the not-recommended profile
-`releases` under [Releases](#releases), and the not-recommended profiles `discovery` and `stars` under
-[account, organization teams, and stars](#discovery-account-organization-teams-and-stars). A
+`releases` under [Releases](#releases), the not-recommended profiles `discovery` and `stars` under
+[account, organization teams, and stars](#discovery-account-organization-teams-and-stars), and the
+not-recommended profile `repository-reader` under
+[repository contents, tree, and blame](#repository-contents-tree-and-blame). A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -407,6 +413,65 @@ Repository, code, issue, pull request, and commit search need no scope for publi
 classic token, or Contents read access, and for issue and pull request search also Issues or Pull requests
 read access, on a fine-grained token, for private ones; code search also needs Contents read access for
 private repositories. User and organization search need no scope beyond the token's own identity.
+
+## Repository contents, tree, and blame
+
+`github.contents.get` reads one file or one directory listing of a repository an explicit connection allows
+at a ref; `github.trees.get` reads its Git tree at a ref, optionally every entry below every directory;
+`github.blame.get` reads, through GraphQL, the commit that last changed each line of one file over a bounded
+line range. None of the three writes, diffs two arbitrary refs, or downloads an archive:
+
+```sh
+qatlas invoke github.contents.get --connection code
+qatlas invoke github.contents.get --connection code --arg path=README.md
+qatlas invoke github.trees.get --connection code --arg ref=main --arg recursive=true
+qatlas invoke github.blame.get --connection code --arg path=internal/app.go --arg start_line=1 --arg end_line=100
+```
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.contents.get` | read | safe | reads one file or one directory listing of a repository at a ref |
+| `github.trees.get` | read | safe | reads the Git tree of a repository at a ref, optionally every entry below every directory |
+| `github.blame.get` | read | safe | reads the commit behind each line of one file over a bounded line range |
+
+`path` is a repository-relative path with no leading or trailing `/` and no empty, `.`, or `..` segment, in
+valid UTF-8 without a control character; every segment is escaped on its own before it reaches GitHub, so it
+can only ever address the path itself. `github.contents.get` leaves it out, or takes `""`, for the
+repository root, a directory listing; `github.blame.get` requires it. `ref` is a branch, a tag, or a commit
+SHA; `github.contents.get` and `github.blame.get` read the default branch, or its tip, when it is left out,
+and `github.trees.get` requires it.
+
+`github.contents.get` on a directory answers `entries`: `name`, `path`, `type` (`file`, `dir`, `symlink`, or
+`submodule`), `size`, and `sha`, bounded to 1000 entries with `entries_truncated` visible past that. On a
+file it answers `path`, `type`, `size`, and `sha`; a text file within 256 KiB is returned in full as
+`content`, with `bytes` its length; past that bound the content is cut from its start to 256 KiB with
+`truncated: true`, `bytes` naming what was kept and `size` the file's real size. A binary file, detected by a
+NUL byte or invalid UTF-8 once its content is decoded, and a file past GitHub's own inline content limit of
+about 1 MiB are metadata only, with `omitted` naming which: `binary` or `too_large`. A symlink and a
+submodule are metadata only as well, with `target` naming the symlink's target path or the commit a
+submodule points at.
+
+`github.trees.get` answers `sha`, the tree GitHub read, and `entries`: `path`, `type` (`blob`, `tree`, or
+`commit` for a submodule), `sha`, and, for a blob, `size`. `recursive: true` reads every entry below every
+directory, not only the top level. GitHub itself may truncate a very large recursive tree, and Qatlas cuts
+one past 2000 entries on its own; `truncated` is true whichever applied.
+
+`github.blame.get` takes `start_line` and `end_line`, bounding the line range: 1 and `start_line`+99 when
+either is left out, and the range may never exceed 2000 lines. GitHub's own blame carries no file content at
+all, only the commit behind each line, so `ranges` never does either: each one names `start_line`,
+`end_line`, the commit `sha`, `author` (the login when GitHub reports one, the commit author's name
+otherwise), and `date`, clipped to the requested range on both sides. A ref GitHub cannot resolve, and a path
+with no blame at that ref, both answer `not-found`.
+
+Reading contents, a tree, or a file's blame needs no scope for a public repository, or the following for a
+private one:
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.contents.get`, `github.trees.get`, `github.blame.get` | `repo` | Contents: read |
+
+The terminal editor's setup profile `repository-reader` ticks `[read]` with the three; it is not the
+recommended profile, which stays `read`, unchanged.
 
 ## Project lifecycle
 
