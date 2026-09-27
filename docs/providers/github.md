@@ -315,10 +315,98 @@ on a classic token, `repo` as well for a private repository, or Starring read an
 fine-grained token.
 
 The terminal editor's setup profile `discovery` ticks `[read]` with `github.accounts.me`,
-`github.teams.list`, `github.teammembers.list`, and `github.stars.list`; it changes nothing. The setup profile
+`github.teams.list`, `github.teammembers.list`, `github.stars.list`, and the seven
+[search tools](#search-repositories-code-issues-pull-requests-commits-users-and-organizations); it changes
+nothing. The setup profile
 `stars` ticks `[read, create, delete]` with `github.stars.list`, `github.stars.add`, and
 `github.stars.remove`; every star or unstar needs its own confirmation. Neither is the recommended profile,
 which stays `read`, unchanged.
+
+## Search: repositories, code, issues, pull requests, commits, users, and organizations
+
+`github.repositories.search`, `github.code.search`, `github.issues.search`, `github.pullrequests.search`,
+`github.commits.search`, `github.users.search`, and `github.organizations.search` read GitHub's own search
+index with `terms`: search terms and GitHub qualifiers, such as `language:go` or `is:merged`, never a `query`
+argument or a route of an agent's own:
+
+```sh
+qatlas invoke github.repositories.search --connection discovery --arg terms="qatlas language:go"
+qatlas invoke github.code.search --connection discovery --arg terms="handleRequest language:go"
+qatlas invoke github.issues.search --connection discovery --arg terms="is:open label:bug"
+qatlas invoke github.pullrequests.search --connection discovery --arg terms="is:merged base:main"
+qatlas invoke github.commits.search --connection discovery --arg terms="author:octocat"
+qatlas invoke github.users.search --connection discovery --arg terms="location:berlin"
+qatlas invoke github.organizations.search --connection discovery --arg terms="octo in:name"
+```
+
+| Tool | Searches | Forces | Each entry |
+| --- | --- | --- | --- |
+| `github.repositories.search` | repositories | the target qualifiers below | `repository`, `description`, `visibility`, `language`, `stars`, `fork`, `archived`, `updated_at`, `url` |
+| `github.code.search` | code, without file bodies or fragments | the target qualifiers below | `path`, `repository`, `sha`, `url` |
+| `github.issues.search` | issues, never pull requests | `is:issue` and the target qualifiers below | `number`, `title`, `repository`, `state`, `labels`, `assignees`, `updated_at`, `url` |
+| `github.pullrequests.search` | pull requests, never plain issues | `is:pr` and the target qualifiers below | `number`, `title`, `repository`, `state`, `draft`, `labels`, `assignees`, `updated_at`, `url` |
+| `github.commits.search` | commits | the target qualifiers below | `sha`, `message`, `repository`, `author`, `committed_at`, `url` |
+| `github.users.search` | personal accounts, never organizations | `type:user`, and, with one organization owner target, `org:LOGIN` of it | `login`, `type`, `url` |
+| `github.organizations.search` | organizations, never personal accounts | `type:org` | `login`, `url` |
+
+None of the seven takes a `repository`, `project`, or `owner` argument: they are narrowed by the connection's
+targets as a whole, exactly like `github.stars.list`. Every batch also names `total_count` and
+`incomplete_results` as GitHub answers them, and pages through the [cursor contract](#cursor-contract), a
+cursor bound to the tool, the forced qualifiers, and the exact `terms`, so a continuation never silently
+searches something else.
+
+### Target scoping
+
+`github.repositories.search`, `github.code.search`, `github.issues.search`, `github.pullrequests.search`, and
+`github.commits.search` force a `repo:` or `org:`/`user:` qualifier ahead of `terms` from every target the
+connection names, so the search never reaches beyond them:
+
+| Target | Forces |
+| --- | --- |
+| `repos/OWNER/REPO` | `repo:OWNER/REPO` |
+| `users/LOGIN` owner target | `user:LOGIN` |
+| `orgs/LOGIN` owner target | `org:LOGIN` |
+| `repos/OWNER/*` | refused with `invalid-request`: a repository pattern names no owner kind to force `org:` or `user:` with; add the owner as `users/LOGIN` or `orgs/LOGIN`, or list its repositories one by one, to search inside it |
+| `users/LOGIN/projects/NUMBER` or `orgs/LOGIN/projects/NUMBER`, alone | refused with `invalid-request`: GitHub's search grammar has no qualifier for a project, and, exactly as a project pattern is not enough to stand for its owner when creating a project, a project target here forces nothing and never widens the search to its owner either; add a repository or an owner target, or use a connection without targets |
+| a project target beside a repository or an owner target | the repository's or the owner's qualifier only; the project itself still forces nothing |
+| several repository or owner targets | every qualifier they force, once per distinct owner; GitHub unions repeated `repo:` and `org:`/`user:` qualifiers of the same name, so the search reaches their combined targets and never beyond them |
+| none | unscoped, whatever the token reaches |
+
+Whatever mix of targets a connection names, a search that would still force no qualifier at all is always
+refused this way: none of the five ever sends a request a target list could not narrow.
+
+`github.users.search` and `github.organizations.search` reach GitHub's whole index unless the targets narrow
+them, since a repository, a repository pattern, or a project target gives neither an account to narrow a
+user or an organization search by:
+
+| Targets | `github.users.search` | `github.organizations.search` |
+| --- | --- | --- |
+| none | unscoped, `type:user` only | unscoped, `type:org` only |
+| exactly one `orgs/LOGIN` owner target | `type:user org:LOGIN`, its members only | refused: no qualifier restricts organization search to one target |
+| exactly one `users/LOGIN` owner target | refused: a personal owner gives it no members to narrow by | refused |
+| a repository or a project target, or several owner targets | refused | refused |
+
+A term list that could escape a forced qualifier is refused with `invalid-request` before a secret is
+resolved, wherever a target forces one: a positive `repo:`, `org:`, `user:`, or `owner:` qualifier in any
+case, since GitHub unions a repeated qualifier of the same name with the one Qatlas forces and could widen
+the search back open; the `OR` operator; and parentheses, since either could change which terms a forced
+qualifier binds to. A negated qualifier, such as `-repo:`, only narrows further and stays allowed everywhere,
+and `in:`, `fork:`, `is:`, and every other qualifier that does not pick an owner or a repository stay
+unrestricted. None of this applies to a connection without targets, which has no boundary to protect.
+
+### Errors and rate limits
+
+Search never answers `not-found`: an empty batch, not a refusal, is how GitHub reports that nothing matched.
+`github.code.search` shares GitHub's separate, lower search rate limit; it and the other search tools report
+GitHub's rate limit as `rate-limited`, naming the wait, through the same [status handling](#errors) as every
+other tool.
+
+### Tokens for search
+
+Repository, code, issue, pull request, and commit search need no scope for public results, or `repo` on a
+classic token, or Contents read access, and for issue and pull request search also Issues or Pull requests
+read access, on a fine-grained token, for private ones; code search also needs Contents read access for
+private repositories. User and organization search need no scope beyond the token's own identity.
 
 ## Project lifecycle
 

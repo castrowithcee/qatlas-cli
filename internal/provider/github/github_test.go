@@ -92,6 +92,10 @@ type fakeGitHub struct {
 	starred map[string]bool
 	// starList orders the repositories github.stars.list answers.
 	starList []fakeStar
+	// searchRateLimited makes every search route answer like GitHub's secondary rate limit.
+	searchRateLimited bool
+	// searchHasNextPage makes every search route announce a following page through the Link header.
+	searchHasNextPage bool
 }
 
 // fakeTeam is one team of an organization.
@@ -229,6 +233,43 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/search/"):
+		if f.searchRateLimited {
+			w.Header().Set("X-RateLimit-Remaining", "0")
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(2*time.Second).Unix(), 10))
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"API rate limit exceeded for installation."}`)
+			return
+		}
+		if f.searchHasNextPage {
+			w.Header().Set("Link", `<https://example.invalid/next>; rel="next"`)
+		}
+		switch strings.TrimPrefix(r.URL.Path, "/api/v3/search/") {
+		case "repositories":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"full_name":"octo-org/example",`+
+				`"description":"An example","visibility":"public","language":"Go","stargazers_count":3,"fork":false,`+
+				`"archived":false,"updated_at":"2026-01-01T00:00:00Z","html_url":"https://github.com/octo-org/example"}]}`)
+		case "code":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"path":"main.go","sha":"deadbeef",`+
+				`"html_url":"https://github.com/octo-org/example/blob/main/main.go",`+
+				`"repository":{"full_name":"octo-org/example"}}]}`)
+		case "issues":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"number":42,"title":"Crash on start",`+
+				`"state":"open","draft":false,"updated_at":"2026-01-02T00:00:00Z",`+
+				`"html_url":"https://github.com/octo-org/example/issues/42","labels":[{"name":"bug"}],`+
+				`"assignees":[{"login":"hubot"}],"repository_url":"https://api.github.com/repos/octo-org/example"}]}`)
+		case "commits":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"sha":"deadbeef",`+
+				`"html_url":"https://github.com/octo-org/example/commit/deadbeef",`+
+				`"repository":{"full_name":"octo-org/example"},`+
+				`"commit":{"message":"Fix the crash","author":{"name":"octocat","date":"2026-01-01T00:00:00Z"}}}]}`)
+		case "users":
+			fmt.Fprint(w, `{"total_count":1,"incomplete_results":false,"items":[{"login":"octocat","type":"User",`+
+				`"html_url":"https://github.com/octocat"}]}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message":"Not Found"}`)
 		}
 	default:
 		w.WriteHeader(http.StatusNotFound)
@@ -758,15 +799,18 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			}
 		}
 	}
-	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.comments.list", "github.issues.get",
-		"github.issues.list", "github.projectfields.list", "github.projectitems.get", "github.projectitems.list", "github.projects.list",
+	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.code.search",
+		"github.comments.list", "github.commits.search", "github.issues.get",
+		"github.issues.list", "github.issues.search", "github.organizations.search", "github.projectfields.list",
+		"github.projectitems.get", "github.projectitems.list", "github.projects.list",
 		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
 		"github.pullrequestchecks.list", "github.pullrequestcomments.list", "github.pullrequestcommits.list",
 		"github.pullrequestdiffs.get", "github.pullrequestfiles.list", "github.pullrequestreviewcomments.list",
 		"github.pullrequestreviews.list", "github.pullrequestreviewthreads.list", "github.pullrequests.get",
-		"github.pullrequests.list",
+		"github.pullrequests.list", "github.pullrequests.search",
 		"github.releaseassets.list", "github.releases.get", "github.releases.list",
-		"github.repositories.list", "github.stars.list", "github.teammembers.list", "github.teams.list",
+		"github.repositories.list", "github.repositories.search", "github.stars.list", "github.teammembers.list",
+		"github.teams.list", "github.users.search",
 		"github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
 		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
@@ -774,7 +818,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 108 {
+	if len(metadata.Tools) != 115 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

@@ -48,10 +48,12 @@ var projectField = capability.Field{Name: "project", Description: "Project the t
 // target the tool acted on in a field of the same name; the project tools that add or create an issue or link
 // a repository also name that repository, and a project copy the owner of the copy, which they take as well.
 func withTargetArgument(d capability.Descriptor) capability.Descriptor {
-	// The account tool and the star list name no repository, project, or owner: they read or, for the star
-	// list, narrow by the connection's targets as a whole, not by a target argument of their own.
+	// The account tool, the star list, and the search tools name no repository, project, or owner: they read
+	// or, for the star list and the search tools, narrow by the connection's targets as a whole, not by a
+	// target argument of their own.
 	switch d.ID {
-	case accountsMe.ID, starsList.ID:
+	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
+		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID:
 		return d
 	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument

@@ -297,6 +297,13 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.stars.list":                   readRisk,
 		"github.stars.add":                    changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
 		"github.stars.remove":                 changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"github.repositories.search":          readRisk,
+		"github.code.search":                  readRisk,
+		"github.issues.search":                readRisk,
+		"github.pullrequests.search":          readRisk,
+		"github.commits.search":               readRisk,
+		"github.users.search":                 readRisk,
+		"github.organizations.search":         readRisk,
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {

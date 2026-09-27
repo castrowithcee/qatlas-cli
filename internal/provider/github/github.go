@@ -37,9 +37,14 @@
 // account's starred repositories, name no repository, project, or owner and are offered only by a connection
 // whose targets name neither a repository nor a project. The star tools also star and unstar one repository
 // an explicit connection allows. The organization tools read the teams of an organization and the members of
-// one of its teams, an organization the connection's targets must allow as an owner. Nothing here accepts a
-// free filter expression, a GraphQL document, or a route from an agent, and every target is checked against
-// the allow-list before a credential is resolved.
+// one of its teams, an organization the connection's targets must allow as an owner. The search tools read
+// GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
+// organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
+// argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
+// forces ahead of the caller's terms, so it never searches beyond them, and a term list that could escape
+// that narrowing, such as a repeated repo:, org:, user:, or owner: qualifier, or OR and parentheses, is
+// refused. Nothing here accepts a free filter expression, a GraphQL document, or a route from an agent, and
+// every target is checked against the allow-list before a credential is resolved.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -363,7 +368,12 @@ func Register(reg *capability.Registry) error {
 				"fine-grained token; reading the account's starred repositories needs no scope for public " +
 				"ones, or repo as well for private ones, or Starring: read on a fine-grained token; starring " +
 				"and unstarring need public_repo on a classic token, repo as well for a private repository, " +
-				"or Starring: read and write on a fine-grained token",
+				"or Starring: read and write on a fine-grained token; repository, code, issue, pull request, " +
+				"and commit search need no scope for public results, or repo on a classic token, or " +
+				"Contents: read, and for issue and pull request search also Issues: read or Pull requests: " +
+				"read, on a fine-grained token, for private ones; code search also needs Contents: read for " +
+				"private repositories; user and organization search need no scope beyond the token's own " +
+				"identity",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -480,9 +490,12 @@ func Register(reg *capability.Registry) error {
 				pullRequestReviewThreadsUnresolve.ID, pullRequestReviewersRequest.ID, pullRequestReviewersRemove.ID},
 		}, {
 			ID: "discovery", Title: "Discovery", Description: "reads the account behind the connection's " +
-				"token, the teams of an organization and their members, and the account's starred " +
-				"repositories; changes nothing",
-			Tools: []string{accountsMe.ID, organizationTeamsList.ID, teamMembersList.ID, starsList.ID},
+				"token, the teams of an organization and their members, the account's starred repositories, " +
+				"and GitHub's search index for repositories, code, issues, pull requests, commits, users, and " +
+				"organizations; changes nothing",
+			Tools: []string{accountsMe.ID, organizationTeamsList.ID, teamMembersList.ID, starsList.ID,
+				repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID, pullRequestsSearch.ID, commitsSearch.ID,
+				usersSearch.ID, organizationsSearch.ID},
 		}, {
 			ID: "stars", Title: "Stars", Description: "reads the account's starred repositories and stars " +
 				"or unstars a repository; every change needs its own confirmation",
@@ -513,7 +526,8 @@ func Register(reg *capability.Registry) error {
 		statusOperations(), accessOperations(), automationOperations(), actionsOperations(),
 		maintenanceOperations(), pullRequestOperations(), releaseOperations(), pullRequestCommentOperations(),
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
-		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations())...)
+		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
+		searchOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1188,14 +1202,18 @@ func pathSegment(path []any, i int) string {
 // restSubject names what a REST request addressed. A path below /repos/OWNER/REPO names that repository, which
 // differs from the bound target where a project tool creates the issue it plans; an issue path names the
 // issue. A path below /orgs/OWNER names that organization or one of its teams; a path below /user names the
-// account behind the token or, below /user/starred, its stars. Any other path names a resource of the bound
-// target.
+// account behind the token or, below /user/starred, its stars; a path below /search/ names the search kind
+// it ran, since a search result names no bound target of its own. Any other path names a resource of the
+// bound target.
 func (c *Client) restSubject(request *http.Request) subject {
 	fallback := subject{in: c.target, what: "this resource"}
 	if request == nil || request.URL == nil {
 		return fallback
 	}
 	full := request.URL.String()
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/search/"); ok {
+		return searchSubject(tail)
+	}
 	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/orgs/"); ok {
 		return organizationSubject(tail)
 	}
@@ -1260,6 +1278,18 @@ func organizationSubject(tail string) subject {
 		}
 	}
 	return subject{in: target{kind: kindOwner, scope: "orgs", owner: owner}}
+}
+
+// searchSubject names the search a path below /search/ ran: repositories, code, issues (also named by
+// github.pullrequests.search, which shares the route), commits, or users (also named by
+// github.organizations.search, which shares it too). A search result names no repository, project, or
+// owner, so this is the whole subject.
+func searchSubject(tail string) subject {
+	kind, _, _ := strings.Cut(tail, "?")
+	if kind == "" {
+		return subject{what: "this search"}
+	}
+	return subject{what: "the " + kind + " search"}
 }
 
 // accountSubject names the account behind the token or one of its stars a path below /user addresses: the
