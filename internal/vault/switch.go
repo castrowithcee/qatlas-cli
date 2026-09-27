@@ -144,6 +144,24 @@ func (v *Vault) Decrypt(passphrase string) error {
 	return nil
 }
 
+// VerifyPassphrase checks passphrase against the vault's key.age and recipient without decrypting anything
+// else and without any side effect: no document is read, no pending entry is merged, and the process's own
+// cached identity, if any, is neither consulted nor replaced. It is how a caller can confirm a passphrase is
+// right before asking for anything that a wrong one would make pointless, such as a new passphrase typed
+// twice or an explicit confirmation, which ChangePassphrase and Decrypt only verify once they already have
+// both. Called on a vault that is not encrypted, it reports ErrNotEncrypted.
+func (v *Vault) VerifyPassphrase(passphrase string) error {
+	state, err := v.State()
+	if err != nil {
+		return err
+	}
+	if state != StateLocked && state != StateUnlocked {
+		return ErrNotEncrypted
+	}
+	_, err = v.decryptIdentity(passphrase)
+	return err
+}
+
 // decryptIdentity reads key.age and recipient fresh from disk and verifies passphrase against them, without
 // consulting or changing the process cache. It is how ChangePassphrase confirms the current passphrase
 // every time it is called, whether or not this process already had the vault unlocked.

@@ -76,11 +76,17 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"encrypted and locked or unlocked) and the actions that apply to it. Unencrypted offers to turn\n" +
 			"encryption on with a new passphrase, typed masked and twice; encrypted offers to change the\n" +
 			"passphrase (the current one once, then a new one twice) and to turn encryption off (the current\n" +
-			"passphrase, then an explicit confirmation that every secret ends up unencrypted on disk). A wrong\n" +
-			"passphrase is reported as error: wrong passphrase and keeps the form open; nothing is ever asked\n" +
-			"on this process's own terminal. The form also edits vault.idle_timeout and vault.admin_timeout,\n" +
-			"saved with F2 like any other setting; admin_timeout only prepares a value for a future admin\n" +
-			"session of this editor and has no effect yet.\n\n" +
+			"passphrase, then an explicit confirmation that every secret ends up unencrypted on disk). The\n" +
+			"current passphrase is verified before anything else is asked; a wrong one reopens that very\n" +
+			"prompt with error: wrong passphrase instead of asking for a new passphrase or the confirmation\n" +
+			"for nothing, and nothing is ever asked on this process's own terminal. While a plaintext\n" +
+			"credentials.yaml left over from an earlier version still holds an entry, migrate\n" +
+			"credentials.yaml carries every one of them into the vault the way 'qatlas vault migrate' does:\n" +
+			"an overview names every entry by credential and role, never a value, before asking to confirm;\n" +
+			"the result then names what moved and which credentials switched to type vault, and a separate\n" +
+			"question asks whether to delete credentials.yaml, kept on no. The form also edits\n" +
+			"vault.idle_timeout and vault.admin_timeout, saved with F2 like any other setting; admin_timeout\n" +
+			"only prepares a value for a future admin session of this editor and has no effect yet.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +

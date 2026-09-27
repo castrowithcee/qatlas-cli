@@ -255,11 +255,8 @@ func TestVaultChangePassphrase(t *testing.T) {
 		press(t, m, "enter")
 		rendered.WriteString(screenOf(m))
 		typeText(t, m, "not the real passphrase")
-		pump(t, m, "enter") // taken at once: a single ask is never confirmed twice
-		rendered.WriteString(screenOf(m))
-		typeText(t, m, fresh)
-		pump(t, m, "enter")
-		typeText(t, m, fresh)
+		// Verified asynchronously before a new passphrase is ever asked for: nothing typed afterwards would
+		// be kept anyway, so this same prompt reopens instead of moving on.
 		pump(t, m, "enter")
 		rendered.WriteString(screenOf(m))
 		rendered.WriteString(m.fail)
@@ -267,8 +264,11 @@ func TestVaultChangePassphrase(t *testing.T) {
 		if m.fail != "error: wrong passphrase" {
 			t.Fatalf("error = %q, want the short wrong-passphrase message", m.fail)
 		}
-		if m.screen != screenForm {
-			t.Fatalf("screen = %v, want the vault form to stay open", m.screen)
+		if m.screen != screenVaultOffer {
+			t.Fatalf("screen = %v, want the current passphrase prompt to stay open", m.screen)
+		}
+		if m.vaultOffer == nil || m.vaultOffer.confirming {
+			t.Fatalf("the reopened prompt is not back at its own first entry")
 		}
 		if state, err := vault.New(dir).State(); err != nil || state != vault.StateLocked {
 			t.Fatalf("State() = %v, %v, want the vault untouched", state, err)
@@ -359,11 +359,16 @@ func TestVaultDecrypt(t *testing.T) {
 
 		press(t, m, "enter")
 		typeText(t, m, "not the real passphrase")
+		// Verified asynchronously before the y/n confirmation is ever asked for: this same prompt reopens
+		// instead of moving on to a confirmation that would turn off encryption for nothing.
 		pump(t, m, "enter")
-		pump(t, m, "y")
 
 		if m.fail != "error: wrong passphrase" {
 			t.Fatalf("error = %q, want the short wrong-passphrase message", m.fail)
+		}
+		if m.screen != screenVaultOffer || m.decryptConfirm {
+			t.Fatalf("screen = %v decryptConfirm %v, want the current passphrase prompt to stay open, not "+
+				"the y/n confirmation", m.screen, m.decryptConfirm)
 		}
 		if state, err := vault.New(dir).State(); err != nil || state != vault.StateLocked {
 			t.Fatalf("State() = %v, %v, want the vault untouched", state, err)

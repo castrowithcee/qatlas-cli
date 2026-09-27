@@ -399,6 +399,14 @@ type Model struct {
 	// the passphrase dropped, the moment the question is answered either way.
 	decryptConfirm    bool
 	decryptPassphrase string
+	// migrate holds a 'migrate credentials.yaml' action's decided plan while any of its several screens are
+	// open, and nil otherwise; see internal/tui/migrate.go. migratePlanConfirm and migrateDeleteConfirm are
+	// its two y/n questions, asked apart: the first before anything is written, the second, once
+	// migrateResult names the outcome, about deleting the file.
+	migrate              *migratePlan
+	migratePlanConfirm   bool
+	migrateDeleteConfirm bool
+	migrateResult        string
 
 	// Connection test state. Raw responses never enter the model, only the class and a redacted message.
 	tester     Tester
@@ -497,6 +505,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleWritten(msg)
 	case vaultActionMsg:
 		return m, m.handleVaultAction(msg)
+	case vaultPassphraseVerifiedMsg:
+		return m, m.handleVaultPassphraseVerified(msg)
+	case planVaultMigrateMsg:
+		return m, m.handlePlannedVaultMigrate(msg)
+	case vaultMigrateWrittenMsg:
+		return m, m.handleVaultMigrateWritten(msg)
 	case setupSavedMsg:
 		return m, m.setupSaved(msg)
 	case updateCheckedMsg:
@@ -882,6 +896,10 @@ func (m *Model) saveAndLeave() tea.Cmd {
 	m.trimFields()
 	if m.section == sectionVault {
 		return m.saveVault()
+	}
+	if reason := m.guardVaultTypeChange(); reason != "" {
+		m.status, m.fail = "", reason
+		return nil
 	}
 	if cmd := m.guardTypeChange(); cmd != nil {
 		// This save has to ask the credential stores first and completes, or explains itself, when they
@@ -1563,6 +1581,33 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
+	if m.migratePlanConfirm {
+		switch key.String() {
+		case "y":
+			m.migratePlanConfirm = false
+			return m.beginVaultMigrateWrite()
+		case "n", "esc":
+			m.migratePlanConfirm, m.migrate, m.screen = false, nil, screenForm
+			m.status = "Cancelled; credentials.yaml was not touched"
+		case "ctrl+c":
+			return m.quit()
+		}
+		return nil
+	}
+	if m.migrateDeleteConfirm {
+		switch key.String() {
+		case "y":
+			m.migrateDeleteConfirm = false
+			return m.deleteLegacyCredentials()
+		case "n", "esc":
+			m.migrateDeleteConfirm, m.screen = false, screenForm
+			m.status = m.migrateResult + "; the file was kept"
+			m.migrate, m.migrateResult = nil, ""
+		case "ctrl+c":
+			return m.quit()
+		}
+		return nil
+	}
 	if profile := m.pendingProfile; profile != "" {
 		switch key.String() {
 		case "y":
@@ -2019,6 +2064,10 @@ func (m *Model) submit() tea.Cmd {
 		// The vault form has no name field, and its action rows already ran on their own enter, never
 		// deferred to here; F2 and enter on a text row save only the two timeouts (see vaultsettings.go).
 		return m.saveVault()
+	}
+	if reason := m.guardVaultTypeChange(); reason != "" {
+		m.status, m.fail = "", reason
+		return nil
 	}
 	if cmd := m.guardTypeChange(); cmd != nil {
 		return cmd
@@ -2556,6 +2605,14 @@ func (m *Model) editorView() string {
 			b.WriteString(m.hint("y turn off · n/esc keep it encrypted"))
 			break
 		}
+		if m.migratePlanConfirm {
+			b.WriteString(m.migratePlanView())
+			break
+		}
+		if m.migrateDeleteConfirm {
+			b.WriteString(m.migrateResultView())
+			break
+		}
 		if m.pendingProfile != "" {
 			b.WriteString(m.profileConfirmView())
 			break
@@ -2974,9 +3031,6 @@ func (m *Model) pathLine() string {
 // pathRoom is what the banner of a newer release leaves the path at least.
 const pathRoom = 12
 
-// sidebarLines are the rows of the sidebar: the sections with their entry counts, the guided setup, the help,
-// quitting, and the next step while there is room. The active section is marked "> " while the sidebar has
-// the focus and "* " while the workspace has it; the marker, not the colour, is what says so.
 // sectionEntryCount is the number shown after a section's name in the sidebar and the narrow navigation
 // line: how many entries it holds, or "-" for a settings form such as Vault, which holds none.
 func sectionEntryCount(m *Model, s section) string {
@@ -2986,6 +3040,9 @@ func sectionEntryCount(m *Model, s section) string {
 	return strconv.Itoa(len(m.entryNames(s)))
 }
 
+// sidebarLines are the rows of the sidebar: the sections with their entry counts, the guided setup, the help,
+// quitting, and the next step while there is room. The active section is marked "> " while the sidebar has
+// the focus and "* " while the workspace has it; the marker, not the colour, is what says so.
 func (m *Model) sidebarLines() []string {
 	inner := sidebarWidth - frameCells
 	var lines []string

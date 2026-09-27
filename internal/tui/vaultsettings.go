@@ -72,6 +72,13 @@ func (m *Model) vaultFields() []field {
 					"secret is then stored unencrypted"))
 	}
 
+	if len(m.legacyEntries()) > 0 {
+		fields = append(fields, vaultActionField(vaultActionMigrate, "migrate credentials.yaml",
+			"enter shows every entry of the plaintext credentials.yaml left over from an earlier version, "+
+				"credential and role names only, before carrying it into the vault, and offers to delete the "+
+				"file once that is confirmed"))
+	}
+
 	fields = append(fields,
 		textField("idle timeout", m.cfg.Vault.IdleTimeout, false).withHint(vaultIdleTimeoutHint),
 		textField("admin timeout", m.cfg.Vault.AdminTimeout, false).withHint(vaultAdminTimeoutHint),
@@ -170,6 +177,8 @@ func (m *Model) runVaultActionField(action string) tea.Cmd {
 		return m.startVaultChangePassphrase()
 	case vaultActionDecrypt:
 		return m.startVaultDecrypt()
+	case vaultActionMigrate:
+		return m.startVaultMigrate()
 	}
 	return nil
 }
@@ -211,20 +220,80 @@ func (m *Model) runVaultEncrypt(passphrase string) tea.Cmd {
 	}
 }
 
-// startVaultChangePassphrase asks for the current passphrase once, then chains into asking for the new one
-// twice, and changes the passphrase with both.
+// startVaultChangePassphrase asks for the current passphrase once, verifies it, then chains into asking for
+// the new one twice, and changes the passphrase with both. See startVaultCurrentPassphrase for why the
+// current passphrase is checked before anything else is asked.
 func (m *Model) startVaultChangePassphrase() tea.Cmd {
-	m.openVaultOffer(
+	return m.startVaultCurrentPassphrase(
 		"Current vault passphrase",
 		"verified before the new passphrase is asked",
-		false, false,
+		m.startVaultNewPassphrase,
+	)
+}
+
+// vaultPassphraseVerifiedMsg carries the outcome of checking the vault's current passphrase before asking
+// for anything a wrong one would make pointless: a new passphrase typed twice, or the explicit confirmation
+// before turning encryption off. See startVaultCurrentPassphrase.
+type vaultPassphraseVerifiedMsg struct {
+	passphrase  string
+	err         error
+	title, hint string
+	next        func(passphrase string) tea.Cmd
+}
+
+// startVaultCurrentPassphrase asks for the vault's current passphrase and verifies it asynchronously, since
+// that decrypts key.age, before calling next with it. A wrong passphrase reopens this very prompt with the
+// error shown, instead of moving on to ask for a new passphrase or an explicit confirmation that would only
+// be typed for nothing; esc still cancels back to the vault form, unchanged, at any point. It is how
+// 'change passphrase' and 'turn off encryption' both start.
+func (m *Model) startVaultCurrentPassphrase(title, hint string, next func(string) tea.Cmd) tea.Cmd {
+	m.openVaultOffer(title, hint, false, false,
 		func(offer vault.PassphraseFunc) tea.Cmd {
 			current, _ := offer("")
-			return m.startVaultNewPassphrase(current)
+			// The offer's own prompt is gone the moment resume runs (see updateVaultOffer); the form is what
+			// shows the check running, the same way it shows every other vault write in flight.
+			m.screen = screenForm
+			return m.verifyVaultPassphrase(current, title, hint, next)
 		},
 		m.cancelVaultPrompt,
 	)
 	return nil
+}
+
+// verifyVaultPassphrase checks current against the vault's key.age, without unlocking or changing anything
+// else (see vault.Vault.VerifyPassphrase), as a command so the scrypt work it does never runs on the event
+// loop; vaultBusy blocks a second vault write, or another such offer, from starting before it is done.
+func (m *Model) verifyVaultPassphrase(current, title, hint string, next func(string) tea.Cmd) tea.Cmd {
+	v := m.secrets.Vault()
+	if v == nil {
+		m.fail = "no vault is configured for this run"
+		return nil
+	}
+	m.vaultBusy = true
+	m.busy = "checking the current vault passphrase"
+	return func() tea.Msg {
+		return vaultPassphraseVerifiedMsg{passphrase: current, err: v.VerifyPassphrase(current),
+			title: title, hint: hint, next: next}
+	}
+}
+
+// handleVaultPassphraseVerified decides what startVaultCurrentPassphrase's caller asked for once the check
+// answers. A wrong passphrase reopens the same prompt with the short error every wrong vault passphrase is
+// reported with; any other failure, such as an unreadable key.age, ends the flow on the form the same way
+// every other vault action failure does. The right passphrase runs next with it.
+func (m *Model) handleVaultPassphraseVerified(msg vaultPassphraseVerifiedMsg) tea.Cmd {
+	m.vaultBusy = false
+	m.busy = ""
+	if msg.err != nil {
+		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
+			cmd := m.startVaultCurrentPassphrase(msg.title, msg.hint, msg.next)
+			m.fail = "error: wrong passphrase"
+			return cmd
+		}
+		m.fail = m.redactor.Apply(msg.err.Error())
+		return nil
+	}
+	return msg.next(msg.passphrase)
 }
 
 func (m *Model) startVaultNewPassphrase(current string) tea.Cmd {
@@ -256,24 +325,21 @@ func (m *Model) runVaultChangePassphrase(current, newPassphrase string) tea.Cmd 
 	}
 }
 
-// startVaultDecrypt asks for the current passphrase once, then the explicit y/n confirmation, and turns
-// encryption off with the passphrase once it is answered y.
+// startVaultDecrypt asks for the current passphrase once, verifies it, then the explicit y/n confirmation,
+// and turns encryption off with the passphrase once it is answered y. See startVaultCurrentPassphrase for
+// why the current passphrase is checked before the confirmation is ever asked.
 func (m *Model) startVaultDecrypt() tea.Cmd {
-	m.openVaultOffer(
+	return m.startVaultCurrentPassphrase(
 		"Current vault passphrase",
 		"verified before encryption is switched off",
-		false, false,
-		func(offer vault.PassphraseFunc) tea.Cmd {
-			current, _ := offer("")
+		func(current string) tea.Cmd {
 			m.decryptPassphrase = current
 			m.decryptConfirm = true
 			m.screen = screenConfirm
 			m.clearMessages()
 			return nil
 		},
-		m.cancelVaultPrompt,
 	)
-	return nil
 }
 
 func (m *Model) runVaultDecrypt(passphrase string) tea.Cmd {

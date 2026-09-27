@@ -675,6 +675,10 @@ func (b blockingSecrets) DeleteVault(string, string) error {
 	<-b.writes
 	return nil
 }
+func (b blockingSecrets) Plaintext() *secret.File { return nil }
+func (b blockingSecrets) StoreValue(context.Context, string, string) (string, secret.StoreState) {
+	return "", secret.StoreUnavailable
+}
 
 // A store that takes its time must not freeze the editor: it has thirty seconds to answer, and the event
 // loop keeps working meanwhile.
@@ -1027,6 +1031,10 @@ func (s scriptedSecrets) SetVault(string, string, string, vault.PassphraseFunc) 
 	return secret.ErrUnavailable
 }
 func (s scriptedSecrets) DeleteVault(string, string) error { return secret.ErrNoEntry }
+func (s scriptedSecrets) Plaintext() *secret.File          { return nil }
+func (s scriptedSecrets) StoreValue(context.Context, string, string) (string, secret.StoreState) {
+	return "", secret.StoreUnavailable
+}
 
 // D3: a second write must not swallow the outcome of the first. The two are really in flight together here,
 // and the one that finishes second is the one that failed.

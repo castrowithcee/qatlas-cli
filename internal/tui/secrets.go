@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"runtime"
@@ -34,6 +35,13 @@ type Secrets interface {
 	SetVault(credential, role, value string, offer vault.PassphraseFunc) error
 	// DeleteVault removes one secret from the vault.
 	DeleteVault(credential, role string) error
+	// Plaintext returns the plaintext fallback file this run reads credentials.yaml from, or nil where none
+	// is configured. The vault form's migrate action uses it only to list and count entries, never to show a
+	// value; see internal/tui/migrate.go.
+	Plaintext() *secret.File
+	// StoreValue is what planning a migration needs to resolve a switched keyring credential's role the way
+	// the keyring-then-plaintext cascade always did: see vaultmigrate.KeyringStore, which this satisfies too.
+	StoreValue(ctx context.Context, credential, role string) (string, secret.StoreState)
 }
 
 // ErrNoResolver reports an editor that was started without a credential resolver. The configuration stays
@@ -52,6 +60,10 @@ func (noSecrets) Lookup(string) bool                                          { 
 func (noSecrets) Vault() *vault.Vault                                         { return nil }
 func (noSecrets) SetVault(string, string, string, vault.PassphraseFunc) error { return ErrNoResolver }
 func (noSecrets) DeleteVault(string, string) error                            { return ErrNoResolver }
+func (noSecrets) Plaintext() *secret.File                                     { return nil }
+func (noSecrets) StoreValue(context.Context, string, string) (string, secret.StoreState) {
+	return "", secret.StoreUnavailable
+}
 
 // Stored reports both places as unasked, because without a resolver neither can be asked. A caller that
 // must not orphan a secret therefore stops, which is the right answer under total ignorance.
@@ -604,6 +616,62 @@ func (m *Model) explain(err error, credential, role string) string {
 		text += ", then retry " + retry
 	}
 	return fmt.Sprintf("%s. Alternatively export %s.", text, secret.DerivedEnvName(credential, role))
+}
+
+// guardVaultTypeChange refuses to turn a stored vault credential into a keyring or env credential while the
+// vault still holds a secret of it: the credential would stop reading the vault the moment it saves, the
+// same orphaning guardTypeChange refuses for the system keyring. Unlike guardTypeChange this never has to
+// ask anything asynchronously: every vault read here is a local file check, never a round trip to a
+// platform service, so the guard runs synchronously and returns the reason to refuse, or "" to save. An
+// encrypted, locked vault cannot be checked at all without its passphrase, which this editor never asks its
+// own terminal for (see tuiSecrets in internal/cli): the save is refused the same way, rather than guessing
+// or asking for one.
+func (m *Model) guardVaultTypeChange() string {
+	if m.section != sectionCredentials || m.editing == "" {
+		return ""
+	}
+	if m.cfg.Credentials[m.editing].Type != config.CredentialTypeVault {
+		return ""
+	}
+	newType := m.credentialType()
+	if newType != config.CredentialTypeKeyring && newType != config.CredentialTypeEnv {
+		return ""
+	}
+
+	v := m.secrets.Vault()
+	if v == nil {
+		return ""
+	}
+	if m.vaultLocked() {
+		return fmt.Sprintf("the vault is encrypted and locked, so whether it still holds a secret of %s "+
+			"cannot be checked; the secrets cannot move to %s until it is unlocked with 'qatlas vault unlock' "+
+			"and saving is tried again", m.editing, vaultTypeChangeDestination(newType))
+	}
+	var held []string
+	for _, role := range m.cfg.SecretRoles() {
+		_, found, _, err := v.Get(m.editing, role, nil)
+		if err != nil {
+			return m.redactor.Apply(err.Error())
+		}
+		if found {
+			held = append(held, role)
+		}
+	}
+	if len(held) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("a secret of %s is still stored in the vault (%s); the secrets cannot move to %s "+
+		"until it is removed first with x on the role, or with 'qatlas credential delete'",
+		m.editing, strings.Join(held, ", "), vaultTypeChangeDestination(newType))
+}
+
+// vaultTypeChangeDestination names the place guardVaultTypeChange's message says the secrets cannot move
+// to: the same words the storage row itself uses.
+func vaultTypeChangeDestination(credType string) string {
+	if credType == config.CredentialTypeEnv {
+		return placeEnv
+	}
+	return placeKeyring
 }
 
 // guardTypeChange refuses to turn a keyring credential into an env credential behind the user's back while
