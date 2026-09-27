@@ -81,6 +81,28 @@ type fakeGitHub struct {
 	views string
 	// noTeams refuses the team list like GitHub does for a token without read:org.
 	noTeams bool
+	// orgTeamsForbidden refuses the organization team and team member routes like GitHub does for a token
+	// without read:org.
+	orgTeamsForbidden bool
+	// orgTeams are the teams of octo-org the organization team list answers.
+	orgTeams []fakeTeam
+	// teamMembers are the members of a team of octo-org, by slug.
+	teamMembers map[string][]string
+	// starred holds every repository currently starred by the account, by full name in lower case.
+	starred map[string]bool
+	// starList orders the repositories github.stars.list answers.
+	starList []fakeStar
+}
+
+// fakeTeam is one team of an organization.
+type fakeTeam struct {
+	slug, name, description, privacy string
+}
+
+// fakeStar is one repository of the star list, with the owner login GitHub reports alongside it.
+type fakeStar struct {
+	fullName, owner, visibility string
+	archived                    bool
 }
 
 func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -146,6 +168,68 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/api/v3/repos/octo-org/example/issues/7":
 		fmt.Fprint(w, `{"number":7,"title":"A change","state":"open","body":"pr body",`+
 			`"pull_request":{"url":"https://api.github.com/repos/octo-org/example/pulls/7"}}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user":
+		fmt.Fprint(w, `{"login":"octocat","name":"The Octocat","type":"User","plan":{"name":"pro"}}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/orgs/octo-org/teams":
+		if f.orgTeamsForbidden {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"Must have admin rights to Repository."}`)
+			return
+		}
+		teams := []string{}
+		for _, team := range f.orgTeams {
+			teams = append(teams, fmt.Sprintf(`{"slug":%q,"name":%q,"description":%q,"privacy":%q}`,
+				team.slug, team.name, team.description, team.privacy))
+		}
+		fmt.Fprint(w, "["+strings.Join(teams, ",")+"]")
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/orgs/octo-org/teams/") &&
+		strings.HasSuffix(r.URL.Path, "/members"):
+		if f.orgTeamsForbidden {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"Must have admin rights to Repository."}`)
+			return
+		}
+		slug := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v3/orgs/octo-org/teams/"), "/members")
+		members, ok := f.teamMembers[slug]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message":"Not Found"}`)
+			return
+		}
+		logins := []string{}
+		for _, login := range members {
+			logins = append(logins, fmt.Sprintf(`{"login":%q}`, login))
+		}
+		fmt.Fprint(w, "["+strings.Join(logins, ",")+"]")
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user/starred":
+		repos := []string{}
+		for _, star := range f.starList {
+			repos = append(repos, fmt.Sprintf(`{"full_name":%q,"visibility":%q,"archived":%t,"owner":{"login":%q}}`,
+				star.fullName, star.visibility, star.archived, star.owner))
+		}
+		fmt.Fprint(w, "["+strings.Join(repos, ",")+"]")
+	case strings.HasPrefix(r.URL.Path, "/api/v3/user/starred/"):
+		repo := strings.ToLower(strings.TrimPrefix(r.URL.Path, "/api/v3/user/starred/"))
+		switch r.Method {
+		case http.MethodGet:
+			if f.starred[repo] {
+				w.WriteHeader(http.StatusNoContent)
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+				fmt.Fprint(w, `{"message":"Not Found"}`)
+			}
+		case http.MethodPut:
+			if f.starred == nil {
+				f.starred = map[string]bool{}
+			}
+			f.starred[repo] = true
+			w.WriteHeader(http.StatusNoContent)
+		case http.MethodDelete:
+			delete(f.starred, repo)
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	default:
 		w.WriteHeader(http.StatusNotFound)
 		fmt.Fprint(w, `{"message":"Not Found"}`)
@@ -666,14 +750,15 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			t.Errorf("descriptor %s = %+v, want a safe read requiring an explicit connection", descriptor.ID, descriptor.Risk)
 		}
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "comments"} {
-			// Only the owner lists take an owner, as their target.
-			owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID
+			// Only the owner lists and the organization tools take an owner, as their target.
+			owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
+				descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("descriptor %s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
 		}
 	}
-	equalIDs(t, ids, []string{"github.actionspermissions.get", "github.comments.list", "github.issues.get",
+	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.comments.list", "github.issues.get",
 		"github.issues.list", "github.projectfields.list", "github.projectitems.get", "github.projectitems.list", "github.projects.list",
 		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
 		"github.pullrequestchecks.list", "github.pullrequestcomments.list", "github.pullrequestcommits.list",
@@ -681,14 +766,15 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		"github.pullrequestreviews.list", "github.pullrequestreviewthreads.list", "github.pullrequests.get",
 		"github.pullrequests.list",
 		"github.releaseassets.list", "github.releases.get", "github.releases.list",
-		"github.repositories.list", "github.workflowartifacts.list",
+		"github.repositories.list", "github.stars.list", "github.teammembers.list", "github.teams.list",
+		"github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
 		"github.workflowjobs.log", "github.workflowpermissions.get", "github.workflowruns.get",
 		"github.workflowruns.list", "github.workflows.get", "github.workflows.list"})
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 102 {
+	if len(metadata.Tools) != 108 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

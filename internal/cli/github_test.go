@@ -66,8 +66,12 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[35]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
+		"tools[39]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
 		"  github.projectitems.list,List GitHub project items,read,code planning roadmap\n", "  github.projectitems.update,Update GitHub project item fields,update,roadmap\n",
+		"  github.accounts.me,Get the GitHub account behind this connection,read,code\n",
+		"  github.stars.list,List the GitHub repositories starred by this account,read,code\n",
+		"  github.teams.list,List the teams of a GitHub organization,read,code\n",
+		"  github.teammembers.list,List the members of a GitHub team,read,code\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -106,7 +110,12 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[102]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[108]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"github.accounts.me,Get the GitHub account behind this connection,read,",
+		"github.teams.list,List the teams of a GitHub organization,read,",
+		"github.teammembers.list,List the members of a GitHub team,read,",
+		"github.stars.list,List the GitHub repositories starred by this account,read,",
+		"github.stars.add,Star a GitHub repository,create,", "github.stars.remove,Unstar a GitHub repository,delete,",
 		"github.projectitems.get,Get a GitHub project item,read,", "github.projectitems.list,List GitHub project items,read,", "github.comments.list,List comments of a GitHub issue,read,",
 		"github.issues.create,Create a GitHub issue,create,", "github.issues.update,Update a GitHub issue,update,", "github.issues.close,Close a GitHub issue,update,",
 		"github.issues.reopen,Reopen a GitHub issue,update,", "github.comments.create,Comment on a GitHub issue,create,", "github.projectitems.update,Update GitHub project item fields,update,",
@@ -276,8 +285,8 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, toolResultFrom(t, responses[`"search"`]).Structured, &searched)
-	if len(searched.Operations) != 35 || searched.Operations[0].ID != "github.comments.list" ||
-		searched.Operations[34].ID != "github.workflows.list" {
+	if len(searched.Operations) != 39 || searched.Operations[0].ID != "github.accounts.me" ||
+		searched.Operations[38].ID != "github.workflows.list" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 	describedByCLI := runTwentyJSON(t, "", "describe", "github.projectitems.list", "--config", path, "--output", "json")

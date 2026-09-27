@@ -181,7 +181,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",102,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",108,0,0\n", ",\"\",3,0,0\n",
 		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",7,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -374,6 +374,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		}},
 		{"namespace seatable", []string{"seatable"}, []string{"seatable.columns.list", "seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.update", "seatable.tables.list"}},
 		{"namespace github", []string{"github"}, []string{
+			"github.accounts.me",
 			"github.actionspermissions.get", "github.actionspermissions.update",
 			"github.comments.create", "github.comments.list", "github.issues.close", "github.issues.create",
 			"github.issues.get", "github.issues.list", "github.issues.reopen", "github.issues.update",
@@ -404,6 +405,8 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.releaseassets.list", "github.releases.create", "github.releases.delete",
 			"github.releases.get", "github.releases.list", "github.releases.update",
 			"github.repositories.list",
+			"github.stars.add", "github.stars.list", "github.stars.remove",
+			"github.teammembers.list", "github.teams.list",
 			"github.workflowartifacts.list", "github.workflowfiles.create",
 			"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowfiles.update",
 			"github.workflowjobs.get", "github.workflowjobs.list", "github.workflowjobs.log",

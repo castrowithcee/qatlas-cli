@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, and release reads and changes: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, release reads and changes, the account behind a connection's token, organization teams and their members, and the account's starred repositories: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the account and organization discovery tools, starring and unstarring, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -30,7 +30,9 @@ threads, and requests or removes reviewers; only approving is not in any profile
 connection's `tools` list names `github.pullrequestreviews.approve`. On the not-recommended profile
 `releases` it also lists the releases of a repository, reads one by identifier, tag, or as the latest
 published one, lists the metadata of a release's assets, and creates and updates releases; only a connection
-whose `tools` list names it deletes a release, because the tag it was cut from stays behind. It never accepts
+whose `tools` list names it deletes a release, because the tag it was cut from stays behind. It also reads the
+account behind the connection's token, the teams of an organization and their members, and the account's
+starred repositories, and it stars and unstars a repository. It never accepts
 a free filter expression, a GraphQL document, or a REST route from the caller. A `repository`, `project`, or
 `owner` argument names exactly one target, and it must lie inside the connection's targets when the connection
 lists any.
@@ -53,8 +55,9 @@ The credential provides `token`, a personal access token. A read-only setup uses
 access to issues and to projects. Changes need `project` instead of `read:project`, or write access to issues
 and projects for a fine-grained token. User-owned projects need a classic token. The Actions tools have
 their own requirements, listed under [GitHub Actions](#github-actions), and so have the tools of
-[workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration) and of
-[pull requests](#tokens-for-pull-requests). A successful `qatlas connection test` shows only that the token
+[workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration), of
+[pull requests](#tokens-for-pull-requests), and of
+[account, organization teams, and stars](#discovery-account-organization-teams-and-stars). A successful `qatlas connection test` shows only that the token
 can read the first project or repository the
 connection's targets name exactly, or, without such a target, its own user; GitHub checks every resource and
 scope again on each call, so a passing test does not authorize every tool.
@@ -162,6 +165,8 @@ qatlas: not-found: get issue: GitHub does not hold issue #5 in repository octo-o
 qatlas: not-found: dispatch workflow: GitHub does not hold workflow file .github/workflows/release.yml at ref other in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: list repositories: GitHub does not hold owner orgs/octocat or does not show it to this token; check the login, and users/ for a user or orgs/ for an organization
 qatlas: not-found: get pull request: GitHub does not hold pull request #99 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: list team members: GitHub does not hold team ghost-team of orgs/octo-org or does not show it to this token
+qatlas: not-found: star repository: GitHub does not hold this star in repository octo-org/ghost or does not show it to this token; check the name, and that the token can see it (...)
 qatlas: permission: list projects: this GitHub token may not read the projects of owner users/octocat; check its scopes or permissions; classic: scope read:project; fine-grained: Projects: read of the organization, as the projects of a user need a classic token
 qatlas: auth: list issues: GitHub rejected the token; check or renew the credential of this connection with 'qatlas credential set <credential> <role>' or in 'qatlas tui'
 ```
@@ -199,8 +204,9 @@ effect `delete` or one that changes access. The
 profiles `actions-observer` and `actions-operator` are described under [GitHub Actions](#github-actions), the
 not-recommended profiles `pull-requests` and `pull-requests-operator` under
 [Pull requests](#pull-requests), the not-recommended profile `pull-request-reviews` under
-[Pull request reviews and comments](#pull-request-reviews-and-comments), and the not-recommended profile
-`releases` under [Releases](#releases). A
+[Pull request reviews and comments](#pull-request-reviews-and-comments), the not-recommended profile
+`releases` under [Releases](#releases), and the not-recommended profiles `discovery` and `stars` under
+[account, organization teams, and stars](#discovery-account-organization-teams-and-stars). A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -254,6 +260,65 @@ Reading the projects needs `read:project` on a classic token. A fine-grained tok
 organization with Projects read access, but not the projects of a user; GitHub refuses that with
 `permission`. The repositories need no scope for public ones, `repo` on a classic token for private ones, or
 access to the repositories on a fine-grained token.
+
+## Discovery: account, organization teams, and stars
+
+`github.accounts.me` reads the login, display name, account type, and billing plan of the account behind the
+connection's token; `github.teams.list` and `github.teammembers.list` read the teams of an organization and
+the members of one of them; `github.stars.list` reads the account's starred repositories, and
+`github.stars.add` and `github.stars.remove` star and unstar one:
+
+```sh
+qatlas invoke github.accounts.me --connection discovery
+qatlas invoke github.teams.list --connection discovery --arg owner=orgs/octo-org
+qatlas invoke github.teammembers.list --connection discovery --arg owner=orgs/octo-org --arg team=design
+qatlas invoke github.stars.list --connection discovery
+echo '{"repository":"octo-org/example"}' | qatlas invoke github.stars.add --connection stars --confirm
+```
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.accounts.me` | read | safe | reads the account behind the connection's token; no repository, project, or owner argument |
+| `github.teams.list` | read | safe | lists the teams of an organization, in batches, with slug, name, description, and privacy |
+| `github.teammembers.list` | read | safe | lists the members of one team of an organization, in batches, by login |
+| `github.stars.list` | read | safe | lists the repositories the account has starred, in batches; no repository or project argument |
+| `github.stars.add` | create | idempotent | stars one repository; a repository already starred is left as it is |
+| `github.stars.remove` | delete | idempotent | unstars one repository; a repository that is not starred is left as it is |
+
+`github.teams.list` and `github.teammembers.list` take `owner` as `orgs/LOGIN`: the organization must be a
+target the connection names as an owner itself, exactly as `github.projects.create` requires, since a project
+or a repository pattern of the organization is not enough. `owner` may be left out only when the targets name
+exactly one owner entry; `users/LOGIN` is refused with `invalid-request`, because teams belong to an
+organization, not a user. `github.teammembers.list` also takes `team`, the slug `github.teams.list` reports.
+Both follow the [cursor contract](#cursor-contract), a `github.teams.list` cursor bound to the organization and
+a `github.teammembers.list` cursor bound to the organization and the team together.
+
+`github.accounts.me` and `github.stars.list` take no `repository`, `project`, or `owner` argument: they read
+data of the account behind the token as a whole. A connection whose targets name a repository or a project is
+refused with `invalid-request` before a secret is read, because such a connection is scoped to those, and the
+account behind its token may belong to a customer other than the one its targets name. A connection without
+targets, or whose targets name only owners, is allowed; on such a connection, `github.stars.list` narrows its
+answer to the starred repositories of the owners the targets name, when it names any. `github.stars.add` and
+`github.stars.remove` take `repository` like every other repository tool and check it against the targets
+before a secret is read.
+
+Starring and unstarring are naturally idempotent: GitHub answers both with no content whatever the
+repository's previous state. Before sending either, Qatlas reads whether the repository is already starred;
+a repository already in the requested state is reported with `changed: false` and nothing further is sent.
+Otherwise the change travels once, as every change here does, and the answer names the state afterward.
+
+Reading the account behind the token needs no scope beyond its own identity, classic or fine-grained. The
+organization team reads need `read:org` on a classic token, or Members read access of the organization on a
+fine-grained one. Reading the account's starred repositories needs no scope for public ones, `repo` as well
+for private ones, or Starring read access on a fine-grained token. Starring and unstarring need `public_repo`
+on a classic token, `repo` as well for a private repository, or Starring read and write access on a
+fine-grained token.
+
+The terminal editor's setup profile `discovery` ticks `[read]` with `github.accounts.me`,
+`github.teams.list`, `github.teammembers.list`, and `github.stars.list`; it changes nothing. The setup profile
+`stars` ticks `[read, create, delete]` with `github.stars.list`, `github.stars.add`, and
+`github.stars.remove`; every star or unstar needs its own confirmation. Neither is the recommended profile,
+which stays `read`, unchanged.
 
 ## Project lifecycle
 

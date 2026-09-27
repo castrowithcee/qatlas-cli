@@ -32,9 +32,14 @@
 // setup profile releases lists releases, reads one by identifier, tag, or as the latest published one, lists
 // the metadata of a release's assets, and creates and updates releases; only a connection whose tools list
 // names it deletes a release, because the tag it was cut from stays behind and the notes and attachments do
-// not. A tool that touches a project and a repository checks both. Nothing here accepts a free filter
-// expression, a GraphQL document, or a route from an agent, and every target is checked against the
-// allow-list before a credential is resolved.
+// not. A tool that touches a project and a repository checks both. The account tool reads the login, name,
+// type, and plan of the account behind the connection's token; it and the star list, which reads the
+// account's starred repositories, name no repository, project, or owner and are offered only by a connection
+// whose targets name neither a repository nor a project. The star tools also star and unstar one repository
+// an explicit connection allows. The organization tools read the teams of an organization and the members of
+// one of its teams, an organization the connection's targets must allow as an owner. Nothing here accepts a
+// free filter expression, a GraphQL document, or a route from an agent, and every target is checked against
+// the allow-list before a credential is resolved.
 //
 // A change is sent at most once. Several field values of one item are written in small, serial batches of
 // aliased mutations after the project, its fields, and their options were resolved once, and the answer
@@ -316,10 +321,10 @@ var issuesGet = capability.Descriptor{
 }
 
 // Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the item and
-// draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, and the listed-only
-// workflow maintainer and Actions administrator tools. Only reads are a connection's default: every change
-// and every execution needs a permission of its own, and a listed-only tool also its name in the
-// connection's tools list.
+// draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, the listed-only
+// workflow maintainer and Actions administrator tools, and the account, organization, and star tools. Only
+// reads are a connection's default: every change and every execution needs a permission of its own, and a
+// listed-only tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
@@ -352,7 +357,13 @@ func Register(reg *capability.Registry) error {
 				"or Pull requests: read and write on a fine-grained token; pull request conversation " +
 				"comments need the same scopes as github.comments.*: repo or public_repo on a classic " +
 				"token, or Pull requests or Issues: read, and read and write for a comment, on a " +
-				"fine-grained token; keep those in a credential of their own",
+				"fine-grained token; keep those in a credential of their own; reading the account behind the " +
+				"token needs no scope beyond its own identity, classic or fine-grained; organization team " +
+				"reads need read:org on a classic token, or Members: read of the organization on a " +
+				"fine-grained token; reading the account's starred repositories needs no scope for public " +
+				"ones, or repo as well for private ones, or Starring: read on a fine-grained token; starring " +
+				"and unstarring need public_repo on a classic token, repo as well for a private repository, " +
+				"or Starring: read and write on a fine-grained token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -467,6 +478,15 @@ func Register(reg *capability.Registry) error {
 				pullRequestReviewsCreate.ID, pullRequestReviewCommentsList.ID, pullRequestReviewCommentsReply.ID,
 				pullRequestReviewThreadsList.ID, pullRequestReviewThreadsResolve.ID,
 				pullRequestReviewThreadsUnresolve.ID, pullRequestReviewersRequest.ID, pullRequestReviewersRemove.ID},
+		}, {
+			ID: "discovery", Title: "Discovery", Description: "reads the account behind the connection's " +
+				"token, the teams of an organization and their members, and the account's starred " +
+				"repositories; changes nothing",
+			Tools: []string{accountsMe.ID, organizationTeamsList.ID, teamMembersList.ID, starsList.ID},
+		}, {
+			ID: "stars", Title: "Stars", Description: "reads the account's starred repositories and stars " +
+				"or unstars a repository; every change needs its own confirmation",
+			Tools: []string{starsList.ID, starsAdd.ID, starsRemove.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -493,7 +513,7 @@ func Register(reg *capability.Registry) error {
 		statusOperations(), accessOperations(), automationOperations(), actionsOperations(),
 		maintenanceOperations(), pullRequestOperations(), releaseOperations(), pullRequestCommentOperations(),
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
-		pullRequestReviewerOperations())...)
+		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1167,13 +1187,22 @@ func pathSegment(path []any, i int) string {
 
 // restSubject names what a REST request addressed. A path below /repos/OWNER/REPO names that repository, which
 // differs from the bound target where a project tool creates the issue it plans; an issue path names the
-// issue. Any other path names a resource of the bound target.
+// issue. A path below /orgs/OWNER names that organization or one of its teams; a path below /user names the
+// account behind the token or, below /user/starred, its stars. Any other path names a resource of the bound
+// target.
 func (c *Client) restSubject(request *http.Request) subject {
 	fallback := subject{in: c.target, what: "this resource"}
 	if request == nil || request.URL == nil {
 		return fallback
 	}
-	tail, ok := strings.CutPrefix(request.URL.String(), c.endpoints.rest+"/repos/")
+	full := request.URL.String()
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/orgs/"); ok {
+		return organizationSubject(tail)
+	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/user"); ok {
+		return accountSubject(tail)
+	}
+	tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/repos/")
 	if !ok {
 		return fallback
 	}
@@ -1213,6 +1242,51 @@ func (c *Client) restSubject(request *http.Request) subject {
 		}
 	}
 	return s
+}
+
+// organizationSubject names the organization or the team a path below /orgs/OWNER addresses: OWNER,
+// OWNER/teams, or OWNER/teams/SLUG with or without /members. It names only a login or a slug of the
+// characters the input schema allows, and names the organization alone otherwise.
+func organizationSubject(tail string) subject {
+	tail, _, _ = strings.Cut(strings.TrimPrefix(tail, "/"), "?")
+	parts := strings.SplitN(tail, "/", 4)
+	owner, err := url.PathUnescape(parts[0])
+	if err != nil || !validLogin(owner) {
+		return subject{what: "this resource"}
+	}
+	if len(parts) >= 3 && parts[1] == "teams" && parts[2] != "" {
+		if slug, err := url.PathUnescape(parts[2]); err == nil && validLogin(slug) {
+			return subject{what: "team " + slug + " of orgs/" + owner}
+		}
+	}
+	return subject{in: target{kind: kindOwner, scope: "orgs", owner: owner}}
+}
+
+// accountSubject names the account behind the token or one of its stars a path below /user addresses: the
+// empty tail, /starred, or /starred/OWNER/REPO. It names only an owner and a repository of the characters the
+// input schema allows, and the account otherwise.
+func accountSubject(tail string) subject {
+	switch {
+	case tail == "":
+		return subject{what: "the account behind this token"}
+	case tail == "/starred":
+		return subject{what: "the account's starred repositories"}
+	}
+	rest, ok := strings.CutPrefix(tail, "/starred/")
+	if !ok {
+		return subject{what: "this resource"}
+	}
+	rest, _, _ = strings.Cut(rest, "?")
+	parts := strings.SplitN(rest, "/", 2)
+	if len(parts) != 2 {
+		return subject{what: "this resource"}
+	}
+	owner, errOwner := url.PathUnescape(parts[0])
+	name, errName := url.PathUnescape(parts[1])
+	if errOwner != nil || errName != nil || !validLogin(owner) || !validRepoName(name) {
+		return subject{what: "this resource"}
+	}
+	return subject{in: target{kind: kindRepository, owner: owner, repo: name}, what: "this star"}
 }
 
 // pullsSubject names the pull request or the commit a pull request path below a repository addresses:
