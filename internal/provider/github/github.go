@@ -141,17 +141,21 @@ const cursorSchema = `{"type":"string","minLength":1,"maxLength":1024,"pattern":
 
 const stringListSchema = `{"type":"array","items":{"type":"string"}}`
 
-// itemProperties is the compact item projection shared by the list and the detail.
-const itemProperties = `"id":{"type":"string"},"type":{"type":"string"},"title":{"type":"string"},` +
+// itemPropertiesCommon is the compact item projection of the list. The list omits the URL because it is
+// derivable from the repository and the number; the detail below adds it back.
+const itemPropertiesCommon = `"id":{"type":"string"},"type":{"type":"string"},"title":{"type":"string"},` +
 	`"number":{"type":"integer"},"repository":{"type":"string"},"state":{"type":"string"},` +
 	`"status":{"type":"string"},"fields":{"type":"object"},"assignees":` + stringListSchema + `,` +
-	`"labels":` + stringListSchema + `,"url":{"type":"string"}`
+	`"labels":` + stringListSchema
+
+// itemProperties is the item projection of the detail: itemPropertiesCommon plus the URL.
+const itemProperties = itemPropertiesCommon + `,"url":{"type":"string"}`
 
 const itemRequired = `"required":["id","type","fields","assignees","labels"],"additionalProperties":false`
 
 var itemsList = capability.Descriptor{
 	ID:      Provider + ".projectitems.list",
-	Version: 1,
+	Version: 2,
 	Title:   "List GitHub project items",
 	Description: "List one bounded, server-side filtered batch of compact items of " +
 		"a GitHub project an explicit connection allows; without a status filter only items whose status is not Done are listed",
@@ -168,7 +172,7 @@ var itemsList = capability.Descriptor{
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"items":{"type":"array","items":{"type":"object","properties":{` + itemProperties + `},` + itemRequired + `}},` +
+		`"items":{"type":"array","items":{"type":"object","properties":{` + itemPropertiesCommon + `},` + itemRequired + `}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["items","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -232,13 +236,17 @@ var itemsGet = capability.Descriptor{
 	}},
 }
 
-const issueProperties = `"number":{"type":"integer"},"title":{"type":"string"},"state":{"type":"string"},` +
-	`"assignees":` + stringListSchema + `,"labels":` + stringListSchema + `,"url":{"type":"string"},` +
-	`"updated_at":{"type":"string"}`
+// issuePropertiesCommon is the compact issue projection of the list. The list omits the URL because it is
+// derivable from the repository and the number; the detail below adds it back.
+const issuePropertiesCommon = `"number":{"type":"integer"},"title":{"type":"string"},"state":{"type":"string"},` +
+	`"assignees":` + stringListSchema + `,"labels":` + stringListSchema + `,"updated_at":{"type":"string"}`
+
+// issueProperties is the issue projection of the detail: issuePropertiesCommon plus the URL.
+const issueProperties = issuePropertiesCommon + `,"url":{"type":"string"}`
 
 var issuesList = capability.Descriptor{
 	ID:      Provider + ".issues.list",
-	Version: 1,
+	Version: 2,
 	Title:   "List GitHub issues",
 	Description: "List one bounded batch of compact issues of a repository an explicit connection allows, " +
 		"newest first, without bodies, comments, or pull requests",
@@ -253,7 +261,7 @@ var issuesList = capability.Descriptor{
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"issues":{"type":"array","items":{"type":"object","properties":{` + issueProperties + `},` +
+		`"issues":{"type":"array","items":{"type":"object","properties":{` + issuePropertiesCommon + `},` +
 		`"required":["number","title","state","assignees","labels"],"additionalProperties":false}},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
 		`"required":["issues","has_more"],"additionalProperties":false}`),

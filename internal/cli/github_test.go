@@ -254,7 +254,8 @@ func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 	}
 }
 
-// The MCP broker finds and describes the same GitHub tools as the CLI.
+// The MCP broker finds and describes the same GitHub tools as the CLI. github.projectitems.list carries
+// contract version 2, so its former version 1 is no longer callable.
 func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	path := githubConfig(t)
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
@@ -262,7 +263,10 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.search","arguments":{"provider":"github"}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.describe","arguments":{"operation":"github.projectitems.list","version":1}}}`,
+			`,"name":"qatlas.describe","arguments":{"operation":"github.projectitems.list","version":2}}}`,
+		`{"jsonrpc":"2.0","id":"stale","method":"tools/call","params":{` + mcpTestMeta +
+			`,"name":"qatlas.invoke","arguments":{"operation":"github.projectitems.list","version":1,` +
+			`"connection":"planning"}}}`,
 	}, "\n") + "\n"
 	responses, stderr := runMCPWithOptions(t, defaultRegistry(), input, options)
 	if stderr != "" {
@@ -280,6 +284,11 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	describe := toolResultFrom(t, responses[`"describe"`])
 	assertMCPParity(t, describedByCLI, "tool", describe.Structured, "operation")
 	assertMCPParity(t, describedByCLI, "connections", describe.Structured, "connections")
+
+	stale := toolResultFrom(t, responses[`"stale"`])
+	if !stale.IsError || !strings.Contains(stale.Content[0].Text, "unknown-operation:") {
+		t.Fatalf("invoke at version 1 = %+v, want unknown-operation now that the tool is version 2", stale)
+	}
 }
 
 // Without a repository argument and without exactly one repository in the targets, a GitHub call is the

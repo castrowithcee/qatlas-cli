@@ -107,18 +107,27 @@ const workflowProperties = `"id":{"type":"integer"},"name":{"type":"string"},"pa
 
 const workflowRequired = `"required":["id","name","path","state"],"additionalProperties":false`
 
-const runProperties = `"id":{"type":"integer"},"name":{"type":"string"},"title":{"type":"string"},` +
+// runPropertiesCommon is the compact run projection of the list. The list omits the URL because it is
+// derivable from the repository and the identifier; the detail below adds it back.
+const runPropertiesCommon = `"id":{"type":"integer"},"name":{"type":"string"},"title":{"type":"string"},` +
 	`"workflow_id":{"type":"integer"},"run_number":{"type":"integer"},"attempt":{"type":"integer"},` +
 	`"event":{"type":"string"},"status":{"type":"string"},"conclusion":{"type":"string"},` +
 	`"branch":{"type":"string"},"head_sha":{"type":"string"},"actor":{"type":"string"},` +
-	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"started_at":{"type":"string"},` +
-	`"url":{"type":"string"}`
+	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"started_at":{"type":"string"}`
+
+// runProperties is the run projection of the detail: runPropertiesCommon plus the URL.
+const runProperties = runPropertiesCommon + `,"url":{"type":"string"}`
 
 const runRequired = `"required":["id","status"],"additionalProperties":false`
 
-const jobProperties = `"id":{"type":"integer"},"run_id":{"type":"integer"},"name":{"type":"string"},` +
+// jobPropertiesCommon is the compact job projection of the list. The list omits the URL because it is
+// derivable from the repository and the identifier; the detail below adds it back.
+const jobPropertiesCommon = `"id":{"type":"integer"},"run_id":{"type":"integer"},"name":{"type":"string"},` +
 	`"status":{"type":"string"},"conclusion":{"type":"string"},"attempt":{"type":"integer"},` +
-	`"started_at":{"type":"string"},"completed_at":{"type":"string"},"url":{"type":"string"}`
+	`"started_at":{"type":"string"},"completed_at":{"type":"string"}`
+
+// jobProperties is the job projection of the detail: jobPropertiesCommon plus the URL.
+const jobProperties = jobPropertiesCommon + `,"url":{"type":"string"}`
 
 const jobRequired = `"required":["id","name","status"],"additionalProperties":false`
 
@@ -176,7 +185,7 @@ var workflowsGet = capability.Descriptor{
 
 var runsList = capability.Descriptor{
 	ID:      Provider + ".workflowruns.list",
-	Version: 1,
+	Version: 2,
 	Title:   "List GitHub Actions workflow runs",
 	Description: "List one bounded, filtered batch of compact workflow runs of " +
 		"a repository an explicit connection allows, newest first",
@@ -189,7 +198,7 @@ var runsList = capability.Descriptor{
 		`"branch":` + refSchema + `,"event":{"type":"string","maxLength":50,"pattern":"` + eventPattern + `"},` +
 		`"actor":{"type":"string","maxLength":105,"pattern":"` + actorPattern + `"},` +
 		`"created_from":` + timeSchema + `,"created_to":` + timeSchema + `,` + pagingKeys),
-	OutputSchema: listOutput("runs", runProperties, runRequired),
+	OutputSchema: listOutput("runs", runPropertiesCommon, runRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "workflow", Description: "Return only runs of this workflow, by identifier or file name"},
 		{Name: "status", Description: "Return only runs with this status or conclusion: " + strings.Join(runStatuses, ", ")},
@@ -232,7 +241,7 @@ var runsGet = capability.Descriptor{
 
 var jobsList = capability.Descriptor{
 	ID:      Provider + ".workflowjobs.list",
-	Version: 1,
+	Version: 2,
 	Title:   "List GitHub Actions jobs of a run",
 	Description: "List one bounded batch of compact jobs of one workflow run of " +
 		"a repository an explicit connection allows, without steps or logs",
@@ -242,7 +251,7 @@ var jobsList = capability.Descriptor{
 	RequiresExplicitConnection: true,
 	InputSchema: inputSchema(`"run_id":`+actionsIDSchema+`,"filter":{"type":"string","enum":["latest","all"]},`+
 		pagingKeys, "run_id"),
-	OutputSchema: listOutput("jobs", jobProperties, jobRequired),
+	OutputSchema: listOutput("jobs", jobPropertiesCommon, jobRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "run_id", Description: "Workflow run identifier", Required: true},
 		{Name: "filter", Description: "latest for the jobs of the latest attempt, all for every attempt; latest " +
@@ -982,7 +991,11 @@ func (c *Client) listRuns(ctx context.Context, a *actionsArguments) (*RunList, e
 		if run.ID < 1 || run.Status == "" {
 			return nil, invalidEntry(op, "a run")
 		}
-		result.Runs = append(result.Runs, run.view())
+		// The list leaves out the URL, derivable from the repository and the identifier; only the detail
+		// read adds it back.
+		view := run.view()
+		view.URL = ""
+		result.Runs = append(result.Runs, view)
 	}
 	total := raw.TotalCount
 	if filtered {
@@ -1070,7 +1083,11 @@ func (c *Client) listJobs(ctx context.Context, a *actionsArguments) (*JobList, e
 		if job.ID < 1 {
 			return nil, invalidEntry(op, "a job")
 		}
-		result.Jobs = append(result.Jobs, job.view())
+		// The list leaves out the URL, derivable from the repository and the identifier; only the detail
+		// read adds it back.
+		view := job.view()
+		view.URL = ""
+		result.Jobs = append(result.Jobs, view)
 	}
 	result.HasMore, result.NextCursor = a.more(len(raw.Jobs), raw.TotalCount)
 	return result, nil

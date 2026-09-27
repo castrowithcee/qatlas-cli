@@ -1300,21 +1300,58 @@ func TestOperationsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), coreConfig(base), resolver(red, nil), red)
 
-	for _, request := range []application.InvokeRequest{
-		{Operation: "github.projectitems.list", Connection: "planning", Arguments: json.RawMessage(`{}`)},
-		{Operation: "github.projectitems.list", Connection: "planning",
-			Arguments: json.RawMessage(`{"status":["Todo"],"type":"issue","limit":2}`)},
-		{Operation: "github.projectitems.get", Connection: "planning", Arguments: json.RawMessage(`{"item_id":"PVTI_item02"}`)},
-		{Operation: "github.issues.list", Connection: "repo", Arguments: json.RawMessage(`{"state":"all","limit":2}`)},
-		{Operation: "github.issues.get", Connection: "repo", Arguments: json.RawMessage(`{"number":42}`)},
+	// The list tools of contract version 2 leave out the URL of each entry, derivable from the repository
+	// and the number or identifier; the detail tools, still at version 1, keep it. A repository-bound list
+	// also names the repository once at the result level, through the target argument every tool adds.
+	for _, tt := range []struct {
+		request  application.InvokeRequest
+		list     string
+		urlAtTop bool
+	}{
+		{application.InvokeRequest{Operation: "github.projectitems.list", Connection: "planning",
+			Arguments: json.RawMessage(`{}`)}, "items", false},
+		{application.InvokeRequest{Operation: "github.projectitems.list", Connection: "planning",
+			Arguments: json.RawMessage(`{"status":["Todo"],"type":"issue","limit":2}`)}, "items", false},
+		{application.InvokeRequest{Operation: "github.projectitems.get", Connection: "planning",
+			Arguments: json.RawMessage(`{"item_id":"PVTI_item00"}`)}, "", true},
+		{application.InvokeRequest{Operation: "github.issues.list", Connection: "repo",
+			Arguments: json.RawMessage(`{"state":"all","limit":2}`)}, "issues", false},
+		{application.InvokeRequest{Operation: "github.issues.get", Connection: "repo",
+			Arguments: json.RawMessage(`{"number":42}`)}, "", true},
 	} {
-		response, err := core.Invoke(context.Background(), request)
+		response, err := core.Invoke(context.Background(), tt.request)
 		if err != nil {
-			t.Errorf("%s %s = %v", request.Operation, request.Arguments, err)
+			t.Errorf("%s %s = %v", tt.request.Operation, tt.request.Arguments, err)
 			continue
 		}
 		if strings.Contains(string(response.Result), "comments") {
-			t.Errorf("%s answered with comments: %s", request.Operation, response.Result)
+			t.Errorf("%s answered with comments: %s", tt.request.Operation, response.Result)
+		}
+		var result map[string]any
+		if err := json.Unmarshal(response.Result, &result); err != nil {
+			t.Fatalf("%s result = %s: %v", tt.request.Operation, response.Result, err)
+		}
+		if tt.urlAtTop {
+			if _, ok := result["url"]; !ok {
+				t.Errorf("%s = %s, want a url", tt.request.Operation, response.Result)
+			}
+			continue
+		}
+		entries, _ := result[tt.list].([]any)
+		if len(entries) == 0 {
+			t.Fatalf("%s = %s, want at least one entry", tt.request.Operation, response.Result)
+		}
+		for _, entry := range entries {
+			if fields, ok := entry.(map[string]any); ok {
+				if _, ok := fields["url"]; ok {
+					t.Errorf("%s entry carries a url: %v", tt.request.Operation, fields)
+				}
+			}
+		}
+		if tt.request.Operation == "github.issues.list" {
+			if _, ok := result["repository"]; !ok {
+				t.Errorf("%s = %s, want the repository named at the result level", tt.request.Operation, response.Result)
+			}
 		}
 	}
 

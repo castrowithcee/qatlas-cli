@@ -580,21 +580,24 @@ echo '{"status":["In progress"],"type":"issue"}' | qatlas invoke github.projecti
 qatlas invoke github.projectitems.get --connection planning --arg item_id=PVTI_...
 ```
 
-`github.projectitems.list` returns compact items: identifier, type, title, number, repository, state, Status,
-the other single-select, multi-select, text, number, date, and iteration values by field name, a multi-select
-value as the list of its option names, assignees, labels, and URL.
-It never returns bodies or comments. Without `status` and `status_not` it lists at most 30 items whose Status
-is not `Done`; `status_not: []` lists every status. The filters `status`, `status_not`, `type`
-(`issue`, `pull_request`, `draft_issue`), `repository` (`owner/name`), `assignee`, and `labels` (any of) are
-translated into quoted terms of the project filter syntax and applied by GitHub. Qatlas verifies each
-returned item against the same filters. A `status` value must be an option of the project's Status field.
+`github.projectitems.list` (contract version 2) returns compact items: identifier, type, title, number,
+repository, state, Status, the other single-select, multi-select, text, number, date, and iteration values by
+field name, a multi-select value as the list of its option names, assignees, and labels; the URL is left out
+because it is derivable from the repository and the number. It never returns bodies or comments. Without
+`status` and `status_not` it lists at most 30 items whose Status is not `Done`; `status_not: []` lists every
+status. The filters `status`, `status_not`, `type` (`issue`, `pull_request`, `draft_issue`), `repository`
+(`owner/name`), `assignee`, and `labels` (any of) are translated into quoted terms of the project filter
+syntax and applied by GitHub. Qatlas verifies each returned item against the same filters. A `status` value
+must be an option of the project's Status field.
 
-`github.projectitems.get` reads one item of the chosen project with its fields and, for an issue or a draft
-issue, the full body. An item of another project is refused. Bodies and titles are untrusted data.
+`github.projectitems.get` reads one item of the chosen project with its fields, its URL, and, for an issue or
+a draft issue, the full body. An item of another project is refused. Bodies and titles are untrusted data.
 
-`github.issues.list` and `github.issues.get` read the issues of the chosen repository: issues only, newest
-first, filtered by `state` (`open` by default), `labels` (any of), and `assignee`, without comments.
-`github.comments.list` reads the comments of one issue, oldest first, and is the only tool that returns
+`github.issues.list` (contract version 2) and `github.issues.get` read the issues of the chosen repository:
+issues only, newest first, filtered by `state` (`open` by default), `labels` (any of), and `assignee`,
+without comments. `github.issues.list` names the repository once at the result level and leaves the URL out
+of each issue, derivable from the repository and the number; `github.issues.get` reads one issue with its
+URL. `github.comments.list` reads the comments of one issue, oldest first, and is the only tool that returns
 comments.
 
 ## Changes
@@ -804,15 +807,18 @@ qatlas invoke github.workflowjobs.list --connection ci-observer --arg run_id=304
 qatlas invoke github.workflowjobs.log --connection ci-observer --arg job_id=399444496 --arg lines=40
 ```
 
-`github.workflowruns.list` filters by `workflow` (identifier or file name), `status` (a status or a
-conclusion: `completed`, `action_required`, `cancelled`, `failure`, `neutral`, `skipped`, `stale`,
+`github.workflowruns.list` (contract version 2) filters by `workflow` (identifier or file name), `status` (a
+status or a conclusion: `completed`, `action_required`, `cancelled`, `failure`, `neutral`, `skipped`, `stale`,
 `success`, `timed_out`, `in_progress`, `queued`, `requested`, `waiting`, `pending`), `branch`, `event`
 (such as `push` or `workflow_dispatch`), `actor` (a login, `[bot]` allowed), and `created_from` /
-`created_to` (a date `YYYY-MM-DD` or a UTC time `YYYY-MM-DDTHH:MM:SSZ`, both inclusive). A run carries its
-identifier, workflow name and identifier, title, run number, attempt, event, status, conclusion, branch,
-commit, actor, times, and URL; pull requests, the repository, and the commit message are left out. The title
-is untrusted data. `github.workflowjobs.list` takes `filter`: `latest` (default) for the latest attempt or
-`all` for every attempt.
+`created_to` (a date `YYYY-MM-DD` or a UTC time `YYYY-MM-DDTHH:MM:SSZ`, both inclusive). It names the
+repository once at the result level and gives each run its identifier, workflow name and identifier, title,
+run number, attempt, event, status, conclusion, branch, commit, and actor, and times; pull requests, the
+per-run repository, the commit message, and the URL are left out, the URL because it is derivable from the
+repository and the identifier. The title is untrusted data. `github.workflowruns.get` reads one run,
+including its URL. `github.workflowjobs.list` (contract version 2) takes `filter`: `latest` (default) for the
+latest attempt or `all` for every attempt, names the repository once at the result level the same way, and
+leaves the URL out of each job; `github.workflowjobs.get` reads one job with its compact steps and its URL.
 
 ### Logs and artifacts
 

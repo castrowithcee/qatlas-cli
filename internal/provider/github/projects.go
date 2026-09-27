@@ -581,7 +581,11 @@ func (c *Client) listItems(ctx context.Context, options ItemListOptions, after s
 					result.HasMore, result.NextCursor = true, encodeCursor(binding, last)
 					return result, nil
 				}
-				result.Items = append(result.Items, item.Item)
+				// The list leaves out the URL, derivable from the repository and the number; only the
+				// detail read adds it back.
+				entry := item.Item
+				entry.URL = ""
+				result.Items = append(result.Items, entry)
 			}
 			last = edge.Cursor
 		}
