@@ -571,6 +571,10 @@ func TestKeyringRowsTellEveryStateApart(t *testing.T) {
 			if !strings.Contains(words, "token-id ("+tt.state+")") {
 				t.Errorf("the row does not say %q:\n%s", tt.state, view)
 			}
+			// The next step is the hint of the role row, so it shows only once that row is focused.
+			focusField(t, m, "token-id")
+			view = screenOf(m)
+			words = strings.Join(strings.Fields(view), " ")
 			for _, want := range tt.next {
 				if !strings.Contains(words, want) {
 					t.Errorf("the row does not name the next step %q:\n%s", want, view)

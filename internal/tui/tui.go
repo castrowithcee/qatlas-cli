@@ -2322,20 +2322,11 @@ func (m *Model) workspaceView() string {
 		width+m.termWidth-m.width, height+m.termHeight-m.height, way), m.width))
 }
 
-// editorView renders the current screen at the density its terminal allows. A form whose hints do not fit
-// keeps the hint of the focused field and drops the rest: the field a person is on is the one they need
-// explained, and a screen that says less is worth more than one that cannot be shown at all.
+// editorView renders the current screen. A form shows only the hint of the focused field, directly under
+// it: the field a person is on is the one they need explained, and that is true whatever the terminal size
+// and however the screen was reached, so it never surprises with every hint at once. Validation errors and
+// warnings are not hints and stay visible regardless of focus.
 func (m *Model) editorView() string {
-	view := m.buildEditorView(false)
-	if m.screen == screenForm && !m.viewFits(view) {
-		if dense := m.buildEditorView(true); m.viewFits(dense) {
-			return dense
-		}
-	}
-	return view
-}
-
-func (m *Model) buildEditorView(dense bool) string {
 	switch m.screen {
 	case screenNav, screenList:
 		return m.listView()
@@ -2358,7 +2349,7 @@ func (m *Model) buildEditorView(dense bool) string {
 			what = "Edit " + m.editing
 		}
 		if m.wizard != nil {
-			b.WriteString(m.setupHeading(dense))
+			b.WriteString(m.setupHeading(false))
 		} else {
 			b.WriteString(titleStyle.Render(what) + "\n\n")
 		}
@@ -2366,20 +2357,16 @@ func (m *Model) buildEditorView(dense bool) string {
 			if f.hidden {
 				continue
 			}
-			// A field and its hint are one block, and the blank line stands between the blocks. Without it
-			// the hint is as close to the next field as to its own, and an indented line under a row of
-			// rows reads as the introduction to what follows rather than as the note of what precedes.
-			// A dense form has no blocks to separate: it carries one hint, under the field it belongs to.
-			if i > 0 && !dense {
-				b.WriteString("\n")
-			}
 			b.WriteString(m.formRow(i == m.focus, f.label, m.renderField(f, i == m.focus)) + "\n")
-			if dense && i != m.focus {
-				continue
+			// A read-only field can never be the one focused, so its hint would never show; it explains
+			// itself in its own value instead (see renderField), the way a read-only tool list already does.
+			if i == m.focus && !f.readOnly {
+				if hint := m.fieldHint(f); hint != "" {
+					b.WriteString(m.indented(hint) + "\n")
+				}
 			}
-			if hint := m.fieldHint(f); hint != "" {
-				b.WriteString(m.indented(hint) + "\n")
-			}
+			// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
+			// an idle connection) matters whether or not the field is the one focused, so it always stands.
 			if warning := m.fieldWarning(f); warning != "" {
 				b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 			}
@@ -3288,6 +3275,10 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = "(nothing to choose)"
 	case f.kind == fieldChoice:
 		value = "< " + value + " >"
+	case f.kind == fieldText && f.readOnly && f.hint != "":
+		// A read-only text field never takes focus, so its hint would never be the one shown; it explains
+		// itself on its own row instead, the way a read-only tool list already does below.
+		value += " (" + f.hint + ")"
 	case f.kind == fieldToolList && f.readOnly:
 		value = hintStyle.Render("(every tool the permissions allow)")
 	case f.kind == fieldToolList && len(f.marked()) == 0:

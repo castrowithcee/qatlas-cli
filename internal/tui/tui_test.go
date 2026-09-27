@@ -1221,47 +1221,54 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "n")
+	if view := screenOf(m); !strings.Contains(view, "a key you choose, without spaces") {
+		t.Errorf("the name field has no hint:\n%s", view)
+	}
 	press(t, m, "tab")
 	press(t, m, "tab")
 	selectChoice(t, m, storageEnv)
+	if view := screenOf(m); !strings.Contains(view, "system keyring keeps the secrets in the system keyring") {
+		t.Errorf("the form does not say what the secrets row decides:\n%s", view)
+	}
+
+	// The role rows are one kind of row, so the sentence about all of them stands only under the first, and
+	// each row still keeps its own, provider-defined explanation once it is the one focused.
+	focusField(t, m, "token-id")
 	view := screenOf(m)
 	words := strings.Join(strings.Fields(view), " ")
-	for _, want := range []string{"the NAME of an environment variable", "never the secret"} {
+	for _, want := range []string{
+		"the NAME of an environment variable", "never the secret", "value labeled Token ID", "not a name you choose",
+		"every role row",
+	} {
 		if !strings.Contains(words, want) {
 			t.Errorf("the credential form does not say %q:\n%s", want, view)
 		}
 	}
-	for _, want := range []string{"value labeled Token ID", "not a name you choose", "value labeled Token Secret"} {
-		if !strings.Contains(words, want) {
-			t.Errorf("the credential form does not explain %q:\n%s", want, view)
-		}
+	if strings.Contains(words, "value labeled Token Secret") {
+		t.Errorf("the token-id hint leaks the token-secret explanation:\n%s", view)
 	}
-	// The sentence is about the kind of row, so it stands once and speaks of every role row. A hint is
-	// wrapped into the terminal, so the test looks for a fragment that survives wrapping rather than for
-	// the whole sentence.
-	if got := strings.Count(view, "the NAME of an environment"); got != 1 {
-		t.Errorf("hint appears %d times, want exactly once for all role rows:\n%s", got, view)
+
+	focusField(t, m, "token-secret")
+	view = screenOf(m)
+	words = strings.Join(strings.Fields(view), " ")
+	if !strings.Contains(words, "value labeled Token Secret") {
+		t.Errorf("the credential form does not explain %q:\n%s", "value labeled Token Secret", view)
 	}
-	if !strings.Contains(view, "every role row") {
-		t.Errorf("the hint does not say that it is about every role row:\n%s", view)
-	}
-	if !strings.Contains(view, "a key you choose, without spaces") {
-		t.Errorf("the name field has no hint:\n%s", view)
-	}
-	if !strings.Contains(words, "system keyring keeps the secrets in the system keyring") {
-		t.Errorf("the form does not say what the secrets row decides:\n%s", view)
+	if strings.Contains(words, "every role row") {
+		t.Errorf("the token-secret hint repeats the sentence shared by every role row:\n%s", view)
 	}
 
 	openSectionByName(t, m, sectionServices)
 	press(t, m, "n")
-	view = screenOf(m)
-	for _, want := range []string{nameHint, baseURLHint} {
-		if !strings.Contains(view, want) {
-			t.Errorf("the service form does not show %q:\n%s", want, view)
-		}
+	if view := screenOf(m); !strings.Contains(view, nameHint) {
+		t.Errorf("the service form does not show %q:\n%s", nameHint, view)
 	}
-	if !strings.Contains(view, "--connection") || !strings.Contains(view, "http or https") {
-		t.Errorf("the hints do not say what name and base url are for:\n%s", view)
+	if !strings.Contains(screenOf(m), "--connection") {
+		t.Errorf("the name hint does not say what the field is for:\n%s", screenOf(m))
+	}
+	focusField(t, m, "base url")
+	if view := screenOf(m); !strings.Contains(view, baseURLHint) || !strings.Contains(view, "http or https") {
+		t.Errorf("the base url field does not explain itself:\n%s", view)
 	}
 
 	m, _, _ = newModel(t)
@@ -1329,6 +1336,7 @@ func TestConnectionDescriptionIsEditedThroughTheForm(t *testing.T) {
 	}
 
 	openEntryForm(t, m, sectionConnections, "wiki")
+	focusField(t, m, "description")
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
 	for _, want := range []string{"description", "what an agent uses this route for",
 		"issues in the test repository", "discovery publishes it", "never carry a secret"} {
@@ -1776,8 +1784,9 @@ func TestALockedFieldDoesNotSwallowTheOpeningFocus(t *testing.T) {
 	}
 }
 
-// A hint belongs to the field above it: it stands directly under its own row, and a blank line separates
-// the block from the next field. It holds at a width that wraps the hints too.
+// A hint belongs to the field above it: it stands directly under its own row, only while that row is
+// focused, and every continuation line of a wrapped hint stays on the same indent. No other field keeps a
+// hint of its own meanwhile.
 func TestAHintBelongsToTheFieldAboveIt(t *testing.T) {
 	for _, width := range []int{100, 46} {
 		m, _, _ := newModel(t)
@@ -1788,14 +1797,11 @@ func TestAHintBelongsToTheFieldAboveIt(t *testing.T) {
 		press(t, m, "tab")
 		selectChoice(t, m, storageEnv)
 
-		lines := formLines(m)
 		wrappedHints := 0
-		for i, f := range m.fields {
+		for _, f := range m.fields {
+			focusField(t, m, f.label)
+			lines := formLines(m)
 			at := fieldLine(t, lines, f.label)
-			if i > 0 && lines[at-1] != "" {
-				t.Errorf("width %d: field %q is not separated from the block above it:\n%s",
-					width, f.label, strings.Join(lines, "\n"))
-			}
 			hint := m.fieldHint(f)
 			if hint == "" {
 				if at+1 < len(lines) && strings.HasPrefix(lines[at+1], "    ") {
@@ -1807,11 +1813,7 @@ func TestAHintBelongsToTheFieldAboveIt(t *testing.T) {
 			// The hint starts on the very next line, and every continuation line of a wrapped hint stays
 			// inside the same block, on the same indent.
 			height := 0
-			for j := at + 1; j < len(lines) && lines[j] != ""; j++ {
-				if !strings.HasPrefix(lines[j], "    ") {
-					t.Errorf("width %d: the hint block of %q leaves its indent at %q:\n%s",
-						width, f.label, lines[j], strings.Join(lines, "\n"))
-				}
+			for j := at + 1; j < len(lines) && strings.HasPrefix(lines[j], "    "); j++ {
 				height++
 			}
 			if height == 0 {
@@ -1821,16 +1823,27 @@ func TestAHintBelongsToTheFieldAboveIt(t *testing.T) {
 			if height > 1 {
 				wrappedHints++
 			}
+			// Every other field's row follows without a hint of its own while this one is focused.
+			for _, other := range m.fields {
+				if other.label == f.label || other.readOnly {
+					continue
+				}
+				oat := fieldLine(t, lines, other.label)
+				if oat+1 < len(lines) && strings.HasPrefix(lines[oat+1], "    ") {
+					t.Errorf("width %d: field %q keeps a hint while %q is focused:\n%s",
+						width, other.label, f.label, strings.Join(lines, "\n"))
+				}
+			}
 		}
 		if width == 46 && wrappedHints == 0 {
 			t.Errorf("width %d: no hint wrapped, the narrow case is not being tested:\n%s",
-				width, strings.Join(lines, "\n"))
+				width, strings.Join(formLines(m), "\n"))
 		}
 	}
 }
 
-// The same sentence never stands twice under one another. What all role rows have in common is said once;
-// what differs per role stays on its own row.
+// The same sentence never stands twice under one another. What all role rows have in common is said once,
+// under the first role row alone, and only while a role row is the one focused.
 func TestNoHintStandsTwice(t *testing.T) {
 	m, _, _ := newModel(t)
 
@@ -1840,11 +1853,20 @@ func TestNoHintStandsTwice(t *testing.T) {
 	press(t, m, "tab")
 	selectChoice(t, m, storageEnv)
 	assertNoRepeatedHint(t, m, "the env credential form")
+
+	focusField(t, m, "token-id")
+	assertNoRepeatedHint(t, m, "the env credential form, token-id focused")
 	if got := strings.Count(screenOf(m), "the NAME of an environment"); got != 1 {
 		t.Errorf("the env sentence stands %d times, want once:\n%s", got, screenOf(m))
 	}
+	focusField(t, m, "token-secret")
+	assertNoRepeatedHint(t, m, "the env credential form, token-secret focused")
+	if strings.Contains(screenOf(m), "the NAME of an environment") {
+		t.Errorf("the sentence shared by every role row repeats under token-secret:\n%s", screenOf(m))
+	}
 
-	// The keyring rows build their hint themselves, out of the keys and the stages the resolver checked.
+	// The keyring rows build their hint themselves, out of the keys and the stages the resolver checked, and
+	// each keeps its own even though only the focused row's hint is shown at a time.
 	addKeyringCredential(t, m, "store")
 	openSectionByName(t, m, sectionCredentials)
 	pump(t, m, "enter")
@@ -1853,14 +1875,22 @@ func TestNoHintStandsTwice(t *testing.T) {
 	}
 	assertNoRepeatedHint(t, m, "the keyring credential form")
 
-	view := screenOf(m)
-	words := strings.Join(strings.Fields(view), " ")
-	if got := strings.Count(words, "x remove; typing is masked"); got != 1 {
-		t.Errorf("the secret keys stand %d times, want once:\n%s", got, view)
-	}
-	// The stages differ per role, so every role keeps its own.
-	if got, want := strings.Count(view, "checked:"), len(m.cfg.SecretRoles()); got != want {
-		t.Errorf("the checked stages appear %d times, want once per role (%d):\n%s", got, want, view)
+	for i, role := range m.cfg.SecretRoles() {
+		focusField(t, m, role)
+		view := screenOf(m)
+		words := strings.Join(strings.Fields(view), " ")
+		assertNoRepeatedHint(t, m, "the keyring credential form, "+role+" focused")
+		// The keys are said once, under the first role row, like the sentence an env credential shares.
+		want := 0
+		if i == 0 {
+			want = 1
+		}
+		if got := strings.Count(words, "x remove; typing is masked"); got != want {
+			t.Errorf("role %q: the secret keys stand %d times, want %d:\n%s", role, got, want, view)
+		}
+		if got := strings.Count(view, "checked:"); got != 1 {
+			t.Errorf("role %q: the checked stages appear %d times, want once:\n%s", role, got, view)
+		}
 	}
 }
 
@@ -1879,53 +1909,108 @@ func assertNoRepeatedHint(t *testing.T, m *Model, what string) {
 	}
 }
 
-// A form too tall for its terminal drops the hints it can spare instead of becoming unreachable, and the
-// resize notice is never the only way out of the editor.
-func TestATallFormStaysUsableInASmallTerminal(t *testing.T) {
-	m, _, _ := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 60, Height: 80})
-	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
-	full := strings.Count(screenOf(m), "\n")
+// A form shows exactly the hint of the focused field, in the same place directly under it, whether the
+// terminal is large enough to hold every hint at once or not: a terminal large enough is not a license to
+// show them all, because that inconsistency is exactly what a fixed, size-independent hint replaces. The
+// default form is used because its two rows fit even at the smallest supported size, 40x12.
+func TestFormShowsOnlyTheFocusedHintAtEverySize(t *testing.T) {
+	for _, size := range []struct{ width, height int }{{120, 40}, {80, 24}, {40, 12}} {
+		m, _, _ := newModel(t)
+		addService(t, m, "wiki", "https://wiki.example.invalid")
+		addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
+		addConnection(t, m, "wiki", "wiki", "reader")
+		m.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+		openSectionByName(t, m, sectionDefaults)
+		press(t, m, "n")
+		if m.activeScreenTooSmall() {
+			t.Fatalf("%dx%d: the new default form does not fit", size.width, size.height)
+		}
 
-	// The same form in a terminal that cannot hold it: it is still the form, only denser.
-	m.Update(tea.WindowSizeMsg{Width: 60, Height: 16})
-	view := screenOf(m)
-	if strings.Contains(view, "Resize terminal") {
-		t.Fatalf("the form gave up instead of tightening:\n%s", view)
-	}
-	if dense := strings.Count(view, "\n"); dense >= full {
-		t.Errorf("dense form = %d lines, want fewer than the %d of the full one", dense, full)
-	}
-	for _, want := range []string{"name", storageLabel, "enter save"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("the dense form dropped %q:\n%s", want, view)
+		// A fresh default form opens on "domain", so its hint is the one that should show.
+		view := screenOf(m)
+		words := strings.Join(strings.Fields(view), " ")
+		lines := formLines(m)
+		at := fieldLine(t, lines, "domain")
+		if !strings.Contains(words, domainHint) {
+			t.Errorf("%dx%d: the focused field's hint is missing:\n%s", size.width, size.height, view)
+		}
+		if !strings.HasPrefix(lines[at+1], "    ") {
+			t.Errorf("%dx%d: the hint does not stand directly under the focused field:\n%s",
+				size.width, size.height, view)
+		}
+
+		// Moving focus moves the hint away: "connection" has none of its own, so none stands under it either.
+		focusField(t, m, "connection")
+		view = screenOf(m)
+		words = strings.Join(strings.Fields(view), " ")
+		if strings.Contains(words, domainHint) {
+			t.Errorf("%dx%d: the previous field's hint survived the focus change:\n%s",
+				size.width, size.height, view)
+		}
+		lines = formLines(m)
+		at = fieldLine(t, lines, "connection")
+		if at+1 < len(lines) && strings.HasPrefix(lines[at+1], "    ") {
+			t.Errorf("%dx%d: a field without a hint shows an indented line under it:\n%s",
+				size.width, size.height, view)
 		}
 	}
-	// The hint of the focused field survives, wrapped to the width; the hints of the others are what paid
-	// for the space.
-	if !strings.Contains(view, "a key you choose") {
-		t.Errorf("the dense form dropped the hint of the focused field:\n%s", view)
+}
+
+// Going a step back in the guided setup used to reopen the multi-field page in whatever density the
+// terminal size last produced, so a large enough terminal suddenly showed every hint at once. Coming back
+// keeps the same single, focused hint every other form shows, at any size.
+func TestReturningToASetupStepShowsOnlyTheFocusedHint(t *testing.T) {
+	m, _, _, _, _ := newStoreModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	walkSetup(t, m, stepPermissions)
+	if m.wizard.step != stepPermissions {
+		t.Fatalf("walkSetup landed on step %d, want %d", m.wizard.step, stepPermissions)
 	}
-	if strings.Contains(view, "containers") {
-		t.Errorf("the dense form kept the hint of an unfocused field:\n%s", view)
+	assertNoRepeatedHint(t, m, "the permissions step")
+	if blocks := hintBlocks(formLines(m)); len(blocks) != 1 {
+		t.Fatalf("the permissions step shows %d hint blocks, want exactly 1:\n%s", len(blocks), screenOf(m))
 	}
 
-	// A terminal too small even for that shows the notice, and esc leaves it.
-	m.Update(tea.WindowSizeMsg{Width: 20, Height: 6})
-	if !strings.Contains(screenOf(m), "Resize terminal") {
-		t.Fatalf("a 20x6 terminal did not show the resize notice:\n%s", screenOf(m))
+	pump(t, m, "f2")
+	if m.wizard.step != stepSummary {
+		t.Fatalf("f2 did not reach the summary: step %d, error %q", m.wizard.step, m.fail)
+	}
+	pump(t, m, "f3")
+	if m.wizard.step != stepPermissions {
+		t.Fatalf("f3 did not return to the permissions step: step %d", m.wizard.step)
+	}
+
+	assertNoRepeatedHint(t, m, "the permissions step after going back")
+	if blocks := hintBlocks(formLines(m)); len(blocks) != 1 {
+		t.Errorf("the permissions step shows %d hint blocks after going back, want exactly 1:\n%s",
+			len(blocks), screenOf(m))
+	}
+}
+
+// Opening the tool picker and leaving it again must not turn the form behind it into the all-hints view
+// either: the same single, focused hint is what a person returns to.
+func TestReturningFromAPickerShowsOnlyTheFocusedHint(t *testing.T) {
+	reg := wikiRegistry(t)
+	m, _ := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+
+	openEntryForm(t, m, sectionConnections, "wiki")
+	focusField(t, m, toolsLabel)
+	selectChoice(t, m, toolsSelected)
+	focusField(t, m, toolListLabel)
+	press(t, m, "enter")
+	if m.screen != screenPicker {
+		t.Fatalf("enter on the tool list did not open the picker: screen %v", m.screen)
 	}
 	press(t, m, "esc")
-	if m.screen != screenList {
-		t.Errorf("screen after esc = %v, want the list the form was opened from", m.screen)
+	if m.screen != screenForm {
+		t.Fatalf("esc did not return to the form: screen %v", m.screen)
 	}
-	press(t, m, "esc")
-	if m.screen != screenNav {
-		t.Errorf("screen after the second esc = %v, want the sidebar", m.screen)
-	}
-	if m.quitting {
-		t.Error("leaving the notice quit the editor")
+
+	assertNoRepeatedHint(t, m, "the connection form after returning from the picker")
+	if blocks := hintBlocks(formLines(m)); len(blocks) != 1 {
+		t.Errorf("the connection form shows %d hint blocks after the picker, want exactly 1:\n%s",
+			len(blocks), screenOf(m))
 	}
 }
 

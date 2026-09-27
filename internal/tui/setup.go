@@ -547,8 +547,10 @@ func setupKeys(step int, next string) string {
 	return next + " next · F3 back · esc cancel setup"
 }
 
-// setupHeading is the title of the current step and what it decides.
-func (m *Model) setupHeading(dense bool) string {
+// setupHeading is the title of the current step and, with withLead, what it decides. The per-field form
+// steps leave the lead out, in favor of the same single fixed hint every other form shows for its focused
+// field; the summary has no fields to focus, so it keeps the lead as the step's only explanation.
+func (m *Model) setupHeading(withLead bool) string {
 	w := m.wizard
 	title := fmt.Sprintf("Set up a connection · step %d of %d · %s", w.step+1, setupSteps, setupTitles[w.step])
 	lead := setupLeads[w.step]
@@ -556,7 +558,7 @@ func (m *Model) setupHeading(dense bool) string {
 		title, lead = "Set up a connection · saved", savedLead
 	}
 	heading := m.wrapped(titleStyle, title) + "\n"
-	if !dense {
+	if withLead {
 		heading += m.wrapped(hintStyle, lead) + "\n"
 	}
 	return heading + "\n"
@@ -566,7 +568,7 @@ func (m *Model) setupHeading(dense bool) string {
 func (m *Model) summaryView() string {
 	w := m.wizard
 	var b strings.Builder
-	b.WriteString(m.setupHeading(false))
+	b.WriteString(m.setupHeading(true))
 	for _, row := range m.summaryRows() {
 		b.WriteString(m.row(false, row) + "\n")
 	}
