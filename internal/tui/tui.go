@@ -330,10 +330,8 @@ type Model struct {
 	// form. Empty means the confirmation is about something else.
 	pendingProfile string
 	// pristine is what the open form held when it was opened, so leaving it can tell whether anything
-	// would be lost. leaveTo is the section the leave question is about, or -1 for the list of the form's
-	// own section; leaveFrom is the screen it returns to when the user stays.
+	// would be lost. leaveFrom is the screen the leave question returns to when the user stays.
 	pristine  string
-	leaveTo   int
 	leaveFrom screen
 
 	status string
@@ -498,9 +496,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.leaveScreen()
 			}
 			return m, nil
-		}
-		if s, ok := altSectionShortcut(msg.String()); ok && m.canSwitchSection() {
-			return m, m.switchSection(s)
 		}
 		var cmd tea.Cmd
 		switch m.screen {
@@ -718,7 +713,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 		m.screen = m.updateFrom
 		return nil
 	case screenForm, screenSummary:
-		return m.requestLeave(-1)
+		return m.requestLeave()
 	case screenTargets:
 		// A typed target or a remove question is dropped as esc drops it; a changed list still asks.
 		m.targetEdit, m.targetRemove, m.targetAdd = -1, false, nil
@@ -750,62 +745,31 @@ func (m *Model) focusNav() {
 	m.clearMessages()
 }
 
-// canSwitchSection reports whether a direct section key applies now. It does on the sidebar, the list, a
-// form and the summary of the guided setup; a picker, table, prompt or confirmation is closed first, so a
-// key meant for it never jumps away from what it is about.
-func (m *Model) canSwitchSection() bool {
-	switch m.screen {
-	case screenNav, screenList, screenForm:
-		return true
-	case screenSummary:
-		return m.wizard != nil && !m.wizard.saving
-	}
-	return false
-}
-
-// switchSection opens s from wherever a section key applies. Input that was not saved is never dropped
-// or saved on the way: the leave question comes first.
-func (m *Model) switchSection(s section) tea.Cmd {
-	if m.screen == screenForm || m.screen == screenSummary {
-		return m.requestLeave(int(s))
-	}
-	return m.openSection(s)
-}
-
-// requestLeave leaves the open form, or the guided setup, for the section to, or for the list of its own
-// section when to is -1. Without unsaved input it leaves at once; otherwise it asks.
-func (m *Model) requestLeave(to int) tea.Cmd {
+// requestLeave leaves the open form, or the guided setup, for the list of its own section. Without unsaved
+// input it leaves at once; otherwise it asks.
+func (m *Model) requestLeave() tea.Cmd {
 	if m.wizard != nil && m.wizard.saving {
 		// The save in flight decides; leaving now would leave its outcome without a place to show.
 		return nil
 	}
 	if m.wizard != nil && m.wizard.saved != "" {
-		cmd := m.finishSetup()
-		if to >= 0 {
-			return m.openSection(section(to))
-		}
-		return cmd
+		return m.finishSetup()
 	}
 	if !m.dirty() {
-		return m.abandon(to)
+		return m.abandon()
 	}
-	m.leaveTo, m.leaveFrom = to, m.screen
+	m.leaveFrom = m.screen
 	m.screen = screenLeave
 	m.clearMessages()
 	return nil
 }
 
-// abandon goes where a leave question pointed, dropping the form or the guided setup with everything
-// typed into it. Nothing of it was written.
-func (m *Model) abandon(to int) tea.Cmd {
+// abandon returns to the list of the form's own section, dropping the form or the guided setup with
+// everything typed into it. Nothing of it was written.
+func (m *Model) abandon() tea.Cmd {
 	setup := m.wizard != nil
 	m.wizard, m.fields = nil, nil
-	var cmd tea.Cmd
-	if to >= 0 {
-		cmd = m.openSection(section(to))
-	} else {
-		cmd = m.returnToList("")
-	}
+	cmd := m.returnToList("")
 	if setup {
 		m.status = "Setup cancelled; nothing was written"
 	}
@@ -846,7 +810,7 @@ func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
 		m.status = "Still editing; nothing was saved or discarded"
 	case "d":
 		setup := m.wizard != nil
-		cmd := m.abandon(m.leaveTo)
+		cmd := m.abandon()
 		if !setup {
 			m.status = "Changes discarded; nothing was written"
 		}
@@ -876,18 +840,14 @@ func (m *Model) saveAndLeave() tea.Cmd {
 	if m.fail != "" {
 		return cmd
 	}
-	if m.leaveTo >= 0 {
-		cmd = m.openSection(section(m.leaveTo))
-	} else {
-		cmd = m.returnToList(name)
-	}
+	cmd = m.returnToList(name)
 	m.status = "Saved " + name
 	return cmd
 }
 
 func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
-	if key.String() == "ctrl+s" {
-		// ctrl+s saves, or goes on to the next setup step, from any row, since enter on a choice row opens it.
+	if key.String() == "f2" {
+		// F2 saves, or goes on to the next setup step, from any row, since enter on a choice row opens it.
 		if m.wizard != nil {
 			m.setupNext()
 			return nil
@@ -924,11 +884,11 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	if m.wizard != nil {
 		switch key.String() {
 		case "esc":
-			return m.requestLeave(-1)
+			return m.requestLeave()
 		case "enter":
 			m.setupNext()
 			return nil
-		case "ctrl+b":
+		case "f3":
 			m.setupBack()
 			return nil
 		}
@@ -936,7 +896,7 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "esc":
 		// Leaving a form never drops input silently: an unchanged form closes, a changed one asks first.
-		return m.requestLeave(-1)
+		return m.requestLeave()
 	case "ctrl+c":
 		return m.quit()
 	case "tab", "down":
@@ -2317,14 +2277,6 @@ func sectionShortcut(key string) (section, bool) {
 	return section(key[0] - '1'), true
 }
 
-// altSectionShortcut is the section key that works in a form too, where the digits alone are text.
-func altSectionShortcut(key string) (section, bool) {
-	if !strings.HasPrefix(key, "alt+") {
-		return 0, false
-	}
-	return sectionShortcut(strings.TrimPrefix(key, "alt+"))
-}
-
 // The colours are few and taken from the terminal's own palette, so they follow its theme. None of them
 // carries meaning on its own: focus has its marker and its border, a result its "[ok]", "[failed]",
 // "warning:" or "error:" prefix, and a terminal without colour, or with NO_COLOR set, loses nothing.
@@ -2452,7 +2404,7 @@ func (m *Model) buildEditorView(dense bool) string {
 		}
 		if m.wizard != nil {
 			keys = strings.Replace(keys, formKeys, setupKeys(m.wizard.step, "enter"), 1)
-			keys = strings.Replace(keys, choiceFormKeys, setupKeys(m.wizard.step, "ctrl+s"), 1)
+			keys = strings.Replace(keys, choiceFormKeys, setupKeys(m.wizard.step, "F2"), 1)
 		}
 		b.WriteString(m.hint(keys))
 	case screenSecret:
@@ -2494,14 +2446,13 @@ func (m *Model) buildEditorView(dense bool) string {
 	return b.String()
 }
 
-// formKeys ends the key line of every form: how it is saved and, in leaveKeys, the two ways out of it, both
-// of which ask before unsaved input is lost. A section key in a form carries alt, because the digits are
-// text there. On a choice row enter opens the values, so choiceFormKeys names ctrl+s, which saves from
-// every row.
+// formKeys ends the key line of every form: how it is saved and, in leaveKeys, the way out of it, which
+// asks before unsaved input is lost. On a choice row enter opens the values, so choiceFormKeys names F2,
+// which saves from every row.
 const (
-	leaveKeys      = "esc leave · alt+1-4 section"
+	leaveKeys      = "esc leave"
 	formKeys       = "enter save · " + leaveKeys
-	choiceFormKeys = "ctrl+s save · " + leaveKeys
+	choiceFormKeys = "F2 save · " + leaveKeys
 )
 
 // leaveView is the leave question. It names what would be lost and where the user was going, and offers
@@ -2512,9 +2463,6 @@ func (m *Model) leaveView() string {
 		what = m.editing
 	}
 	where := "the " + m.section.title() + " list"
-	if m.leaveTo >= 0 {
-		where = section(m.leaveTo).title()
-	}
 	warning, keys := "warning: unsaved changes in "+what, "s save and go on · d discard · esc keep editing"
 	why := "Leaving for " + where + " would lose them."
 	if m.wizard != nil {

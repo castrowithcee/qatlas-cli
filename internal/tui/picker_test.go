@@ -95,7 +95,7 @@ func TestThePickerReachesOneOfManyConnectionsDirectly(t *testing.T) {
 		t.Fatalf("connection = %q, want conn-047", got)
 	}
 
-	pump(t, m, "ctrl+s")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("saving reported %q", m.fail)
 	}
@@ -313,23 +313,23 @@ func TestEveryChoiceRowOpensOnEnterSpaceAndSlash(t *testing.T) {
 	}
 }
 
-// ctrl+s saves from a choice row, where enter opens the values instead.
-func TestCtrlSSavesFromAChoiceRow(t *testing.T) {
+// F2 saves from a choice row, where enter opens the values instead.
+func TestF2SavesFromAChoiceRow(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, nil)
 	openSectionByName(t, m, sectionConnections)
 	press(t, m, "n")
 	typeText(t, m, "fresh")
 	focusField(t, m, "permissions")
-	if view := screenOf(m); !strings.Contains(view, "enter tick · tab move · ctrl+s save") {
+	if view := screenOf(m); !strings.Contains(view, "enter tick · tab move · F2 save") {
 		t.Errorf("the key line of a multiselect row does not name its keys:\n%s", view)
 	}
-	pump(t, m, "ctrl+s")
+	pump(t, m, "f2")
 	if m.fail != "" {
-		t.Fatalf("ctrl+s reported %q", m.fail)
+		t.Fatalf("F2 reported %q", m.fail)
 	}
 	if got := savedConnection(t, path, reg, "fresh"); got.Service != "wiki" {
-		t.Fatalf("ctrl+s saved %+v, want the new connection", got)
+		t.Fatalf("F2 saved %+v, want the new connection", got)
 	}
 }
 
@@ -374,7 +374,7 @@ func TestThePermissionsAreTickedInThePicker(t *testing.T) {
 	}
 }
 
-// In the guided setup enter, space, and / open a choice row and stay on the step; ctrl+s goes on from it.
+// In the guided setup enter, space, and / open a choice row and stay on the step; F2 goes on from it.
 func TestAChoiceRowDoesNotAdvanceTheSetup(t *testing.T) {
 	m, _, _, _, _ := newStoreModel(t)
 	walkSetup(t, m, stepService)
@@ -391,15 +391,15 @@ func TestAChoiceRowDoesNotAdvanceTheSetup(t *testing.T) {
 			t.Fatalf("esc in the picker left screen %v at step %d", m.screen, m.wizard.step)
 		}
 	}
-	if view := screenOf(m); !strings.Contains(view, "enter choose · left/right switch · tab move · ctrl+s next") {
-		t.Errorf("the key line does not name ctrl+s next:\n%s", view)
+	if view := screenOf(m); !strings.Contains(view, "enter choose · left/right switch · tab move · F2 next") {
+		t.Errorf("the key line does not name F2 next:\n%s", view)
 	}
 	press(t, m, "tab")
 	typeText(t, m, "wiki")
 	press(t, m, "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	press(t, m, "shift+tab", "shift+tab", "ctrl+s")
+	press(t, m, "shift+tab", "shift+tab", "f2")
 	if m.wizard.step != stepCredential || m.fail != "" {
-		t.Fatalf("ctrl+s on the service row went to step %d, error %q", m.wizard.step, m.fail)
+		t.Fatalf("F2 on the service row went to step %d, error %q", m.wizard.step, m.fail)
 	}
 }

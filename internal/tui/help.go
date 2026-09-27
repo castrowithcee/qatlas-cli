@@ -52,8 +52,14 @@ func (m *Model) helpLines() []string {
 	return strings.Split(helptopics.Wrap(helptopics.All()[m.helpTopic].Text, m.usable(0)), "\n")
 }
 
+// macOSFunctionKeyNote explains why F2 and F3, used throughout the editor, might not reach it on a Mac
+// keyboard without fn held or the system setting turned on; every other host reaches them directly.
+const macOSFunctionKeyNote = "On macOS, hold fn for F-keys, or turn on 'Use F1, F2, etc. keys as standard " +
+	"function keys' in System Settings."
+
 // helpFrame is everything of the help screen except the text: above it the topics with the current one in
-// brackets, below it the position in the text and the keys. room is the number of text lines between them.
+// brackets, and the macOS note where it fits, below it the position in the text and the keys. room is the
+// number of text lines between them.
 func (m *Model) helpFrame() (string, string, int) {
 	var names []string
 	for i, topic := range helptopics.All() {
@@ -63,21 +69,33 @@ func (m *Model) helpFrame() (string, string, int) {
 		}
 		names = append(names, topic.Name)
 	}
-	head := m.wrapped(titleStyle, "Help  "+strings.Join(names, "  ")) + "\n\n"
+	base := m.wrapped(titleStyle, "Help  "+strings.Join(names, "  ")) + "\n\n"
+	note := m.wrapped(hintStyle, macOSFunctionKeyNote) + "\n\n"
 	lines := len(m.helpLines())
 	keys := "left/right topic · up/down scroll · esc close"
 	if lipgloss.Width(keys) > m.width {
 		keys = "left/right topic · up/down · esc close"
 	}
-	foot := m.hint(keys)
-	room := m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
-	if lines > room {
-		// The position line is only there when the text scrolls; it takes one line of the text's room.
-		room--
-		first := min(m.helpOffset+1, lines)
-		foot = "\n" + m.wrapped(hintStyle, fmt.Sprintf("lines %d-%d of %d", first,
-			min(m.helpOffset+max(room, 1), lines), lines)) + foot
+	// layout lays the topic text out under head and reports how many lines of it fit; a topic longer than
+	// that gains the position line, which itself takes one of those lines.
+	layout := func(head string) (string, string, int) {
+		foot := m.hint(keys)
+		room := m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
+		if lines > room {
+			room--
+			first := min(m.helpOffset+1, lines)
+			foot = "\n" + m.wrapped(hintStyle, fmt.Sprintf("lines %d-%d of %d", first,
+				min(m.helpOffset+max(room, 1), lines), lines)) + foot
+		}
+		return head, foot, room
 	}
+	// The macOS note is worth a line only where the terminal has room left over for it, position line
+	// included; a tight window keeps every line for the topic text instead, the way the keys line above
+	// already shortens itself.
+	if head, foot, room := layout(base + note); room >= 1 {
+		return head, foot, room
+	}
+	head, foot, room := layout(base)
 	return head, foot, max(room, 1)
 }
 

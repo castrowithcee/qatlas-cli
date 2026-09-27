@@ -49,7 +49,7 @@ func walkSetup(t *testing.T, m *Model, until int) {
 			typeText(t, m, "team wiki, read only")
 			press(t, m, "enter")
 		},
-		func() { press(t, m, "ctrl+s") },
+		func() { press(t, m, "f2") },
 	}
 	for step := 0; step < until; step++ {
 		steps[step]()
@@ -118,7 +118,7 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 	}
 	press(t, m, "enter")
 	record()
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	record()
 	if m.screen != screenSummary {
 		t.Fatalf("screen = %v, want the summary", m.screen)
@@ -184,7 +184,7 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 	if m.fieldValue("service") != "wiki" || !m.field("name").hidden {
 		t.Fatalf("service step does not offer the configured service first: %q", m.fieldValue("service"))
 	}
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.fieldValue("credential") != "reader" {
 		t.Fatalf("credential step does not offer the configured credential first: %q",
 			m.fieldValue("credential"))
@@ -194,7 +194,7 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 			t.Errorf("row %q of a new credential is shown while one is reused", f.label)
 		}
 	}
-	press(t, m, "ctrl+s", "enter", "ctrl+s")
+	press(t, m, "f2", "enter", "f2")
 	if !strings.Contains(screenOf(m), "reader (existing, unchanged)") {
 		t.Errorf("summary does not say the credential is reused:\n%s", screenOf(m))
 	}
@@ -295,12 +295,12 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 	}
 
 	// Going back shows the confirmed step as it was, and coming forward again the refused one.
-	press(t, m, "ctrl+b")
+	press(t, m, "f3")
 	if m.wizard.step != stepService || m.fieldValue("service") != newService ||
 		m.fieldValue("name") != "archive" || m.fieldValue("base url") != "https://archive.example.invalid" {
 		t.Fatalf("going back lost the service step: step %d name %q", m.wizard.step, m.fieldValue("name"))
 	}
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.wizard.step != stepCredential || m.fieldValue("name") != "reader" || m.fieldValue("token-id") != canaryID {
 		t.Fatalf("coming forward lost the credential step")
 	}
@@ -323,7 +323,7 @@ func TestAFailedSaveLeavesNothingBehind(t *testing.T) {
 		mem.Fail(secret.ErrUnavailable)
 		pump(t, m, "enter")
 		mem.Fail(nil)
-		if m.wizard.saved != "" || !strings.Contains(m.fail, "ctrl+b") {
+		if m.wizard.saved != "" || !strings.Contains(m.fail, "F3") {
 			t.Fatalf("a failed keyring did not say how to go on: %q", m.fail)
 		}
 		if _, err := os.Stat(path); err == nil {
@@ -375,7 +375,7 @@ func TestGuidedSetupOtherSecretSources(t *testing.T) {
 		typeText(t, m, "WIKI_ID")
 		press(t, m, "tab")
 		typeText(t, m, "WIKI_SECRET")
-		press(t, m, "enter", "enter", "ctrl+s")
+		press(t, m, "enter", "enter", "f2")
 		pump(t, m, "enter")
 		if m.fail != "" {
 			t.Fatalf("save failed: %q", m.fail)
@@ -489,7 +489,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 			t.Fatalf("New() = %v", err)
 		}
 		m.screen = screenNav
-		press(t, m, "c", "enter", "ctrl+s")
+		press(t, m, "c", "enter", "f2")
 		selectChoice(t, m, credential)
 		view := screenOf(m)
 		assertNoRawStorageTerm(t, "the setup reusing "+credential, view)
@@ -497,7 +497,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 		if words := strings.Join(strings.Fields(view), " "); !strings.Contains(words, "("+want+") unchanged") {
 			t.Errorf("reusing %s does not say %q:\n%s", credential, want, view)
 		}
-		press(t, m, "ctrl+s", "enter", "ctrl+s")
+		press(t, m, "f2", "enter", "f2")
 		if m.screen != screenSummary {
 			t.Fatalf("screen = %v, want the summary: %q", m.screen, m.fail)
 		}
@@ -566,7 +566,7 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 				typeText(t, m, value)
 			}
 			press(t, m, "enter")
-			press(t, m, "enter", "ctrl+s")
+			press(t, m, "enter", "f2")
 			pump(t, m, "enter")
 			if m.fail != "" {
 				t.Fatalf("the setup reported %q", m.fail)
@@ -589,7 +589,7 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 				}
 				pump(t, e, "enter")
 			} else {
-				pump(t, e, "ctrl+s")
+				pump(t, e, "f2")
 				if got := e.fieldValue(storageLabel); got != choice {
 					t.Fatalf("the saved credential reopened on %q, want %q", got, choice)
 				}

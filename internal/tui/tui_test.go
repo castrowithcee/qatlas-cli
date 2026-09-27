@@ -189,7 +189,7 @@ func addCredential(t *testing.T, m *Model, name string, envNames ...string) {
 		press(t, m, "tab")
 		typeText(t, m, env)
 	}
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 }
 
 // addKeyringCredential creates a credential whose secrets live in the credential store. It names nothing:
@@ -202,7 +202,7 @@ func addKeyringCredential(t *testing.T, m *Model, name string) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	selectChoice(t, m, storageKeyring)
-	pump(t, m, "ctrl+s")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("creating the keyring credential reported %q", m.fail)
 	}
@@ -221,7 +221,7 @@ func addConnection(t *testing.T, m *Model, name, service, credential string) {
 	selectChoice(t, m, service)
 	press(t, m, "tab")
 	selectChoice(t, m, credential)
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 }
 
 func selectChoice(t *testing.T, m *Model, want string) {
@@ -277,7 +277,7 @@ func TestFullConfigurationFlow(t *testing.T) {
 	typeText(t, m, "knowledge")
 	press(t, m, "tab")
 	selectChoice(t, m, "wiki")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
@@ -452,7 +452,7 @@ func TestDirectSectionKeys(t *testing.T) {
 		}
 	}
 
-	// In a form the digits are text; alt with a digit is the section key there.
+	// In a form the digits are text, with no alt+digit section key: the global shortcut was removed.
 	press(t, m, "n")
 	typeText(t, m, "2")
 	if m.section != sectionServices || m.fieldValue("name") != "2" {
@@ -462,8 +462,9 @@ func TestDirectSectionKeys(t *testing.T) {
 	clearField(t, m)
 	press(t, m, "shift+tab")
 	clearField(t, m)
+	press(t, m, "esc")
 
-	// An unchanged form, new or opened, is left at once.
+	// alt+digit does nothing in a form, changed or not.
 	for _, want := range []section{sectionCredentials, sectionConnections, sectionDefaults} {
 		openSectionByName(t, m, sectionServices)
 		press(t, m, "enter")
@@ -471,8 +472,8 @@ func TestDirectSectionKeys(t *testing.T) {
 			t.Fatalf("enter did not open wiki: screen %v", m.screen)
 		}
 		m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune('1' + want)}, Alt: true})
-		if m.screen != screenList || m.section != want {
-			t.Errorf("alt+%d from an unchanged form = screen %v section %v", want+1, m.screen, m.section)
+		if m.screen != screenForm || m.editing != "wiki" || m.section != sectionServices {
+			t.Errorf("alt+%d in a form = screen %v section %v, want no effect", want+1, m.screen, m.section)
 		}
 	}
 
@@ -567,18 +568,17 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		typeText(t, m, "https://wiki.example.invalid")
 		return m, path
 	}
-	altKey := func(s section) tea.KeyMsg {
-		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{rune('1' + s)}, Alt: true}
-	}
 
 	t.Run("stay keeps every input and writes nothing", func(t *testing.T) {
 		m, path := startForm(t)
-		m.Update(altKey(sectionCredentials))
+		press(t, m, "esc")
 		if m.screen != screenLeave {
-			t.Fatalf("alt+2 on a changed form = screen %v, want the leave question", m.screen)
+			t.Fatalf("esc on a changed form = screen %v, want the leave question", m.screen)
 		}
 		view := m.View()
-		for _, want := range []string{"warning: unsaved changes", "s save and go on", "d discard", "esc keep editing"} {
+		for _, want := range []string{
+			"warning: unsaved changes", "s save and go on", "d discard", "esc keep editing", "the Services list",
+		} {
 			if !strings.Contains(view, want) {
 				t.Errorf("the leave question does not say %q:\n%s", want, view)
 			}
@@ -601,10 +601,9 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 
 	t.Run("discard drops the input and goes on", func(t *testing.T) {
 		m, path := startForm(t)
-		m.Update(altKey(sectionConnections))
-		press(t, m, "d")
-		if m.screen != screenList || m.section != sectionConnections {
-			t.Fatalf("discard = screen %v section %v, want Connections", m.screen, m.section)
+		press(t, m, "esc", "d")
+		if m.screen != screenList || m.section != sectionServices {
+			t.Fatalf("discard = screen %v section %v, want Services", m.screen, m.section)
 		}
 		if _, ok := m.cfg.Services["wiki"]; ok {
 			t.Error("the discarded entry reached the model")
@@ -619,9 +618,9 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 
 	t.Run("save writes through the core and goes on", func(t *testing.T) {
 		m, _ := startForm(t)
-		m.Update(altKey(sectionCredentials))
+		press(t, m, "esc")
 		pump(t, m, "s")
-		if m.fail != "" || m.screen != screenList || m.section != sectionCredentials {
+		if m.fail != "" || m.screen != screenList || m.section != sectionServices {
 			t.Fatalf("save = screen %v section %v error %q", m.screen, m.section, m.fail)
 		}
 		if _, ok := m.cfg.Services["wiki"]; !ok || !strings.Contains(m.status, "Saved wiki") {
@@ -633,7 +632,7 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		m, path := startForm(t)
 		press(t, m, "shift+tab", "shift+tab")
 		clearField(t, m)
-		m.Update(altKey(sectionCredentials))
+		press(t, m, "esc")
 		pump(t, m, "s")
 		if m.screen != screenForm || m.section != sectionServices || m.fail == "" {
 			t.Fatalf("a refused save = screen %v section %v error %q", m.screen, m.section, m.fail)
@@ -646,28 +645,13 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		}
 	})
 
-	t.Run("escape asks the same question", func(t *testing.T) {
-		m, _ := startForm(t)
-		press(t, m, "esc")
-		if m.screen != screenLeave || m.leaveTo != -1 {
-			t.Fatalf("esc on a changed form = screen %v", m.screen)
-		}
-		if view := m.View(); !strings.Contains(view, "the Services list") {
-			t.Errorf("the question does not say where escape leads:\n%s", view)
-		}
-		press(t, m, "d")
-		if m.screen != screenList || m.section != sectionServices {
-			t.Errorf("discard after esc = screen %v section %v", m.screen, m.section)
-		}
-	})
-
 	t.Run("an unfinished guided setup can only be kept or dropped", func(t *testing.T) {
 		m, _, path := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 		walkSetup(t, m, 1)
-		m.Update(altKey(sectionCredentials))
+		press(t, m, "esc")
 		if m.screen != screenLeave {
-			t.Fatalf("alt+2 in the setup = screen %v, want the leave question", m.screen)
+			t.Fatalf("esc in the setup = screen %v, want the leave question", m.screen)
 		}
 		if view := m.View(); strings.Contains(view, "s save") || !strings.Contains(view, "d discard setup") {
 			t.Errorf("the setup question offers the wrong answers:\n%s", view)
@@ -680,9 +664,8 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		if m.wizard == nil || m.screen != screenForm {
 			t.Fatalf("staying dropped the setup: screen %v", m.screen)
 		}
-		m.Update(altKey(sectionCredentials))
-		press(t, m, "d")
-		if m.wizard != nil || m.screen != screenList || m.section != sectionCredentials {
+		press(t, m, "esc", "d")
+		if m.wizard != nil || m.screen != screenList || m.section != sectionServices {
 			t.Fatalf("discard = wizard %v screen %v section %v", m.wizard != nil, m.screen, m.section)
 		}
 		if _, err := os.Stat(path); err == nil {
@@ -1504,7 +1487,7 @@ func TestServiceFormEditsTheProviderNote(t *testing.T) {
 		t.Errorf("the note row does not warn that discovery publishes it: %q", hint)
 	}
 	typeText(t, m, " Wiki ")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if got := saved().ProviderNotes[provider]; got != "Wiki" {
 		t.Fatalf("saved note = %q, want Wiki", got)
 	}
@@ -1518,7 +1501,7 @@ func TestServiceFormEditsTheProviderNote(t *testing.T) {
 		t.Errorf("the reopened form shows the note %q, want Wiki", got)
 	}
 	typeText(t, m, "/next")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if cfg := saved(); cfg.ProviderNotes[provider] != "Wiki" ||
 		cfg.Services["wiki"].BaseURL != "https://wiki.example.invalid/next" {
 		t.Errorf("after a base url change: note %q, base url %q", cfg.ProviderNotes[provider],
@@ -1527,7 +1510,7 @@ func TestServiceFormEditsTheProviderNote(t *testing.T) {
 
 	focusNote()
 	clearField(t, m)
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if notes := saved().ProviderNotes; notes != nil {
 		t.Errorf("notes = %#v, want none after clearing the row", notes)
 	}
@@ -1775,7 +1758,7 @@ func TestALockedFieldDoesNotSwallowTheOpeningFocus(t *testing.T) {
 	typeText(t, m, "wiki.example.invalid")
 	press(t, m, "tab")
 	selectChoice(t, m, "wiki")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
 	}
@@ -1965,7 +1948,7 @@ func TestNamingTheProviderKeepsTheRestOfTheCredential(t *testing.T) {
 		t.Fatalf("type after choosing the provider = %q, want the keyring it was created as", got)
 	}
 	press(t, m, "tab")
-	pump(t, m, "ctrl+s")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("saving reported %q", m.fail)
 	}

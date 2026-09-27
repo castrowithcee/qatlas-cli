@@ -399,7 +399,7 @@ func (m *Model) pickAdd(key string) {
 	}
 }
 
-// saveAdd is ctrl+s in the menu or the builder. A typed line in the menu is taken like a typed target, and
+// saveAdd is F2 in the menu or the builder. A typed line in the menu is taken like a typed target, and
 // a typed value in the builder only when it completes the target; a selected row is never taken. It reports whether the list may
 // be saved; otherwise the reason is shown and nothing is dropped.
 func (m *Model) saveAdd() bool {
@@ -491,9 +491,9 @@ func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
 func (m *Model) addFrame() (string, string) {
 	a := m.targetAdd
 	metadata := m.targetMetadata()
-	save := "ctrl+s save"
+	save := "F2 save"
 	if m.wizard != nil {
-		save = "ctrl+s next step"
+		save = "F2 next step"
 	}
 	var head strings.Builder
 	label := "filter or type: "

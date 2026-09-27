@@ -28,13 +28,13 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"terminal and keeps everything as it was until it gets one.\n\n" +
 			"The editor opens with the focus on the sidebar. up/down (or j/k) choose a section and show its\n" +
 			"list at once; enter, right, or tab move the focus into the list, and left, tab, or esc move it\n" +
-			"back. 1-4 open a section directly from the sidebar or a list; in a form, where digits are text,\n" +
-			"alt+1-4 do the same. In a list, / filters, n adds, enter edits, d deletes, t tests the selected\n" +
-			"connection, c starts the guided setup, and q quits; ctrl+c quits anywhere without saving. esc\n" +
-			"only ever steps back one level: it clears a filter, cancels a running test, closes a picker, a\n" +
-			"table, or a question, or leaves a form.\n\n" +
-			"A form with unsaved changes is never left silently. esc or a section key first asks: s saves\n" +
-			"through the same checks as ctrl+s and goes on only when the save succeeds, d discards the changes\n" +
+			"back. 1-4 open a section directly from the sidebar or a list; in a form, digits are text instead.\n" +
+			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
+			"the guided setup, and q quits; ctrl+c quits anywhere without saving. esc only ever steps back one\n" +
+			"level: it clears a filter, cancels a running test, closes a picker, a table, or a question, or\n" +
+			"leaves a form.\n\n" +
+			"A form with unsaved changes is never left silently. esc first asks: s saves through the same\n" +
+			"checks as F2 and goes on only when the save succeeds, d discards the changes\n" +
 			"and goes on, and esc keeps editing with every input intact. An unchanged form closes at once. An\n" +
 			"unfinished guided setup can only be kept or discarded, since it saves from its summary only.\n\n" +
 			"Focus and state read without colour. The active section is marked > while the sidebar has the\n" +
@@ -48,7 +48,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"refuse a step before the next one opens, and a refused step keeps its input. A new credential\n" +
 			"keeps its secrets in the system keyring (recommended) or names environment variables. Secrets\n" +
 			"are typed masked and never shown. Nothing is written before the summary is saved: esc cancels,\n" +
-			"asking first once a provider is chosen, ctrl+b goes back one step, and should the configuration\n" +
+			"asking first once a provider is chosen, F3 goes back one step, and should the configuration\n" +
 			"fail to save, the secrets just stored are removed again.\n\n" +
 			"The sections remain for direct editing. The editor manages services, credentials, connections,\n" +
 			"and domain defaults, can test a selected connection, and stores the secrets of a credential in\n" +
@@ -87,7 +87,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"ticking it drops the explicit permissions and ticking one of those drops default.\n\n" +
 			"The targets row of a connection, in its form and in the scope step of the guided setup alike,\n" +
 			"holds a list. enter, space, or / opens it: a adds a target, enter edits the selected one, and x or\n" +
-			"d removes it after asking. ctrl+s keeps the list and saves the connection in one step, taking a\n" +
+			"d removes it after asking. F2 keeps the list and saves the connection in one step, taking a\n" +
 			"target that is still being typed first; in the guided setup it goes on to the next step instead,\n" +
 			"since the setup saves only from its summary. esc closes an unchanged list; after a change it asks\n" +
 			"first: k keeps the list in the row, d discards the changes, and esc returns to the list.\n\n" +
@@ -99,7 +99,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"number, suggests the values the same service already uses there, offers * as all, and writes the\n" +
 			"usual path such as repos/OWNER/REPO; backspace on an empty line steps back, and esc cancels the\n" +
 			"entry. * is never selected when a step opens, so a pattern is added only when it is chosen with\n" +
-			"enter or typed. ctrl+s takes a typed line, or a typed value that completes a build, never a row\n" +
+			"enter or typed. F2 takes a typed line, or a typed value that completes a build, never a row\n" +
 			"that is merely selected, and says what is missing otherwise. Every target, however it was added,\n" +
 			"is checked by the provider when it is taken; a refused one stays typed with the reason, and one\n" +
 			"the list holds already is refused. enter on a target edits it as typed text.\n\n" +
@@ -108,7 +108,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"connection without targets reaches whatever its credential reaches, while SeaTable or Telegram\n" +
 			"cannot be saved without one, and Telegram takes one chat only. One target is saved as target,\n" +
 			"several as targets.\n\n" +
-			"enter on a text row saves the form, or goes on to the next step of the guided setup; ctrl+s does\n" +
+			"enter on a text row saves the form, or goes on to the next step of the guided setup; F2 does\n" +
 			"the same from every row, choice rows included. The summary of the guided setup saves with enter.\n\n" +
 			"A connection's tools row decides between every tool its permissions allow, which is how a\n" +
 			"connection without a tools list behaves, and only selected tools. In the second mode the tool\n" +

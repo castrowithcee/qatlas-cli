@@ -134,7 +134,7 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	if len(m.targetList.all) != 3 {
 		t.Fatalf("n removed a target: %v", m.targetList.all)
 	}
-	press(t, m, "x", "y", "ctrl+s")
+	press(t, m, "x", "y", "f2")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}
@@ -149,13 +149,13 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	// One target is written as target, none as neither key.
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "x", "y", "ctrl+s")
+	press(t, m, "x", "y", "f2")
 	if saved := savedConnection(t, path, reg, "gh"); saved.Target != "orgs/octo/projects/1" || saved.Targets != nil {
 		t.Fatalf("saved %q / %v, want one target", saved.Target, saved.Targets)
 	}
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "x", "y", "ctrl+s")
+	press(t, m, "x", "y", "f2")
 	if m.fail != "" {
 		t.Fatalf("saving no target failed: %s", m.fail)
 	}
@@ -195,13 +195,13 @@ func TestARequiredSingleTargetIsKeptToOne(t *testing.T) {
 	if m.targetEdit >= 0 || !strings.Contains(m.fail, "one chat ID only") {
 		t.Fatalf("a second chat was offered: editing %d, error %q", m.targetEdit, m.fail)
 	}
-	press(t, m, "x", "y", "ctrl+s")
+	press(t, m, "x", "y", "f2")
 	if !strings.Contains(m.fail, "requires chat ID") {
 		t.Fatalf("a connection without a chat was saved: error %q", m.fail)
 	}
 	openTargetList(t, m)
 	addTarget(t, m, "-1001")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if saved := savedConnection(t, path, reg, "chat"); saved.Target != "-1001" || saved.Targets != nil {
 		t.Fatalf("saved %q / %v, want the one chat", saved.Target, saved.Targets)
 	}
@@ -214,14 +214,14 @@ func TestARequiredTargetListTakesSeveral(t *testing.T) {
 	openSectionByName(t, m, sectionConnections)
 	press(t, m, "n")
 	typeText(t, m, "rows")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if !strings.Contains(m.fail, "requires table") {
 		t.Fatalf("a connection without a table was saved: error %q", m.fail)
 	}
 	openTargetList(t, m)
 	addTarget(t, m, "Kunden, Aktive")
 	addTarget(t, m, "Tickets")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if saved := savedConnection(t, path, reg, "rows"); !reflect.DeepEqual(saved.Targets,
 		[]string{"Kunden, Aktive", "Tickets"}) {
 		t.Fatalf("saved %q / %v, want both tables", saved.Target, saved.Targets)
@@ -233,7 +233,7 @@ func TestTheGuidedSetupEditsTargetsAlike(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
 	m, path := toolsModel(t, reg, nil)
 	m.screen = screenNav
-	press(t, m, "c", "enter", "ctrl+s", "ctrl+s")
+	press(t, m, "c", "enter", "f2", "f2")
 	if m.wizard == nil || m.wizard.step != stepScope {
 		t.Fatalf("the setup did not reach its scope step: %+v, error %q", m.wizard, m.fail)
 	}
@@ -244,20 +244,20 @@ func TestTheGuidedSetupEditsTargetsAlike(t *testing.T) {
 	press(t, m, "enter")
 	clearField(t, m)
 	typeText(t, m, "users/octo/projects/3")
-	press(t, m, "enter", "up", "x", "y", "ctrl+s")
+	press(t, m, "enter", "up", "x", "y", "f2")
 	if m.wizard.step != stepPermissions || m.fail != "" {
-		t.Fatalf("ctrl+s in the setup list did not go on to the next step: step %d, error %q", m.wizard.step, m.fail)
+		t.Fatalf("F2 in the setup list did not go on to the next step: step %d, error %q", m.wizard.step, m.fail)
 	}
 	if hasConnection(t, path, reg, "github") {
-		t.Fatal("ctrl+s in the setup list wrote the unfinished connection")
+		t.Fatal("F2 in the setup list wrote the unfinished connection")
 	}
-	press(t, m, "ctrl+b")
+	press(t, m, "f3")
 	focusField(t, m, targetsLabel)
 	press(t, m, "right")
 	if view := screenOf(m); !strings.Contains(view, "users/octo/projects/3") {
 		t.Fatalf("the unfolded setup row does not list every target:\n%s", view)
 	}
-	press(t, m, "ctrl+s", "ctrl+s")
+	press(t, m, "f2", "f2")
 	if m.fail != "" || m.screen != screenSummary {
 		t.Fatalf("the setup did not reach its summary: screen %v, error %q", m.screen, m.fail)
 	}
@@ -271,16 +271,16 @@ func TestTheGuidedSetupEditsTargetsAlike(t *testing.T) {
 	}
 }
 
-// One ctrl+s saves the connection from every state of the list: a typed target is taken first, and one the
+// One F2 saves the connection from every state of the list: a typed target is taken first, and one the
 // provider refuses stays typed with the reason while nothing is written.
-func TestOneCtrlSSavesTheTargetsFromEveryState(t *testing.T) {
+func TestOneF2SavesTheTargetsFromEveryState(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
 	m, path := toolsModel(t, reg, map[string]config.Connection{"gh": {Service: "wiki", Credential: "reader"}})
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
 	press(t, m, "a")
 	typeText(t, m, "octo/a")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.fail == "" || m.targetEdit < 0 || m.screen != screenTargets {
 		t.Fatalf("a refused target was saved: screen %v, editing %d, error %q", m.screen, m.targetEdit, m.fail)
 	}
@@ -290,9 +290,9 @@ func TestOneCtrlSSavesTheTargetsFromEveryState(t *testing.T) {
 
 	clearField(t, m)
 	typeText(t, m, "repos/octo/a")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.fail != "" || m.screen != screenList {
-		t.Fatalf("ctrl+s while typing did not save: screen %v, error %q", m.screen, m.fail)
+		t.Fatalf("F2 while typing did not save: screen %v, error %q", m.screen, m.fail)
 	}
 	if saved := savedConnection(t, path, reg, "gh"); saved.Target != "repos/octo/a" {
 		t.Fatalf("saved %q / %v, want the typed target", saved.Target, saved.Targets)
@@ -302,9 +302,9 @@ func TestOneCtrlSSavesTheTargetsFromEveryState(t *testing.T) {
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
 	addTarget(t, m, "repos/octo/b")
-	press(t, m, "x", "ctrl+s")
+	press(t, m, "x", "f2")
 	if m.fail != "" || m.screen != screenList {
-		t.Fatalf("ctrl+s at the remove question did not save: screen %v, error %q", m.screen, m.fail)
+		t.Fatalf("F2 at the remove question did not save: screen %v, error %q", m.screen, m.fail)
 	}
 	if saved := savedConnection(t, path, reg, "gh"); !reflect.DeepEqual(saved.Targets,
 		[]string{"repos/octo/a", "repos/octo/b"}) {
@@ -367,13 +367,13 @@ func TestEscAsksBeforeDroppingTargetChanges(t *testing.T) {
 	}
 }
 
-// The guided setup takes a typed target with ctrl+s and goes on to its next step without writing anything,
+// The guided setup takes a typed target with F2 and goes on to its next step without writing anything,
 // and asks about a changed list on esc like the editor does.
-func TestTheGuidedSetupTakesTargetsWithOneCtrlS(t *testing.T) {
+func TestTheGuidedSetupTakesTargetsWithOneF2(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
 	m, path := toolsModel(t, reg, nil)
 	m.screen = screenNav
-	press(t, m, "c", "enter", "ctrl+s", "ctrl+s")
+	press(t, m, "c", "enter", "f2", "f2")
 	if m.wizard == nil || m.wizard.step != stepScope {
 		t.Fatalf("the setup did not reach its scope step: %+v, error %q", m.wizard, m.fail)
 	}
@@ -389,14 +389,14 @@ func TestTheGuidedSetupTakesTargetsWithOneCtrlS(t *testing.T) {
 	}
 
 	openTargetList(t, m)
-	if view := screenOf(m); !strings.Contains(view, "ctrl+s next step") {
-		t.Fatalf("the setup list does not say what ctrl+s does:\n%s", view)
+	if view := screenOf(m); !strings.Contains(view, "F2 next step") {
+		t.Fatalf("the setup list does not say what F2 does:\n%s", view)
 	}
 	press(t, m, "a")
 	typeText(t, m, "repos/octo/b")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.fail != "" || m.wizard.step != stepPermissions {
-		t.Fatalf("ctrl+s while typing did not go on: step %d, error %q", m.wizard.step, m.fail)
+		t.Fatalf("F2 while typing did not go on: step %d, error %q", m.wizard.step, m.fail)
 	}
 	if got := pageEntries(m.wizard.pages[stepScope], targetsLabel); !reflect.DeepEqual(got, []string{"repos/octo/b"}) {
 		t.Fatalf("the scope step holds %v, want the typed target", got)
@@ -508,7 +508,7 @@ func TestAddingOffersTheTargetsOfTheSameService(t *testing.T) {
 		!strings.Contains(rows, "users/octo/projects/2") {
 		t.Fatalf("the menu offers a listed target again or lost another:\n%s", rows)
 	}
-	press(t, m, "esc", "ctrl+s")
+	press(t, m, "esc", "f2")
 	if saved := savedConnection(t, path, reg, "gh"); m.fail != "" || saved.Target != "repos/octo/b" {
 		t.Fatalf("saved %q / %v, error %q", saved.Target, saved.Targets, m.fail)
 	}
@@ -547,7 +547,7 @@ func TestTheBuilderWritesEveryGitHubKind(t *testing.T) {
 	if m.fail != "" {
 		t.Fatalf("building reported %q", m.fail)
 	}
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	want := []string{"repos/octo/a", "repos/octo/b", "users/octo/projects/2", "repos/octo/cli", "repos/new-owner/*",
 		"orgs/octo-org/projects/7", "users/octo/projects/*", "users/octo"}
 	if saved := savedConnection(t, path, reg, "gh-a"); m.fail != "" || !reflect.DeepEqual(saved.Targets, want) {
@@ -589,24 +589,24 @@ func TestTheBuilderStepsBackAndHandsOverWhatIsRefused(t *testing.T) {
 	}
 }
 
-// ctrl+s saves from the menu and the builder too: a typed line is taken as typed, a builder completes on
+// F2 saves from the menu and the builder too: a typed line is taken as typed, a builder completes on
 // its last step, and an incomplete one says what is missing while nothing is written or dropped.
-func TestCtrlSSavesFromTheMenuAndTheBuilder(t *testing.T) {
+func TestF2SavesFromTheMenuAndTheBuilder(t *testing.T) {
 	m, path, reg := knownTargetsModel(t)
 	openConnection(t, m, "gh-a")
 	openTargetList(t, m)
 	press(t, m, "a")
 	pickRow(t, m, "new repository")
 	press(t, m, "enter")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.screen != screenTargets || m.targetAdd == nil || !strings.Contains(m.fail, "not complete yet: choose OWNER") {
 		t.Fatalf("an incomplete build was saved or dropped: screen %v, error %q", m.screen, m.fail)
 	}
 	press(t, m, "enter")
 	typeText(t, m, "cli")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.fail != "" || m.screen != screenList {
-		t.Fatalf("ctrl+s on the last step did not save: screen %v, error %q", m.screen, m.fail)
+		t.Fatalf("F2 on the last step did not save: screen %v, error %q", m.screen, m.fail)
 	}
 	if saved := savedConnection(t, path, reg, "gh-a"); !slices.Contains(saved.Targets, "repos/octo/cli") {
 		t.Fatalf("saved %v, want the built target", saved.Targets)
@@ -616,12 +616,12 @@ func TestCtrlSSavesFromTheMenuAndTheBuilder(t *testing.T) {
 	openTargetList(t, m)
 	press(t, m, "a")
 	typeText(t, m, "repos/octo")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.targetEdit < 0 || m.fail == "" {
 		t.Fatalf("a refused typed line was saved: editing %d, error %q", m.targetEdit, m.fail)
 	}
 	typeText(t, m, "/d")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if saved := savedConnection(t, path, reg, "gh-a"); m.fail != "" || !slices.Contains(saved.Targets, "repos/octo/d") {
 		t.Fatalf("saved %v, error %q", saved.Targets, m.fail)
 	}
@@ -643,17 +643,17 @@ func TestAProviderWithoutKindsOffersKnownTargets(t *testing.T) {
 	pickRow(t, m, "Tickets")
 	press(t, m, "enter")
 	addTarget(t, m, "Neu")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if saved := savedConnection(t, path, reg, "rows"); !reflect.DeepEqual(saved.Targets, []string{"Tickets", "Neu"}) {
 		t.Fatalf("saved %v, error %q", saved.Targets, m.fail)
 	}
 }
 
-// The guided setup offers the known targets and the builder alike, and ctrl+s goes on to its next step.
+// The guided setup offers the known targets and the builder alike, and F2 goes on to its next step.
 func TestTheGuidedSetupOffersKnownTargetsAndTheBuilder(t *testing.T) {
 	m, path, reg := knownTargetsModel(t)
 	m.screen = screenNav
-	press(t, m, "c", "enter", "ctrl+s", "ctrl+s")
+	press(t, m, "c", "enter", "f2", "f2")
 	if m.wizard == nil || m.wizard.step != stepScope {
 		t.Fatalf("the setup did not reach its scope step: %+v, error %q", m.wizard, m.fail)
 	}
@@ -665,9 +665,9 @@ func TestTheGuidedSetupOffersKnownTargetsAndTheBuilder(t *testing.T) {
 	pickRow(t, m, "new repository")
 	press(t, m, "enter", "enter")
 	typeText(t, m, "c")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.fail != "" || m.wizard.step != stepPermissions {
-		t.Fatalf("ctrl+s in the builder did not go on: step %d, error %q", m.wizard.step, m.fail)
+		t.Fatalf("F2 in the builder did not go on: step %d, error %q", m.wizard.step, m.fail)
 	}
 	if got := pageEntries(m.wizard.pages[stepScope], targetsLabel); !reflect.DeepEqual(got,
 		[]string{"repos/octo/a", "repos/octo/c"}) {
@@ -679,7 +679,7 @@ func TestTheGuidedSetupOffersKnownTargetsAndTheBuilder(t *testing.T) {
 }
 
 // A pattern is never taken without an explicit choice: * is never the selected row when a step opens,
-// enter on the resting line takes nothing, and ctrl+s takes only a typed value, never a merely selected
+// enter on the resting line takes nothing, and F2 takes only a typed value, never a merely selected
 // row, in the builder and in the menu alike.
 func TestAPatternNeedsAnExplicitChoice(t *testing.T) {
 	m, path, reg := knownTargetsModel(t)
@@ -697,11 +697,11 @@ func TestAPatternNeedsAnExplicitChoice(t *testing.T) {
 		m.targetAdd.choices.cursor != 0 {
 		t.Fatalf("the number step offers %v on row %d", rows, m.targetAdd.choices.cursor)
 	}
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.targetAdd == nil || !strings.Contains(m.fail, "not complete yet: choose NUMBER or * (all)") {
-		t.Fatalf("ctrl+s without a value did not say what is missing: error %q", m.fail)
+		t.Fatalf("F2 without a value did not say what is missing: error %q", m.fail)
 	}
-	unchanged("ctrl+s on the pattern step")
+	unchanged("F2 on the pattern step")
 	press(t, m, "enter")
 	if m.targetAdd == nil || !strings.Contains(m.fail, "type NUMBER or * (all) first") {
 		t.Fatalf("enter on the resting line took something: error %q", m.fail)
@@ -711,33 +711,33 @@ func TestAPatternNeedsAnExplicitChoice(t *testing.T) {
 		t.Fatalf("an explicit * was not taken: %v, error %q", m.targetList.all, m.fail)
 	}
 
-	// Suggestions come before *, and a selected suggestion is no choice for ctrl+s either.
+	// Suggestions come before *, and a selected suggestion is no choice for F2 either.
 	press(t, m, "a")
 	pickRow(t, m, "new repository")
 	press(t, m, "enter", "enter")
 	if rows := addRows(m); rows[len(rows)-1] != "* (all)" || m.targetAdd.text[m.targetAdd.choices.matches[0]] != "a" {
 		t.Fatalf("the repository step offers %v", rows)
 	}
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.targetAdd == nil || !strings.Contains(m.fail, "not complete yet") {
-		t.Fatalf("ctrl+s took the selected suggestion: error %q", m.fail)
+		t.Fatalf("F2 took the selected suggestion: error %q", m.fail)
 	}
-	unchanged("ctrl+s on a selected suggestion")
+	unchanged("F2 on a selected suggestion")
 	typeText(t, m, "*")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if saved := savedConnection(t, path, reg, "gh-a"); m.fail != "" || !slices.Contains(saved.Targets, "repos/octo/*") ||
 		!slices.Contains(saved.Targets, "users/cli/projects/*") {
 		t.Fatalf("a typed * was not saved: %v, error %q", saved.Targets, m.fail)
 	}
 
-	// In the menu, ctrl+s saves the list without the selected row.
+	// In the menu, F2 saves the list without the selected row.
 	openConnection(t, m, "gh-a")
 	openTargetList(t, m)
 	press(t, m, "a")
 	pickRow(t, m, "new owner")
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if saved := savedConnection(t, path, reg, "gh-a"); m.fail != "" || m.screen != screenList || len(saved.Targets) != 5 {
-		t.Fatalf("ctrl+s in the menu took its selected row: screen %v, saved %v, error %q", m.screen, saved.Targets,
+		t.Fatalf("F2 in the menu took its selected row: screen %v, saved %v, error %q", m.screen, saved.Targets,
 			m.fail)
 	}
 }

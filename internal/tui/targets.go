@@ -12,7 +12,7 @@ import (
 
 // The target list of a connection is edited in a screen of its own, opened from its row like a picker: a is
 // add, which offers known targets and a builder where there are any, enter edits the selected target, and x
-// or d removes it after asking. ctrl+s keeps the list and saves the form in one step, from every state of the
+// or d removes it after asking. F2 keeps the list and saves the form in one step, from every state of the
 // screen, the typed target included; in the guided setup it goes on to the next step instead, which saves
 // only from its summary. esc closes an unchanged list at once and asks about a changed one, so no change is
 // dropped silently. Each target is typed on its own, so none has to be quoted into a line with the others. A
@@ -40,8 +40,8 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "ctrl+c":
 		return m.quit()
-	case "ctrl+s":
-		// ctrl+s saves from every state of the list, the way it does from every row of the form. A typed
+	case "f2":
+		// F2 saves from every state of the list, the way it does from every row of the form. A typed
 		// target is taken first; one the provider refuses stays typed with the reason, and nothing is saved.
 		// The add menu takes its typed line the same way, and the builder its target once it is complete.
 		if m.targetAdd != nil && !m.saveAdd() {
@@ -137,7 +137,7 @@ func (m *Model) leaveTargets() tea.Cmd {
 		m.screen = screenForm
 		return nil
 	}
-	m.leaveTo, m.leaveFrom = -1, screenTargets
+	m.leaveFrom = screenTargets
 	m.screen = screenLeave
 	return nil
 }
@@ -253,10 +253,10 @@ func (m *Model) targetFrame() (string, string) {
 	}
 
 	var foot strings.Builder
-	save := "ctrl+s save"
+	save := "F2 save"
 	if m.wizard != nil {
 		// The guided setup saves only from its summary.
-		save = "ctrl+s next step"
+		save = "F2 next step"
 	}
 	keys := "a add · enter edit · x remove · up/down move · " + save + " · esc close"
 	switch {

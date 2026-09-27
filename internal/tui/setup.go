@@ -287,7 +287,7 @@ func (m *Model) setupBack() {
 // leaveSetup is esc: it closes a saved setup, and cancels one that is not saved yet, asking first once a
 // provider was chosen. Dropping the setup drops every typed secret with it; nothing reached the file or a
 // store.
-func (m *Model) leaveSetup() tea.Cmd { return m.requestLeave(-1) }
+func (m *Model) leaveSetup() tea.Cmd { return m.requestLeave() }
 
 // finishSetup ends a saved setup on the Connections list, with the new connection selected.
 func (m *Model) finishSetup() tea.Cmd {
@@ -444,7 +444,7 @@ func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "esc":
 		return m.leaveSetup()
-	case "ctrl+b":
+	case "f3":
 		m.setupBack()
 	case "enter":
 		return m.saveSetup()
@@ -534,7 +534,7 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 // setupError turns a failed save into the way out. The configuration is unchanged in every case.
 func (m *Model) setupError(err error) string {
 	if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
-		return fmt.Sprintf("%v; nothing was saved. %s, then press enter again, or press ctrl+b to go back "+
+		return fmt.Sprintf("%v; nothing was saved. %s, then press enter again, or press F3 to go back "+
 			"and choose %s instead", err, secret.StoreAdvice(secret.StoreStateOf(err), platform), storageEnv)
 	}
 	return err.Error() + "; the configuration was not changed"
@@ -544,7 +544,7 @@ func setupKeys(step int, next string) string {
 	if step == stepProvider {
 		return next + " next · esc cancel setup"
 	}
-	return next + " next · ctrl+b back · esc cancel setup · alt+1-4 section"
+	return next + " next · F3 back · esc cancel setup"
 }
 
 // setupHeading is the title of the current step and what it decides.
@@ -573,7 +573,7 @@ func (m *Model) summaryView() string {
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
 		b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 	}
-	keys := "enter save · ctrl+b back · esc cancel setup · alt+1-4 section"
+	keys := "enter save · F3 back · esc cancel setup"
 	switch {
 	case w.saving:
 		keys = "ctrl+c quit"

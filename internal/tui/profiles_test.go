@@ -101,7 +101,7 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 		toggleTool(t, m, descriptor.ID)
 		every = append(every, descriptor.ID)
 	}
-	pump(t, m, "ctrl+s")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}
@@ -221,7 +221,7 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 			m.fieldValue("permissions"))
 	}
 	press(t, m, "right", "y")
-	pump(t, m, "ctrl+s")
+	pump(t, m, "f2")
 	saved := savedConnection(t, path, reg, "all")
 	if !reflect.DeepEqual(saved.Tools, []string{"bookstack.pages.get", "bookstack.pages.list"}) ||
 		config.FormatPermissions(saved.Permissions) != "read" {
@@ -255,7 +255,7 @@ func TestALaterToolJoinsNoSavedConnection(t *testing.T) {
 		list.selected["bookstack.books.list"] {
 		t.Fatalf("the later tool is not offered unticked: %v %v", list.choices, list.selected)
 	}
-	pump(t, m, "ctrl+s")
+	pump(t, m, "f2")
 	if got := savedTools(t, path, reg, "wiki"); !reflect.DeepEqual(got, []string{"bookstack.pages.list"}) {
 		t.Fatalf("saved tools = %#v, want the listed tool only", got)
 	}
@@ -287,7 +287,7 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 	if m.fieldValue(profileLabel) != profileCustom {
 		t.Fatalf("profile = %q after a change by hand", m.fieldValue(profileLabel))
 	}
-	press(t, m, "ctrl+s")
+	press(t, m, "f2")
 	if m.screen != screenSummary {
 		t.Fatalf("screen = %v, error %q, want the summary", m.screen, m.fail)
 	}
