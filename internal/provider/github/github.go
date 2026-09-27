@@ -38,8 +38,10 @@
 // whose targets name neither a repository nor a project. The star tools also star and unstar one repository
 // an explicit connection allows. The organization tools read the teams of an organization and the members of
 // one of its teams, an organization the connection's targets must allow as an owner. The repository tools
-// read the contents of a file or a directory, the Git tree of a ref, and, through GraphQL, the blame of a
-// file over a bounded line range; none of them writes, diffs two refs, or downloads an archive. The search
+// read the contents of a file or a directory, the Git tree of a ref, through GraphQL the blame of a file
+// over a bounded line range, the commits of a repository or one commit with its stats and changed files, and
+// the branches and the tags of a repository or one tag resolved through the Git refs and Git tags APIs;
+// none of them writes, diffs two refs, or downloads an archive. The search
 // tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
@@ -376,9 +378,9 @@ func Register(reg *capability.Registry) error {
 				"Contents: read, and for issue and pull request search also Issues: read or Pull requests: " +
 				"read, on a fine-grained token, for private ones; code search also needs Contents: read for " +
 				"private repositories; user and organization search need no scope beyond the token's own " +
-				"identity; reading repository contents, a Git tree, or a file's blame needs no scope for a " +
-				"public repository, or repo on a classic token, or Contents: read on a fine-grained token, " +
-				"for a private one",
+				"identity; reading repository contents, a Git tree, a file's blame, commits, branches, or tags " +
+				"needs no scope for a public repository, or repo on a classic token, or Contents: read on a " +
+				"fine-grained token, for a private one",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -507,9 +509,11 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{starsList.ID, starsAdd.ID, starsRemove.ID},
 		}, {
 			ID: "repository-reader", Title: "Repository reader",
-			Description: "reads the contents of a file or a directory, the Git tree of a ref, and the " +
-				"blame of a file over a bounded line range; changes nothing",
-			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID},
+			Description: "reads the contents of a file or a directory, the Git tree of a ref, the blame of a " +
+				"file over a bounded line range, the commits of a repository or one commit, and the branches " +
+				"and the tags of a repository or one tag; changes nothing",
+			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID, commitsList.ID, commitsGet.ID,
+				branchesList.ID, tagsList.ID, tagsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -537,7 +541,7 @@ func Register(reg *capability.Registry) error {
 		maintenanceOperations(), pullRequestOperations(), releaseOperations(), pullRequestCommentOperations(),
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
-		searchOperations(), contentsOperations(), blameOperations())...)
+		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1269,6 +1273,12 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := releasesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := commitsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := refsSubject(parts[2]); what != "" {
 			s.what = what
 		}
 	}

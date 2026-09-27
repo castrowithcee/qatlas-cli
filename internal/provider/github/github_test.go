@@ -805,8 +805,9 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		}
 	}
 	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.blame.get",
-		"github.code.search",
-		"github.comments.list", "github.commits.search", "github.contents.get", "github.issues.get",
+		"github.branches.list", "github.code.search",
+		"github.comments.list", "github.commits.get", "github.commits.list", "github.commits.search",
+		"github.contents.get", "github.issues.get",
 		"github.issues.list", "github.issues.search", "github.organizations.search", "github.projectfields.list",
 		"github.projectitems.get", "github.projectitems.list", "github.projects.list",
 		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
@@ -815,7 +816,8 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		"github.pullrequestreviews.list", "github.pullrequestreviewthreads.list", "github.pullrequests.get",
 		"github.pullrequests.list", "github.pullrequests.search",
 		"github.releaseassets.list", "github.releases.get", "github.releases.list",
-		"github.repositories.list", "github.repositories.search", "github.stars.list", "github.teammembers.list",
+		"github.repositories.list", "github.repositories.search", "github.stars.list", "github.tags.get",
+		"github.tags.list", "github.teammembers.list",
 		"github.teams.list", "github.trees.get", "github.users.search",
 		"github.workflowartifacts.list",
 		"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowjobs.get", "github.workflowjobs.list",
@@ -824,7 +826,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 118 {
+	if len(metadata.Tools) != 123 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }
