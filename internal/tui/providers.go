@@ -26,7 +26,7 @@ type providerTable struct {
 func (t *providerTable) open(ids []string, names map[string]string, current string) {
 	t.names, t.current = names, current
 	t.list = newFilterList(t.text)
-	t.list.input.Placeholder = "type a name or ID"
+	t.list.input.Placeholder = "Type to search"
 	t.list.reset(ids)
 	t.list.selectName(current)
 	t.list.startFilter()
@@ -159,7 +159,7 @@ func (m *Model) providerTableFrame() (string, string) {
 	keys := "type to search · up/down move · enter choose · esc cancel"
 	if w := m.wizard; w != nil {
 		title = fmt.Sprintf("Setup step %d of %d · choose provider", w.step+1, setupSteps)
-		keys = "type to search · up/down move · enter choose and continue · esc cancel setup"
+		keys = "type to search · up/down move · enter next · esc cancel setup"
 	}
 	var head strings.Builder
 	head.WriteString(m.wrapped(titleStyle, fmt.Sprintf("%s  %d/%d (%d total)",
@@ -176,13 +176,13 @@ func (m *Model) providerTableFrame() (string, string) {
 		head.WriteString(m.wrapped(hintStyle,
 			fmt.Sprintf("No provider matches %q. esc keeps the current one.", t.list.query())) + "\n")
 	}
-	return head.String(), m.hint(keys) + m.notes()
+	return head.String(), m.keyHint(keys) + m.notes()
 }
 
 // providerTableRow draws the shown provider at index i of the table.
 func (m *Model) providerTableRow(i int) string {
 	_, width := m.fit("  ")
-	return m.row(i == m.providers.list.cursor, m.providers.row(m.providers.list.matches[i], width))
+	return m.listRow(i == m.providers.list.cursor, i%2 == 1, m.providers.row(m.providers.list.matches[i], width))
 }
 
 func (m *Model) providerTableWindow() (int, int) {

@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -300,5 +301,71 @@ func TestTableLayoutPriority(t *testing.T) {
 		if line := tab.line(tab.rows["a-rather-long-name"], got); line != c.line {
 			t.Errorf("line at %d = %q, want %q", c.width, line, c.line)
 		}
+	}
+}
+
+// ansiEscape matches one Lip Gloss/termenv SGR sequence, so a test can look at a line's text regardless of
+// the colour profile that rendered it.
+var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// findRow is the first line of view that is a table row (its text starts with the '>' marker or its blank
+// of the same width, once any colour is stripped) and holds text, so a test can read the row of a known
+// entry without assuming a fixed position, a colour profile, or mistaking a header or hint line that
+// happens to mention the same text for the row itself.
+func findRow(view, text string) string {
+	for _, line := range strings.Split(view, "\n") {
+		plain := ansiEscape.ReplaceAllString(line, "")
+		if strings.Contains(plain, text) && (strings.HasPrefix(plain, "> ") || strings.HasPrefix(plain, "  ")) {
+			return line
+		}
+	}
+	return ""
+}
+
+// The marked row of a section list is highlighted the full width of the row under colour, and, without it
+// (NO_COLOR or an ASCII terminal), is still told apart by its leading '>' alone; an unmarked row beside it
+// still gets its zebra shade under colour. No row is ever wider than the terminal, at any of the widths the
+// design is meant to hold at.
+func TestListRowsAreHighlightedFullWidthAndReadWithoutColour(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+
+	for _, width := range []int{40, 79, 80, 120} {
+		m := newTableModel(t, width)
+		openSectionByName(t, m, sectionServices)
+		if len(m.list.matches) < 2 {
+			t.Fatalf("width %d: need at least two services for the marked row and its zebra neighbour", width)
+		}
+		marked, alt := m.list.matches[0], m.list.matches[1]
+
+		lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
+		coloured := screenOf(m)
+		assertViewFits(t, coloured, width, m.height)
+		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the marked row shows no colour: %q\n%s", width, row, coloured)
+		}
+		if row := findRow(coloured, alt); !strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the alternating row shows no zebra colour: %q\n%s", width, row, coloured)
+		}
+
+		lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces
+		plain := screenOf(m)
+		assertViewFits(t, plain, width, m.height)
+		if strings.Contains(plain, "\x1b") {
+			t.Errorf("width %d: NO_COLOR still emits escape sequences:\n%s", width, plain)
+		}
+		if row := findRow(plain, marked); !strings.HasPrefix(row, "> ") {
+			t.Errorf("width %d: the marked row has no leading '>' without colour: %q\n%s", width, row, plain)
+		}
+		if row := findRow(plain, alt); !strings.HasPrefix(row, "  ") {
+			t.Errorf("width %d: an unmarked row wrongly carries the marker: %q\n%s", width, row, plain)
+		}
+
+		press(t, m, "/")
+		typeText(t, m, marked)
+		if len(m.list.matches) != 1 || m.list.matches[0] != marked {
+			t.Errorf("width %d: typing %q does not filter down to it: %v", width, marked, m.list.matches)
+		}
+		press(t, m, "esc")
 	}
 }

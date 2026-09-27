@@ -427,6 +427,7 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
 	m.picker = newFilterList(choiceText)
+	m.picker.input.Placeholder = "Type to search"
 	m.targetList = newFilterList(func(target string) string { return target })
 	m.targetInput = textField("", "", false).input
 	// The editor opens on the sidebar, with the first section already shown beside it.
@@ -2290,6 +2291,17 @@ var (
 	warningStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3"))
 	focusBorder  = lipgloss.NewStyle().Foreground(accent)
 	quietBorder  = lipgloss.NewStyle().Faint(true)
+	// activeRowStyle highlights the marked row of a table screen (a section list, the picker, the provider
+	// table) the full width of the row, reversing whatever foreground and background the terminal already
+	// has instead of naming a colour of its own. It never carries the selection alone: the '>' prefix of
+	// listRow still leads the row, so NO_COLOR or an ASCII terminal keeps showing which one is marked.
+	activeRowStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
+	// zebraStyle shades every other unmarked row of a table screen as a reading aid on top of the '>'
+	// prefix and the column layout, never instead of them; it is gone under NO_COLOR like every other
+	// colour here, which is fine because it never was the only way to tell a row apart.
+	zebraStyle = lipgloss.NewStyle().Background(lipgloss.Color("8"))
+	// keyStyle is the key of a footer hint (bold); the action after it keeps the plain hintStyle.
+	keyStyle = lipgloss.NewStyle().Bold(true)
 )
 
 // View renders the frame: the configuration path, the sections, and the workspace with the current screen.
@@ -2531,7 +2543,7 @@ func (m *Model) listFrame() (string, string) {
 	var keys string
 	switch {
 	case m.screen == screenNav:
-		keys = "up/down section · enter open list · 1-4 open · n new · c setup · ? help · q quit"
+		keys = "up/down section · enter open · 1-4 open · n new · c setup · ? help · q quit"
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
 	case m.section == sectionConnections:
@@ -2543,7 +2555,7 @@ func (m *Model) listFrame() (string, string) {
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
 	}
-	foot := m.hint(keys)
+	foot := m.keyHint(keys)
 	if m.section == sectionConnections {
 		for _, name := range m.list.all {
 			if m.needsDescription(name) {
@@ -2587,7 +2599,7 @@ func (m *Model) listRows() func(i int) string {
 	layout := t.layout(width)
 	return func(i int) string {
 		name := m.list.matches[i]
-		return m.row(i == m.list.cursor && m.screen != screenNav, t.line(t.rows[name], layout))
+		return m.listRow(i == m.list.cursor && m.screen != screenNav, i%2 == 1, t.line(t.rows[name], layout))
 	}
 }
 
@@ -2632,8 +2644,8 @@ func (m *Model) pickerFrame() (string, string) {
 	var head strings.Builder
 	head.WriteString(m.wrapped(titleStyle, fmt.Sprintf("Choose %s  %d/%d (%d total)",
 		f.label, min(m.picker.cursor+1, shown), shown, total)) + "\n")
-	head.WriteString(m.filterLine(&m.picker) + "\n")
-	keys := "type to filter · up/down move · enter choose · esc cancel"
+	head.WriteString(m.searchLine(&m.picker, "search: ") + "\n")
+	keys := "type to search · up/down move · enter choose · esc cancel"
 	if m.pickerMarks != nil {
 		ticked := 0
 		for _, choice := range m.picker.all {
@@ -2642,7 +2654,7 @@ func (m *Model) pickerFrame() (string, string) {
 			}
 		}
 		head.WriteString(m.wrapped(hintStyle, fmt.Sprintf("ticked: %d of %d", ticked, total)) + "\n")
-		keys = "type to filter · up/down move · space tick · enter keep · esc cancel"
+		keys = "type to search · up/down move · space tick · enter keep · esc cancel"
 	} else {
 		head.WriteString(m.wrapped(hintStyle, "current: "+choiceText(f.value())) + "\n")
 	}
@@ -2650,24 +2662,29 @@ func (m *Model) pickerFrame() (string, string) {
 		head.WriteString(m.wrapped(hintStyle,
 			fmt.Sprintf("No value matches %q. esc keeps the current one.", m.picker.query())) + "\n")
 	}
-	return head.String(), m.hint(keys) + m.notes()
+	return head.String(), m.keyHint(keys) + m.notes()
 }
 
-// pickerRow draws the shown value at index i of the picker and marks the value the row holds now.
+// pickerRow draws the shown value at index i of the picker and marks the value the row holds now. Its text
+// is cut to fit beside the marker before listRow ever sees it, the way a table cell is cut rather than
+// wrapped.
 func (m *Model) pickerRow(i int) string {
+	_, width := m.fit("  ")
 	choice := m.picker.matches[i]
+	var text string
 	if m.pickerMarks != nil {
 		mark := "[ ] "
 		if m.pickerMarks[choice] {
 			mark = "[x] "
 		}
-		return m.row(i == m.picker.cursor, mark+m.picker.text(choice))
+		text = mark + m.picker.text(choice)
+	} else {
+		text = choiceText(choice)
+		if choice == m.fields[m.focus].value() {
+			text += "  (current)"
+		}
 	}
-	text := choiceText(choice)
-	if choice == m.fields[m.focus].value() {
-		text += "  (current)"
-	}
-	return m.row(i == m.picker.cursor, text)
+	return m.listRow(i == m.picker.cursor, i%2 == 1, truncateCells(text, width))
 }
 
 func (m *Model) pickerWindow() (int, int) {
@@ -3372,9 +3389,70 @@ func (m *Model) row(active bool, text string) string {
 	return strings.Join(lines, "\n")
 }
 
+// listRow draws one row of a table screen: a section list, the picker, or the provider table. text is
+// already cut to fit beside the marker: long cells are shortened before they ever reach here, never
+// wrapped. The marked row is highlighted the full width of the row, on top of the '>' prefix row already
+// gives it, so NO_COLOR or an ASCII terminal still shows which one it is; every other
+// row alternates a faint background as a secondary reading aid, never the only one.
+func (m *Model) listRow(active, alt bool, text string) string {
+	blank, width := m.fit("  ")
+	marker := blank
+	if active && len(blank) == 2 {
+		marker = "> "
+	}
+	line := marker + padLine(text, width)
+	switch {
+	case active:
+		return activeRowStyle.Render(line)
+	case alt:
+		return zebraStyle.Render(line)
+	default:
+		return line
+	}
+}
+
 // hint is the key line of a screen. Like every other prose line it is wrapped into the terminal instead of
 // being cut off at its right edge.
 func (m *Model) hint(text string) string { return "\n" + m.wrapped(hintStyle, text) }
+
+// keyHint is the key line of a table screen (a section list, the picker, the provider table): groups of
+// keys separated by " · " never split across a wrap, only between groups, and within a group the key (its
+// first word) is bold while the action after it keeps the plain hint style. A single group too wide for the
+// terminal is cut with "..." rather than left to overflow, which only a pathologically narrow terminal
+// should ever trigger.
+func (m *Model) keyHint(text string) string {
+	width := m.usable(0)
+	var lines []string
+	var line string
+	lineWidth := 0
+	for _, group := range strings.Split(text, " · ") {
+		group = truncateCells(group, width)
+		gw := lipgloss.Width(group)
+		if lineWidth > 0 && lineWidth+lipgloss.Width(" · ")+gw > width {
+			lines = append(lines, line)
+			line, lineWidth = "", 0
+		}
+		if lineWidth > 0 {
+			line += hintStyle.Render(" · ")
+			lineWidth += lipgloss.Width(" · ")
+		}
+		line += keyHintGroup(group)
+		lineWidth += gw
+	}
+	if lineWidth > 0 || len(lines) == 0 {
+		lines = append(lines, line)
+	}
+	return "\n" + strings.Join(lines, "\n")
+}
+
+// keyHintGroup styles one "key action" hint: the key (its first word) bold, the action after it faint.
+func keyHintGroup(group string) string {
+	key, action, ok := strings.Cut(group, " ")
+	if !ok {
+		return keyStyle.Render(key)
+	}
+	return keyStyle.Render(key) + hintStyle.Render(" "+action)
+}
 
 // Run starts the editor on the given terminal streams. The updater may be nil, in which case the editor does
 // not look for a newer release.

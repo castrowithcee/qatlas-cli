@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -354,7 +355,7 @@ func TestGuidedSetupChoosesItsProviderInTheTable(t *testing.T) {
 			t.Errorf("the setup table does not show %q:\n%s", want, view)
 		}
 	}
-	if !strings.Contains(strings.Join(strings.Fields(view), " "), "enter choose and continue") {
+	if !strings.Contains(strings.Join(strings.Fields(view), " "), "enter next") {
 		t.Errorf("the setup table does not say that enter goes on:\n%s", view)
 	}
 
@@ -439,5 +440,61 @@ func TestTheProviderTableShowsTodoistAndItsWildcardWarning(t *testing.T) {
 	if got := m.permissionChoices("todoist"); !reflect.DeepEqual(got, []string{"default", "read", "create", "update",
 		"delete"}) {
 		t.Errorf("todoist permissions = %v, want reads and the task and comment changes", got)
+	}
+}
+
+// The provider table has no letter actions either, so it filters as you type and shows "Type to search"
+// until something is typed. Its marked row is highlighted the full width of the row under colour and,
+// without it, is still told apart by its leading '>' alone; an unmarked row beside it still gets its zebra
+// shade under colour. No row is ever wider than the terminal, at any of the widths the design is meant to
+// hold at.
+func TestProviderTableRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+
+	for _, width := range []int{40, 79, 80, 120} {
+		m, _ := providerModel(t, providerRegistry(t, 55))
+		m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+		openProviderRow(t, m, sectionServices)
+		press(t, m, "enter")
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+		if m.screen != screenProviders {
+			t.Fatalf("width %d: enter did not open the provider table: screen %v", width, m.screen)
+		}
+		marked, alt := "p000", "p001"
+
+		lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces
+		if view := screenOf(m); !strings.Contains(view, "Type to search") {
+			t.Errorf("width %d: the empty provider table shows no 'Type to search' placeholder:\n%s", width, view)
+		}
+
+		lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
+		coloured := screenOf(m)
+		assertViewFits(t, coloured, width, m.height)
+		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the marked provider row shows no colour: %q\n%s", width, row, coloured)
+		}
+		if row := findRow(coloured, alt); !strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the alternating provider row shows no zebra colour: %q\n%s", width, row, coloured)
+		}
+
+		lipgloss.SetColorProfile(3)
+		plain := screenOf(m)
+		assertViewFits(t, plain, width, m.height)
+		if strings.Contains(plain, "\x1b") {
+			t.Errorf("width %d: NO_COLOR still emits escape sequences in the provider table:\n%s", width, plain)
+		}
+		if row := findRow(plain, marked); !strings.HasPrefix(row, "> ") {
+			t.Errorf("width %d: the marked provider row has no leading '>' without colour: %q\n%s", width, row, plain)
+		}
+
+		typeText(t, m, "p015")
+		if len(m.providers.list.matches) != 1 || m.providers.list.matches[0] != "p015" {
+			t.Errorf("width %d: typing does not filter the table to p015: %v", width, m.providers.list.matches)
+		}
+		if view := screenOf(m); !strings.Contains(view, "> ") || !strings.Contains(view, "p015") {
+			t.Errorf("width %d: the filtered table does not mark p015:\n%s", width, view)
+		}
+		press(t, m, "esc")
 	}
 }

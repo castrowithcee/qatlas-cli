@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
@@ -401,5 +402,62 @@ func TestAChoiceRowDoesNotAdvanceTheSetup(t *testing.T) {
 	press(t, m, "shift+tab", "shift+tab", "f2")
 	if m.wizard.step != stepCredential || m.fail != "" {
 		t.Fatalf("F2 on the service row went to step %d, error %q", m.wizard.step, m.fail)
+	}
+}
+
+// A picker has no letter actions, so it filters as you type and shows "Type to search" until something is
+// typed. Its marked row is highlighted the full width of the row under colour
+// and, without it, is still told apart by its leading '>' alone; an unmarked row beside it still gets its
+// zebra shade under colour. No row is ever wider than the terminal, at any of the widths the design is
+// meant to hold at.
+func TestPickerRowsAreHighlightedFullWidthReadWithoutColourAndSearchByTyping(t *testing.T) {
+	before := lipgloss.ColorProfile()
+	t.Cleanup(func() { lipgloss.SetColorProfile(before) })
+
+	for _, width := range []int{40, 79, 80, 120} {
+		m, _, _ := newModel(t)
+		names := numberedConnections(30)
+		seedConnections(t, m, names...)
+		m.Update(tea.WindowSizeMsg{Width: width, Height: 24})
+		openDefaultForm(t, m)
+		press(t, m, "/")
+		if m.screen != screenPicker {
+			t.Fatalf("width %d: / did not open the picker: screen %v", width, m.screen)
+		}
+		marked, alt := names[0], names[1]
+
+		lipgloss.SetColorProfile(3) // termenv.Ascii: what NO_COLOR also produces
+		if view := screenOf(m); !strings.Contains(view, "Type to search") {
+			t.Errorf("width %d: the empty picker shows no 'Type to search' placeholder:\n%s", width, view)
+		}
+
+		lipgloss.SetColorProfile(2) // termenv.ANSI: a colour terminal
+		coloured := screenOf(m)
+		assertViewFits(t, coloured, width, m.height)
+		if row := findRow(coloured, marked); !strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the marked picker row shows no colour: %q\n%s", width, row, coloured)
+		}
+		if row := findRow(coloured, alt); !strings.Contains(row, "\x1b[") {
+			t.Errorf("width %d: the alternating picker row shows no zebra colour: %q\n%s", width, row, coloured)
+		}
+
+		lipgloss.SetColorProfile(3)
+		plain := screenOf(m)
+		assertViewFits(t, plain, width, m.height)
+		if strings.Contains(plain, "\x1b") {
+			t.Errorf("width %d: NO_COLOR still emits escape sequences in the picker:\n%s", width, plain)
+		}
+		if row := findRow(plain, marked); !strings.HasPrefix(row, "> ") {
+			t.Errorf("width %d: the marked picker row has no leading '>' without colour: %q\n%s", width, row, plain)
+		}
+
+		typeText(t, m, "015")
+		if len(m.picker.matches) != 1 || m.picker.matches[0] != "conn-015" {
+			t.Errorf("width %d: typing does not filter the picker to conn-015: %v", width, m.picker.matches)
+		}
+		if view := screenOf(m); !strings.Contains(view, "> conn-015") {
+			t.Errorf("width %d: the filtered picker does not mark conn-015:\n%s", width, view)
+		}
+		press(t, m, "esc")
 	}
 }
