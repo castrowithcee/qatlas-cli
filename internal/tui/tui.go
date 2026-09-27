@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -45,16 +46,21 @@ const (
 	sectionCredentials
 	sectionConnections
 	sectionDefaults
+	// sectionVault is a settings form, not a list of named entries: it shows the vault's state and the
+	// actions that apply to it, and edits vault.idle_timeout and vault.admin_timeout. See vaultsettings.go.
+	sectionVault
 	sectionCount
 )
 
 func (s section) title() string {
-	return [...]string{"Services", "Credentials", "Connections", "Defaults"}[s]
+	return [...]string{"Services", "Credentials", "Connections", "Defaults", "Vault"}[s]
 }
 
-// entry is what one entry of the section is called.
+// entry is what one entry of the section is called. Vault has no entries of its own; the name here is
+// never shown, because the vault form and its leave question are worded on their own (see editorView and
+// leaveView).
 func (s section) entry() string {
-	return [...]string{"service", "credential", "connection", "default"}[s]
+	return [...]string{"service", "credential", "connection", "default", "vault setting"}[s]
 }
 
 type screen int
@@ -111,6 +117,13 @@ const (
 	// in a screen of their own, so a target never has to be quoted into one line with the others. The row
 	// shows a short form of them, or every entry while it is expanded.
 	fieldTargets
+	// fieldVaultState is the read-only row of the vault form that names the vault's current state. It holds
+	// no value of its own: renderField computes what it shows live, from the vault, every time it is drawn.
+	fieldVaultState
+	// fieldVaultAction is a row of the vault form that runs a vault action (turning encryption on or off, or
+	// changing the passphrase) at once on enter, instead of saving with F2 like every other row. See
+	// vaultsettings.go.
+	fieldVaultAction
 )
 
 type field struct {
@@ -137,6 +150,8 @@ type field struct {
 	// the row shows every one of them.
 	entries  []string
 	expanded bool
+	// action identifies which vault action a fieldVaultAction row runs on enter (see vaultsettings.go).
+	action string
 }
 
 // providerNoteLabel is the row of a service form that edits the note of the service's provider.
@@ -248,6 +263,11 @@ func (f field) withHint(hint string) field {
 }
 
 func (f field) value() string {
+	if f.kind == fieldVaultState || f.kind == fieldVaultAction {
+		// Neither kind holds anything to save: the state is read live from the vault when it is drawn, and
+		// an action runs at once on enter rather than being saved with the rest of the form.
+		return ""
+	}
 	if f.kind == fieldMultiChoice {
 		if f.selected["default"] {
 			return ""
@@ -374,6 +394,11 @@ type Model struct {
 	// so a second one cannot start before it is done.
 	vaultOffer *vaultOffer
 	vaultBusy  bool
+	// decryptConfirm is the explicit y/n question before the vault's encryption is switched off, holding the
+	// already-verified current passphrase to run the switch with once it is answered y. It is cleared, and
+	// the passphrase dropped, the moment the question is answered either way.
+	decryptConfirm    bool
+	decryptPassphrase string
 
 	// Connection test state. Raw responses never enter the model, only the class and a redacted message.
 	tester     Tester
@@ -470,6 +495,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handlePlaced(msg)
 	case writtenMsg:
 		return m, m.handleWritten(msg)
+	case vaultActionMsg:
+		return m, m.handleVaultAction(msg)
 	case setupSavedMsg:
 		return m, m.setupSaved(msg)
 	case updateCheckedMsg:
@@ -558,6 +585,9 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	case "down", "j":
 		return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
 	case "enter", "right", "l", "tab":
+		if m.section == sectionVault {
+			return m.enterVaultSection()
+		}
 		m.screen = screenList
 		m.clearMessages()
 	case "c":
@@ -699,6 +729,8 @@ func (m *Model) newEntryBlockedFor(s section) string {
 			return "Create a connection before choosing a default. Press 3 to open Connections, or c for " +
 				"the guided setup."
 		}
+	case sectionVault:
+		return "Vault is a settings form, not a list; press enter to open it."
 	}
 	return ""
 }
@@ -848,6 +880,9 @@ func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
 func (m *Model) saveAndLeave() tea.Cmd {
 	m.screen = m.leaveFrom
 	m.trimFields()
+	if m.section == sectionVault {
+		return m.saveVault()
+	}
 	if cmd := m.guardTypeChange(); cmd != nil {
 		// This save has to ask the credential stores first and completes, or explains itself, when they
 		// answered; the form stays open until then.
@@ -898,6 +933,12 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			m.fields[m.focus].expanded = false
 			return nil
 		}
+	case fieldVaultAction:
+		// An action row runs at once on enter, never deferred to F2 like the rest of the form.
+		switch key.String() {
+		case "enter", " ":
+			return m.runVaultActionField(m.fields[m.focus].action)
+		}
 	}
 	if m.wizard != nil {
 		switch key.String() {
@@ -947,6 +988,10 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	case fieldSecret:
 		// A secret row holds nothing to type into, so its keys are free for what a secret needs.
 		return m.secretRowKey(current.label, key)
+	case fieldVaultState, fieldVaultAction:
+		// Neither kind holds anything to type into: the state is never focused (it is read-only), and an
+		// action already ran, if it was going to, above.
+		return nil
 	}
 	if current.readOnly {
 		return nil
@@ -1504,6 +1549,20 @@ func (m *Model) replacePermissionChoices(provider string) {
 }
 
 func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
+	if m.decryptConfirm {
+		switch key.String() {
+		case "y":
+			passphrase := m.decryptPassphrase
+			m.decryptConfirm, m.decryptPassphrase, m.screen = false, "", screenForm
+			return m.runVaultDecrypt(passphrase)
+		case "n", "esc":
+			m.decryptConfirm, m.decryptPassphrase, m.screen = false, "", screenForm
+			m.status = "Cancelled; the vault stays encrypted"
+		case "ctrl+c":
+			return m.quit()
+		}
+		return nil
+	}
 	if profile := m.pendingProfile; profile != "" {
 		switch key.String() {
 		case "y":
@@ -1653,6 +1712,10 @@ func (m *Model) stopTest() {
 func (m *Model) openSection(s section) tea.Cmd {
 	m.section = s
 	m.list.reset(m.entryNames(s))
+	if s == sectionVault {
+		// Vault has no list: entering the section opens its settings form directly.
+		return m.enterVaultSection()
+	}
 	return m.showList()
 }
 
@@ -1670,16 +1733,34 @@ func (m *Model) returnToList(name string) tea.Cmd {
 func (m *Model) showList() tea.Cmd {
 	m.stopTest()
 	m.testName = ""
-	m.screen = screenList
 	m.editing = ""
 	m.confirmRole = ""
 	m.clearMessages()
+	if m.section == sectionVault {
+		// Vault has no list of its own, so "the list" a form or confirmation returns to is the level above
+		// it, the sidebar; openSection is what opens the form directly on the way in (see enterVaultSection).
+		m.focusNav()
+		return nil
+	}
+	m.screen = screenList
 	if m.section != sectionCredentials {
 		return nil
 	}
 	// The list says where each secret resolves from, and that answer comes from the resolver rather than
 	// from anything this editor remembers.
 	return m.refreshSources(m.keyringQueries())
+}
+
+// enterVaultSection opens the vault settings form directly: Vault has no list to show first, so entering
+// the section from the sidebar is the same one step as opening a list's own entry would be for any other
+// section.
+func (m *Model) enterVaultSection() tea.Cmd {
+	m.stopTest()
+	m.testName = ""
+	m.editing = ""
+	m.confirmRole = ""
+	m.clearMessages()
+	return m.openVaultForm()
 }
 
 func (m *Model) selected() (string, bool) { return m.list.selected() }
@@ -1703,6 +1784,8 @@ func (m *Model) entryNames(s section) []string {
 		for domain := range m.cfg.Defaults.Connections {
 			names = append(names, domain)
 		}
+	case sectionVault:
+		// A settings form, not a list of named entries.
 	}
 	sort.Strings(names)
 	return names
@@ -1932,6 +2015,11 @@ func (m *Model) buildFields(name string) []field {
 // submit saves the form, unless the change first has to be checked against the places that keep secrets.
 func (m *Model) submit() tea.Cmd {
 	m.trimFields()
+	if m.section == sectionVault {
+		// The vault form has no name field, and its action rows already ran on their own enter, never
+		// deferred to here; F2 and enter on a text row save only the two timeouts (see vaultsettings.go).
+		return m.saveVault()
+	}
 	if cmd := m.guardTypeChange(); cmd != nil {
 		return cmd
 	}
@@ -2139,7 +2227,7 @@ func (m *Model) trimFields() {
 	for i := range m.fields {
 		f := &m.fields[i]
 		if f.kind == fieldChoice || f.kind == fieldProvider || f.kind == fieldMultiChoice || f.kind == fieldToolList ||
-			f.kind == fieldMasked || f.kind == fieldTargets {
+			f.kind == fieldMasked || f.kind == fieldTargets || f.kind == fieldVaultState || f.kind == fieldVaultAction {
 			continue
 		}
 		if trimmed := strings.TrimSpace(f.input.Value()); trimmed != f.input.Value() {
@@ -2152,7 +2240,7 @@ func (m *Model) applyFocus() {
 	for i := range m.fields {
 		if i == m.focus && m.fields[i].kind != fieldChoice && m.fields[i].kind != fieldProvider &&
 			m.fields[i].kind != fieldMultiChoice && m.fields[i].kind != fieldToolList &&
-			m.fields[i].kind != fieldTargets && !m.fields[i].readOnly {
+			m.fields[i].kind != fieldTargets && m.fields[i].kind != fieldVaultAction && !m.fields[i].readOnly {
 			m.fields[i].input.Focus()
 			continue
 		}
@@ -2309,7 +2397,7 @@ func wrap(i, n int) int {
 }
 
 func sectionShortcut(key string) (section, bool) {
-	if len(key) != 1 || key[0] < '1' || key[0] > '4' {
+	if len(key) != 1 || key[0] < '1' || key[0] > '0'+byte(sectionCount) {
 		return 0, false
 	}
 	return section(key[0] - '1'), true
@@ -2396,6 +2484,8 @@ func (m *Model) editorView() string {
 		what := "New " + m.section.entry()
 		if m.editing != "" {
 			what = "Edit " + m.editing
+		} else if m.section == sectionVault {
+			what = "Vault"
 		}
 		if m.wizard != nil {
 			b.WriteString(m.setupHeading(false))
@@ -2430,6 +2520,8 @@ func (m *Model) editorView() string {
 			keys = "enter choose provider in the table · tab move · " + choiceFormKeys
 		case fieldTargets:
 			keys = "enter edit list · right/left expand/collapse · tab move · " + choiceFormKeys
+		case fieldVaultAction:
+			keys = "enter run · tab move · " + choiceFormKeys
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
@@ -2456,6 +2548,14 @@ func (m *Model) editorView() string {
 	case screenVaultOffer:
 		b.WriteString(m.vaultOfferView())
 	case screenConfirm:
+		if m.decryptConfirm {
+			b.WriteString(titleStyle.Render("Turn the vault's encryption off?") + "\n\n")
+			b.WriteString(m.indentedWith(warningStyle,
+				"warning: every secret it holds is written back to disk unencrypted; anyone who can read "+
+					"this machine's files can then read them") + "\n")
+			b.WriteString(m.hint("y turn off · n/esc keep it encrypted"))
+			break
+		}
 		if m.pendingProfile != "" {
 			b.WriteString(m.profileConfirmView())
 			break
@@ -2505,10 +2605,13 @@ const (
 // exactly the answers that apply; they come right under the warning, so even a tiny terminal shows them.
 func (m *Model) leaveView() string {
 	what := "New " + m.section.entry()
-	if m.editing != "" {
-		what = m.editing
-	}
 	where := "the " + m.section.title() + " list"
+	switch {
+	case m.editing != "":
+		what = m.editing
+	case m.section == sectionVault:
+		what, where = "the vault settings", "Vault"
+	}
 	warning, keys := "warning: unsaved changes in "+what, "s save and go on · d discard · esc keep editing"
 	why := "Leaving for " + where + " would lose them."
 	if m.wizard != nil {
@@ -2590,14 +2693,14 @@ func (m *Model) listFrame() (string, string) {
 	var keys string
 	switch {
 	case m.screen == screenNav:
-		keys = "up/down section · enter open · 1-4 open · n new · c setup · ? help · q quit"
+		keys = "up/down section · enter open · 1-5 open · n new · c setup · ? help · q quit"
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-4 or left sections · " +
+		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-5 or left sections · " +
 			"? help · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-4 or left sections · ? help · q quit"
+		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-5 or left sections · ? help · q quit"
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
@@ -2874,11 +2977,20 @@ const pathRoom = 12
 // sidebarLines are the rows of the sidebar: the sections with their entry counts, the guided setup, the help,
 // quitting, and the next step while there is room. The active section is marked "> " while the sidebar has
 // the focus and "* " while the workspace has it; the marker, not the colour, is what says so.
+// sectionEntryCount is the number shown after a section's name in the sidebar and the narrow navigation
+// line: how many entries it holds, or "-" for a settings form such as Vault, which holds none.
+func sectionEntryCount(m *Model, s section) string {
+	if s == sectionVault {
+		return "-"
+	}
+	return strconv.Itoa(len(m.entryNames(s)))
+}
+
 func (m *Model) sidebarLines() []string {
 	inner := sidebarWidth - frameCells
 	var lines []string
 	for s := section(0); s < sectionCount; s++ {
-		text := fmt.Sprintf("%d %-11s%3d", int(s)+1, s.title(), len(m.entryNames(s)))
+		text := fmt.Sprintf("%d %-11s%3s", int(s)+1, s.title(), sectionEntryCount(m, s))
 		switch {
 		case s != m.section || m.wizard != nil:
 			lines = append(lines, "  "+text)
@@ -3076,6 +3188,8 @@ func (m *Model) emptyHelp() string {
 			return reason + " Defaults are optional."
 		}
 		return "No default yet. Press n to choose one, or leave this empty and select connections explicitly."
+	case sectionVault:
+		return "A settings form, not a list: press enter to open it."
 	}
 	return "Nothing configured yet."
 }
@@ -3181,6 +3295,9 @@ func (m *Model) fieldHint(f field) string {
 }
 
 func (m *Model) fieldWarning(f field) string {
+	if f.kind == fieldVaultState {
+		return m.vaultStateWarning()
+	}
 	if f.kind != fieldTargets {
 		return ""
 	}
@@ -3322,6 +3439,12 @@ func (m *Model) cells(name string) []string {
 func (m *Model) renderField(f field, focused bool) string {
 	value := f.value()
 	switch {
+	case f.kind == fieldVaultState:
+		// Read live, never cached: the very act of running an action rebuilds the form (see vaultsettings.go),
+		// but reading it fresh here as well costs nothing and can never go stale.
+		value = m.vaultStateText()
+	case f.kind == fieldVaultAction:
+		value = "enter runs this"
 	case f.kind == fieldSecret:
 		// A secret row shows where the role resolves from and nothing else: there is no value to draw,
 		// and the resolver would not hand one out.

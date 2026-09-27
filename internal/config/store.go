@@ -71,6 +71,7 @@ func (c *Config) Clone() *Config {
 		out.Defaults.Connections = cloneStrings(c.Defaults.Connections)
 	}
 	out.Defaults.SecretStore = c.Defaults.SecretStore
+	out.Vault = c.Vault
 	return out
 }
 

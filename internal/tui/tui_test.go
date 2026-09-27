@@ -345,8 +345,8 @@ func TestNavigation(t *testing.T) {
 	t.Run("the sidebar wraps in both directions and shows each section at once", func(t *testing.T) {
 		m.screen, m.section = screenNav, sectionServices
 		press(t, m, "up")
-		if m.section != sectionDefaults || m.screen != screenNav {
-			t.Errorf("up = section %v screen %v, want Defaults on the sidebar", m.section, m.screen)
+		if m.section != sectionVault || m.screen != screenNav {
+			t.Errorf("up = section %v screen %v, want Vault on the sidebar", m.section, m.screen)
 		}
 		press(t, m, "down")
 		if m.section != sectionServices {
@@ -402,8 +402,8 @@ func TestNavigation(t *testing.T) {
 	})
 }
 
-// sectionLabels are how the sidebar names the four sections.
-var sectionLabels = []string{"1 Services", "2 Credentials", "3 Connections", "4 Defaults"}
+// sectionLabels are how the sidebar names the five sections.
+var sectionLabels = []string{"1 Services", "2 Credentials", "3 Connections", "4 Defaults", "5 Vault"}
 
 func TestLayoutsFitTheirTerminal(t *testing.T) {
 	m, _, _ := newEnvModel(t, map[string]string{
@@ -423,9 +423,9 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 	}{
 		{name: "sidebar beside the workspace", width: 100, height: 28, sidebar: true, nav: sectionLabels},
 		{name: "sidebar in a standard terminal", width: 80, height: 24, sidebar: true, nav: sectionLabels},
-		{name: "one navigation line above the workspace", width: 60, height: 24,
-			nav: []string{"[1 Services]", "2 Credentials", "3 Connections", "4 Defaults"}},
-		{name: "compact navigation line", width: 40, height: 12, nav: []string{"[1 Services] 2 3 4"}},
+		{name: "one navigation line above the workspace", width: 72, height: 24,
+			nav: []string{"[1 Services]", "2 Credentials", "3 Connections", "4 Defaults", "5 Vault"}},
+		{name: "compact navigation line", width: 40, height: 12, nav: []string{"[1 Services] 2 3 4 5"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

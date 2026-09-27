@@ -142,6 +142,58 @@ func TestVaultIdleTimeout(t *testing.T) {
 	}
 }
 
+// vault.admin_timeout is a Go duration, 10m when it is left out, "0" is a valid value of its own (not a
+// fallback trigger, unlike idle_timeout), and anything negative or unparsable is refused by its key.
+func TestVaultAdminTimeout(t *testing.T) {
+	cfg, err := Decode(strings.NewReader(minimal), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if got := cfg.VaultAdminTimeout(); got != 10*time.Minute {
+		t.Errorf("VaultAdminTimeout() without a setting = %v, want 10m", got)
+	}
+
+	cfg, err = Decode(strings.NewReader(minimal+"vault:\n  admin_timeout: 5m\n"), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() with admin_timeout = %v", err)
+	}
+	if got := cfg.VaultAdminTimeout(); got != 5*time.Minute {
+		t.Errorf("VaultAdminTimeout() = %v, want 5m", got)
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil || !strings.Contains(string(data), "admin_timeout: 5m") {
+		t.Errorf("the setting does not survive encoding: %s, %v", data, err)
+	}
+
+	cfg, err = Decode(strings.NewReader(minimal+"vault:\n  admin_timeout: \"0\"\n"), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() with admin_timeout 0 = %v", err)
+	}
+	if got := cfg.VaultAdminTimeout(); got != 0 {
+		t.Errorf("VaultAdminTimeout() with 0 = %v, want 0, not the default", got)
+	}
+
+	for _, value := range []string{"-1h", "-1s", "twelve minutes", "1d"} {
+		_, err := Decode(strings.NewReader(minimal+"vault:\n  admin_timeout: \""+value+"\"\n"), testProviders)
+		if err == nil || !strings.Contains(err.Error(), "vault.admin_timeout: ") {
+			t.Errorf("Decode() with admin_timeout %q error = %v, want it refused by its key", value, err)
+		}
+	}
+}
+
+// Clone must carry the vault settings over: a save of an unrelated change must never silently drop
+// vault.idle_timeout or vault.admin_timeout from the file.
+func TestCloneKeepsVaultSettings(t *testing.T) {
+	cfg, err := Decode(strings.NewReader(minimal+"vault:\n  idle_timeout: 90m\n  admin_timeout: 5m\n"), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	clone := cfg.Clone()
+	if clone.Vault != cfg.Vault {
+		t.Errorf("Clone().Vault = %+v, want %+v", clone.Vault, cfg.Vault)
+	}
+}
+
 // The connection description is optional prose the user maintains and discovery publishes. It arrives in
 // one normalized form, it stays one short line, and a refusal never quotes what was written.
 func TestConnectionDescriptionIsOneShortNormalizedLine(t *testing.T) {

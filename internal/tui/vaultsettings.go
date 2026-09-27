@@ -1,0 +1,321 @@
+package tui
+
+import (
+	"errors"
+
+	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
+)
+
+// Vault actions: what a fieldVaultAction row of the vault form runs on enter.
+const (
+	vaultActionEncrypt    = "encrypt"
+	vaultActionPassphrase = "passphrase"
+	vaultActionDecrypt    = "decrypt"
+)
+
+// Hints of the two vault settings rows every state offers.
+const (
+	vaultIdleTimeoutHint = "how long a vault process that holds the vault unlocked does so without a read " +
+		"before it locks itself, as a Go duration such as \"12h\" or \"30m\"; empty means 12h"
+	// vaultAdminTimeoutHint says plainly that this setting has no effect yet: an editor that claimed
+	// otherwise would be lying about behaviour it does not have.
+	vaultAdminTimeoutHint = "sets vault.admin_timeout for a future admin session of this editor; that " +
+		"session is not built yet, so this setting has no effect so far. A Go duration such as \"10m\", or " +
+		"\"0\" to ask for the passphrase on every change once it exists; empty means 10m"
+)
+
+// vaultActionMsg carries the outcome of Encrypt, ChangePassphrase, or Decrypt back into the event loop.
+type vaultActionMsg struct {
+	action string
+	err    error
+}
+
+// vaultActionDone is the status line once an action finished without error.
+var vaultActionDone = map[string]string{
+	vaultActionEncrypt:    "The vault is encrypted",
+	vaultActionPassphrase: "The vault's passphrase is changed",
+	vaultActionDecrypt:    "The vault is decrypted; every secret it holds is now stored unencrypted",
+}
+
+// openVaultForm opens the vault section: a settings form without a list, over the vault's own state, built
+// fresh every time so it never shows anything but what the vault and the configuration hold right now. It
+// never clears status or fail itself, so a caller that just set one to report what it did is not undone by
+// the rebuild; showList clears them before opening the section fresh from the sidebar or a list.
+func (m *Model) openVaultForm() tea.Cmd {
+	m.editing = ""
+	m.screen = screenForm
+	m.fields = m.vaultFields()
+	m.focus = m.firstEditable()
+	m.applyFocus()
+	m.pristine = m.formState()
+	return nil
+}
+
+// vaultFields builds the rows of the vault form: the state, the actions that apply to it, and the two
+// timeouts, which are config, not vault-file state, and so are offered whatever the vault's state is.
+func (m *Model) vaultFields() []field {
+	fields := []field{{label: "state", kind: fieldVaultState, readOnly: true}}
+
+	switch m.vaultState() {
+	case vault.StateUnencrypted:
+		fields = append(fields, vaultActionField(vaultActionEncrypt, "encrypt",
+			"enter turns encryption on: a new passphrase, typed masked and twice"))
+	case vault.StateLocked, vault.StateUnlocked:
+		fields = append(fields,
+			vaultActionField(vaultActionPassphrase, "change passphrase",
+				"enter changes the passphrase: the current one once, then a new one typed masked and twice"),
+			vaultActionField(vaultActionDecrypt, "turn off encryption",
+				"enter turns encryption off: the current passphrase, then an explicit confirmation; every "+
+					"secret is then stored unencrypted"))
+	}
+
+	fields = append(fields,
+		textField("idle timeout", m.cfg.Vault.IdleTimeout, false).withHint(vaultIdleTimeoutHint),
+		textField("admin timeout", m.cfg.Vault.AdminTimeout, false).withHint(vaultAdminTimeoutHint),
+	)
+	return fields
+}
+
+// vaultActionField is one action row of the vault form: it runs at once on enter, never deferred to F2.
+func vaultActionField(action, label, hint string) field {
+	return field{label: label, kind: fieldVaultAction, action: action, hint: hint}
+}
+
+// vaultState is the vault's current state, StateAbsent when this run has no vault configured at all or
+// reading it failed; either way there is nothing more specific to act on.
+func (m *Model) vaultState() vault.State {
+	v := m.secrets.Vault()
+	if v == nil {
+		return vault.StateAbsent
+	}
+	state, err := v.State()
+	if err != nil {
+		return vault.StateAbsent
+	}
+	return state
+}
+
+// vaultStateText is what the state row of the vault form shows.
+func (m *Model) vaultStateText() string {
+	v := m.secrets.Vault()
+	if v == nil {
+		return "no vault is configured for this run"
+	}
+	state, err := v.State()
+	if err != nil {
+		return m.redactor.Apply(err.Error())
+	}
+	switch state {
+	case vault.StateAbsent:
+		return "no vault yet; it is created automatically the first time a secret is stored in it"
+	case vault.StateUnencrypted:
+		return "unencrypted"
+	case vault.StateLocked:
+		return "encrypted, locked"
+	case vault.StateUnlocked:
+		return "encrypted, unlocked"
+	}
+	return string(state)
+}
+
+// vaultStateWarning names the one state worth a person's attention, in the same words 'qatlas vault status'
+// uses, so the two never drift apart.
+func (m *Model) vaultStateWarning() string {
+	v := m.secrets.Vault()
+	if v == nil {
+		return ""
+	}
+	if state, err := v.State(); err != nil || state != vault.StateUnencrypted {
+		return ""
+	}
+	return "the vault is unencrypted: no passphrase was set when its first secret was stored"
+}
+
+// saveVault saves vault.idle_timeout and vault.admin_timeout, the only two rows F2 ever saves on this form;
+// every action row already ran on its own enter (see runVaultActionField).
+func (m *Model) saveVault() tea.Cmd {
+	candidate := m.cfg.Clone()
+	candidate.Vault = config.VaultSettings{
+		IdleTimeout:  m.fieldValue("idle timeout"),
+		AdminTimeout: m.fieldValue("admin timeout"),
+	}
+	if err := m.store.Save(candidate); err != nil {
+		m.fail = m.redactor.Apply(err.Error())
+		return nil
+	}
+	m.cfg = candidate
+	m.configExists = true
+	// openVaultForm never clears status or fail on its own (see its comment), so a fail left over from an
+	// earlier, refused attempt on this same form has to be cleared here before it is replaced with success.
+	m.clearMessages()
+	m.status = "Saved"
+	return m.openVaultForm()
+}
+
+// runVaultActionField starts the flow of one action row.
+func (m *Model) runVaultActionField(action string) tea.Cmd {
+	if m.vaultBusy {
+		// A vault write, or the prompt that may lead to one, is already in flight: starting a second one
+		// here would race it over the same files.
+		m.status = "a vault write is already in progress; wait for it to finish"
+		return nil
+	}
+	switch action {
+	case vaultActionEncrypt:
+		return m.startVaultEncrypt()
+	case vaultActionPassphrase:
+		return m.startVaultChangePassphrase()
+	case vaultActionDecrypt:
+		return m.startVaultDecrypt()
+	}
+	return nil
+}
+
+// cancelVaultPrompt is the cancel callback every vault settings prompt shares: back to the form, unchanged.
+func (m *Model) cancelVaultPrompt() tea.Cmd {
+	m.screen = screenForm
+	m.status = "Cancelled"
+	return nil
+}
+
+// startVaultEncrypt asks for a new passphrase, typed masked and twice, and turns encryption on with it.
+func (m *Model) startVaultEncrypt() tea.Cmd {
+	m.openVaultOffer(
+		"Set a passphrase for the vault",
+		"typed masked and twice; this switches the vault's encryption on",
+		false, true,
+		func(offer vault.PassphraseFunc) tea.Cmd {
+			passphrase, _ := offer("")
+			m.screen = screenForm
+			return m.runVaultEncrypt(passphrase)
+		},
+		m.cancelVaultPrompt,
+	)
+	return nil
+}
+
+func (m *Model) runVaultEncrypt(passphrase string) tea.Cmd {
+	v := m.secrets.Vault()
+	if v == nil {
+		m.fail = "no vault is configured for this run"
+		return nil
+	}
+	m.vaultBusy = true
+	m.writes++
+	m.busy = "encrypting the vault"
+	return func() tea.Msg {
+		return vaultActionMsg{action: vaultActionEncrypt, err: v.Encrypt(passphrase)}
+	}
+}
+
+// startVaultChangePassphrase asks for the current passphrase once, then chains into asking for the new one
+// twice, and changes the passphrase with both.
+func (m *Model) startVaultChangePassphrase() tea.Cmd {
+	m.openVaultOffer(
+		"Current vault passphrase",
+		"verified before the new passphrase is asked",
+		false, false,
+		func(offer vault.PassphraseFunc) tea.Cmd {
+			current, _ := offer("")
+			return m.startVaultNewPassphrase(current)
+		},
+		m.cancelVaultPrompt,
+	)
+	return nil
+}
+
+func (m *Model) startVaultNewPassphrase(current string) tea.Cmd {
+	m.openVaultOffer(
+		"New vault passphrase",
+		"typed masked and twice",
+		false, true,
+		func(offer vault.PassphraseFunc) tea.Cmd {
+			newPassphrase, _ := offer("")
+			m.screen = screenForm
+			return m.runVaultChangePassphrase(current, newPassphrase)
+		},
+		m.cancelVaultPrompt,
+	)
+	return nil
+}
+
+func (m *Model) runVaultChangePassphrase(current, newPassphrase string) tea.Cmd {
+	v := m.secrets.Vault()
+	if v == nil {
+		m.fail = "no vault is configured for this run"
+		return nil
+	}
+	m.vaultBusy = true
+	m.writes++
+	m.busy = "changing the vault's passphrase"
+	return func() tea.Msg {
+		return vaultActionMsg{action: vaultActionPassphrase, err: v.ChangePassphrase(current, newPassphrase)}
+	}
+}
+
+// startVaultDecrypt asks for the current passphrase once, then the explicit y/n confirmation, and turns
+// encryption off with the passphrase once it is answered y.
+func (m *Model) startVaultDecrypt() tea.Cmd {
+	m.openVaultOffer(
+		"Current vault passphrase",
+		"verified before encryption is switched off",
+		false, false,
+		func(offer vault.PassphraseFunc) tea.Cmd {
+			current, _ := offer("")
+			m.decryptPassphrase = current
+			m.decryptConfirm = true
+			m.screen = screenConfirm
+			m.clearMessages()
+			return nil
+		},
+		m.cancelVaultPrompt,
+	)
+	return nil
+}
+
+func (m *Model) runVaultDecrypt(passphrase string) tea.Cmd {
+	v := m.secrets.Vault()
+	if v == nil {
+		m.fail = "no vault is configured for this run"
+		return nil
+	}
+	m.vaultBusy = true
+	m.writes++
+	m.busy = "turning the vault's encryption off"
+	return func() tea.Msg {
+		return vaultActionMsg{action: vaultActionDecrypt, err: v.Decrypt(passphrase)}
+	}
+}
+
+// handleVaultAction applies the outcome of Encrypt, ChangePassphrase, or Decrypt. A wrong passphrase is
+// reported the same short way every masked prompt of this editor would, never with the passphrase itself;
+// the form stays open on every outcome, success included, freshly rebuilt from the vault's new state.
+func (m *Model) handleVaultAction(msg vaultActionMsg) tea.Cmd {
+	m.vaultBusy = false
+	if m.writes > 0 {
+		m.writes--
+	}
+	if m.writes == 0 {
+		m.busy = ""
+	}
+
+	if msg.err != nil {
+		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
+			m.fail = "error: wrong passphrase"
+		} else {
+			m.fail = m.redactor.Apply(msg.err.Error())
+		}
+	} else {
+		m.status = vaultActionDone[msg.action]
+	}
+
+	if m.section != sectionVault || m.screen != screenForm {
+		return nil
+	}
+	// The action changed the vault's state; the form is rebuilt so its rows, the action rows included, show
+	// what applies now. openVaultForm never clears status or fail, so the outcome just set above survives.
+	return m.openVaultForm()
+}

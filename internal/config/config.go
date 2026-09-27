@@ -143,6 +143,11 @@ func (c *Config) SecretStore() string {
 // locks itself, unless vault.idle_timeout says otherwise.
 const DefaultVaultIdleTimeout = 12 * time.Hour
 
+// DefaultVaultAdminTimeout is how long an admin session of the TUI editor stays open before it asks for
+// the vault's passphrase again, unless vault.admin_timeout says otherwise. Nothing in this build reads it
+// yet: the admin session itself is a later addition, and this setting only prepares the value it will use.
+const DefaultVaultAdminTimeout = 10 * time.Minute
+
 // VaultSettings holds the settings of the vault that are not secret.
 type VaultSettings struct {
 	// IdleTimeout is how long the vault process holds the unlocked vault without a read before it locks
@@ -150,6 +155,11 @@ type VaultSettings struct {
 	// be positive: a vault process that never locks itself is not offered, and 'qatlas vault lock' locks it
 	// at once.
 	IdleTimeout string `yaml:"idle_timeout,omitempty"`
+	// AdminTimeout is how long a future admin session of the TUI editor stays open before it asks for the
+	// vault's passphrase again, as a Go duration such as "10m". Left empty, it means DefaultVaultAdminTimeout.
+	// "0" is allowed and means asking for the passphrase on every change once that session exists; it must
+	// not be negative. Nothing in this build reads it yet.
+	AdminTimeout string `yaml:"admin_timeout,omitempty"`
 }
 
 // VaultIdleTimeout returns the effective idle timeout of the vault process. A configuration that passed
@@ -171,6 +181,30 @@ func parseIdleTimeout(text string) (time.Duration, error) {
 	}
 	if d <= 0 {
 		return 0, errors.New("must be positive; run 'qatlas vault lock' to lock the vault at once")
+	}
+	return d, nil
+}
+
+// VaultAdminTimeout returns the effective admin session timeout, prepared here for the session a later
+// version adds. A configuration that passed Validate always has one; an unparseable value falls back to
+// DefaultVaultAdminTimeout. Unlike VaultIdleTimeout, "0" is a real, valid value, not a fallback trigger.
+func (c *Config) VaultAdminTimeout() time.Duration {
+	if d, err := parseAdminTimeout(c.Vault.AdminTimeout); err == nil {
+		return d
+	}
+	return DefaultVaultAdminTimeout
+}
+
+func parseAdminTimeout(text string) (time.Duration, error) {
+	if text == "" {
+		return DefaultVaultAdminTimeout, nil
+	}
+	d, err := time.ParseDuration(text)
+	if err != nil {
+		return 0, errors.New(`must be a duration such as "10m" or "0"`)
+	}
+	if d < 0 {
+		return 0, errors.New("must not be negative; 0 means asking for the passphrase on every change")
 	}
 	return d, nil
 }
@@ -550,6 +584,9 @@ func (c *Config) Validate() error {
 
 	if _, err := parseIdleTimeout(c.Vault.IdleTimeout); err != nil {
 		report("vault.idle_timeout: %v", err)
+	}
+	if _, err := parseAdminTimeout(c.Vault.AdminTimeout); err != nil {
+		report("vault.admin_timeout: %v", err)
 	}
 
 	return errors.Join(problems...)

@@ -382,37 +382,55 @@ func (m *Model) removeSecret(credential, role string) tea.Cmd {
 	}
 }
 
-// vaultOffer is the state of the passphrase offer that follows a vault's very first secret, in the pattern
-// of the masked secret prompt: one input, reused for the entry and, once it was not left empty, for typing
-// it again to confirm. resume is called once the offer is answered, with the offer to hand to the vault:
-// nil to skip it, or one that hands back the passphrase just confirmed. cancel is called on esc, before
-// anything reaches the vault; both return the command, if any, that continues whatever asked for the offer.
+// vaultOffer is the state of a masked vault passphrase prompt, in the pattern of the masked secret prompt:
+// one input, reused for the entry and, while twice is set, for typing it again to confirm it.
+//
+// It serves every masked passphrase prompt of the vault, not only the offer that follows a vault's very
+// first secret: optional and twice, set independently, cover the offer (empty accepted as "stay
+// unencrypted", a non-empty entry confirmed once more), a mandatory new passphrase for 'encrypt' or
+// 'passphrase' (never empty, always confirmed), and a single ask for a current passphrase for 'passphrase'
+// or 'decrypt' (never empty, taken at once, no confirmation). resume is called once the prompt is answered,
+// with an offer that hands back exactly the passphrase just taken or confirmed; it is never asked for a
+// prompt of its own, since the masked input already showed one. cancel is called on esc, before anything
+// reaches the vault; both return the command, if any, that continues whatever opened the prompt.
 type vaultOffer struct {
 	input      textinput.Model
 	first      string
 	confirming bool
-	resume     func(offer vault.PassphraseFunc) tea.Cmd
-	cancel     func() tea.Cmd
+	// optional accepts an empty first entry as "no passphrase" instead of refusing it; only the offer that
+	// follows a vault's very first secret sets it.
+	optional bool
+	// twice asks a non-empty first entry again to confirm it; every prompt but a single ask for an existing
+	// passphrase sets it.
+	twice bool
+	// title and hint are the first entry's heading and explanation; the confirmation step always reads the
+	// same way, so it needs none of its own.
+	title, hint string
+	resume      func(offer vault.PassphraseFunc) tea.Cmd
+	cancel      func() tea.Cmd
 }
 
-// openVaultOffer opens the passphrase offer. It never touches the vault itself: resume decides what happens
-// once it is answered, so the same offer serves a single role of the credential form and the several roles
-// a guided setup commits at once.
-func (m *Model) openVaultOffer(resume func(vault.PassphraseFunc) tea.Cmd, cancel func() tea.Cmd) {
+// openVaultOffer opens a masked passphrase prompt. It never touches the vault itself: resume decides what
+// happens once it is answered, so the same prompt serves a single role of the credential form, the several
+// roles a guided setup commits at once, and every vault settings action (see vaultsettings.go).
+func (m *Model) openVaultOffer(title, hint string, optional, twice bool,
+	resume func(offer vault.PassphraseFunc) tea.Cmd, cancel func() tea.Cmd) {
 	in := textinput.New()
 	in.Prompt = ""
 	in.EchoMode = textinput.EchoPassword
 	in.Cursor.SetMode(cursor.CursorStatic)
 	in.Focus()
 
-	m.vaultOffer = &vaultOffer{input: in, resume: resume, cancel: cancel}
+	m.vaultOffer = &vaultOffer{input: in, optional: optional, twice: twice, title: title, hint: hint,
+		resume: resume, cancel: cancel}
 	m.screen = screenVaultOffer
 	m.clearMessages()
 }
 
-// updateVaultOffer handles the masked entry of the passphrase offer: the first time through it takes a
-// passphrase, empty or not, and the second time it asks for the same one again to confirm it. A mismatch is
-// an error that leaves the offer open, back at the first entry, rather than closing it or writing anything.
+// updateVaultOffer handles the masked entry of a vault passphrase prompt: the first time through it takes a
+// passphrase, and, while twice is set, the second time asks for the same one again to confirm it. A
+// mismatch is an error that leaves the prompt open, back at the first entry, rather than closing it or
+// writing anything.
 func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 	o := m.vaultOffer
 	switch key.String() {
@@ -429,11 +447,20 @@ func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 		m.clearMessages()
 		if !o.confirming {
 			if typed == "" {
-				// Leaving it empty and continuing is the offer declined: the vault stays, or becomes,
-				// unencrypted, the same as 'qatlas credential set' answered the same way on the terminal.
-				resume := o.resume
+				if o.optional {
+					// Leaving it empty and continuing is the offer declined: the vault stays, or becomes,
+					// unencrypted, the same as 'qatlas credential set' answered the same way on the terminal.
+					resume := o.resume
+					m.vaultOffer = nil
+					return resume(nil)
+				}
+				m.fail = "a passphrase must not be empty"
+				return nil
+			}
+			if !o.twice {
+				passphrase, resume := typed, o.resume
 				m.vaultOffer = nil
-				return resume(nil)
+				return resume(func(string) (string, error) { return passphrase, nil })
 			}
 			o.first, o.confirming = typed, true
 			return nil
@@ -471,6 +498,10 @@ func (m *Model) beginVaultSecret(credential, role, value string) tea.Cmd {
 		return m.writeVaultSecret(credential, role, value, nil)
 	}
 	m.openVaultOffer(
+		"Set a passphrase for the vault?",
+		"this is the vault's very first secret; a passphrase encrypts it, typed masked and twice, or "+
+			"leave this empty and press enter to keep the vault unencrypted",
+		true, true,
 		func(offer vault.PassphraseFunc) tea.Cmd {
 			m.screen = screenForm
 			return m.writeVaultSecret(credential, role, value, offer)
@@ -519,18 +550,17 @@ func (m *Model) removeVaultSecret(credential, role string) tea.Cmd {
 	}
 }
 
-// vaultOfferView draws the passphrase offer, in the pattern of the masked secret prompt: a title, the
-// masked line, an explanation, and a footer of enter and esc. It has two shapes, the first entry and its
-// confirmation, told apart by vaultOffer.confirming.
+// vaultOfferView draws a masked vault passphrase prompt, in the pattern of the masked secret prompt: a
+// title, the masked line, an explanation, and a footer of enter and esc. It has two shapes, the first entry
+// (title and hint of its own) and its confirmation (always worded the same way), told apart by
+// vaultOffer.confirming.
 func (m *Model) vaultOfferView() string {
 	o := m.vaultOffer
 	var b strings.Builder
 	if !o.confirming {
-		b.WriteString(titleStyle.Render("Set a passphrase for the vault?") + "\n\n")
+		b.WriteString(titleStyle.Render(o.title) + "\n\n")
 		b.WriteString("  " + o.input.View() + "\n")
-		b.WriteString(m.indented(
-			"this is the vault's very first secret; a passphrase encrypts it, typed masked and twice, or "+
-				"leave this empty and press enter to keep the vault unencrypted") + "\n")
+		b.WriteString(m.indented(o.hint) + "\n")
 	} else {
 		b.WriteString(titleStyle.Render("Confirm the vault passphrase") + "\n\n")
 		b.WriteString("  " + o.input.View() + "\n")

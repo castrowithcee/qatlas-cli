@@ -22,14 +22,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Set up connections and edit the configuration in a terminal interface",
-		Long: "The editor is one screen: a sidebar with the four sections 1 Services, 2 Credentials,\n" +
-			"3 Connections, and 4 Defaults, and beside it a workspace with the list, form, or setup step of\n" +
-			"the active section. From 80 columns the sidebar stands on the left; a narrower terminal shows the\n" +
-			"sections in one navigation line above the workspace. Below 40x12 the editor asks for a larger\n" +
-			"terminal and keeps everything as it was until it gets one.\n\n" +
+		Long: "The editor is one screen: a sidebar with the five sections 1 Services, 2 Credentials,\n" +
+			"3 Connections, 4 Defaults, and 5 Vault, and beside it a workspace with the list, form, or setup\n" +
+			"step of the active section. From 80 columns the sidebar stands on the left; a narrower terminal\n" +
+			"shows the sections in one navigation line above the workspace. Below 40x12 the editor asks for a\n" +
+			"larger terminal and keeps everything as it was until it gets one.\n\n" +
 			"The editor opens with the focus on the sidebar. up/down (or j/k) choose a section and show its\n" +
 			"list at once; enter, right, or tab move the focus into the list, and left, tab, or esc move it\n" +
-			"back. 1-4 open a section directly from the sidebar or a list; in a form, digits are text instead.\n" +
+			"back. 1-5 open a section directly from the sidebar or a list; in a form, digits are text instead.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
 			"the guided setup, and q quits; ctrl+c quits anywhere without saving. esc only ever steps back one\n" +
 			"level: it clears a filter, cancels a running test, closes a picker, a table, or a question, or\n" +
@@ -72,6 +72,15 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"vault role says in the vault, not stored yet, or vault locked. A set variable\n" +
 			"QATLAS_<CREDENTIAL>_<ROLE> still wins over either one and the row says environment variable,\n" +
 			"overrides keyring; that is the way for CI and containers.\n\n" +
+			"5 Vault is a settings form, not a list: it shows the vault's state (no vault yet, unencrypted, or\n" +
+			"encrypted and locked or unlocked) and the actions that apply to it. Unencrypted offers to turn\n" +
+			"encryption on with a new passphrase, typed masked and twice; encrypted offers to change the\n" +
+			"passphrase (the current one once, then a new one twice) and to turn encryption off (the current\n" +
+			"passphrase, then an explicit confirmation that every secret ends up unencrypted on disk). A wrong\n" +
+			"passphrase is reported as error: wrong passphrase and keeps the form open; nothing is ever asked\n" +
+			"on this process's own terminal. The form also edits vault.idle_timeout and vault.admin_timeout,\n" +
+			"saved with F2 like any other setting; admin_timeout only prepares a value for a future admin\n" +
+			"session of this editor and has no effect yet.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +
