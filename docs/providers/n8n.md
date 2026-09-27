@@ -2,7 +2,8 @@
 description: >
   Describes the n8n provider: Public API key setup, the project and workflow allow-lists and their live
   project-membership check, the workflow and execution reads, pagination and cursor contracts, the bounded
-  failed-execution error, and the version and plan boundaries of n8n's Projects feature.
+  failed-execution error, the confirmed workflow and execution changes and their retry contract, and the
+  version and plan boundaries of n8n's Projects feature and its deprecated activate/deactivate endpoints.
 type: knowledge
 edit: shared
 created: 2026-09-27
@@ -11,10 +12,14 @@ updated: 2026-09-27
 
 # n8n
 
-n8n is a read-only provider for the n8n Public API (n8n Cloud or self-hosted, `/api/v1`). It lists and reads
-workflows, and lists and reads executions, including a bounded view of a failed execution's error. It
-creates, changes, activates, deactivates, runs, retries, stops, or deletes nothing; those, and credential,
-user, project, tag, variable, and data table management, are a later milestone.
+n8n is a provider for the n8n Public API (n8n Cloud or self-hosted, `/api/v1`). It lists and reads workflows
+and executions, including a bounded view of a failed execution's error, creates and replaces workflows,
+activates and deactivates them, and retries and stops executions.
+
+**There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
+tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
+test-run action, and no credential, user, tag, variable, project, or data table management; those are a
+later milestone.
 
 ## Configuration
 
@@ -89,17 +94,96 @@ An instance or Public API version that never sends `shared` at all, an older rel
 instance without the Projects feature, cannot prove a workflow's project. A project-restricted connection
 then fails the check closed instead of guessing, and the refusal says so.
 
+`workflows.create` applies the same boundary to a workflow that does not exist yet, see below.
+
 ## Tools
 
-| Tool | Reads |
-| --- | --- |
-| `n8n.workflows.list` | the workflows of the bound instance, filtered to the allow-lists, page by page |
-| `n8n.workflows.get` | one workflow, including its nodes, their connections, and credential references (id/name only) |
-| `n8n.executions.list` | the executions of the bound instance, filtered to the allow-lists, page by page |
-| `n8n.executions.get` | one execution's status, timestamps, and, for a failed one, a bounded error |
+| Tool | Effect | Does |
+| --- | --- | --- |
+| `n8n.workflows.list` | read | lists the workflows of the bound instance, filtered to the allow-lists, page by page |
+| `n8n.workflows.get` | read | reads one workflow, including its nodes, their connections, and credential references (id/name only) |
+| `n8n.workflows.create` | create | creates one workflow from its name, nodes, connections, and settings |
+| `n8n.workflows.update` | update | replaces one workflow's name, nodes, connections, and settings with a full PUT |
+| `n8n.workflows.activate` | update | activates one workflow, turning its triggers live |
+| `n8n.workflows.deactivate` | update | deactivates one workflow, turning its triggers off |
+| `n8n.executions.list` | read | lists the executions of the bound instance, filtered to the allow-lists, page by page |
+| `n8n.executions.get` | read | reads one execution's status, timestamps, and, for a failed one, a bounded error |
+| `n8n.executions.retry` | execute | retries one execution, starting a new execution from it |
+| `n8n.executions.stop` | execute | stops one running or waiting execution |
 
-All four are `read`, safe, and need no confirmation. The terminal editor starts a new connection on the setup
-profile `read`, which ticks `[read]` and every tool above; it is the only profile this provider offers.
+**There is no tool to start a workflow.** n8n's Public API documents no endpoint for it (`POST
+/workflows/{id}/activate` only flips the `active` flag; running a workflow on demand is an editor and
+webhook/trigger action, not a Public API one). There is also no tool to delete a workflow or an execution,
+and no `stopMany`, archive, unarchive, publish, unpublish, transfer, or test-run action.
+
+The four read tools are `read`, safe, and need no confirmation. The six tools above them each change the
+bound instance: every one of them needs its own confirmation (`confirm: true` on the invoke request), sends
+exactly one changing request, and is never retried by Qatlas itself; see "Changes and their retry contract"
+below. That per-call confirmation is separate from, and required in addition to, a connection's own setup:
+the terminal editor starts a new connection on the setup profile `read`, which offers only the four read
+tools; `manage` additionally offers the six change tools, each of which still needs its own confirmation on
+every call regardless of the profile a connection was set up with.
+
+## Changes and their retry contract
+
+Every change tool needs its own confirmation and sends exactly one request that can change n8n's state. A
+failure of that request that could still mean it reached n8n, a timeout, a connection reset, a 5xx, or an
+unreadable answer, is reported with "this change may have taken effect, read the current state before
+repeating it" instead of being retried; Qatlas never repeats a changing request by itself. A 401 or 403
+before that request is sent is classified `auth` or `permission` the same way every read is.
+
+`workflows.update` is a full `PUT` replacement of `name`, `nodes`, `connections`, and `settings`, exactly as
+n8n's own `updateWorkflow` endpoint is: a field left out is not kept, it is cleared. It never changes the
+`active` state; `workflows.activate` and `workflows.deactivate` own that instead. When the workflow being
+updated is currently active, n8n republishes the new content live unless `publish_if_active` is set to
+`false`, in which case the change is saved as a draft on the still-live version; either way the `active`
+flag itself is unaffected.
+
+A node's `credentials` only ever carry the `id`/`name` reference pair n8n itself resolves and validates, the
+same shape a workflow read already reports; this provider never accepts anything else of a credential.
+`settings` accepts the subset of n8n's own settings object a caller can reasonably set programmatically
+(`save_execution_progress`, `save_manual_executions`, `save_data_error_execution`,
+`save_data_success_execution`, `execution_timeout`, `error_workflow`, `timezone`, `execution_order`,
+`caller_policy`, `caller_ids`, `time_saved_mode`, `time_saved_per_execution`, `redaction_policy`,
+`available_in_mcp`); it deliberately excludes `binaryMode` and `credentialResolverId`, which n8n's own spec
+documents as derived, internal settings whose value is ignored on write, and `customTelemetryTags` and the
+top-level `nodeGroups`, which are canvas and telemetry decoration with no execution effect. A node likewise
+only accepts `id`, `name`, `type`, `type_version`, `position`, `disabled`, `parameters`, and `credentials`;
+n8n's own create/update schemas additionally accept execution-behaviour fields such as `notes`, `onError`,
+`retryOnFail`, `maxTries`, and `webhookId`, which this milestone does not offer. `error_workflow` is passed
+through as an opaque workflow ID and is not checked against this connection's own allow-lists: n8n enforces
+its own access to that workflow when the error trigger it names would actually run.
+
+### `workflows.create` under a project or workflow restriction
+
+`workflows.create` refuses outright, before any request, on a connection restricted by a **workflow**
+allow-list: a workflow that does not exist yet can never already be on that list. On a connection restricted
+by a **project** allow-list, n8n's own `createWorkflow` schema does let a caller steer the target project
+through `project_id` (`projectId` on the wire), so this provider requires it explicitly, checks it against
+the allow-list locally, and forwards it; a connection without a project restriction may still name any
+`project_id` its API key can reach, or leave it out, which n8n then places in the API key owner's personal
+project. After the one changing `POST /workflows` request, this provider re-reads the new workflow and
+re-applies the project allow-list to what n8n actually reports: if n8n did not honor `project_id` (an older
+Public API version, for example), the result is reported as a **provider error**, not an invalid request,
+because the request has already reached n8n and this milestone offers no delete tool to remove the
+misplaced workflow; the caller is told to remove it directly in n8n. `workflows.update` cannot move a
+workflow between projects at all (its own schema has no `projectId` field), so no equivalent risk exists
+there; the same re-check still runs defensively after its one `PUT`.
+
+## Version and plan boundaries
+
+`workflows.activate` and `workflows.deactivate` use n8n's own `POST /workflows/{id}/activate` and
+`POST /workflows/{id}/deactivate` endpoints. n8n's own Public API spec marks both **deprecated** in favour
+of `POST /workflows/{id}/publish` and `/unpublish`, a newer, versioned publishing model; this provider
+intentionally keeps using the deprecated pair, since publish/unpublish and the version history behind them
+are out of this milestone's scope. `activateWorkflow` additionally accepts an optional `versionId`, `name`,
+and `description` to activate a specific saved version; this provider does not offer them and always
+activates the latest version, the same effect as omitting them.
+
+The n8n Public API is not available on a free trial; upgrading to a paid plan is a prerequisite this
+provider cannot detect ahead of a failed request. The Projects feature, and therefore a project allow-list's
+live membership check, needs an Enterprise plan; see "Scope" above for what happens when an instance or
+Public API version never reports it.
 
 `n8n.workflows.get` never returns a credential's value: n8n's own Public API does not put one in a workflow
 response either, only a referenced credential's `id` and `name` per node, which is what a person editing the
@@ -146,21 +230,27 @@ Errors keep stable classes and never carry the API key or a raw provider respons
 | `timeout` | n8n did not answer in time |
 | `unreachable` | n8n is unavailable, in maintenance, or could not be reached |
 | `invalid-provider-response` | the answer was unreadable, too large, or named a different resource than the one requested |
-| `provider-error` | every other rejection, including a redirect on an endpoint that must not answer with one |
+| `provider-error` | every other rejection, including a redirect on an endpoint that must not answer with one, and a create or update n8n placed outside this connection's allowed projects after its one changing request already reached n8n |
 
 A `workflow_id` or `project_id` outside the connection's allow-list, and a workflow the live project check
 finds outside an allowed project (including one whose instance or Public API version reports no project at
 all while the connection restricts by project), are invalid requests, never provider errors, so a scope
-refusal is never mistaken for a missing workflow.
+refusal is never mistaken for a missing workflow. The one exception is a `workflows.create` or
+`workflows.update` whose one changing request has already reached n8n before the mismatch is found; see
+"`workflows.create` under a project or workflow restriction" above.
 
 ## Untrusted data
 
 Workflow and project names, tag names, node parameters, and every other value a listing or a read answers
 with come from the instance and are untrusted data. Qatlas normalises them into a stable envelope and never
-renders them, follows a link inside them, or executes anything derived from them.
+renders them, follows a link inside them, or executes anything derived from them. A create or an update
+carries a caller's own node parameters, connections, and settings back to n8n unmodified, but never
+interprets or executes any of it itself.
 
 ## Boundary
 
-This provider only reads workflows and executions. Everything that changes n8n's state, running a workflow,
-retrying or stopping an execution, activating or deactivating a workflow, and every credential, user, tag,
-variable, project, and data table management operation, is deliberately out of this milestone.
+This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
+and their executions. It does not, and has no tool to, start a workflow (no Public API endpoint exists for
+that), delete a workflow or an execution, stop many executions at once, archive, unarchive, publish,
+unpublish, or transfer a workflow, or manage credentials, users, tags, variables, projects, or data tables;
+those are deliberately out of this milestone.

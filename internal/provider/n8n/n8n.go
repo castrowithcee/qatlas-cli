@@ -1,10 +1,12 @@
-// Package n8n implements controlled, read-only access to one n8n instance (n8n Cloud or self-hosted) over
-// its Public API (https://docs.n8n.io/api/api-reference/, packages/cli/src/public-api/v1 of n8n-io/n8n): it
-// lists and reads workflows, and lists and reads executions including a bounded, filtered view of a failed
-// execution's error. No workflow, credential, user, project, tag, variable, or data table management, and no
-// execution control action (run, retry, stop, delete), is exposed; those are deliberately left to a later
-// milestone, which this package's Client, error classes, and target model are built to extend without a
-// rewrite.
+// Package n8n implements controlled access to one n8n instance (n8n Cloud or self-hosted) over its Public
+// API (https://docs.n8n.io/api/api-reference/, packages/cli/src/public-api/v1 of n8n-io/n8n): it lists and
+// reads workflows and executions, including a bounded, filtered view of a failed execution's error, creates
+// and replaces workflows, activates and deactivates them, and retries and stops executions. There is no tool
+// to start a workflow: the Public API documents no endpoint for it. There is also no tool to delete a
+// workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or test-run action, and
+// no credential, user, tag, variable, project, or data table management; those are deliberately left to a
+// later milestone, which this package's Client, error classes, and target model are built to extend without
+// a rewrite.
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -52,9 +54,23 @@
 // Node parameters, tag names, workflow and project names, and every other value a listing or a read answers
 // with arrive from the n8n instance and are treated as untrusted data: normalised into a stable envelope,
 // passed through the output encoders, and never rendered, executed, or stored.
+//
+// Every tool that changes something needs its own confirmation, sends exactly one changing request, and is
+// never retried by this provider: a failure that could mean the request nonetheless reached n8n (a timeout,
+// a connection reset, or a 5xx) is reported as uncertain instead, see (*Client).do. workflows.create refuses
+// outright on a connection restricted by a workflow allow-list, since a workflow that does not exist yet can
+// never already be on that list, and requires an explicit, allow-listed project_id on a connection restricted
+// by a project allow-list, since n8n's own createWorkflow schema does let a caller steer the target project.
+// Both workflows.create and workflows.update re-read the resulting workflow after their one changing request
+// and re-apply the project allow-list to it; a mismatch is reported as a provider error, not an invalid
+// request, because the change has already happened and this milestone has no delete tool to undo it.
+// workflows.update is a full PUT replacement of name, nodes, connections, and settings, exactly as n8n's own
+// updateWorkflow endpoint is; it never changes the active state, which workflows.activate and
+// workflows.deactivate own instead.
 package n8n
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -108,6 +124,13 @@ const (
 	// itself defaults to.
 	defaultListLimit = 100
 	maxListLimit     = 250
+	// maxWorkflowWriteBytes bounds the marshaled request body of workflows.create and workflows.update. It
+	// is a local ceiling on what this provider ever sends, not a belief about what the instance would
+	// accept; a caller with a larger workflow definition is refused before any request is built.
+	maxWorkflowWriteBytes = 4 << 20
+	// maxWorkflowNodes bounds how many nodes a single create or update may define, well above what a real
+	// workflow needs, so a malformed or excessive payload fails fast on its shape alone.
+	maxWorkflowNodes = 1000
 )
 
 // limiters holds the rate-limit budget of every API key this process has used. n8n documents no fixed
@@ -212,44 +235,101 @@ func newHTTPClient() *http.Client {
 // much of the answer this process reads before giving up; every read of this provider uses maxResponseBytes
 // except the one includeData=true request executions.get may send, which uses maxErrorResponseBytes.
 func (c *Client) get(ctx context.Context, op, path string, query url.Values, out any, maxBytes int) error {
+	return c.do(ctx, op, http.MethodGet, path, query, nil, out, maxBytes, false)
+}
+
+// uncertain is appended to a failure of a change request whose request may have reached n8n: the change may
+// have taken effect although no confirmation ever arrived. Qatlas never repeats such a request by itself; a
+// caller is told to read the current state before deciding whether to try again.
+const uncertain = "; this change may have taken effect, read the current state before repeating it"
+
+// change sends one bounded, state-changing request below the Public API root, once, with a JSON body when
+// body is not nil, and decodes the answer into out when out is not nil. It is never retried by this
+// provider; every failure that could mean the request nonetheless reached n8n is marked uncertain instead.
+func (c *Client) change(ctx context.Context, op, method, path string, query url.Values, body, out any,
+	maxBytes int) error {
+	return c.do(ctx, op, method, path, query, body, out, maxBytes, true)
+}
+
+// do sends one bounded request below the Public API root, with a JSON body when body is not nil, and
+// decodes the answer into out when out is not nil. changing marks a request that may change n8n's state:
+// every failure of it that could mean the request nonetheless arrived is marked uncertain, so this provider
+// never repeats it by itself, the same contract infomaniakchat and todoist give their own change requests.
+func (c *Client) do(ctx context.Context, op, method, path string, query url.Values, body, out any, maxBytes int,
+	changing bool) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "n8n", err)
+	}
+	var payload []byte
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return providerError(op, "the request could not be built")
+		}
+		payload = encoded
 	}
 	endpoint := c.origin + apiPath + path
 	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	var reqBody io.Reader
+	if payload != nil {
+		reqBody = bytes.NewReader(payload)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reqBody)
 	if err != nil {
 		return providerError(op, "the request could not be built")
 	}
 	req.Header.Set("X-N8N-API-KEY", c.apiKey)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "qatlas-cli")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return provider.Transport(op, "n8n", err)
+		failure := provider.Transport(op, "n8n", err)
+		if changing && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
+			failure.Cause == provider.CauseUnknown) {
+			failure.Message += uncertain
+		}
+		return failure
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return c.statusError(op, response)
+		failure := c.statusError(op, response)
+		if changing && response.StatusCode >= 500 {
+			failure.Message += uncertain
+		}
+		return failure
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, int64(maxBytes)+1))
 	if err != nil || len(data) > maxBytes {
-		return invalidResponse(op, "the n8n response could not be read within the size limit")
-	}
-	if out != nil {
-		if err := json.Unmarshal(data, out); err != nil {
-			return invalidResponse(op, "n8n returned an invalid response")
+		message := "the n8n response could not be read within the size limit"
+		if changing {
+			message += uncertain
 		}
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
+	}
+	if out == nil || len(bytes.TrimSpace(data)) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		message := "n8n returned an invalid response"
+		if changing {
+			message += uncertain
+		}
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 	}
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class. The provider body is never read into the message.
-func (c *Client) statusError(op string, response *http.Response) error {
+// statusError maps an HTTP status to a stable class. The provider body is never read into the message. It
+// returns the concrete type, not the error interface, so (*Client).do can still append the uncertain
+// suffix to its message for a change request that a 5xx may nonetheless have carried out.
+func (c *Client) statusError(op string, response *http.Response) *provider.Error {
 	status := response.StatusCode
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 	switch {
@@ -351,11 +431,13 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds n8n metadata, its read-only connection test, and its read operations.
+// Register adds n8n metadata, its read-only connection test, its read operations, and its confirmed
+// workflow and execution changes.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "n8n", DefaultPermissions: []config.Permission{config.PermissionRead},
-		Description: "Workflow automation platform, self-hosted or n8n Cloud, read through its Public API",
+		Description: "Workflow automation platform, self-hosted or n8n Cloud, read and confirmed changes " +
+			"through its Public API",
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,
 			Description: "n8n Public API key, created under Settings, n8n API, Create an API key; on an " +
@@ -390,7 +472,16 @@ func Register(reg *capability.Registry) error {
 			ID: "read", Title: "Read workflows and executions", Recommended: true,
 			Description: "lists and reads workflows, and lists and reads executions including a bounded " +
 				"view of a failed execution's error; changes nothing and starts nothing",
-			Tools: []string{workflowsList.ID, workflowsGet.ID, executionsList.ID, executionsGet.ID},
+			Tools: readTools,
+		}, {
+			ID: "manage", Title: "Manage workflows and executions",
+			Description: "reads what the read profile reads, creates and replaces workflows, activates and " +
+				"deactivates them, and retries and stops executions; every change needs its own confirmation. " +
+				"There is no tool to start a workflow, delete a workflow, or delete an execution: the Public " +
+				"API documents no endpoint for the first, and this milestone deliberately leaves out the other " +
+				"two",
+			Tools: append(append([]string{}, readTools...), workflowsCreate.ID, workflowsUpdate.ID,
+				workflowsActivate.ID, workflowsDeactivate.ID, executionsRetry.ID, executionsStop.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -400,5 +491,15 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: workflowsGet, Handler: capability.Handler(invokeWorkflowsGet)},
 		capability.Operation{Descriptor: executionsList, Handler: capability.Handler(invokeExecutionsList)},
 		capability.Operation{Descriptor: executionsGet, Handler: capability.Handler(invokeExecutionsGet)},
+		capability.Operation{Descriptor: workflowsCreate, Handler: capability.Handler(invokeWorkflowsCreate)},
+		capability.Operation{Descriptor: workflowsUpdate, Handler: capability.Handler(invokeWorkflowsUpdate)},
+		capability.Operation{Descriptor: workflowsActivate, Handler: capability.Handler(invokeWorkflowsActivate)},
+		capability.Operation{Descriptor: workflowsDeactivate, Handler: capability.Handler(invokeWorkflowsDeactivate)},
+		capability.Operation{Descriptor: executionsRetry, Handler: capability.Handler(invokeExecutionsRetry)},
+		capability.Operation{Descriptor: executionsStop, Handler: capability.Handler(invokeExecutionsStop)},
 	)
 }
+
+// readTools are the four tools of Milestone A, unchanged in scope; the manage profile reuses this list
+// instead of repeating it.
+var readTools = []string{workflowsList.ID, workflowsGet.ID, executionsList.ID, executionsGet.ID}
