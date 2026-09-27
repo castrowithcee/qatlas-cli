@@ -98,6 +98,38 @@ func TestCredentialChangesReachTheVaultProcess(t *testing.T) {
 	}
 }
 
+// 'vault approve' hands what it approved to the vault process that holds the vault unlocked, at once: a
+// connection changed by hand after the process started is refused until 'vault approve' releases it, and
+// the running process itself checks the change right afterwards, without being restarted.
+func TestVaultApproveSyncsARunningVaultProcess(t *testing.T) {
+	dir := encryptedVaultFixture(t, "")
+	_, client := serveVaultInProcess(t, dir)
+	ctx := context.Background()
+	scope := connectionScope(t, dir, "wiki")
+	if err := client.Check(ctx, scope); err != nil {
+		t.Fatalf("Check() before the change = %v, want the connection approved as it was started", err)
+	}
+
+	edited := strings.Replace(vaultCredentialConfig, "https://wiki.example.invalid", "http://127.0.0.1:9", 1)
+	if err := os.WriteFile(configIn(dir), []byte(edited), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed := connectionScope(t, dir, "wiki")
+	if err := client.Check(ctx, changed); !errors.Is(err, vault.ErrApprovalRequired) {
+		t.Fatalf("Check() after the change = %v, want ErrApprovalRequired", err)
+	}
+
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	if code != exitOK || !strings.Contains(stdout, "approved 1 connection: wiki") {
+		t.Fatalf("vault approve: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+
+	if err := client.Check(ctx, changed); err != nil {
+		t.Errorf("Check() after approve = %v, want the running vault process to check with the new approval", err)
+	}
+}
+
 // A vault process that refuses the update keeps what it held, and the command says so without taking back
 // what it stored.
 func TestCredentialSetWarnsWhenTheVaultProcessRefuses(t *testing.T) {

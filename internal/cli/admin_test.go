@@ -96,6 +96,7 @@ func TestVaultManagementCommandsRequireATerminal(t *testing.T) {
 		{"vault", "passphrase"},
 		{"vault", "decrypt", "--confirm"},
 		{"vault", "migrate"},
+		{"vault", "approve"},
 	} {
 		full := append(append([]string{}, args...), "--config", configIn(dir))
 		code, stdout, stderr := runWithInput(t, &Options{}, "", full...)

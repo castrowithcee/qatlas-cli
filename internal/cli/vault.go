@@ -16,6 +16,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
@@ -59,7 +60,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"connections' marks the connections it affects; a person runs 'qatlas vault unlock' to open it, or\n" +
 			"presses ctrl+l in 'qatlas tui' to open it for the editor alone. An encrypted vault hands a\n" +
 			"secret only to a connection it approved as it is configured now; any other access fails with\n" +
-			"the code approval-required, which only a person resolves.\n\n" +
+			"the code approval-required, which only a person resolves: 'vault approve' lists every open\n" +
+			"connection with what changed and releases it, all at once or one at a time with --connection.\n\n" +
 			"On Linux 'vault unlock' hands the unlocked vault to a vault process that holds it open until it\n" +
 			"is idle for vault.idle_timeout (12h unless the configuration says otherwise), 'vault lock' ends\n" +
 			"it, or the machine restarts; elsewhere unlocking only lasts for the current process. Every later\n" +
@@ -218,7 +220,35 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		},
 	}
 
-	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate)
+	var connectionNames []string
+	approve := &cobra.Command{
+		Use:   "approve",
+		Short: "Release open connections to read the vault credential they are configured for",
+		Long: "Lists every connection that is not approved to read its vault credential as it is configured now:\n" +
+			"'new connection, not yet approved' for one never approved, or one line per field that changed since,\n" +
+			"among origin, provider, permissions, targets, tools, and credential, before and after. Asks for the\n" +
+			"vault's passphrase once and then approves every open connection listed, or only the ones named with\n" +
+			"--connection (repeatable), and hands the change to a running vault process the way every other vault\n" +
+			"change does.\n\n" +
+			"An approval a connection no longer belongs to, because it was renamed, removed, or switched away\n" +
+			"from the vault, is stale; approving every open connection also removes it and names it. --connection\n" +
+			"leaves a stale approval untouched. A name given with --connection that does not read a stored vault\n" +
+			"credential at all is refused before anything is approved; one that is already approved as it is\n" +
+			"configured now is reported and left alone, nothing written.\n\n" +
+			"Run against a vault that is not encrypted, which binds no connection to any approval, it says so and\n" +
+			"changes nothing; with nothing open it says so too. Like every 'vault' command but status, unlock,\n" +
+			"and lock, it runs only from an interactive terminal and, where the vault is encrypted, asks for its\n" +
+			"passphrase there once before doing anything; without a terminal it fails with admin-required, and a\n" +
+			"wrong passphrase with usage.",
+		Args: noArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			return runVaultApprove(c, opts, reg, connectionNames)
+		},
+	}
+	approve.Flags().StringArrayVar(&connectionNames, "connection", nil,
+		"approve only this connection, repeated per connection; the default approves every open one")
+
+	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate, approve)
 	return cmd
 }
 
@@ -397,9 +427,11 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 		return err
 	}
 	mergedText := fmt.Sprintf("merged %d pending %s", merged, plural(merged, "entry", "entries"))
+	notice := pendingApprovalNotice(opts, reg, v)
 
 	if !vaultProcessSupported {
 		fmt.Fprintf(c.OutOrStdout(), "the vault is unlocked; %s\n", mergedText)
+		printNote(c, notice)
 		return nil
 	}
 
@@ -416,7 +448,31 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 	for _, warning := range sessionWarnings(client.Path) {
 		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
 	}
+	printNote(c, notice)
 	return nil
+}
+
+// pendingApprovalNotice reports, right after a locked vault was just unlocked, that it holds connections
+// that are not approved as they are configured now, so 'qatlas vault approve' has something to release; ""
+// when there is nothing to say, because none is open, the vault holds no approvals to compare with (an
+// unencrypted vault, unreachable here since 'vault unlock' only ever asked for a passphrase to reach this
+// point), or the configuration cannot be read, which is not this command's own failure to report.
+func pendingApprovalNotice(opts *Options, reg *capability.Registry, v *vault.Vault) string {
+	path, err := config.Path(opts.Config)
+	if err != nil {
+		return ""
+	}
+	cfg, err := config.Load(path, reg)
+	if err != nil {
+		return ""
+	}
+	report, err := approval.Pending(cfg, v)
+	if err != nil || len(report.Open) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("qatlas: %d %s %s from the vault but %s not approved as configured; "+
+		"run 'qatlas vault approve'", len(report.Open), plural(len(report.Open), "connection", "connections"),
+		plural(len(report.Open), "reads", "read"), plural(len(report.Open), "is", "are"))
 }
 
 // runVaultLock ends the vault process. No process to end is the vault already locked, not a failure.
@@ -661,6 +717,151 @@ func approveOnEncrypt(c *cobra.Command, opts *Options, reg *capability.Registry,
 	}
 	return fmt.Sprintf("; approved %d %s to read from it: %s", len(approved),
 		plural(len(approved), "connection", "connections"), strings.Join(approved, ", "))
+}
+
+// runVaultApprove lists what changed about every connection the vault has not approved as it is configured
+// now and approves it, or only the connections names lists, once the vault's passphrase proved a person is
+// asking. Nothing is written before every name in names is checked: an unknown one, or one whose credential
+// is not of type vault or has no entry in the vault, refuses the whole run first.
+func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, names []string) error {
+	if err := requireAdmin(opts); err != nil {
+		return err
+	}
+	v, err := vaultOf(opts)
+	if err != nil {
+		return err
+	}
+	state, err := v.State()
+	if err != nil {
+		return classifyUserError(err)
+	}
+	if state != vault.StateLocked && state != vault.StateUnlocked {
+		fmt.Fprintln(c.OutOrStdout(),
+			"the vault is not encrypted; connections are not bound to approvals, so there is nothing to approve")
+		return nil
+	}
+
+	path, err := config.Path(opts.Config)
+	if err != nil {
+		return err
+	}
+	cfg, err := config.Load(path, reg)
+	if err != nil {
+		return classifyUserError(err)
+	}
+	report, err := approval.Pending(cfg, v)
+	if err != nil {
+		return classifyUserError(err)
+	}
+
+	if len(names) == 0 && len(report.Open) == 0 && len(report.Stale) == 0 {
+		fmt.Fprintln(c.OutOrStdout(), "nothing is open: every connection is approved as it is configured now")
+		return nil
+	}
+
+	open := map[string]bool{}
+	for _, change := range report.Open {
+		open[change.Connection] = true
+	}
+
+	// Every requested name is classified before anything is written: an unknown one refuses the whole run,
+	// so approving some of a batch and refusing the rest never happens.
+	var toApprove, already []string
+	if len(names) > 0 {
+		seen := map[string]bool{}
+		for _, name := range names {
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
+			if open[name] {
+				toApprove = append(toApprove, name)
+				continue
+			}
+			candidate, err := vaultCandidate(cfg, v, name)
+			if err != nil {
+				return classifyUserError(err)
+			}
+			if !candidate {
+				return &UsageError{fmt.Errorf("connection %s: %w", name, approval.ErrUnknownConnection)}
+			}
+			already = append(already, name)
+		}
+	}
+
+	out := c.OutOrStdout()
+	if len(report.Open) > 0 {
+		fmt.Fprintf(out, "%d %s open:\n", len(report.Open),
+			plural(len(report.Open), "connection is", "connections are"))
+		for _, change := range report.Open {
+			fmt.Fprintln(out, opts.Redactor.Apply(change.Connection))
+			if change.New {
+				fmt.Fprintln(out, "  new connection, not yet approved")
+				continue
+			}
+			for _, field := range change.Fields {
+				fmt.Fprintf(out, "  %s  %s -> %s\n", field.Field,
+					opts.Redactor.Apply(field.Before), opts.Redactor.Apply(field.After))
+			}
+		}
+	}
+
+	ctx := contextOrBackground(c.Context())
+	if len(names) == 0 || len(toApprove) > 0 {
+		approved, warning, err := approval.Approve(ctx, cfg, v, toApprove)
+		if err != nil {
+			return classifyUserError(err)
+		}
+		if warning != "" {
+			fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+		}
+		if len(approved) > 0 {
+			fmt.Fprintf(out, "approved %d %s: %s\n", len(approved),
+				plural(len(approved), "connection", "connections"), redactAll(opts.Redactor, approved))
+		}
+	}
+	for _, name := range already {
+		fmt.Fprintf(out, "%s is already approved as it is configured now\n", opts.Redactor.Apply(name))
+	}
+
+	if len(names) == 0 && len(report.Stale) > 0 {
+		removed, warning, err := approval.Revoke(ctx, v, report.Stale)
+		if err != nil {
+			return classifyUserError(err)
+		}
+		if warning != "" {
+			fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+		}
+		if removed > 0 {
+			fmt.Fprintf(out, "removed %d stale %s no longer read from the vault: %s\n", removed,
+				plural(removed, "approval", "approvals"), redactAll(opts.Redactor, report.Stale))
+		}
+	}
+	return nil
+}
+
+// vaultCandidate reports whether name is a connection of cfg whose credential is of type vault and has an
+// entry in the vault unlocked in this process, the same filter approval.Pending applies before it compares a
+// connection's scope: what Approve refuses with ErrUnknownConnection when it is asked for a name outside it.
+func vaultCandidate(cfg *config.Config, v *vault.Vault, name string) (bool, error) {
+	connection, ok := cfg.Connections[name]
+	if !ok {
+		return false, nil
+	}
+	if cfg.Credentials[connection.Credential].Type != config.CredentialTypeVault {
+		return false, nil
+	}
+	_, ok, err := v.CredentialID(connection.Credential)
+	return ok, err
+}
+
+// redactAll joins names with the redactor applied to each, the way a single one is shown.
+func redactAll(redactor *redact.Redactor, names []string) string {
+	out := make([]string, len(names))
+	for i, name := range names {
+		out[i] = redactor.Apply(name)
+	}
+	return strings.Join(out, ", ")
 }
 
 func runVaultPassphrase(c *cobra.Command, opts *Options) error {

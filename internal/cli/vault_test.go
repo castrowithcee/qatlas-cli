@@ -2,9 +2,11 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -1068,5 +1070,327 @@ func TestBackupFileFailureLeavesNoFileBehind(t *testing.T) {
 	}
 	if _, err := os.Stat(path + ".bak"); !os.IsNotExist(err) {
 		t.Errorf(".bak exists although the backup failed: %v", err)
+	}
+}
+
+// twoConnectionVaultConfig configures two connections that read the same vault credential, so a single
+// 'vault encrypt' or 'vault credential set' fixture can be extended into a report with more than one open
+// connection at a time.
+const twoConnectionVaultConfig = `
+version: 1
+services:
+  wiki:
+    provider: bookstack
+    base_url: https://wiki.example.invalid
+credentials:
+  wiki-vault:
+    type: vault
+connections:
+  wiki:
+    service: wiki
+    credential: wiki-vault
+  wiki2:
+    service: wiki
+    credential: wiki-vault
+    permissions: [read, create]
+defaults:
+  connections:
+    knowledge: wiki
+`
+
+func twoConnectionVaultFixture(t *testing.T) string {
+	t.Helper()
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(twoConnectionVaultConfig), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	return dir
+}
+
+// 'vault approve' with no --connection lists every open connection and approves all of them after a single
+// passphrase; run again once nothing is left open, it says so and changes nothing.
+func TestVaultApproveAllOpenConnections(t *testing.T) {
+	dir := twoConnectionVaultFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	if code != exitOK {
+		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr)
+	}
+	if stderr != "" {
+		t.Errorf("stderr = %q, want none", stderr)
+	}
+	for _, want := range []string{"2 connections are open:", "wiki\n  new connection, not yet approved",
+		"wiki2\n  new connection, not yet approved", "approved 2 connections: wiki, wiki2"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout = %q, want it to contain %q", stdout, want)
+		}
+	}
+
+	fresh := vault.New(dir)
+	if _, err := fresh.Unlock("s3cret-phrase"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"wiki", "wiki2"} {
+		if err := fresh.CheckApproval(connectionScope(t, dir, name)); err != nil {
+			t.Errorf("CheckApproval(%s) after approve = %v, want the connection usable", name, err)
+		}
+	}
+
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	if code != exitOK || !strings.Contains(stdout, "nothing is open") {
+		t.Fatalf("second run: exit %d, stdout %q, stderr %q, want nothing open", code, stdout, stderr)
+	}
+}
+
+// '--connection' approves only the connections it names; the rest stay open for a later run.
+func TestVaultApproveOneConnection(t *testing.T) {
+	dir := twoConnectionVaultFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "",
+		"vault", "approve", "--connection", "wiki", "--config", configIn(dir))
+	if code != exitOK {
+		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr)
+	}
+	if !strings.Contains(stdout, "2 connections are open:") || !strings.Contains(stdout, "approved 1 connection: wiki") ||
+		strings.Contains(stdout, "wiki2 is already") {
+		t.Errorf("stdout = %q", stdout)
+	}
+
+	fresh := vault.New(dir)
+	if _, err := fresh.Unlock("s3cret-phrase"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fresh.CheckApproval(connectionScope(t, dir, "wiki")); err != nil {
+		t.Errorf("CheckApproval(wiki) after approve = %v, want it usable", err)
+	}
+	if err := fresh.CheckApproval(connectionScope(t, dir, "wiki2")); !errors.Is(err, vault.ErrApprovalRequired) {
+		t.Errorf("CheckApproval(wiki2) after approving only wiki = %v, want ErrApprovalRequired", err)
+	}
+
+	// Approving the one already approved a second time writes nothing and says so.
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr = runWithInput(t, &Options{}, "",
+		"vault", "approve", "--connection", "wiki", "--config", configIn(dir))
+	if code != exitOK || !strings.Contains(stdout, "wiki is already approved as it is configured now") ||
+		strings.Contains(stdout, "approved 1 connection") {
+		t.Errorf("re-approving wiki: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+}
+
+// loadConfig loads the configuration of dir, failing the test on error.
+func loadConfig(t *testing.T, dir string) *config.Config {
+	t.Helper()
+	cfg, err := config.Load(configIn(dir), defaultRegistry())
+	if err != nil {
+		t.Fatalf("config.Load() = %v", err)
+	}
+	return cfg
+}
+
+// '--connection' with a name that does not read a stored vault credential refuses the whole run before
+// anything is approved, whatever else was open.
+func TestVaultApproveUnknownConnection(t *testing.T) {
+	dir := twoConnectionVaultFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "",
+		"vault", "approve", "--connection", "nope", "--config", configIn(dir))
+	if code != exitUsage {
+		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitUsage, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty: nothing may be approved before the unknown name is refused", stdout)
+	}
+	if !strings.Contains(stderr, "connection nope") || !strings.Contains(stderr, "does not read a secret stored in the vault") {
+		t.Errorf("stderr = %q, want the unknown connection named", stderr)
+	}
+
+	fresh := vault.New(dir)
+	if _, err := fresh.Unlock("s3cret-phrase"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"wiki", "wiki2"} {
+		if err := fresh.CheckApproval(connectionScope(t, dir, name)); !errors.Is(err, vault.ErrApprovalRequired) {
+			t.Errorf("CheckApproval(%s) = %v, want still ErrApprovalRequired: nothing may have been written", name, err)
+		}
+	}
+}
+
+// With nothing open 'vault approve' says so and changes nothing, once for the default run and once with a
+// stale approval alone left to clean up.
+func TestVaultApproveNothingOpen(t *testing.T) {
+	dir := vaultCredentialFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	approveConnections(t, dir, v)
+
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	if code != exitOK || !strings.Contains(stdout, "nothing is open: every connection is approved as it is configured now") {
+		t.Fatalf("exit code = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+}
+
+// A stale approval, left behind by a connection that was renamed or removed, is revoked by the default run
+// and named in the outcome; it is untouched by a run naming --connection.
+func TestVaultApproveRemovesStaleApprovals(t *testing.T) {
+	dir := twoConnectionVaultFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	approveConnections(t, dir, v)
+
+	// wiki2 is renamed to wiki3: its old approval is now stale, and the new name is open.
+	renamed := strings.Replace(twoConnectionVaultConfig, "wiki2:", "wiki3:", 1)
+	if renamed == twoConnectionVaultConfig {
+		t.Fatal("the rename did not apply")
+	}
+	if err := os.WriteFile(configIn(dir), []byte(renamed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "",
+		"vault", "approve", "--connection", "wiki3", "--config", configIn(dir))
+	if code != exitOK || !strings.Contains(stdout, "approved 1 connection: wiki3") || strings.Contains(stdout, "removed") {
+		t.Fatalf("--connection run: exit %d, stdout %q, stderr %q, want the stale approval untouched", code, stdout, stderr)
+	}
+	fresh := vault.New(dir)
+	if _, err := fresh.Unlock("s3cret-phrase"); err != nil {
+		t.Fatal(err)
+	}
+	report, err := approval.Pending(loadConfig(t, dir), fresh)
+	if err != nil || !reflect.DeepEqual(report.Stale, []string{"wiki2"}) {
+		t.Fatalf("Pending().Stale after --connection = %+v, %v, want wiki2 still stale", report, err)
+	}
+
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	if code != exitOK || !strings.Contains(stdout, "removed 1 stale approval no longer read from the vault: wiki2") {
+		t.Fatalf("default run: exit %d, stdout %q, stderr %q, want the stale approval removed and named", code, stdout, stderr)
+	}
+}
+
+// Against a vault that is not encrypted, which binds no connection to any approval, 'vault approve' says so
+// and changes nothing.
+func TestVaultApproveOnUnencryptedVault(t *testing.T) {
+	dir := vaultCredentialFixture(t)
+	if err := vault.New(dir).Set("wiki-vault", "token-id", canaryVault, nil); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	if code != exitOK {
+		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr)
+	}
+	if !strings.Contains(stdout, "the vault is not encrypted") || !strings.Contains(stdout, "nothing to approve") {
+		t.Errorf("stdout = %q, want the missing binding named", stdout)
+	}
+}
+
+// A wrong passphrase refuses 'vault approve' with usage before anything is read or written, the same way
+// every other management command does.
+func TestVaultApproveWrongPassphraseIsRefused(t *testing.T) {
+	dir := vaultCredentialFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+
+	withVaultPassphrase(t, sequencedPassphrases("wrong-phrase"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	if code != exitUsage {
+		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitUsage, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty", stdout)
+	}
+	if !strings.Contains(stderr, "does not unlock") {
+		t.Errorf("stderr = %q, want the vault to refuse the passphrase", stderr)
+	}
+
+	fresh := vault.New(dir)
+	if err := fresh.CheckApproval(connectionScope(t, dir, "wiki")); !errors.Is(err, vault.ErrNotUnlocked) {
+		t.Errorf("CheckApproval() after a wrong passphrase = %v, want ErrNotUnlocked: nothing was written", err)
+	}
+}
+
+// A locked, encrypted vault refuses 'vault approve' without an interactive terminal, before anything of the
+// vault or the configuration is touched, the same way every other management command does; the shared loop
+// this belongs to lives in admin_test.go.
+func TestVaultApproveWithoutTerminal(t *testing.T) {
+	dir := vaultCredentialFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	withInteractive(t, false)
+
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "approve", "--config", configIn(dir))
+	if code != exitUsage {
+		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitUsage, stderr)
+	}
+	if stdout != "" {
+		t.Errorf("stdout = %q, want empty", stdout)
+	}
+	if !strings.Contains(stderr, "admin-required") {
+		t.Errorf("stderr = %q, want the admin-required code", stderr)
+	}
+}
+
+// Once a locked, encrypted vault is unlocked and holds connections that are not approved as they are
+// configured now, 'vault unlock' names how many and points at 'vault approve'; it approves none of them
+// itself. With nothing open it says nothing about approvals at all.
+func TestVaultUnlockNoticesOpenConnections(t *testing.T) {
+	dir := twoConnectionVaultFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "unlock", "--config", configIn(dir))
+	if code != exitOK {
+		t.Fatalf("exit code = %d, want %d (stdout: %s, stderr: %s)", code, exitOK, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "2 connections read from the vault but are not approved as configured") ||
+		!strings.Contains(stderr, "run 'qatlas vault approve'") {
+		t.Errorf("stderr = %q, want the pending approvals named", stderr)
+	}
+
+	fresh := vault.New(dir)
+	if _, err := fresh.Unlock("s3cret-phrase"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fresh.CheckApproval(connectionScope(t, dir, "wiki")); !errors.Is(err, vault.ErrApprovalRequired) {
+		t.Errorf("CheckApproval(wiki) = %v, want still open: 'vault unlock' approves nothing itself", err)
+	}
+
+	// Approve everything, then unlock a second time: nothing is left to name.
+	approveConnections(t, dir, fresh)
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "unlock", "--config", configIn(dir))
+	if code != exitOK || strings.Contains(stderr, "vault approve") {
+		t.Fatalf("second unlock: exit %d, stdout %q, stderr %q, want nothing said about approvals", code, stdout, stderr)
 	}
 }

@@ -242,6 +242,41 @@ defaults:
 		}
 	})
 
+	// vault approve keeps its own change in place, unlike the loop above: it approves the connection as
+	// changed, not as it was before, so this runs last and does not undo the change again afterwards.
+	t.Run("vault approve at a terminal releases a connection changed by hand", func(t *testing.T) {
+		edited := strings.Replace(config, "    credential: vault-reader\n",
+			"    credential: vault-reader\n    permissions: [read, create]\n", 1)
+		if edited == config {
+			t.Fatal("the permissions change did not apply")
+		}
+		if err := os.WriteFile(configPath, []byte(edited), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
+		if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qatlas: approval-required: connection wiki ") {
+			t.Fatalf("invoke before approve: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+		}
+
+		out, code := runAtTerminal(t, c, passphrase+"\n", "vault", "approve")
+		if code != 0 || !strings.Contains(out, "permissions") || !strings.Contains(out, "approved 1 connection: wiki") {
+			t.Fatalf("vault approve: exit %d, output %q", code, out)
+		}
+		if strings.Contains(out, passphrase) {
+			t.Errorf("the passphrase was echoed: %q", out)
+		}
+
+		code, stdout, stderr = c.run(t, "invoke", "bookstack.pages.list")
+		if code != 0 || !strings.Contains(stdout, "Vault Runbook") {
+			t.Fatalf("invoke after approve: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+		}
+		code, stdout, stderr = c.run(t, "connections", "--output", "json")
+		if code != 0 || strings.Contains(stdout, "unusable") {
+			t.Errorf("connections: exit %d, stdout %q, stderr %q; want no unusable column", code, stdout, stderr)
+		}
+	})
+
 	t.Run("vault lock locks the vault again", func(t *testing.T) {
 		code, stdout, stderr := c.run(t, "vault", "lock")
 		if code != 0 || !strings.Contains(stdout, "the vault is locked") {
