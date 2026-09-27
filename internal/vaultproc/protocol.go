@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"filippo.io/age"
+
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // The operations a request names.
@@ -22,6 +24,8 @@ const (
 	opSet    = "set"
 	opDelete = "delete"
 	opLock   = "lock"
+	opCheck  = "check"
+	opBind   = "bind"
 )
 
 // The codes an answer's error carries. They are fixed words, never text built from a request, so an error
@@ -32,6 +36,7 @@ const (
 	codeVersion    = "version"
 	codeLocked     = "locked"
 	codeChallenge  = "challenge"
+	codeApproval   = "approval-required"
 )
 
 // nonceSize is the number of random bytes a challenge holds.
@@ -48,13 +53,16 @@ type hello struct {
 	Challenge []byte `json:"challenge,omitempty"`
 }
 
-// request is one line a client sends.
+// request is one line a client sends. Scope is the connection a get or a check is made for; a get without
+// one is refused. Bindings replace the server's own on a bind.
 type request struct {
-	V          int    `json:"v"`
-	Op         string `json:"op"`
-	Credential string `json:"credential,omitempty"`
-	Role       string `json:"role,omitempty"`
-	Value      string `json:"value,omitempty"`
+	V          int             `json:"v"`
+	Op         string          `json:"op"`
+	Credential string          `json:"credential,omitempty"`
+	Role       string          `json:"role,omitempty"`
+	Value      string          `json:"value,omitempty"`
+	Scope      *vault.Scope    `json:"scope,omitempty"`
+	Bindings   *vault.Bindings `json:"bindings,omitempty"`
 }
 
 // response is a line a server answers with. Error is empty on success; Proof answers the hello, Found and
@@ -125,6 +133,8 @@ func answerError(code string) error {
 		return ErrNotRunning
 	case codeChallenge:
 		return errUnproven
+	case codeApproval:
+		return vault.ErrApprovalRequired
 	default:
 		return errors.New("the vault process could not read the request")
 	}

@@ -195,7 +195,7 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 		return err
 	}
 
-	server := vaultproc.NewServer(key, snap.Secrets)
+	server := vaultproc.NewServer(key, snap.Secrets, snap.Bindings)
 	server.IdleTimeout = idle
 	snap.Secrets = nil
 

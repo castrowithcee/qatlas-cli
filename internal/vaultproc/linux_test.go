@@ -104,7 +104,7 @@ func TestHelperProcess(t *testing.T) {
 			os.Exit(1)
 		}
 		fmt.Println("listening")
-		if err := NewServer(key, testSecrets()).Serve(l); err != nil {
+		if err := NewServer(key, testSecrets(), testBindings()).Serve(l); err != nil {
 			fmt.Println("error", err)
 			os.Exit(1)
 		}
@@ -207,25 +207,25 @@ func TestSocketRoundTrip(t *testing.T) {
 		}
 	}
 
-	s := NewServer(testKey, testSecrets())
+	s := NewServer(testKey, testSecrets(), testBindings())
 	done := serve(t, s, l)
 	c := NewClient(path, testRecipient)
 	ctx := context.Background()
 
-	value, found, err := c.Get(ctx, "wiki-reader", "token")
+	value, found, err := c.Get(ctx, "wiki-reader", "token", *testScope())
 	if err != nil || !found || value != "synthetic-token" {
 		t.Fatalf("Get() = %q, %v, %v, want the stored value", value, found, err)
 	}
 	if err := c.Set(ctx, "wiki-reader", "token", "synthetic-new"); err != nil {
 		t.Fatalf("Set() error = %v", err)
 	}
-	if value, _, _ := c.Get(ctx, "wiki-reader", "token"); value != "synthetic-new" {
+	if value, _, _ := c.Get(ctx, "wiki-reader", "token", *testScope()); value != "synthetic-new" {
 		t.Fatalf("Get() after Set() = %q", value)
 	}
 	if err := c.Delete(ctx, "wiki-reader", "token"); err != nil {
 		t.Fatalf("Delete() error = %v", err)
 	}
-	if _, found, err := c.Get(ctx, "wiki-reader", "token"); err != nil || found {
+	if _, found, err := c.Get(ctx, "wiki-reader", "token", *testScope()); err != nil || found {
 		t.Fatalf("Get() after Delete() = found %v, %v", found, err)
 	}
 	status, err := c.Status(ctx)
@@ -254,14 +254,14 @@ func TestIdleLock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Listen() error = %v", err)
 	}
-	s := NewServer(testKey, testSecrets())
+	s := NewServer(testKey, testSecrets(), testBindings())
 	s.IdleTimeout = 500 * time.Millisecond
 	done := serve(t, s, l)
 	c := NewClient(path, testRecipient)
 
 	// Each get restarts the idle period, so the server outlives several of them.
 	for range 5 {
-		if _, _, err := c.Get(context.Background(), "wiki-reader", "token"); err != nil {
+		if _, _, err := c.Get(context.Background(), "wiki-reader", "token", *testScope()); err != nil {
 			t.Fatalf("Get() while in use error = %v", err)
 		}
 		time.Sleep(50 * time.Millisecond)
@@ -410,7 +410,7 @@ func TestClientRefusesAnotherProgramAsServer(t *testing.T) {
 		t.Fatalf("the helper process said %q", got)
 	}
 
-	_, _, err := NewClient(path, testRecipient).Get(context.Background(), "wiki-reader", "token")
+	_, _, err := NewClient(path, testRecipient).Get(context.Background(), "wiki-reader", "token", *testScope())
 	var peer *PeerError
 	if !errors.Is(err, ErrRefused) || !errors.As(err, &peer) || peer.PID != cmd.Process.Pid ||
 		!strings.Contains(err.Error(), fmt.Sprintf("(process %d)", cmd.Process.Pid)) {
@@ -427,7 +427,7 @@ func TestServerRefusesAnotherProgramAsClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Listen() error = %v", err)
 	}
-	s := NewServer(testKey, testSecrets())
+	s := NewServer(testKey, testSecrets(), testBindings())
 	serve(t, s, l)
 
 	// Another program does not even get the challenge answered: the key does not work for it.
@@ -445,7 +445,7 @@ func TestClientNamesAServerThatRefusesIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Listen() error = %v", err)
 	}
-	s := NewServer(testKey, testSecrets())
+	s := NewServer(testKey, testSecrets(), testBindings())
 	s.Verify = func(net.Conn) error { return fmt.Errorf("%w: it runs another program", ErrRefused) }
 	serve(t, s, l)
 
@@ -498,7 +498,7 @@ func TestClientReachesAHardenedServer(t *testing.T) {
 	if err != nil || status.PID != cmd.Process.Pid {
 		t.Fatalf("Status() = %+v, %v, want the helper's pid", status, err)
 	}
-	if value, found, err := c.Get(ctx, "wiki-reader", "token"); err != nil || !found || value != "synthetic-token" {
+	if value, found, err := c.Get(ctx, "wiki-reader", "token", *testScope()); err != nil || !found || value != "synthetic-token" {
 		t.Fatalf("Get() = %q, %v, %v", value, found, err)
 	}
 	if _, err := NewClient(path, otherKey.Recipient().String()).Status(ctx); !errors.Is(err, ErrRefused) {

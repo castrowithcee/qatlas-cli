@@ -75,8 +75,9 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			"While the vault is encrypted and locked, a connection whose credential is of type vault cannot\n" +
 			"be used, and every row gets a column unusable: vault-locked for such a connection, the code its\n" +
 			"invoke would end with, and empty for the others. Locked means that no vault process holds the\n" +
-			"vault unlocked; 'qatlas vault unlock' starts one. Without such a connection, or with the vault\n" +
-			"unlocked, the column is left out.\n\n" +
+			"vault unlocked; 'qatlas vault unlock' starts one. An encrypted vault also hands its secrets only\n" +
+			"to a connection a person approved as it is configured now; one that was never approved or changed\n" +
+			"since gets unusable: approval-required. Without such a connection the column is left out.\n\n" +
 			"It is answered from the local configuration and the vault's state alone: no provider is\n" +
 			"contacted, no secret is read, and no passphrase is asked for. No URL, credential, target, or\n" +
 			"secret source is published. The tools one connection offers are one 'qatlas tools <provider>\n" +
@@ -102,7 +103,7 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			if err != nil {
 				return err
 			}
-			return emitDocument(c, format, core.Connections(provider, vaultLockedCheck(c.Context(), opts)))
+			return emitDocument(c, format, core.Connections(provider, vaultAccessCheck(c.Context(), opts)))
 		},
 	}
 }

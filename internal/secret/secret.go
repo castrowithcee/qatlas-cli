@@ -153,6 +153,66 @@ func (e *VaultLockedError) Error() string {
 		"for its passphrase", e.Credential, e.Role)
 }
 
+// ApprovalRequiredError reports that the encrypted vault does not hand the secret of a vault credential to
+// the connection asking for it: the connection was never approved, or its endpoint, provider, permissions,
+// targets, tools list, or the credential entry changed since it was. Nothing was read or handed out. It is a
+// state only a person can change, by approving the connection as it is now; an agent cannot.
+//
+// Connection is empty only for an access that named no connection at all, which is refused the same way.
+type ApprovalRequiredError struct {
+	Connection string
+	Credential string
+}
+
+func (e *ApprovalRequiredError) Error() string {
+	if e.Connection == "" {
+		return fmt.Sprintf("the vault hands the secret of %s only to an approved connection, and this access "+
+			"names none", e.Credential)
+	}
+	return fmt.Sprintf("connection %s is not approved to read its vault credential %s as it is configured now",
+		e.Connection, e.Credential)
+}
+
+func (e *ApprovalRequiredError) Unwrap() error { return vault.ErrApprovalRequired }
+
+// scopeKey marks the connection a request resolves its secrets for.
+type scopeKey struct{}
+
+// ForConnection returns ctx bound to the connection resolved describes, the one whose operation runs with
+// it. A secret of an encrypted vault is handed out only to a request bound this way, and only when the vault
+// approved that connection as it is now. The application core and the connection test bind every request
+// they hand to a provider; nothing a caller chooses decides which connection is presented.
+func ForConnection(ctx context.Context, resolved *config.Resolved) context.Context {
+	return context.WithValue(ctx, scopeKey{}, ScopeOf(resolved))
+}
+
+func scopeFrom(ctx context.Context) (vault.Scope, bool) {
+	scope, ok := ctx.Value(scopeKey{}).(vault.Scope)
+	return scope, ok
+}
+
+// ScopeOf returns the scope an approval of the connection resolved describes is given for: its name, its
+// credential, its provider, its effective endpoint, its effective permissions, its targets, and its tools
+// list.
+func ScopeOf(resolved *config.Resolved) vault.Scope {
+	permissions := make([]string, len(resolved.Permissions))
+	for i, permission := range resolved.Permissions {
+		permissions[i] = string(permission)
+	}
+	targets := append([]string(nil), resolved.Targets...)
+	if len(targets) == 0 && strings.TrimSpace(resolved.Target) != "" {
+		targets = []string{resolved.Target}
+	}
+	var tools []string
+	if resolved.Tools != nil {
+		tools = append(make([]string, 0, len(resolved.Tools)), resolved.Tools...)
+	}
+	return vault.Scope{
+		Connection: resolved.Name, Credential: resolved.Credential, Provider: resolved.Provider,
+		Origin: resolved.BaseURL, Permissions: permissions, Targets: targets, Tools: tools,
+	}
+}
+
 // VaultProcessError reports a vault process that listens for the vault but cannot deliver a secret: it did
 // not prove that it holds this vault's key, it refused this program, it speaks another protocol version, or
 // it failed to answer. The resolver never falls back to asking for the passphrase then. A process that
@@ -411,10 +471,11 @@ func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.C
 	if cred.Type == config.CredentialTypeVault {
 		value, found, err := r.fromVault(ctx, credential, role)
 		var process *VaultProcessError
+		var approval *ApprovalRequiredError
 		switch {
 		case err != nil && errors.Is(err, vault.ErrNoTerminal):
 			return Value{}, &VaultLockedError{Credential: credential, Role: role}
-		case errors.As(err, &process):
+		case errors.As(err, &process), errors.As(err, &approval):
 			return Value{}, err
 		case err != nil:
 			checked = append(checked, stage(SourceVault, "unavailable"))
@@ -500,18 +561,32 @@ func (r *Resolver) storeAnswered() {
 // its vault process first; only where none runs is it unlocked interactively. A resolver built without
 // WithVault reports the vault unavailable rather than reaching into a nil pointer, which is every test that
 // never sets up a vault.
+//
+// An encrypted vault hands a secret only to the connection ctx is bound to (see ForConnection), and only
+// when it approved that connection as it is now; the vault process and a vault unlocked here make the same
+// check. An unencrypted vault binds no connection.
 func (r *Resolver) fromVault(ctx context.Context, credential, role string) (string, bool, error) {
 	if r.vault == nil {
 		return "", false, errors.New("no vault is configured for this resolver")
 	}
+	scope, bound := scopeFrom(ctx)
+	refused := &ApprovalRequiredError{Credential: credential}
+	if bound {
+		refused.Connection = scope.Connection
+	}
 	if client := r.processClient(); client != nil {
+		if !bound || scope.Credential != credential {
+			return "", false, refused
+		}
 		// The client sends nothing, not even the credential name, before the process proved that it holds
 		// this vault's key. Every call is a connection of its own, so a process started or locked after
 		// this resolver was built is found as it is now.
-		value, found, err := client.Get(ctx, credential, role)
+		value, found, err := client.Get(ctx, credential, role, scope)
 		switch {
 		case err == nil:
 			return value, found, nil
+		case errors.Is(err, vault.ErrApprovalRequired):
+			return "", false, refused
 		case !errors.Is(err, vaultproc.ErrNotRunning):
 			return "", false, &VaultProcessError{Credential: credential, Role: role, Err: err}
 		}
@@ -523,9 +598,21 @@ func (r *Resolver) fromVault(ctx context.Context, credential, role string) (stri
 	if unattended {
 		ask = nil
 	}
-	value, found, _, err := r.vault.Get(credential, role, ask)
+	value, found, state, err := r.vault.Get(credential, role, ask)
 	if err != nil {
 		return "", false, err
+	}
+	if state == vault.StateUnlocked {
+		// Unlocked means encrypted: the value read is dropped unless the connection is approved.
+		if !bound || scope.Credential != credential {
+			return "", false, refused
+		}
+		switch err := r.vault.CheckApproval(scope); {
+		case errors.Is(err, vault.ErrApprovalRequired):
+			return "", false, refused
+		case err != nil:
+			return "", false, err
+		}
 	}
 	return value, found, nil
 }
@@ -552,23 +639,40 @@ func (r *Resolver) processClient() *vaultproc.Client {
 	return vaultproc.NewClient(path, recipient)
 }
 
-// VaultLocked reports whether a credential of type vault cannot be read now without a passphrase: the
-// vault is encrypted, it was not unlocked in this process, and no vault process that passes the check
-// answers for it. It asks for no passphrase and reads no secret; a running vault process is asked for its
-// status alone, which ends with ctx at the latest.
-func (r *Resolver) VaultLocked(ctx context.Context) bool {
-	if r.vault == nil {
-		return false
+// Usable reports, without reading a secret or asking for a passphrase, why the connection resolved describes
+// cannot read its vault credential now: a *VaultLockedError while the vault is encrypted and locked, or a
+// *ApprovalRequiredError while the vault has not approved the connection as it is now. It is nil for every
+// other connection, for an unencrypted vault, and where the answer cannot be told; the invoke itself then
+// reports what stands in its way. A running vault process is asked, which ends with ctx at the latest.
+func (r *Resolver) Usable(ctx context.Context, resolved *config.Resolved) error {
+	if r.vault == nil || resolved.Secrets.Type != config.CredentialTypeVault {
+		return nil
 	}
-	if state, err := r.vault.State(); err != nil || state != vault.StateLocked {
-		return false
+	state, err := r.vault.State()
+	if err != nil {
+		return nil
 	}
-	client := r.processClient()
-	if client == nil {
-		return true
+	scope := ScopeOf(resolved)
+	refused := &ApprovalRequiredError{Connection: resolved.Name, Credential: resolved.Credential}
+	switch state {
+	case vault.StateUnlocked:
+		if errors.Is(r.vault.CheckApproval(scope), vault.ErrApprovalRequired) {
+			return refused
+		}
+	case vault.StateLocked:
+		client := r.processClient()
+		if client == nil {
+			return &VaultLockedError{}
+		}
+		switch err := client.Check(ctx, scope); {
+		case err == nil:
+		case errors.Is(err, vault.ErrApprovalRequired):
+			return refused
+		default:
+			return &VaultLockedError{}
+		}
 	}
-	_, err := client.Status(ctx)
-	return err != nil
+	return nil
 }
 
 func missing(credential string, cred config.Credential, role string, checked []string, cause error) error {
@@ -580,7 +684,14 @@ func missing(credential string, cred config.Credential, role string, checked []s
 // Status reports which stage would deliver, without handing the value to the caller. A user interface asks
 // here, so it can show the source of a secret it must never see.
 func (r *Resolver) Status(credential string, cred config.Credential, role string) (Source, []string) {
-	value, err := r.Resolve(context.Background(), credential, cred, role)
+	return r.StatusContext(context.Background(), credential, cred, role)
+}
+
+// StatusContext is Status for a request ctx, such as one bound to a connection with ForConnection, which
+// is what a vault credential of an encrypted vault needs to be read at all.
+func (r *Resolver) StatusContext(ctx context.Context, credential string, cred config.Credential,
+	role string) (Source, []string) {
+	value, err := r.Resolve(ctx, credential, cred, role)
 	var missing *MissingSecretError
 	if errors.As(err, &missing) {
 		return SourceMissing, missing.Checked

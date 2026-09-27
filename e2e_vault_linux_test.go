@@ -4,10 +4,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,11 +18,16 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 	"unsafe"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	qconfig "github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -71,6 +79,18 @@ defaults:
 	}
 	if err := v.Set("vault-reader", "token-secret", storedSecret, offer); err != nil {
 		t.Fatalf("seed token-secret: %v", err)
+	}
+	// What saving the connection with an unlocked vault would have approved: the connection as it is now.
+	reg := capability.NewRegistry()
+	if err := bookstack.Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := qconfig.Load(configPath, reg)
+	if err != nil {
+		t.Fatalf("loading the configuration: %v", err)
+	}
+	if approved, _, err := approval.Approve(context.Background(), cfg, v, nil); err != nil || len(approved) != 1 {
+		t.Fatalf("approving the connection: %v, %v", approved, err)
 	}
 
 	// The socket path must stay within what a socket address holds, which a test's own temporary
@@ -161,6 +181,64 @@ defaults:
 		list := broker.call(t, `{"list":"connections"}`, "qatlas.search")
 		if list.Result.IsError || strings.Contains(string(list.Result.Structured), "unusable") {
 			t.Errorf("MCP list = %s, want no unusable column", list.Result.Structured)
+		}
+	})
+
+	// A connection changed by hand, here pointed at another server, no longer gets the secret: nothing is
+	// sent there, and the CLI and the broker both say that a person has to approve the change first.
+	var reached atomic.Int32
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Add(1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(elsewhere.Close)
+	for _, change := range []struct{ name, from, to string }{
+		{"base_url", "base_url: " + server.URL, "base_url: " + elsewhere.URL},
+		{"permissions", "    credential: vault-reader\n", "    credential: vault-reader\n    permissions: [read, create]\n"},
+	} {
+		t.Run("a connection whose "+change.name+" was changed by hand needs approval", func(t *testing.T) {
+			edited := strings.Replace(config, change.from, change.to, 1)
+			if edited == config {
+				t.Fatalf("the change of %s did not apply", change.name)
+			}
+			if err := os.WriteFile(configPath, []byte(edited), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.WriteFile(configPath, []byte(config), 0o600) })
+
+			code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
+			if code != 2 || stdout != "" || !strings.HasPrefix(stderr, "qatlas: approval-required: connection wiki ") ||
+				!strings.Contains(stderr, "'qatlas vault approve'") {
+				t.Errorf("invoke: exit %d, stdout %q, stderr %q; want approval-required naming the way out",
+					code, stdout, stderr)
+			}
+			code, _, stderr = c.run(t, "invoke", "bookstack.pages.list", "--agent")
+			if code != 2 || !strings.Contains(stderr, "an agent cannot approve it, ask the user") {
+				t.Errorf("invoke --agent: exit %d, stderr %q; want the step for an agent", code, stderr)
+			}
+			code, stdout, stderr = c.run(t, "connections", "--output", "json")
+			if code != 0 || !strings.Contains(stdout, `"unusable":"approval-required"`) {
+				t.Errorf("connections: exit %d, stdout %q, stderr %q; want the connection unusable", code, stdout, stderr)
+			}
+			invoke := broker.call(t, `{"operation":"bookstack.pages.list","connection":"wiki"}`, "qatlas.invoke")
+			if !invoke.Result.IsError || !strings.Contains(string(invoke.Result.Structured), `"code":"approval-required"`) ||
+				!strings.Contains(string(invoke.Result.Structured), "an agent cannot approve it") {
+				t.Errorf("MCP invoke = %s, want approval-required for an agent", invoke.Result.Structured)
+			}
+			list := broker.call(t, `{"list":"connections"}`, "qatlas.search")
+			if list.Result.IsError || !strings.Contains(string(list.Result.Structured), `"unusable":"approval-required"`) {
+				t.Errorf("MCP list = %s, want the connection unusable", list.Result.Structured)
+			}
+			if n := reached.Load(); n != 0 {
+				t.Errorf("the changed endpoint was reached %d times", n)
+			}
+		})
+	}
+
+	t.Run("the approved connection works again once the change is undone", func(t *testing.T) {
+		code, stdout, stderr := c.run(t, "invoke", "bookstack.pages.list")
+		if code != 0 || !strings.Contains(stdout, "Vault Runbook") {
+			t.Fatalf("invoke: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 		}
 	})
 

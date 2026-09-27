@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -77,7 +78,7 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 					{Name: "valid", Value: true}, {Name: "path", Value: path},
 				}})
 			}
-			result, err := secretSources(cfg, opts)
+			result, err := secretSources(contextOrBackground(c.Context()), cfg, opts)
 			if err != nil {
 				return err
 			}
@@ -103,7 +104,7 @@ var secretSourceColumns = []string{"connection", "credential", "role", "source",
 // secretSources resolves every secret every connection needs and reports the delivering stage. A secret
 // that no stage delivers is reported as missing rather than aborting the run: the report is the answer to
 // "where does this come from", and it stays useful exactly when something is wrong.
-func secretSources(cfg *config.Config, opts *Options) (output.Result, error) {
+func secretSources(ctx context.Context, cfg *config.Config, opts *Options) (output.Result, error) {
 	resolver, err := opts.resolver()
 	if err != nil {
 		return nil, err
@@ -117,7 +118,8 @@ func secretSources(cfg *config.Config, opts *Options) (output.Result, error) {
 			return nil, classifyUserError(err)
 		}
 		for _, role := range cfg.ProviderSecretRoles(resolved.Provider) {
-			source, checked := resolver.Status(resolved.Credential, resolved.Secrets, role)
+			source, checked := resolver.StatusContext(secret.ForConnection(ctx, resolved), resolved.Credential,
+				resolved.Secrets, role)
 			rows = append(rows, output.Row{
 				"connection": name,
 				"credential": resolved.Credential,

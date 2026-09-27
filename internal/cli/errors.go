@@ -38,6 +38,9 @@ type route int
 const (
 	routeCLI route = iota
 	routeMCP
+	// routeAgent is the CLI run with --agent: a next step that only a person can take is addressed to the
+	// agent the same way the MCP broker addresses it. Every other step reads as on routeCLI.
+	routeAgent
 )
 
 // nextStep is what to do about a refusal err, or "" where the message of the error already says it. It never
@@ -64,6 +67,13 @@ func nextStep(err error, r route) string {
 			return "agents cannot unlock the vault; ask the user to unlock it"
 		}
 		return "run 'qatlas vault unlock' in a terminal, or press ctrl+l in 'qatlas tui'"
+	case output.CodeApprovalRequired:
+		// Approving hands a secret to a connection, so it is a person's decision, never an agent's.
+		if r == routeMCP || r == routeAgent {
+			return "the change to this connection is not approved; an agent cannot approve it, ask the user"
+		}
+		return "approve the connection as it is configured now: save it in 'qatlas tui' or run " +
+			"'qatlas vault approve'"
 	case output.CodeAuth:
 		// Some providers answer a credential that lacks access with auth as well, so the step does not
 		// claim which of the two happened.
@@ -224,11 +234,13 @@ func classifyUserError(err error) error {
 		missingSecret   *secret.MissingSecretError
 		permission      *secret.PermissionError
 		vaultPermission *vault.PermissionError
+		approval        *secret.ApprovalRequiredError
 	)
 	switch {
 	case errors.As(err, &notFound), errors.As(err, &invalid), errors.As(err, &selection),
 		errors.As(err, &unknownConn), errors.As(err, &unsupported), errors.As(err, &projection),
 		errors.As(err, &missingSecret), errors.As(err, &permission), errors.As(err, &vaultPermission),
+		errors.As(err, &approval),
 		errors.As(err, &invalidReq), errors.As(err, &unknownOp), errors.As(err, &ambiguous),
 		errors.As(err, &confirmation), errors.As(err, &appSelection), errors.As(err, &denied):
 		return &UsageError{err}

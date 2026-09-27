@@ -2,14 +2,14 @@
 // qatlas, the CLI and the MCP broker alike, read them without asking for the passphrase again.
 //
 // The process listens on a Unix socket in a private runtime directory and answers one request per
-// connection: status, get, set, delete, and lock. Every message is one line of JSON, versioned and bounded
-// in size, and every connection has a deadline, so a peer that hangs cannot hold either side.
+// connection: status, get, check, set, delete, bind, and lock. Every message is one line of JSON, versioned
+// and bounded in size, and every connection has a deadline, so a peer that hangs cannot hold either side.
 //
-// A secret leaves the process only for this very program run by this very user. Both ends check each
-// other. The server checks the process that connected, its user and its program, before it answers
-// anything; see VerifyProgram. The client checks the user of the process that listens and then challenges
-// it to prove that it holds the vault's key, before it sends anything else, not even a credential name;
-// see Client. A connection therefore carries two exchanges: the challenge and its proof, then the request
+// A secret leaves the process only for a connection the vault approved (see vault.Bindings), and only for
+// this very program run by this very user. Both ends check each other. The server checks the process that
+// connected, its user and its program, before it answers anything; see VerifyProgram. The client checks the
+// user of the process that listens and then challenges it to prove that it holds the vault's key, before it
+// sends anything else, not even a credential name; see Client. A connection therefore carries two exchanges: the challenge and its proof, then the request
 // and its answer.
 //
 // Nothing here logs, and no error or answer other than a successful get carries a secret value. The
@@ -30,7 +30,7 @@ import (
 
 // Version is the protocol version a request carries and an answer repeats. A server refuses a request of
 // another version rather than guessing what it meant.
-const Version = 2
+const Version = 3
 
 // MaxMessage bounds one request or answer, newline included. It leaves room for any token or key a
 // credential holds, and keeps a peer from making the other side buffer without end.

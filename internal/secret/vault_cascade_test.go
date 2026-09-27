@@ -15,6 +15,25 @@ const canaryVault = "canary-from-vault-6e19b2"
 
 func vaultCred() config.Credential { return config.Credential{Type: config.CredentialTypeVault} }
 
+// wikiConnection is the connection every vault test resolves credName through.
+func wikiConnection() *config.Resolved {
+	return &config.Resolved{
+		Name: "wiki", Provider: "bookstack", BaseURL: "https://wiki.example.test", Service: "wiki",
+		Credential: credName, Secrets: vaultCred(), Permissions: []config.Permission{config.PermissionRead},
+	}
+}
+
+// throughWiki is a request bound to wikiConnection.
+func throughWiki() context.Context { return ForConnection(context.Background(), wikiConnection()) }
+
+// approveWiki approves wikiConnection in v, an encrypted vault unlocked in the test process.
+func approveWiki(t *testing.T, v *vault.Vault) {
+	t.Helper()
+	if err := v.Approve([]vault.Scope{ScopeOf(wikiConnection())}); err != nil {
+		t.Fatalf("Approve() = %v", err)
+	}
+}
+
 // vaultFixture builds a resolver whose vault is a fresh, unencrypted vault in a temporary directory. ask
 // stands in for the terminal: nil means none is attached.
 func vaultFixture(t *testing.T, ask vault.PassphraseFunc) (*Resolver, *vault.Vault, *redact.Redactor) {
@@ -106,10 +125,11 @@ func TestResolveVault(t *testing.T) {
 		if err := v.Set(credName, role, canaryVault, offeringPassphrase("s3cret")); err != nil {
 			t.Fatalf("vault Set() = %v", err)
 		}
+		approveWiki(t, v)
 		locked := vault.New(dir)
 		r := NewWith(func(string) string { return "" }, nil, nil, red).WithVault(locked, offeringPassphrase("s3cret"))
 
-		got, err := r.Resolve(context.Background(), credName, vaultCred(), role)
+		got, err := r.Resolve(throughWiki(), credName, vaultCred(), role)
 		if err != nil {
 			t.Fatalf("Resolve() = %v", err)
 		}

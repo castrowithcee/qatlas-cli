@@ -123,7 +123,11 @@ func run(cmd *cobra.Command, opts *Options, args []string, stdout, stderr io.Wri
 		return exitOK
 	}
 
-	err = withNextStep(err, routeCLI)
+	r := routeCLI
+	if opts.Agent {
+		r = routeAgent
+	}
+	err = withNextStep(err, r)
 	// Redaction happens before anything is shown, including unexpected provider errors.
 	fmt.Fprintf(stderr, "qatlas: %s: %s\n", codeFor(err), opts.Redactor.Error(err))
 	// A detail follows the diagnostic as one JSON line, so a caller reads its fields instead of the text.

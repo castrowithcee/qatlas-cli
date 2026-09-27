@@ -239,9 +239,10 @@ const (
 // spaces, and how its tools list shapes what it offers. It never names a service, a URL, a credential, a
 // target, or a secret source.
 //
-// Unusable is present exactly while the vault is locked and a listed connection reads its secrets from it:
-// the error code an invoke through such a connection ends with, vault-locked, and empty for every other
-// connection of the list.
+// Unusable is present exactly while a listed connection cannot read its secrets from the vault: the error
+// code an invoke through such a connection ends with, vault-locked while the vault is locked, or
+// approval-required while the vault has not approved the connection as it is configured now, and empty for
+// every other connection of the list.
 type ConnectionSummary struct {
 	Name        string  `json:"name"`
 	Provider    string  `json:"provider"`
@@ -257,19 +258,26 @@ type ConnectionsResponse struct {
 }
 
 // Connections lists the configured routes, of one provider when provider is not empty, sorted by provider
-// and then by name. It answers from the configuration and, only when a listed connection reads its secrets
-// from the vault, from vaultLocked, which reports whether the vault is locked without reading a secret. A
-// nil vaultLocked stands for a vault that is never locked.
-func (c *Core) Connections(provider string, vaultLocked func() bool) ConnectionsResponse {
+// and then by name. It answers from the configuration and, only for a listed connection that reads its
+// secrets from the vault, from unusable, which reports without reading a secret why that connection cannot
+// read them now, as the error its invoke would end with, or nil when it can. A nil unusable stands for a
+// vault that never refuses.
+func (c *Core) Connections(provider string, unusable func(*config.Resolved) error) ConnectionsResponse {
 	listed := func(name string) bool {
 		return provider == "" || c.config.Services[c.config.Connections[name].Service].Provider == provider
 	}
-	locked := false
-	if vaultLocked != nil {
+	reasons := map[string]string{}
+	if unusable != nil {
 		for name, connection := range c.config.Connections {
-			if listed(name) && c.config.Credentials[connection.Credential].Type == config.CredentialTypeVault {
-				locked = vaultLocked()
-				break
+			if !listed(name) || c.config.Credentials[connection.Credential].Type != config.CredentialTypeVault {
+				continue
+			}
+			resolved, err := c.connection(name)
+			if err != nil {
+				continue
+			}
+			if err := unusable(resolved); err != nil {
+				reasons[name] = string(ErrorCode(err))
 			}
 		}
 	}
@@ -301,12 +309,9 @@ func (c *Core) Connections(provider string, vaultLocked func() bool) Connections
 			Name: name, Provider: owner, Description: connection.Description,
 			Permissions: strings.Join(effects, " "), Tools: tools,
 		}
-		if locked {
-			unusable := ""
-			if c.config.Credentials[connection.Credential].Type == config.CredentialTypeVault {
-				unusable = string(output.CodeVaultLocked)
-			}
-			summary.Unusable = &unusable
+		if len(reasons) > 0 {
+			reason := reasons[name]
+			summary.Unusable = &reason
 		}
 		connections = append(connections, summary)
 	}
@@ -568,7 +573,9 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 			})
 		}()
 	}
-	value, err := handler(ctx, resolved, c.secrets, c.redactor, request.Arguments)
+	// The secrets of the handler are resolved for the selected connection alone: an encrypted vault hands
+	// them out only when it approved that connection as it is configured now.
+	value, err := handler(secret.ForConnection(ctx, resolved), resolved, c.secrets, c.redactor, request.Arguments)
 	if err != nil {
 		return InvokeResponse{}, err
 	}
@@ -725,6 +732,7 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		Service: connection.Service, Credential: connection.Credential,
 		Secrets:     c.config.Credentials[connection.Credential],
 		Permissions: c.config.ConnectionPermissions(name),
+		Tools:       connection.ToolsList(),
 	}, nil
 }
 

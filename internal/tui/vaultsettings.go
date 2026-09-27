@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -227,9 +229,37 @@ func (m *Model) runVaultEncrypt(passphrase string) tea.Cmd {
 	m.vaultBusy = true
 	m.writes++
 	m.busy = "encrypting the vault"
+	store := m.store
 	return func() tea.Msg {
-		return vaultActionMsg{action: vaultActionEncrypt, err: v.Encrypt(passphrase)}
+		if err := v.Encrypt(passphrase); err != nil {
+			return vaultActionMsg{action: vaultActionEncrypt, err: err}
+		}
+		return vaultActionMsg{action: vaultActionEncrypt, procNote: approveOnEncrypt(store, v)}
 	}
+}
+
+// approveOnEncrypt approves every saved connection that reads a secret the vault just encrypted, the same
+// way 'qatlas vault encrypt' does: the passphrase was proven a moment ago. It returns what to add to the
+// outcome; a configuration that cannot be read approves nothing, and the encryption stands.
+func approveOnEncrypt(store *config.Store, v *vault.Vault) string {
+	if store == nil {
+		return ""
+	}
+	cfg, err := store.Load()
+	if err != nil {
+		return ""
+	}
+	approved, warning, err := approval.Approve(context.Background(), cfg, v, nil)
+	switch {
+	case err != nil:
+		return "warning: no connection was approved to read from the vault: " + err.Error()
+	case warning != "":
+		return "warning: " + warning
+	case len(approved) == 0:
+		return ""
+	}
+	return fmt.Sprintf("approved %d connection(s) to read from it: %s", len(approved),
+		strings.Join(approved, ", "))
 }
 
 // startVaultChangePassphrase asks for the current passphrase once, verifies it, then chains into asking for

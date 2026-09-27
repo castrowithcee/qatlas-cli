@@ -18,6 +18,17 @@ type Resolved struct {
 	Credential  string
 	Secrets     Credential
 	Permissions []Permission
+	// Tools is the connection's tools list: nil when it has none, an empty list when it offers no tool.
+	Tools []string
+}
+
+// ToolsList returns a copy of the connection's tools list that keeps a missing list, nil, apart from an
+// empty one.
+func (c Connection) ToolsList() []string {
+	if c.Tools == nil {
+		return nil
+	}
+	return append(make([]string, 0, len(c.Tools)), c.Tools...)
 }
 
 // SelectionError reports that no single connection could be determined for a domain. It is a usage
@@ -64,5 +75,6 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 		Credential:  conn.Credential,
 		Secrets:     cred,
 		Permissions: c.ConnectionPermissions(name),
+		Tools:       conn.ToolsList(),
 	}, nil
 }

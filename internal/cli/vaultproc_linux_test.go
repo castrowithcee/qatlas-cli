@@ -66,6 +66,15 @@ func endVaultProcess(t *testing.T, client *vaultproc.Client) {
 func encryptedVaultFixture(t *testing.T, extra string) string {
 	t.Helper()
 	dir := vaultCredentialFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	// The fixture's connection is approved as the base configuration has it, before extra is appended.
+	approveConnections(t, dir, v)
+	if err := vault.New(dir).Set("wiki-vault", "token-secret", "second-"+canaryVault, nil); err != nil {
+		t.Fatalf("pending Set() = %v", err)
+	}
 	if extra != "" {
 		f, err := os.OpenFile(configIn(dir), os.O_APPEND|os.O_WRONLY, 0)
 		if err != nil {
@@ -73,12 +82,6 @@ func encryptedVaultFixture(t *testing.T, extra string) string {
 		}
 		_, _ = f.WriteString(extra)
 		_ = f.Close()
-	}
-	if err := vault.New(dir).Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
-		t.Fatalf("vault Set() = %v", err)
-	}
-	if err := vault.New(dir).Set("wiki-vault", "token-secret", "second-"+canaryVault, nil); err != nil {
-		t.Fatalf("pending Set() = %v", err)
 	}
 	return dir
 }
@@ -109,7 +112,7 @@ func TestVaultUnlockStartsAVaultProcess(t *testing.T) {
 	if err != nil || status.PID == os.Getpid() || time.Until(status.LocksAt) < 11*time.Hour {
 		t.Fatalf("Status() = %+v, %v, want another process locking itself in 12h", status, err)
 	}
-	if value, found, err := client.Get(ctx, "wiki-vault", "token-secret"); err != nil || !found || value != "second-"+canaryVault {
+	if value, found, err := client.Get(ctx, "wiki-vault", "token-secret", connectionScope(t, dir, "wiki")); err != nil || !found || value != "second-"+canaryVault {
 		t.Fatalf("Get() of the merged entry = %q, %v, %v", value, found, err)
 	}
 	cmdline, _ := os.ReadFile(filepath.Join("/proc", strconv.Itoa(status.PID), "cmdline"))

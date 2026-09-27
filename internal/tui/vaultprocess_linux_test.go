@@ -59,11 +59,36 @@ func serveVaultProcess(t *testing.T, dir, passphrase string) (*vaultproc.Server,
 	if err != nil {
 		t.Fatalf("Listen() = %v", err)
 	}
-	server := vaultproc.NewServer(key, snap.Secrets)
+	server := vaultproc.NewServer(key, snap.Secrets, snap.Bindings)
 	done := make(chan struct{})
 	go func() { _ = server.Serve(l); close(done) }()
 	t.Cleanup(func() { _ = server.Close(); <-done })
 	return server, client
+}
+
+// probeScope approves a probe connection for credential in the running vault process, with the entry id the
+// vault on disk keeps for it, so the test can read back what the process holds. A credential stored while the
+// process runs is bound to no connection until the vault's approvals are handed over.
+func probeScope(t *testing.T, client *vaultproc.Client, dir, passphrase, credential string) vault.Scope {
+	t.Helper()
+	v := vault.New(dir)
+	if _, err := v.Unlock(passphrase); err != nil {
+		t.Fatalf("Unlock() = %v", err)
+	}
+	id, ok, err := v.CredentialID(credential)
+	if err != nil || !ok {
+		t.Fatalf("CredentialID(%q) = %v, %v", credential, ok, err)
+	}
+	bindings, err := v.Bindings()
+	if err != nil {
+		t.Fatalf("Bindings() = %v", err)
+	}
+	scope := vault.Scope{Connection: "probe", Credential: credential}
+	bindings.Approvals[scope.Connection] = vault.Fingerprint(scope, id)
+	if err := client.Bind(context.Background(), bindings); err != nil {
+		t.Fatalf("Bind() = %v", err)
+	}
+	return scope
 }
 
 // refuseEveryClient makes a server refuse every client, as a vault process does once an update replaced its
@@ -108,7 +133,8 @@ func TestVaultRoleWriteAndRemoveSyncTheVaultProcess(t *testing.T) {
 		t.Fatalf("storing in the vault reported %q", m.fail)
 	}
 	ctx := context.Background()
-	if got, found, err := client.Get(ctx, "reader", "token-id"); err != nil || !found || got != canary {
+	probe := probeScope(t, client, dir, passphrase, "reader")
+	if got, found, err := client.Get(ctx, "reader", "token-id", probe); err != nil || !found || got != canary {
 		t.Fatalf("process Get() after s = %q, %v, %v, want the value just stored", got, found, err)
 	}
 
@@ -120,7 +146,7 @@ func TestVaultRoleWriteAndRemoveSyncTheVaultProcess(t *testing.T) {
 	if m.fail != "" {
 		t.Fatalf("removing from the vault reported %q", m.fail)
 	}
-	if _, found, err := client.Get(ctx, "reader", "token-id"); err != nil || found {
+	if _, found, err := client.Get(ctx, "reader", "token-id", probe); err != nil || found {
 		t.Fatalf("process Get() after x = %v, %v, want it removed from the process too", found, err)
 	}
 }
@@ -229,8 +255,9 @@ func TestCommitSetupSyncsNewVaultSecretsToARunningProcess(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	probe := probeScope(t, client, dir, passphrase, "reader")
 	for role, want := range plan.secrets {
-		if got, found, err := client.Get(ctx, "reader", role); err != nil || !found || got != want {
+		if got, found, err := client.Get(ctx, "reader", role, probe); err != nil || !found || got != want {
 			t.Errorf("process Get(%q) = %q, %v, %v, want %q", role, got, found, err, want)
 		}
 	}

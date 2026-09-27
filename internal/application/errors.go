@@ -196,6 +196,7 @@ func ErrorCode(err error) output.Code {
 		permission      *secret.PermissionError
 		vaultPermission *vault.PermissionError
 		vaultLocked     *secret.VaultLockedError
+		approval        *secret.ApprovalRequiredError
 		providerErr     *provider.Error
 	)
 	switch {
@@ -241,6 +242,9 @@ func ErrorCode(err error) output.Code {
 		// A locked vault is a runtime state, not a configuration mistake: unlocking it and retrying needs
 		// no change to the file, unlike every code above.
 		return output.CodeVaultLocked
+	case errors.As(err, &approval):
+		// The vault has not approved the connection as it is configured now; only a person approves it.
+		return output.CodeApprovalRequired
 	case errors.As(err, &providerErr):
 		return providerCode(providerErr.Class)
 	}

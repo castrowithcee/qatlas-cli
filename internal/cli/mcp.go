@@ -17,6 +17,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -560,14 +561,18 @@ func (s *mcpServer) list(ctx context.Context, core *application.Core, raw json.R
 		}
 	}
 	// The resolver lives as long as the server and is built under the same lock as the core; the vault's
-	// state is asked anew for every listing, so a vault unlocked or locked since is reported as it is now.
-	locked := func() bool {
+	// state and its approvals are asked anew for every listing, so a vault unlocked or locked since, or a
+	// connection approved since, is reported as it is now.
+	unusable := func(resolved *config.Resolved) error {
 		s.coreMu.Lock()
 		secrets, err := s.opts.resolver()
 		s.coreMu.Unlock()
-		return err == nil && secrets.VaultLocked(ctx)
+		if err != nil {
+			return nil
+		}
+		return secrets.Usable(ctx, resolved)
 	}
-	return core.Connections(provider, locked), nil
+	return core.Connections(provider, unusable), nil
 }
 
 func decodeMCPArguments(raw json.RawMessage, target any) error {
@@ -630,8 +635,9 @@ func mcpTools() []mcpTool {
 				"list returns an overview instead: providers lists every provider with its description, note, " +
 				"and counts of tools, connections that can run them, and configured connections; connections " +
 				"lists the configured connections, of provider when given, each with its description, " +
-				"permitted effects, and tools list, and, while the vault is locked, unusable: vault-locked for a " +
-				"connection that cannot be used until a person unlocks it, empty for the others. list takes no " +
+				"permitted effects, and tools list, and, while one of them cannot read its secret from the vault, " +
+				"unusable: vault-locked for a connection that cannot be used until a person unlocks the vault, " +
+				"approval-required for one a person has to approve as it is configured now, empty for the others. list takes no " +
 				"other argument than provider with connections.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"list":{"type":"string","enum":["providers","connections"],"description":"Return the providers or the configured connections instead of tools; only provider may accompany connections"},"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},

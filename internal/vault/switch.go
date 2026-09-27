@@ -127,7 +127,10 @@ func (v *Vault) Decrypt(passphrase string) error {
 		return err
 	}
 
-	if err := v.writePlain(v.doc); err != nil {
+	// Approvals bind connections only while the vault is encrypted; the plaintext document keeps none.
+	plain := *v.doc
+	plain.Approvals = nil
+	if err := v.writePlain(&plain); err != nil {
 		return err
 	}
 

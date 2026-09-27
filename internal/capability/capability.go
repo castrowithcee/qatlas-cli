@@ -211,14 +211,15 @@ func (r *Registry) ProviderMetadataAll() []config.ProviderMetadata {
 	return all
 }
 
-// TestConnection invokes only the registered safe test function for the selected provider.
+// TestConnection invokes only the registered safe test function for the selected provider, with its secrets
+// resolved for that connection alone (see secret.ForConnection).
 func (r *Registry) TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
 	test, ok := r.testers[resolved.Provider]
 	if !ok {
 		return "", fmt.Errorf("connection %q uses provider %q, which cannot be tested yet", resolved.Name, resolved.Provider)
 	}
-	return test(ctx, resolved, secrets, red)
+	return test(secret.ForConnection(ctx, resolved), resolved, secrets, red)
 }
 
 func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {

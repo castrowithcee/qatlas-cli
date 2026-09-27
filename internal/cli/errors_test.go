@@ -168,6 +168,12 @@ func TestNextStepByCodeAndRoute(t *testing.T) {
 			"run the command in a terminal and enter the passphrase, or manage it in 'qatlas tui'"},
 		{"MCP admin required", &UsageError{&application.AdminRequiredError{}}, routeMCP,
 			"agents do not manage credentials or the vault; ask the user"},
+		{"CLI approval required", &secret.ApprovalRequiredError{Connection: "wiki", Credential: "c"}, routeCLI,
+			"approve the connection as it is configured now: save it in 'qatlas tui' or run 'qatlas vault approve'"},
+		{"agent approval required", &secret.ApprovalRequiredError{Connection: "wiki", Credential: "c"}, routeAgent,
+			"the change to this connection is not approved; an agent cannot approve it, ask the user"},
+		{"MCP approval required", &secret.ApprovalRequiredError{Connection: "wiki", Credential: "c"}, routeMCP,
+			"the change to this connection is not approved; an agent cannot approve it, ask the user"},
 	} {
 		if got := nextStep(tt.err, tt.r); got != tt.want {
 			t.Errorf("%s: step = %q, want %q", tt.name, got, tt.want)

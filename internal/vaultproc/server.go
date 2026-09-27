@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"filippo.io/age"
+
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // Server holds an unlocked vault's secrets in memory and answers the clients on one listener. The zero
@@ -26,9 +28,11 @@ type Server struct {
 	mu      sync.Mutex
 	key     age.Identity                 // the vault's key, which answers a client's challenge
 	secrets map[string]map[string][]byte // credential name, role, value
-	locked  bool
-	locksAt time.Time
-	timer   *time.Timer
+	// bindings decide which connection a get may hand a secret to; see vault.Bindings.
+	bindings vault.Bindings
+	locked   bool
+	locksAt  time.Time
+	timer    *time.Timer
 
 	listener net.Listener
 	stopOnce sync.Once
@@ -36,12 +40,13 @@ type Server struct {
 	handlers sync.WaitGroup
 }
 
-// NewServer returns a server holding key, the vault's own key, and secrets, keyed by credential name and
-// then by role, the shape of a decrypted vault document. The key proves to every client that this process
-// holds the vault; a server without one, or with another vault's, fails every client's challenge and is
-// told nothing. The server keeps copies of the secrets; the caller drops its map once the server holds
-// them, since only the copies can be overwritten when the server locks.
-func NewServer(key age.Identity, secrets map[string]map[string]string) *Server {
+// NewServer returns a server holding key, the vault's own key, secrets, keyed by credential name and then by
+// role, the shape of a decrypted vault document, and bindings, which say which connection may read which
+// credential. The key proves to every client that this process holds the vault; a server without one, or
+// with another vault's, fails every client's challenge and is told nothing. A get is answered only for a
+// connection bindings approve. The server keeps copies of the secrets; the caller drops its map once the
+// server holds them, since only the copies can be overwritten when the server locks.
+func NewServer(key age.Identity, secrets map[string]map[string]string, bindings vault.Bindings) *Server {
 	held := make(map[string]map[string][]byte, len(secrets))
 	for credential, roles := range secrets {
 		held[credential] = make(map[string][]byte, len(roles))
@@ -49,7 +54,19 @@ func NewServer(key age.Identity, secrets map[string]map[string]string) *Server {
 			held[credential][role] = []byte(value)
 		}
 	}
-	return &Server{key: key, secrets: held, stopped: make(chan struct{})}
+	return &Server{key: key, secrets: held, bindings: copyBindings(bindings), stopped: make(chan struct{})}
+}
+
+// copyBindings returns bindings with maps of their own, never nil.
+func copyBindings(b vault.Bindings) vault.Bindings {
+	out := vault.Bindings{IDs: make(map[string]string, len(b.IDs)), Approvals: make(map[string]string, len(b.Approvals))}
+	for name, id := range b.IDs {
+		out.IDs[name] = id
+	}
+	for name, fingerprint := range b.Approvals {
+		out.Approvals[name] = fingerprint
+	}
+	return out
 }
 
 // Serve answers connections on l until the server locks: on a lock request, after IdleTimeout without a
@@ -140,6 +157,7 @@ func (s *Server) wipe() {
 		}
 	}
 	s.secrets = nil
+	s.bindings = vault.Bindings{}
 	s.locked = true
 }
 
@@ -232,6 +250,23 @@ func (s *Server) answer(req request) response {
 		return response{V: Version, PID: os.Getpid(), LocksAt: &locksAt}
 	case opLock:
 		return response{V: Version}
+	case opBind:
+		if req.Bindings == nil {
+			return response{V: Version, Error: codeBadRequest}
+		}
+		s.bindings = copyBindings(*req.Bindings)
+		return response{V: Version}
+	case opCheck:
+		if req.Scope == nil {
+			return response{V: Version, Error: codeBadRequest}
+		}
+		if _, held := s.secrets[req.Scope.Credential]; !held {
+			return response{V: Version}
+		}
+		if !s.bindings.Allows(*req.Scope, req.Scope.Credential) {
+			return response{V: Version, Error: codeApproval}
+		}
+		return response{V: Version, Found: true}
 	}
 
 	if req.Credential == "" || req.Role == "" {
@@ -240,7 +275,17 @@ func (s *Server) answer(req request) response {
 	switch req.Op {
 	case opGet:
 		s.touch()
-		value, found := s.secrets[req.Credential][req.Role]
+		roles, held := s.secrets[req.Credential]
+		if !held {
+			return response{V: Version}
+		}
+		// A credential the process holds is handed out only to a connection the vault approved as it is
+		// now; a get that names no connection, or another credential than its connection reads, is refused
+		// the same way.
+		if req.Scope == nil || !s.bindings.Allows(*req.Scope, req.Credential) {
+			return response{V: Version, Error: codeApproval}
+		}
+		value, found := roles[req.Role]
 		if !found {
 			return response{V: Version}
 		}
@@ -259,7 +304,10 @@ func (s *Server) answer(req request) response {
 		clear(roles[req.Role])
 		delete(roles, req.Role)
 		if len(roles) == 0 {
+			// The vault removed the entry with its last role; one stored again under the same name is a
+			// new entry with a new id, which no approval covers until the vault's bindings say so.
 			delete(s.secrets, req.Credential)
+			delete(s.bindings.IDs, req.Credential)
 		}
 		return response{V: Version}
 	}

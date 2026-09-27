@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -55,6 +58,34 @@ func confirming(answer bool) func(string) (bool, error) {
 
 const canaryVault = "canary-vault-token-8e5c31"
 
+// approveConnections approves every connection of the configuration in dir that reads a secret of v, an
+// encrypted vault unlocked in the test process, as it is configured now.
+func approveConnections(t *testing.T, dir string, v *vault.Vault) {
+	t.Helper()
+	cfg, err := config.Load(configIn(dir), defaultRegistry())
+	if err != nil {
+		t.Fatalf("config.Load() = %v", err)
+	}
+	if _, _, err := approval.Approve(context.Background(), cfg, v, nil); err != nil {
+		t.Fatalf("approval.Approve() = %v", err)
+	}
+}
+
+// connectionScope returns the scope of one connection of the configuration in dir, as a request through it
+// presents it to the vault.
+func connectionScope(t *testing.T, dir, name string) vault.Scope {
+	t.Helper()
+	cfg, err := config.Load(configIn(dir), defaultRegistry())
+	if err != nil {
+		t.Fatalf("config.Load() = %v", err)
+	}
+	resolved, err := cfg.Resolve(name, "")
+	if err != nil {
+		t.Fatalf("Resolve() = %v", err)
+	}
+	return secret.ScopeOf(resolved)
+}
+
 const vaultCredentialConfig = `
 version: 1
 services:
@@ -93,6 +124,15 @@ func TestVaultStatusCLI(t *testing.T) {
 	}
 	if !strings.Contains(stdout, `"state":"absent"`) {
 		t.Errorf("stdout = %q, want state absent", stdout)
+	}
+
+	// An unencrypted vault is named as one that binds no connection.
+	if err := vault.New(dir).Set("wiki-vault", "token-id", canaryVault, nil); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	_, stdout, _ = runWithInput(t, opts, "", "vault", "status", "--config", configIn(dir), "--output", "json")
+	if !strings.Contains(stdout, "connections are not bound to approvals") {
+		t.Errorf("stdout = %q, want the missing binding named", stdout)
 	}
 }
 
@@ -292,8 +332,8 @@ func TestVaultEncryptCLI(t *testing.T) {
 	if code != exitOK {
 		t.Fatalf("exit code = %d, want %d (stderr: %s)", code, exitOK, stderr)
 	}
-	if !strings.Contains(stdout, "the vault is encrypted") {
-		t.Errorf("stdout = %q, want the outcome reported", stdout)
+	if !strings.Contains(stdout, "the vault is encrypted; approved 1 connection to read from it: wiki") {
+		t.Errorf("stdout = %q, want the outcome and the approved connection reported", stdout)
 	}
 
 	fresh := vault.New(dir)
@@ -303,6 +343,47 @@ func TestVaultEncryptCLI(t *testing.T) {
 	got, found, _, err := fresh.Get("wiki-vault", "token-id", offeringPassphrase("s3cret-phrase"))
 	if err != nil || !found || got != canaryVault {
 		t.Fatalf("Get() = %q, %v, %v, want %q, true, nil", got, found, err, canaryVault)
+	}
+	// The connection that read the vault when encryption was switched on keeps reading it.
+	if err := fresh.CheckApproval(connectionScope(t, dir, "wiki")); err != nil {
+		t.Errorf("CheckApproval() after encrypt = %v, want the connection approved", err)
+	}
+}
+
+// A connection changed by hand after the vault was encrypted is refused with approval-required, exit code 2,
+// the connection named and the way out for a person or an agent, and nothing of the secret. The vault here is
+// unlocked in the command's own process; the vault process makes the same check.
+func TestInvokeThroughAChangedConnectionNeedsApproval(t *testing.T) {
+	dir := vaultCredentialFixture(t)
+	v := vault.New(dir)
+	if err := v.Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	if err := v.Set("wiki-vault", "token-secret", "second-"+canaryVault, nil); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	approveConnections(t, dir, v)
+	edited := strings.Replace(vaultCredentialConfig, "https://wiki.example.invalid", "http://127.0.0.1:9", 1)
+	if err := os.WriteFile(configIn(dir), []byte(edited), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tt := range []struct {
+		args []string
+		step string
+	}{
+		{nil, "save it in 'qatlas tui' or run 'qatlas vault approve'"},
+		{[]string{"--agent"}, "the change to this connection is not approved; an agent cannot approve it, ask the user"},
+	} {
+		secrets := secret.NewWith(func(string) string { return "" }, nil, nil, &redact.Redactor{}).
+			WithVault(vault.New(dir), offeringPassphrase("s3cret-phrase"))
+		args := append([]string{"invoke", "bookstack.pages.list", "--config", configIn(dir)}, tt.args...)
+		code, stdout, stderr := runWithInput(t, &Options{Secrets: secrets}, "", args...)
+		if code != exitUsage || stdout != "" ||
+			!strings.HasPrefix(stderr, "qatlas: approval-required: connection wiki is not approved") ||
+			!strings.Contains(stderr, tt.step) || strings.Contains(stderr, canaryVault) {
+			t.Errorf("invoke %v: exit %d, stdout %q, stderr %q", tt.args, code, stdout, stderr)
+		}
 	}
 }
 

@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
@@ -55,7 +57,9 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"argument, an environment variable, or a file. Without a terminal to ask on, such as an agent\n" +
 			"talking to qatlas over MCP, such an access fails with the code vault-locked, and 'qatlas\n" +
 			"connections' marks the connections it affects; a person runs 'qatlas vault unlock' to open it, or\n" +
-			"presses ctrl+l in 'qatlas tui' to open it for the editor alone.\n\n" +
+			"presses ctrl+l in 'qatlas tui' to open it for the editor alone. An encrypted vault hands a\n" +
+			"secret only to a connection it approved as it is configured now; any other access fails with\n" +
+			"the code approval-required, which only a person resolves.\n\n" +
 			"On Linux 'vault unlock' hands the unlocked vault to a vault process that holds it open until it\n" +
 			"is idle for vault.idle_timeout (12h unless the configuration says otherwise), 'vault lock' ends\n" +
 			"it, or the machine restarts; elsewhere unlocking only lasts for the current process. Every later\n" +
@@ -76,7 +80,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"holds, and how many entries are queued in pending, added or changed while it was locked. The\n" +
 			"entry count is unknown while the vault is locked: counting it needs the passphrase, the same\n" +
 			"way reading a secret does. For an encrypted vault it also reports whether a vault process holds\n" +
-			"it unlocked (process running, with its pid and when it locks itself, or none). It asks for no\n" +
+			"it unlocked (process running, with its pid and when it locks itself, or none); for an\n" +
+			"unencrypted one it warns that connections are not bound to approvals. It asks for no\n" +
 			"passphrase and shows no secret value.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
@@ -132,10 +137,13 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"vault already holds is re-encrypted as secrets.age. The plaintext document is removed only once\n" +
 			"the encrypted one is safely written. Run against a vault that is already encrypted, it changes\n" +
 			"nothing and says to use 'qatlas vault passphrase' instead; a passphrase left empty, or a mismatch\n" +
-			"between the two entries, aborts the same way, without touching any file.",
+			"between the two entries, aborts the same way, without touching any file.\n\n" +
+			"From then on the vault hands a secret only to a connection it approved as it is configured, and\n" +
+			"fails any other with approval-required. Every connection that reads from the vault at this\n" +
+			"moment is approved at once, since the passphrase was just set, and the command names them.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			return runVaultEncrypt(c, opts)
+			return runVaultEncrypt(c, opts, reg)
 		},
 	}
 
@@ -237,6 +245,10 @@ func runVaultStatus(c *cobra.Command, opts *Options) error {
 	if err != nil {
 		return classifyUserError(err)
 	}
+	if status.State == vault.StateUnencrypted {
+		addWarning(&status.Warning, "while the vault is unencrypted, connections are not bound to approvals: "+
+			"any connection reading a vault credential gets its secret")
+	}
 	if legacyCredentialsExist(v) {
 		addWarning(&status.Warning,
 			"credentials.yaml still holds plaintext secrets; run 'qatlas vault migrate' to move them into the vault")
@@ -285,13 +297,17 @@ func vaultProcessOf(ctx context.Context, v *vault.Vault, state vault.State, warn
 	return vaultProcessState{State: "unknown"}
 }
 
-// vaultLockedCheck returns how a listing learns whether the vault is locked, asked only when it lists a
-// connection that reads from the vault. A run whose resolver cannot be built lists without the state; the
-// invoke that needs a secret reports that problem itself.
-func vaultLockedCheck(ctx context.Context, opts *Options) func() bool {
-	return func() bool {
+// vaultAccessCheck returns how a listing learns why a connection that reads from the vault cannot use it
+// now: the vault is locked, or it has not approved the connection (see secret.Resolver.Usable). A run whose
+// resolver cannot be built lists without the state; the invoke that needs a secret reports that problem
+// itself.
+func vaultAccessCheck(ctx context.Context, opts *Options) func(*config.Resolved) error {
+	return func(resolved *config.Resolved) error {
 		secrets, err := opts.resolver()
-		return err == nil && secrets.VaultLocked(contextOrBackground(ctx))
+		if err != nil {
+			return nil
+		}
+		return secrets.Usable(contextOrBackground(ctx), resolved)
 	}
 }
 
@@ -580,7 +596,7 @@ func askNewPassphrase(prompt string) (string, error) {
 	return passphrase, nil
 }
 
-func runVaultEncrypt(c *cobra.Command, opts *Options) error {
+func runVaultEncrypt(c *cobra.Command, opts *Options, reg *capability.Registry) error {
 	if err := requireAdmin(opts); err != nil {
 		return err
 	}
@@ -608,8 +624,43 @@ func runVaultEncrypt(c *cobra.Command, opts *Options) error {
 	if err := v.Encrypt(passphrase); err != nil {
 		return classifyUserError(err)
 	}
-	fmt.Fprintln(c.OutOrStdout(), "the vault is encrypted")
+	fmt.Fprintln(c.OutOrStdout(), "the vault is encrypted"+approveOnEncrypt(c, opts, reg, v))
 	return nil
+}
+
+// approveOnEncrypt approves every connection that reads a secret the vault just encrypted, since the
+// passphrase was proven a moment ago, and returns what to add to the outcome. From now on the vault hands a
+// secret only to a connection it approved as it is configured now. A configuration that cannot be read
+// approves nothing; the command says so, and the encryption stands.
+func approveOnEncrypt(c *cobra.Command, opts *Options, reg *capability.Registry, v *vault.Vault) string {
+	path, err := config.Path(opts.Config)
+	var cfg *config.Config
+	if err == nil {
+		cfg, err = config.Load(path, reg)
+	}
+	var missing *config.NotFoundError
+	switch {
+	case errors.As(err, &missing):
+		return ""
+	case err != nil:
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: no connection was approved to read from the vault, "+
+			"because the configuration cannot be read: %s\n", opts.Redactor.Error(err))
+		return ""
+	}
+	approved, warning, err := approval.Approve(contextOrBackground(c.Context()), cfg, v, nil)
+	if err != nil {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: no connection was approved to read from the vault: %s\n",
+			opts.Redactor.Error(err))
+		return ""
+	}
+	if warning != "" {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+	}
+	if len(approved) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("; approved %d %s to read from it: %s", len(approved),
+		plural(len(approved), "connection", "connections"), strings.Join(approved, ", "))
 }
 
 func runVaultPassphrase(c *cobra.Command, opts *Options) error {

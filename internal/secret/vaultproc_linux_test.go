@@ -10,6 +10,7 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
@@ -25,9 +26,11 @@ func processFixture(t *testing.T) (*Resolver, string) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	dir := t.TempDir()
 	offer := func(string) (string, error) { return processPassphrase, nil }
-	if err := vault.New(dir).Set(credName, role, canaryVault, offer); err != nil {
+	v := vault.New(dir)
+	if err := v.Set(credName, role, canaryVault, offer); err != nil {
 		t.Fatalf("vault Set() = %v", err)
 	}
+	approveWiki(t, v)
 	ask := func(string) (string, error) {
 		t.Errorf("the passphrase was asked for")
 		return "", vault.ErrNoTerminal
@@ -62,7 +65,7 @@ func startProcess(t *testing.T, dir string, key age.Identity) *vaultproc.Server 
 	if err != nil {
 		t.Fatalf("Listen() = %v", err)
 	}
-	s := vaultproc.NewServer(key, snap.Secrets)
+	s := vaultproc.NewServer(key, snap.Secrets, snap.Bindings)
 	done := make(chan struct{})
 	go func() { _ = s.Serve(l); close(done) }()
 	t.Cleanup(func() { _ = s.Close(); <-done })
@@ -80,14 +83,14 @@ func TestResolveFromTheVaultProcess(t *testing.T) {
 			// Attended, a locked vault without a process asks; that path is not what this test is about.
 			r.passphrase = func(string) (string, error) { return "", vault.ErrNoTerminal }
 		}
-		ctx := context.Background()
+		ctx := throughWiki()
 
 		var locked *VaultLockedError
 		if _, err := r.Resolve(ctx, credName, vaultCred(), role); !errors.As(err, &locked) {
 			t.Fatalf("Resolve() without a vault process = %v, want *VaultLockedError", err)
 		}
-		if !r.VaultLocked(ctx) {
-			t.Errorf("VaultLocked() without a vault process = false")
+		if err := r.Usable(ctx, wikiConnection()); !errors.As(err, &locked) {
+			t.Errorf("Usable() without a vault process = %v, want *VaultLockedError", err)
 		}
 
 		s := startProcess(t, dir, nil)
@@ -95,8 +98,8 @@ func TestResolveFromTheVaultProcess(t *testing.T) {
 		if err != nil || got.Source != SourceVault || got.Secret != canaryVault {
 			t.Fatalf("Resolve() from the vault process = %+v, %v, want the vault to deliver", got, err)
 		}
-		if r.VaultLocked(ctx) {
-			t.Errorf("VaultLocked() with a vault process = true")
+		if err := r.Usable(ctx, wikiConnection()); err != nil {
+			t.Errorf("Usable() with a vault process = %v", err)
 		}
 		if _, err := r.Resolve(ctx, credName, vaultCred(), "other"); !errors.As(err, new(*MissingSecretError)) {
 			t.Errorf("Resolve() of a role the process does not hold = %v, want *MissingSecretError", err)
@@ -122,7 +125,7 @@ func TestResolveRefusesAVaultProcessWithAnotherKey(t *testing.T) {
 	}
 	startProcess(t, dir, other)
 
-	_, err = r.Resolve(context.Background(), credName, vaultCred(), role)
+	_, err = r.Resolve(throughWiki(), credName, vaultCred(), role)
 	var process *VaultProcessError
 	var peer *vaultproc.PeerError
 	if !errors.As(err, &process) || !errors.Is(err, vaultproc.ErrRefused) || !errors.As(err, &peer) {
@@ -131,8 +134,8 @@ func TestResolveRefusesAVaultProcessWithAnotherKey(t *testing.T) {
 	if !strings.Contains(err.Error(), "kill ") || strings.Contains(err.Error(), canaryVault) {
 		t.Errorf("Resolve() error = %q, want how to end the process and no secret", err)
 	}
-	if !r.VaultLocked(context.Background()) {
-		t.Errorf("VaultLocked() with a process that fails the check = false")
+	if err := r.Usable(context.Background(), wikiConnection()); !errors.As(err, new(*VaultLockedError)) {
+		t.Errorf("Usable() with a process that fails the check = %v, want *VaultLockedError", err)
 	}
 }
 
@@ -140,10 +143,65 @@ func TestResolveRefusesAVaultProcessWithAnotherKey(t *testing.T) {
 func TestResolveFromTheVaultProcessEndsWithTheRequest(t *testing.T) {
 	r, dir := processFixture(t)
 	startProcess(t, dir, nil)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(throughWiki())
 	cancel()
 	_, err := r.Resolve(ctx, credName, vaultCred(), role)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Resolve() with an ended request = %v, want context.Canceled", err)
+	}
+}
+
+// The vault process hands a secret only to the connection the vault approved, as approved, the same way a
+// vault unlocked in this process does; bindings handed over later take effect at once.
+func TestVaultProcessNeedsApproval(t *testing.T) {
+	r, dir := processFixture(t)
+	r.Unattended()
+	startProcess(t, dir, nil)
+	ctx := context.Background()
+
+	if got, err := r.Resolve(throughWiki(), credName, vaultCred(), role); err != nil || got.Secret != canaryVault {
+		t.Fatalf("Resolve() through the approved connection = %+v, %v", got, err)
+	}
+	if err := r.Usable(ctx, wikiConnection()); err != nil {
+		t.Errorf("Usable() of the approved connection = %v", err)
+	}
+	for name, change := range scopeChanges() {
+		changed := wikiConnection()
+		change(changed)
+		_, err := r.Resolve(ForConnection(ctx, changed), credName, vaultCred(), role)
+		var approval *ApprovalRequiredError
+		if !errors.As(err, &approval) || approval.Connection != "wiki" || strings.Contains(err.Error(), canaryVault) {
+			t.Errorf("Resolve() with a changed %s = %v, want *ApprovalRequiredError without the secret", name, err)
+		}
+		if err := r.Usable(ctx, changed); !errors.As(err, &approval) {
+			t.Errorf("Usable() with a changed %s = %v, want *ApprovalRequiredError", name, err)
+		}
+	}
+	if _, err := r.Resolve(ctx, credName, vaultCred(), role); !errors.As(err, new(*ApprovalRequiredError)) {
+		t.Errorf("Resolve() without a connection = %v, want *ApprovalRequiredError", err)
+	}
+
+	// Approving the changed connection and handing the bindings over lets it through at once.
+	changed := wikiConnection()
+	changed.Permissions = append(changed.Permissions, config.PermissionCreate)
+	v := vault.New(dir)
+	if _, err := v.Unlock(processPassphrase); err != nil {
+		t.Fatalf("Unlock() = %v", err)
+	}
+	if err := v.Approve([]vault.Scope{ScopeOf(changed)}); err != nil {
+		t.Fatalf("Approve() = %v", err)
+	}
+	bindings, err := v.Bindings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.processClient().Bind(ctx, bindings); err != nil {
+		t.Fatalf("Bind() = %v", err)
+	}
+	if got, err := r.Resolve(ForConnection(ctx, changed), credName, vaultCred(), role); err != nil || got.Secret != canaryVault {
+		t.Fatalf("Resolve() after the approval = %+v, %v", got, err)
+	}
+	if _, err := r.Resolve(throughWiki(), credName, vaultCred(), role); !errors.As(err, new(*ApprovalRequiredError)) {
+		t.Errorf("Resolve() through the scope approved before = %v, want *ApprovalRequiredError", err)
 	}
 }

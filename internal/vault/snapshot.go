@@ -17,6 +17,8 @@ type Snapshot struct {
 	Identity string `json:"identity"`
 	// Secrets holds every role of every credential the vault holds.
 	Secrets map[string]map[string]string `json:"secrets"`
+	// Bindings says which connection may read which credential; see Bindings.
+	Bindings Bindings `json:"bindings"`
 }
 
 // Snapshot returns what this process unlocked, pending entries already merged in by Unlock. The maps are
@@ -34,7 +36,7 @@ func (v *Vault) Snapshot() (Snapshot, error) {
 		}
 		secrets[entry.Name] = roles
 	}
-	return Snapshot{Identity: v.identity.key.String(), Secrets: secrets}, nil
+	return Snapshot{Identity: v.identity.key.String(), Secrets: secrets, Bindings: v.doc.bindings()}, nil
 }
 
 // Recipient returns the public key an encrypted vault encrypts to, as age text, the content of its

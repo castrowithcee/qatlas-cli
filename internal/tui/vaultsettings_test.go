@@ -8,6 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -161,6 +163,11 @@ func TestVaultEncryptTurnsEncryptionOn(t *testing.T) {
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 	mustNoError(t, secrets.SetVault("reader", "token-id", "canary-encrypt-3f9a", nil))
+	cfg := newTestConfig(t)
+	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.test"}))
+	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeVault}))
+	mustNoError(t, cfg.SetConnection("wiki", config.Connection{Service: "wiki", Credential: "reader"}))
+	mustNoError(t, store.Save(cfg))
 
 	m, err := New(store, nil, secrets, nil)
 	if err != nil {
@@ -202,8 +209,8 @@ func TestVaultEncryptTurnsEncryptionOn(t *testing.T) {
 	rendered.WriteString(screenOf(m))
 	rendered.WriteString(m.status)
 
-	if !strings.Contains(m.status, "encrypted") {
-		t.Errorf("status = %q, want the vault reported encrypted", m.status)
+	if !strings.Contains(m.status, "encrypted") || !strings.Contains(m.status, "approved 1 connection(s) to read from it: wiki") {
+		t.Errorf("status = %q, want the vault reported encrypted and its connection approved", m.status)
 	}
 	view := screenOf(m)
 	if !strings.Contains(view, "encrypted, locked") && !strings.Contains(view, "encrypted, unlocked") {
@@ -216,6 +223,16 @@ func TestVaultEncryptTurnsEncryptionOn(t *testing.T) {
 	fresh := vault.New(dir)
 	if state, err := fresh.State(); err != nil || state != vault.StateLocked {
 		t.Fatalf("State() = %v, %v, want the vault encrypted and locked for a new process", state, err)
+	}
+	if _, err := fresh.Unlock(passphrase); err != nil {
+		t.Fatalf("Unlock() = %v", err)
+	}
+	resolved, err := cfg.Resolve("wiki", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fresh.CheckApproval(secret.ScopeOf(resolved)); err != nil {
+		t.Errorf("CheckApproval() after encrypting = %v, want the saved connection approved", err)
 	}
 
 	for _, canary := range []string{passphrase, "a different one"} {

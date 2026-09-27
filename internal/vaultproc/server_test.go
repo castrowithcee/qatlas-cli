@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"filippo.io/age"
+
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // allow and refuse stand in for VerifyProgram wherever the test is about the protocol rather than about
@@ -39,8 +41,23 @@ func testSecrets() map[string]map[string]string {
 	return map[string]map[string]string{"wiki-reader": {"token": "synthetic-token"}}
 }
 
+// testScope is the connection every test get is made for, and testBindings approve it for wiki-reader.
+func testScope() *vault.Scope {
+	return &vault.Scope{Connection: "wiki", Credential: "wiki-reader", Provider: "bookstack",
+		Origin: "https://wiki.example.test", Permissions: []string{"read", "create"}, Targets: []string{"a", "b"}}
+}
+
+const testCredentialID = "0123456789abcdef0123456789abcdef"
+
+func testBindings() vault.Bindings {
+	return vault.Bindings{
+		IDs:       map[string]string{"wiki-reader": testCredentialID},
+		Approvals: map[string]string{"wiki": vault.Fingerprint(*testScope(), testCredentialID)},
+	}
+}
+
 func testServer() *Server {
-	s := NewServer(testKey, testSecrets())
+	s := NewServer(testKey, testSecrets(), testBindings())
 	s.Verify = allow
 	return s
 }
@@ -70,11 +87,11 @@ func TestServerAnswersEveryOperation(t *testing.T) {
 	s := testServer()
 	c := testClient()
 
-	resp, err := exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "wiki-reader", Role: "token"})
+	resp, err := exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "wiki-reader", Role: "token", Scope: testScope()})
 	if err != nil || !resp.Found || resp.Value != "synthetic-token" {
 		t.Fatalf("get = %+v, %v, want the stored value", resp, err)
 	}
-	resp, err = exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "wiki-reader", Role: "other"})
+	resp, err = exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "wiki-reader", Role: "other", Scope: testScope()})
 	if err != nil || resp.Found || resp.Value != "" {
 		t.Fatalf("get of an unknown role = %+v, %v, want not found and no error", resp, err)
 	}
@@ -83,9 +100,21 @@ func TestServerAnswersEveryOperation(t *testing.T) {
 		Value: "synthetic-other"}); err != nil {
 		t.Fatalf("set error = %v", err)
 	}
-	resp, err = exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "crm", Role: "token"})
+	crm := &vault.Scope{Connection: "crm", Credential: "crm", Provider: "twentycrm", Origin: "https://crm.example.test"}
+	// A credential set in the process has no entry id the vault bound to a connection yet.
+	resp, err = exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "crm", Role: "token", Scope: crm})
+	if !errors.Is(err, vault.ErrApprovalRequired) || resp.Value != "" {
+		t.Fatalf("get of an unbound credential = %+v, %v, want vault.ErrApprovalRequired", resp, err)
+	}
+	bindings := testBindings()
+	bindings.IDs["crm"] = "fedcba9876543210fedcba9876543210"
+	bindings.Approvals["crm"] = vault.Fingerprint(*crm, bindings.IDs["crm"])
+	if _, err := exchangeOverPipe(t, s, c, request{Op: opBind, Bindings: &bindings}); err != nil {
+		t.Fatalf("bind error = %v", err)
+	}
+	resp, err = exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "crm", Role: "token", Scope: crm})
 	if err != nil || resp.Value != "synthetic-other" {
-		t.Fatalf("get after set = %+v, %v", resp, err)
+		t.Fatalf("get after set and bind = %+v, %v", resp, err)
 	}
 
 	if _, err := exchangeOverPipe(t, s, c, request{Op: opDelete, Credential: "crm", Role: "token"}); err != nil {
@@ -93,6 +122,9 @@ func TestServerAnswersEveryOperation(t *testing.T) {
 	}
 	if _, ok := s.secrets["crm"]; ok {
 		t.Fatalf("delete left an empty credential behind")
+	}
+	if _, ok := s.bindings.IDs["crm"]; ok {
+		t.Fatalf("delete left the id of a removed credential behind")
 	}
 
 	resp, err = exchangeOverPipe(t, s, c, request{Op: opStatus})
@@ -114,7 +146,7 @@ func TestServerRefusesAnUncheckedPeer(t *testing.T) {
 	c := testClient()
 
 	for _, req := range []request{
-		{Op: opGet, Credential: "wiki-reader", Role: "token"},
+		{Op: opGet, Credential: "wiki-reader", Role: "token", Scope: testScope()},
 		{Op: opSet, Credential: "wiki-reader", Role: "token", Value: "planted"},
 		{Op: opLock},
 	} {
@@ -141,7 +173,7 @@ func TestClientSendsNothingToAnUncheckedServer(t *testing.T) {
 
 	c := &Client{Recipient: testRecipient, Verify: refuse}
 	ctx := context.Background()
-	_, err := c.exchange(ctx, clientEnd, c.deadline(ctx), request{Op: opGet, Credential: "wiki-reader", Role: "token"})
+	_, err := c.exchange(ctx, clientEnd, c.deadline(ctx), request{Op: opGet, Credential: "wiki-reader", Role: "token", Scope: testScope()})
 	_ = clientEnd.Close()
 	if !errors.Is(err, ErrRefused) {
 		t.Fatalf("exchange with an unchecked server error = %v, want ErrRefused", err)
@@ -158,7 +190,7 @@ func TestServerRefusesAnotherVersion(t *testing.T) {
 	go s.serveConn(serverEnd)
 
 	go func() {
-		_ = writeMessage(clientEnd, request{V: Version + 1, Op: opGet, Credential: "wiki-reader", Role: "token"})
+		_ = writeMessage(clientEnd, request{V: Version + 1, Op: opGet, Credential: "wiki-reader", Role: "token", Scope: testScope()})
 	}()
 	var resp response
 	if err := readMessage(clientEnd, &resp); err != nil {
@@ -266,7 +298,7 @@ func TestClientReportsAMissingProcess(t *testing.T) {
 	if _, err := c.Status(context.Background()); !errors.Is(err, ErrNotRunning) {
 		t.Fatalf("Status() without a process error = %v, want ErrNotRunning", err)
 	}
-	if _, _, err := c.Get(context.Background(), "wiki-reader", "token"); !errors.Is(err, ErrNotRunning) {
+	if _, _, err := c.Get(context.Background(), "wiki-reader", "token", *testScope()); !errors.Is(err, ErrNotRunning) {
 		t.Fatalf("Get() without a process error = %v, want ErrNotRunning", err)
 	}
 }
@@ -275,7 +307,7 @@ func TestLockOverwritesTheSecrets(t *testing.T) {
 	s := testServer()
 	held := s.secrets["wiki-reader"]["token"]
 	s.stop()
-	if resp := s.answer(request{Op: opGet, Credential: "wiki-reader", Role: "token"}); resp.Error != codeLocked {
+	if resp := s.answer(request{Op: opGet, Credential: "wiki-reader", Role: "token", Scope: testScope()}); resp.Error != codeLocked {
 		t.Fatalf("get while locking = %+v, want %q", resp, codeLocked)
 	}
 	s.wipe()
@@ -395,7 +427,7 @@ func TestClientSendsNothingAfterAFailedChallenge(t *testing.T) {
 			conn, _, rest := fakeServer(t, answer)
 			c := testClient()
 			ctx := context.Background()
-			_, err := c.exchange(ctx, conn, c.deadline(ctx), request{Op: opGet, Credential: "wiki-reader", Role: "token"})
+			_, err := c.exchange(ctx, conn, c.deadline(ctx), request{Op: opGet, Credential: "wiki-reader", Role: "token", Scope: testScope()})
 			_ = conn.Close()
 			if !errors.Is(err, ErrRefused) {
 				t.Fatalf("exchange error = %v, want ErrRefused", err)
@@ -432,7 +464,7 @@ func TestChallengeIsFreshPerConnection(t *testing.T) {
 	}
 
 	conn, second, rest := fakeServer(t, func([]byte) response { return response{V: Version, Proof: recorded} })
-	_, err := c.exchange(ctx, conn, c.deadline(ctx), request{Op: opGet, Credential: "wiki-reader", Role: "token"})
+	_, err := c.exchange(ctx, conn, c.deadline(ctx), request{Op: opGet, Credential: "wiki-reader", Role: "token", Scope: testScope()})
 	_ = conn.Close()
 	if !errors.Is(err, ErrRefused) {
 		t.Fatalf("exchange with a replayed proof error = %v, want ErrRefused", err)
@@ -449,11 +481,11 @@ func TestChallengeIsFreshPerConnection(t *testing.T) {
 func TestServerWithoutTheKeyFailsTheChallenge(t *testing.T) {
 	for name, key := range map[string]age.Identity{"no key": nil, "another key": otherKey} {
 		t.Run(name, func(t *testing.T) {
-			s := NewServer(key, testSecrets())
+			s := NewServer(key, testSecrets(), testBindings())
 			s.Verify = allow
 			c := testClient()
 			for _, req := range []request{
-				{Op: opGet, Credential: "wiki-reader", Role: "token"},
+				{Op: opGet, Credential: "wiki-reader", Role: "token", Scope: testScope()},
 				{Op: opSet, Credential: "wiki-reader", Role: "token", Value: "planted"},
 				{Op: opLock},
 			} {
@@ -509,5 +541,63 @@ func TestClientWithoutARecipientSendsNothing(t *testing.T) {
 		if _, err := c.Status(context.Background()); err == nil || errors.Is(err, ErrNotRunning) {
 			t.Fatalf("Status() with recipient %q error = %v, want a refusal before connecting", recipient, err)
 		}
+	}
+}
+
+// A get is answered only for the connection the bindings approve, exactly as it was approved: any change of
+// its scope, another credential than the one it reads, or no connection at all is refused without a value.
+// A check answers the same question without one.
+func TestServerHandsSecretsOnlyToApprovedConnections(t *testing.T) {
+	s := testServer()
+	c := testClient()
+
+	changed := map[string]func(*vault.Scope){
+		"origin":      func(sc *vault.Scope) { sc.Origin = "http://127.0.0.1:9" },
+		"permissions": func(sc *vault.Scope) { sc.Permissions = []string{"read", "delete"} },
+		"targets":     func(sc *vault.Scope) { sc.Targets = []string{"other"} },
+		"tools":       func(sc *vault.Scope) { sc.Tools = []string{} },
+		"provider":    func(sc *vault.Scope) { sc.Provider = "github" },
+		"connection":  func(sc *vault.Scope) { sc.Connection = "wiki-copy" },
+	}
+	for field, change := range changed {
+		scope := testScope()
+		change(scope)
+		resp, err := exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "wiki-reader", Role: "token",
+			Scope: scope})
+		if !errors.Is(err, vault.ErrApprovalRequired) || resp.Value != "" {
+			t.Errorf("get with a changed %s = %+v, %v, want vault.ErrApprovalRequired", field, resp, err)
+		}
+		if _, err := exchangeOverPipe(t, s, c, request{Op: opCheck, Scope: scope}); !errors.Is(err,
+			vault.ErrApprovalRequired) {
+			t.Errorf("check with a changed %s = %v, want vault.ErrApprovalRequired", field, err)
+		}
+	}
+
+	for name, req := range map[string]request{
+		"no connection":      {Op: opGet, Credential: "wiki-reader", Role: "token"},
+		"another credential": {Op: opGet, Credential: "wiki-reader", Role: "token", Scope: &vault.Scope{Connection: "wiki", Credential: "crm"}},
+	} {
+		resp, err := exchangeOverPipe(t, s, c, req)
+		if !errors.Is(err, vault.ErrApprovalRequired) || resp.Value != "" {
+			t.Errorf("get with %s = %+v, %v, want vault.ErrApprovalRequired", name, resp, err)
+		}
+	}
+
+	// The same scope in another order is the same scope.
+	reordered := testScope()
+	reordered.Permissions = []string{"create", "read"}
+	reordered.Targets = []string{"b", "a"}
+	if _, err := exchangeOverPipe(t, s, c, request{Op: opCheck, Scope: reordered}); err != nil {
+		t.Errorf("check of the approved scope = %v", err)
+	}
+
+	// Bindings that drop the approval take effect at once.
+	if _, err := exchangeOverPipe(t, s, c, request{Op: opBind, Bindings: &vault.Bindings{
+		IDs: testBindings().IDs}}); err != nil {
+		t.Fatalf("bind error = %v", err)
+	}
+	if _, err := exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "wiki-reader", Role: "token",
+		Scope: testScope()}); !errors.Is(err, vault.ErrApprovalRequired) {
+		t.Errorf("get after the approval was revoked = %v, want vault.ErrApprovalRequired", err)
 	}
 }

@@ -26,10 +26,14 @@ type Entry struct {
 	Modified time.Time         `json:"modified"`
 }
 
-// document is the JSON shape held by secrets.json and, encrypted, by secrets.age.
+// document is the JSON shape held by secrets.json and, encrypted, by secrets.age. Approvals, by connection
+// name, exist only in secrets.age: they sit in the same encrypted document as the secrets they release, so
+// nobody who can merely write files, and encrypt to the public recipient, can add one without also replacing
+// every secret. An unencrypted vault binds no connection and never keeps them.
 type document struct {
-	Schema  int              `json:"schema"`
-	Entries map[string]Entry `json:"entries,omitempty"`
+	Schema    int                 `json:"schema"`
+	Entries   map[string]Entry    `json:"entries,omitempty"`
+	Approvals map[string]Approval `json:"approvals,omitempty"`
 }
 
 func newDocument() *document {
@@ -187,7 +191,13 @@ func loadPlainDocument(path string) (*document, error) {
 		}
 		return nil, fmt.Errorf("cannot read %s: %w", path, err)
 	}
-	return decodeDocument(path, data)
+	doc, err := decodeDocument(path, data)
+	if err != nil {
+		return nil, err
+	}
+	// Approvals in a plaintext document are never trusted, and never carried into an encrypted one.
+	doc.Approvals = nil
+	return doc, nil
 }
 
 func decodeDocument(path string, data []byte) (*document, error) {

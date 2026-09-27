@@ -141,6 +141,7 @@ const (
 	CodePolicyDenied          Code = "policy-denied"
 	CodeAdminRequired         Code = "admin-required"
 	CodeVaultLocked           Code = "vault-locked"
+	CodeApprovalRequired      Code = "approval-required"
 	CodeUnreachable           Code = "unreachable"
 	CodeTLS                   Code = "tls"
 	CodeAuth                  Code = "auth"
@@ -158,8 +159,8 @@ func AllCodes() []Code {
 	return []Code{
 		CodeUsage, CodeInvalidRequest, CodeConfigMissing, CodeConfigInvalid, CodeConnectionSelection,
 		CodeUnknownConnection, CodeConnectionAmbiguous, CodeUnknownOperation, CodeUnsupportedCapability,
-		CodeMissingSecret, CodeConfirmationRequired, CodePolicyDenied, CodeAdminRequired, CodeVaultLocked,
-		CodeUnreachable, CodeTLS, CodeAuth, CodePermission, CodeNotFound, CodeTimeout, CodeRateLimited,
+		CodeMissingSecret, CodeConfirmationRequired, CodePolicyDenied, CodeAdminRequired, CodeApprovalRequired,
+		CodeVaultLocked, CodeUnreachable, CodeTLS, CodeAuth, CodePermission, CodeNotFound, CodeTimeout, CodeRateLimited,
 		CodeInvalidProviderResult, CodeProviderError, CodeRuntime,
 	}
 }

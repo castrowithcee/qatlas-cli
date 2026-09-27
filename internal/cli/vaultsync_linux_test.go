@@ -58,7 +58,7 @@ func serveVaultInProcess(t *testing.T, dir string) (*vaultproc.Server, *vaultpro
 	if err != nil {
 		t.Fatalf("Listen() = %v", err)
 	}
-	server := vaultproc.NewServer(key, snap.Secrets)
+	server := vaultproc.NewServer(key, snap.Secrets, snap.Bindings)
 	done := make(chan struct{})
 	go func() { _ = server.Serve(l); close(done) }()
 	t.Cleanup(func() { _ = server.Close(); <-done })
@@ -84,7 +84,7 @@ func TestCredentialChangesReachTheVaultProcess(t *testing.T) {
 	if code != exitOK || stdout != "" || stderr != "" {
 		t.Fatalf("set: exit code = %d, stdout = %q, stderr = %q, want a silent success", code, stdout, stderr)
 	}
-	if value, found, err := client.Get(ctx, "wiki-vault", "token-id"); err != nil || !found || value != "changed-"+canaryVault {
+	if value, found, err := client.Get(ctx, "wiki-vault", "token-id", connectionScope(t, dir, "wiki")); err != nil || !found || value != "changed-"+canaryVault {
 		t.Fatalf("Get() after set = %q, %v, %v, want the new secret", value, found, err)
 	}
 
@@ -93,7 +93,7 @@ func TestCredentialChangesReachTheVaultProcess(t *testing.T) {
 	if code != exitOK || stdout != "" || stderr != "" {
 		t.Fatalf("delete: exit code = %d, stdout = %q, stderr = %q, want a silent success", code, stdout, stderr)
 	}
-	if _, found, err := client.Get(ctx, "wiki-vault", "token-id"); err != nil || found {
+	if _, found, err := client.Get(ctx, "wiki-vault", "token-id", connectionScope(t, dir, "wiki")); err != nil || found {
 		t.Fatalf("Get() after delete = %v, %v, want nothing", found, err)
 	}
 }

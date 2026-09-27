@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"filippo.io/age"
+
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // Client reaches the vault process at one socket. Every call opens a connection of its own, checks the
@@ -80,14 +82,31 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	return status, nil
 }
 
-// Get returns the secret of one credential role. found is false when the process holds nothing for the
-// pair, which is not an error. ErrNotRunning means the vault is not unlocked in a process.
-func (c *Client) Get(ctx context.Context, credential, role string) (value string, found bool, err error) {
-	resp, err := c.call(ctx, request{Op: opGet, Credential: credential, Role: role})
+// Get returns the secret of one credential role for the connection scope describes. found is false when the
+// process holds nothing for the pair, which is not an error. vault.ErrApprovalRequired means the vault has not
+// approved the connection as scope describes it; ErrNotRunning means the vault is not unlocked in a process.
+func (c *Client) Get(ctx context.Context, credential, role string, scope vault.Scope) (value string, found bool,
+	err error) {
+	resp, err := c.call(ctx, request{Op: opGet, Credential: credential, Role: role, Scope: &scope})
 	if err != nil {
 		return "", false, err
 	}
 	return resp.Value, resp.Found, nil
+}
+
+// Check reports whether the connection scope describes may read its credential, without reading a secret:
+// nil when it may or when the process holds nothing for the credential, vault.ErrApprovalRequired when the
+// vault has not approved it as it is now.
+func (c *Client) Check(ctx context.Context, scope vault.Scope) error {
+	_, err := c.call(ctx, request{Op: opCheck, Scope: &scope})
+	return err
+}
+
+// Bind replaces the bindings the running process checks every get with, after the vault's approvals
+// changed. It does not write the vault.
+func (c *Client) Bind(ctx context.Context, bindings vault.Bindings) error {
+	_, err := c.call(ctx, request{Op: opBind, Bindings: &bindings})
+	return err
 }
 
 // Set stores or replaces the secret of one credential role in the running process, so it keeps answering
