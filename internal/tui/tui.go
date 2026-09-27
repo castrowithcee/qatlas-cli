@@ -602,8 +602,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateNav handles the sidebar in focus. Moving through it changes the active section at once, so the
-// workspace beside it always shows the section the marker stands on.
+// updateNav handles the sidebar or, in a narrow terminal, the navigation line in focus. Below the sidebar
+// width, left/right (also h/l) step through the sections with wraparound, the way up/down do in the
+// sidebar; up/down (k/j) still work there too. Moving through the sections changes the active one at once,
+// so the workspace beside or below it always shows the section the marker stands on.
 func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
@@ -615,12 +617,17 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 		return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
 	case "down", "j":
 		return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
-	case "enter", "right", "l", "tab":
-		if m.section == sectionVault {
-			return m.enterVaultSection()
+	case "left", "h":
+		if !m.sidebarLayout() {
+			return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
 		}
-		m.screen = screenList
-		m.clearMessages()
+	case "right", "l":
+		if !m.sidebarLayout() {
+			return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
+		}
+		return m.focusList()
+	case "enter", "tab":
+		return m.focusList()
 	case "c":
 		m.startSetup()
 	case "?":
@@ -635,6 +642,17 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 		}
 		return m.openForm("")
 	}
+	return nil
+}
+
+// focusList hands the focus to the active section's list, or, for Vault, which holds no entries of its
+// own, opens its form the same way enter does from the list.
+func (m *Model) focusList() tea.Cmd {
+	if m.section == sectionVault {
+		return m.enterVaultSection()
+	}
+	m.screen = screenList
+	m.clearMessages()
 	return nil
 }
 
@@ -2789,8 +2807,12 @@ func (m *Model) listFrame() (string, string) {
 
 	var keys string
 	switch {
-	case m.screen == screenNav:
+	case m.screen == screenNav && m.sidebarLayout():
 		keys = "up/down section · enter open · 1-5 open · n new · c setup · ? help · q quit"
+	case m.screen == screenNav:
+		// Below the sidebar width every arrow does the same thing, left/right or the kept up/down, so the
+		// hint names them together rather than repeating "up/down section" from the sidebar layout above.
+		keys = "arrows section · enter open · 1-5 open · n new · c setup · ? help · q quit"
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
 	case m.section == sectionConnections:

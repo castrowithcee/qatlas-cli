@@ -27,9 +27,12 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"step of the active section. From 80 columns the sidebar stands on the left; a narrower terminal\n" +
 			"shows the sections in one navigation line above the workspace. Below 40x12 the editor asks for a\n" +
 			"larger terminal and keeps everything as it was until it gets one.\n\n" +
-			"The editor opens with the focus on the sidebar. up/down (or j/k) choose a section and show its\n" +
-			"list at once; enter, right, or tab move the focus into the list, and left, tab, or esc move it\n" +
-			"back. 1-5 open a section directly from the sidebar or a list; in a form, digits are text instead.\n" +
+			"The editor opens with the focus on the sidebar or, below 80 columns, the navigation line above\n" +
+			"the workspace. From 80 columns up/down (or j/k) choose a section and show its list at once, and\n" +
+			"enter, right, or tab move the focus into the list; below 80 columns left/right (or h/l) choose a\n" +
+			"section instead, wrapping from the last to the first and back, up/down still work too, and enter\n" +
+			"or tab move the focus into the list. left, tab, or esc move the focus back to the navigation.\n" +
+			"1-5 open a section directly from the sidebar or a list; in a form, digits are text instead.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
 			"the guided setup, and q quits; ctrl+c quits anywhere without saving. esc only ever steps back one\n" +
 			"level: it clears a filter, cancels a running test, closes a picker, a table, or a question, or\n" +

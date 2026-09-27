@@ -402,6 +402,67 @@ func TestNavigation(t *testing.T) {
 	})
 }
 
+// TestNarrowNavigation checks the width edge at which the navigation line replaces the sidebar: at 80
+// columns and above up/down still choose the section and right/l focus the list; below 80 columns
+// left/right (and h/l) choose the section instead, wrapping in both directions, while enter/tab still
+// focus the list. The footer names whichever keys apply to the layout shown.
+func TestNarrowNavigation(t *testing.T) {
+	m, _, _ := newModel(t)
+
+	t.Run("at 80 columns up/down choose the section and right focuses the list", func(t *testing.T) {
+		m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+		m.screen, m.section = screenNav, sectionServices
+		if !strings.Contains(m.View(), "up/down section") {
+			t.Errorf("footer does not name up/down at 80 columns:\n%s", m.View())
+		}
+		press(t, m, "down")
+		if m.section != sectionCredentials || m.screen != screenNav {
+			t.Fatalf("down = section %v screen %v, want Credentials on the sidebar", m.section, m.screen)
+		}
+		press(t, m, "right")
+		if m.screen != screenList || m.section != sectionCredentials {
+			t.Fatalf("right = screen %v section %v, want the Credentials list", m.screen, m.section)
+		}
+	})
+
+	t.Run("below 80 columns left/right choose the section with wraparound", func(t *testing.T) {
+		m.Update(tea.WindowSizeMsg{Width: 79, Height: 24})
+		m.screen, m.section = screenNav, sectionServices
+		if !strings.Contains(m.View(), "arrows section") {
+			t.Errorf("footer does not name the arrow keys below 80 columns:\n%s", m.View())
+		}
+		press(t, m, "left")
+		if m.section != sectionVault || m.screen != screenNav {
+			t.Fatalf("left at Services = section %v screen %v, want Vault (wrapped back)", m.section, m.screen)
+		}
+		for _, key := range []string{"right", "l"} {
+			m.screen, m.section = screenNav, sectionVault
+			press(t, m, key)
+			if m.section != sectionServices || m.screen != screenNav {
+				t.Errorf("%q at Vault = section %v screen %v, want Services (wrapped forward)", key, m.section, m.screen)
+			}
+		}
+		m.screen, m.section = screenNav, sectionServices
+		press(t, m, "h")
+		if m.section != sectionVault || m.screen != screenNav {
+			t.Errorf("h at Services = section %v screen %v, want Vault (wrapped back)", m.section, m.screen)
+		}
+		// up/down (and j/k) still work as additional shortcuts in the narrow line.
+		m.screen, m.section = screenNav, sectionServices
+		press(t, m, "down")
+		if m.section != sectionCredentials || m.screen != screenNav {
+			t.Errorf("down = section %v screen %v, want Credentials", m.section, m.screen)
+		}
+		for _, key := range []string{"enter", "tab"} {
+			m.screen, m.section = screenNav, sectionCredentials
+			press(t, m, key)
+			if m.screen != screenList || m.section != sectionCredentials {
+				t.Errorf("%q = screen %v section %v, want the Credentials list", key, m.screen, m.section)
+			}
+		}
+	})
+}
+
 // sectionLabels are how the sidebar names the five sections.
 var sectionLabels = []string{"1 Services", "2 Credentials", "3 Connections", "4 Defaults", "5 Vault"}
 
