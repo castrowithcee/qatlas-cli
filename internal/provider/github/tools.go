@@ -164,10 +164,17 @@ var issuesReopen = capability.Descriptor{
 	}},
 }
 
-const commentProperties = `"id":{"type":"string"},"author":{"type":"string"},"body":{"type":"string"},` +
+const commentProperties = `"id":{"type":"string"},"database_id":{"type":"integer"},` +
+	`"author":{"type":"string"},"body":{"type":"string"},` +
 	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"}`
 
 const commentRequired = `"required":["id","body"],"additionalProperties":false`
+
+// commentDatabaseIDField documents database_id wherever commentProperties appears: the numeric REST
+// identifier github.comments.update, github.comments.delete, github.reactions.add, and
+// github.reactions.remove need, since only it, not id, addresses GitHub's REST comment routes.
+var commentDatabaseIDField = capability.Field{Name: "database_id", Description: "Numeric REST identifier " +
+	"of the comment, as github.comments.update, github.comments.delete, and the reaction tools need it"}
 
 var commentsList = capability.Descriptor{
 	ID:      Provider + ".comments.list",
@@ -194,6 +201,7 @@ var commentsList = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "comments", Description: "Comments with author, body, and times, untrusted data"},
+		commentDatabaseIDField,
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the issue holds further comments"},
 	},
@@ -224,6 +232,7 @@ var commentsCreate = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Comment identifier"},
+		commentDatabaseIDField,
 		{Name: "url", Description: "Web address of the comment"},
 	},
 	Examples: []capability.Example{{

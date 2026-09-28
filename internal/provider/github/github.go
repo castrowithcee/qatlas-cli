@@ -429,7 +429,12 @@ func Register(reg *capability.Registry) error {
 				"rather than a scope of its own; reading the milestones of a repository needs the same scope " +
 				"as reading its labels; setting an issue's milestone through github.issues.update, and " +
 				"updating or deleting an issue comment, need the same scope as writing an issue or a comment: " +
-				"repo on a classic token, or Issues: read and write on a fine-grained token",
+				"repo on a classic token, or Issues: read and write on a fine-grained token; reacting to an " +
+				"issue or an issue or pull request conversation comment needs the same scope as writing one, " +
+				"Issues: read and write on a fine-grained token; reacting to a pull request line comment needs " +
+				"repo on a classic token, or Pull requests: read and write on a fine-grained token; removing a " +
+				"reaction additionally reads the account behind the token, which needs no scope beyond its own " +
+				"identity",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -580,11 +585,12 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "issue-maintainer", Title: "Issue maintainer",
 			Description: "not recommended: lists and reads the labels of a repository, lists its " +
-				"milestones, and creates and updates labels and issue comments; every change needs its own " +
-				"confirmation, and deleting a label or a comment stays unticked, since each is offered only " +
-				"where a connection's tools list names it",
+				"milestones, creates and updates labels and issue comments, and reacts to issues, comments, " +
+				"and pull request line comments; every change needs its own confirmation, and deleting a " +
+				"label or a comment stays unticked, since each is offered only where a connection's tools " +
+				"list names it",
 			Tools: []string{labelsList.ID, labelsGet.ID, labelsCreate.ID, labelsUpdate.ID, milestonesList.ID,
-				commentsUpdate.ID},
+				commentsUpdate.ID, reactionsAdd.ID, reactionsRemove.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -614,7 +620,7 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
-		labelsOperations(), milestonesOperations(), commentMaintenanceOperations())...)
+		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1141,7 +1147,7 @@ func (c *Client) post(ctx context.Context, op, document string, variables map[st
 	if err != nil {
 		return envelope, providerError(op, "the request could not be built")
 	}
-	err = c.do(ctx, op, http.MethodPost, c.endpoints.graphql, payload, &envelope, change, nil)
+	err = c.do(ctx, op, http.MethodPost, c.endpoints.graphql, payload, &envelope, change, nil, nil)
 	return envelope, err
 }
 
@@ -1372,6 +1378,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := commentMaintenanceSubject(parts[2]); what != "" {
 			s.what = what
 		}
+		if what := reactionsSubject(parts[2]); what != "" {
+			s.what = what
+		}
 	}
 	return s
 }
@@ -1560,7 +1569,7 @@ func invalidResponse(op string, change bool) *provider.Error {
 
 // rest performs one bounded REST read below the configured REST root.
 func (c *Client) rest(ctx context.Context, op, path string, out any) error {
-	return c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, nil)
+	return c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, nil, nil)
 }
 
 // restPage performs one bounded REST list read below the configured REST root and reports whether GitHub
@@ -1571,7 +1580,7 @@ func (c *Client) restPage(ctx context.Context, op, path string, query url.Values
 		path += "?" + query.Encode()
 	}
 	var header http.Header
-	if err := c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, &header); err != nil {
+	if err := c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, &header, nil); err != nil {
 		return false, err
 	}
 	return hasNextPage(header), nil
@@ -1590,19 +1599,32 @@ func hasNextPage(header http.Header) bool {
 
 // restChange sends one REST change below the configured REST root, once, and decodes the answer.
 func (c *Client) restChange(ctx context.Context, op, method, path string, body any, out any) error {
+	_, err := c.restChangeStatus(ctx, op, method, path, body, out)
+	return err
+}
+
+// restChangeStatus sends one REST change below the configured REST root, once, decodes the answer, and
+// reports the response's status code alongside any error, for the rare route where GitHub tells two
+// successes apart by status, such as the reaction routes' 200 for an existing reaction and 201 for a new one.
+func (c *Client) restChangeStatus(ctx context.Context, op, method, path string, body any, out any) (int, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return providerError(op, "the request could not be built")
+		return 0, providerError(op, "the request could not be built")
 	}
-	return c.do(ctx, op, method, c.endpoints.rest+path, payload, out, true, nil)
+	var status int
+	err = c.do(ctx, op, method, c.endpoints.rest+path, payload, out, true, nil, &status)
+	return status, err
 }
 
 // do sends one request with the shared authentication, version, and size rules and decodes the answer. A
 // change is never repeated: every failure after its request may have reached GitHub says so, and the next
 // request of this token waits mutationInterval. header, when not nil, receives the response header of a
-// successful request, so a caller may read a pagination header without changing what is decoded.
+// successful request, so a caller may read a pagination header without changing what is decoded. status,
+// when not nil, receives the successful response's status code, so a caller may tell apart the two success
+// codes GitHub answers the same route with, such as the reaction routes' 200 for an existing reaction and
+// 201 for a new one.
 func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []byte, out any, change bool,
-	header *http.Header) error {
+	header *http.Header, status *int) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "GitHub", err)
 	}
@@ -1636,6 +1658,9 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return c.statusError(op, response, change)
+	}
+	if status != nil {
+		*status = response.StatusCode
 	}
 	if header != nil {
 		*header = response.Header

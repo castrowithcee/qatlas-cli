@@ -48,6 +48,7 @@ var commentsUpdate = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Comment identifier"},
+		commentDatabaseIDField,
 		{Name: "url", Description: "Web address of the comment"},
 	},
 	Examples: []capability.Example{{
@@ -222,8 +223,8 @@ func (c *Client) UpdateComment(ctx context.Context, commentID int64, body string
 	if raw.NodeID == "" {
 		return nil, invalidResponse(op, true)
 	}
-	comment := &Comment{ID: raw.NodeID, Body: raw.Body, CreatedAt: raw.CreatedAt, UpdatedAt: raw.UpdatedAt,
-		URL: raw.HTMLURL}
+	comment := &Comment{ID: raw.NodeID, DatabaseID: raw.ID, Body: raw.Body, CreatedAt: raw.CreatedAt,
+		UpdatedAt: raw.UpdatedAt, URL: raw.HTMLURL}
 	if raw.User != nil {
 		comment.Author = raw.User.Login
 	}

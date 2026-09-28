@@ -123,7 +123,8 @@ func TestCommentMaintenanceToolsSatisfyTheirContractThroughTheApplicationCore(t 
 	core := application.New(registry(t), commentMaintenanceConfig(base), resolver(red, nil), red)
 
 	updated, err := invoke(t, core, commentsUpdate.ID, "repo", `{"comment_id":555,"body":"Fixed in the latest build."}`, true)
-	if err != nil || !strings.Contains(string(updated), `"body":"Fixed in the latest build."`) {
+	if err != nil || !strings.Contains(string(updated), `"body":"Fixed in the latest build."`) ||
+		!strings.Contains(string(updated), `"database_id":555`) {
 		t.Fatalf("update = %s, %v", updated, err)
 	}
 

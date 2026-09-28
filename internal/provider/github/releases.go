@@ -729,7 +729,7 @@ type DeletedRelease struct {
 func (c *Client) deleteRelease(ctx context.Context, id int64) (*DeletedRelease, error) {
 	const op = "delete release"
 	path := c.endpoints.rest + c.repoPath("releases/"+strconv.FormatInt(id, 10))
-	if err := c.do(ctx, op, http.MethodDelete, path, nil, nil, true, nil); err != nil {
+	if err := c.do(ctx, op, http.MethodDelete, path, nil, nil, true, nil, nil); err != nil {
 		return nil, actionsFailure(err, releasesChangePermission)
 	}
 	return &DeletedRelease{ID: id, Deleted: true}, nil

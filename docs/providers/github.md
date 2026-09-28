@@ -230,7 +230,8 @@ and the not-recommended profile `repository-admin-reader` under
 rulesets under [Rulesets](#rulesets-repository-and-organization-governance) and the custom property values or
 schema under [Custom properties](#custom-properties). The not-recommended profile `issue-maintainer` lists and
 reads the labels of a repository, creates and updates them, under [Labels](#labels), lists the milestones
-under [Milestones](#milestones), and updates issue comments under [Changes](#changes); deleting a label or a
+under [Milestones](#milestones), updates issue comments under [Changes](#changes), and reacts to issues,
+comments, and pull request line comments under [Reactions](#reactions); deleting a label or a
 comment stays unticked, since each is offered only where a connection's `tools` list names it. A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
@@ -896,6 +897,50 @@ of an existing issue instead, under [Changes](#changes). Reading the milestones 
 same scope as reading its labels: no scope for a public repository, or `repo` on a classic token, or Issues:
 read on a fine-grained token, for a private one.
 
+## Reactions
+
+`github.reactions.add` and `github.reactions.remove` react to one issue, one issue or pull request
+conversation comment, or one pull request review line comment of the bound repository, with the account
+behind the connection's token. The target is named by `kind` and a numeric `id`:
+
+| `kind` | `id` | Addresses |
+| --- | --- | --- |
+| `issue` | an issue or pull request number | an issue, or a pull request's own conversation as a whole, since a pull request conversation is an issue for GitHub's reaction routes |
+| `issue_comment` | the numeric `database_id` `github.comments.list`, `.create`, `github.pullrequestcomments.list`, and `.create` report | an issue comment or a pull request conversation comment alike |
+| `review_comment` | the `id` `github.pullrequestreviewcomments.list` and `.reply` report | one pull request line comment |
+
+`content` is one of `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, or `eyes`. Every `id` is
+addressed below the connection's bound repository, so an `id` of another repository, or one GitHub does not
+hold, answers `not-found` before anything changes; unlike `github.comments.update` and `github.comments.delete`,
+kind `issue_comment` accepts a pull request conversation comment, since GitHub keeps its reactions under the
+same route as an issue comment's.
+
+```sh
+echo '{"kind":"issue","id":42,"content":"+1"}' | qatlas invoke github.reactions.add --connection maintainer --confirm
+echo '{"kind":"issue","id":42,"content":"+1"}' | qatlas invoke github.reactions.remove --connection maintainer --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.reactions.add` | create | idempotent | required | adds the account's reaction; a reaction it already left with the same `content` is left as it is and `added` answers `false` |
+| `github.reactions.remove` | delete | idempotent | required | removes the account's own reaction of one `content`; `removed` answers `false` when it had left none |
+
+`github.reactions.add` sends one `POST`, which GitHub itself answers idempotently: with the reaction newly
+created, or with the one this account already held for this content, never a duplicate; `added` reports which
+of the two happened. `github.reactions.remove` never accepts a reaction identifier from its caller, which
+would risk deleting another account's reaction: it reads the account behind the connection's token, lists the
+existing reactions of this `content`, and removes only the one this account left, when there is one; a
+reaction of another account is never touched.
+
+GitHub keeps a reaction under the resource it reacts to rather than a scope of its own, so reacting needs the
+same scope as writing that resource. `github.reactions.remove` additionally reads the account behind the
+token, which needs no scope beyond its own identity on either kind of token:
+
+| Kind | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `issue`, `issue_comment` | `repo` | Issues: read and write |
+| `review_comment` | `repo` | Pull requests: read and write |
+
 ## Project lifecycle
 
 The lifecycle tools make and maintain projects themselves, not their items. Each one is a change that needs
@@ -1300,7 +1345,12 @@ echo '{"number":42,"milestone":0}' | qatlas invoke github.issues.update --connec
 `github.comments.update` and `github.comments.delete` address one existing issue comment by its `comment_id`,
 the numeric identifier GitHub reports in a comment's URL after `#issuecomment-`, not the `id`
 `github.comments.list` and `github.comments.create` answer, which is a GraphQL identifier the issue comment
-REST route does not accept. Both tools read the comment first: its route already scopes it to the connection's
+REST route does not accept. Both tools also report this numeric identifier as `database_id`, alongside `id`,
+which `github.pullrequestcomments.list` and `.create` report as well, so it never needs a separate lookup; the
+reaction tools under [Reactions](#reactions) take the same identifier for kind `issue_comment`.
+`github.pullrequestreviewcomments.list` and `.reply` already report the numeric identifier a line comment
+needs as `id`, since GitHub gives that route no GraphQL identifier of its own. Both comment tools read the
+comment first: its route already scopes it to the connection's
 bound repository, so a comment of another repository answers `not-found`, and the issue it belongs to is read
 the same way an issue change reads it, so a pull request's own conversation comment is refused as
 `invalid-request` the same way a pull request number is, before anything changes. `github.comments.delete`

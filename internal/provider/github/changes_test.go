@@ -92,9 +92,10 @@ func (f *fakeGitHub) commentsPage(w http.ResponseWriter, variables map[string]an
 	end := min(start+int(variables["first"].(float64)), f.comments)
 	nodes := []string{}
 	for i := start; i < end; i++ {
-		nodes = append(nodes, fmt.Sprintf(`{"id":"IC_%d","author":{"login":"octocat"},"body":"comment %d",`+
-			`"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","url":"https://github.com/c/%d"}`,
-			i, i, i))
+		nodes = append(nodes, fmt.Sprintf(`{"id":"IC_%d","databaseId":%d,"author":{"login":"octocat"},`+
+			`"body":"comment %d","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z",`+
+			`"url":"https://github.com/c/%d"}`,
+			i, 1000+i, i, i))
 	}
 	fmt.Fprintf(w, `{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","comments":{"pageInfo":`+
 		`{"hasNextPage":%t,"endCursor":"ccur-%d"},`+
@@ -344,6 +345,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.comments.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.comments.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
 			commentSensitivity),
+		"github.reactions.add":    changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+		"github.reactions.remove": changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {
@@ -599,6 +602,7 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 
 	options := CommentListOptions{Number: 42}
 	var ids []string
+	var databaseIDs []int64
 	for batch := 0; ; batch++ {
 		page, err := c.ListComments(context.Background(), options)
 		if err != nil {
@@ -609,6 +613,7 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 		}
 		for _, comment := range page.Comments {
 			ids = append(ids, comment.ID)
+			databaseIDs = append(databaseIDs, comment.DatabaseID)
 		}
 		if !page.HasMore {
 			break
@@ -617,6 +622,11 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 	}
 	if len(ids) != 45 || ids[0] != "IC_0" || ids[44] != "IC_44" {
 		t.Errorf("comments = %v, want every comment once, oldest first", ids)
+	}
+	// database_id is added alongside id, additively, so github.comments.update, github.comments.delete, and
+	// the reaction tools can address the comment id already reports by its REST identifier.
+	if len(databaseIDs) != 45 || databaseIDs[0] != 1000 || databaseIDs[44] != 1044 {
+		t.Errorf("database ids = %v, want the numeric REST identifier of every comment", databaseIDs)
 	}
 	refused := len(f.recorded())
 	if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 43, Cursor: options.Cursor}); !isInvalidRequest(err) {
@@ -647,7 +657,7 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 
 	before := len(f.recorded())
 	comment, err := c.CreateComment(context.Background(), 42, "Fixed "+bodyCanary)
-	if err != nil || comment.ID != "IC_new" || comment.Body != "Fixed "+bodyCanary || comment.Author != "octocat" {
+	if err != nil || comment.ID != "IC_new" || comment.DatabaseID != 9 || comment.Body != "Fixed "+bodyCanary || comment.Author != "octocat" {
 		t.Fatalf("CreateComment() = %+v, %v", comment, err)
 	}
 	requests := f.recorded()[before:]
