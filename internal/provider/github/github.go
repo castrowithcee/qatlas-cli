@@ -62,7 +62,12 @@
 // it sets or removes property values, and for an organization it creates or updates property definitions.
 // github.labels.list and github.labels.get read the labels of a repository; github.labels.create and
 // github.labels.update change them; only on a connection whose tools list names it, github.labels.delete
-// removes one permanently, which also strips it from every issue and pull request that carries it. The search
+// removes one permanently, which also strips it from every issue and pull request that carries it.
+// github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
+// takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
+// the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
+// github.comments.delete removes one permanently; both refuse a comment of another repository and a pull
+// request conversation comment the same way the issue tools refuse a pull request number. The search
 // tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
@@ -421,7 +426,10 @@ func Register(reg *capability.Registry) error {
 				"for a public repository, or repo on a classic token, or Issues: read on a fine-grained token, " +
 				"for a private one; changing them, including delete which is listed-only, needs Issues: read " +
 				"and write instead, since GitHub keeps a label under a repository's issues and pull requests " +
-				"rather than a scope of its own",
+				"rather than a scope of its own; reading the milestones of a repository needs the same scope " +
+				"as reading its labels; setting an issue's milestone through github.issues.update, and " +
+				"updating or deleting an issue comment, need the same scope as writing an issue or a comment: " +
+				"repo on a classic token, or Issues: read and write on a fine-grained token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -571,11 +579,12 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{collaboratorsList.ID, rulesetsList.ID, rulesetsGet.ID, customPropertiesGet.ID},
 		}, {
 			ID: "issue-maintainer", Title: "Issue maintainer",
-			Description: "not recommended: lists and reads the labels of a repository and creates and " +
-				"updates them; every change needs its own confirmation, and deleting a label stays " +
-				"unticked, since it is offered only where a connection's tools list names " +
-				"github.labels.delete",
-			Tools: []string{labelsList.ID, labelsGet.ID, labelsCreate.ID, labelsUpdate.ID},
+			Description: "not recommended: lists and reads the labels of a repository, lists its " +
+				"milestones, and creates and updates labels and issue comments; every change needs its own " +
+				"confirmation, and deleting a label or a comment stays unticked, since each is offered only " +
+				"where a connection's tools list names it",
+			Tools: []string{labelsList.ID, labelsGet.ID, labelsCreate.ID, labelsUpdate.ID, milestonesList.ID,
+				commentsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -605,7 +614,7 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
-		labelsOperations())...)
+		labelsOperations(), milestonesOperations(), commentMaintenanceOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1355,6 +1364,12 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := labelsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := milestonesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := commentMaintenanceSubject(parts[2]); what != "" {
 			s.what = what
 		}
 	}

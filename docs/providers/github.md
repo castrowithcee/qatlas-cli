@@ -229,8 +229,9 @@ and the not-recommended profile `repository-admin-reader` under
 [repository lifecycle and collaborators](#repository-lifecycle-and-collaborators), which also lists the
 rulesets under [Rulesets](#rulesets-repository-and-organization-governance) and the custom property values or
 schema under [Custom properties](#custom-properties). The not-recommended profile `issue-maintainer` lists and
-reads the labels of a repository and creates and updates them, under [Labels](#labels); deleting a label stays
-unticked, since `github.labels.delete` is offered only where a connection's `tools` list names it. A
+reads the labels of a repository, creates and updates them, under [Labels](#labels), lists the milestones
+under [Milestones](#milestones), and updates issue comments under [Changes](#changes); deleting a label or a
+comment stays unticked, since each is offered only where a connection's `tools` list names it. A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -879,6 +880,22 @@ listed-only, needs Issues: read and write instead:
 | `github.labels.list`, `github.labels.get` | `repo` (private) or none (public) | Issues: read |
 | `github.labels.create`, `github.labels.update`, `github.labels.delete` | `repo` | Issues: read and write |
 
+## Milestones
+
+`github.milestones.list` reads one bounded batch of the milestones of a repository, filtered by `state`
+(`open` by default, or `closed` or `all`), with their number, title, description (untrusted data, absent
+when the milestone has none), state, due date (absent when unset), and open and closed issue counts, paged
+the same way [labels](#labels) are, by GitHub's `Link` response header:
+
+```sh
+qatlas invoke github.milestones.list --connection code --arg state=all
+```
+
+Nothing here creates, changes, or deletes a milestone; `github.issues.update` sets or removes the milestone
+of an existing issue instead, under [Changes](#changes). Reading the milestones of a repository needs the
+same scope as reading its labels: no scope for a public repository, or `repo` on a classic token, or Issues:
+read on a fine-grained token, for a private one.
+
 ## Project lifecycle
 
 The lifecycle tools make and maintain projects themselves, not their items. Each one is a change that needs
@@ -1234,10 +1251,12 @@ read and before GitHub is contacted. The changes of projects themselves are list
 | Tool | Effect | Idempotency | Does |
 | --- | --- | --- | --- |
 | `github.issues.create` | create | non-idempotent | opens one issue with title, body, labels, assignees |
-| `github.issues.update` | update | idempotent | replaces title, body, labels, or assignees; left-out fields stay |
+| `github.issues.update` | update | idempotent | replaces title, body, labels, assignees, or milestone; left-out fields stay |
 | `github.issues.close` | update | idempotent | closes with `state_reason` `completed` (default), `not_planned`, or `duplicate` |
 | `github.issues.reopen` | update | idempotent | opens a closed issue again |
 | `github.comments.create` | create | non-idempotent | writes exactly one comment on one issue |
+| `github.comments.update` | update | idempotent | replaces the body of one comment, by its `comment_id` |
+| `github.comments.delete` | delete | unknown | deletes one comment permanently, by its `comment_id`; offered only where a connection's `tools` list names it |
 | `github.projectitems.update` | update | idempotent | sets or clears field values of one item |
 | `github.projectitems.add` | create | idempotent | adds an existing issue of a named repository, then sets fields |
 | `github.projectitems.archive` | update | idempotent | archives one item; GitHub keeps it restorable |
@@ -1265,6 +1284,33 @@ issue number given to either is refused as `invalid-request`.
 
 ```text
 qatlas: invalid-request: number 39 in repository octo-org/example is a pull request; issue tools do not handle pull requests
+```
+
+`github.issues.update` also takes an optional `milestone`: a milestone number, as `github.milestones.list`
+reports it, sets it, and `0` removes the issue's current milestone, since a milestone number is never `0` and
+GitHub itself is asked with an explicit `null` in that case; a milestone-only change is enough on its own,
+without any of `title`, `body`, `labels`, or `assignees`. Nothing here creates, renames, or closes a milestone
+itself.
+
+```sh
+echo '{"number":42,"milestone":3}' | qatlas invoke github.issues.update --connection maintainer --confirm
+echo '{"number":42,"milestone":0}' | qatlas invoke github.issues.update --connection maintainer --confirm
+```
+
+`github.comments.update` and `github.comments.delete` address one existing issue comment by its `comment_id`,
+the numeric identifier GitHub reports in a comment's URL after `#issuecomment-`, not the `id`
+`github.comments.list` and `github.comments.create` answer, which is a GraphQL identifier the issue comment
+REST route does not accept. Both tools read the comment first: its route already scopes it to the connection's
+bound repository, so a comment of another repository answers `not-found`, and the issue it belongs to is read
+the same way an issue change reads it, so a pull request's own conversation comment is refused as
+`invalid-request` the same way a pull request number is, before anything changes. `github.comments.delete`
+removes a comment permanently and is offered only where a connection's `tools` list names it, the way
+`github.labels.delete` is.
+
+```sh
+echo '{"comment_id":123456789,"body":"Fixed in the latest build."}' |
+  qatlas invoke github.comments.update --connection maintainer --confirm
+echo '{"comment_id":123456789}' | qatlas invoke github.comments.delete --connection maintainer --confirm
 ```
 
 Project field values are named, not identified: `fields` maps field names to an option name of a

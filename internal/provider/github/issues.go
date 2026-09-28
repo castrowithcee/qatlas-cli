@@ -350,11 +350,15 @@ const (
 
 // IssueContent is the content of a new issue, or the part of an existing issue a change replaces. A nil
 // field stays as it is; Labels and Assignees replace the whole set, and an empty list removes every entry.
+// Milestone is admitted only by github.issues.update's own input schema, so it stays nil for every other
+// user of this shape; a positive number sets that milestone, and 0 removes the current one, since GitHub
+// itself is asked with an explicit null in that case, and a milestone number is never 0.
 type IssueContent struct {
 	Title     *string   `json:"title"`
 	Body      *string   `json:"body"`
 	Labels    *[]string `json:"labels"`
 	Assignees *[]string `json:"assignees"`
+	Milestone *int      `json:"milestone"`
 }
 
 // check applies the bounds of the issue content. A new issue needs a title; a change needs at least one
@@ -363,8 +367,12 @@ func (content IssueContent) check(create bool) error {
 	switch {
 	case create && content.Title == nil:
 		return invalidRequest("title is required")
-	case !create && content.Title == nil && content.Body == nil && content.Labels == nil && content.Assignees == nil:
-		return invalidRequest("name at least one of title, body, labels, or assignees to change")
+	case !create && content.Title == nil && content.Body == nil && content.Labels == nil &&
+		content.Assignees == nil && content.Milestone == nil:
+		return invalidRequest("name at least one of title, body, labels, assignees, or milestone to change")
+	}
+	if content.Milestone != nil && (*content.Milestone < 0 || *content.Milestone > 1000000000) {
+		return invalidRequest("milestone must be 0 to remove the current milestone, or a positive milestone number")
 	}
 	if content.Title != nil {
 		if length := utf8.RuneCountInString(*content.Title); strings.TrimSpace(*content.Title) == "" ||
@@ -412,6 +420,13 @@ func (content IssueContent) payload() map[string]any {
 	}
 	if content.Assignees != nil {
 		payload["assignees"] = append([]string{}, *content.Assignees...)
+	}
+	if content.Milestone != nil {
+		if *content.Milestone == 0 {
+			payload["milestone"] = nil
+		} else {
+			payload["milestone"] = *content.Milestone
+		}
 	}
 	return payload
 }

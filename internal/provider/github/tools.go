@@ -88,11 +88,15 @@ var issuesCreate = capability.Descriptor{
 	}},
 }
 
+// milestoneUpdateSchema is the bound of github.issues.update's own milestone argument: 0 removes the
+// current milestone, since a milestone number is never 0.
+const milestoneUpdateSchema = `{"type":"integer","minimum":0,"maximum":1000000000}`
+
 var issuesUpdate = capability.Descriptor{
 	ID:      Provider + ".issues.update",
 	Version: 1,
 	Title:   "Update a GitHub issue",
-	Description: "Replace the title, body, labels, or assignees of one issue of " +
+	Description: "Replace the title, body, labels, assignees, or milestone of one issue of " +
 		"a repository an explicit connection allows; fields left out stay unchanged, and GitHub creates any " +
 		"label the repository does not have yet",
 	Tags:                       []string{"github", "issues", "update"},
@@ -100,11 +104,13 @@ var issuesUpdate = capability.Descriptor{
 	Provider:                   Provider,
 	RequiresExplicitConnection: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
-		issueContentKeys + `},"required":["number"],"additionalProperties":false}`),
+		issueContentKeys + `,"milestone":` + milestoneUpdateSchema + `},"required":["number"],` +
+		`"additionalProperties":false}`),
 	OutputSchema: issuesGet.OutputSchema,
-	Arguments: append([]capability.Argument{
+	Arguments: append(append([]capability.Argument{
 		{Name: "number", Description: "Issue number in the repository", Required: true},
-	}, issueContentArguments...),
+	}, issueContentArguments...), capability.Argument{Name: "milestone", Description: "Milestone number to " +
+		"set, as github.milestones.list reports it; 0 removes the current milestone; left out leaves it unchanged"}),
 	Fields: issuesGet.Fields,
 	Examples: []capability.Example{{
 		Description: "Replace the body of an issue",

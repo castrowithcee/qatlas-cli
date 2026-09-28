@@ -340,6 +340,10 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.labels.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.labels.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
 			labelSensitivity),
+		"github.milestones.list": readRisk,
+		"github.comments.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.comments.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
+			commentSensitivity),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {
@@ -543,6 +547,46 @@ func TestIssueChangesUseRESTAndRefusePullRequests(t *testing.T) {
 	} {
 		if err := try(); !isInvalidRequest(err) {
 			t.Errorf("err = %v, want an invalid request", err)
+		}
+	}
+}
+
+// github.issues.update's own milestone argument sets or removes an issue's milestone: 0 is sent to GitHub
+// as an explicit null, since a milestone number is never 0, and a milestone-only change is enough on its
+// own, without a title, body, labels, or assignees.
+func TestIssueUpdateSetsAndRemovesTheMilestone(t *testing.T) {
+	f := &fakeGitHub{}
+	base := serve(t, f)
+	c := client(t, base, repoTarget)
+
+	milestone := 5
+	if _, err := c.UpdateIssue(context.Background(), 42, IssueContent{Milestone: &milestone}); err != nil {
+		t.Fatalf("UpdateIssue() with a milestone = %v", err)
+	}
+	change := f.recorded()[len(f.recorded())-1]
+	if change.method != http.MethodPatch || fmt.Sprint(change.body["milestone"]) != "5" {
+		t.Errorf("change request = %+v, want milestone 5", change)
+	}
+
+	removed := 0
+	if _, err := c.UpdateIssue(context.Background(), 42, IssueContent{Milestone: &removed}); err != nil {
+		t.Fatalf("UpdateIssue() removing a milestone = %v", err)
+	}
+	change = f.recorded()[len(f.recorded())-1]
+	if change.method != http.MethodPatch {
+		t.Fatalf("change request = %+v", change)
+	}
+	if value, ok := change.body["milestone"]; !ok || value != nil {
+		t.Errorf("change request milestone = %v, want an explicit null", value)
+	}
+
+	for _, tt := range []struct {
+		name  string
+		value int
+	}{{"negative", -1}, {"too large", 1000000001}} {
+		bad := tt.value
+		if _, err := c.UpdateIssue(context.Background(), 42, IssueContent{Milestone: &bad}); !isInvalidRequest(err) {
+			t.Errorf("%s milestone = %v, want an invalid request", tt.name, err)
 		}
 	}
 }
