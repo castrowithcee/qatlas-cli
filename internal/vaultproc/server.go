@@ -36,6 +36,10 @@ type Server struct {
 	locked   bool
 	locksAt  time.Time
 	timer    *time.Timer
+	// vaultDir is the vault directory an approve-token request opens with key; see ApproveWithTokens.
+	vaultDir string
+	// tokenMu keeps approve-token requests apart, each of which reads and writes the vault.
+	tokenMu sync.Mutex
 
 	listener net.Listener
 	stopOnce sync.Once
@@ -77,6 +81,19 @@ func (s *Server) KeepLog(vaultDir string, retentionDays int) {
 	if s.logKey != nil {
 		s.log = invokelog.New(vaultDir, retentionDays).WithKey(s.logKey)
 	}
+}
+
+// ApproveWithTokens lets the server approve open connection changes with an agent token for the vault in
+// vaultDir, the vault directory it holds unlocked, which comes from the configuration the process was
+// started with, never from a request. For each such request the server opens the vault with its key as the
+// vault is on disk then, so a token created or revoked since counts at once; checks the token, its expiry,
+// and what its vorbild connections cover (see vault.Vault.ApproveWithToken); writes the approvals into the
+// vault; checks every later get against them; and logs each decision with the token's name, never its
+// value. A server without it refuses every approve-token request. Call it before Serve.
+func (s *Server) ApproveWithTokens(vaultDir string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.vaultDir = vaultDir
 }
 
 // copyBindings returns bindings with maps of their own, never nil.
@@ -237,9 +254,12 @@ func (s *Server) serveConn(conn net.Conn) {
 	}
 
 	var resp response
-	if req.Op == opLog || req.Op == opLogCheck {
+	switch req.Op {
+	case opLog, opLogCheck:
 		resp = s.answerLog(req)
-	} else {
+	case opApproveToken:
+		resp = s.answerToken(req)
+	default:
 		resp = s.answer(req)
 	}
 	_ = writeMessage(conn, resp)
@@ -384,6 +404,77 @@ func (s *Server) answerLog(req request) response {
 		return response{V: Version, Error: codeLogFailed}
 	}
 	return response{V: Version}
+}
+
+// approveOperation is the operation a token approval is logged under.
+const approveOperation = "vault.approve"
+
+// answerToken carries out one checked approve-token request. Like answerLog it holds s.mu only to take what
+// it needs and, at the end, to adopt the vault's new bindings, never while it reads or writes a file; tokenMu
+// keeps two such requests from writing the vault over each other. The answer names the token and the
+// connections it decided on, never a value.
+func (s *Server) answerToken(req request) response {
+	s.mu.Lock()
+	locked := s.locked || s.stopping()
+	key, dir, logger := s.key, s.vaultDir, s.log
+	s.mu.Unlock()
+	if locked {
+		return response{V: Version, Error: codeLocked}
+	}
+	id, ok := key.(*age.X25519Identity)
+	if dir == "" || !ok {
+		return response{V: Version, Error: codeNoTokens}
+	}
+
+	s.tokenMu.Lock()
+	defer s.tokenMu.Unlock()
+	v, err := vault.OpenWithKey(dir, id)
+	if err != nil {
+		return response{V: Version, Error: codeTokenFailed}
+	}
+	result, err := v.ApproveWithToken(req.Token, req.Scopes, req.Names, time.Now())
+	refused := invokelog.Fields{Path: "cli", Operation: approveOperation, Result: resultAdminRequired,
+		Token: result.Token}
+	switch {
+	case errors.Is(err, vault.ErrTokenUnknown):
+		logDecision(logger, refused)
+		return response{V: Version, Error: codeTokenUnknown}
+	case errors.Is(err, vault.ErrTokenExpired):
+		logDecision(logger, refused)
+		return response{V: Version, Error: codeTokenExpired}
+	case errors.Is(err, vault.ErrTokensTampered):
+		return response{V: Version, Error: codeTokensTampered}
+	case err != nil:
+		return response{V: Version, Error: codeTokenFailed}
+	}
+
+	if bindings, err := v.Bindings(); err == nil {
+		s.mu.Lock()
+		if !s.locked && !s.stopping() {
+			s.bindings = copyBindings(bindings)
+		}
+		s.mu.Unlock()
+	}
+	logged := true
+	for _, change := range result.Changes {
+		fields := invokelog.Fields{Path: "cli", Operation: approveOperation, Connection: change.Connection,
+			Effect: change.Kind, Result: resultAdminRequired, Token: result.Token}
+		if change.Approved {
+			fields.Result = "success"
+		}
+		if !logDecision(logger, fields) {
+			logged = false
+		}
+	}
+	return response{V: Version, Approval: &result, Unlogged: !logged}
+}
+
+// resultAdminRequired is the result a refused token approval is logged with, the code the command fails with.
+const resultAdminRequired = "admin-required"
+
+// logDecision appends one token decision to the invocation log and reports whether it was written.
+func logDecision(logger *invokelog.Logger, fields invokelog.Fields) bool {
+	return logger != nil && fields.Validate() == nil && logger.Append(fields) == nil
 }
 
 // touch restarts the idle period on a get. The caller holds s.mu.

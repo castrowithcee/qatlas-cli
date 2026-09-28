@@ -53,7 +53,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"unlock, and lock manage a credential or the vault, keyring credentials included, and run only from an\n" +
 			"interactive terminal; where the vault is encrypted they ask for its passphrase there too, once per\n" +
 			"command and before doing anything, whatever credential they target. No terminal at all, or a wrong\n" +
-			"passphrase, fails with the code admin-required; an agent never manages a credential or the vault.\n\n" +
+			"passphrase, fails with the code admin-required; an agent never manages a credential or the vault,\n" +
+			"with one exception: an agent token lets 'vault approve' release, without a terminal, the open\n" +
+			"connection changes that reach no further than one of the token's vorbild connections; see\n" +
+			"'qatlas vault token'.\n\n" +
 			"An encrypted vault also needs its passphrase to answer a read outside such a command, unless a\n" +
 			"vault process holds it unlocked, and asks for it on the terminal, never as a command line\n" +
 			"argument, an environment variable, or a file. Without a terminal to ask on, such as an agent\n" +
@@ -62,7 +65,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"presses ctrl+l in 'qatlas tui', which unlocks it the same way. An encrypted vault hands a\n" +
 			"secret only to a connection it approved as it is configured now; any other access fails with\n" +
 			"the code approval-required, which only a person resolves: 'vault approve' lists every open\n" +
-			"connection with what changed and releases it, all at once or one at a time with --connection.\n\n" +
+			"connection with what changed and releases it, all at once or one at a time with --connection.\n" +
+			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n\n" +
 			"On Linux 'vault unlock' hands the unlocked vault to a vault process that holds it open until it\n" +
 			"is idle for vault.idle_timeout (12h unless the configuration says otherwise), 'vault lock' ends\n" +
 			"it, or the machine restarts; elsewhere unlocking only lasts for the current process. ctrl+l in\n" +
@@ -183,7 +187,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"touching any file. Afterwards 'qatlas vault status' warns that the vault is unencrypted, the same\n" +
 			"way it does for a vault that was never encrypted at all. Run against a vault that is not\n" +
 			"encrypted, it refuses and says there is nothing to decrypt. A vault process that holds the vault\n" +
-			"unlocked is locked once the passphrase is entered, since it could not be reached afterwards.",
+			"unlocked is locked once the passphrase is entered, since it could not be reached afterwards.\n" +
+			"Approvals and agent tokens exist only while the vault is encrypted and are removed with it.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultDecrypt(c, opts, decryptConfirm)
@@ -244,10 +249,21 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"credential at all is refused before anything is approved; one that is already approved as it is\n" +
 			"configured now is reported and left alone, nothing written.\n\n" +
 			"Run against a vault that is not encrypted, which binds no connection to any approval, it says so and\n" +
-			"changes nothing; with nothing open it says so too. Like every 'vault' command but status, unlock,\n" +
-			"and lock, it runs only from an interactive terminal and, where the vault is encrypted, asks for its\n" +
-			"passphrase there once before doing anything; without a terminal it fails with admin-required, and a\n" +
-			"wrong passphrase with usage.",
+			"changes nothing; with nothing open it says so too. Run from an interactive terminal it asks, like\n" +
+			"every 'vault' command but status, unlock, and lock, for the passphrase of an encrypted vault there\n" +
+			"once before doing anything; a wrong passphrase fails with usage.\n\n" +
+			"Without a terminal it approves with an agent token instead (see 'qatlas vault token'): the one in\n" +
+			"QATLAS_AGENT_TOKEN, else in the nearest .qatlas/local/agent.env of the working directory or a\n" +
+			"directory above it, else in ~/.qatlas/local/agent.env, as a line QATLAS_AGENT_TOKEN=<token>. The\n" +
+			"vault process that holds the vault unlocked checks the token, its expiry, and each open change,\n" +
+			"approves every change a vorbild of the token covers, or only the ones --connection names, and logs\n" +
+			"each decision in the invocation log with the token's name, never its value. No token, an unknown,\n" +
+			"revoked, or expired one, a vault that is not encrypted, or a change the token does not cover fails\n" +
+			"with admin-required, naming each change left open and what of it the token does not cover:\n" +
+			"service, credential, permissions, tools, targets, paths, or that it is a vorbild itself. Without a\n" +
+			"vault process, the vault locked, it fails with vault-locked, since only that process can check a\n" +
+			"token. The stale approval of a connection removed or renamed is a change of kind delete: a token\n" +
+			"that covers the connection it belonged to removes it.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultApprove(c, opts, reg, connectionNames)
@@ -256,7 +272,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	approve.Flags().StringArrayVar(&connectionNames, "connection", nil,
 		"approve only this connection, repeated per connection; the default approves every open one")
 
-	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate, approve, newVaultLogsCommand(opts))
+	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate, approve,
+		newVaultTokenCommand(opts, reg), newVaultLogsCommand(opts))
 	return cmd
 }
 
@@ -279,7 +296,11 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 			"entry, or a day file missing from the middle, can be found later; 'vault logs verify' checks it.\n" +
 			"logs.retention_days keeps entries for that many days, 90 unless the configuration says otherwise;\n" +
 			"an older day is removed on the next invoke, and the entry written right after names what was\n" +
-			"removed, so the cut is never mistaken for a gap.",
+			"removed, so the cut is never mistaken for a gap.\n\n" +
+			"An approval with an agent token adds one entry per connection change it decided on, with the\n" +
+			"operation vault.approve, the connection, the kind of change as the effect (create, update, or\n" +
+			"delete), the result (success, or admin-required for a change left open), and the token's name,\n" +
+			"never its value; a token the vault does not hold adds one entry without a connection or a name.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
@@ -905,6 +926,10 @@ func approveOnEncrypt(c *cobra.Command, opts *Options, reg *capability.Registry,
 // asking. Nothing is written before every name in names is checked: an unknown one, or one whose credential
 // is not of type vault or has no entry in the vault, refuses the whole run first.
 func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, names []string) error {
+	if !checkInteractive() {
+		// Without a terminal nobody can type the passphrase; an agent token may approve instead.
+		return runVaultApproveWithToken(c, opts, reg, names)
+	}
 	if err := requireAdmin(opts); err != nil {
 		return err
 	}

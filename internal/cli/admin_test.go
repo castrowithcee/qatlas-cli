@@ -27,6 +27,8 @@ func TestMain(m *testing.M) {
 	}
 	checkInteractive = func() bool { return true }
 	vaultProcessSupported = false
+	// No test finds an agent token of the machine it runs on; a test that needs one sets its own.
+	lookupAgentToken = func() (string, string, error) { return "", "", nil }
 	os.Exit(m.Run())
 }
 

@@ -80,8 +80,10 @@ type Entry struct {
 	Effect     string      `json:"effect,omitempty"`
 	Result     string      `json:"result,omitempty"`
 	DurationMS int64       `json:"duration_ms,omitempty"`
-	Cut        *Cut        `json:"cut,omitempty"`
-	PrevHash   string      `json:"prev_hash"`
+	// Token is the name of the agent token an approval was made with, never its value; empty otherwise.
+	Token    string `json:"token,omitempty"`
+	Cut      *Cut   `json:"cut,omitempty"`
+	PrevHash string `json:"prev_hash"`
 	// MAC is the check value of a signed entry, empty for an unsigned one; see Key.mac.
 	MAC string `json:"mac"`
 }
@@ -98,6 +100,9 @@ type Fields struct {
 	// Result is "success" or the failure's error code, the same value application.auditResult uses.
 	Result   string
 	Duration time.Duration
+	// Token names the agent token an approval of a connection change was made with, never its value; empty
+	// for an invoke.
+	Token string
 }
 
 // The bounds Validate holds the fields of an entry to.
@@ -142,6 +147,9 @@ func (f Fields) Validate() error {
 		return err
 	}
 	if err := checkText("connection", f.Connection, maxTextLength); err != nil {
+		return err
+	}
+	if err := checkText("token", f.Token, maxTextLength); err != nil {
 		return err
 	}
 	if f.Client != nil {
@@ -269,7 +277,7 @@ func (l *Logger) Append(f Fields) error {
 	entry := Entry{
 		Seq: seq, Time: now, Path: f.Path, Client: f.Client, Operation: f.Operation, Version: f.Version,
 		Connection: f.Connection, Effect: f.Effect, Result: f.Result, DurationMS: f.Duration.Milliseconds(),
-		PrevHash: prevHash,
+		Token: f.Token, PrevHash: prevHash,
 	}
 	raw, err := l.encode(entry)
 	if err != nil {

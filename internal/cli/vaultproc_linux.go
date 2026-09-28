@@ -99,6 +99,8 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 	// While it runs, this process is the one writer that signs the invocation log of this vault, with the
 	// retention the configuration had when it started.
 	server.KeepLog(vaultDir, retentionDays)
+	// It also approves open connection changes an agent token covers, in this same vault.
+	server.ApproveWithTokens(vaultDir)
 	snap.Secrets = nil
 
 	signals := make(chan os.Signal, 1)

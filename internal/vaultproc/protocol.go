@@ -31,6 +31,10 @@ const (
 	// stored log lines. Neither ever answers with the log key or the vault's key.
 	opLog      = "log"
 	opLogCheck = "logcheck"
+	// opApproveToken approves the open connection changes an agent token covers. The process checks the
+	// token against the tokens the vault holds, writes the approvals into the vault itself, and logs each
+	// decision; it never answers with a token's value.
+	opApproveToken = "approve-token"
 )
 
 // The codes an answer's error carries. They are fixed words, never text built from a request, so an error
@@ -44,6 +48,12 @@ const (
 	codeApproval   = "approval-required"
 	codeNoLog      = "no-log"
 	codeLogFailed  = "log-failed"
+	// The codes of an approve-token request.
+	codeNoTokens       = "no-tokens"
+	codeTokenUnknown   = "token-unknown"
+	codeTokenExpired   = "token-expired"
+	codeTokensTampered = "tokens-tampered"
+	codeTokenFailed    = "token-failed"
 )
 
 // nonceSize is the number of random bytes a challenge holds.
@@ -62,7 +72,9 @@ type hello struct {
 
 // request is one line a client sends. Scope is the connection a get or a check is made for; a get without
 // one is refused. Bindings replace the server's own on a bind. Entry is what a log appends, and Lines are
-// the stored log lines a logcheck checks.
+// the stored log lines a logcheck checks. Token, Scopes, and Names belong to approve-token: the agent token
+// presented, the scope of every connection reading a vault credential as configured now, and the
+// connections to limit the approval to, none for all.
 type request struct {
 	V          int             `json:"v"`
 	Op         string          `json:"op"`
@@ -73,6 +85,9 @@ type request struct {
 	Bindings   *vault.Bindings `json:"bindings,omitempty"`
 	Entry      *logEntry       `json:"entry,omitempty"`
 	Lines      [][]byte        `json:"lines,omitempty"`
+	Token      string          `json:"token,omitempty"`
+	Scopes     []vault.Scope   `json:"scopes,omitempty"`
+	Names      []string        `json:"names,omitempty"`
 }
 
 // logEntry is what a client sends for one invoke to log: invokelog.Fields, without anything the server
@@ -103,16 +118,19 @@ func logEntryOf(f invokelog.Fields) *logEntry {
 }
 
 // response is a line a server answers with. Error is empty on success; Proof answers the hello, Found and
-// Value belong to get, PID and LocksAt to status, and Valid, one per line asked, to logcheck.
+// Value belong to get, PID and LocksAt to status, Valid, one per line asked, to logcheck, and Approval and
+// Unlogged to approve-token.
 type response struct {
-	V       int        `json:"v"`
-	Error   string     `json:"error,omitempty"`
-	Proof   []byte     `json:"proof,omitempty"`
-	Found   bool       `json:"found,omitempty"`
-	Value   string     `json:"value,omitempty"`
-	PID     int        `json:"pid,omitempty"`
-	LocksAt *time.Time `json:"locks_at,omitempty"`
-	Valid   []bool     `json:"valid,omitempty"`
+	V        int                  `json:"v"`
+	Error    string               `json:"error,omitempty"`
+	Proof    []byte               `json:"proof,omitempty"`
+	Found    bool                 `json:"found,omitempty"`
+	Value    string               `json:"value,omitempty"`
+	PID      int                  `json:"pid,omitempty"`
+	LocksAt  *time.Time           `json:"locks_at,omitempty"`
+	Valid    []bool               `json:"valid,omitempty"`
+	Approval *vault.TokenApproval `json:"approval,omitempty"`
+	Unlogged bool                 `json:"unlogged,omitempty"`
 }
 
 // writeMessage sends v as one line of JSON. A message above MaxMessage is not sent at all. The encoded
@@ -177,6 +195,16 @@ func answerError(code string) error {
 		return ErrNoLog
 	case codeLogFailed:
 		return errors.New("the vault process could not write the invocation log")
+	case codeNoTokens:
+		return ErrNoTokens
+	case codeTokenUnknown:
+		return vault.ErrTokenUnknown
+	case codeTokenExpired:
+		return vault.ErrTokenExpired
+	case codeTokensTampered:
+		return vault.ErrTokensTampered
+	case codeTokenFailed:
+		return errors.New("the vault process could not approve with the agent token")
 	default:
 		return errors.New("the vault process could not read the request")
 	}

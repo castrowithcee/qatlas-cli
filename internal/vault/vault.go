@@ -11,6 +11,11 @@
 // vault is unlocked. Reading a value, deleting an entry, and merging pending entries all need the private
 // key and therefore the passphrase.
 //
+// An encrypted vault can also hold tokens.age, the agent tokens (see Token): each a random value that lets an
+// agent approve an open connection change without the passphrase, as long as the change reaches no further
+// than one of the token's vorbild connections (see ApproveWithToken). The file carries a check value keyed
+// from the vault's private key, so a document merely encrypted to the public recipient is not trusted.
+//
 // Every file follows the same rule the plaintext credential fallback uses: the vault directory is 0700,
 // every file in it 0600, and a write replaces the target atomically through a temporary file in the same
 // directory.

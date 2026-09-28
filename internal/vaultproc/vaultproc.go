@@ -2,7 +2,8 @@
 // qatlas, the CLI and the MCP broker alike, read them without asking for the passphrase again.
 //
 // The process listens on a Unix socket in a private runtime directory and answers one request per
-// connection: status, get, check, set, delete, bind, lock, and, for the invocation log, log and logcheck. Every message is one line of JSON, versioned
+// connection: status, get, check, set, delete, bind, lock, for the invocation log, log and logcheck, and
+// approve-token, which approves open connection changes an agent token covers. Every message is one line of JSON, versioned
 // and bounded in size, and every connection has a deadline, so a peer that hangs cannot hold either side.
 //
 // A secret leaves the process only for a connection the vault approved (see vault.Bindings), and only for
@@ -36,7 +37,7 @@ import (
 
 // Version is the protocol version a request carries and an answer repeats. A server refuses a request of
 // another version rather than guessing what it meant.
-const Version = 4
+const Version = 5
 
 // MaxMessage bounds one request or answer, newline included. It leaves room for any token or key a
 // credential holds, and keeps a peer from making the other side buffer without end.
@@ -76,6 +77,9 @@ var (
 
 	// ErrNoLog reports a vault process that does not keep the invocation log, or cannot sign it.
 	ErrNoLog = errors.New("the vault process does not keep the invocation log")
+
+	// ErrNoTokens reports a vault process that does not approve with agent tokens.
+	ErrNoTokens = errors.New("the vault process does not approve with agent tokens")
 
 	// ErrUnsupported reports a platform the vault process does not run on yet.
 	ErrUnsupported = fmt.Errorf("the vault process is not supported on this platform: %w", errors.ErrUnsupported)

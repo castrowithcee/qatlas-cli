@@ -140,6 +140,23 @@ func (c *Client) Log(ctx context.Context, f invokelog.Fields) error {
 	return err
 }
 
+// ApproveWithToken asks the vault process to approve every open connection change the agent token covers,
+// or only the changes of the connections names lists. scopes is the scope of every connection that reads a
+// vault credential, as configured now. The process checks the token and decides, writes the approvals into
+// the vault, and logs each decision; unlogged is true when it could not log one. vault.ErrTokenUnknown and
+// vault.ErrTokenExpired refuse the token; ErrNotRunning means no vault process holds the vault unlocked.
+func (c *Client) ApproveWithToken(ctx context.Context, token string, scopes []vault.Scope, names []string) (
+	approval vault.TokenApproval, unlogged bool, err error) {
+	resp, err := c.call(ctx, request{Op: opApproveToken, Token: token, Scopes: scopes, Names: names})
+	if err != nil {
+		return vault.TokenApproval{}, false, err
+	}
+	if resp.Approval != nil {
+		approval = *resp.Approval
+	}
+	return approval, resp.Unlogged, nil
+}
+
 // maxLogCheckBatch bounds the stored lines one logcheck carries, before their base64 encoding, so a request
 // stays well within MaxMessage.
 const maxLogCheckBatch = MaxMessage / 2

@@ -275,3 +275,55 @@ func sortedKeys[V any](m map[string]V) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// VaultScopes returns the scope of every connection of cfg that reads a credential of type vault, as it is
+// configured now and sorted by name: what an approval with an agent token is decided on (see
+// vault.Vault.ApproveWithToken), whether or not the vault holds an entry for its credential yet.
+func VaultScopes(cfg *config.Config) ([]vault.Scope, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+	var scopes []vault.Scope
+	for _, name := range sortedKeys(cfg.Connections) {
+		if cfg.Credentials[cfg.Connections[name].Credential].Type != config.CredentialTypeVault {
+			continue
+		}
+		resolved, err := cfg.Resolve(name, "")
+		if err != nil {
+			return nil, err
+		}
+		scopes = append(scopes, secret.ScopeOf(resolved))
+	}
+	return scopes, nil
+}
+
+// LapsedModels names the vorbild connections of token that cover nothing now, sorted: one that is no
+// connection of cfg reading a vault credential any more, because it was renamed, deleted, or switched away
+// from the vault; one the vault unlocked in this process holds no approval for; and one whose approval was
+// given for a credential entry since removed or stored anew. It is the same rule the vault applies when a
+// token approves (see vault.Vault.ApproveWithToken), so 'qatlas vault token list' and 'show' warn about
+// exactly the vorbilder an approval would skip.
+func LapsedModels(cfg *config.Config, v *vault.Vault, token vault.Token) ([]string, error) {
+	approvals, err := v.Approvals()
+	if err != nil {
+		return nil, err
+	}
+	var lapsed []string
+	for _, name := range token.Models {
+		connection, ok := cfgConnection(cfg, name)
+		approved, isApproved := approvals[name]
+		if !ok || cfg.Credentials[connection.Credential].Type != config.CredentialTypeVault || !isApproved {
+			lapsed = append(lapsed, name)
+			continue
+		}
+		id, held, err := v.CredentialID(approved.Scope.Credential)
+		if err != nil {
+			return nil, err
+		}
+		if !held || id != approved.CredentialID {
+			lapsed = append(lapsed, name)
+		}
+	}
+	sort.Strings(lapsed)
+	return lapsed, nil
+}

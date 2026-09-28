@@ -167,9 +167,16 @@ func (e *InvalidProviderResponseError) Error() string {
 // any file, credential store, or vault access the command would otherwise make. An agent never manages a
 // credential or the vault, whatever route it reaches qatlas by; it asks the user to run the command
 // themselves instead.
-type AdminRequiredError struct{}
+//
+// Reason, when set, replaces that message: 'qatlas vault approve' without a terminal says there why the agent
+// token it found, or the lack of one, did not approve every open change. It never holds a secret or a
+// token's value.
+type AdminRequiredError struct{ Reason string }
 
 func (e *AdminRequiredError) Error() string {
+	if e.Reason != "" {
+		return e.Reason
+	}
 	return "managing a credential or the vault needs a person at an interactive terminal"
 }
 
