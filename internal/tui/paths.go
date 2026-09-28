@@ -347,7 +347,9 @@ func (m *Model) pathFrame() (string, string) {
 		}
 	case m.pathRemove:
 		path, _ := m.pathList.selected()
-		foot.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove %q from the list?", path)) + "\n")
+		// %q keeps control characters visible, but it would also double every backslash of a Windows path.
+		quoted := strings.ReplaceAll(fmt.Sprintf("%q", path), `\\`, `\`)
+		foot.WriteString("\n" + m.wrapped(warningStyle, "Remove "+quoted+" from the list?") + "\n")
 		keys = "y remove · n keep"
 	}
 	foot.WriteString(m.hint(keys))
