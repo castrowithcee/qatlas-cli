@@ -316,6 +316,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.contents.put":                 changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
 		"github.contents.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
 			dataSensitivity),
+		"github.files.push": guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent,
+			dataSensitivity),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {

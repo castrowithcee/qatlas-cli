@@ -43,8 +43,10 @@
 // the branches and the tags of a repository or one tag resolved through the Git refs and Git tags APIs; none
 // of them writes, diffs two refs, or downloads an archive. github.branches.create makes one new branch from a
 // branch, a tag, or a commit SHA; github.contents.put creates or updates one file, and, only on a connection
-// whose tools list names it, github.contents.delete deletes one; none of the three ever touches a path below
-// .github/workflows/, which the listed-only workflow maintainer covers instead. The search
+// whose tools list names it, github.contents.delete deletes one; only on a connection whose tools list names
+// it, github.files.push writes several files as one commit through the Git Data API, fast-forward only, so a
+// branch that moved since it was read is refused with nothing written; none of the four ever touches a path
+// below .github/workflows/, which the listed-only workflow maintainer covers instead. The search
 // tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
@@ -383,9 +385,9 @@ func Register(reg *capability.Registry) error {
 				"private repositories; user and organization search need no scope beyond the token's own " +
 				"identity; reading repository contents, a Git tree, a file's blame, commits, branches, or tags " +
 				"needs no scope for a public repository, or repo on a classic token, or Contents: read on a " +
-				"fine-grained token, for a private one; creating a branch, and creating, updating, or deleting " +
-				"a file below the repository root need repo on a classic token, or Contents: read and write on " +
-				"a fine-grained token",
+				"fine-grained token, for a private one; creating a branch, creating, updating, or deleting a " +
+				"file below the repository root, and pushing several files as one commit, listed-only, need " +
+				"repo on a classic token, or Contents: read and write on a fine-grained token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",

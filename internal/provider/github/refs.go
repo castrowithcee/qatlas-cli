@@ -362,13 +362,20 @@ func validObjectSHA(value string) bool {
 	return true
 }
 
-// refsSubject names the tag or the tag object a Git refs or Git tags path below a repository addresses:
-// git/refs/tags/TAG or git/tags/SHA. It names only a tag of the characters the input schema allows, or a hex
-// object SHA, and is empty otherwise.
+// refsSubject names the tag, the tag object, or the branch a Git refs or Git tags path below a repository
+// addresses: git/refs/tags/TAG, git/tags/SHA, or git/refs/heads/BRANCH, the route github.files.push reads
+// and moves. It names only a tag or a branch of the characters the input schema allows, or a hex object SHA,
+// and is empty otherwise.
 func refsSubject(path string) string {
 	if rest, ok := strings.CutPrefix(path, "git/refs/tags/"); ok {
 		if tag, err := url.PathUnescape(rest); err == nil && validRef(tag) {
 			return "tag " + tag
+		}
+		return ""
+	}
+	if rest, ok := strings.CutPrefix(path, "git/refs/heads/"); ok {
+		if branch, err := url.PathUnescape(rest); err == nil && validRef(branch) {
+			return "branch " + branch
 		}
 		return ""
 	}

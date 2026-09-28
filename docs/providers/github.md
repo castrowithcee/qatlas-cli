@@ -530,8 +530,10 @@ through the same commits route `github.commits.get` uses, so the branch always s
 `github.contents.put` creates a new file, or, while `sha` names its
 current blob, updates an existing one; `github.contents.delete` deletes one file with its current blob `sha`
 and is offered only where a connection's `tools` list names it, since deleting a file the wrong branch relied
-on cannot be undone. All three refuse a `path` below `.github/workflows/`, matched without regard to case,
-which the workflow file tools maintain instead with their own `workflow` token requirement; none of the three
+on cannot be undone. `github.files.push` writes several files as one commit through the Git Data API and is
+offered only where a connection's `tools` list names it, since several files land in one commit that cannot
+be undone by halves. All four refuse a `path` below `.github/workflows/`, matched without regard to case,
+which the workflow file tools maintain instead with their own `workflow` token requirement; none of the four
 ever answers with a file's content, only its path, its blob SHA, and the commit GitHub made:
 
 ```sh
@@ -540,6 +542,8 @@ qatlas invoke github.contents.put --connection code --arg path=docs/notes.md --a
   --arg message="docs: add notes" --confirm
 qatlas invoke github.contents.delete --connection code --arg path=docs/notes.md \
   --arg sha=3d21ec53a331a6f037a91c368710b99387d012c1 --arg message="docs: remove notes" --confirm
+qatlas invoke github.files.push --connection code --arg branch=main --arg message="docs: add two pages" \
+  --arg 'files=[{"path":"docs/a.md","content":"# A"},{"path":"docs/b.md","content":"# B"}]' --confirm
 ```
 
 | Tool | Effect | Idempotency | Does |
@@ -547,6 +551,7 @@ qatlas invoke github.contents.delete --connection code --arg path=docs/notes.md 
 | `github.branches.create` | create | non-idempotent | creates one branch from a branch, a tag, or a commit SHA |
 | `github.contents.put` | update | non-idempotent | creates a new file, or updates an existing one while sha names its current blob |
 | `github.contents.delete` | delete | unknown | deletes one file with its current blob sha; offered only where a connection's tools list names it |
+| `github.files.push` | create | non-idempotent | writes 1 to 100 files as one commit on an existing branch; offered only where a connection's tools list names it |
 
 `github.branches.create` answers `name`, `ref` (`refs/heads/` plus `name`), `sha` (the commit `from`, or the
 default branch, resolved to), and `from` (the branch actually used, when it was left out). A branch name
@@ -569,17 +574,37 @@ so the caller does not need a separate `github.contents.get` call first. When th
 given, the conflict had another cause, such as a branch protection rule, and GitHub's original refusal is
 kept unchanged; the same holds when the file cannot be read again at all.
 
+`github.files.push` takes `branch` (required, no default branch fallback, since a push several files can
+never be undone by halves is the one call where the target branch should always be explicit), `message`, and
+`files` (1 to 100 entries of `path` and `content`, no path repeated, the combined content of every file
+bounded as well as each file on its own), and optionally `expected_head_sha`, a commit SHA the branch is
+expected to be at: when given and the branch is at another commit, the call is refused before any blob is
+created, so a caller that already knows the branch moved fails cheaply instead of creating git objects that
+would only be discarded. It reads the branch's current head and tree through the Git Data API, creates one
+blob per file and one new tree above the read tree, creates one commit from that tree with the read head as
+its only parent, and moves the branch to that commit with a ref update sent with `force` false, so GitHub
+refuses it with HTTP 422 the moment the branch is no longer at the head this call read: nothing is written to
+the branch, and the refusal becomes `invalid-request` naming the branch's current head, read again on a
+best-effort basis, and the next step, reading the branch again and reapplying the change. This is the same
+fast-forward guard `expected_head_sha` only lets a caller trigger earlier; the final ref update enforces it
+either way. Every step is sent at most once; a failure while creating a blob, a tree, or a commit leaves the
+branch exactly as it was, since only the ref update ever moves it, though the object it was creating may
+still exist as a loose Git object with no effect until referenced. It answers `branch`, `commit_sha`,
+`commit_url`, `parent_sha` (the commit the branch was at before the push), and `paths` (the paths written, in
+the order given), never any file's content.
+
 Reading contents needs no scope for a public repository, or the following for a private one, and the same
-tokens after them are what creating a branch, and creating, updating, or deleting a file need for either kind
-of repository:
+tokens after them are what creating a branch, creating, updating, or deleting a file, and pushing several
+files as one commit need for either kind of repository:
 
 | Tools | Classic token | Fine-grained token |
 | --- | --- | --- |
-| `github.branches.create`, `github.contents.put`, `github.contents.delete` | `repo` | Contents: read and write |
+| `github.branches.create`, `github.contents.put`, `github.contents.delete`, `github.files.push` | `repo` | Contents: read and write |
 
 The terminal editor's setup profile `repository-writer` (not recommended) ticks `[read, create, update]` with
-the read eight plus `github.branches.create` and `github.contents.put`; `github.contents.delete` is in no
-profile, offered only where a connection's `tools` list names it, like `github.releases.delete`.
+the read eight plus `github.branches.create` and `github.contents.put`; `github.contents.delete` and
+`github.files.push` are in no profile, offered only where a connection's `tools` list names them, like
+`github.releases.delete`.
 
 ## Project lifecycle
 

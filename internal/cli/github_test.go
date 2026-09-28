@@ -125,7 +125,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[126]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[127]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
 		"github.branches.create,Create a GitHub branch,create,", "github.contents.put,Create or update a GitHub repository file,update,",
 		"github.contents.delete,Delete a GitHub repository file,delete,",
@@ -210,7 +210,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	}
 	// A tool that requires an allow-list has no route on a connection that does not list it, whatever the
 	// connection's permissions.
-	for _, id := range []string{"github.workflowfiles.get", "github.workflowfiles.update", "github.actionspermissions.update"} {
+	for _, id := range []string{"github.workflowfiles.get", "github.workflowfiles.update", "github.actionspermissions.update",
+		"github.files.push"} {
 		guarded := runTwentyJSON(t, "", "describe", id, "--full", "--config", path)
 		if !strings.Contains(string(guarded), `"connections":[]`) ||
 			!strings.Contains(string(guarded), `"requires_tool_allow_list":true`) {
@@ -222,7 +223,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		if code != exitOK || stderr != "" || !strings.Contains(listed, "github.projectitems.list") {
 			t.Fatalf("tools --connection %s: exit=%d stdout=%q stderr=%q", connection, code, listed, stderr)
 		}
-		for _, id := range []string{"workflowfiles", "actionspermissions", "workflowpermissions", "workflows.enable"} {
+		for _, id := range []string{"workflowfiles", "actionspermissions", "workflowpermissions", "workflows.enable",
+			"files.push"} {
 			if strings.Contains(listed, id) {
 				t.Errorf("connection %s lists %s:\n%s", connection, id, listed)
 			}

@@ -202,9 +202,10 @@ func validArguments(id string) string {
 	}[id]
 }
 
-// Exactly the maintainer and administrator tools, the tools with the effect delete, and the tools that change
-// access require an allow-list, no profile a new connection starts with selects them, their own profiles are
-// chosen on purpose only, and no profile selects a delete or an access change.
+// Exactly the maintainer and administrator tools, the tools with the effect delete, the tools that change
+// access, and github.files.push require an allow-list, no profile a new connection starts with selects them,
+// their own profiles are chosen on purpose only, and no profile selects a delete, an access change, or
+// github.files.push.
 func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 	reg := registry(t)
 	if err := reg.ValidateProfiles(); err != nil {
@@ -214,11 +215,12 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 	for _, id := range guardedTools {
 		guarded[id] = true
 	}
-	// The deletes and the tools that change who reaches a project.
+	// The deletes, the tools that change who reaches a project, and github.files.push: guarded on its own like
+	// contents.delete, since several files land in one commit that cannot be undone by halves.
 	deletes := map[string]bool{projectsDelete.ID: true, fieldsDelete.ID: true, fieldOptionsDelete.ID: true,
 		iterationsReplace.ID: true, viewsDelete.ID: true, itemsDelete.ID: true, statusDelete.ID: true,
 		projectWorkflowsDelete.ID: true, releasesDelete.ID: true, contentsDelete.ID: true,
-		collaboratorsUpdate.ID: true, teamsLink.ID: true, teamsUnlink.ID: true}
+		collaboratorsUpdate.ID: true, teamsLink.ID: true, teamsUnlink.ID: true, filesPush.ID: true}
 	// github.pullrequests.merge and github.pullrequestreviews.approve are each guarded on their own: neither is
 	// a maintainer or administrator tool nor a delete, but each is offered only where a connection's tools list
 	// names it, because merging into the wrong repository's default branch, and approving on the connection's
@@ -238,8 +240,8 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 		}
 	}
 	if marked != len(guardedTools)+len(deletes)+2 || len(guardedTools) != 10 {
-		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools, the ten deletes, "+
-			"the three access tools, the merge, and the approve", marked)
+		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools, the ten deletes and "+
+			"the three access tools and files.push, the merge, and the approve", marked)
 	}
 	profiles := map[string]config.ToolProfile{}
 	for _, profile := range metadata.Profiles {
