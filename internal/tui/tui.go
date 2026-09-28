@@ -54,18 +54,25 @@ const (
 	// now: a new connection reading a vault credential, or one whose scope changed since it was last
 	// approved. See approvals.go.
 	sectionApprovals
+	// sectionTokens holds the place of the agent tokens: until they exist it only says that they are not
+	// available yet, with no action of its own.
+	sectionTokens
+	// sectionLogs is the invocation log, read only: its own screen with a day, range or all days, filters,
+	// search, and the status of every entry. See logs.go.
+	sectionLogs
 	sectionCount
 )
 
 func (s section) title() string {
-	return [...]string{"Services", "Credentials", "Connections", "Defaults", "Vault", "Approvals"}[s]
+	return [...]string{"Services", "Credentials", "Connections", "Defaults", "Vault", "Approvals", "Tokens", "Logs"}[s]
 }
 
 // entry is what one entry of the section is called. Vault has no entries of its own; the name here is
 // never shown, because the vault form and its leave question are worded on their own (see editorView and
 // leaveView). Approvals never opens a "New ..." form either: its entries only ever come from Pending.
+// Tokens and Logs hold no list of named entries either.
 func (s section) entry() string {
-	return [...]string{"service", "credential", "connection", "default", "vault setting", "approval"}[s]
+	return [...]string{"service", "credential", "connection", "default", "vault setting", "approval", "token", "log entry"}[s]
 }
 
 type screen int
@@ -104,6 +111,11 @@ const (
 	// the unlock itself, the vault process handoff on Linux, and starting this window's admin session. See
 	// vaultheader.go. The matching "Lock the vault now?" question reuses screenConfirm (vaultLockConfirm).
 	screenVaultUnlock
+	// screenLogs is the Logs section with the focus in its workspace, including its date and filter dialogs.
+	// See logs.go.
+	screenLogs
+	// screenLogDetail shows every field of one log entry.
+	screenLogDetail
 )
 
 type fieldKind int
@@ -470,6 +482,9 @@ type Model struct {
 	vaultLockConfirm     bool
 	vaultLockBack        screen
 
+	// logs is the state of the Logs section; see logs.go.
+	logs *logView
+
 	quitting bool
 }
 
@@ -506,6 +521,7 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	m.picker.input.Placeholder = "Type to search"
 	m.targetList = newFilterList(func(target string) string { return target })
 	m.targetInput = textField("", "", false).input
+	m.logs = newLogView()
 	// The editor opens on the sidebar, with the first section already shown beside it.
 	m.list.reset(m.entryNames(m.section))
 	return m, nil
@@ -555,11 +571,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case approvalActionMsg:
 		return m, m.handleApprovalAction(msg)
 	case vaultUnlockedMsg:
-		return m, m.handleVaultUnlocked(msg)
+		return m, tea.Batch(m.handleVaultUnlocked(msg), m.reloadShownLogs())
 	case vaultProcessStartedMsg:
 		return m, m.handleVaultProcessStarted(msg)
 	case vaultLockedMsg:
-		return m, m.handleVaultLocked(msg)
+		return m, tea.Batch(m.handleVaultLocked(msg), m.reloadShownLogs())
+	case logsLoadedMsg:
+		return m, m.handleLogsLoaded(msg)
 	case vaultProcessCheckMsg:
 		m.vaultProcessUnlocked = msg.unlocked
 		return m, nil
@@ -589,7 +607,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.quit()
 			case "q":
 				// q is a letter in a form, so it quits only where nothing typed can be lost.
-				if m.screen == screenNav || m.screen == screenList {
+				if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
 					return m, m.quit()
 				}
 			case "esc":
@@ -640,6 +658,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateTargets(msg)
 		case screenVaultUnlock:
 			cmd = m.updateVaultUnlockPrompt(msg)
+		case screenLogs:
+			cmd = m.updateLogs(msg)
+		case screenLogDetail:
+			cmd = m.updateLogDetail(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -694,10 +716,18 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 }
 
 // focusList hands the focus to the active section's list, or, for Vault, which holds no entries of its
-// own, opens its form the same way enter does from the list.
+// own, opens its form the same way enter does from the list, or, for Logs, to its own screen.
 func (m *Model) focusList() tea.Cmd {
 	if m.section == sectionVault {
 		return m.enterVaultSection()
+	}
+	if m.section == sectionLogs {
+		m.screen = screenLogs
+		m.clearMessages()
+		if !m.logs.loaded && !m.logs.loading {
+			return m.loadLogs()
+		}
+		return nil
 	}
 	m.screen = screenList
 	m.clearMessages()
@@ -860,6 +890,10 @@ func (m *Model) newEntryBlockedFor(s section) string {
 		return "Vault is a settings form, not a list; press enter to open it."
 	case sectionApprovals:
 		return "Approvals lists connections automatically; there is nothing to add by hand."
+	case sectionTokens:
+		return tokensUnavailable
+	case sectionLogs:
+		return "Logs shows what was invoked; there is nothing to add by hand."
 	}
 	return ""
 }
@@ -873,6 +907,22 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return nil
 	case screenList:
 		m.focusNav()
+		return nil
+	case screenLogs:
+		// A dialog or a typed search is left before the screen is, the way esc leaves them.
+		switch lv := m.logs; {
+		case lv.dialog != nil:
+			lv.dialog = nil
+		case lv.pick != nil:
+			lv.pick = nil
+		case lv.list.editing:
+			lv.list.clearFilter()
+		default:
+			m.focusNav()
+		}
+		return nil
+	case screenLogDetail:
+		m.screen = screenLogs
 		return nil
 	case screenLeave:
 		// Staying is the answer that loses nothing.
@@ -1943,6 +1993,9 @@ func (m *Model) openSection(s section) tea.Cmd {
 		// Vault has no list: entering the section opens its settings form directly.
 		return m.enterVaultSection()
 	}
+	if s == sectionLogs {
+		return m.openLogs()
+	}
 	return m.showList()
 }
 
@@ -1967,6 +2020,10 @@ func (m *Model) showList() tea.Cmd {
 		// Vault has no list of its own, so "the list" a form or confirmation returns to is the level above
 		// it, the sidebar; openSection is what opens the form directly on the way in (see enterVaultSection).
 		m.focusNav()
+		return nil
+	}
+	if m.section == sectionLogs {
+		m.screen = screenLogs
 		return nil
 	}
 	m.screen = screenList
@@ -2659,6 +2716,9 @@ func sectionShortcut(key string) (section, bool) {
 	return section(key[0] - '1'), true
 }
 
+// tokensUnavailable is all the Tokens section says until agent tokens exist.
+const tokensUnavailable = "Agent tokens are not available yet."
+
 // The colours are few and taken from the terminal's own palette, so they follow its theme. None of them
 // carries meaning on its own: focus has its marker and its border, a result its "[ok]", "[failed]",
 // "warning:" or "error:" prefix, and a terminal without colour, or with NO_COLOR set, loses nothing.
@@ -2733,6 +2793,10 @@ func (m *Model) editorView() string {
 		return m.updateView() + m.notes()
 	case screenTargets:
 		return m.targetsView()
+	case screenLogs:
+		return m.logsView()
+	case screenLogDetail:
+		return m.logDetailView() + m.notes()
 	}
 	var b strings.Builder
 	switch m.screen {
@@ -2923,8 +2987,12 @@ func (m *Model) notes() string {
 	return b.String()
 }
 
-// listView draws the list screen: its frame, and between them as many rows as fit.
+// listView draws the list screen: its frame, and between them as many rows as fit. Logs has no list; the
+// sidebar shows its own screen beside it.
 func (m *Model) listView() string {
+	if m.section == sectionLogs {
+		return m.logsView()
+	}
 	header, footer := m.listFrame()
 	row := m.listRows()
 	var b strings.Builder
@@ -2972,23 +3040,21 @@ func (m *Model) listFrame() (string, string) {
 
 	var keys string
 	switch {
-	case m.screen == screenNav && m.sidebarLayout():
-		keys = "up/down section · enter open · 1-6 open · n new · c setup · ? help · q quit"
 	case m.screen == screenNav:
-		// Below the sidebar width every arrow does the same thing, left/right or the kept up/down, so the
-		// hint names them together rather than repeating "up/down section" from the sidebar layout above.
-		keys = "arrows section · enter open · 1-6 open · n new · c setup · ? help · q quit"
+		keys = m.navKeys()
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
 	case m.section == sectionApprovals && m.vaultLocked():
-		keys = "enter unlock · 1-6 or left sections · ? help · q quit"
+		keys = "enter unlock · 1-8 or left sections · ? help · q quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · a approve all · 1-6 or left sections · ? help · q quit"
+		keys = "enter details · a approve all · 1-8 or left sections · ? help · q quit"
+	case m.section == sectionTokens:
+		keys = "1-8 or left sections · ? help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-6 or left sections · " +
+		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-8 or left sections · " +
 			"? help · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-6 or left sections · ? help · q quit"
+		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-8 or left sections · ? help · q quit"
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
@@ -3012,6 +3078,16 @@ func (m *Model) listFrame() (string, string) {
 		foot = m.testLine() + idle.String() + foot
 	}
 	return head.String(), foot + m.notes()
+}
+
+// navKeys is the key line while the sidebar, or below its width the navigation line, has the focus.
+func (m *Model) navKeys() string {
+	if m.sidebarLayout() {
+		return "up/down section · enter open · 1-8 open · n new · c setup · ? help · q quit"
+	}
+	// Below the sidebar width every arrow does the same thing, left/right or the kept up/down, so the hint
+	// names them together rather than repeating "up/down section" from the sidebar layout above.
+	return "arrows section · enter open · 1-8 open · n new · c setup · ? help · q quit"
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.
@@ -3134,6 +3210,10 @@ func (m *Model) pickerWindow() (int, int) {
 // long as the selection stays on screen instead of jumping to put the selection at an edge.
 func (m *Model) keepScrollPosition() {
 	if m.terminalTooSmall() {
+		return
+	}
+	if m.section == sectionLogs && (m.screen == screenNav || m.screen == screenLogs) {
+		m.keepLogsScrollPosition()
 		return
 	}
 	switch m.screen {
@@ -3288,7 +3368,7 @@ const pathRoom = 12
 // sectionEntryCount is the number shown after a section's name in the sidebar and the narrow navigation
 // line: how many entries it holds, or "-" for a settings form such as Vault, which holds none.
 func sectionEntryCount(m *Model, s section) string {
-	if s == sectionVault {
+	if s == sectionVault || s == sectionTokens || s == sectionLogs {
 		return "-"
 	}
 	if s == sectionApprovals {
@@ -3526,6 +3606,8 @@ func (m *Model) emptyHelp() string {
 			return unavailable
 		}
 		return "No open approvals."
+	case sectionTokens:
+		return tokensUnavailable
 	}
 	return "Nothing configured yet."
 }

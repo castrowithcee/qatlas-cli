@@ -344,8 +344,8 @@ func TestNavigation(t *testing.T) {
 	t.Run("the sidebar wraps in both directions and shows each section at once", func(t *testing.T) {
 		m.screen, m.section = screenNav, sectionServices
 		press(t, m, "up")
-		if m.section != sectionApprovals || m.screen != screenNav {
-			t.Errorf("up = section %v screen %v, want Approvals on the sidebar", m.section, m.screen)
+		if m.section != sectionLogs || m.screen != screenNav {
+			t.Errorf("up = section %v screen %v, want Logs on the sidebar", m.section, m.screen)
 		}
 		press(t, m, "down")
 		if m.section != sectionServices {
@@ -431,21 +431,21 @@ func TestNarrowNavigation(t *testing.T) {
 			t.Errorf("footer does not name the arrow keys below 80 columns:\n%s", m.View())
 		}
 		press(t, m, "left")
-		if m.section != sectionApprovals || m.screen != screenNav {
-			t.Fatalf("left at Services = section %v screen %v, want Approvals (wrapped back)", m.section, m.screen)
+		if m.section != sectionLogs || m.screen != screenNav {
+			t.Fatalf("left at Services = section %v screen %v, want Logs (wrapped back)", m.section, m.screen)
 		}
 		for _, key := range []string{"right", "l"} {
-			m.screen, m.section = screenNav, sectionApprovals
+			m.screen, m.section = screenNav, sectionLogs
 			press(t, m, key)
 			if m.section != sectionServices || m.screen != screenNav {
-				t.Errorf("%q at Approvals = section %v screen %v, want Services (wrapped forward)",
+				t.Errorf("%q at Logs = section %v screen %v, want Services (wrapped forward)",
 					key, m.section, m.screen)
 			}
 		}
 		m.screen, m.section = screenNav, sectionServices
 		press(t, m, "h")
-		if m.section != sectionApprovals || m.screen != screenNav {
-			t.Errorf("h at Services = section %v screen %v, want Approvals (wrapped back)", m.section, m.screen)
+		if m.section != sectionLogs || m.screen != screenNav {
+			t.Errorf("h at Services = section %v screen %v, want Logs (wrapped back)", m.section, m.screen)
 		}
 		// up/down (and j/k) still work as additional shortcuts in the narrow line.
 		m.screen, m.section = screenNav, sectionServices
@@ -463,8 +463,8 @@ func TestNarrowNavigation(t *testing.T) {
 	})
 }
 
-// sectionLabels are how the sidebar names the six sections.
-var sectionLabels = []string{"1 Services", "2 Credentials", "3 Connections", "4 Defaults", "5 Vault", "6 Approvals"}
+// sectionLabels are how the sidebar names the eight sections.
+var sectionLabels = []string{"1 Services", "2 Credentials", "3 Connections", "4 Defaults", "5 Vault", "6 Approvals", "7 Tokens", "8 Logs"}
 
 func TestLayoutsFitTheirTerminal(t *testing.T) {
 	m, _, _ := newEnvModel(t, map[string]string{
@@ -484,7 +484,7 @@ func TestLayoutsFitTheirTerminal(t *testing.T) {
 	}{
 		{name: "sidebar beside the workspace", width: 100, height: 28, sidebar: true, nav: sectionLabels},
 		{name: "sidebar in a standard terminal", width: 80, height: 24, sidebar: true, nav: sectionLabels},
-		// Six full section names no longer fit any width below the sidebar's own threshold (80), so the
+		// Eight full section names no longer fit any width below the sidebar's own threshold (80), so the
 		// navigation line falls back to digits here the same way it does at 40 columns; both cases are kept
 		// to check the line still stands above its rule at either width.
 		{name: "one navigation line above the workspace", width: 72, height: 24,

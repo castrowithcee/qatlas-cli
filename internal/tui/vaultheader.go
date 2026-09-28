@@ -115,7 +115,8 @@ func (m *Model) vaultLockKeyHint() string {
 // forms and every other screen besides those questions.
 func (m *Model) vaultLockKeyAllowed() bool {
 	switch m.screen {
-	case screenNav, screenList, screenForm, screenTargets, screenPicker, screenProviders, screenSummary:
+	case screenNav, screenList, screenForm, screenTargets, screenPicker, screenProviders, screenSummary,
+		screenLogs, screenLogDetail:
 		return true
 	}
 	return false

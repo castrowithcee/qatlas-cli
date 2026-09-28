@@ -22,8 +22,9 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Set up connections and edit the configuration in a terminal interface",
-		Long: "The editor is one screen: a sidebar with the six sections 1 Services, 2 Credentials,\n" +
-			"3 Connections, 4 Defaults, 5 Vault, and 6 Approvals, and beside it a workspace with the list,\n" +
+		Long: "The editor is one screen: a sidebar with the eight sections 1 Services, 2 Credentials,\n" +
+			"3 Connections, 4 Defaults, 5 Vault, 6 Approvals, 7 Tokens, and 8 Logs, and beside it a\n" +
+			"workspace with the list,\n" +
 			"form, or setup step of the active section. From 80 columns the sidebar stands on the left; a\n" +
 			"narrower terminal\n" +
 			"shows the sections in one navigation line above the workspace. Below 40x12 the editor asks for a\n" +
@@ -33,7 +34,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"enter, right, or tab move the focus into the list; below 80 columns left/right (or h/l) choose a\n" +
 			"section instead, wrapping from the last to the first and back, up/down still work too, and enter\n" +
 			"or tab move the focus into the list. left, tab, or esc move the focus back to the navigation.\n" +
-			"1-6 open a section directly from the sidebar or a list; in a form, digits are text instead.\n" +
+			"1-8 open a section directly from the sidebar, a list, or the Logs screen; in a form, digits are\n" +
+			"text instead.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
 			"the guided setup, and q quits; ctrl+c quits anywhere without saving. esc only ever steps back one\n" +
 			"level: it clears a filter, cancels a running test, closes a picker, a table, or a question, or\n" +
@@ -125,6 +127,28 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"what changed since it was last approved: enter opens its detail to approve it alone, and a\n" +
 			"on the list approves every one currently open, asking to confirm the count first. While the\n" +
 			"vault is unencrypted or locked, the section says so instead of a list.\n\n" +
+			"7 Tokens only says that agent tokens are not available yet; it offers no action.\n\n" +
+			"8 Logs shows the invocation log, read only, the same log 'qatlas vault logs verify' checks. The\n" +
+			"bar on top reads Mode: Day, Range, or All and, for the first two, the date or the range of UTC\n" +
+			"days: tab moves the focus from the rows to the bar's fields and back, left/right change the\n" +
+			"mode, and enter or left/right on the date open a small dialog that takes one date, or from and\n" +
+			"to, as YYYY-MM-DD. The filter line names what f filters by: way, MCP client, tool, connection,\n" +
+			"effect, and result, each chosen in a picker among the values the shown days hold, all by\n" +
+			"default. / searches the text of the rows, enter keeps the search, and esc clears it. The table\n" +
+			"shows status, time, way, client, tool, connection, result, and duration, leaving out the\n" +
+			"duration, then the connection, then the client where the terminal is narrow; enter opens every\n" +
+			"field of one entry, and esc returns. Every row and the bar, for everything the chosen days\n" +
+			"hold, show a status, symbol and word together: ✓ verified for an entry that chains and whose\n" +
+			"check value matches, ? unverified for one without a check value or one that could not be\n" +
+			"checked, … gap where entries are missing right before it without a retention cut, and ✗ altered\n" +
+			"for one that fails its check value, where the hash chain breaks, or that does not parse at all.\n" +
+			"The check values are checked with the key of a vault unlocked in this window or by a running\n" +
+			"vault process; while the vault is locked they stay unchecked and show as unverified, since the\n" +
+			"editor never asks for the passphrase here, and ctrl+l unlocks it. Reading and checking run in\n" +
+			"the background: the chain is followed through every day file, but only the chosen days are\n" +
+			"kept and have their check values checked. A field of a log line is shown without its control\n" +
+			"characters and with every known secret redacted. Nothing in the section writes or deletes the\n" +
+			"log.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +
