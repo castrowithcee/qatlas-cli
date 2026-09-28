@@ -50,18 +50,22 @@ const (
 	// sectionVault is a settings form, not a list of named entries: it shows the vault's state and the
 	// actions that apply to it, and edits vault.idle_timeout and vault.admin_timeout. See vaultsettings.go.
 	sectionVault
+	// sectionApprovals lists the connections an encrypted vault has not approved as they are configured
+	// now: a new connection reading a vault credential, or one whose scope changed since it was last
+	// approved. See approvals.go.
+	sectionApprovals
 	sectionCount
 )
 
 func (s section) title() string {
-	return [...]string{"Services", "Credentials", "Connections", "Defaults", "Vault"}[s]
+	return [...]string{"Services", "Credentials", "Connections", "Defaults", "Vault", "Approvals"}[s]
 }
 
 // entry is what one entry of the section is called. Vault has no entries of its own; the name here is
 // never shown, because the vault form and its leave question are worded on their own (see editorView and
-// leaveView).
+// leaveView). Approvals never opens a "New ..." form either: its entries only ever come from Pending.
 func (s section) entry() string {
-	return [...]string{"service", "credential", "connection", "default", "vault setting"}[s]
+	return [...]string{"service", "credential", "connection", "default", "vault setting", "approval"}[s]
 }
 
 type screen int
@@ -356,6 +360,11 @@ type Model struct {
 	// pendingProfile names the profile the confirmation would apply to the permission and tool ticks of the
 	// form. Empty means the confirmation is about something else.
 	pendingProfile string
+	// approvalDetail names the connection the Approvals detail screen shows, "" otherwise. approveAllConfirm
+	// is the Approvals list's own bulk confirmation, asked before 'a' approves every connection currently
+	// open. Both stand over the Approvals list, not a form; see approvals.go.
+	approvalDetail    string
+	approveAllConfirm bool
 	// pristine is what the open form held when it was opened, so leaving it can tell whether anything
 	// would be lost. leaveFrom is the screen the leave question returns to when the user stays.
 	pristine  string
@@ -525,6 +534,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleVaultMigrateWritten(msg)
 	case setupSavedMsg:
 		return m, m.setupSaved(msg)
+	case approvalSweepMsg:
+		return m, m.handleApprovalSweep(msg)
+	case approvalActionMsg:
+		return m, m.handleApprovalAction(msg)
 	case updateCheckedMsg:
 		m.updateChecked(msg)
 		return m, nil
@@ -710,16 +723,46 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		}
 		return m.openForm("")
 	case "enter":
-		if name, ok := m.selected(); ok {
-			return m.openForm(name)
+		if m.section == sectionApprovals && m.vaultLocked() {
+			// Nothing is listed while the vault is locked (see approvalsReport); enter is a managing action
+			// like any other here, gated behind requireAdmin, whose "Unlock vault to continue" dialog
+			// unlocks it and starts the admin session together. The action itself writes nothing: it only
+			// rebuilds the list, now that Pending can read it.
+			return m.requireAdmin(func() tea.Cmd { return m.returnToList("") })
 		}
-	case "d":
-		if _, ok := m.selected(); ok {
+		name, ok := m.selected()
+		if !ok {
+			return nil
+		}
+		if m.section == sectionApprovals {
+			m.approvalDetail = name
 			m.screen = screenConfirm
 			m.clearMessages()
+			return nil
+		}
+		return m.openForm(name)
+	case "d":
+		if m.section != sectionApprovals {
+			if _, ok := m.selected(); ok {
+				m.screen = screenConfirm
+				m.clearMessages()
+			}
 		}
 	case "t":
 		return m.startTest()
+	case "a":
+		if m.section != sectionApprovals {
+			return nil
+		}
+		// A bulk approval is offered whenever it would do something: approve what is open, remove a stale
+		// approval left over from a deleted or renamed connection, or both, the same way 'qatlas vault
+		// approve' with no --connection does.
+		if report, unavailable := m.approvalsReport(); unavailable == "" &&
+			(len(report.Open) > 0 || len(report.Stale) > 0) {
+			m.approveAllConfirm = true
+			m.screen = screenConfirm
+			m.clearMessages()
+		}
 	}
 	return nil
 }
@@ -780,6 +823,8 @@ func (m *Model) newEntryBlockedFor(s section) string {
 		}
 	case sectionVault:
 		return "Vault is a settings form, not a list; press enter to open it."
+	case sectionApprovals:
+		return "Approvals lists connections automatically; there is nothing to add by hand."
 	}
 	return ""
 }
@@ -816,6 +861,13 @@ func (m *Model) leaveScreen() tea.Cmd {
 			return m.leaveSetup()
 		}
 	case screenConfirm:
+		if m.approvalDetail != "" || m.approveAllConfirm {
+			// Both stand over the Approvals list, never a form; see approvals.go.
+			m.approvalDetail, m.approveAllConfirm = "", false
+			m.screen = screenList
+			m.status = "Cancelled"
+			return nil
+		}
 		if m.confirmRole == "" && m.pendingProfile == "" {
 			// The delete question stands over the list.
 			m.screen = screenList
@@ -1656,6 +1708,32 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
+	if name := m.approvalDetail; name != "" {
+		switch key.String() {
+		case "y":
+			m.approvalDetail, m.screen = "", screenList
+			return m.requireAdmin(func() tea.Cmd { return m.approveOne(name) })
+		case "n", "esc":
+			m.approvalDetail, m.screen = "", screenList
+			m.status = "Cancelled"
+		case "ctrl+c":
+			return m.quit()
+		}
+		return nil
+	}
+	if m.approveAllConfirm {
+		switch key.String() {
+		case "y":
+			m.approveAllConfirm, m.screen = false, screenList
+			return m.requireAdmin(m.approveAll)
+		case "n", "esc":
+			m.approveAllConfirm, m.screen = false, screenList
+			m.status = "Cancelled"
+		case "ctrl+c":
+			return m.quit()
+		}
+		return nil
+	}
 	if profile := m.pendingProfile; profile != "" {
 		switch key.String() {
 		case "y":
@@ -1679,7 +1757,8 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			m.screen = screenForm
 			return m.requireAdmin(func() tea.Cmd {
 				if m.credentialType() == config.CredentialTypeVault {
-					return m.removeVaultSecret(m.editing, role)
+					before := m.approvalSnapshot(m.secrets.Vault(), m.cfg)
+					return m.removeVaultSecret(m.editing, role, before)
 				}
 				return m.removeSecret(m.editing, role)
 			})
@@ -1884,6 +1963,11 @@ func (m *Model) entryNames(s section) []string {
 		}
 	case sectionVault:
 		// A settings form, not a list of named entries.
+	case sectionApprovals:
+		report, _ := m.approvalsReport()
+		for _, c := range report.Open {
+			names = append(names, c.Connection)
+		}
 	}
 	sort.Strings(names)
 	return names
@@ -2139,6 +2223,9 @@ func (m *Model) save(name string) tea.Cmd {
 	wasNewStorable := m.section == sectionCredentials && m.editing == "" &&
 		(credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault)
 	choice := m.fieldValue(storageLabel)
+	// Captured before the change so autoApprove can tell which connections it newly opened, in an encrypted
+	// and unlocked vault only; see approvals.go.
+	before := m.approvalSnapshot(m.secrets.Vault(), m.cfg)
 	candidate := m.cfg.Clone()
 	if err := m.apply(candidate, name); err != nil {
 		m.fail = m.redactor.Apply(err.Error())
@@ -2150,6 +2237,12 @@ func (m *Model) save(name string) tea.Cmd {
 	}
 	m.cfg = candidate
 	m.configExists = true
+	// A connection saved directly here is what autoApprove's direct means; every other section saves no
+	// single connection by name.
+	direct := ""
+	if m.section == sectionConnections {
+		direct = name
+	}
 	if wasNewStorable {
 		cmd := m.openForm(name)
 		// Nothing is stored yet, so the reopened form cannot rediscover the choice from the resolver; it
@@ -2169,11 +2262,11 @@ func (m *Model) save(name string) tea.Cmd {
 		}
 		m.status = "Credential saved. Add the required provider secrets below: press s on each role to " +
 			"store it in " + where + "."
-		return cmd
+		return tea.Batch(cmd, m.autoApprove(before, direct))
 	}
 	cmd := m.returnToList(name)
 	m.status = "Saved " + name
-	return cmd
+	return tea.Batch(cmd, m.autoApprove(before, direct))
 }
 
 func (m *Model) apply(cfg *config.Config, name string) error {
@@ -2249,6 +2342,11 @@ func (m *Model) delete() tea.Cmd {
 		m.screen = screenList
 		return nil
 	}
+	section := m.section
+	// Captured before the change; a deletion outside Connections cannot open one (the core refuses deleting
+	// a service, credential, or default still in use), but computing it the same way as save keeps the two
+	// paths in step. See approvals.go.
+	before := m.approvalSnapshot(m.secrets.Vault(), m.cfg)
 
 	candidate := m.cfg.Clone()
 	if err := m.remove(candidate, name); err != nil {
@@ -2265,7 +2363,10 @@ func (m *Model) delete() tea.Cmd {
 	m.configExists = true
 	cmd := m.returnToList("")
 	m.status = "Deleted " + name
-	return cmd
+	if section == sectionConnections {
+		return tea.Batch(cmd, m.revokeApproval(name))
+	}
+	return tea.Batch(cmd, m.autoApprove(before, ""))
 }
 
 func (m *Model) fieldValue(label string) string {
@@ -2671,6 +2772,14 @@ func (m *Model) editorView() string {
 			b.WriteString(m.migrateResultView())
 			break
 		}
+		if m.approvalDetail != "" {
+			b.WriteString(m.approvalDetailView())
+			break
+		}
+		if m.approveAllConfirm {
+			b.WriteString(m.approveAllConfirmView())
+			break
+		}
 		if m.pendingProfile != "" {
 			b.WriteString(m.profileConfirmView())
 			break
@@ -2808,18 +2917,22 @@ func (m *Model) listFrame() (string, string) {
 	var keys string
 	switch {
 	case m.screen == screenNav && m.sidebarLayout():
-		keys = "up/down section · enter open · 1-5 open · n new · c setup · ? help · q quit"
+		keys = "up/down section · enter open · 1-6 open · n new · c setup · ? help · q quit"
 	case m.screen == screenNav:
 		// Below the sidebar width every arrow does the same thing, left/right or the kept up/down, so the
 		// hint names them together rather than repeating "up/down section" from the sidebar layout above.
-		keys = "arrows section · enter open · 1-5 open · n new · c setup · ? help · q quit"
+		keys = "arrows section · enter open · 1-6 open · n new · c setup · ? help · q quit"
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
+	case m.section == sectionApprovals && m.vaultLocked():
+		keys = "enter unlock · 1-6 or left sections · ? help · q quit"
+	case m.section == sectionApprovals:
+		keys = "enter details · a approve all · 1-6 or left sections · ? help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-5 or left sections · " +
+		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-6 or left sections · " +
 			"? help · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-5 or left sections · ? help · q quit"
+		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-6 or left sections · ? help · q quit"
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
@@ -3099,6 +3212,13 @@ func sectionEntryCount(m *Model, s section) string {
 	if s == sectionVault {
 		return "-"
 	}
+	if s == sectionApprovals {
+		report, unavailable := m.approvalsReport()
+		if unavailable != "" {
+			return "-"
+		}
+		return strconv.Itoa(len(report.Open))
+	}
 	return strconv.Itoa(len(m.entryNames(s)))
 }
 
@@ -3279,6 +3399,9 @@ func padLine(text string, width int) string {
 }
 
 func (m *Model) nextStep() string {
+	if m.hasOpenApprovals() {
+		return fmt.Sprintf("open Approvals (%d)", int(sectionApprovals)+1)
+	}
 	switch {
 	case len(m.cfg.Connections) == 0:
 		// The guided setup creates whatever of service and credential is still missing, so it is the
@@ -3309,6 +3432,12 @@ func (m *Model) emptyHelp() string {
 		return "No default yet. Press n to choose one, or leave this empty and select connections explicitly."
 	case sectionVault:
 		return "A settings form, not a list: press enter to open it."
+	case sectionApprovals:
+		_, unavailable := m.approvalsReport()
+		if unavailable != "" {
+			return unavailable
+		}
+		return "No open approvals."
 	}
 	return "Nothing configured yet."
 }
@@ -3483,7 +3612,8 @@ var sectionColumns = map[section][]column{
 		{title: "SECRETS", flex: true}},
 	sectionConnections: {{title: "NAME"}, {title: "SERVICE"}, {title: "EFFECTS", optional: true},
 		{title: "TOOLS", optional: true}, {title: "TARGETS", optional: true}, {title: "DESCRIPTION", flex: true}},
-	sectionDefaults: {{title: "PROVIDER OR TOOL"}, {title: "CONNECTION"}},
+	sectionDefaults:  {{title: "PROVIDER OR TOOL"}, {title: "CONNECTION"}},
+	sectionApprovals: {{title: "CONNECTION"}, {title: "CHANGE", flex: true}},
 }
 
 // listTable is the table of every entry of the section, filtered out or not.
@@ -3548,6 +3678,14 @@ func (m *Model) cells(name string) []string {
 		return []string{name, conn.Service, strings.Join(effects, ","), tools, targets, description}
 	case sectionDefaults:
 		return []string{name, m.cfg.Defaults.Connections[name]}
+	case sectionApprovals:
+		report, _ := m.approvalsReport()
+		for _, c := range report.Open {
+			if c.Connection == name {
+				return []string{name, approvalSummary(c)}
+			}
+		}
+		return []string{name, ""}
 	}
 	return []string{name}
 }

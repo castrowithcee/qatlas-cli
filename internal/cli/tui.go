@@ -22,9 +22,10 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 	return &cobra.Command{
 		Use:   "tui",
 		Short: "Set up connections and edit the configuration in a terminal interface",
-		Long: "The editor is one screen: a sidebar with the five sections 1 Services, 2 Credentials,\n" +
-			"3 Connections, 4 Defaults, and 5 Vault, and beside it a workspace with the list, form, or setup\n" +
-			"step of the active section. From 80 columns the sidebar stands on the left; a narrower terminal\n" +
+		Long: "The editor is one screen: a sidebar with the six sections 1 Services, 2 Credentials,\n" +
+			"3 Connections, 4 Defaults, 5 Vault, and 6 Approvals, and beside it a workspace with the list,\n" +
+			"form, or setup step of the active section. From 80 columns the sidebar stands on the left; a\n" +
+			"narrower terminal\n" +
 			"shows the sections in one navigation line above the workspace. Below 40x12 the editor asks for a\n" +
 			"larger terminal and keeps everything as it was until it gets one.\n\n" +
 			"The editor opens with the focus on the sidebar or, below 80 columns, the navigation line above\n" +
@@ -32,7 +33,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"enter, right, or tab move the focus into the list; below 80 columns left/right (or h/l) choose a\n" +
 			"section instead, wrapping from the last to the first and back, up/down still work too, and enter\n" +
 			"or tab move the focus into the list. left, tab, or esc move the focus back to the navigation.\n" +
-			"1-5 open a section directly from the sidebar or a list; in a form, digits are text instead.\n" +
+			"1-6 open a section directly from the sidebar or a list; in a form, digits are text instead.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
 			"the guided setup, and q quits; ctrl+c quits anywhere without saving. esc only ever steps back one\n" +
 			"level: it clears a filter, cancels a running test, closes a picker, a table, or a question, or\n" +
@@ -109,6 +110,13 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"vault.idle_timeout and vault.admin_timeout, saved with F2 like any other setting; admin_timeout\n" +
 			"sets how long this window's own admin session above stays open (see the read-only\n" +
 			"paragraph further up), 0 asking for the passphrase on every managing action instead.\n\n" +
+			"Saving a change while the vault is encrypted approves it automatically, without an extra\n" +
+			"step: the connection saved directly, in its own form or by the guided setup, and any other\n" +
+			"connection whose scope changed because of that same save, such as one sharing a service\n" +
+			"whose base_url just changed. 6 Approvals lists every connection still open otherwise, with\n" +
+			"what changed since it was last approved: enter opens its detail to approve it alone, and a\n" +
+			"on the list approves every one currently open, asking to confirm the count first. While the\n" +
+			"vault is unencrypted or locked, the section says so instead of a list.\n\n" +
 			"Every list scrolls within the terminal and shows the position of the selected entry. / filters\n" +
 			"a list by the text of its rows, ignoring case; enter keeps the filter and esc clears it. Up/down\n" +
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +
