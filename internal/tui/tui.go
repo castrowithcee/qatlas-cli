@@ -111,7 +111,7 @@ const (
 	screenPaths
 	// screenVaultUnlock is the masked passphrase dialog 'ctrl+l' opens for a locked vault with no other
 	// action pending: unlike requireAdmin's own "Unlock vault to continue", answering it does nothing but
-	// the unlock itself, the vault process handoff on Linux and macOS, and starting this window's admin session. See
+	// the unlock itself, the vault process handoff on Linux, macOS, and Windows, and starting this window's admin session. See
 	// vaultheader.go. The matching "Lock the vault now?" question reuses screenConfirm (vaultLockConfirm).
 	screenVaultUnlock
 	// screenLogs is the Logs section with the focus in its workspace, including its date and filter dialogs.

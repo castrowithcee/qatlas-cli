@@ -246,9 +246,16 @@ func VaultProcessRemedy(err error) string {
 }
 
 // EndVaultProcess says how to end the vault process err came from: by its id where the error carries one,
-// otherwise by finding it first.
+// otherwise by finding it first. On Windows a vault process has no window to close, so it is ended with
+// taskkill /F; its command line is hidden from other processes there, so it is found by its program.
 func EndVaultProcess(err error) string {
 	var peer *vaultproc.PeerError
+	if runtime.GOOS == "windows" {
+		if errors.As(err, &peer) {
+			return fmt.Sprintf("end it with 'taskkill /F /PID %d'", peer.PID)
+		}
+		return "find it with 'tasklist /FI \"IMAGENAME eq qatlas.exe\"' and end it with 'taskkill /F /PID <pid>'"
+	}
 	if errors.As(err, &peer) {
 		return fmt.Sprintf("end it with 'kill %d'", peer.PID)
 	}

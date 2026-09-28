@@ -22,9 +22,10 @@ import (
 // process that listens, and only then sends its request.
 //
 // The check has two steps. The process that listens must run as this user, which the kernel reports
-// through SO_PEERCRED on Linux and LOCAL_PEERCRED on macOS. On Linux its program cannot be checked the way
-// the server checks its clients, since the vault process is hardened and its /proc entries are closed to
-// this user too; on macOS it is checked like that, see VerifyProgram. It must then prove that it
+// through SO_PEERCRED on Linux and LOCAL_PEERCRED on macOS, and Windows through the token of the process
+// that serves the pipe. On Linux its program cannot be checked the way the server checks its clients, since
+// the vault process is hardened and its /proc entries are closed to this user too; on macOS and Windows it
+// is checked like that, see VerifyProgram. It must then prove that it
 // holds the vault's key: the client sends a fresh random nonce encrypted to the vault's public recipient,
 // and the process answers with a hash of what it decrypted. Nothing else is sent before both steps
 // passed, not even the credential name a get asks for.
@@ -38,7 +39,7 @@ type Client struct {
 	// means DefaultRequestTimeout.
 	Timeout time.Duration
 	// Verify checks the process that listens before the challenge is sent. Nil means VerifyUser on Linux
-	// and VerifyProgram on macOS; a test passes its own. The challenge is never skipped.
+	// and VerifyProgram on macOS and Windows; a test passes its own. The challenge is never skipped.
 	Verify Verifier
 }
 
@@ -226,8 +227,7 @@ func (c *Client) call(ctx context.Context, req request) (response, error) {
 		return response{}, err
 	}
 	deadline := c.deadline(ctx)
-	dialer := net.Dialer{Deadline: deadline}
-	conn, err := dialer.DialContext(ctx, "unix", c.Path)
+	conn, err := dial(ctx, c.Path, deadline)
 	if err != nil {
 		if notRunning(err) {
 			return response{}, ErrNotRunning

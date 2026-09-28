@@ -310,7 +310,7 @@ func TestClientStopsWhenTheCallerCancels(t *testing.T) {
 
 func TestClientReportsAMissingProcess(t *testing.T) {
 	if !Supported {
-		t.Skip("the vault process runs only on Linux and macOS; elsewhere nothing dials or places its socket")
+		t.Skip("the vault process runs only on Linux, macOS, and Windows; elsewhere nothing dials or places its socket")
 	}
 	c := NewClient(filepath.Join(shortTempDir(t), "absent.sock"), testRecipient)
 	if _, err := c.Status(context.Background()); !errors.Is(err, ErrNotRunning) {
@@ -346,8 +346,8 @@ func TestLockOverwritesTheSecrets(t *testing.T) {
 }
 
 func TestSocketPath(t *testing.T) {
-	if !Supported {
-		t.Skip("the vault process runs only on Linux and macOS; elsewhere nothing dials or places its socket")
+	if !Supported || runtime.GOOS == "windows" {
+		t.Skip("the vault socket is placed on Linux and macOS only; Windows has a pipe of its own (see TestPipePath)")
 	}
 	home := shortTempDir(t)
 	vaultDir := filepath.Join(home, ".qatlas", "cli", "vault")

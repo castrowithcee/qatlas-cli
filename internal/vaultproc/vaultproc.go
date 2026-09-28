@@ -1,17 +1,19 @@
 // Package vaultproc keeps an unlocked vault's secrets in a process of their own, so later invocations of
 // qatlas, the CLI and the MCP broker alike, read them without asking for the passphrase again.
 //
-// The process listens on a Unix socket in a private runtime directory and answers one request per
-// connection: status, get, check, set, delete, bind, lock, for the invocation log, log and logcheck, and
+// The process listens on a Unix socket in a private runtime directory, on Windows on a named pipe only this
+// user can open, and answers one request per connection: status, get, check, set, delete, bind, lock, for
+// the invocation log, log and logcheck, and
 // approve-token, which approves open connection changes an agent token covers. Every message is one line of JSON, versioned
 // and bounded in size, and every connection has a deadline, so a peer that hangs cannot hold either side.
 //
 // A secret leaves the process only for a connection the vault approved (see vault.Bindings), and only for
 // this very program run by this very user. Both ends check each other. The server checks the process that
 // connected, its user and its program, before it answers anything; see VerifyProgram. The client checks the
-// user of the process that listens, on macOS its program as well, and then challenges it to prove that it
-// holds the vault's key, before it sends anything else, not even a credential name; see Client. A
-// connection therefore carries two exchanges: the challenge and its proof, then the request and its answer.
+// user of the process that listens, on macOS and Windows its program as well, and then challenges it to
+// prove that it holds the vault's key, before it sends anything else, not even a credential name; see
+// Client. A connection therefore carries two exchanges: the challenge and its proof, then the request and
+// its answer.
 //
 // While it runs, the process is the one writer of the invocation log that signs its entries: a client hands
 // it the fields of an invoke, and the process checks them, chains them, and signs them with the log key it
@@ -110,10 +112,18 @@ func checkPathLength(path string) error {
 // On macOS, where a socket path holds fewer bytes, a path that would be too long there moves to qatlas in
 // the per-user temporary directory ($TMPDIR) instead; every other platform, and a path too long even
 // there, fails with a PathTooLongError.
+//
+// On Windows the vault process listens on a named pipe instead, \\.\pipe\qatlas-vault-<user>-<vault>: the
+// security identifier of this user, so no two users' names collide, and a hash of the vault's absolute
+// path, compared without regard to case as the file system does. A pipe leaves nothing on disk, and the
+// system removes it once its process ends, at logout or restart included.
 func SocketPath(vaultDir string) (string, error) {
 	abs, err := filepath.Abs(vaultDir)
 	if err != nil {
 		return "", fmt.Errorf("cannot determine the vault directory: %w", err)
+	}
+	if path, ok, err := pipePath(abs); ok {
+		return path, err
 	}
 	sum := sha256.Sum256([]byte(abs))
 	name := "vault-" + hex.EncodeToString(sum[:8]) + ".sock"
