@@ -705,10 +705,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateNav handles the sidebar or, in a narrow terminal, the navigation line in focus. Below the sidebar
-// width, left/right (also h/l) step through the sections with wraparound, the way up/down do in the
-// sidebar; up/down (k/j) still work there too. Moving through the sections changes the active one at once,
-// so the workspace beside or below it always shows the section the marker stands on.
+// updateNav handles the sidebar or, in a narrow terminal, the navigation line in focus. In the sidebar,
+// up/down (k/j, and shift+tab for up) step through the sections with wraparound, and right, enter, or tab
+// move the focus into the workspace. Below the sidebar width the navigation line follows its own layout
+// instead: left/right (h/l) step through the sections with the same wraparound, down, enter, or tab move
+// the focus into the workspace, and up does nothing there, since it has no section above it to go to.
+// Moving through the sections changes the active one at once, so the workspace beside or below it always
+// shows the section the marker stands on.
 func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
@@ -716,10 +719,17 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "q", "ctrl+c":
 		return m.quit()
-	case "up", "k", "shift+tab":
+	case "shift+tab":
 		return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
+	case "up", "k":
+		if m.sidebarLayout() {
+			return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
+		}
 	case "down", "j":
-		return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
+		if m.sidebarLayout() {
+			return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
+		}
+		return m.focusList()
 	case "left", "h":
 		if !m.sidebarLayout() {
 			return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
@@ -804,8 +814,14 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.focusNav()
-	case "left", "h", "tab", "shift+tab":
+	case "tab", "shift+tab":
 		m.focusNav()
+	case "left", "h":
+		if m.sidebarLayout() {
+			m.focusNav()
+		}
+		// Below the sidebar width, left/right stay in the list: the navigation line above it, not beside it,
+		// is where those keys belong instead (see updateNav).
 	case "c":
 		m.startSetup()
 	case "?":
@@ -817,8 +833,22 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 	case "/":
 		m.list.startFilter()
 	case "up", "k":
+		if !m.sidebarLayout() {
+			// No wraparound below the sidebar width: the first entry is where the list ends and the
+			// navigation line begins, in an empty list just as much as a full one.
+			if m.list.cursor <= 0 {
+				m.focusNav()
+			} else {
+				m.list.jump(-1)
+			}
+			return nil
+		}
 		m.list.move(-1)
 	case "down", "j":
+		if !m.sidebarLayout() {
+			m.list.jump(1)
+			return nil
+		}
 		m.list.move(1)
 	case "pgup", "pgdown", "home", "end":
 		m.jumpList(key.String())
@@ -3183,6 +3213,7 @@ func (m *Model) listFrame() (string, string) {
 			fmt.Sprintf("No entry matches %q. Press esc to clear the filter.", m.list.query())) + "\n")
 	}
 
+	back := m.backToSectionsHint()
 	var keys string
 	switch {
 	case m.screen == screenNav:
@@ -3190,20 +3221,20 @@ func (m *Model) listFrame() (string, string) {
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
 	case m.section == sectionApprovals && m.vaultLocked():
-		keys = "enter unlock · 1-8 or left sections · ? help · q quit"
+		keys = "enter unlock · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · a approve all · 1-8 or left sections · ? help · q quit"
+		keys = "enter details · a approve all · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionTokens && m.vaultLocked():
-		keys = "enter unlock · n new · 1-8 or left sections · ? help · q quit"
+		keys = "enter unlock · n new · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
-		keys = "1-8 or left sections · ? help · q quit"
+		keys = "1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionTokens:
-		keys = "/ filter · n new · enter show · x revoke · 1-8 or left sections · ? help · q quit"
+		keys = "/ filter · n new · enter show · x revoke · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-8 or left sections · " +
+		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-8 or " + back + " · " +
 			"? help · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-8 or left sections · ? help · q quit"
+		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-8 or " + back + " · ? help · q quit"
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
@@ -3234,9 +3265,21 @@ func (m *Model) navKeys() string {
 	if m.sidebarLayout() {
 		return "up/down section · enter open · 1-8 open · n new · c setup · ? help · q quit"
 	}
-	// Below the sidebar width every arrow does the same thing, left/right or the kept up/down, so the hint
-	// names them together rather than repeating "up/down section" from the sidebar layout above.
-	return "arrows section · enter open · 1-8 open · n new · c setup · ? help · q quit"
+	// Below the sidebar width the navigation line follows its own keys: left/right step through the
+	// sections, and down (like enter and tab) moves the focus into the workspace below it; up does nothing
+	// here, so it is left out of the hint, the same way the sidebar hint above leaves out right. Kept short
+	// enough to still wrap into two lines at the minimum terminal width.
+	return "left/right move · down open · 1-8 open · n new · c setup · ? help · q quit"
+}
+
+// backToSectionsHint names the key that takes the focus from the list back to the sections: left, in the
+// sidebar layout, where it also steps the sidebar's own selection; tab, below the sidebar width, where
+// left/right instead stay inside the list (see updateList).
+func (m *Model) backToSectionsHint() string {
+	if m.sidebarLayout() {
+		return "left sections"
+	}
+	return "tab sections"
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.

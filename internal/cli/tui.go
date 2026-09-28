@@ -30,10 +30,13 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"shows the sections in one navigation line above the workspace. Below 40x12 the editor asks for a\n" +
 			"larger terminal and keeps everything as it was until it gets one.\n\n" +
 			"The editor opens with the focus on the sidebar or, below 80 columns, the navigation line above\n" +
-			"the workspace. From 80 columns up/down (or j/k) choose a section and show its list at once, and\n" +
-			"enter, right, or tab move the focus into the list; below 80 columns left/right (or h/l) choose a\n" +
-			"section instead, wrapping from the last to the first and back, up/down still work too, and enter\n" +
-			"or tab move the focus into the list. left, tab, or esc move the focus back to the navigation.\n" +
+			"the workspace. From 80 columns up/down (or j/k, and shift+tab for up) choose a section, and\n" +
+			"enter, right, or tab move the focus into the list; left, tab, or esc move the focus back to the\n" +
+			"navigation. Below 80 columns left/right (or h/l) choose a section instead, wrapping from the last\n" +
+			"to the first and back; down or enter or tab move the focus into the list, and up does nothing\n" +
+			"there. In that list, up/down (or k/j) move the selection without wrapping, up at the first entry\n" +
+			"or in an empty list moves the focus back to the navigation, down stays at the last entry, and\n" +
+			"left/right (or h/l) leave the focus where it is; tab or esc still move it back.\n" +
 			"1-8 open a section directly from the sidebar, a list, or the Logs screen; in a form, digits are\n" +
 			"text instead.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +

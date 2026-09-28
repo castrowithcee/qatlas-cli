@@ -402,9 +402,10 @@ func TestNavigation(t *testing.T) {
 }
 
 // TestNarrowNavigation checks the width edge at which the navigation line replaces the sidebar: at 80
-// columns and above up/down still choose the section and right/l focus the list; below 80 columns
-// left/right (and h/l) choose the section instead, wrapping in both directions, while enter/tab still
-// focus the list. The footer names whichever keys apply to the layout shown.
+// columns and above the sidebar keeps its keys unchanged (up/down choose the section, right/enter/tab focus
+// the list); below 80 columns the navigation line follows its own, purely spatial keys: left/right (and
+// h/l) choose the section with wraparound, down (and enter/tab) focuses the content below it, and up does
+// nothing there. The footer names whichever keys apply to the layout shown.
 func TestNarrowNavigation(t *testing.T) {
 	m, _, _ := newModel(t)
 
@@ -422,13 +423,19 @@ func TestNarrowNavigation(t *testing.T) {
 		if m.screen != screenList || m.section != sectionCredentials {
 			t.Fatalf("right = screen %v section %v, want the Credentials list", m.screen, m.section)
 		}
+		m.screen, m.section = screenNav, sectionServices
+		press(t, m, "up")
+		if m.section != sectionLogs || m.screen != screenNav {
+			t.Errorf("up at Services = section %v screen %v, want Logs (sidebar keeps wraparound)",
+				m.section, m.screen)
+		}
 	})
 
 	t.Run("below 80 columns left/right choose the section with wraparound", func(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: 79, Height: 24})
 		m.screen, m.section = screenNav, sectionServices
-		if !strings.Contains(m.View(), "arrows section") {
-			t.Errorf("footer does not name the arrow keys below 80 columns:\n%s", m.View())
+		if !strings.Contains(m.View(), "left/right move") {
+			t.Errorf("footer does not name left/right below 80 columns:\n%s", m.View())
 		}
 		press(t, m, "left")
 		if m.section != sectionLogs || m.screen != screenNav {
@@ -447,20 +454,88 @@ func TestNarrowNavigation(t *testing.T) {
 		if m.section != sectionLogs || m.screen != screenNav {
 			t.Errorf("h at Services = section %v screen %v, want Logs (wrapped back)", m.section, m.screen)
 		}
-		// up/down (and j/k) still work as additional shortcuts in the narrow line.
-		m.screen, m.section = screenNav, sectionServices
-		press(t, m, "down")
-		if m.section != sectionCredentials || m.screen != screenNav {
-			t.Errorf("down = section %v screen %v, want Credentials", m.section, m.screen)
+	})
+
+	t.Run("below 80 columns up does nothing and down/enter/tab focus the content", func(t *testing.T) {
+		m.Update(tea.WindowSizeMsg{Width: 79, Height: 24})
+		for _, key := range []string{"up", "k"} {
+			m.screen, m.section = screenNav, sectionServices
+			press(t, m, key)
+			if m.section != sectionServices || m.screen != screenNav {
+				t.Errorf("%q at Services = section %v screen %v, want no change", key, m.section, m.screen)
+			}
 		}
-		for _, key := range []string{"enter", "tab"} {
+		for _, key := range []string{"down", "j", "enter", "tab"} {
 			m.screen, m.section = screenNav, sectionCredentials
 			press(t, m, key)
 			if m.screen != screenList || m.section != sectionCredentials {
 				t.Errorf("%q = screen %v section %v, want the Credentials list", key, m.screen, m.section)
 			}
 		}
+		// Vault and Logs have no list of their own; down/enter/tab open their own content area the same
+		// way right does in the sidebar.
+		m.screen, m.section = screenNav, sectionVault
+		press(t, m, "down")
+		if m.screen != screenForm {
+			t.Errorf("down at Vault = screen %v, want the Vault form", m.screen)
+		}
+		m.screen, m.section = screenNav, sectionLogs
+		press(t, m, "enter")
+		if m.screen != screenLogs {
+			t.Errorf("enter at Logs = screen %v, want the Logs screen", m.screen)
+		}
 	})
+}
+
+// TestNarrowListFocus checks the list's own keys below 80 columns: up/down move the selection without
+// wraparound, up at the first entry or in an empty list returns the focus to the navigation line, down
+// stays at the last entry, and left/right leave the focus in the list, unlike the sidebar layout where they
+// (like tab) return it to the navigation.
+func TestNarrowListFocus(t *testing.T) {
+	m, _, _ := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 79, Height: 24})
+	m.section = sectionServices
+	m.list.reset([]string{"a", "b", "c"})
+	m.screen = screenList
+
+	if !strings.Contains(m.View(), "tab sections") {
+		t.Errorf("footer does not name tab below 80 columns:\n%s", m.View())
+	}
+
+	press(t, m, "up")
+	if m.screen != screenNav {
+		t.Fatalf("up at the first entry = screen %v, want the navigation line", m.screen)
+	}
+
+	m.screen = screenList
+	press(t, m, "down", "down")
+	if m.list.cursor != 2 {
+		t.Fatalf("cursor after two downs = %d, want 2 (last entry)", m.list.cursor)
+	}
+	press(t, m, "down")
+	if m.list.cursor != 2 || m.screen != screenList {
+		t.Errorf("down at the last entry = cursor %d screen %v, want to stay put", m.list.cursor, m.screen)
+	}
+
+	for _, key := range []string{"left", "h", "right", "l"} {
+		m.screen = screenList
+		press(t, m, key)
+		if m.screen != screenList {
+			t.Errorf("%q in the list = screen %v, want to stay in the list", key, m.screen)
+		}
+	}
+
+	press(t, m, "k", "k", "k")
+	if m.screen != screenNav {
+		t.Errorf("k to the first entry and past it = screen %v, want the navigation line", m.screen)
+	}
+
+	m.screen = screenList
+	m.list.reset(nil)
+	press(t, m, "up")
+	if m.screen != screenNav {
+		t.Errorf("up in an empty list = screen %v, want the navigation line", m.screen)
+	}
 }
 
 // sectionLabels are how the sidebar names the eight sections.

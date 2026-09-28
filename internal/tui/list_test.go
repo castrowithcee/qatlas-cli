@@ -80,10 +80,19 @@ func TestALongListScrollsInsideTheTerminal(t *testing.T) {
 				press(t, m, "down")
 				check(names[i], i+1)
 			}
-			press(t, m, "down")
-			check(names[0], 1)
-			press(t, m, "up")
-			check(names[119], 120)
+			if size.width >= sidebarMinWidth {
+				// The sidebar layout wraps at both ends, like every other list of the editor.
+				press(t, m, "down")
+				check(names[0], 1)
+				press(t, m, "up")
+				check(names[119], 120)
+			} else {
+				// Below the sidebar width, down stops at the last entry instead of wrapping to the first.
+				press(t, m, "down")
+				check(names[119], 120)
+				press(t, m, "up")
+				check(names[118], 119)
+			}
 			press(t, m, "home")
 			check(names[0], 1)
 			press(t, m, "pgdown")
