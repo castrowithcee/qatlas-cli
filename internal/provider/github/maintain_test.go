@@ -217,8 +217,8 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 	// The deletes and the tools that change who reaches a project.
 	deletes := map[string]bool{projectsDelete.ID: true, fieldsDelete.ID: true, fieldOptionsDelete.ID: true,
 		iterationsReplace.ID: true, viewsDelete.ID: true, itemsDelete.ID: true, statusDelete.ID: true,
-		projectWorkflowsDelete.ID: true, releasesDelete.ID: true, collaboratorsUpdate.ID: true, teamsLink.ID: true,
-		teamsUnlink.ID: true}
+		projectWorkflowsDelete.ID: true, releasesDelete.ID: true, contentsDelete.ID: true,
+		collaboratorsUpdate.ID: true, teamsLink.ID: true, teamsUnlink.ID: true}
 	// github.pullrequests.merge and github.pullrequestreviews.approve are each guarded on their own: neither is
 	// a maintainer or administrator tool nor a delete, but each is offered only where a connection's tools list
 	// names it, because merging into the wrong repository's default branch, and approving on the connection's
@@ -238,7 +238,7 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 		}
 	}
 	if marked != len(guardedTools)+len(deletes)+2 || len(guardedTools) != 10 {
-		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools, the nine deletes, "+
+		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools, the ten deletes, "+
 			"the three access tools, the merge, and the approve", marked)
 	}
 	profiles := map[string]config.ToolProfile{}

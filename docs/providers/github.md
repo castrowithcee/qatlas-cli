@@ -32,7 +32,10 @@ connection's `tools` list names `github.pullrequestreviews.approve`. On the not-
 published one, lists the metadata of a release's assets, and creates and updates releases; only a connection
 whose `tools` list names it deletes a release, because the tag it was cut from stays behind. It also reads the
 account behind the connection's token, the teams of an organization and their members, and the account's
-starred repositories, and it stars and unstars a repository. It never accepts
+starred repositories, and it stars and unstars a repository. On the not-recommended profile
+`repository-writer` it also creates a branch from a branch, a tag, or a commit SHA, and creates or updates a
+file; only deleting a file is not in any profile, offered only while a connection's `tools` list names
+`github.contents.delete`. It never accepts
 a free filter expression, a GraphQL document, or a REST route from the caller. A `repository`, `project`, or
 `owner` argument names exactly one target, and it must lie inside the connection's targets when the connection
 lists any.
@@ -518,6 +521,65 @@ or the following for a private one:
 
 The terminal editor's setup profile `repository-reader` ticks `[read]` with the eight; it is not the
 recommended profile, which stays `read`, unchanged.
+
+## Repository writes: branches and file contents
+
+`github.branches.create` makes one new branch of a repository an explicit connection allows from `from`, a
+branch, a tag, or a commit SHA, or, when `from` is left out, the repository's default branch, resolved
+through the same commits route `github.commits.get` uses, so the branch always starts at a real commit;
+`github.contents.put` creates a new file, or, while `sha` names its
+current blob, updates an existing one; `github.contents.delete` deletes one file with its current blob `sha`
+and is offered only where a connection's `tools` list names it, since deleting a file the wrong branch relied
+on cannot be undone. All three refuse a `path` below `.github/workflows/`, matched without regard to case,
+which the workflow file tools maintain instead with their own `workflow` token requirement; none of the three
+ever answers with a file's content, only its path, its blob SHA, and the commit GitHub made:
+
+```sh
+qatlas invoke github.branches.create --connection code --arg name=feature/login --arg from=main --confirm
+qatlas invoke github.contents.put --connection code --arg path=docs/notes.md --arg content="# Notes" \
+  --arg message="docs: add notes" --confirm
+qatlas invoke github.contents.delete --connection code --arg path=docs/notes.md \
+  --arg sha=3d21ec53a331a6f037a91c368710b99387d012c1 --arg message="docs: remove notes" --confirm
+```
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.branches.create` | create | non-idempotent | creates one branch from a branch, a tag, or a commit SHA |
+| `github.contents.put` | update | non-idempotent | creates a new file, or updates an existing one while sha names its current blob |
+| `github.contents.delete` | delete | unknown | deletes one file with its current blob sha; offered only where a connection's tools list names it |
+
+`github.branches.create` answers `name`, `ref` (`refs/heads/` plus `name`), `sha` (the commit `from`, or the
+default branch, resolved to), and `from` (the branch actually used, when it was left out). A branch name
+already taken answers `invalid-request` with a clear message instead of a second attempt, since GitHub
+refuses to create it with HTTP 422; `from` naming no commit, branch, or tag GitHub holds answers `not-found`.
+
+`github.contents.put` takes `path`, `content` (the complete new content as UTF-8 text, at most 512 KiB),
+`message` (a commit message, at most 1000 characters), `sha` (the blob SHA of the version to replace,
+required to change an existing file and refused for a new one, as `github.contents.get` reports it), and
+`branch` (the repository's default branch when left out). It answers `path`, `sha` (the file's blob SHA
+after the change), `branch`, `commit_sha`, and `commit_url`. `github.contents.delete` takes `path`, the
+required `sha` of the version to delete, `message`, and `branch`, and answers `path`, `branch`, `deleted`,
+`commit_sha`, and `commit_url`.
+
+A missing or a stale `sha` is not refused before I/O, since only GitHub knows the file's current state on the
+given branch; the request reaches GitHub, which answers a conflict or a validation failure, and Qatlas then
+reads the file again. Once that read proves the given `sha` is not the file's current one, or that a file
+already exists although none was given, the refusal becomes `invalid-request`, naming the file's current SHA,
+so the caller does not need a separate `github.contents.get` call first. When the current SHA matches the one
+given, the conflict had another cause, such as a branch protection rule, and GitHub's original refusal is
+kept unchanged; the same holds when the file cannot be read again at all.
+
+Reading contents needs no scope for a public repository, or the following for a private one, and the same
+tokens after them are what creating a branch, and creating, updating, or deleting a file need for either kind
+of repository:
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.branches.create`, `github.contents.put`, `github.contents.delete` | `repo` | Contents: read and write |
+
+The terminal editor's setup profile `repository-writer` (not recommended) ticks `[read, create, update]` with
+the read eight plus `github.branches.create` and `github.contents.put`; `github.contents.delete` is in no
+profile, offered only where a connection's `tools` list names it, like `github.releases.delete`.
 
 ## Project lifecycle
 
