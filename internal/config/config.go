@@ -84,6 +84,11 @@ type Credential struct {
 // selector, not an explanation, so this one line says what the route is for and lets a reader tell two
 // routes of one provider apart. Discovery publishes it verbatim and nothing is ever sent to a provider,
 // which is why it is configuration, never a secret and never personal data.
+//
+// Paths, when present, binds the connection to projects: it names directories, absolute or starting with
+// "~", and the connection is discovered and run only for a project that equals one of them or lies below
+// it (see ConnectionApplies). Missing, the connection applies everywhere. Discovery never publishes the
+// paths. Managing commands still see every connection.
 type Connection struct {
 	Service     string       `yaml:"service"`
 	Credential  string       `yaml:"credential"`
@@ -92,6 +97,7 @@ type Connection struct {
 	Description string       `yaml:"description,omitempty"`
 	Permissions []Permission `yaml:"permissions,omitempty"`
 	Tools       []string     `yaml:"tools,omitempty"`
+	Paths       []string     `yaml:"paths,omitempty"`
 }
 
 // MarshalYAML preserves the semantic difference between a missing permissions or tools field (provider
@@ -106,6 +112,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		Description string        `yaml:"description,omitempty"`
 		Permissions *[]Permission `yaml:"permissions,omitempty"`
 		Tools       *[]string     `yaml:"tools,omitempty"`
+		Paths       []string      `yaml:"paths,omitempty"`
 	}
 	var permissions *[]Permission
 	if c.Permissions != nil {
@@ -118,7 +125,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		tools = &copy
 	}
 	return wire{Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
-		Description: c.Description, Permissions: permissions, Tools: tools}, nil
+		Description: c.Description, Permissions: permissions, Tools: tools, Paths: c.Paths}, nil
 }
 
 // Defaults holds the connection chosen for a domain when no connection is given explicitly, and the
@@ -515,6 +522,7 @@ func (c *Config) Validate() error {
 		if err := validateLine(conn.Description, descriptionRule); err != nil {
 			report("connections.%s.description: %v", name, err)
 		}
+		validatePaths(name, conn.Paths, report)
 		seenPermissions := map[Permission]bool{}
 		for _, permission := range conn.Permissions {
 			if !validPermission(permission) {

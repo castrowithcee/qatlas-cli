@@ -94,6 +94,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 	write.Permissions = append(write.Permissions, config.PermissionDelete)
 	write.Tools = []string{}
 	write.Targets = []string{"shelf-2", "shelf-1"}
+	write.Paths = []string{"~/repos/kunde-a"}
 	cfg.Connections["wiki-write"] = write
 
 	report, err := Pending(cfg, v)
@@ -108,6 +109,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 		{Field: FieldPermissions, Before: "create read", After: "create delete read"},
 		{Field: FieldTargets, Before: "(none)", After: "shelf-1 shelf-2"},
 		{Field: FieldTools, Before: "(every tool the permissions allow)", After: "(none)"},
+		{Field: FieldPaths, Before: "(every project)", After: "~/repos/kunde-a"},
 	}
 	if got := report.Open[1].Fields; report.Open[1].New || !reflect.DeepEqual(got, want) {
 		t.Fatalf("Pending() fields of wiki-write = %+v, want %+v", got, want)

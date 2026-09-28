@@ -41,6 +41,7 @@ func TestFingerprintCoversTheScope(t *testing.T) {
 		"targets":     func(s *Scope) { s.Targets = []string{"a"} },
 		"tools empty": func(s *Scope) { s.Tools = []string{} },
 		"tools named": func(s *Scope) { s.Tools = []string{"bookstack.pages.list"} },
+		"paths bound": func(s *Scope) { s.Paths = []string{"~/repos/kunde-a"} },
 	}
 	for name, change := range changes {
 		s := wikiScope()
@@ -48,6 +49,23 @@ func TestFingerprintCoversTheScope(t *testing.T) {
 		if Fingerprint(s, "id-1") == base {
 			t.Errorf("a changed %s left the fingerprint as it was", name)
 		}
+	}
+	// A connection bound to no path keeps the fingerprint it had before paths existed, whether the list is
+	// missing or empty; a bound one is stable under the order of its paths and changes with each of them.
+	unbound := wikiScope()
+	unbound.Paths = []string{}
+	if Fingerprint(unbound, "id-1") != base {
+		t.Errorf("an empty paths list changed the fingerprint of an unbound connection")
+	}
+	bound, reversed, moved := wikiScope(), wikiScope(), wikiScope()
+	bound.Paths = []string{"/repos/a", "/repos/b"}
+	reversed.Paths = []string{"/repos/b", "/repos/a"}
+	moved.Paths = []string{"/repos/a", "/repos/c"}
+	if Fingerprint(bound, "id-1") != Fingerprint(reversed, "id-1") {
+		t.Errorf("reordering paths changed the fingerprint")
+	}
+	if Fingerprint(bound, "id-1") == Fingerprint(moved, "id-1") {
+		t.Errorf("a changed path left the fingerprint as it was")
 	}
 	if Fingerprint(wikiScope(), "id-2") == base {
 		t.Errorf("another credential entry left the fingerprint as it was")

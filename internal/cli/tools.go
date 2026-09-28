@@ -72,6 +72,12 @@ func newConnectionsCommand(opts *Options, registry *capability.Registry) *cobra.
 			"                 contract says requires_tool_allow_list\n" +
 			"  listed         only the tools its tools list names\n" +
 			"  none           an empty tools list: no tool at all\n\n" +
+			"A connection with a paths list is bound to projects: it is listed, and offered by every other\n" +
+			"discovery and invoke command, only when the working directory, or the root of the Git repository\n" +
+			"it lies in, is one of those directories or below one; a linked worktree also counts as its\n" +
+			"repository's main working tree. Elsewhere it is left out as if it were not configured, and naming\n" +
+			"it fails with unknown-connection. The paths are never published. 'qatlas help configuration'\n" +
+			"explains them.\n\n" +
 			"While the vault is encrypted and locked, a connection whose credential is of type vault cannot\n" +
 			"be used, and every row gets a column unusable: vault-locked for such a connection, the code its\n" +
 			"invoke would end with, and empty for the others. Locked means that no vault process holds the\n" +

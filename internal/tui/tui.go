@@ -2422,6 +2422,9 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Description: m.fieldValue("description"),
 			Permissions: permissions,
 			Tools:       tools,
+			// The form has no field for paths yet; the connection keeps the ones it was saved with, so
+			// saving it here never widens where it applies.
+			Paths: append([]string(nil), cfg.Connections[m.editing].Paths...),
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))

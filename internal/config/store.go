@@ -64,6 +64,7 @@ func (c *Config) Clone() *Config {
 		if conn.Tools != nil && copied.Tools == nil {
 			copied.Tools = []string{}
 		}
+		copied.Paths = append([]string(nil), conn.Paths...)
 		out.Connections[name] = copied
 	}
 	out.ProviderNotes = cloneStrings(c.ProviderNotes)

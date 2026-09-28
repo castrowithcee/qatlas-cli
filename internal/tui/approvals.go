@@ -77,7 +77,7 @@ func approvalSummary(c approval.Change) string {
 // means.
 var approvalFields = []string{
 	approval.FieldCredential, approval.FieldProvider, approval.FieldOrigin,
-	approval.FieldPermissions, approval.FieldTargets, approval.FieldTools,
+	approval.FieldPermissions, approval.FieldTargets, approval.FieldTools, approval.FieldPaths,
 }
 
 // approvalDetailRows is one row per field of c: "field   before -> after" for a field that changed, or, for
@@ -95,6 +95,7 @@ func approvalDetailRows(c approval.Change) []string {
 		approval.FieldPermissions: approvalList(c.After.Permissions),
 		approval.FieldTargets:     approvalList(c.After.Targets),
 		approval.FieldTools:       approvalTools(c.After.Tools),
+		approval.FieldPaths:       approval.PathsText(c.After.Paths),
 	}
 	rows := make([]string, 0, len(approvalFields))
 	for _, field := range approvalFields {

@@ -20,6 +20,8 @@ type Resolved struct {
 	Permissions []Permission
 	// Tools is the connection's tools list: nil when it has none, an empty list when it offers no tool.
 	Tools []string
+	// Paths is the connection's paths list as configured, nil when it applies in every project.
+	Paths []string
 }
 
 // ToolsList returns a copy of the connection's tools list that keeps a missing list, nil, apart from an
@@ -76,5 +78,6 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 		Secrets:     cred,
 		Permissions: c.ConnectionPermissions(name),
 		Tools:       conn.ToolsList(),
+		Paths:       append([]string(nil), conn.Paths...),
 	}, nil
 }

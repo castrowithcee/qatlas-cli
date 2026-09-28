@@ -15,13 +15,21 @@ type UnknownConnectionError struct {
 	// next step of the diagnostic points to the connections configured for them.
 	Provider  string
 	Operation string
+	// MayBeBound is true when the configuration binds connections to project paths, so the name may belong
+	// to a connection of another project. The message then says that much in general, and never which
+	// connection or which path.
+	MayBeBound bool
 }
 
 func (e *UnknownConnectionError) Error() string {
+	message := fmt.Sprintf("unknown connection %q", e.Name)
 	if e.Suggestion != "" {
-		return fmt.Sprintf("unknown connection %q (did you mean %q?)", e.Name, e.Suggestion)
+		message = fmt.Sprintf("unknown connection %q (did you mean %q?)", e.Name, e.Suggestion)
 	}
-	return fmt.Sprintf("unknown connection %q", e.Name)
+	if e.MayBeBound {
+		message += "; a connection can also be bound to the paths of other projects and is unknown outside them"
+	}
+	return message
 }
 
 // UnsupportedError reports that an operation is not offered. Connection is empty when no configured

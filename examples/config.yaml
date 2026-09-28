@@ -240,6 +240,19 @@ credentials:
 # listed once, with an effect that permissions allows; anything else makes the file invalid. Each connection
 # keeps its own lists, even when it shares the provider, the service, or the credential with another one.
 #
+# paths optionally binds a connection to projects: a list of directories, absolute or starting with ~/, each
+# covering itself and everything below it, compared by whole directory names, so ~/repos/kunde-a does not
+# cover ~/repos/kunde-ab. Glob patterns are refused. The project of a call is its working directory, or the
+# root of the Git repository that directory lies in; symbolic links are resolved, and a linked worktree
+# checked out elsewhere also counts as its repository's main working tree. 'qatlas mcp' uses the directory
+# it was started in. Outside its paths a connection is missing from connections, providers, tools,
+# describe, search and every candidate list, a default that names it does not apply, and naming it fails
+# with unknown-connection. Without paths it applies everywhere. 'qatlas config validate' and 'qatlas tui'
+# still show every connection, and validate warns about an entry that names no existing directory. The
+# binding keeps the connections of one customer out of another customer's project by mistake, not by
+# force: an agent that changes into a bound directory sees that connection there. While the vault is
+# encrypted, a change of paths needs a new approval.
+#
 # The TUI starts a new connection on its provider's recommended setup profile, for example read, which
 # ticks permissions and the concrete tools it names; every tick can be changed before saving. A profile is
 # a visible starting selection, not a role: this file stores only permissions and tools, never a profile,
@@ -281,11 +294,13 @@ connections:
     target: "-1002222222222"
     permissions: [create]
 
-  # Lexware needs no target: the organization follows from the API key.
+  # Lexware needs no target: the organization follows from the API key. This connection is bound to the
+  # projects under one customer's directory and exists nowhere else.
   accounting:
     service: books
     credential: books-accountant
     permissions: [read, create]
+    paths: ["~/repos/kunde-a"]
 
   # Twenty needs no target either: the workspace follows from the API key. Two workspaces stay two
   # connections, so a read always names the one it means.

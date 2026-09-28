@@ -42,6 +42,10 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"A connection that offers no tool, because its permissions or its tools list are empty or allow\n" +
 			"none of its provider's tools, is valid but useless to an agent. Validate names each one in a\n" +
 			"warning on stderr and still succeeds.\n\n" +
+			"A connection's optional paths list binds it to projects: each entry is a directory, absolute or\n" +
+			"starting with '~/', and glob patterns are refused. An entry that names no existing directory is\n" +
+			"valid, since the directory may be created later; validate names it by its position in a warning\n" +
+			"on stderr and still succeeds. Validate itself checks every connection, wherever it is run.\n\n" +
 			"With --secrets it additionally resolves the secrets of every connection and reports which\n" +
 			"source delivers each of them, so an environment variable that overrides the credential store\n" +
 			"is visible instead of silent. It prints where a secret comes from, never what it is, and it\n" +
@@ -64,6 +68,9 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 				if warning := cfg.IdleWarning(name); warning != "" {
 					fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
 				}
+			}
+			for _, warning := range cfg.PathWarnings() {
+				fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
 			}
 			if legacyPath := filepath.Join(filepath.Dir(path), secret.FileName); fileExists(legacyPath) {
 				fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s still holds plaintext secrets; run 'qatlas "+

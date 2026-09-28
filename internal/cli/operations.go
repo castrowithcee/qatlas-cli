@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -141,14 +142,26 @@ func loadCore(opts *Options, registry *capability.Registry, withSecrets bool) (*
 	if err != nil {
 		return nil, nil, "", classifyUserError(err)
 	}
-	if !withSecrets {
-		return application.New(registry, cfg, nil, opts.Redactor), cfg, path, nil
+	var secrets *secret.Resolver
+	if withSecrets {
+		if secrets, err = opts.resolver(); err != nil {
+			return nil, nil, "", err
+		}
 	}
-	secrets, err := opts.resolver()
+	core := application.New(registry, cfg, secrets, opts.Redactor)
+	core.SetProjects(workingProjects())
+	return core, cfg, path, nil
+}
+
+// workingProjects names the project a discovery or invoke call runs in: its working directory, which the
+// core resolves to the root of the Git working tree it lies in. A working directory that cannot be read
+// names none, which leaves every connection bound to paths out.
+func workingProjects() []string {
+	dir, err := os.Getwd()
 	if err != nil {
-		return nil, nil, "", err
+		return nil
 	}
-	return application.New(registry, cfg, secrets, opts.Redactor), cfg, path, nil
+	return []string{dir}
 }
 
 // readInvokeArguments reads the schema-dependent arguments of one invocation from stdin. Empty input means

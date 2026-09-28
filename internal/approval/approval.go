@@ -1,7 +1,7 @@
 // Package approval decides which connections an encrypted vault hands a vault credential's secret to. A
 // connection is approved for its scope as it is configured at that moment (see vault.Scope); any later
-// change of its endpoint, provider, permissions, targets, tools list, or credential entry leaves it open
-// until a person approves it again. The approvals themselves live inside the encrypted vault.
+// change of its endpoint, provider, permissions, targets, tools list, paths, or credential entry leaves it
+// open until a person approves it again. The approvals themselves live inside the encrypted vault.
 //
 // Every function here reads or writes the approvals of a vault unlocked in this process and never asks for
 // a passphrase: making sure the person at hand may approve at all, and unlocking the vault for it, is up to
@@ -30,6 +30,7 @@ const (
 	FieldPermissions = "permissions"
 	FieldTargets     = "targets"
 	FieldTools       = "tools"
+	FieldPaths       = "paths"
 )
 
 // FieldChange is one field of a connection's scope that differs from what was approved, each side written as
@@ -159,6 +160,7 @@ func diff(approved vault.Approval, now vault.Scope, id string) []FieldChange {
 	add(FieldPermissions, list(before.Permissions), list(after.Permissions))
 	add(FieldTargets, list(before.Targets), list(after.Targets))
 	add(FieldTools, tools(before.Tools), tools(after.Tools))
+	add(FieldPaths, PathsText(before.Paths), PathsText(after.Paths))
 	return fields
 }
 
@@ -167,6 +169,14 @@ func list(values []string) string {
 		return "(none)"
 	}
 	return strings.Join(values, " ")
+}
+
+// PathsText is a paths list as a person reads it.
+func PathsText(values []string) string {
+	if len(values) == 0 {
+		return "(every project)"
+	}
+	return list(values)
 }
 
 func tools(values []string) string {

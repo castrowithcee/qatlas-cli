@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
+	"github.com/castrowithcee/qatlas-cli/internal/projectpath"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -31,8 +33,14 @@ const (
 )
 
 // Core owns the configured, provider-independent operations surface.
+//
+// It keeps the whole configuration and the projects of the current call (see SetProjects). Every public
+// method first takes the view of the configuration those projects may see, and every discovery and invoke
+// path reads that view alone, so a connection bound to another project is missing from all of them at once.
 type Core struct {
 	registry *capability.Registry
+	all      *config.Config
+	projects []string
 	config   *config.Config
 	secrets  *secret.Resolver
 	redactor *redact.Redactor
@@ -48,9 +56,48 @@ type Core struct {
 // credential resolution, or provider I/O. A nil policy allows the request.
 type Policy func(context.Context, InvokeRequest, capability.Descriptor, *config.Resolved) error
 
-// New returns an application core over one validated configuration.
+// New returns an application core over one validated configuration. Until SetProjects names the projects
+// of the call, it runs in no project: every connection bound to paths is left out, and every connection
+// without paths is offered.
 func New(registry *capability.Registry, cfg *config.Config, secrets *secret.Resolver, redactor *redact.Redactor) *Core {
-	return &Core{registry: registry, config: cfg, secrets: secrets, redactor: redactor}
+	return &Core{registry: registry, all: cfg, config: cfg, secrets: secrets, redactor: redactor}
+}
+
+// SetProjects names the project directories the current call runs in, and replaces the ones named before.
+// Each directory stands for the project it lies in, as projectpath.Roots resolves it: symbolic links
+// resolved, the root of its Git working tree, and for a linked worktree also the repository's main working
+// tree. A relative directory is taken relative to the working directory of this process. A connection bound
+// to paths is offered from then on only when at least one of those projects lies inside one of its paths;
+// a connection without paths is offered in every project and in none.
+//
+// The CLI passes its working directory. The MCP broker passes the same, or the roots its client names.
+// SetProjects is not safe for use concurrently with any other method of the core.
+func (c *Core) SetProjects(dirs []string) {
+	var projects []string
+	seen := map[string]bool{}
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		if abs, err := filepath.Abs(dir); err == nil {
+			dir = abs
+		}
+		for _, root := range projectpath.Roots(dir) {
+			if !seen[root] {
+				seen[root] = true
+				projects = append(projects, root)
+			}
+		}
+	}
+	c.projects = projects
+}
+
+// scope takes the view of the configuration the projects of the current call may see. It is taken anew at
+// the start of every public method, so the view follows both SetProjects and the configuration itself.
+func (c *Core) scope() {
+	if c.all != nil {
+		c.config = c.all.ForProjects(c.projects)
+	}
 }
 
 // SetPolicy installs the policy used by subsequent invocations.
@@ -113,6 +160,7 @@ type SearchResponse struct {
 // follow the stable ID order of the registry, and a cursor continues after the last ID of its page, so
 // reading every page yields each match exactly once.
 func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
+	c.scope()
 	limit := request.Limit
 	if limit <= 0 || limit > maxSearchResults {
 		limit = maxSearchResults
@@ -215,6 +263,7 @@ func ProviderIDs(registry *capability.Registry) []string {
 // Providers answers the first step of discovery: which namespaces exist at all. It stays one line per
 // provider however large the catalog grows, so a reader picks a namespace before paying for its tools.
 func (c *Core) Providers() ProvidersResponse {
+	c.scope()
 	// The namespaces are counted from the descriptors themselves, not from the provider metadata, so a
 	// namespace that answers "tools" can never be missing here. Descriptors arrive sorted by ID, and the
 	// namespace is the ID prefix, so first appearance is already alphabetical order.
@@ -278,6 +327,7 @@ type ConnectionsResponse struct {
 // read them now, as the error its invoke would end with, or nil when it can. A nil unusable stands for a
 // vault that never refuses.
 func (c *Core) Connections(provider string, unusable func(*config.Resolved) error) ConnectionsResponse {
+	c.scope()
 	listed := func(name string) bool {
 		return provider == "" || c.config.Services[c.config.Connections[name].Service].Provider == provider
 	}
@@ -366,6 +416,7 @@ type ToolsResponse struct {
 // The catalog view answers what this installation offers, so a truncated answer would read as a complete
 // one; the bounded Search response stays the contract of the request-bound agent surface.
 func (c *Core) Tools(request SearchRequest) (ToolsResponse, error) {
+	c.scope()
 	descriptors, err := c.catalog(request, "", 0)
 	if err != nil {
 		return ToolsResponse{}, err
@@ -507,6 +558,7 @@ func (r DescribeResponse) Compact() CompactDescribeResponse {
 
 // Describe returns one registered descriptor without contacting a provider.
 func (c *Core) Describe(request DescribeRequest) (DescribeResponse, error) {
+	c.scope()
 	descriptor, _, err := c.operation(request.Operation, request.Version)
 	if err != nil {
 		return DescribeResponse{}, err
@@ -556,6 +608,7 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	var descriptor capability.Descriptor
 	var resolved *config.Resolved
 	defer func() { c.logInvoke(request, descriptor, resolved, start, err) }()
+	c.scope()
 
 	descriptor, rawHandler, err := c.operation(request.Operation, request.Version)
 	if err != nil {
@@ -793,7 +846,9 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		for known := range c.config.Connections {
 			names = append(names, known)
 		}
-		return nil, &capability.UnknownConnectionError{Name: name, Suggestion: Suggest(name, names)}
+		return nil, &capability.UnknownConnectionError{
+			Name: name, Suggestion: Suggest(name, names), MayBeBound: c.all.UsesPaths(),
+		}
 	}
 	service := c.config.Services[connection.Service]
 	return &config.Resolved{
@@ -803,6 +858,7 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		Secrets:     c.config.Credentials[connection.Credential],
 		Permissions: c.config.ConnectionPermissions(name),
 		Tools:       connection.ToolsList(),
+		Paths:       append([]string(nil), connection.Paths...),
 	}, nil
 }
 

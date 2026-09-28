@@ -210,6 +210,7 @@ func ScopeOf(resolved *config.Resolved) vault.Scope {
 	return vault.Scope{
 		Connection: resolved.Name, Credential: resolved.Credential, Provider: resolved.Provider,
 		Origin: resolved.BaseURL, Permissions: permissions, Targets: targets, Tools: tools,
+		Paths: append([]string(nil), resolved.Paths...),
 	}
 }
 

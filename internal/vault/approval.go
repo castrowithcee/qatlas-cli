@@ -12,8 +12,8 @@ import (
 
 // ErrApprovalRequired reports a connection whose current scope the encrypted vault has not approved for the
 // credential it reads: it was never approved, or something security relevant about it changed since, its
-// endpoint, its permissions, its targets, its tools list, or the credential entry itself. The secret is not
-// handed out until a person approves the connection as it is now.
+// endpoint, its permissions, its targets, its tools list, its paths, or the credential entry itself. The
+// secret is not handed out until a person approves the connection as it is now.
 var ErrApprovalRequired = errors.New("the connection is not approved to read its vault credential")
 
 // Scope is the security relevant cut of one connection, the part an approval is given for. It is built from
@@ -36,10 +36,14 @@ type Scope struct {
 	// Tools is the connection's tools list. Nil means it has none, so every tool its permissions admit is
 	// offered; an empty list offers none. The two are different scopes.
 	Tools []string `json:"tools"`
+	// Paths are the directories the connection is bound to, as configured; none means every project. A
+	// connection bound to other projects reaches other data, so a change of its paths needs approval too.
+	Paths []string `json:"paths,omitempty"`
 }
 
 // Normalized returns s with every list whose order carries no meaning sorted, and an absent permissions or
-// targets list made empty, since both mean the same. Tools keeps nil apart from empty.
+// targets list made empty, since both mean the same. Tools keeps nil apart from empty; an empty paths list
+// becomes nil, since both mean every project.
 func (s Scope) Normalized() Scope {
 	sorted := func(values []string) []string {
 		out := append(make([]string, 0, len(values)), values...)
@@ -50,6 +54,11 @@ func (s Scope) Normalized() Scope {
 	s.Targets = sorted(s.Targets)
 	if s.Tools != nil {
 		s.Tools = sorted(s.Tools)
+	}
+	if len(s.Paths) > 0 {
+		s.Paths = sorted(s.Paths)
+	} else {
+		s.Paths = nil
 	}
 	return s
 }
@@ -74,7 +83,8 @@ func Fingerprint(scope Scope, credentialID string) string {
 		Permissions  []string `json:"permissions"`
 		Targets      []string `json:"targets"`
 		Tools        []string `json:"tools"`
-	}{credentialID, n.Credential, n.Provider, n.Origin, n.Permissions, n.Targets, n.Tools}
+		Paths        []string `json:"paths,omitempty"`
+	}{credentialID, n.Credential, n.Provider, n.Origin, n.Permissions, n.Targets, n.Tools, n.Paths}
 	data, err := json.Marshal(canonical)
 	if err != nil {
 		// Marshalling strings and string slices cannot fail.
