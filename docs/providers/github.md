@@ -182,6 +182,7 @@ qatlas: not-found: get pull request: GitHub does not hold pull request #99 in re
 qatlas: not-found: list team members: GitHub does not hold team ghost-team of orgs/octo-org or does not show it to this token
 qatlas: not-found: star repository: GitHub does not hold this star in repository octo-org/ghost or does not show it to this token; check the name, and that the token can see it (...)
 qatlas: not-found: get repository custom property values: GitHub does not hold the custom property values in repository octo-org/ghost or does not show it to this token; check the arguments, and that the token can see the repository (...)
+qatlas: not-found: get label: GitHub does not hold label ghost in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: permission: list projects: this GitHub token may not read the projects of owner users/octocat; check its scopes or permissions; classic: scope read:project; fine-grained: Projects: read of the organization, as the projects of a user need a classic token
 qatlas: auth: list issues: GitHub rejected the token; check or renew the credential of this connection with 'qatlas credential set <credential> <role>' or in 'qatlas tui'
 ```
@@ -227,7 +228,9 @@ not-recommended profile `repository-reader` under
 and the not-recommended profile `repository-admin-reader` under
 [repository lifecycle and collaborators](#repository-lifecycle-and-collaborators), which also lists the
 rulesets under [Rulesets](#rulesets-repository-and-organization-governance) and the custom property values or
-schema under [Custom properties](#custom-properties). A
+schema under [Custom properties](#custom-properties). The not-recommended profile `issue-maintainer` lists and
+reads the labels of a repository and creates and updates them, under [Labels](#labels); deleting a label stays
+unticked, since `github.labels.delete` is offered only where a connection's `tools` list names it. A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -824,6 +827,57 @@ live:
 | `github.customproperties.set` (repository) | `repo` | Custom properties: write |
 | `github.customproperties.get` (organization) | `admin:org` | Custom properties: read (organization), as far as GitHub documents it |
 | `github.customproperties.set` (organization) | `admin:org` | Custom properties: read and write (organization), as far as GitHub documents it |
+
+## Labels
+
+`github.labels.list` and `github.labels.get` read the labels of a repository; `github.labels.create` and
+`github.labels.update` change them; `github.labels.delete` removes one permanently and is offered only where a
+connection's `tools` list names it, since it also strips the label from every issue and pull request that
+carries it. A label is addressed by its `name`, matched exactly and URL-encoded as one opaque path segment, so
+a name with a space or another special character still reaches the right label:
+
+```sh
+qatlas invoke github.labels.list --connection code
+qatlas invoke github.labels.get --connection code --arg name=bug
+echo '{"name":"needs docs","color":"0e8a16","description":"Documentation is missing"}' |
+  qatlas invoke github.labels.create --connection maintainer --confirm
+echo '{"name":"needs docs","new_name":"needs-docs","color":"c5def5"}' |
+  qatlas invoke github.labels.update --connection maintainer --confirm
+echo '{"name":"wontfix"}' | qatlas invoke github.labels.delete --connection maintainer --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.labels.list` | read | safe | none | lists one bounded batch of the labels of a repository |
+| `github.labels.get` | read | safe | none | reads one label by name |
+| `github.labels.create` | create | non-idempotent | required | creates one new label; a name GitHub already holds is refused with a clear message |
+| `github.labels.update` | update | idempotent | required | changes a label's name, color, or description; at least one of `new_name`, `color`, or `description` is required |
+| `github.labels.delete` | delete | unknown | required | deletes one label permanently; offered only where a connection's `tools` list names it |
+
+`github.labels.list` answers `labels`, each with `name`, `color` (a 6-digit hex color without `#`),
+`description` (absent when the label has none), and `default` (true for a label GitHub created with the
+repository, such as `bug` or `enhancement`), and is paged the same way [branches and tags](#repository-contents-tree-blame-commits-branches-and-tags)
+are, by GitHub's `Link` response header; see the [cursor contract](#cursor-contract). `github.labels.get`
+answers the same shape for one label.
+
+`github.labels.create` takes `name` (1 to 50 characters) and `color`, and, optionally, `description` (at most
+100 characters); `name` must not already name a label of the repository, checked by GitHub and turned into a
+clear `invalid-request` naming the repeated name rather than the generic "rejected as invalid" message.
+`github.labels.update` takes the label's current `name` and at least one of `new_name`, `color`, or
+`description` to change; sending `description` as `""` clears it. Every field is checked before a credential
+is resolved: the name and description are refused if they carry a control character, and `color` must be
+exactly six hex digits without a leading `#`. `github.labels.delete` takes only `name` and answers `deleted`
+and the `name` that was removed.
+
+GitHub keeps a label under a repository's issues and pull requests rather than under a scope of its own.
+Reading the labels of a repository needs no scope for a public repository, or `repo` on a classic token, or
+Issues: read on a fine-grained token, for a private one; changing them, including the delete which is
+listed-only, needs Issues: read and write instead:
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.labels.list`, `github.labels.get` | `repo` (private) or none (public) | Issues: read |
+| `github.labels.create`, `github.labels.update`, `github.labels.delete` | `repo` | Issues: read and write |
 
 ## Project lifecycle
 

@@ -181,7 +181,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",138,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",143,0,0\n", ",\"\",3,0,0\n",
 		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",7,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -391,6 +391,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.files.push",
 			"github.issues.close", "github.issues.create",
 			"github.issues.get", "github.issues.list", "github.issues.reopen", "github.issues.search", "github.issues.update",
+			"github.labels.create", "github.labels.delete", "github.labels.get", "github.labels.list", "github.labels.update",
 			"github.organizations.search",
 			"github.projectcollaborators.update", "github.projectdrafts.convert", "github.projectdrafts.create", "github.projectdrafts.update",
 			"github.projectfieldoptions.delete", "github.projectfields.create",

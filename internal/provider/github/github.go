@@ -60,7 +60,9 @@
 // instead, the custom property definitions (schema) an organization declares, the same exclusive selection;
 // only on a connection whose tools list names it, github.customproperties.set changes them: for a repository
 // it sets or removes property values, and for an organization it creates or updates property definitions.
-// The search
+// github.labels.list and github.labels.get read the labels of a repository; github.labels.create and
+// github.labels.update change them; only on a connection whose tools list names it, github.labels.delete
+// removes one permanently, which also strips it from every issue and pull request that carries it. The search
 // tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
@@ -415,7 +417,11 @@ func Register(reg *capability.Registry) error {
 				"classic token, and changing them, listed-only, needs Custom properties: write instead; reading " +
 				"or changing the custom property schema of an organization needs the organization permission " +
 				"Custom properties, read or read and write, on a fine-grained token, or, as far as GitHub " +
-				"documents it, admin:org on a classic token",
+				"documents it, admin:org on a classic token; reading the labels of a repository needs no scope " +
+				"for a public repository, or repo on a classic token, or Issues: read on a fine-grained token, " +
+				"for a private one; changing them, including delete which is listed-only, needs Issues: read " +
+				"and write instead, since GitHub keeps a label under a repository's issues and pull requests " +
+				"rather than a scope of its own",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -563,6 +569,13 @@ func Register(reg *capability.Registry) error {
 				"repository or an organization, and the custom property values of a repository or the custom " +
 				"property schema of an organization; changes nothing",
 			Tools: []string{collaboratorsList.ID, rulesetsList.ID, rulesetsGet.ID, customPropertiesGet.ID},
+		}, {
+			ID: "issue-maintainer", Title: "Issue maintainer",
+			Description: "not recommended: lists and reads the labels of a repository and creates and " +
+				"updates them; every change needs its own confirmation, and deleting a label stays " +
+				"unticked, since it is offered only where a connection's tools list names " +
+				"github.labels.delete",
+			Tools: []string{labelsList.ID, labelsGet.ID, labelsCreate.ID, labelsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -591,7 +604,8 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
-		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations())...)
+		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
+		labelsOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1338,6 +1352,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := customPropertiesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := labelsSubject(parts[2]); what != "" {
 			s.what = what
 		}
 	}

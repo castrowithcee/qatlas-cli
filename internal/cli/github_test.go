@@ -66,7 +66,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[58]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
+		"tools[60]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
+		"  github.labels.list,List GitHub labels,read,code\n", "  github.labels.get,Get a GitHub label,read,code\n",
 		"  github.collaborators.list,List GitHub repository collaborators,read,code\n",
 		"  github.contents.get,Get GitHub repository contents,read,code\n",
 		"  github.trees.get,Get a GitHub repository tree,read,code\n",
@@ -126,7 +127,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[138]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[143]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
 		"github.branches.create,Create a GitHub branch,create,", "github.contents.put,Create or update a GitHub repository file,update,",
 		"github.contents.delete,Delete a GitHub repository file,delete,",

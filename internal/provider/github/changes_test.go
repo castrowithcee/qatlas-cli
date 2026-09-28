@@ -334,6 +334,12 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.customproperties.get": readRisk,
 		"github.customproperties.set": guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent,
 			customPropertySensitivity),
+		"github.labels.list":   readRisk,
+		"github.labels.get":    readRisk,
+		"github.labels.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.labels.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.labels.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
+			labelSensitivity),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {
