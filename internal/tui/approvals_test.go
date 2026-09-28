@@ -438,7 +438,7 @@ func TestApprovalsSectionListsDetailsAndApproves(t *testing.T) {
 
 	m := openApprovalModel(t, store, dir)
 	// Approvals cannot list a locked vault (see TestApprovalsSectionWhileLocked); an unrelated managing
-	// action unlocks it first, the only way this milestone offers (ctrl+l is a later task).
+	// action unlocks it first here, exactly as well suited as ctrl+l would be for this fixture.
 	openEntryForm(t, m, sectionServices, "wiki")
 	press(t, m, "f2")
 	unlockWithAdminPassphrase(t, m, passphrase)
@@ -541,8 +541,8 @@ func TestApprovalsSectionWhileLocked(t *testing.T) {
 		t.Fatal("merely opening the locked Approvals section asked for the passphrase")
 	}
 	view := screenOf(m)
-	if !strings.Contains(view, "locked") || !strings.Contains(view, "press enter to unlock") {
-		t.Errorf("the section does not explain the locked vault with enter as the way out:\n%s", view)
+	if !strings.Contains(view, "locked") || !strings.Contains(view, "press enter or ctrl+l to unlock") {
+		t.Errorf("the section does not explain the locked vault with enter or ctrl+l as the way out:\n%s", view)
 	}
 	if !strings.Contains(view, "enter unlock") {
 		t.Errorf("the footer does not name enter as the key while locked:\n%s", view)

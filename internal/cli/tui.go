@@ -75,6 +75,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"other window, and no vault process a Linux build may hold unlocked outside this run, ever shares\n" +
 			"the session: the passphrase proves it, not merely an unlocked vault. An unencrypted vault, or\n" +
 			"one that does not exist yet, needs none of this and manages exactly as before.\n\n" +
+			"The header above the sections always shows the vault's state, unlocked, locked, or unencrypted,\n" +
+			"symbol and word together so it reads without colour, plus the admin abbreviation while it is\n" +
+			"encrypted: admin off, admin Nm left, or admin: confirm each change for vault.admin_timeout: 0.\n" +
+			"ctrl+l works everywhere, forms included: on a locked vault it opens a masked prompt that unlocks\n" +
+			"it, hands it to a vault process on Linux the same way 'qatlas vault unlock' does, and starts this\n" +
+			"window's admin session in the same step; on an unlocked, encrypted vault it asks Lock the vault\n" +
+			"now?, and y locks the vault process, forgets the key this window held, and ends the admin\n" +
+			"session. An unencrypted vault has nothing to lock, and ctrl+l says so.\n\n" +
 			"The system keyring is the credential store the operating system already provides: Secret\n" +
 			"Service on Linux (for example GNOME Keyring or KWallet), the macOS Keychain, or the Windows\n" +
 			"Credential Manager. It needs no setup and no exported variable. The vault is a directory beside\n" +

@@ -99,6 +99,11 @@ const (
 	screenUpdate
 	// screenTargets edits the target list of a connection entry by entry.
 	screenTargets
+	// screenVaultUnlock is the masked passphrase dialog 'ctrl+l' opens for a locked vault with no other
+	// action pending: unlike requireAdmin's own "Unlock vault to continue", answering it does nothing but
+	// the unlock itself, the vault process handoff on Linux, and starting this window's admin session. See
+	// vaultheader.go. The matching "Lock the vault now?" question reuses screenConfirm (vaultLockConfirm).
+	screenVaultUnlock
 )
 
 type fieldKind int
@@ -454,6 +459,17 @@ type Model struct {
 	updated    string
 	updateFrom screen
 
+	// Vault header and 'ctrl+l' state (see vaultheader.go). vaultProcessUnlocked caches whether a vault
+	// process holds a locked vault open, refreshed by a tick and right after this window's own lock and
+	// unlock actions; it is read only while the vault is locked in this process, since an unlocked one
+	// already answers the header synchronously from vault.State() alone. vaultUnlock holds the masked
+	// 'ctrl+l' unlock dialog while it is open, back is the screen it returns to either way once it is done.
+	// vaultLockConfirm and vaultLockBack are the same for the short 'Lock the vault now?' question.
+	vaultProcessUnlocked bool
+	vaultUnlock          *vaultUnlockPrompt
+	vaultLockConfirm     bool
+	vaultLockBack        screen
+
 	quitting bool
 }
 
@@ -506,7 +522,7 @@ func asNotFound(err error, target **config.NotFoundError) bool {
 // Init resolves credential locations for the credential list. It asks only for source metadata; secret values
 // never enter the model. It also starts the check for a newer release, which never blocks the editor.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.refreshSources(m.keyringQueries()), m.checkUpdate())
+	return tea.Batch(m.refreshSources(m.keyringQueries()), m.checkUpdate(), m.checkVaultProcess(), vaultTick())
 }
 
 // Update handles one event. It is the whole editor logic and needs no terminal.
@@ -538,6 +554,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleApprovalSweep(msg)
 	case approvalActionMsg:
 		return m, m.handleApprovalAction(msg)
+	case vaultUnlockedMsg:
+		return m, m.handleVaultUnlocked(msg)
+	case vaultProcessStartedMsg:
+		return m, m.handleVaultProcessStarted(msg)
+	case vaultLockedMsg:
+		return m, m.handleVaultLocked(msg)
+	case vaultProcessCheckMsg:
+		m.vaultProcessUnlocked = msg.unlocked
+		return m, nil
+	case vaultTickMsg:
+		return m, tea.Batch(m.checkVaultProcess(), vaultTick())
 	case updateCheckedMsg:
 		m.updateChecked(msg)
 		return m, nil
@@ -575,6 +602,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Every key is activity for this window's admin session, whichever screen it lands on; the dialog
 		// that starts one runs its own check on "enter" instead, never through this.
 		m.touchAdminSessionIfActive()
+		// 'ctrl+l' is global, ahead of every screen's own keys (see vaultheader.go): it never reaches a
+		// screen that already asks its own question, and is a no-op while vaultBusy, so it can never step on
+		// a passphrase dialog, a confirmation, or vault work already running.
+		if msg.String() == "ctrl+l" && m.vaultLockKeyAllowed() {
+			return m, m.handleVaultLockKey()
+		}
 		var cmd tea.Cmd
 		switch m.screen {
 		case screenNav:
@@ -605,6 +638,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateUpdateConfirm(msg)
 		case screenTargets:
 			cmd = m.updateTargets(msg)
+		case screenVaultUnlock:
+			cmd = m.updateVaultUnlockPrompt(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -1667,6 +1702,21 @@ func (m *Model) replacePermissionChoices(provider string) {
 }
 
 func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
+	if m.vaultLockConfirm {
+		switch key.String() {
+		case "y":
+			back := m.vaultLockBack
+			m.vaultLockConfirm, m.screen = false, back
+			return m.beginVaultLock()
+		case "n", "esc":
+			back := m.vaultLockBack
+			m.vaultLockConfirm, m.screen = false, back
+			m.status = "Cancelled; the vault stays unlocked"
+		case "ctrl+c":
+			return m.quit()
+		}
+		return nil
+	}
 	if m.decryptConfirm {
 		switch key.String() {
 		case "y":
@@ -2755,7 +2805,13 @@ func (m *Model) editorView() string {
 		b.WriteString(m.vaultOfferView())
 	case screenAdminAuth:
 		b.WriteString(m.adminAuthView())
+	case screenVaultUnlock:
+		b.WriteString(m.vaultUnlockPromptView())
 	case screenConfirm:
+		if m.vaultLockConfirm {
+			b.WriteString(m.vaultLockConfirmView())
+			break
+		}
 		if m.decryptConfirm {
 			b.WriteString(titleStyle.Render("Turn the vault's encryption off?") + "\n\n")
 			b.WriteString(m.indentedWith(warningStyle,
@@ -3153,7 +3209,7 @@ func (m *Model) layoutWorkspace() {
 
 // frame puts the workspace into the editor's frame.
 func (m *Model) frame(workspace string) string {
-	lines := []string{m.pathLine()}
+	lines := m.headerLines()
 	content := strings.Split(workspace, "\n")
 	if !m.sidebarLayout() {
 		lines = append(lines, m.navLine(), quietBorder.Render(strings.Repeat("─", m.termWidth)))
@@ -3177,10 +3233,27 @@ func (m *Model) frame(workspace string) string {
 	return strings.Join(lines, "\n")
 }
 
+// headerLines are the header rows above the workspace: the path line alone for a run with no vault
+// configured, since showing a warning for something that does not exist yet would be misleading;
+// otherwise the vault state beside the path line from sidebarMinWidth up, or, in a narrower terminal, its
+// own row above the path line, because the two together do not read well combined that narrow.
+func (m *Model) headerLines() []string {
+	vault := m.vaultHeaderText()
+	if vault == "" {
+		return []string{m.pathLine("")}
+	}
+	if m.sidebarLayout() {
+		return []string{m.pathLine(vault)}
+	}
+	return []string{vault, m.pathLine("")}
+}
+
 // pathLine names the configuration file the editor works on. A path too long for the line keeps its end,
 // the part that tells files apart. A newer release stands between the title and the path, in the longest
-// form that still leaves the path some room.
-func (m *Model) pathLine() string {
+// form that still leaves the path some room. vaultText is the vault state segment headerLines puts beside
+// it once the sidebar layout has room for both on one line; "" leaves this exactly the plain path line it
+// always was, which a run without a vault, and the narrow layout's own second row, both still use.
+func (m *Model) pathLine(vaultText string) string {
 	suffix := ""
 	if !m.configExists {
 		suffix = " (created on first save)"
@@ -3189,18 +3262,24 @@ func (m *Model) pathLine() string {
 	if m.termWidth < 60 {
 		title = ""
 	}
-	banner := m.updateBanner(m.termWidth - lipgloss.Width(title) - 2 - pathRoom)
+	sep := ""
+	if vaultText != "" {
+		sep = "  "
+	}
+	reserved := lipgloss.Width(title) + lipgloss.Width(vaultText) + lipgloss.Width(sep)
+	banner := m.updateBanner(m.termWidth - reserved - 2 - pathRoom)
 	if banner != "" {
 		banner += "  "
 	}
-	rest := m.termWidth - lipgloss.Width(title+banner)
+	rest := m.termWidth - reserved - lipgloss.Width(banner)
 	label := "Config: "
-	if banner != "" && lipgloss.Width(label+suffix)+pathRoom > rest {
-		// Beside the banner a narrow line keeps the end of the path and drops its label.
+	if lipgloss.Width(label+suffix)+pathRoom > rest {
+		// A narrow line, whatever crowds it (the banner, or now the vault state beside it), keeps the end of
+		// the path and drops its label rather than the path itself.
 		label, suffix = "", ""
 	}
 	path := truncateLeft(m.store.Path(), rest-lipgloss.Width(label+suffix))
-	return titleStyle.Render(title) + okStyle.Render(banner) + hintStyle.Render(label+path+suffix)
+	return titleStyle.Render(title) + vaultText + sep + okStyle.Render(banner) + hintStyle.Render(label+path+suffix)
 }
 
 // pathRoom is what the banner of a newer release leaves the path at least.
@@ -3247,6 +3326,15 @@ func (m *Model) sidebarLines() []string {
 	if next := render(hintStyle, inner, "next: "+m.nextStep()); len(lines)+1+strings.Count(next, "\n")+1 <= m.height {
 		lines = append(lines, "")
 		lines = append(lines, strings.Split(next, "\n")...)
+	}
+	// The 'ctrl+l' footer hint is worth a line only for an encrypted vault (an absent or unencrypted one has
+	// nothing to lock or unlock, see handleVaultLockKey), and only where the sidebar still has room left
+	// over for it, the same "wo Platz ist" rule the next: line above already follows.
+	if hint := m.vaultLockKeyHint(); hint != "" {
+		if extra := render(hintStyle, inner, hint); len(lines)+1+strings.Count(extra, "\n")+1 <= m.height {
+			lines = append(lines, "")
+			lines = append(lines, strings.Split(extra, "\n")...)
+		}
 	}
 	return lines
 }

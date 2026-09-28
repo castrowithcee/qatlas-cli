@@ -43,21 +43,37 @@ func newerRelease() *fakeUpdater {
 }
 
 // deliver runs a command and hands its messages back to the model, the way the event loop does.
-func deliver(m *Model, cmd tea.Cmd) {
+//
+// vaultTickMsg reschedules itself forever, by design (see vaultTick in vaultheader.go), the way a real run
+// keeps the header current for as long as it keeps running; a test still sees the one round of work it
+// starts (checkVaultProcess, batched alongside the next tick), but stops at the second vaultTickMsg that
+// round's own rescheduling produces, instead of looping until the test binary's own timeout.
+func deliver(m *Model, cmd tea.Cmd) { deliverTick(m, cmd, false) }
+
+func deliverTick(m *Model, cmd tea.Cmd, sawTick bool) {
 	if cmd == nil {
 		return
 	}
 	msg := cmd()
 	if batch, ok := msg.(tea.BatchMsg); ok {
 		for _, c := range batch {
-			deliver(m, c)
+			deliverTick(m, c, sawTick)
 		}
 		return
 	}
-	if msg != nil {
-		_, next := m.Update(msg)
-		deliver(m, next)
+	if msg == nil {
+		return
 	}
+	if _, ok := msg.(vaultTickMsg); ok {
+		if sawTick {
+			return
+		}
+		_, next := m.Update(msg)
+		deliverTick(m, next, true)
+		return
+	}
+	_, next := m.Update(msg)
+	deliverTick(m, next, sawTick)
 }
 
 // startedWith builds an editor with the updater and runs its start, the check included.

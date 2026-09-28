@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
@@ -23,125 +22,24 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // vaultProcessPlatform reports whether this platform runs a vault process.
 const vaultProcessPlatform = true
 
-// The descriptors a vault process inherits from 'qatlas vault unlock': the handover it reads the vault's
-// key and secrets from, and the report it answers on once it listens or failed to.
-const (
-	handoverFD = 3
-	reportFD   = 4
-)
-
-// maxHandover bounds what a vault process reads from its handover, a vault's key and its secrets.
-const maxHandover = 16 << 20
-
-// vaultStartTimeout bounds how long 'qatlas vault unlock' waits for the vault process it started.
-const vaultStartTimeout = 10 * time.Second
-
 // socketCheckInterval is how often a vault process checks that its socket is still in place.
 const socketCheckInterval = 10 * time.Second
 
-// Words the vault process reports its start with on the report descriptor. Anything else is the reason it
-// did not start, which never carries a secret.
-const (
-	reportReady   = "ready"
-	reportRunning = "running"
-)
-
-// startVaultProcess starts 'qatlas vault serve' for the vault configured at configPath, detached from this
-// process and its session, hands it snap through an inherited pipe, and waits until client reaches it.
-//
-// The program is this very file, so the process passes the check the vault process makes of every client.
-// Its standard streams are /dev/null and its working directory is /, so it holds no terminal and no
-// directory of the session that started it. Neither the key nor any secret ever appears in its arguments
-// or its environment: they travel through the pipe alone, which the process closes once it read them.
-func startVaultProcess(ctx context.Context, configPath string, snap vault.Snapshot,
-	client *vaultproc.Client) (vaultproc.Status, error) {
-	program, err := os.Executable()
-	if err != nil {
-		return vaultproc.Status{}, fmt.Errorf("cannot find this program to start the vault process: %w", err)
-	}
-	handoverRead, handoverWrite, err := os.Pipe()
-	if err != nil {
-		return vaultproc.Status{}, err
-	}
-	defer handoverWrite.Close()
-	reportRead, reportWrite, err := os.Pipe()
-	if err != nil {
-		_ = handoverRead.Close()
-		return vaultproc.Status{}, err
-	}
-	defer reportRead.Close()
-
-	cmd := exec.Command(program, "vault", "serve", "--config", configPath)
-	cmd.Dir = "/"
-	cmd.ExtraFiles = []*os.File{handoverRead, reportWrite} // handoverFD and reportFD
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	err = cmd.Start()
-	// The process holds its own ends now; closing them here makes its end, or its report, an end of file.
-	_ = handoverRead.Close()
-	_ = reportWrite.Close()
-	if err != nil {
-		return vaultproc.Status{}, fmt.Errorf("cannot start the vault process: %w", err)
-	}
-	// Reaps the process should it end while this one still runs; it is not waited for otherwise.
-	go func() { _ = cmd.Wait() }()
-
-	deadline := time.Now().Add(vaultStartTimeout)
-	if end, ok := ctx.Deadline(); ok && end.Before(deadline) {
-		deadline = end
-	}
-	data, err := json.Marshal(snap)
-	if err != nil {
-		return vaultproc.Status{}, errors.New("cannot encode the vault for the vault process")
-	}
-	_ = handoverWrite.SetWriteDeadline(deadline)
-	_, err = handoverWrite.Write(data)
-	clear(data)
-	_ = handoverWrite.Close()
-	if err != nil {
-		return vaultproc.Status{}, errors.New("the vault process did not take the vault")
-	}
-
-	_ = reportRead.SetReadDeadline(deadline)
-	report, err := bufio.NewReader(io.LimitReader(reportRead, 4096)).ReadString('\n')
-	report = strings.TrimSpace(report)
-	switch {
-	case report == reportReady, report == reportRunning:
-	case report != "":
-		return vaultproc.Status{}, fmt.Errorf("the vault process did not start: %s", report)
-	case errors.Is(err, os.ErrDeadlineExceeded):
-		return vaultproc.Status{}, errors.New("the vault process did not report within " + vaultStartTimeout.String())
-	default:
-		return vaultproc.Status{}, errors.New("the vault process ended before it was ready")
-	}
-
-	// Whichever process listens, the one just started or one that won a race with it, it has to answer the
-	// check every client makes before it counts as started.
-	for {
-		status, err := client.Status(ctx)
-		if err == nil {
-			return status, nil
-		}
-		if !errors.Is(err, vaultproc.ErrNotRunning) || time.Now().After(deadline) {
-			return vaultproc.Status{}, fmt.Errorf("the vault process does not answer: %w", err)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
-
-// runVaultServe is 'qatlas vault serve', the vault process itself. It is started by 'qatlas vault unlock'
-// alone, with the handover and the report it inherits; run any other way, it refuses before it reads
-// anything.
+// runVaultServe is 'qatlas vault serve', the vault process itself. It is started by 'qatlas vault unlock',
+// or by the TUI's own 'ctrl+l' (see vaultmigrate.StartProcess, which both run to start it), with the
+// handover and the report it inherits; run any other way, it refuses before it reads anything.
 func runVaultServe(opts *Options, reg *capability.Registry) error {
-	if !inheritedPipe(handoverFD) || !inheritedPipe(reportFD) {
+	if !inheritedPipe(vaultmigrate.HandoverFD) || !inheritedPipe(vaultmigrate.ReportFD) {
 		return &UsageError{errors.New("'qatlas vault serve' is started by 'qatlas vault unlock'; run that instead")}
 	}
-	report := os.NewFile(reportFD, "vault-report")
+	report := os.NewFile(vaultmigrate.ReportFD, "vault-report")
 	reported := false
 	answer := func(word string) {
 		if !reported {
@@ -157,7 +55,7 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 		answer(err.Error())
 		return err
 	}
-	snap, err := readHandover(os.NewFile(handoverFD, "vault-handover"))
+	snap, err := readHandover(os.NewFile(vaultmigrate.HandoverFD, "vault-handover"))
 	if err != nil {
 		answer(err.Error())
 		return err
@@ -187,7 +85,7 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 	}
 	listener, err := vaultproc.Listen(socket)
 	if errors.Is(err, vaultproc.ErrRunning) {
-		answer(reportRunning)
+		answer(vaultmigrate.ReportRunning)
 		return err
 	}
 	if err != nil {
@@ -213,7 +111,7 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 	}()
 	go watchSocket(ctx, socket, func() { _ = server.Close() })
 
-	answer(reportReady)
+	answer(vaultmigrate.ReportReady)
 	return server.Serve(listener)
 }
 
@@ -230,13 +128,13 @@ func inheritedPipe(fd int) bool {
 // readHandover reads the vault's key and secrets from the pipe 'qatlas vault unlock' writes them to, and
 // closes it. The bytes read are overwritten once decoded; an error never quotes them.
 func readHandover(f *os.File) (vault.Snapshot, error) {
-	data, err := io.ReadAll(io.LimitReader(f, maxHandover+1))
+	data, err := io.ReadAll(io.LimitReader(f, vaultmigrate.MaxHandover+1))
 	_ = f.Close()
 	defer clear(data)
 	if err != nil {
 		return vault.Snapshot{}, errors.New("cannot read the vault handed over")
 	}
-	if len(data) > maxHandover {
+	if len(data) > vaultmigrate.MaxHandover {
 		return vault.Snapshot{}, errors.New("the vault handed over is too large")
 	}
 	var snap vault.Snapshot

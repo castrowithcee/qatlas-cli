@@ -58,13 +58,14 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"argument, an environment variable, or a file. Without a terminal to ask on, such as an agent\n" +
 			"talking to qatlas over MCP, such an access fails with the code vault-locked, and 'qatlas\n" +
 			"connections' marks the connections it affects; a person runs 'qatlas vault unlock' to open it, or\n" +
-			"presses ctrl+l in 'qatlas tui' to open it for the editor alone. An encrypted vault hands a\n" +
+			"presses ctrl+l in 'qatlas tui', which unlocks it the same way. An encrypted vault hands a\n" +
 			"secret only to a connection it approved as it is configured now; any other access fails with\n" +
 			"the code approval-required, which only a person resolves: 'vault approve' lists every open\n" +
 			"connection with what changed and releases it, all at once or one at a time with --connection.\n\n" +
 			"On Linux 'vault unlock' hands the unlocked vault to a vault process that holds it open until it\n" +
 			"is idle for vault.idle_timeout (12h unless the configuration says otherwise), 'vault lock' ends\n" +
-			"it, or the machine restarts; elsewhere unlocking only lasts for the current process. Every later\n" +
+			"it, or the machine restarts; elsewhere unlocking only lasts for the current process. ctrl+l in\n" +
+			"'qatlas tui' unlocks and locks it the same way. Every later\n" +
 			"command and the MCP broker, one started before included, read their secrets from that process\n" +
 			"without asking for anything. 'credential set', 'credential delete', and 'vault migrate' hand it\n" +
 			"what they changed; 'vault passphrase', 'vault decrypt', and 'qatlas update' lock it first. A\n" +
@@ -439,7 +440,7 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 	if err != nil {
 		return err
 	}
-	status, err := startVaultProcess(ctx, configPath, snap, client)
+	status, err := vaultmigrate.StartProcess(ctx, configPath, snap, client)
 	if err != nil {
 		return fmt.Errorf("%s, but the vault stays locked for later invocations: %w", mergedText, err)
 	}

@@ -25,7 +25,9 @@ import (
 // no vault, it is unencrypted (an unencrypted vault binds no connection), or it is locked. A locked vault is
 // never unlocked merely to compute this list, the same way a connection test or a secret row does not
 // unlock it either; enter on the empty list is what does, through requireAdmin like any other managing
-// action, and updateList's own key hint says so (see approvalsUnlockHint).
+// action, and updateList's own key hint says so (see approvalsUnlockHint). ctrl+l unlocks it the same way,
+// from here or any other section (see handleVaultLockKey in tui.go, which intercepts it before this list
+// ever sees the key).
 func (m *Model) approvalsReport() (report approval.Report, unavailable string) {
 	v := m.secrets.Vault()
 	if v == nil {
@@ -41,7 +43,8 @@ func (m *Model) approvalsReport() (report approval.Report, unavailable string) {
 			"Approvals are not used while the vault is unencrypted. Open Vault (%d) to set a passphrase.",
 			int(sectionVault)+1)
 	case vault.StateLocked:
-		return approval.Report{}, "The vault is locked, so open approvals cannot be listed; press enter to unlock it."
+		return approval.Report{}, "The vault is locked, so open approvals cannot be listed; " +
+			"press enter or ctrl+l to unlock it."
 	}
 	report, err = approval.Pending(m.cfg, v)
 	if err != nil {

@@ -116,6 +116,31 @@ func TestEncryptedRoundTrip(t *testing.T) {
 	}
 }
 
+func TestForget(t *testing.T) {
+	lowWorkFactor(t)
+	dir := t.TempDir()
+
+	v := New(dir)
+	if err := v.Set("wiki-reader", "token-id", "synthetic-token", offering("s3cret-phrase")); err != nil {
+		t.Fatalf("Set() error = %v", err)
+	}
+	if state, err := v.State(); err != nil || state != StateUnlocked {
+		t.Fatalf("State() before Forget() = %v, %v, want unlocked, nil", state, err)
+	}
+
+	v.Forget()
+
+	if state, err := v.State(); err != nil || state != StateLocked {
+		t.Fatalf("State() after Forget() = %v, %v, want locked, nil", state, err)
+	}
+	if _, _, _, err := v.Get("wiki-reader", "token-id", nil); !errors.Is(err, ErrNoTerminal) {
+		t.Fatalf("Get() after Forget(), without a passphrase source, error = %v, want ErrNoTerminal", err)
+	}
+	if _, _, _, err := v.Get("wiki-reader", "token-id", offering("s3cret-phrase")); err != nil {
+		t.Fatalf("Get() after Forget(), with the right passphrase, error = %v", err)
+	}
+}
+
 func TestPendingMerge(t *testing.T) {
 	lowWorkFactor(t)
 	dir := t.TempDir()

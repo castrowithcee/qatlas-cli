@@ -352,3 +352,153 @@ func TestVaultRekeyIsSilentWithoutARunningVaultProcess(t *testing.T) {
 		t.Errorf("status = %q, want nothing said about a vault process that never ran", m.status)
 	}
 }
+
+// withStartableVaultProcess lets 'ctrl+l' unlocking a vault actually hand it to a vault process for the
+// duration of a test: startVaultProcessFn starts a real vaultproc.Server, bound to the socket a real 'qatlas
+// vault serve' would use, from the very snapshot the unlock itself hands it, instead of a second copy of
+// this test binary (see TestMain in vaultheader_test.go, and package cli's own withVaultProcess for the same
+// reason over 'qatlas vault unlock' itself). Every server started this way is closed on cleanup.
+func withStartableVaultProcess(t *testing.T) {
+	t.Helper()
+	original := startVaultProcessFn
+	t.Cleanup(func() { startVaultProcessFn = original })
+	startVaultProcessFn = func(ctx context.Context, _ string, snap vault.Snapshot,
+		client *vaultproc.Client) (vaultproc.Status, error) {
+		key, err := age.ParseX25519Identity(snap.Identity)
+		if err != nil {
+			return vaultproc.Status{}, err
+		}
+		l, err := vaultproc.Listen(client.Path)
+		if err != nil {
+			return vaultproc.Status{}, err
+		}
+		server := vaultproc.NewServer(key, snap.Secrets, snap.Bindings)
+		done := make(chan struct{})
+		go func() { _ = server.Serve(l); close(done) }()
+		t.Cleanup(func() { _ = server.Close(); <-done })
+		return client.Status(ctx)
+	}
+}
+
+// 'ctrl+l' unlocking a locked vault hands it to a real vault process on Linux, exactly the way 'qatlas vault
+// unlock' does: a fresh model over the very same directory, still locked in its own process, sees it
+// unlocked too once checkVaultProcess asks the process, the way another terminal's window would on its next
+// tick.
+func TestCtrlLStartsARealVaultProcess(t *testing.T) {
+	const passphrase = "hunter2"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	path := filepath.Join(dir, "config.yaml")
+	store := newTestStore(t, path)
+	setup, _ := newVaultResolver(t, dir)
+	mustNoError(t, setup.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
+	locked, _ := newVaultResolver(t, dir)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	withStartableVaultProcess(t)
+
+	m, err := New(store, nil, locked, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	openSectionByName(t, m, sectionServices)
+	pump(t, m, "ctrl+l")
+	typeText(t, m, passphrase)
+	pump(t, m, "enter")
+	if m.fail != "" {
+		t.Fatalf("unlocking reported %q", m.fail)
+	}
+
+	// Another window over the same directory, still locked in its own process: the vault process ctrl+l
+	// just started is what tells its header "unlocked" too.
+	elsewhere, _ := newVaultResolver(t, dir)
+	other, err := New(newTestStore(t, path), nil, elsewhere, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	if state, err := other.secrets.Vault().State(); err != nil || state != vault.StateLocked {
+		t.Fatalf("a fresh process' own State() = %v, %v, want locked", state, err)
+	}
+	if got := other.vaultHeaderText(); !strings.Contains(got, "vault locked") {
+		t.Fatalf("another window's header before any tick = %q, want %q", got, "vault locked")
+	}
+	// The periodic tick, not a one-off call: this is what a real second window actually runs every 5
+	// seconds (vaultTickInterval, shrunk for this suite in TestMain) to notice a vault process it did not
+	// start itself.
+	deliver(other, vaultTick())
+	if !other.vaultProcessUnlocked {
+		t.Error("the tick did not see the vault process ctrl+l started")
+	}
+	if got := other.vaultHeaderText(); !strings.Contains(got, "vault unlocked") {
+		t.Errorf("another window's header after the tick = %q, want it to say the vault is unlocked too", got)
+	}
+}
+
+// 'ctrl+l' locking an unlocked, encrypted vault locks the real vault process that holds it open, the same
+// way 'qatlas vault lock' does.
+func TestCtrlLLocksARealVaultProcess(t *testing.T) {
+	const passphrase = "hunter2"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	path := filepath.Join(dir, "config.yaml")
+	store := newTestStore(t, path)
+	secrets, _ := newVaultResolver(t, dir)
+	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
+	_, client := serveVaultProcess(t, dir, passphrase)
+
+	m, err := New(store, nil, secrets, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	openSectionByName(t, m, sectionServices)
+	pump(t, m, "ctrl+l")
+	if m.screen != screenConfirm || !m.vaultLockConfirm {
+		t.Fatalf("ctrl+l on an unlocked vault = screen %v, vaultLockConfirm %v, want the lock question",
+			m.screen, m.vaultLockConfirm)
+	}
+	pump(t, m, "y")
+	if m.fail != "" {
+		t.Fatalf("locking reported %q", m.fail)
+	}
+	if _, err := client.Status(context.Background()); err == nil {
+		t.Error("the vault process still answers after ctrl+l locked it, want it ended")
+	}
+}
+
+// 'ctrl+l' locks the real vault process even when this window itself never unlocked the vault: a fresh
+// model, still locked in its own process, whose header already shows "unlocked" because a vault process
+// elsewhere holds it open (see checkVaultProcess and the tick), asks "Lock the vault now?" straight away,
+// without a passphrase, and 'y' ends that real process.
+func TestCtrlLLocksARealVaultProcessWhenOnlyTheProcessHoldsItUnlocked(t *testing.T) {
+	const passphrase = "hunter2"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	path := filepath.Join(dir, "config.yaml")
+	store := newTestStore(t, path)
+	setup, _ := newVaultResolver(t, dir)
+	mustNoError(t, setup.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
+	_, client := serveVaultProcess(t, dir, passphrase)
+	locked, _ := newVaultResolver(t, dir)
+
+	m, err := New(store, nil, locked, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	if state, err := m.secrets.Vault().State(); err != nil || state != vault.StateLocked {
+		t.Fatalf("this window's own State() = %v, %v, want locked", state, err)
+	}
+	deliver(m, vaultTick())
+	if got := m.vaultHeaderText(); !strings.Contains(got, "vault unlocked") {
+		t.Fatalf("header after the tick = %q, want it to say the vault is unlocked", got)
+	}
+
+	openSectionByName(t, m, sectionServices)
+	pump(t, m, "ctrl+l")
+	if m.screen != screenConfirm || !m.vaultLockConfirm {
+		t.Fatalf("ctrl+l with only the vault process unlocked = screen %v, vaultLockConfirm %v, want the "+
+			"lock question, not the unlock dialog", m.screen, m.vaultLockConfirm)
+	}
+	pump(t, m, "y")
+	if m.fail != "" {
+		t.Fatalf("locking reported %q", m.fail)
+	}
+	if _, err := client.Status(context.Background()); err == nil {
+		t.Error("the vault process still answers after ctrl+l locked it, want it ended")
+	}
+}
