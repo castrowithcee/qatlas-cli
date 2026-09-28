@@ -54,8 +54,8 @@ const (
 	// now: a new connection reading a vault credential, or one whose scope changed since it was last
 	// approved. See approvals.go.
 	sectionApprovals
-	// sectionTokens holds the place of the agent tokens: until they exist it only says that they are not
-	// available yet, with no action of its own.
+	// sectionTokens lists the agent tokens of an encrypted vault, with their vorbild connections and expiry,
+	// and creates, shows, and revokes them in an admin session. See tokens.go.
 	sectionTokens
 	// sectionLogs is the invocation log, read only: its own screen with a day, range or all days, filters,
 	// search, and the status of every entry. See logs.go.
@@ -69,10 +69,11 @@ func (s section) title() string {
 
 // entry is what one entry of the section is called. Vault has no entries of its own; the name here is
 // never shown, because the vault form and its leave question are worded on their own (see editorView and
-// leaveView). Approvals never opens a "New ..." form either: its entries only ever come from Pending.
-// Tokens and Logs hold no list of named entries either.
+// leaveView). Approvals never opens a "New ..." form either: its entries only ever come from Pending. Logs
+// holds no list of named entries either.
 func (s section) entry() string {
-	return [...]string{"service", "credential", "connection", "default", "vault setting", "approval", "token", "log entry"}[s]
+	return [...]string{"service", "credential", "connection", "default", "vault setting", "approval", "agent token",
+		"log entry"}[s]
 }
 
 type screen int
@@ -398,6 +399,12 @@ type Model struct {
 	// open. Both stand over the Approvals list, not a form; see approvals.go.
 	approvalDetail    string
 	approveAllConfirm bool
+	// tokenDetail names the agent token the Tokens detail screen shows, "" otherwise; tokenReveal says that
+	// s asked to show its value there (see tokenValueShown). tokenRevoke names the token the revoke question
+	// is about, asked from the list or over the detail screen. All stand over the Tokens list; see tokens.go.
+	tokenDetail string
+	tokenReveal bool
+	tokenRevoke string
 	// pristine is what the open form held when it was opened, so leaving it can tell whether anything
 	// would be lost. leaveFrom is the screen the leave question returns to when the user stays.
 	pristine  string
@@ -592,6 +599,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleApprovalSweep(msg)
 	case approvalActionMsg:
 		return m, m.handleApprovalAction(msg)
+	case tokenActionMsg:
+		return m, m.handleTokenAction(msg)
 	case vaultUnlockedMsg:
 		return m, tea.Batch(m.handleVaultUnlocked(msg), m.reloadShownLogs())
 	case vaultProcessStartedMsg:
@@ -729,14 +738,23 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	case "u":
 		m.askUpdate()
 	case "n":
-		if reason := m.newEntryBlocked(); reason != "" {
-			m.status = ""
-			m.fail = reason
-			return nil
-		}
-		return m.openForm("")
+		return m.newEntry()
 	}
 	return nil
+}
+
+// newEntry is n from the sidebar or a list: the form of a new entry of the active section, unless a missing
+// prerequisite blocks it. A new agent token is a managing action from the start (see newToken).
+func (m *Model) newEntry() tea.Cmd {
+	if reason := m.newEntryBlocked(); reason != "" {
+		m.status = ""
+		m.fail = reason
+		return nil
+	}
+	if m.section == sectionTokens {
+		return m.newToken()
+	}
+	return m.openForm("")
 }
 
 // focusList hands the focus to the active section's list, or, for Vault, which holds no entries of its
@@ -805,14 +823,9 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 	case "pgup", "pgdown", "home", "end":
 		m.jumpList(key.String())
 	case "n":
-		if reason := m.newEntryBlocked(); reason != "" {
-			m.status = ""
-			m.fail = reason
-			return nil
-		}
-		return m.openForm("")
+		return m.newEntry()
 	case "enter":
-		if m.section == sectionApprovals && m.vaultLocked() {
+		if (m.section == sectionApprovals || m.section == sectionTokens) && m.vaultLocked() {
 			// Nothing is listed while the vault is locked (see approvalsReport); enter is a managing action
 			// like any other here, gated behind requireAdmin, whose "Unlock vault to continue" dialog
 			// unlocks it and starts the admin session together. The action itself writes nothing: it only
@@ -829,9 +842,26 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			m.clearMessages()
 			return nil
 		}
+		if m.section == sectionTokens {
+			// The detail screen shows the value masked; s there reveals it, in an admin session only.
+			m.tokenDetail, m.tokenReveal = name, false
+			m.screen = screenConfirm
+			m.clearMessages()
+			return nil
+		}
 		return m.openForm(name)
+	case "x":
+		if m.section != sectionTokens {
+			return nil
+		}
+		if name, ok := m.selected(); ok {
+			m.tokenRevoke = name
+			m.screen = screenConfirm
+			m.clearMessages()
+		}
 	case "d":
-		if m.section != sectionApprovals {
+		// A token is revoked with x, never deleted like a configuration entry.
+		if m.section != sectionApprovals && m.section != sectionTokens {
 			if _, ok := m.selected(); ok {
 				m.screen = screenConfirm
 				m.clearMessages()
@@ -915,7 +945,7 @@ func (m *Model) newEntryBlockedFor(s section) string {
 	case sectionApprovals:
 		return "Approvals lists connections automatically; there is nothing to add by hand."
 	case sectionTokens:
-		return tokensUnavailable
+		return m.tokensBlocked()
 	case sectionLogs:
 		return "Logs shows what was invoked; there is nothing to add by hand."
 	}
@@ -977,6 +1007,13 @@ func (m *Model) leaveScreen() tea.Cmd {
 		if m.approvalDetail != "" || m.approveAllConfirm {
 			// Both stand over the Approvals list, never a form; see approvals.go.
 			m.approvalDetail, m.approveAllConfirm = "", false
+			m.screen = screenList
+			m.status = "Cancelled"
+			return nil
+		}
+		if m.tokenDetail != "" || m.tokenRevoke != "" {
+			// Both stand over the Tokens list, never a form; see tokens.go.
+			m.tokenDetail, m.tokenRevoke, m.tokenReveal = "", "", false
 			m.screen = screenList
 			m.status = "Cancelled"
 			return nil
@@ -1108,6 +1145,10 @@ func (m *Model) saveAndLeave() tea.Cmd {
 	m.trimFields()
 	if m.section == sectionVault {
 		return m.requireAdmin(m.saveVault)
+	}
+	if m.section == sectionTokens {
+		// A created token opens its own detail screen (see handleTokenAction); a refused one keeps the form.
+		return m.requireAdmin(m.createToken)
 	}
 	// requireAdmin gates the whole save, guards included: a locked vault must be unlocked before
 	// guardVaultTypeChange can even check what it already holds (see requireAdmin's own comment).
@@ -1284,7 +1325,7 @@ func (m *Model) openPicker() {
 			m.pickerMarks[choice] = marked
 		}
 	}
-	if f.kind == fieldToolList {
+	if f.kind == fieldToolList && f.label == toolListLabel {
 		m.picker.text = m.toolText
 	}
 	m.picker.reset(f.choices)
@@ -1843,6 +1884,9 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
+	if cmd, ok := m.updateTokenScreens(key); ok {
+		return cmd
+	}
 	if name := m.approvalDetail; name != "" {
 		switch key.String() {
 		case "y":
@@ -2110,6 +2154,8 @@ func (m *Model) entryNames(s section) []string {
 		for _, c := range report.Open {
 			names = append(names, c.Connection)
 		}
+	case sectionTokens:
+		names = m.tokenNames()
 	}
 	sort.Strings(names)
 	return names
@@ -2261,6 +2307,9 @@ func (m *Model) credentialTypeChosen() tea.Cmd {
 }
 
 func (m *Model) buildFields(name string) []field {
+	if m.section == sectionTokens {
+		return m.tokenFields()
+	}
 	key := textField("name", name, name != "").withHint(nameHint)
 	if m.section == sectionDefaults {
 		key.label, key.hint = "domain", domainHint
@@ -2345,6 +2394,10 @@ func (m *Model) submit() tea.Cmd {
 		// The vault form has no name field, and its action rows already ran on their own enter, never
 		// deferred to here; F2 and enter on a text row save only the two timeouts (see vaultsettings.go).
 		return m.requireAdmin(m.saveVault)
+	}
+	if m.section == sectionTokens {
+		// A token is written to the vault, not to the configuration.
+		return m.requireAdmin(m.createToken)
 	}
 	return m.requireAdmin(func() tea.Cmd {
 		if reason := m.guardVaultTypeChange(); reason != "" {
@@ -2791,9 +2844,6 @@ func sectionShortcut(key string) (section, bool) {
 	return section(key[0] - '1'), true
 }
 
-// tokensUnavailable is all the Tokens section says until agent tokens exist.
-const tokensUnavailable = "Agent tokens are not available yet."
-
 // The colours are few and taken from the terminal's own palette, so they follow its theme. None of them
 // carries meaning on its own: focus has its marker and its border, a result its "[ok]", "[failed]",
 // "warning:" or "error:" prefix, and a terminal without colour, or with NO_COLOR set, loses nothing.
@@ -2907,6 +2957,9 @@ func (m *Model) editorView() string {
 				b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 			}
 		}
+		if m.section == sectionTokens && m.wizard == nil {
+			b.WriteString(m.tokenFormNotes())
+		}
 		keys := "tab move · " + formKeys
 		switch m.fields[m.focus].kind {
 		case fieldChoice:
@@ -2930,6 +2983,10 @@ func (m *Model) editorView() string {
 		if m.wizard != nil {
 			keys = strings.Replace(keys, formKeys, setupKeys(m.wizard.step, "enter"), 1)
 			keys = strings.Replace(keys, choiceFormKeys, setupKeys(m.wizard.step, "F2"), 1)
+		}
+		if m.section == sectionTokens && m.wizard == nil {
+			// A token is created, not saved: it goes to the vault, never into the configuration.
+			keys = strings.ReplaceAll(keys, " save", " create")
 		}
 		b.WriteString(m.hint(keys))
 	case screenSecret:
@@ -2975,6 +3032,14 @@ func (m *Model) editorView() string {
 		}
 		if m.approveAllConfirm {
 			b.WriteString(m.approveAllConfirmView())
+			break
+		}
+		if m.tokenRevoke != "" {
+			b.WriteString(m.tokenRevokeView())
+			break
+		}
+		if m.tokenDetail != "" {
+			b.WriteString(m.tokenDetailView())
 			break
 		}
 		if m.pendingProfile != "" {
@@ -3128,8 +3193,12 @@ func (m *Model) listFrame() (string, string) {
 		keys = "enter unlock · 1-8 or left sections · ? help · q quit"
 	case m.section == sectionApprovals:
 		keys = "enter details · a approve all · 1-8 or left sections · ? help · q quit"
-	case m.section == sectionTokens:
+	case m.section == sectionTokens && m.vaultLocked():
+		keys = "enter unlock · n new · 1-8 or left sections · ? help · q quit"
+	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
 		keys = "1-8 or left sections · ? help · q quit"
+	case m.section == sectionTokens:
+		keys = "/ filter · n new · enter show · x revoke · 1-8 or left sections · ? help · q quit"
 	case m.section == sectionConnections:
 		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-8 or left sections · " +
 			"? help · q quit"
@@ -3450,8 +3519,15 @@ const pathRoom = 12
 // sectionEntryCount is the number shown after a section's name in the sidebar and the narrow navigation
 // line: how many entries it holds, or "-" for a settings form such as Vault, which holds none.
 func sectionEntryCount(m *Model, s section) string {
-	if s == sectionVault || s == sectionTokens || s == sectionLogs {
+	if s == sectionVault || s == sectionLogs {
 		return "-"
+	}
+	if s == sectionTokens {
+		entries, unavailable := m.tokensReport()
+		if unavailable != "" {
+			return "-"
+		}
+		return strconv.Itoa(len(entries))
 	}
 	if s == sectionApprovals {
 		report, unavailable := m.approvalsReport()
@@ -3689,7 +3765,13 @@ func (m *Model) emptyHelp() string {
 		}
 		return "No open approvals."
 	case sectionTokens:
-		return tokensUnavailable
+		if _, unavailable := m.tokensReport(); unavailable != "" {
+			return unavailable
+		}
+		if reason := m.tokensBlocked(); reason != "" {
+			return reason
+		}
+		return "No agent tokens yet. Press n to create one with one or more connections as its vorbilder."
 	}
 	return "Nothing configured yet."
 }
@@ -3866,6 +3948,7 @@ var sectionColumns = map[section][]column{
 		{title: "TOOLS", optional: true}, {title: "TARGETS", optional: true}, {title: "DESCRIPTION", flex: true}},
 	sectionDefaults:  {{title: "PROVIDER OR TOOL"}, {title: "CONNECTION"}},
 	sectionApprovals: {{title: "CONNECTION"}, {title: "CHANGE", flex: true}},
+	sectionTokens:    {{title: "NAME"}, {title: "EXPIRES"}, {title: "VORBILDER", flex: true}},
 }
 
 // listTable is the table of every entry of the section, filtered out or not.
@@ -3938,6 +4021,8 @@ func (m *Model) cells(name string) []string {
 			}
 		}
 		return []string{name, ""}
+	case sectionTokens:
+		return m.tokenCells(name)
 	}
 	return []string{name}
 }
@@ -3975,6 +4060,10 @@ func (m *Model) renderField(f field, focused bool) string {
 		// A read-only text field never takes focus, so its hint would never be the one shown; it explains
 		// itself on its own row instead, the way a read-only tool list already does below.
 		value += " (" + f.hint + ")"
+	case f.kind == fieldToolList && f.label == vorbilderLabel && len(f.marked()) == 0:
+		value = hintStyle.Render(fmt.Sprintf("(none of %d ticked)", len(f.choices)))
+	case f.kind == fieldToolList && f.label == vorbilderLabel:
+		value = strings.Join(f.marked(), ", ")
 	case f.kind == fieldToolList && f.readOnly:
 		value = hintStyle.Render("(every tool the permissions allow)")
 	case f.kind == fieldToolList && len(f.marked()) == 0:

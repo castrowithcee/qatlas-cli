@@ -438,8 +438,9 @@ func TestLogsNarrowLayout(t *testing.T) {
 	}
 }
 
-// Tokens holds its place with a neutral note and offers nothing to do.
-func TestTokensSectionIsAPlaceholder(t *testing.T) {
+// Without a vault, Tokens says so instead of a list and offers nothing to do.
+func TestTokensSectionWithoutAVault(t *testing.T) {
+	const noVault = "There is no vault configured for this run."
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 	pump(t, m, "7")
@@ -447,16 +448,16 @@ func TestTokensSectionIsAPlaceholder(t *testing.T) {
 		t.Fatalf("7 = screen %v section %v", m.screen, m.section)
 	}
 	view := m.View()
-	if !strings.Contains(view, tokensUnavailable) || !strings.Contains(view, "7 Tokens       -") {
-		t.Errorf("Tokens does not say it is not available yet:\n%s", view)
+	if !strings.Contains(view, noVault) || !strings.Contains(view, "7 Tokens       -") {
+		t.Errorf("Tokens does not say that there is no vault:\n%s", view)
 	}
-	for _, action := range []string{"n new", "enter edit", "d delete", "/ filter"} {
+	for _, action := range []string{"n new", "enter show", "x revoke", "d delete", "/ filter"} {
 		if strings.Contains(view, action) {
 			t.Errorf("Tokens offers %q:\n%s", action, view)
 		}
 	}
 	press(t, m, "n")
-	if m.screen != screenList || m.fail != tokensUnavailable {
+	if m.screen != screenList || m.fail != noVault {
 		t.Errorf("n on Tokens = screen %v error %q", m.screen, m.fail)
 	}
 }

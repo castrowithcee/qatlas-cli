@@ -127,7 +127,13 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"what changed since it was last approved: enter opens its detail to approve it alone, and a\n" +
 			"on the list approves every one currently open, asking to confirm the count first. While the\n" +
 			"vault is unencrypted or locked, the section says so instead of a list.\n\n" +
-			"7 Tokens only says that agent tokens are not available yet; it offers no action.\n\n" +
+			"7 Tokens lists the agent tokens of an encrypted vault with their vorbild connections and expiry,\n" +
+			"and marks an expired token, or a vorbild that covers nothing now, with ⚠ and words behind its\n" +
+			"name. Every action on a token needs the admin session above: n creates one from a name, one or\n" +
+			"more connections that read a vault credential, ticked in a picker, and an optional expiry\n" +
+			"(YYYY-MM-DD or an RFC 3339 time), like 'qatlas vault token create'; enter opens its detail, where\n" +
+			"s shows its value and hides it again, only there and only while the session lasts; x revokes it\n" +
+			"after asking. While the vault is unencrypted or locked, the section says so instead of a list.\n\n" +
 			"8 Logs shows the invocation log, read only, the same log 'qatlas vault logs verify' checks. The\n" +
 			"bar on top reads Mode: Day, Range, or All and, for the first two, the date or the range of UTC\n" +
 			"days: tab moves the focus from the rows to the bar's fields and back, left/right change the\n" +
