@@ -75,7 +75,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"ever shows a stored secret back.\n\n" +
 			"Beside the vault itself, every invoke over the CLI and the MCP broker appends one entry to a\n" +
 			"hash-chained invocation log under this same directory, whether the vault exists or not, is locked,\n" +
-			"or is unencrypted; 'vault logs verify' checks that chain.",
+			"or is unencrypted. While a vault process holds the vault unlocked, it writes each entry itself and\n" +
+			"signs it with a key derived from the vault's key, which never leaves it; a run that unlocked the\n" +
+			"vault itself signs its entries the same way, and every other entry stays unverified. 'vault logs\n" +
+			"verify' checks that chain, and the check values too while a vault process runs.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
@@ -287,30 +290,51 @@ func newVaultLogsCommand(opts *Options) *cobra.Command {
 func newVaultLogsVerifyCommand(opts *Options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "verify",
-		Short: "Check the invocation log's hash chain",
+		Short: "Check the invocation log's hash chain and check values",
 		Long: "Verify walks every day file of the invocation log in order and checks that each entry's\n" +
 			"sequence number follows the one before it and that its recorded hash is the exact previous line's\n" +
 			"SHA-256, across day boundaries. A changed or deleted entry, or a day file missing from the middle,\n" +
 			"breaks the chain there and is reported; a documented retention cut does not, since the entry\n" +
 			"written right after logs.retention_days removed something names what it removed.\n\n" +
-			"The report has one row per day: its date, how many entries it holds, how many of those carry no\n" +
-			"check value yet, and the first problem found, empty where the day is fine. In this build no entry\n" +
-			"carries a check value, so every one of them is unverified; that alone never breaks the chain, and\n" +
-			"the command still exits successfully.\n\n" +
+			"An entry also carries a check value, an HMAC-SHA256 of the line under a log key derived from the\n" +
+			"vault's own key, when it was written while the vault's key was at hand: by the vault process that\n" +
+			"'qatlas vault unlock' starts, or by a run that unlocked the vault itself. Every other entry, one\n" +
+			"written while the vault was locked without a vault process, unencrypted, or absent, carries none\n" +
+			"and is unverified, which never breaks the chain by itself. While a vault process holds the vault\n" +
+			"unlocked, verify has it check every check value, without the key ever leaving it; a check value\n" +
+			"that does not match marks its entry changed and breaks the chain, even on the very last entry. While\n" +
+			"the vault is locked, verify checks the chain alone and reports the check values as not checked; it\n" +
+			"never asks for the passphrase, so run 'qatlas vault unlock' first to have them checked.\n\n" +
+			"The report says whether the check values were checked (mac_check: checked, vault-locked, or\n" +
+			"no-vault-key for a vault that is unencrypted or absent) and has one row per day: its date, how many\n" +
+			"entries it holds, how many of those carry no check value (unverified), how many carry one nobody\n" +
+			"checked (unchecked), how many lines fail their check value (changed), how many entries are missing\n" +
+			"right before an entry of that day, and the first problem found, empty where the day is fine.\n\n" +
 			"It only reads the log: no terminal, no passphrase, and no provider are needed, and it runs the\n" +
 			"same way against a vault that does not exist yet, is locked, or is unencrypted.\n\n" +
 			"The chain only ever links an entry to the one after it, so removing the most recent entries\n" +
 			"without adding a new one leaves nothing to notice they are gone; only a change before the last\n" +
-			"surviving entry is caught this way.\n\n" +
+			"surviving entry is caught this way. A check value catches a change to an entry itself, the last one\n" +
+			"included, but not the removal of whole entries from the end, nor an unsigned entry in place of a\n" +
+			"signed one at the end.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
-			"JSON. Exit code: 0 while the chain is intact, even where every entry is unverified; a broken\n" +
-			"chain exits with the code runtime, which the report already explains, so this is not a new code.",
+			"JSON. Exit code: 0 while the chain is intact, even where entries are unverified or unchecked; a\n" +
+			"broken chain exits with the code runtime, which the report already explains, so this is not a new\n" +
+			"code. A check value the vault process cannot check at all fails the command the same way rather\n" +
+			"than passing unchecked.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultLogsVerify(c, opts)
 		},
 	}
 }
+
+// The mac_check values of 'vault logs verify'.
+const (
+	macChecked     = "checked"
+	macVaultLocked = "vault-locked"
+	macNoVaultKey  = "no-vault-key"
+)
 
 func runVaultLogsVerify(c *cobra.Command, opts *Options) error {
 	format, err := discoveryFormat(c, opts)
@@ -321,11 +345,17 @@ func runVaultLogsVerify(c *cobra.Command, opts *Options) error {
 	if err != nil {
 		return err
 	}
-	report, err := invokelog.Verify(vault.New(filepath.Dir(configPath)).Dir())
+	v := vault.New(filepath.Dir(configPath))
+	ctx := contextOrBackground(c.Context())
+	checker, macCheck, done := logChecker(ctx, v, func(warning string) {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+	})
+	defer done()
+	report, err := invokelog.VerifyWith(v.Dir(), checker)
 	if err != nil {
 		return err
 	}
-	if emitErr := emitDocument(c, format, logsVerifyResponse(report)); emitErr != nil {
+	if emitErr := emitDocument(c, format, logsVerifyResponse(report, macCheck)); emitErr != nil {
 		return emitErr
 	}
 	if report.Broken {
@@ -334,24 +364,66 @@ func runVaultLogsVerify(c *cobra.Command, opts *Options) error {
 	return nil
 }
 
+// logChecker returns what checks the invocation log's check values of v, and what mac_check reports: the
+// running vault process, which only ever answers whether a check value matches; else the vault unlocked in
+// this process; else nothing, since verify never asks for the passphrase. A vault process that is there but
+// fails the check or speaks another version is reported through warn, and the check values then go
+// unchecked. done clears whatever key this process derived.
+func logChecker(ctx context.Context, v *vault.Vault, warn func(string)) (invokelog.Checker, string, func()) {
+	nothing := func() {}
+	state, err := v.State()
+	switch {
+	case err != nil:
+		return nil, macVaultLocked, nothing
+	case state == vault.StateUnlocked:
+		key, err := v.LogKey()
+		if err != nil {
+			return nil, macVaultLocked, nothing
+		}
+		return key, macChecked, key.Clear
+	case state != vault.StateLocked:
+		return nil, macNoVaultKey, nothing
+	case !vaultProcessSupported:
+		return nil, macVaultLocked, nothing
+	}
+	client, err := vaultProcessClient(v)
+	if err != nil {
+		return nil, macVaultLocked, nothing
+	}
+	if _, err := client.Status(ctx); err != nil {
+		if !errors.Is(err, vaultproc.ErrNotRunning) {
+			warn(fmt.Sprintf("the vault process cannot check the invocation log's check values: %v", err))
+		}
+		return nil, macVaultLocked, nothing
+	}
+	return client.LogChecker(ctx), macChecked, nothing
+}
+
 type logsVerifyDay struct {
 	Date       string `json:"date"`
 	Entries    int    `json:"entries"`
 	Unverified int    `json:"unverified"`
+	Unchecked  int    `json:"unchecked"`
+	Changed    int    `json:"changed"`
+	Missing    uint64 `json:"missing"`
 	Problem    string `json:"problem,omitempty"`
 }
 
 type logsVerifyDocument struct {
-	Broken bool            `json:"broken"`
-	Days   []logsVerifyDay `json:"days"`
+	Broken   bool            `json:"broken"`
+	MACCheck string          `json:"mac_check"`
+	Days     []logsVerifyDay `json:"days"`
 }
 
-func logsVerifyResponse(report invokelog.Report) logsVerifyDocument {
+func logsVerifyResponse(report invokelog.Report, macCheck string) logsVerifyDocument {
 	days := make([]logsVerifyDay, len(report.Days))
 	for i, day := range report.Days {
-		days[i] = logsVerifyDay{Date: day.Date, Entries: day.Entries, Unverified: day.Unverified, Problem: day.Problem}
+		days[i] = logsVerifyDay{
+			Date: day.Date, Entries: day.Entries, Unverified: day.Unverified, Unchecked: day.Unchecked,
+			Changed: day.Changed, Missing: day.Missing, Problem: day.Problem,
+		}
 	}
-	return logsVerifyDocument{Broken: report.Broken, Days: days}
+	return logsVerifyDocument{Broken: report.Broken, MACCheck: macCheck, Days: days}
 }
 
 // vaultOf returns the vault this run resolves credentials from. It is nil only for a resolver a test built
@@ -687,15 +759,22 @@ func absConfigPath(opts *Options) (string, error) {
 // vaultIdleTimeout returns vault.idle_timeout of the configuration at path, the default when there is no
 // configuration file yet.
 func vaultIdleTimeout(path string, reg *capability.Registry) (time.Duration, error) {
+	idle, _, err := vaultProcessSettings(path, reg)
+	return idle, err
+}
+
+// vaultProcessSettings returns what a vault process takes from the configuration at path when it starts:
+// vault.idle_timeout and logs.retention_days, each its default when there is no configuration file yet.
+func vaultProcessSettings(path string, reg *capability.Registry) (idle time.Duration, retentionDays int, err error) {
 	cfg, err := config.Load(path, reg)
 	var missing *config.NotFoundError
 	if errors.As(err, &missing) {
-		return config.DefaultVaultIdleTimeout, nil
+		return config.DefaultVaultIdleTimeout, config.DefaultLogRetentionDays, nil
 	}
 	if err != nil {
-		return 0, classifyUserError(err)
+		return 0, 0, classifyUserError(err)
 	}
-	return cfg.VaultIdleTimeout(), nil
+	return cfg.VaultIdleTimeout(), cfg.LogRetentionDays(), nil
 }
 
 func formatLocksAt(t time.Time) string {

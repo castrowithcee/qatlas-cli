@@ -14,6 +14,7 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -128,6 +129,75 @@ func (c *Client) Lock(ctx context.Context) error {
 	_, err := c.call(ctx, request{Op: opLock})
 	return err
 }
+
+// Log hands the fields of one completed invoke to the vault process, which checks them, signs them with
+// the log key, and appends them to the invocation log it was started for, as the one writer that signs.
+// ErrNotRunning means there is no vault process; ErrVersion one of another build, which cannot sign; and
+// ErrNoLog one that keeps no log. In each case, and on any other error, nothing was written as far as
+// the client can tell, and the caller writes the entry itself.
+func (c *Client) Log(ctx context.Context, f invokelog.Fields) error {
+	_, err := c.call(ctx, request{Op: opLog, Entry: logEntryOf(f)})
+	return err
+}
+
+// maxLogCheckBatch bounds the stored lines one logcheck carries, before their base64 encoding, so a request
+// stays well within MaxMessage.
+const maxLogCheckBatch = MaxMessage / 2
+
+// CheckLog asks the vault process whether the check value of each of lines, stored invocation log lines,
+// matches, and returns one answer per line in the same order. The process only compares; it never answers
+// with the log key. Lines are sent in as many requests as MaxMessage calls for. A single line too long to
+// send at all is not one the log ever wrote, and is answered as not matching without asking.
+func (c *Client) CheckLog(ctx context.Context, lines [][]byte) ([]bool, error) {
+	valid := make([]bool, len(lines))
+	var batch [][]byte
+	var indexes []int
+	size := 0
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
+		}
+		resp, err := c.call(ctx, request{Op: opLogCheck, Lines: batch})
+		if err != nil {
+			return err
+		}
+		if len(resp.Valid) != len(batch) {
+			return errors.New("the vault process answered a log check with the wrong number of results")
+		}
+		for i, ok := range resp.Valid {
+			valid[indexes[i]] = ok
+		}
+		batch, indexes, size = nil, nil, 0
+		return nil
+	}
+	for i, line := range lines {
+		if len(line) > maxLogCheckBatch {
+			continue
+		}
+		if size+len(line) > maxLogCheckBatch {
+			if err := flush(); err != nil {
+				return nil, err
+			}
+		}
+		batch, indexes, size = append(batch, line), append(indexes, i), size+len(line)
+	}
+	if err := flush(); err != nil {
+		return nil, err
+	}
+	return valid, nil
+}
+
+// LogChecker returns an invokelog.Checker that checks through CheckLog, bounded by ctx.
+func (c *Client) LogChecker(ctx context.Context) invokelog.Checker {
+	return logChecker{ctx: ctx, client: c}
+}
+
+type logChecker struct {
+	ctx    context.Context
+	client *Client
+}
+
+func (l logChecker) Check(lines [][]byte) ([]bool, error) { return l.client.CheckLog(l.ctx, lines) }
 
 // call connects, checks the server, and exchanges one request for its answer.
 func (c *Client) call(ctx context.Context, req request) (response, error) {

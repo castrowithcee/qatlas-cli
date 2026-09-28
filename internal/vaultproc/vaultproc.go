@@ -2,7 +2,7 @@
 // qatlas, the CLI and the MCP broker alike, read them without asking for the passphrase again.
 //
 // The process listens on a Unix socket in a private runtime directory and answers one request per
-// connection: status, get, check, set, delete, bind, and lock. Every message is one line of JSON, versioned
+// connection: status, get, check, set, delete, bind, lock, and, for the invocation log, log and logcheck. Every message is one line of JSON, versioned
 // and bounded in size, and every connection has a deadline, so a peer that hangs cannot hold either side.
 //
 // A secret leaves the process only for a connection the vault approved (see vault.Bindings), and only for
@@ -12,7 +12,13 @@
 // sends anything else, not even a credential name; see Client. A connection therefore carries two exchanges: the challenge and its proof, then the request
 // and its answer.
 //
-// Nothing here logs, and no error or answer other than a successful get carries a secret value. The
+// While it runs, the process is the one writer of the invocation log that signs its entries: a client hands
+// it the fields of an invoke, and the process checks them, chains them, and signs them with the log key it
+// derives from the vault's key, which never leaves it; see invokelog. It checks a stored line's check value
+// the same way, answering only whether it matches.
+//
+// Nothing here writes a diagnostic log, and no error or answer other than a successful get carries a secret
+// value. The
 // process locks itself after a period without a get, when asked to, or when it ends; locking overwrites the
 // values it holds as far as Go allows, which is the copies this package owns and no others.
 package vaultproc
@@ -30,7 +36,7 @@ import (
 
 // Version is the protocol version a request carries and an answer repeats. A server refuses a request of
 // another version rather than guessing what it meant.
-const Version = 3
+const Version = 4
 
 // MaxMessage bounds one request or answer, newline included. It leaves room for any token or key a
 // credential holds, and keeps a peer from making the other side buffer without end.
@@ -67,6 +73,9 @@ var (
 	// ErrVersion reports a vault process that speaks another protocol version, which is a process started
 	// by another build of qatlas.
 	ErrVersion = errors.New("the vault process speaks another protocol version; lock it and unlock the vault again")
+
+	// ErrNoLog reports a vault process that does not keep the invocation log, or cannot sign it.
+	ErrNoLog = errors.New("the vault process does not keep the invocation log")
 
 	// ErrUnsupported reports a platform the vault process does not run on yet.
 	ErrUnsupported = fmt.Errorf("the vault process is not supported on this platform: %w", errors.ErrUnsupported)

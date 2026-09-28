@@ -14,6 +14,7 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -26,6 +27,10 @@ const (
 	opLock   = "lock"
 	opCheck  = "check"
 	opBind   = "bind"
+	// opLog appends one invocation log entry, signed by the process; opLogCheck checks the check values of
+	// stored log lines. Neither ever answers with the log key or the vault's key.
+	opLog      = "log"
+	opLogCheck = "logcheck"
 )
 
 // The codes an answer's error carries. They are fixed words, never text built from a request, so an error
@@ -37,6 +42,8 @@ const (
 	codeLocked     = "locked"
 	codeChallenge  = "challenge"
 	codeApproval   = "approval-required"
+	codeNoLog      = "no-log"
+	codeLogFailed  = "log-failed"
 )
 
 // nonceSize is the number of random bytes a challenge holds.
@@ -54,7 +61,8 @@ type hello struct {
 }
 
 // request is one line a client sends. Scope is the connection a get or a check is made for; a get without
-// one is refused. Bindings replace the server's own on a bind.
+// one is refused. Bindings replace the server's own on a bind. Entry is what a log appends, and Lines are
+// the stored log lines a logcheck checks.
 type request struct {
 	V          int             `json:"v"`
 	Op         string          `json:"op"`
@@ -63,10 +71,39 @@ type request struct {
 	Value      string          `json:"value,omitempty"`
 	Scope      *vault.Scope    `json:"scope,omitempty"`
 	Bindings   *vault.Bindings `json:"bindings,omitempty"`
+	Entry      *logEntry       `json:"entry,omitempty"`
+	Lines      [][]byte        `json:"lines,omitempty"`
+}
+
+// logEntry is what a client sends for one invoke to log: invokelog.Fields, without anything the server
+// computes itself, which is the time, the sequence number, the previous entry's hash, and the check value.
+type logEntry struct {
+	Path       string                `json:"path"`
+	Client     *invokelog.ClientInfo `json:"client,omitempty"`
+	Operation  string                `json:"operation,omitempty"`
+	Version    int                   `json:"version,omitempty"`
+	Connection string                `json:"connection,omitempty"`
+	Effect     string                `json:"effect,omitempty"`
+	Result     string                `json:"result"`
+	DurationMS int64                 `json:"duration_ms,omitempty"`
+}
+
+func (e logEntry) fields() invokelog.Fields {
+	return invokelog.Fields{
+		Path: e.Path, Client: e.Client, Operation: e.Operation, Version: e.Version, Connection: e.Connection,
+		Effect: e.Effect, Result: e.Result, Duration: time.Duration(e.DurationMS) * time.Millisecond,
+	}
+}
+
+func logEntryOf(f invokelog.Fields) *logEntry {
+	return &logEntry{
+		Path: f.Path, Client: f.Client, Operation: f.Operation, Version: f.Version, Connection: f.Connection,
+		Effect: f.Effect, Result: f.Result, DurationMS: f.Duration.Milliseconds(),
+	}
 }
 
 // response is a line a server answers with. Error is empty on success; Proof answers the hello, Found and
-// Value belong to get, PID and LocksAt to status.
+// Value belong to get, PID and LocksAt to status, and Valid, one per line asked, to logcheck.
 type response struct {
 	V       int        `json:"v"`
 	Error   string     `json:"error,omitempty"`
@@ -75,6 +112,7 @@ type response struct {
 	Value   string     `json:"value,omitempty"`
 	PID     int        `json:"pid,omitempty"`
 	LocksAt *time.Time `json:"locks_at,omitempty"`
+	Valid   []bool     `json:"valid,omitempty"`
 }
 
 // writeMessage sends v as one line of JSON. A message above MaxMessage is not sent at all. The encoded
@@ -135,6 +173,10 @@ func answerError(code string) error {
 		return errUnproven
 	case codeApproval:
 		return vault.ErrApprovalRequired
+	case codeNoLog:
+		return ErrNoLog
+	case codeLogFailed:
+		return errors.New("the vault process could not write the invocation log")
 	default:
 		return errors.New("the vault process could not read the request")
 	}

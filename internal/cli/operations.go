@@ -113,14 +113,21 @@ func applicationCore(opts *Options, registry *capability.Registry, withSecrets b
 // same vault directory a vault credential does, so it exists without a vault ever being set up, and its
 // retention follows logs.retention_days of the same configuration this core was loaded from. client is the
 // MCP client's name and version from initialize, or nil on the CLI and where a client never declared one.
+// Each entry is signed where the vault's key is at hand, by a running vault process or by this process
+// when it holds the vault unlocked; see invokeLogWriter.
 func applicationCoreForInvoke(opts *Options, registry *capability.Registry, path string,
 	client *invokelog.ClientInfo) (*application.Core, error) {
 	core, cfg, configPath, err := loadCore(opts, registry, true)
 	if err != nil {
 		return nil, err
 	}
-	logger := invokelog.New(vault.New(filepath.Dir(configPath)).Dir(), cfg.LogRetentionDays())
-	core.SetInvokeLog(logger, path, client)
+	vaultDir := vault.New(filepath.Dir(configPath)).Dir()
+	writer := invokeLogWriter{logger: invokelog.New(vaultDir, cfg.LogRetentionDays())}
+	// Only the vault this very log belongs to signs it.
+	if secrets, err := opts.resolver(); err == nil && secrets.Vault() != nil && secrets.Vault().Dir() == vaultDir {
+		writer.vault = secrets.Vault()
+	}
+	core.SetInvokeLog(writer, path, client)
 	return core, nil
 }
 

@@ -73,12 +73,13 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 		answer(err.Error())
 		return err
 	}
-	idle, err := vaultIdleTimeout(path, reg)
+	idle, retentionDays, err := vaultProcessSettings(path, reg)
 	if err != nil {
 		answer(err.Error())
 		return err
 	}
-	socket, err := vaultproc.SocketPath(vault.New(filepath.Dir(path)).Dir())
+	vaultDir := vault.New(filepath.Dir(path)).Dir()
+	socket, err := vaultproc.SocketPath(vaultDir)
 	if err != nil {
 		answer(err.Error())
 		return err
@@ -95,6 +96,9 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 
 	server := vaultproc.NewServer(key, snap.Secrets, snap.Bindings)
 	server.IdleTimeout = idle
+	// While it runs, this process is the one writer that signs the invocation log of this vault, with the
+	// retention the configuration had when it started.
+	server.KeepLog(vaultDir, retentionDays)
 	snap.Secrets = nil
 
 	signals := make(chan os.Signal, 1)

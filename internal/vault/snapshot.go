@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 )
 
 // ErrNotUnlocked reports a vault that was not unlocked in this process, so there is nothing to take a
@@ -37,6 +39,17 @@ func (v *Vault) Snapshot() (Snapshot, error) {
 		secrets[entry.Name] = roles
 	}
 	return Snapshot{Identity: v.identity.key.String(), Secrets: secrets, Bindings: v.doc.bindings()}, nil
+}
+
+// LogKey returns the invocation log key of a vault unlocked in this process, derived from its key (see
+// invokelog.DeriveKey), so this process signs the entries it writes itself while no vault process runs. It
+// fails with ErrNotUnlocked unless the vault was unlocked, or created encrypted, in this process. The key
+// is the caller's to clear.
+func (v *Vault) LogKey() (*invokelog.Key, error) {
+	if !v.unlocked || v.identity == nil {
+		return nil, ErrNotUnlocked
+	}
+	return invokelog.DeriveKey(v.identity.key)
 }
 
 // Recipient returns the public key an encrypted vault encrypts to, as age text, the content of its

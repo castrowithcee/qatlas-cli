@@ -39,7 +39,7 @@ type Core struct {
 	policy   Policy
 	audit    io.Writer
 
-	invokeLog    *invokelog.Logger
+	invokeLog    invokelog.Writer
 	invokePath   string
 	invokeClient *invokelog.ClientInfo
 }
@@ -67,7 +67,7 @@ func (c *Core) SetAudit(writer io.Writer) { c.audit = writer }
 // client is the MCP client's name and version from its initialize request, or nil on the CLI and wherever
 // a client never declared one. A nil logger leaves invocation logging off, which no caller of this build
 // does outside a test.
-func (c *Core) SetInvokeLog(logger *invokelog.Logger, path string, client *invokelog.ClientInfo) {
+func (c *Core) SetInvokeLog(logger invokelog.Writer, path string, client *invokelog.ClientInfo) {
 	c.invokeLog, c.invokePath, c.invokeClient = logger, path, client
 }
 
@@ -624,7 +624,9 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 // descriptor and resolved are zero where the failure happened before they were resolved, in which case the
 // entry falls back to what the request itself asked for, so an unknown operation or connection still gets a
 // row instead of none. A log failure is reported as a warning through the same audit writer the CLI and the
-// MCP broker already flush to their stderr, and never changes err or response themselves.
+// MCP broker already flush to their stderr, and never changes err or response themselves; so is an entry
+// written without a check value only because the writer that would have signed it failed (see
+// invokelog.UnsignedError).
 func (c *Core) logInvoke(request InvokeRequest, descriptor capability.Descriptor, resolved *config.Resolved,
 	start time.Time, err error) {
 	if c.invokeLog == nil {
@@ -640,7 +642,13 @@ func (c *Core) logInvoke(request InvokeRequest, descriptor capability.Descriptor
 	if resolved != nil {
 		fields.Connection = resolved.Name
 	}
-	if logErr := c.invokeLog.Append(fields); logErr != nil {
+	var unsigned *invokelog.UnsignedError
+	switch logErr := c.invokeLog.Append(fields); {
+	case logErr == nil:
+	case errors.As(logErr, &unsigned):
+		c.writeAuditText(fmt.Sprintf("qatlas: warning: the invocation log entry was written without a check value: %v",
+			unsigned.Err))
+	default:
 		c.writeAuditText(fmt.Sprintf("qatlas: warning: could not write the invocation log: %v", logErr))
 	}
 }

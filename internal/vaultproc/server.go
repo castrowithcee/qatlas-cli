@@ -9,6 +9,7 @@ import (
 
 	"filippo.io/age"
 
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -27,6 +28,8 @@ type Server struct {
 
 	mu      sync.Mutex
 	key     age.Identity                 // the vault's key, which answers a client's challenge
+	logKey  *invokelog.Key               // derived from key; signs and checks the invocation log
+	log     *invokelog.Logger            // the invocation log this server writes; see KeepLog
 	secrets map[string]map[string][]byte // credential name, role, value
 	// bindings decide which connection a get may hand a secret to; see vault.Bindings.
 	bindings vault.Bindings
@@ -54,7 +57,26 @@ func NewServer(key age.Identity, secrets map[string]map[string]string, bindings 
 			held[credential][role] = []byte(value)
 		}
 	}
-	return &Server{key: key, secrets: held, bindings: copyBindings(bindings), stopped: make(chan struct{})}
+	s := &Server{key: key, secrets: held, bindings: copyBindings(bindings), stopped: make(chan struct{})}
+	if id, ok := key.(*age.X25519Identity); ok {
+		// A key the log key cannot be derived from leaves the server without one: it then refuses log and
+		// logcheck, and a client falls back to what it would do without a vault process.
+		s.logKey, _ = invokelog.DeriveKey(id)
+	}
+	return s
+}
+
+// KeepLog makes the server the writer of the invocation log below vaultDir, the vault directory it holds
+// unlocked, which keeps the entries of retentionDays days: every log request is signed with the log key
+// and appended under the log's own lock, through the same invokelog.Logger any other writer uses. Both
+// values come from the configuration the process was started with, never from a request. A server
+// without KeepLog refuses every log request. Call it before Serve.
+func (s *Server) KeepLog(vaultDir string, retentionDays int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.logKey != nil {
+		s.log = invokelog.New(vaultDir, retentionDays).WithKey(s.logKey)
+	}
 }
 
 // copyBindings returns bindings with maps of their own, never nil.
@@ -151,6 +173,8 @@ func (s *Server) wipe() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.key = nil
+	s.logKey.Clear()
+	s.logKey, s.log = nil, nil
 	for _, roles := range s.secrets {
 		for _, value := range roles {
 			clear(value)
@@ -212,7 +236,12 @@ func (s *Server) serveConn(conn net.Conn) {
 		return
 	}
 
-	resp := s.answer(req)
+	var resp response
+	if req.Op == opLog || req.Op == opLogCheck {
+		resp = s.answerLog(req)
+	} else {
+		resp = s.answer(req)
+	}
 	_ = writeMessage(conn, resp)
 	if req.Op == opLock && resp.Error == "" {
 		s.stop()
@@ -312,6 +341,49 @@ func (s *Server) answer(req request) response {
 		return response{V: Version}
 	}
 	return response{V: Version, Error: codeBadRequest}
+}
+
+// answerLog carries out one checked log or logcheck request. It holds s.mu only to see whether the server
+// is still unlocked and to take the log and its key, never while it reads or writes a file, so a slow disk
+// or a writer holding the log's lock never holds up a get. Neither request restarts the idle period: an
+// invoke that reads a secret does that with its get already. A log request's fields are validated before
+// anything is written, and a logcheck's lines are only compared, never written; the answer names neither
+// the key nor anything the request sent.
+func (s *Server) answerLog(req request) response {
+	s.mu.Lock()
+	locked := s.locked || s.stopping()
+	logger, key := s.log, s.logKey
+	s.mu.Unlock()
+	switch {
+	case locked:
+		return response{V: Version, Error: codeLocked}
+	case key == nil || (req.Op == opLog && logger == nil):
+		return response{V: Version, Error: codeNoLog}
+	}
+
+	if req.Op == opLogCheck {
+		if len(req.Lines) == 0 {
+			return response{V: Version, Error: codeBadRequest}
+		}
+		valid, err := key.Check(req.Lines)
+		if err != nil {
+			return response{V: Version, Error: codeNoLog}
+		}
+		return response{V: Version, Valid: valid}
+	}
+
+	// A duration beyond what Validate accepts is refused before it is converted, where it could overflow.
+	if req.Entry == nil || req.Entry.DurationMS < 0 || req.Entry.DurationMS > invokelog.MaxDuration.Milliseconds() {
+		return response{V: Version, Error: codeBadRequest}
+	}
+	fields := req.Entry.fields()
+	if fields.Validate() != nil {
+		return response{V: Version, Error: codeBadRequest}
+	}
+	if logger.Append(fields) != nil {
+		return response{V: Version, Error: codeLogFailed}
+	}
+	return response{V: Version}
 }
 
 // touch restarts the idle period on a get. The caller holds s.mu.

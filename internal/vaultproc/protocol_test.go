@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -25,7 +26,7 @@ func TestMessageRoundTrip(t *testing.T) {
 	if err := <-done; err != nil {
 		t.Fatalf("writeMessage() error = %v", err)
 	}
-	if got != sent {
+	if !reflect.DeepEqual(got, sent) {
 		t.Fatalf("readMessage() = %+v, want %+v", got, sent)
 	}
 }

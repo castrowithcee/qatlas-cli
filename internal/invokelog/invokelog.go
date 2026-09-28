@@ -8,9 +8,10 @@
 // so concurrent writers, goroutines or processes, never race the chain. A failed Append is reported to the
 // caller, never written silently and never left to abort the invoke it was called for.
 //
-// Nothing here reads or writes a check value bound to the vault's key: Entry.MAC stays empty until an entry
-// is signed, which marks it unverified. Verify already treats an empty MAC as "unverified", never as a
-// break, so signing can be added later without changing this format.
+// A logger given the log key (see Key and Logger.WithKey) also signs every entry it writes, retention-cut
+// markers included, with a check value in Entry.MAC; see Key.mac for its exact definition. A logger
+// without one leaves MAC empty, which marks an entry unverified: Verify counts such an entry but never
+// treats it as a break, so the chain runs on through signed and unsigned entries alike.
 package invokelog
 
 import (
@@ -18,12 +19,16 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -60,8 +65,9 @@ type Cut struct {
 
 // Entry is one line of a log file, in the field order it is written. Kind is empty for an invocation and
 // KindCut for a retention-cut marker, which carries only Cut beside the chain fields. MAC is the check
-// value of a signed entry; it stays empty until the entry is signed, which marks it unverified. No field
-// ever holds an argument, a result, a secret, a target, or a URL query.
+// value of a signed entry and always the last field; it stays empty for an entry written without the log
+// key, which marks it unverified. No field ever holds an argument, a result, a secret, a target, or a URL
+// query.
 type Entry struct {
 	Seq        uint64      `json:"seq"`
 	Time       time.Time   `json:"time"`
@@ -76,7 +82,7 @@ type Entry struct {
 	DurationMS int64       `json:"duration_ms,omitempty"`
 	Cut        *Cut        `json:"cut,omitempty"`
 	PrevHash   string      `json:"prev_hash"`
-	// MAC is the check value of a signed entry; empty until the entry is signed, on purpose.
+	// MAC is the check value of a signed entry, empty for an unsigned one; see Key.mac.
 	MAC string `json:"mac"`
 }
 
@@ -94,11 +100,89 @@ type Fields struct {
 	Duration time.Duration
 }
 
+// The bounds Validate holds the fields of an entry to.
+const (
+	maxTextLength   = 256
+	maxClientLength = 128
+	maxVersion      = 1 << 20
+)
+
+// MaxDuration is the longest duration Validate accepts for one invoke.
+const MaxDuration = 30 * 24 * time.Hour
+
+// resultPattern is the form of Fields.Result: "success" or an error code, a lowercase word with dashes.
+var resultPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+
+// validEffects are the effects an operation can declare, and the empty effect of an invoke that failed
+// before its operation was known.
+var validEffects = map[string]bool{"": true, "read": true, "create": true, "update": true, "delete": true,
+	"execute": true}
+
+// Validate reports whether f is something an invoke of this program could log: a known path, a result of
+// the form auditResult gives, a known effect, non-negative numbers, and text fields of bounded length that
+// are valid UTF-8 without a control character. A writer that takes fields from another process checks
+// them with it before anything reaches a file. The error names the field, never its value.
+func (f Fields) Validate() error {
+	if f.Path != "cli" && f.Path != "mcp" {
+		return errors.New("path must be cli or mcp")
+	}
+	if !resultPattern.MatchString(f.Result) {
+		return errors.New("result must be success or an error code")
+	}
+	if !validEffects[f.Effect] {
+		return errors.New("effect is not a known effect")
+	}
+	if f.Version < 0 || f.Version > maxVersion {
+		return errors.New("version is out of range")
+	}
+	if f.Duration < 0 || f.Duration > MaxDuration {
+		return errors.New("duration is out of range")
+	}
+	if err := checkText("operation", f.Operation, maxTextLength); err != nil {
+		return err
+	}
+	if err := checkText("connection", f.Connection, maxTextLength); err != nil {
+		return err
+	}
+	if f.Client != nil {
+		if err := checkText("client name", f.Client.Name, maxClientLength); err != nil {
+			return err
+		}
+		if err := checkText("client version", f.Client.Version, maxClientLength); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkText(name, value string, max int) error {
+	if len(value) > max || !utf8.ValidString(value) || strings.IndexFunc(value, unicode.IsControl) >= 0 {
+		return fmt.Errorf("%s must be at most %d bytes of text without control characters", name, max)
+	}
+	return nil
+}
+
+// Writer is what an invoke's entry is handed to: a *Logger, or a writer that decides per entry who signs it.
+type Writer interface {
+	Append(Fields) error
+}
+
+// UnsignedError reports an entry that was written, only without a check value, because Err kept the
+// writer that would have signed it from doing so. The entry is in the log and chained like any other; the
+// caller reports the reason as a warning.
+type UnsignedError struct{ Err error }
+
+func (e *UnsignedError) Error() string { return e.Err.Error() }
+
+func (e *UnsignedError) Unwrap() error { return e.Err }
+
 // Logger appends invoke entries under one vault directory's logs subdirectory. The zero value is not
 // usable; use New.
 type Logger struct {
 	vaultDir      string
 	retentionDays int
+	// key signs every entry written; nil leaves them unsigned.
+	key *Key
 	// now is the logger's clock; nil means time.Now. A test overrides it to move the clock across days
 	// without waiting.
 	now func() time.Time
@@ -109,6 +193,17 @@ type Logger struct {
 func New(vaultDir string, retentionDays int) *Logger {
 	return &Logger{vaultDir: vaultDir, retentionDays: retentionDays}
 }
+
+// WithKey returns a logger like l that signs every entry it writes with key; see Key. A nil key signs
+// nothing, like l itself. The key stays the caller's, who clears it once no logger uses it any more.
+func (l *Logger) WithKey(key *Key) *Logger {
+	out := *l
+	out.key = key
+	return &out
+}
+
+// Signs reports whether l signs the entries it writes.
+func (l *Logger) Signs() bool { return l.key.usable() }
 
 func (l *Logger) logsDir() string { return filepath.Join(l.vaultDir, logsDirName) }
 
@@ -163,7 +258,7 @@ func (l *Logger) Append(f Fields) error {
 	var lines [][]byte
 	if removedRaw != nil {
 		cut := Entry{Seq: seq, Time: now, Kind: KindCut, Cut: &Cut{ThroughSeq: removed.Seq}, PrevHash: prevHash}
-		raw, err := json.Marshal(cut)
+		raw, err := l.encode(cut)
 		if err != nil {
 			return fmt.Errorf("encode retention cut entry: %w", err)
 		}
@@ -176,13 +271,23 @@ func (l *Logger) Append(f Fields) error {
 		Connection: f.Connection, Effect: f.Effect, Result: f.Result, DurationMS: f.Duration.Milliseconds(),
 		PrevHash: prevHash,
 	}
-	raw, err := json.Marshal(entry)
+	raw, err := l.encode(entry)
 	if err != nil {
 		return fmt.Errorf("encode invocation log entry: %w", err)
 	}
 	lines = append(lines, raw)
 
 	return appendLines(todayPath, lines)
+}
+
+// encode is the line entry is stored as: its JSON encoding with an empty MAC, signed when l has a key.
+func (l *Logger) encode(entry Entry) ([]byte, error) {
+	entry.MAC = ""
+	raw, err := json.Marshal(entry)
+	if err != nil || !l.key.usable() {
+		return raw, err
+	}
+	return l.key.sign(raw)
 }
 
 // applyRetention removes every day file older than retentionDays, relative to now, and returns the last
