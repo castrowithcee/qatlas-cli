@@ -181,6 +181,7 @@ qatlas: not-found: list repositories: GitHub does not hold owner orgs/octocat or
 qatlas: not-found: get pull request: GitHub does not hold pull request #99 in repository octo-org/example or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: not-found: list team members: GitHub does not hold team ghost-team of orgs/octo-org or does not show it to this token
 qatlas: not-found: star repository: GitHub does not hold this star in repository octo-org/ghost or does not show it to this token; check the name, and that the token can see it (...)
+qatlas: not-found: get repository custom property values: GitHub does not hold the custom property values in repository octo-org/ghost or does not show it to this token; check the arguments, and that the token can see the repository (...)
 qatlas: permission: list projects: this GitHub token may not read the projects of owner users/octocat; check its scopes or permissions; classic: scope read:project; fine-grained: Projects: read of the organization, as the projects of a user need a classic token
 qatlas: auth: list issues: GitHub rejected the token; check or renew the credential of this connection with 'qatlas credential set <credential> <role>' or in 'qatlas tui'
 ```
@@ -225,7 +226,8 @@ not-recommended profile `repository-reader` under
 [repository contents, tree, blame, commits, branches, and tags](#repository-contents-tree-blame-commits-branches-and-tags),
 and the not-recommended profile `repository-admin-reader` under
 [repository lifecycle and collaborators](#repository-lifecycle-and-collaborators), which also lists the
-rulesets under [Rulesets](#rulesets-repository-and-organization-governance). A
+rulesets under [Rulesets](#rulesets-repository-and-organization-governance) and the custom property values or
+schema under [Custom properties](#custom-properties). A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -684,8 +686,8 @@ collaborators needs `repo` on a classic token, or Metadata: read on a fine-grain
 | `github.collaborators.list` | `repo` | Metadata: read |
 
 The terminal editor's setup profile `repository-admin-reader` (not recommended) ticks `[read]` with
-`github.collaborators.list`, `github.rulesets.list`, and `github.rulesets.get`; it is not the recommended
-profile, which stays `read`, unchanged. Custom properties are a separate group of tools, not part of this one.
+`github.collaborators.list`, `github.rulesets.list`, `github.rulesets.get`, and `github.customproperties.get`;
+it is not the recommended profile, which stays `read`, unchanged.
 
 ## Rulesets: repository and organization governance
 
@@ -755,7 +757,73 @@ organization, read or read and write:
 | `github.rulesets.list`, `github.rulesets.get` (organization) | `admin:org` | Administration read (organization), as far as GitHub documents it |
 | `github.rulesets.create`, `github.rulesets.update`, `github.rulesets.delete` (organization) | `admin:org` | Administration read and write (organization), as far as GitHub documents it |
 
-Custom properties are a separate group of tools, not part of this one.
+## Custom properties
+
+`github.customproperties.get` reads the custom property values of a repository or, with `organization`
+instead of `repository`, the custom property definitions (schema) an organization declares; exactly one of
+the two is required, the same exclusive selection as [Rulesets](#rulesets-repository-and-organization-governance).
+It never reads the values GitHub holds for the repositories of an organization: that GitHub route names
+repositories by a bare list of names the caller supplies, and binding that list to the connection's own
+repository targets would need a second, independent allow-list check this tool does not perform, so the
+narrower reading is a schema read only. `github.customproperties.set` changes them and is offered only where
+a connection's `tools` list names it, since a custom property can gate what a ruleset condition matches: for
+a repository it takes `properties` and sets or removes property values, a `value` of `null` removing one; for
+an organization it takes `definitions` and creates or replaces property definitions, the smaller scope that
+already covers the official custom properties write for a single repository, since that is offered through
+the repository target above; only one of `properties` or `definitions` may be given, matching the exclusive
+target:
+
+```sh
+qatlas invoke github.customproperties.get --connection code --arg repository=octo-org/example
+qatlas invoke github.customproperties.get --connection org --arg organization=orgs/octo-org
+echo '{"repository":"octo-org/example","properties":[{"property_name":"team","value":"atlas"},
+  {"property_name":"cost_center","value":null}]}' |
+  qatlas invoke github.customproperties.set --connection governance --confirm
+echo '{"organization":"orgs/octo-org","definitions":[{"property_name":"team","value_type":"single_select",
+  "allowed_values":["atlas","hydra"]}]}' |
+  qatlas invoke github.customproperties.set --connection governance --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.customproperties.get` | read | safe | none | reads the property values of a repository or the property schema of an organization |
+| `github.customproperties.set` | update | idempotent | required | sets or removes property values, or creates or replaces property definitions; offered only where a connection's tools list names it |
+
+Every call takes exactly one of `repository` (as `OWNER/REPO`, checked against the connection's repository
+targets like every other repository tool) or `organization` (as `orgs/LOGIN`, checked against its owner
+targets like `github.rulesets.list`); giving both or neither is an invalid request, checked before a
+credential is resolved.
+
+`github.customproperties.get` answers `properties` (present only for a repository call: each `property_name`
+and `value`, a string, an array of strings for a multi-select property, or `null` while unset) or `schema`
+(present only for an organization call: each `property_name`, `value_type` (`string`, `single_select`,
+`multi_select`, or `true_false`), `required`, `default_value`, `description`, `allowed_values`, and
+`values_editable_by` (`org_actors` or `org_and_repo_actors`)).
+
+`github.customproperties.set` takes `properties` (required with `repository`, refused with `organization`):
+an array of at most 100 `{property_name, value}` entries, each value a string, an array of strings, or `null`
+to remove that property. It takes `definitions` instead (required with `organization`, refused with
+`repository`): an array of at most 100 property definitions, each with `property_name`, `value_type`, and,
+optionally, `required`, `default_value`, `description`, `allowed_values`, and `values_editable_by`; a name the
+organization already declares is replaced, so a repeated call is idempotent. GitHub answers a repository set
+with no body, so the tool echoes back the values sent; an organization set answers the definitions GitHub
+created or replaced. Every field is checked before a credential is resolved: the exclusive target and
+argument, the array bounds a JSON schema's `maxItems` cannot enforce by itself, and the size of the whole
+request.
+
+Reading the custom property values of a repository needs Custom properties: read on a fine-grained token, or
+`repo` on a classic token; changing them, listed-only, needs Custom properties: write instead. Reading or
+changing the custom property schema of an organization needs the organization permission Custom properties,
+read or read and write, on a fine-grained token, or, as far as GitHub documents it, `admin:org` on a classic
+token; these fine-grained mappings are stated cautiously, since Qatlas cannot verify them against GitHub
+live:
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.customproperties.get` (repository) | `repo` | Custom properties: read |
+| `github.customproperties.set` (repository) | `repo` | Custom properties: write |
+| `github.customproperties.get` (organization) | `admin:org` | Custom properties: read (organization), as far as GitHub documents it |
+| `github.customproperties.set` (organization) | `admin:org` | Custom properties: read and write (organization), as far as GitHub documents it |
 
 ## Project lifecycle
 

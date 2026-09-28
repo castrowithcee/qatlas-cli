@@ -56,7 +56,11 @@
 // of a repository or, with organization instead of repository, an organization the connection allows;
 // exactly one of the two is required. Only on a connection whose tools list names them, github.rulesets.
 // create, github.rulesets.update, and github.rulesets.delete change them; an update replaces a ruleset as a
-// whole. The search
+// whole. github.customproperties.get reads the custom property values of a repository or, with organization
+// instead, the custom property definitions (schema) an organization declares, the same exclusive selection;
+// only on a connection whose tools list names it, github.customproperties.set changes them: for a repository
+// it sets or removes property values, and for an organization it creates or updates property definitions.
+// The search
 // tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
@@ -347,9 +351,10 @@ var issuesGet = capability.Descriptor{
 // Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the item and
 // draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, the listed-only
 // workflow maintainer and Actions administrator tools, the account, organization, and star tools, the
-// contents, tree, and blame tools, the repository lifecycle and collaborators tools, and the repository and
-// organization ruleset tools. Only reads are a connection's default: every change and every execution needs
-// a permission of its own, and a listed-only tool also its name in the connection's tools list.
+// contents, tree, and blame tools, the repository lifecycle and collaborators tools, the repository and
+// organization ruleset tools, and the repository and organization custom properties tools. Only reads are a
+// connection's default: every change and every execution needs a permission of its own, and a listed-only
+// tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
@@ -405,7 +410,12 @@ func Register(reg *capability.Registry) error {
 				"read on a fine-grained token; changing them, listed-only, needs Administration: read and write " +
 				"on a fine-grained token instead; reading or changing the rulesets of an organization needs " +
 				"admin:org on a classic token, or, as far as GitHub documents it, Administration read, or read " +
-				"and write, access of the organization on a fine-grained token",
+				"and write, access of the organization on a fine-grained token; reading the custom property " +
+				"values of a repository needs Custom properties: read on a fine-grained token, or repo on a " +
+				"classic token, and changing them, listed-only, needs Custom properties: write instead; reading " +
+				"or changing the custom property schema of an organization needs the organization permission " +
+				"Custom properties, read or read and write, on a fine-grained token, or, as far as GitHub " +
+				"documents it, admin:org on a classic token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -549,9 +559,10 @@ func Register(reg *capability.Registry) error {
 				branchesList.ID, tagsList.ID, tagsGet.ID, branchesCreate.ID, contentsPut.ID},
 		}, {
 			ID: "repository-admin-reader", Title: "Repository administration reader",
-			Description: "not recommended: reads the collaborators of a repository and the rulesets of a " +
-				"repository or an organization; changes nothing",
-			Tools: []string{collaboratorsList.ID, rulesetsList.ID, rulesetsGet.ID},
+			Description: "not recommended: reads the collaborators of a repository, the rulesets of a " +
+				"repository or an organization, and the custom property values of a repository or the custom " +
+				"property schema of an organization; changes nothing",
+			Tools: []string{collaboratorsList.ID, rulesetsList.ID, rulesetsGet.ID, customPropertiesGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -580,7 +591,7 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
-		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations())...)
+		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1326,6 +1337,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := rulesetsSubject(parts[2]); what != "" {
 			s.what = what
 		}
+		if what := customPropertiesSubject(parts[2]); what != "" {
+			s.what = what
+		}
 	}
 	return s
 }
@@ -1356,6 +1370,9 @@ func organizationSubject(tail string) subject {
 			}
 		}
 		return subject{what: what}
+	}
+	if len(parts) >= 2 && parts[1] == "properties" {
+		return subject{what: "the custom property schema of orgs/" + owner}
 	}
 	return subject{in: target{kind: kindOwner, scope: "orgs", owner: owner}}
 }
