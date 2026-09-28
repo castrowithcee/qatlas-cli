@@ -224,7 +224,8 @@ not-recommended profiles `pull-requests` and `pull-requests-operator` under
 not-recommended profile `repository-reader` under
 [repository contents, tree, blame, commits, branches, and tags](#repository-contents-tree-blame-commits-branches-and-tags),
 and the not-recommended profile `repository-admin-reader` under
-[repository lifecycle and collaborators](#repository-lifecycle-and-collaborators). A
+[repository lifecycle and collaborators](#repository-lifecycle-and-collaborators), which also lists the
+rulesets under [Rulesets](#rulesets-repository-and-organization-governance). A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -683,8 +684,78 @@ collaborators needs `repo` on a classic token, or Metadata: read on a fine-grain
 | `github.collaborators.list` | `repo` | Metadata: read |
 
 The terminal editor's setup profile `repository-admin-reader` (not recommended) ticks `[read]` with
-`github.collaborators.list` alone; it is not the recommended profile, which stays `read`, unchanged. Rulesets
-and custom properties are separate groups of tools, not part of this one.
+`github.collaborators.list`, `github.rulesets.list`, and `github.rulesets.get`; it is not the recommended
+profile, which stays `read`, unchanged. Custom properties are a separate group of tools, not part of this one.
+
+## Rulesets: repository and organization governance
+
+`github.rulesets.list` and `github.rulesets.get` read the rulesets of a repository or, with `organization`
+instead of `repository`, an organization an explicit connection allows. `github.rulesets.create`,
+`github.rulesets.update`, and `github.rulesets.delete` change them and are offered only where a connection's
+`tools` list names them, since a ruleset governs what a repository or an organization allows at all:
+
+```sh
+qatlas invoke github.rulesets.list --connection code --arg repository=octo-org/example
+qatlas invoke github.rulesets.list --connection org --arg organization=orgs/octo-org
+qatlas invoke github.rulesets.get --connection code --arg repository=octo-org/example --arg id=1420
+echo '{"repository":"octo-org/example","name":"protect-main","target":"branch","enforcement":"active",
+  "conditions":{"ref_name":{"include":["refs/heads/main"],"exclude":[]}},
+  "rules":[{"type":"non_fast_forward"}]}' |
+  qatlas invoke github.rulesets.create --connection governance --confirm
+qatlas invoke github.rulesets.delete --connection governance --arg repository=octo-org/example --arg id=1420 \
+  --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.rulesets.list` | read | safe | none | lists the rulesets of a repository or an organization, compactly |
+| `github.rulesets.get` | read | safe | none | reads one ruleset with its conditions, rules, and bypass actors |
+| `github.rulesets.create` | create | non-idempotent | required | creates one new ruleset; offered only where a connection's tools list names it |
+| `github.rulesets.update` | update | idempotent | required | replaces one ruleset as a whole; offered only where a connection's tools list names it |
+| `github.rulesets.delete` | delete | unknown | required | deletes one ruleset permanently; offered only where a connection's tools list names it |
+
+Every call takes exactly one of `repository` (as `OWNER/REPO`, checked against the connection's repository
+targets like every other repository tool) or `organization` (as `orgs/LOGIN`, checked against its owner
+targets like `github.teams.list`); giving both or neither is an invalid request, checked before a credential
+is resolved, so a call never falls back to a target it did not name. A ruleset identifier from one target is
+unknown under another: `github.rulesets.get`, `.update`, and `.delete` answer `not-found` for an `id` GitHub
+does not hold under the given repository or organization, whichever GitHub does not distinguish from one it
+merely does not show to this token.
+
+`github.rulesets.list` also takes `includes_parents` (true by default for a repository, also listing
+rulesets it inherits from its organization; ignored for an organization, which has none to inherit) and the
+paging arguments, a cursor bound to the target and `includes_parents`. It answers `rulesets`, each with `id`,
+`name`, `target` (`branch`, `tag`, `push`, or `repository`), `enforcement`, and `source` (the repository or
+organization it was read from).
+
+`github.rulesets.create` and `github.rulesets.update` take a ruleset definition: `name` (1 to 100
+characters), `target` (`branch`, `tag`, `push`, or `repository`, the last selecting repositories instead of
+refs for an organization ruleset), `enforcement` (`disabled`, `active`, or `evaluate`), and, all optional,
+`conditions` (an object, such as `ref_name` include and exclude, or, for target `repository`,
+`repository_name`), `rules` (an array of at most 200 `{type, parameters}` objects, GitHub's own rule types),
+and `bypass_actors` (an array of at most 100 objects, each with `actor_type` and, depending on it, `actor_id`
+and `bypass_mode`). Every field is GitHub's own shape, passed through as given and read back the same way,
+untrusted data; only the top-level required fields, the enums, and the array and byte-size bounds above are
+checked before a credential is resolved. `github.rulesets.update` sends the whole definition in one `PUT`
+that replaces the ruleset as a whole and is idempotent as long as nothing else changes the ruleset between
+two identical calls; `github.rulesets.create` is not, since a repeated call creates a second ruleset.
+`github.rulesets.get`, `.create`, and `.update` answer `id`, `name`, `target`, `enforcement`, `conditions`,
+`rules`, and `bypass_actors`.
+
+Reading the rulesets of a repository needs `repo` on a classic token, or Administration: read on a
+fine-grained token; changing them, listed-only, needs Administration: read and write on a fine-grained token
+instead. Reading or changing the rulesets of an organization needs `admin:org` on a classic token; the
+fine-grained equivalent is, as far as GitHub documents it, a single Administration permission of the
+organization, read or read and write:
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.rulesets.list`, `github.rulesets.get` (repository) | `repo` | Administration: read |
+| `github.rulesets.create`, `github.rulesets.update`, `github.rulesets.delete` (repository) | `repo` | Administration: read and write |
+| `github.rulesets.list`, `github.rulesets.get` (organization) | `admin:org` | Administration read (organization), as far as GitHub documents it |
+| `github.rulesets.create`, `github.rulesets.update`, `github.rulesets.delete` (organization) | `admin:org` | Administration read and write (organization), as far as GitHub documents it |
+
+Custom properties are a separate group of tools, not part of this one.
 
 ## Project lifecycle
 

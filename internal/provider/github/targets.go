@@ -51,10 +51,13 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	// The account tool, the star list, and the search tools name no repository, project, or owner: they read
 	// or, for the star list and the search tools, narrow by the connection's targets as a whole, not by a
 	// target argument of their own. github.repositories.create names no existing repository either, since it
-	// makes one; its own optional owner argument is defined on its descriptor directly.
+	// makes one; its own optional owner argument is defined on its descriptor directly. The ruleset tools take
+	// an exclusive repository or organization argument of their own, since exactly one of the two, never a
+	// default, addresses a call.
 	switch d.ID {
 	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
-		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID, repositoriesCreate.ID:
+		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID, repositoriesCreate.ID,
+		rulesetsList.ID, rulesetsGet.ID, rulesetsCreate.ID, rulesetsUpdate.ID, rulesetsDelete.ID:
 		return d
 	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument

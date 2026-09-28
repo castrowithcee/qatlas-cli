@@ -52,7 +52,11 @@
 // answered asynchronously; only on a connection whose tools list names it, github.repositories.delete deletes
 // one repository permanently, once confirm_name repeats its owner/name exactly. github.collaborators.list
 // reads the collaborators of a repository with their login, account type, role, and permissions, never an
-// email address or another personal detail. The search
+// email address or another personal detail. github.rulesets.list and github.rulesets.get read the rulesets
+// of a repository or, with organization instead of repository, an organization the connection allows;
+// exactly one of the two is required. Only on a connection whose tools list names them, github.rulesets.
+// create, github.rulesets.update, and github.rulesets.delete change them; an update replaces a ruleset as a
+// whole. The search
 // tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
@@ -343,9 +347,9 @@ var issuesGet = capability.Descriptor{
 // Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the item and
 // draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, the listed-only
 // workflow maintainer and Actions administrator tools, the account, organization, and star tools, the
-// contents, tree, and blame tools, and the repository lifecycle and collaborators tools. Only
-// reads are a connection's default: every change and every execution needs a permission of its own, and a
-// listed-only tool also its name in the connection's tools list.
+// contents, tree, and blame tools, the repository lifecycle and collaborators tools, and the repository and
+// organization ruleset tools. Only reads are a connection's default: every change and every execution needs
+// a permission of its own, and a listed-only tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
@@ -397,7 +401,11 @@ func Register(reg *capability.Registry) error {
 				"forking a repository need repo on a classic token, or Administration: read and write on a " +
 				"fine-grained token; deleting a repository, listed-only, needs delete_repo as well on a classic " +
 				"token; listing collaborators needs repo on a classic token, or Metadata: read on a fine-grained " +
-				"token",
+				"token; reading the rulesets of a repository needs repo on a classic token, or Administration: " +
+				"read on a fine-grained token; changing them, listed-only, needs Administration: read and write " +
+				"on a fine-grained token instead; reading or changing the rulesets of an organization needs " +
+				"admin:org on a classic token, or, as far as GitHub documents it, Administration read, or read " +
+				"and write, access of the organization on a fine-grained token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -541,8 +549,9 @@ func Register(reg *capability.Registry) error {
 				branchesList.ID, tagsList.ID, tagsGet.ID, branchesCreate.ID, contentsPut.ID},
 		}, {
 			ID: "repository-admin-reader", Title: "Repository administration reader",
-			Description: "not recommended: reads the collaborators of a repository; changes nothing",
-			Tools:       []string{collaboratorsList.ID},
+			Description: "not recommended: reads the collaborators of a repository and the rulesets of a " +
+				"repository or an organization; changes nothing",
+			Tools: []string{collaboratorsList.ID, rulesetsList.ID, rulesetsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -571,7 +580,7 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
-		contentsWriteOperations(), repositoriesOperations())...)
+		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1314,6 +1323,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := repositoryAdminSubject(parts[2]); what != "" {
 			s.what = what
 		}
+		if what := rulesetsSubject(parts[2]); what != "" {
+			s.what = what
+		}
 	}
 	return s
 }
@@ -1335,6 +1347,15 @@ func organizationSubject(tail string) subject {
 	}
 	if len(parts) >= 2 && parts[1] == "repos" {
 		return subject{what: "the repositories of orgs/" + owner}
+	}
+	if len(parts) >= 2 && parts[1] == "rulesets" {
+		what := "the rulesets of orgs/" + owner
+		if len(parts) >= 3 {
+			if id, err := strconv.ParseInt(parts[2], 10, 64); err == nil && id > 0 {
+				what = "ruleset " + parts[2] + " of orgs/" + owner
+			}
+		}
+		return subject{what: what}
 	}
 	return subject{in: target{kind: kindOwner, scope: "orgs", owner: owner}}
 }

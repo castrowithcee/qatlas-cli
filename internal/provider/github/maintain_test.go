@@ -221,14 +221,16 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 		iterationsReplace.ID: true, viewsDelete.ID: true, itemsDelete.ID: true, statusDelete.ID: true,
 		projectWorkflowsDelete.ID: true, releasesDelete.ID: true, contentsDelete.ID: true,
 		repositoriesDelete.ID: true, collaboratorsUpdate.ID: true, teamsLink.ID: true, teamsUnlink.ID: true,
-		filesPush.ID: true}
+		filesPush.ID: true, rulesetsDelete.ID: true}
 	// github.pullrequests.merge and github.pullrequestreviews.approve are each guarded on their own: neither is
 	// a maintainer or administrator tool nor a delete, but each is offered only where a connection's tools list
 	// names it, because merging into the wrong repository's default branch, and approving on the connection's
-	// behalf, are costly mistakes.
+	// behalf, are costly mistakes. github.rulesets.create and github.rulesets.update are guarded the same way:
+	// a ruleset governs what a repository or an organization allows at all.
 	for _, descriptor := range reg.Provider(Provider) {
 		want := guarded[descriptor.ID] || deletes[descriptor.ID] || descriptor.ID == pullsMerge.ID ||
-			descriptor.ID == pullRequestReviewsApprove.ID
+			descriptor.ID == pullRequestReviewsApprove.ID || descriptor.ID == rulesetsCreate.ID ||
+			descriptor.ID == rulesetsUpdate.ID
 		if descriptor.RequiresToolAllowList != want {
 			t.Errorf("%s requires an allow-list = %t", descriptor.ID, descriptor.RequiresToolAllowList)
 		}
@@ -240,9 +242,10 @@ func TestGuardedToolsStayOutOfEveryStandardProfile(t *testing.T) {
 			marked++
 		}
 	}
-	if marked != len(guardedTools)+len(deletes)+2 || len(guardedTools) != 10 {
-		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools, the eleven deletes and "+
-			"the three access tools and files.push, the merge, and the approve", marked)
+	if marked != len(guardedTools)+len(deletes)+4 || len(guardedTools) != 10 {
+		t.Errorf("marked tools = %d, want the ten maintainer and administrator tools, the twelve deletes and "+
+			"the three access tools and files.push, the merge, the approve, and the ruleset create and update",
+			marked)
 	}
 	profiles := map[string]config.ToolProfile{}
 	for _, profile := range metadata.Profiles {
