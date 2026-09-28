@@ -50,10 +50,11 @@ var projectField = capability.Field{Name: "project", Description: "Project the t
 func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	// The account tool, the star list, and the search tools name no repository, project, or owner: they read
 	// or, for the star list and the search tools, narrow by the connection's targets as a whole, not by a
-	// target argument of their own.
+	// target argument of their own. github.repositories.create names no existing repository either, since it
+	// makes one; its own optional owner argument is defined on its descriptor directly.
 	switch d.ID {
 	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
-		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID:
+		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID, repositoriesCreate.ID:
 		return d
 	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument

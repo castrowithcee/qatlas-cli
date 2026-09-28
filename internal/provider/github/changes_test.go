@@ -318,6 +318,11 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 			dataSensitivity),
 		"github.files.push": guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent,
 			dataSensitivity),
+		"github.repositories.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.repositories.fork":   changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+		"github.repositories.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
+			dataSensitivity),
+		"github.collaborators.list": readRisk,
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {
@@ -333,7 +338,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		}
 		owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
 			descriptor.ID == projectsCreate.ID || descriptor.ID == projectsCopy.ID ||
-			descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID
+			descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID ||
+			descriptor.ID == repositoriesCreate.ID
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "document"} {
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("%s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)

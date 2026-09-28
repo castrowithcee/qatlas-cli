@@ -1,10 +1,10 @@
 ---
 description: >
-  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, release reads and changes, the account behind a connection's token, organization teams and their members, and the account's starred repositories: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the account and organization discovery tools, starring and unstarring, the cursor contract, and token scopes.
+  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, release reads and changes, the account behind a connection's token, organization teams and their members, and the account's starred repositories: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the account and organization discovery tools, starring and unstarring, repository create and fork, the listed-only repository delete, repository collaborators, the cursor contract, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # GitHub
@@ -35,7 +35,10 @@ account behind the connection's token, the teams of an organization and their me
 starred repositories, and it stars and unstars a repository. On the not-recommended profile
 `repository-writer` it also creates a branch from a branch, a tag, or a commit SHA, and creates or updates a
 file; only deleting a file is not in any profile, offered only while a connection's `tools` list names
-`github.contents.delete`. It never accepts
+`github.contents.delete`. It also creates and forks repositories, under the token's own account or an
+organization, and, on the not-recommended profile `repository-admin-reader`, reads the collaborators of a
+repository; only deleting a repository is not in any profile, offered only while a connection's `tools` list
+names `github.repositories.delete`. It never accepts
 a free filter expression, a GraphQL document, or a REST route from the caller. A `repository`, `project`, or
 `owner` argument names exactly one target, and it must lie inside the connection's targets when the connection
 lists any.
@@ -159,7 +162,8 @@ a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested proj
 check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, the
 workflow file or `.github/workflows` directory with the ref it was read at, `github.contents.get`'s path or
 the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s ref or its path at that ref,
-`github.commits.get`'s ref, `github.tags.get`'s tag, the pull request by its number, or, for
+`github.commits.get`'s ref, `github.tags.get`'s tag, a fork or the collaborators `github.repositories.fork` and
+`github.collaborators.list` address, the pull request by its number, or, for
 `github.pullrequestchecks.list` once the pull request itself was found, the commit its checks were asked
 for, where the call named one:
 
@@ -218,7 +222,9 @@ not-recommended profiles `pull-requests` and `pull-requests-operator` under
 `releases` under [Releases](#releases), the not-recommended profiles `discovery` and `stars` under
 [account, organization teams, and stars](#discovery-account-organization-teams-and-stars), and the
 not-recommended profile `repository-reader` under
-[repository contents, tree, blame, commits, branches, and tags](#repository-contents-tree-blame-commits-branches-and-tags). A
+[repository contents, tree, blame, commits, branches, and tags](#repository-contents-tree-blame-commits-branches-and-tags),
+and the not-recommended profile `repository-admin-reader` under
+[repository lifecycle and collaborators](#repository-lifecycle-and-collaborators). A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -605,6 +611,80 @@ The terminal editor's setup profile `repository-writer` (not recommended) ticks 
 the read eight plus `github.branches.create` and `github.contents.put`; `github.contents.delete` and
 `github.files.push` are in no profile, offered only where a connection's `tools` list names them, like
 `github.releases.delete`.
+
+## Repository lifecycle and collaborators
+
+`github.repositories.create` makes one new repository under the token's own account, or, with `owner`, under
+an organization an explicit connection names as an owner target; private by default. `github.repositories.
+fork` forks a repository an explicit connection allows into the token's own account or, with `organization`,
+an organization the connection names as an owner target; GitHub answers this asynchronously, so a large
+repository may still be importing once the call returns. Creating or forking under the token's own account,
+rather than an organization, reads the account behind the token as a whole, the same account-wide guard the
+account and star tools apply: it is refused when the connection's targets name a repository or a project,
+since the account behind the token may belong to a customer other than the one those targets name.
+`github.repositories.delete` deletes one repository permanently and is offered only where a connection's
+`tools` list names it; `confirm_name` must repeat the repository as `owner/name` exactly, checked before any
+credential is resolved, since this cannot be undone. `github.collaborators.list` reads the collaborators of a
+repository with their login, account type, role, and permissions, filtered by `affiliation` and `permission`,
+paged; it never answers an email address or another personal detail GitHub's collaborator object may carry:
+
+```sh
+qatlas invoke github.repositories.create --connection org --arg name=example --confirm
+qatlas invoke github.repositories.create --connection org --arg owner=orgs/octo-org --arg name=example \
+  --arg private=false --confirm
+qatlas invoke github.repositories.fork --connection code --confirm
+qatlas invoke github.repositories.fork --connection code --arg organization=orgs/octo-fork-org --confirm
+qatlas invoke github.repositories.delete --connection code --arg confirm_name=octo-org/example --confirm
+qatlas invoke github.collaborators.list --connection code --arg affiliation=outside
+```
+
+| Tool | Effect | Idempotency | Does |
+| --- | --- | --- | --- |
+| `github.repositories.create` | create | non-idempotent | creates one repository under the token's own account or an organization |
+| `github.repositories.fork` | create | idempotent | forks a repository into the token's own account or an organization |
+| `github.repositories.delete` | delete | unknown | deletes one repository permanently; offered only where a connection's tools list names it |
+| `github.collaborators.list` | read | safe | lists the collaborators of a repository with their role and permissions |
+
+`github.repositories.create` takes `owner` (an organization as `orgs/LOGIN`; a user login is refused, since
+GitHub creates a repository only under the token's own account or an organization), `name` (required, 1 to
+100 characters), `description` (at most 350 characters), `private` (true by default), and `auto_init` (false
+by default; true creates an initial commit with a README). Left out, `owner` defaults to the connection's one
+organization owner target, when it names exactly one; otherwise the repository is created under the token's
+own account, subject to the account-wide guard above. It answers `repository` (`OWNER/REPO`), `owner` (the
+account it actually landed under, as `users/LOGIN` or `orgs/LOGIN`), `private`, `default_branch`, and `url`. A
+name already taken under the destination account answers `invalid-request` with a clear message instead of a
+second attempt, since GitHub refuses it with HTTP 422.
+
+`github.repositories.fork` takes `organization` (as `orgs/LOGIN`, the same restriction and target check as
+`owner` above; no default, unlike create, since a fork always names a specific source repository and never
+falls back to a target it merely happens to allow), `name` (renames the fork; the source repository's name
+when left out), and `default_branch_only` (false by default; true forks only the default branch). It answers
+`fork` (the new repository as `OWNER/REPO`), `private`, `url`, and `accepted` (true once GitHub queued the
+fork). Forking a repository already forked into the same account does not create a second fork, so the tool
+is idempotent.
+
+`github.repositories.delete` takes only `confirm_name`, the repository's `owner/name` repeated exactly; a
+mismatch is refused before any credential is resolved. It answers `deleted`.
+
+`github.collaborators.list` takes `affiliation` (`outside`, `direct`, or `all`; `all` when omitted),
+`permission` (`pull`, `triage`, `push`, `maintain`, or `admin`; every permission level when omitted), and the
+paging arguments, a cursor bound to the repository and its filters. Each collaborator answers `login`,
+`type`, `role_name`, and `permissions` (the booleans `pull`, `triage`, `push`, `maintain`, `admin`); no other
+field GitHub's collaborator object may carry, such as an email address, ever reaches the answer.
+
+Creating or forking a repository needs `repo` on a classic token, or Administration: read and write on a
+fine-grained token; deleting one, listed-only, needs `delete_repo` as well on a classic token. Listing
+collaborators needs `repo` on a classic token, or Metadata: read on a fine-grained token:
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.repositories.create`, `github.repositories.fork` | `repo` | Administration: read and write |
+| `github.repositories.delete` | `repo` and `delete_repo` | Administration: read and write |
+| `github.collaborators.list` | `repo` | Metadata: read |
+
+The terminal editor's setup profile `repository-admin-reader` (not recommended) ticks `[read]` with
+`github.collaborators.list` alone; it is not the recommended profile, which stays `read`, unchanged. Rulesets
+and custom properties are separate groups of tools, not part of this one.
 
 ## Project lifecycle
 

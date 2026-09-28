@@ -46,7 +46,13 @@
 // whose tools list names it, github.contents.delete deletes one; only on a connection whose tools list names
 // it, github.files.push writes several files as one commit through the Git Data API, fast-forward only, so a
 // branch that moved since it was read is refused with nothing written; none of the four ever touches a path
-// below .github/workflows/, which the listed-only workflow maintainer covers instead. The search
+// below .github/workflows/, which the listed-only workflow maintainer covers instead. github.repositories.
+// create makes one new repository, under the token's own account or an organization the connection names as
+// an owner target; github.repositories.fork forks a repository an explicit connection allows the same way,
+// answered asynchronously; only on a connection whose tools list names it, github.repositories.delete deletes
+// one repository permanently, once confirm_name repeats its owner/name exactly. github.collaborators.list
+// reads the collaborators of a repository with their login, account type, role, and permissions, never an
+// email address or another personal detail. The search
 // tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
@@ -336,8 +342,8 @@ var issuesGet = capability.Descriptor{
 
 // Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the item and
 // draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, the listed-only
-// workflow maintainer and Actions administrator tools, the account, organization, and star tools, and the
-// contents, tree, and blame tools. Only
+// workflow maintainer and Actions administrator tools, the account, organization, and star tools, the
+// contents, tree, and blame tools, and the repository lifecycle and collaborators tools. Only
 // reads are a connection's default: every change and every execution needs a permission of its own, and a
 // listed-only tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
@@ -387,7 +393,11 @@ func Register(reg *capability.Registry) error {
 				"needs no scope for a public repository, or repo on a classic token, or Contents: read on a " +
 				"fine-grained token, for a private one; creating a branch, creating, updating, or deleting a " +
 				"file below the repository root, and pushing several files as one commit, listed-only, need " +
-				"repo on a classic token, or Contents: read and write on a fine-grained token",
+				"repo on a classic token, or Contents: read and write on a fine-grained token; creating or " +
+				"forking a repository need repo on a classic token, or Administration: read and write on a " +
+				"fine-grained token; deleting a repository, listed-only, needs delete_repo as well on a classic " +
+				"token; listing collaborators needs repo on a classic token, or Metadata: read on a fine-grained " +
+				"token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -529,6 +539,10 @@ func Register(reg *capability.Registry) error {
 				"is offered only where a connection's tools list names github.contents.delete",
 			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID, commitsList.ID, commitsGet.ID,
 				branchesList.ID, tagsList.ID, tagsGet.ID, branchesCreate.ID, contentsPut.ID},
+		}, {
+			ID: "repository-admin-reader", Title: "Repository administration reader",
+			Description: "not recommended: reads the collaborators of a repository; changes nothing",
+			Tools:       []string{collaboratorsList.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -557,7 +571,7 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
-		contentsWriteOperations())...)
+		contentsWriteOperations(), repositoriesOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1297,6 +1311,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := refsSubject(parts[2]); what != "" {
 			s.what = what
 		}
+		if what := repositoryAdminSubject(parts[2]); what != "" {
+			s.what = what
+		}
 	}
 	return s
 }
@@ -1315,6 +1332,9 @@ func organizationSubject(tail string) subject {
 		if slug, err := url.PathUnescape(parts[2]); err == nil && validLogin(slug) {
 			return subject{what: "team " + slug + " of orgs/" + owner}
 		}
+	}
+	if len(parts) >= 2 && parts[1] == "repos" {
+		return subject{what: "the repositories of orgs/" + owner}
 	}
 	return subject{in: target{kind: kindOwner, scope: "orgs", owner: owner}}
 }
@@ -1340,6 +1360,8 @@ func accountSubject(tail string) subject {
 		return subject{what: "the account behind this token"}
 	case tail == "/starred":
 		return subject{what: "the account's starred repositories"}
+	case tail == "/repos":
+		return subject{what: "the account's own repositories"}
 	}
 	rest, ok := strings.CutPrefix(tail, "/starred/")
 	if !ok {

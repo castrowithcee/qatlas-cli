@@ -190,7 +190,7 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 			descriptor.ID == repositoriesSearch.ID || descriptor.ID == codeSearch.ID ||
 			descriptor.ID == issuesSearch.ID || descriptor.ID == pullRequestsSearch.ID ||
 			descriptor.ID == commitsSearch.ID || descriptor.ID == usersSearch.ID ||
-			descriptor.ID == organizationsSearch.ID:
+			descriptor.ID == organizationsSearch.ID || descriptor.ID == repositoriesCreate.ID:
 			names = []string{}
 		case descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
 			descriptor.ID == projectsCreate.ID || descriptor.ID == organizationTeamsList.ID ||
