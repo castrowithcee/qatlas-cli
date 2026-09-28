@@ -8,6 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
+	"path"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -35,6 +38,14 @@ const (
 	mcpInvalidParams      = -32602
 	mcpInternalError      = -32603
 	mcpUnsupportedVersion = -32022
+
+	// maxMCPRoots bounds how many entries of a roots/list answer are read, and maxMCPRootURIBytes how long
+	// one root URI may be. Roots are data of the client, so neither is trusted to stay small.
+	maxMCPRoots        = 64
+	maxMCPRootURIBytes = 4096
+	// mcpRootsWait bounds how long after asking for roots a tool call waits for the answer before it runs
+	// in the working directory instead.
+	mcpRootsWait = 2 * time.Second
 )
 
 // mcpLegacyVersions are the handshake-based protocol versions an initialize request negotiates, newest
@@ -105,6 +116,14 @@ func mcpCommandLong() string {
 		"to 80 characters, for a client that shows only the text. A request refused with\n" +
 		"unsupported-capability adds operation, connection, and reason. Where a message points to\n" +
 		"discovery, it names qatlas.search or qatlas.describe instead of a command.\n\n" +
+		"A connection bound to paths is offered only in its projects. A session an initialize request\n" +
+		"opened runs in the projects its client names as roots: where the client declares the roots\n" +
+		"capability, the server sends roots/list after notifications/initialized, and again after\n" +
+		"notifications/roots/list_changed where the client declared listChanged. Each file:// root names\n" +
+		"one project; other URIs are ignored, and at most 64 roots are read. A tool call waits at most 2\n" +
+		"seconds for the answer. Where the client offers no roots, names none, answers with an error, or not\n" +
+		"in time, and for every request that declares MCP 2026-07-28, the project is the directory the\n" +
+		"server was started in; an answer that arrives late applies to the calls that follow.\n\n" +
 		"The guide below is exactly what server/discover and initialize hand the client as instructions;\n" +
 		"'qatlas agents' covers the same ground, and more, at CLI length.\n\n" +
 		helptopics.MCP().Text
@@ -125,6 +144,12 @@ type mcpServer struct {
 	// negotiated session, since that session declares no per-request client identity of its own.
 	legacyClient *invokelog.ClientInfo
 
+	// roots is what the client of the negotiated session says about its roots. The reading loop writes it
+	// and every tool call reads it, both under rootsMu. rootsWait is mcpRootsWait outside of tests.
+	rootsMu   sync.Mutex
+	roots     mcpRoots
+	rootsWait time.Duration
+
 	coreMu   sync.Mutex
 	outMu    sync.Mutex
 	errMu    sync.Mutex
@@ -139,13 +164,34 @@ type mcpPending struct {
 	cancelled bool
 }
 
+// mcpRoots is the roots state of a session an initialize request started. The server asks for the roots
+// once the client has sent notifications/initialized, and again on notifications/roots/list_changed; only
+// the answer to the latest request counts.
+type mcpRoots struct {
+	offered     bool // the client declared the roots capability
+	listChanged bool // and announced notifications/roots/list_changed
+	sequence    int
+	pending     string         // ID of the roots/list request whose answer counts, or empty
+	round       *mcpRootsRound // the latest request, or nil before the first
+	dirs        []string       // local directories of the counted answer; nil means the working directory
+}
+
+// mcpRootsRound ends when the answer to one roots/list request arrives, when it has not arrived within
+// rootsWait, or when a newer request replaces it, whichever comes first. A tool call waits for it.
+type mcpRootsRound struct {
+	done chan struct{}
+	once sync.Once
+}
+
+func (r *mcpRootsRound) finish() { r.once.Do(func() { close(r.done) }) }
+
 func newMCPServer(opts *Options, registry *capability.Registry, stdout, stderr io.Writer) *mcpServer {
 	if opts.Redactor == nil {
 		opts.Redactor = &redact.Redactor{}
 	}
 	return &mcpServer{
 		opts: opts, registry: registry, stdout: stdout, stderr: stderr,
-		timeout: invokeTimeout, pending: make(map[string]*mcpPending),
+		timeout: invokeTimeout, rootsWait: mcpRootsWait, pending: make(map[string]*mcpPending),
 	}
 }
 
@@ -202,6 +248,10 @@ type mcpMessage struct {
 	ID     json.RawMessage
 	Method string
 	Params json.RawMessage
+	// Reply marks the client's answer to a request of this server, with either Result or Error set.
+	Reply  bool
+	Result json.RawMessage
+	Error  json.RawMessage
 }
 
 func (s *mcpServer) handle(parent context.Context, line []byte) {
@@ -214,9 +264,18 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 		s.writeResponse(mcpErrorResponse(message.ID, code, text, nil))
 		return
 	}
+	if message.Reply {
+		s.receiveReply(message)
+		return
+	}
 	if len(message.ID) == 0 {
-		if message.Method == "notifications/cancelled" {
+		switch message.Method {
+		case "notifications/cancelled":
 			s.cancel(message.Params)
+		case "notifications/initialized":
+			s.requestRoots(false)
+		case "notifications/roots/list_changed":
+			s.requestRoots(true)
 		}
 		return
 	}
@@ -229,7 +288,9 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 	// session, whose client is the one initialize declared; one that declares a version is served per
 	// request, as if no session existed, and names its own client, if any, in the same declaration.
 	client := s.legacyClient
+	session := s.legacy != ""
 	if s.legacy == "" || declaresProtocolVersion(message.Params) {
+		session = false
 		requested, err := requestProtocolVersion(message.Params)
 		if err != nil {
 			s.writeResponse(mcpErrorResponse(message.ID, mcpInvalidParams, err.Error(), nil))
@@ -280,7 +341,7 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 			"ttlMs": mcpCacheTTLMillis, "cacheScope": "public", "_meta": mcpServerMeta(),
 		}))
 	case "tools/call":
-		s.startToolCall(parent, message, client)
+		s.startToolCall(parent, message, client, session)
 	default:
 		s.writeResponse(mcpErrorResponse(message.ID, mcpMethodNotFound, "Method not found", nil))
 	}
@@ -292,8 +353,17 @@ func decodeMCPMessage(line []byte) (mcpMessage, int, string) {
 		return mcpMessage{}, mcpParseError, "Parse error: invalid JSON"
 	}
 	var rpcVersion, method string
-	if json.Unmarshal(fields["jsonrpc"], &rpcVersion) != nil || rpcVersion != "2.0" ||
-		json.Unmarshal(fields["method"], &method) != nil || method == "" {
+	versionOK := json.Unmarshal(fields["jsonrpc"], &rpcVersion) == nil && rpcVersion == "2.0"
+	// A message without method that carries exactly one of result and error answers a request of this
+	// server; it never receives a response of its own.
+	if _, hasMethod := fields["method"]; versionOK && !hasMethod {
+		result, hasResult := fields["result"]
+		failure, hasError := fields["error"]
+		if hasResult != hasError && len(validMCPID(fields["id"])) > 0 {
+			return mcpMessage{ID: fields["id"], Reply: true, Result: result, Error: failure}, 0, ""
+		}
+	}
+	if !versionOK || json.Unmarshal(fields["method"], &method) != nil || method == "" {
 		return mcpMessage{ID: validMCPID(fields["id"])}, mcpInvalidRequest, "Invalid Request"
 	}
 	id := fields["id"]
@@ -329,11 +399,13 @@ func validMCPID(raw json.RawMessage) json.RawMessage {
 }
 
 // initialize negotiates a legacy protocol version for the rest of the process: the requested one when this
-// server speaks it, otherwise the newest it speaks, which the client may decline by disconnecting.
+// server speaks it, otherwise the newest it speaks, which the client may decline by disconnecting. It also
+// records whether the client offers roots, and forgets the roots of an earlier session.
 func (s *mcpServer) initialize(message mcpMessage) mcpResponse {
 	var params struct {
 		ProtocolVersion json.RawMessage `json:"protocolVersion"`
 		ClientInfo      json.RawMessage `json:"clientInfo"`
+		Capabilities    json.RawMessage `json:"capabilities"`
 	}
 	var requested string
 	if json.Unmarshal(message.Params, &params) != nil ||
@@ -348,6 +420,7 @@ func (s *mcpServer) initialize(message mcpMessage) mcpResponse {
 		}
 	}
 	s.legacyClient = decodeMCPClientInfo(params.ClientInfo)
+	s.resetRoots(params.Capabilities)
 	return mcpResultResponse(message.ID, map[string]any{
 		"protocolVersion": s.legacy,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
@@ -452,7 +525,8 @@ func cursorPresent(raw json.RawMessage) bool {
 	return ok && len(bytes.TrimSpace(cursor)) > 0 && !bytes.Equal(bytes.TrimSpace(cursor), []byte(`""`))
 }
 
-func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, client *invokelog.ClientInfo) {
+func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, client *invokelog.ClientInfo,
+	session bool) {
 	var params struct {
 		Name           string          `json:"name"`
 		Arguments      json.RawMessage `json:"arguments"`
@@ -502,7 +576,7 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, cl
 	go func() {
 		defer s.wg.Done()
 		defer cancel()
-		result, audit, err := s.callTool(requestContext, params.Name, params.Arguments, client)
+		result, audit, err := s.callTool(requestContext, params.Name, params.Arguments, client, session)
 		s.writeAudit(audit)
 		if err != nil && errors.Is(requestContext.Err(), context.DeadlineExceeded) {
 			err = pastDeadline(err, s.timeout)
@@ -518,8 +592,11 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, cl
 	}()
 }
 
+// callTool runs one tool call. session marks a call of the session an initialize request negotiated: its
+// projects are the roots the client names, where it names any; every other call runs in the working
+// directory.
 func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessage,
-	client *invokelog.ClientInfo) (any, []byte, error) {
+	client *invokelog.ClientInfo, session bool) (any, []byte, error) {
 	var audit bytes.Buffer
 	// The published input schema is the contract; checking it first names the offending field.
 	for _, tool := range mcpTools() {
@@ -528,6 +605,10 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 				return nil, nil, &application.InvalidRequestError{Message: err.Error()}
 			}
 		}
+	}
+	var projects []string
+	if session {
+		projects = s.sessionProjects(ctx)
 	}
 	s.coreMu.Lock()
 	var core *application.Core
@@ -540,6 +621,9 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 	s.coreMu.Unlock()
 	if err != nil {
 		return nil, nil, err
+	}
+	if len(projects) > 0 {
+		core.SetProjects(projects)
 	}
 
 	switch name {
@@ -768,11 +852,22 @@ func mcpErrorResponse(id json.RawMessage, code int, message string, data any) mc
 	return mcpResponse{JSONRPC: "2.0", ID: id, Error: &mcpRPCError{Code: code, Message: message, Data: data}}
 }
 
+// mcpRequest is a request this server sends to its client.
+type mcpRequest struct {
+	JSONRPC string `json:"jsonrpc"`
+	ID      string `json:"id"`
+	Method  string `json:"method"`
+}
+
 func (s *mcpServer) writeResponse(response mcpResponse) {
+	s.writeMessage(response)
+}
+
+func (s *mcpServer) writeMessage(message any) {
 	s.outMu.Lock()
 	defer s.outMu.Unlock()
 	if s.writeErr == nil {
-		s.writeErr = json.NewEncoder(s.stdout).Encode(response)
+		s.writeErr = json.NewEncoder(s.stdout).Encode(message)
 	}
 }
 
@@ -792,4 +887,149 @@ func (s *mcpServer) writeAudit(audit []byte) {
 	s.errMu.Lock()
 	defer s.errMu.Unlock()
 	writeAudit(s.stderr, audit, s.opts.Redactor)
+}
+
+// resetRoots starts the roots state of a new session from the capabilities its initialize request declares.
+// The client offers roots where capabilities.roots is an object; listChanged true in it announces
+// notifications/roots/list_changed. Anything else offers none, and the session runs in the working
+// directory.
+func (s *mcpServer) resetRoots(raw json.RawMessage) {
+	var capabilities struct {
+		Roots json.RawMessage `json:"roots"`
+	}
+	var roots map[string]json.RawMessage
+	offered := json.Unmarshal(raw, &capabilities) == nil && json.Unmarshal(capabilities.Roots, &roots) == nil &&
+		roots != nil
+	var listChanged bool
+	_ = json.Unmarshal(roots["listChanged"], &listChanged)
+
+	s.rootsMu.Lock()
+	defer s.rootsMu.Unlock()
+	if s.roots.round != nil {
+		s.roots.round.finish()
+	}
+	s.roots = mcpRoots{offered: offered, listChanged: listChanged, sequence: s.roots.sequence}
+}
+
+// requestRoots asks the client of the session for its roots, where it offers them: after
+// notifications/initialized, and for changed set to true after notifications/roots/list_changed, which
+// only a client that announced listChanged is asked again for. The roots known so far no longer count,
+// and a tool call waits at most rootsWait for the answer, then runs in the working directory.
+func (s *mcpServer) requestRoots(changed bool) {
+	s.rootsMu.Lock()
+	if !s.roots.offered || (changed && !s.roots.listChanged) {
+		s.rootsMu.Unlock()
+		return
+	}
+	if s.roots.round != nil {
+		s.roots.round.finish()
+	}
+	s.roots.sequence++
+	id := fmt.Sprintf("qatlas-roots-%d", s.roots.sequence)
+	round := &mcpRootsRound{done: make(chan struct{})}
+	s.roots.round, s.roots.pending, s.roots.dirs = round, id, nil
+	s.rootsMu.Unlock()
+
+	time.AfterFunc(s.rootsWait, round.finish)
+	s.writeMessage(mcpRequest{JSONRPC: "2.0", ID: id, Method: "roots/list"})
+}
+
+// receiveReply takes the client's answer to a request of this server. Only the answer to the latest
+// roots/list request counts, also after its round ended, so a late answer applies to the calls that follow;
+// any other reply is dropped without a response. An error, an empty list, or a list without a usable root
+// leaves the working directory.
+func (s *mcpServer) receiveReply(message mcpMessage) {
+	var id string
+	if json.Unmarshal(message.ID, &id) != nil || id == "" {
+		return
+	}
+	s.rootsMu.Lock()
+	defer s.rootsMu.Unlock()
+	if id != s.roots.pending {
+		return
+	}
+	s.roots.pending = ""
+	s.roots.dirs = nil
+	if len(message.Error) == 0 {
+		s.roots.dirs = rootDirs(message.Result, runtime.GOOS == "windows")
+	}
+	s.roots.round.finish()
+}
+
+// sessionProjects returns the directories the roots of the session name, once the latest roots/list
+// round has ended, or nil where there are none, which leaves the working directory.
+func (s *mcpServer) sessionProjects(ctx context.Context) []string {
+	s.rootsMu.Lock()
+	round := s.roots.round
+	s.rootsMu.Unlock()
+	if round == nil {
+		return nil
+	}
+	select {
+	case <-round.done:
+	case <-ctx.Done():
+		return nil
+	}
+	s.rootsMu.Lock()
+	defer s.rootsMu.Unlock()
+	return s.roots.dirs
+}
+
+// rootDirs reads the local directories of a roots/list result. Roots are data of the client: at most
+// maxMCPRoots entries are read, only file URIs count, and the directories only ever name projects.
+func rootDirs(raw json.RawMessage, windows bool) []string {
+	var result struct {
+		Roots []json.RawMessage `json:"roots"`
+	}
+	if json.Unmarshal(raw, &result) != nil {
+		return nil
+	}
+	var dirs []string
+	for i, entry := range result.Roots {
+		if i == maxMCPRoots {
+			break
+		}
+		var root struct {
+			URI string `json:"uri"`
+		}
+		if json.Unmarshal(entry, &root) != nil {
+			continue
+		}
+		if dir, ok := fileURIPath(root.URI, windows); ok {
+			dirs = append(dirs, dir)
+		}
+	}
+	return dirs
+}
+
+// fileURIPath decodes a file URI to the absolute local path it names, percent escapes decoded and "." and
+// ".." resolved without leaving the root. Only an empty host or localhost is local; a URI with another
+// scheme or host, user info, query, or fragment, a relative or overlong one, and one with a NUL byte name
+// no path. On Windows the path must start with a drive, as in file:///C:/Users/me, and uses backslashes.
+func fileURIPath(raw string, windows bool) (string, bool) {
+	if raw == "" || len(raw) > maxMCPRootURIBytes {
+		return "", false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "file" || parsed.Opaque != "" || parsed.User != nil ||
+		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" ||
+		(parsed.Host != "" && !strings.EqualFold(parsed.Host, "localhost")) {
+		return "", false
+	}
+	name := parsed.Path
+	if !strings.HasPrefix(name, "/") || strings.ContainsRune(name, 0) {
+		return "", false
+	}
+	if !windows {
+		return path.Clean(name), true
+	}
+	if len(name) < 3 || !isASCIILetter(name[1]) || name[2] != ':' || (len(name) > 3 && name[3] != '/') {
+		return "", false
+	}
+	drive := strings.ToUpper(name[1:3])
+	return strings.ReplaceAll(drive+path.Clean("/"+name[3:]), "/", `\`), true
+}
+
+func isASCIILetter(c byte) bool {
+	return 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z'
 }
