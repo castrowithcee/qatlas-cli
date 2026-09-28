@@ -72,6 +72,7 @@ func (c *Config) Clone() *Config {
 	}
 	out.Defaults.SecretStore = c.Defaults.SecretStore
 	out.Vault = c.Vault
+	out.Logs = c.Logs
 	return out
 }
 

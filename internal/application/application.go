@@ -18,6 +18,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -37,6 +38,10 @@ type Core struct {
 	redactor *redact.Redactor
 	policy   Policy
 	audit    io.Writer
+
+	invokeLog    *invokelog.Logger
+	invokePath   string
+	invokeClient *invokelog.ClientInfo
 }
 
 // Policy may reject a fully validated request after connection selection and before confirmation,
@@ -55,6 +60,16 @@ func (c *Core) SetPolicy(policy Policy) { c.policy = policy }
 // that it flushes in stream-contract order; tests can use the same seam. Read operations and requests
 // rejected before confirmation do not produce an event.
 func (c *Core) SetAudit(writer io.Writer) { c.audit = writer }
+
+// SetInvokeLog installs the invocation log that every subsequent Invoke call appends one entry to,
+// whatever it does or returns: unlike the mutation audit event above, this covers every effect, confirmed
+// or not, and every failure, including one before a connection is even selected. path is "cli" or "mcp";
+// client is the MCP client's name and version from its initialize request, or nil on the CLI and wherever
+// a client never declared one. A nil logger leaves invocation logging off, which no caller of this build
+// does outside a test.
+func (c *Core) SetInvokeLog(logger *invokelog.Logger, path string, client *invokelog.ClientInfo) {
+	c.invokeLog, c.invokePath, c.invokeClient = logger, path, client
+}
 
 // SearchRequest filters the local operation catalog. Limit is capped even when omitted or non-positive.
 // Cursor continues a previous page: it is the opaque next_cursor of a response to the same filters, and
@@ -532,7 +547,16 @@ type InvokeResponse struct {
 
 // Invoke validates arguments before route selection, then applies policy and confirmation before
 // dispatch. Provider output is normalized and validated before it can reach the caller.
+//
+// Every call, whatever it does or returns, appends one entry to the invocation log installed with
+// SetInvokeLog: descriptor and resolved are declared here, before any early return, exactly so the deferred
+// call below can still log the operation ID and the connection an earlier failure never reached.
 func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response InvokeResponse, err error) {
+	start := time.Now()
+	var descriptor capability.Descriptor
+	var resolved *config.Resolved
+	defer func() { c.logInvoke(request, descriptor, resolved, start, err) }()
+
 	descriptor, rawHandler, err := c.operation(request.Operation, request.Version)
 	if err != nil {
 		return InvokeResponse{}, err
@@ -544,7 +568,7 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 		return InvokeResponse{}, &InvalidRequestError{Message: err.Error()}
 	}
 
-	resolved, err := c.selectConnection(request.Connection, descriptor)
+	resolved, err = c.selectConnection(request.Connection, descriptor)
 	if err != nil {
 		return InvokeResponse{}, unknownConnectionOf(err, descriptor.Provider, descriptor.ID)
 	}
@@ -594,6 +618,44 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	return InvokeResponse{
 		Operation: descriptor.ID, Version: descriptor.Version, Connection: resolved.Name, Result: result,
 	}, nil
+}
+
+// logInvoke appends one invocation log entry for a completed call to Invoke, whatever it did or returned.
+// descriptor and resolved are zero where the failure happened before they were resolved, in which case the
+// entry falls back to what the request itself asked for, so an unknown operation or connection still gets a
+// row instead of none. A log failure is reported as a warning through the same audit writer the CLI and the
+// MCP broker already flush to their stderr, and never changes err or response themselves.
+func (c *Core) logInvoke(request InvokeRequest, descriptor capability.Descriptor, resolved *config.Resolved,
+	start time.Time, err error) {
+	if c.invokeLog == nil {
+		return
+	}
+	fields := invokelog.Fields{
+		Path: c.invokePath, Client: c.invokeClient, Operation: request.Operation, Version: request.Version,
+		Connection: request.Connection, Result: auditResult(err), Duration: time.Since(start),
+	}
+	if descriptor.ID != "" {
+		fields.Operation, fields.Version, fields.Effect = descriptor.ID, descriptor.Version, string(descriptor.Risk.Effect)
+	}
+	if resolved != nil {
+		fields.Connection = resolved.Name
+	}
+	if logErr := c.invokeLog.Append(fields); logErr != nil {
+		c.writeAuditText(fmt.Sprintf("qatlas: warning: could not write the invocation log: %v", logErr))
+	}
+}
+
+// writeAuditText appends one warning line to the audit writer, beside the JSON audit event a confirmed
+// mutation may also write there. Both share the writer because both are diagnostics the CLI and the MCP
+// broker flush to stderr in the same place, under the same redaction, after the same call to Invoke.
+func (c *Core) writeAuditText(line string) {
+	if c.audit == nil {
+		return
+	}
+	if !strings.HasSuffix(line, "\n") {
+		line += "\n"
+	}
+	_, _ = io.WriteString(c.audit, line)
 }
 
 type auditEvent struct {

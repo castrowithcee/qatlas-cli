@@ -301,7 +301,7 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			if err != nil {
 				return err
 			}
-			core, err := applicationCore(opts, registry, true)
+			core, err := applicationCoreForInvoke(opts, registry, "cli", nil)
 			if err != nil {
 				return err
 			}

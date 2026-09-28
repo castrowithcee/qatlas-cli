@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -13,9 +14,11 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // invokeTimeout bounds one invoke in the CLI and in the MCP broker: reading stdin, resolving the secret,
@@ -101,22 +104,44 @@ func writeAudit(writer io.Writer, audit []byte, redactor *redact.Redactor) {
 }
 
 func applicationCore(opts *Options, registry *capability.Registry, withSecrets bool) (*application.Core, error) {
-	path, err := config.Path(opts.Config)
+	core, _, _, err := loadCore(opts, registry, withSecrets)
+	return core, err
+}
+
+// applicationCoreForInvoke builds the core exactly like applicationCore(opts, registry, true), then installs
+// the invocation log every invoke over path ("cli" or "mcp") appends to: the invocation log lives under the
+// same vault directory a vault credential does, so it exists without a vault ever being set up, and its
+// retention follows logs.retention_days of the same configuration this core was loaded from. client is the
+// MCP client's name and version from initialize, or nil on the CLI and where a client never declared one.
+func applicationCoreForInvoke(opts *Options, registry *capability.Registry, path string,
+	client *invokelog.ClientInfo) (*application.Core, error) {
+	core, cfg, configPath, err := loadCore(opts, registry, true)
 	if err != nil {
 		return nil, err
+	}
+	logger := invokelog.New(vault.New(filepath.Dir(configPath)).Dir(), cfg.LogRetentionDays())
+	core.SetInvokeLog(logger, path, client)
+	return core, nil
+}
+
+func loadCore(opts *Options, registry *capability.Registry, withSecrets bool) (*application.Core, *config.Config,
+	string, error) {
+	path, err := config.Path(opts.Config)
+	if err != nil {
+		return nil, nil, "", err
 	}
 	cfg, err := config.Load(path, registry)
 	if err != nil {
-		return nil, classifyUserError(err)
+		return nil, nil, "", classifyUserError(err)
 	}
 	if !withSecrets {
-		return application.New(registry, cfg, nil, opts.Redactor), nil
+		return application.New(registry, cfg, nil, opts.Redactor), cfg, path, nil
 	}
 	secrets, err := opts.resolver()
 	if err != nil {
-		return nil, err
+		return nil, nil, "", err
 	}
-	return application.New(registry, cfg, secrets, opts.Redactor), nil
+	return application.New(registry, cfg, secrets, opts.Redactor), cfg, path, nil
 }
 
 // readInvokeArguments reads the schema-dependent arguments of one invocation from stdin. Empty input means

@@ -19,6 +19,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
@@ -119,6 +120,10 @@ type mcpServer struct {
 	// legacy is the protocol version an initialize request negotiated, or empty. It is only touched by
 	// the reading loop.
 	legacy string
+	// legacyClient is the client name and version an initialize request declared, or nil where it did not.
+	// Like legacy it is only touched by the reading loop, and it names the client of every call of the
+	// negotiated session, since that session declares no per-request client identity of its own.
+	legacyClient *invokelog.ClientInfo
 
 	coreMu   sync.Mutex
 	outMu    sync.Mutex
@@ -221,7 +226,9 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 	}
 
 	// After initialize, a request without a declared protocol version belongs to the negotiated legacy
-	// session; one that declares a version is served per request, as if no session existed.
+	// session, whose client is the one initialize declared; one that declares a version is served per
+	// request, as if no session existed, and names its own client, if any, in the same declaration.
+	client := s.legacyClient
 	if s.legacy == "" || declaresProtocolVersion(message.Params) {
 		requested, err := requestProtocolVersion(message.Params)
 		if err != nil {
@@ -235,6 +242,7 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 				}))
 			return
 		}
+		client = requestClientInfo(message.Params)
 	}
 
 	switch message.Method {
@@ -272,7 +280,7 @@ func (s *mcpServer) handle(parent context.Context, line []byte) {
 			"ttlMs": mcpCacheTTLMillis, "cacheScope": "public", "_meta": mcpServerMeta(),
 		}))
 	case "tools/call":
-		s.startToolCall(parent, message)
+		s.startToolCall(parent, message, client)
 	default:
 		s.writeResponse(mcpErrorResponse(message.ID, mcpMethodNotFound, "Method not found", nil))
 	}
@@ -325,6 +333,7 @@ func validMCPID(raw json.RawMessage) json.RawMessage {
 func (s *mcpServer) initialize(message mcpMessage) mcpResponse {
 	var params struct {
 		ProtocolVersion json.RawMessage `json:"protocolVersion"`
+		ClientInfo      json.RawMessage `json:"clientInfo"`
 	}
 	var requested string
 	if json.Unmarshal(message.Params, &params) != nil ||
@@ -338,12 +347,44 @@ func (s *mcpServer) initialize(message mcpMessage) mcpResponse {
 			s.legacy = known
 		}
 	}
+	s.legacyClient = decodeMCPClientInfo(params.ClientInfo)
 	return mcpResultResponse(message.ID, map[string]any{
 		"protocolVersion": s.legacy,
 		"capabilities":    map[string]any{"tools": map[string]any{}},
 		"serverInfo":      map[string]string{"name": "qatlas", "version": version},
 		"instructions":    helptopics.MCP().Text,
 	})
+}
+
+// decodeMCPClientInfo reads a clientInfo object the way the invocation log records it: name and version,
+// or nil where either is missing or empty. It never fails the request that carries it: an initialize's own
+// well-formedness is checked elsewhere, and a per-request client identity is simply optional (see
+// requestClientInfo).
+func decodeMCPClientInfo(raw json.RawMessage) *invokelog.ClientInfo {
+	var client struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	}
+	if json.Unmarshal(raw, &client) != nil || client.Name == "" || client.Version == "" {
+		return nil
+	}
+	return &invokelog.ClientInfo{Name: client.Name, Version: client.Version}
+}
+
+// requestClientInfo reads the per-request client identity a 2026-07-28 call may declare in
+// params._meta["io.modelcontextprotocol/clientInfo"], already validated as well-formed if present by
+// requestProtocolVersion. It returns nil where the call declares none, which the invocation log then
+// leaves empty, exactly like a session that never declared one.
+func requestClientInfo(raw json.RawMessage) *invokelog.ClientInfo {
+	var params map[string]json.RawMessage
+	if json.Unmarshal(raw, &params) != nil {
+		return nil
+	}
+	var meta map[string]json.RawMessage
+	if json.Unmarshal(params["_meta"], &meta) != nil {
+		return nil
+	}
+	return decodeMCPClientInfo(meta["io.modelcontextprotocol/clientInfo"])
 }
 
 func declaresProtocolVersion(raw json.RawMessage) bool {
@@ -411,7 +452,7 @@ func cursorPresent(raw json.RawMessage) bool {
 	return ok && len(bytes.TrimSpace(cursor)) > 0 && !bytes.Equal(bytes.TrimSpace(cursor), []byte(`""`))
 }
 
-func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage) {
+func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage, client *invokelog.ClientInfo) {
 	var params struct {
 		Name           string          `json:"name"`
 		Arguments      json.RawMessage `json:"arguments"`
@@ -461,7 +502,7 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage) {
 	go func() {
 		defer s.wg.Done()
 		defer cancel()
-		result, audit, err := s.callTool(requestContext, params.Name, params.Arguments)
+		result, audit, err := s.callTool(requestContext, params.Name, params.Arguments, client)
 		s.writeAudit(audit)
 		if err != nil && errors.Is(requestContext.Err(), context.DeadlineExceeded) {
 			err = pastDeadline(err, s.timeout)
@@ -477,7 +518,8 @@ func (s *mcpServer) startToolCall(parent context.Context, message mcpMessage) {
 	}()
 }
 
-func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessage) (any, []byte, error) {
+func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessage,
+	client *invokelog.ClientInfo) (any, []byte, error) {
 	var audit bytes.Buffer
 	// The published input schema is the contract; checking it first names the offending field.
 	for _, tool := range mcpTools() {
@@ -488,7 +530,13 @@ func (s *mcpServer) callTool(ctx context.Context, name string, raw json.RawMessa
 		}
 	}
 	s.coreMu.Lock()
-	core, err := applicationCore(s.opts, s.registry, name == "qatlas.invoke")
+	var core *application.Core
+	var err error
+	if name == "qatlas.invoke" {
+		core, err = applicationCoreForInvoke(s.opts, s.registry, "mcp", client)
+	} else {
+		core, err = applicationCore(s.opts, s.registry, false)
+	}
 	s.coreMu.Unlock()
 	if err != nil {
 		return nil, nil, err

@@ -194,6 +194,43 @@ func TestCloneKeepsVaultSettings(t *testing.T) {
 	}
 }
 
+// logs.retention_days is a positive integer, DefaultLogRetentionDays (90) when it is left out, and survives
+// both a save and a Clone; anything negative is refused by its key.
+func TestLogRetentionDays(t *testing.T) {
+	cfg, err := Decode(strings.NewReader(minimal), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() = %v", err)
+	}
+	if got := cfg.LogRetentionDays(); got != DefaultLogRetentionDays {
+		t.Errorf("LogRetentionDays() without a setting = %d, want %d", got, DefaultLogRetentionDays)
+	}
+
+	cfg, err = Decode(strings.NewReader(minimal+"logs:\n  retention_days: 30\n"), testProviders)
+	if err != nil {
+		t.Fatalf("Decode() with retention_days = %v", err)
+	}
+	if got := cfg.LogRetentionDays(); got != 30 {
+		t.Errorf("LogRetentionDays() = %d, want 30", got)
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil || !strings.Contains(string(data), "logs:\n    retention_days: 30") {
+		t.Errorf("the setting does not survive encoding: %s, %v", data, err)
+	}
+	if clone := cfg.Clone(); clone.Logs != cfg.Logs {
+		t.Errorf("Clone().Logs = %+v, want %+v", clone.Logs, cfg.Logs)
+	}
+
+	for _, value := range []string{"-1", "-30"} {
+		_, err := Decode(strings.NewReader(minimal+"logs:\n  retention_days: "+value+"\n"), testProviders)
+		if err == nil || !strings.Contains(err.Error(), "logs.retention_days: ") {
+			t.Errorf("Decode() with retention_days %q error = %v, want it refused by its key", value, err)
+		}
+	}
+	if _, err := Decode(strings.NewReader(minimal+"logs:\n  unknown: 1\n"), testProviders); err == nil {
+		t.Errorf("Decode() accepted an unknown key under logs")
+	}
+}
+
 // The connection description is optional prose the user maintains and discovery publishes. It arrives in
 // one normalized form, it stays one short line, and a refusal never quotes what was written.
 func TestConnectionDescriptionIsOneShortNormalizedLine(t *testing.T) {

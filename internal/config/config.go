@@ -42,6 +42,7 @@ type Config struct {
 	ProviderNotes map[string]string     `yaml:"provider_notes,omitempty"`
 	Defaults      Defaults              `yaml:"defaults"`
 	Vault         VaultSettings         `yaml:"vault,omitempty"`
+	Logs          LogSettings           `yaml:"logs,omitempty"`
 	providers     ProviderCatalog       `yaml:"-"`
 }
 
@@ -209,6 +210,28 @@ func parseAdminTimeout(text string) (time.Duration, error) {
 		return 0, errors.New("must not be negative; 0 means asking for the passphrase on every change")
 	}
 	return d, nil
+}
+
+// DefaultLogRetentionDays is how many days of invocation log entries are kept when logs.retention_days is
+// left out.
+const DefaultLogRetentionDays = 90
+
+// LogSettings holds the settings of the invocation log that are not secret. The log itself is not
+// optional: every invoke over the CLI and MCP writes an entry whatever this section says; only how long
+// entries are kept is configurable.
+type LogSettings struct {
+	// RetentionDays is how many days of invocation log entries are kept, a positive integer. Left out or
+	// zero, it means DefaultLogRetentionDays.
+	RetentionDays int `yaml:"retention_days,omitempty"`
+}
+
+// LogRetentionDays returns the effective retention window of the invocation log. A configuration that
+// passed Validate always has a positive one; an unset value falls back to DefaultLogRetentionDays.
+func (c *Config) LogRetentionDays() int {
+	if c.Logs.RetentionDays <= 0 {
+		return DefaultLogRetentionDays
+	}
+	return c.Logs.RetentionDays
 }
 
 // The supported credential types.
@@ -589,6 +612,9 @@ func (c *Config) Validate() error {
 	}
 	if _, err := parseAdminTimeout(c.Vault.AdminTimeout); err != nil {
 		report("vault.admin_timeout: %v", err)
+	}
+	if c.Logs.RetentionDays < 0 {
+		report("logs.retention_days: must be a positive integer, got %d", c.Logs.RetentionDays)
 	}
 
 	return errors.Join(problems...)

@@ -15,6 +15,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -71,7 +72,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"what they changed; 'vault passphrase', 'vault decrypt', and 'qatlas update' lock it first. A\n" +
 			"process at the vault's socket that fails the check or does not answer is reported with its\n" +
 			"process id and how to end it, never answered by asking for the passphrase instead. No command\n" +
-			"ever shows a stored secret back.",
+			"ever shows a stored secret back.\n\n" +
+			"Beside the vault itself, every invoke over the CLI and the MCP broker appends one entry to a\n" +
+			"hash-chained invocation log under this same directory, whether the vault exists or not, is locked,\n" +
+			"or is unencrypted; 'vault logs verify' checks that chain.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
@@ -249,8 +253,105 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 	approve.Flags().StringArrayVar(&connectionNames, "connection", nil,
 		"approve only this connection, repeated per connection; the default approves every open one")
 
-	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate, approve)
+	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate, approve, newVaultLogsCommand(opts))
 	return cmd
+}
+
+// newVaultLogsCommand groups the commands that read the invocation log every invoke over the CLI and the
+// MCP broker appends to; nothing under it writes to the log itself, so unlike most of 'vault' it never
+// needs a terminal or a passphrase.
+func newVaultLogsCommand(opts *Options) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "logs",
+		Short: "Inspect the invocation log every invoke appends to",
+		Long: "Every invoke over the CLI and the MCP broker appends one entry to a daily file under the vault\n" +
+			"directory, vault/logs/YYYY-MM-DD.jsonl, named by its UTC date: the time, whether it came over cli\n" +
+			"or mcp and, over mcp, the client's name and version from its initialize request, the tool ID and\n" +
+			"version, the connection, the tool's effect, the result (success or the error code the diagnostic\n" +
+			"leads with), and how long it took. No argument, result, secret, target, or URL query ever reaches\n" +
+			"it, and an entry is written even where the vault does not exist yet, is locked, or is unencrypted;\n" +
+			"a logging failure, such as an unwritable directory, is a warning beside the invoke's own result,\n" +
+			"never a reason to change it.\n\n" +
+			"Entries are linked by a SHA-256 hash chain that spans day boundaries, so a changed or deleted\n" +
+			"entry, or a day file missing from the middle, can be found later; 'vault logs verify' checks it.\n" +
+			"logs.retention_days keeps entries for that many days, 90 unless the configuration says otherwise;\n" +
+			"an older day is removed on the next invoke, and the entry written right after names what was\n" +
+			"removed, so the cut is never mistaken for a gap.",
+		Args: noArgs,
+		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
+	}
+	cmd.AddCommand(newVaultLogsVerifyCommand(opts))
+	return cmd
+}
+
+func newVaultLogsVerifyCommand(opts *Options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "verify",
+		Short: "Check the invocation log's hash chain",
+		Long: "Verify walks every day file of the invocation log in order and checks that each entry's\n" +
+			"sequence number follows the one before it and that its recorded hash is the exact previous line's\n" +
+			"SHA-256, across day boundaries. A changed or deleted entry, or a day file missing from the middle,\n" +
+			"breaks the chain there and is reported; a documented retention cut does not, since the entry\n" +
+			"written right after logs.retention_days removed something names what it removed.\n\n" +
+			"The report has one row per day: its date, how many entries it holds, how many of those carry no\n" +
+			"check value yet, and the first problem found, empty where the day is fine. In this build no entry\n" +
+			"carries a check value, so every one of them is unverified; that alone never breaks the chain, and\n" +
+			"the command still exits successfully.\n\n" +
+			"It only reads the log: no terminal, no passphrase, and no provider are needed, and it runs the\n" +
+			"same way against a vault that does not exist yet, is locked, or is unencrypted.\n\n" +
+			"The chain only ever links an entry to the one after it, so removing the most recent entries\n" +
+			"without adding a new one leaves nothing to notice they are gone; only a change before the last\n" +
+			"surviving entry is caught this way.\n\n" +
+			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
+			"JSON. Exit code: 0 while the chain is intact, even where every entry is unverified; a broken\n" +
+			"chain exits with the code runtime, which the report already explains, so this is not a new code.",
+		Args: noArgs,
+		RunE: func(c *cobra.Command, _ []string) error {
+			return runVaultLogsVerify(c, opts)
+		},
+	}
+}
+
+func runVaultLogsVerify(c *cobra.Command, opts *Options) error {
+	format, err := discoveryFormat(c, opts)
+	if err != nil {
+		return err
+	}
+	configPath, err := config.Path(opts.Config)
+	if err != nil {
+		return err
+	}
+	report, err := invokelog.Verify(vault.New(filepath.Dir(configPath)).Dir())
+	if err != nil {
+		return err
+	}
+	if emitErr := emitDocument(c, format, logsVerifyResponse(report)); emitErr != nil {
+		return emitErr
+	}
+	if report.Broken {
+		return errors.New("the invocation log's hash chain is broken; see the report for the day and the problem")
+	}
+	return nil
+}
+
+type logsVerifyDay struct {
+	Date       string `json:"date"`
+	Entries    int    `json:"entries"`
+	Unverified int    `json:"unverified"`
+	Problem    string `json:"problem,omitempty"`
+}
+
+type logsVerifyDocument struct {
+	Broken bool            `json:"broken"`
+	Days   []logsVerifyDay `json:"days"`
+}
+
+func logsVerifyResponse(report invokelog.Report) logsVerifyDocument {
+	days := make([]logsVerifyDay, len(report.Days))
+	for i, day := range report.Days {
+		days[i] = logsVerifyDay{Date: day.Date, Entries: day.Entries, Unverified: day.Unverified, Problem: day.Problem}
+	}
+	return logsVerifyDocument{Broken: report.Broken, Days: days}
 }
 
 // vaultOf returns the vault this run resolves credentials from. It is nil only for a resolver a test built
