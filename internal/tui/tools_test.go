@@ -251,7 +251,7 @@ func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 	m, path := toolsModel(t, reg, map[string]config.Connection{
 		"route": {Service: "wiki", Credential: "reader", Tools: []string{}},
 	})
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
 	openEntryForm(t, m, sectionConnections, "route")
 	focusField(t, m, toolListLabel)
 	// The connection form itself needs more than twelve lines; the picker it opens does not.

@@ -106,6 +106,8 @@ const (
 	screenUpdate
 	// screenTargets edits the target list of a connection entry by entry.
 	screenTargets
+	// screenPaths edits the path list of a connection entry by entry, with tab completion for directories.
+	screenPaths
 	// screenVaultUnlock is the masked passphrase dialog 'ctrl+l' opens for a locked vault with no other
 	// action pending: unlike requireAdmin's own "Unlock vault to continue", answering it does nothing but
 	// the unlock itself, the vault process handoff on Linux, and starting this window's admin session. See
@@ -142,6 +144,9 @@ const (
 	// in a screen of their own, so a target never has to be quoted into one line with the others. The row
 	// shows a short form of them, or every entry while it is expanded.
 	fieldTargets
+	// fieldPaths is the path list of a connection, a list like fieldTargets: its directories are added,
+	// edited, and removed one by one in a screen of their own, with tab completion for directories.
+	fieldPaths
 	// fieldVaultState is the read-only row of the vault form that names the vault's current state. It holds
 	// no value of its own: renderField computes what it shows live, from the vault, every time it is drawn.
 	fieldVaultState
@@ -225,6 +230,9 @@ const (
 	// tool added by a later version joins only the first mode, and an empty selection closes the route.
 	toolsHint = "all allowed by permissions also offers tools a later version adds, but never a tool marked " +
 		"listed only; only selected tools offers exactly the tools ticked below, and none ticked offers no tool at all"
+	// pathsHint says what the path list of a connection does.
+	pathsHint = "the connection is offered only in projects inside these directories, absolute or starting " +
+		"with ~/; none means every project"
 	toolListHint = "enter opens this provider's tools to tick; a tool is offered only when the permissions " +
 		"above allow its effect as well"
 	toolListOffHint = "not used while every tool the permissions allow is offered; choose only selected " +
@@ -317,8 +325,8 @@ func (f field) value() string {
 	if f.kind == fieldToolList {
 		return strings.Join(f.marked(), ", ")
 	}
-	if f.kind == fieldTargets {
-		// One target per line, so the value tells every list apart, a target with a comma included.
+	if f.kind == fieldTargets || f.kind == fieldPaths {
+		// One entry per line, so the value tells every list apart, entries with commas included.
 		return strings.Join(f.entries, "\n")
 	}
 	if f.kind == fieldMasked {
@@ -371,6 +379,14 @@ type Model struct {
 	targetRemove bool
 	// targetAdd is the menu that adds a target, with its builder, while it is open.
 	targetAdd *targetAdd
+	// pathList, pathInput, pathEdit and pathRemove do for the path list of a connection what the target
+	// fields above do for its targets (see paths.go).
+	pathList   filterList
+	pathInput  textinput.Model
+	pathEdit   int
+	pathRemove bool
+	// startDir is the working directory the TUI was started in, the first suggestion for a new path.
+	startDir string
 	// confirmRole names the role whose stored secret the confirmation removes. Empty means the
 	// confirmation is about the selected entry of the list.
 	confirmRole string
@@ -508,12 +524,15 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	if secrets == nil {
 		secrets = noSecrets{}
 	}
+	// Without a working directory a new path simply starts without a suggestion.
+	startDir, _ := os.Getwd()
 	m := &Model{
 		store: store, cfg: cfg, tester: tester, redactor: redactor,
 		secrets:   secrets,
 		sources:   map[string]secret.Source{},
 		checked:   map[string][]string{},
 		termWidth: defaultWidth, termHeight: defaultHeight, configExists: configExists,
+		startDir: startDir,
 	}
 	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
@@ -521,6 +540,9 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	m.picker.input.Placeholder = "Type to search"
 	m.targetList = newFilterList(func(target string) string { return target })
 	m.targetInput = textField("", "", false).input
+	m.pathList = newFilterList(func(path string) string { return path })
+	m.pathInput = textField("", "", false).input
+	m.pathInput.ShowSuggestions = true
 	m.logs = newLogView()
 	// The editor opens on the sidebar, with the first section already shown beside it.
 	m.list.reset(m.entryNames(m.section))
@@ -656,6 +678,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateUpdateConfirm(msg)
 		case screenTargets:
 			cmd = m.updateTargets(msg)
+		case screenPaths:
+			cmd = m.updatePaths(msg)
 		case screenVaultUnlock:
 			cmd = m.updateVaultUnlockPrompt(msg)
 		case screenLogs:
@@ -941,6 +965,10 @@ func (m *Model) leaveScreen() tea.Cmd {
 		m.targetEdit, m.targetRemove, m.targetAdd = -1, false, nil
 		m.targetInput.Blur()
 		return m.leaveTargets()
+	case screenPaths:
+		m.pathEdit, m.pathRemove = -1, false
+		m.pathInput.Blur()
+		return m.leavePaths()
 	case screenProviders:
 		if m.wizard != nil {
 			return m.leaveSetup()
@@ -1047,6 +1075,9 @@ func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
 	if m.leaveFrom == screenTargets {
 		return m.answerTargetsLeave(key)
 	}
+	if m.leaveFrom == screenPaths {
+		return m.answerPathsLeave(key)
+	}
 	switch key.String() {
 	case "ctrl+c":
 		return m.quit()
@@ -1123,11 +1154,15 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			}
 			return nil
 		}
-	case fieldTargets:
-		// A target list opens like a choice row, and left/right fold it in the form like a tree.
+	case fieldTargets, fieldPaths:
+		// A target or path list opens like a choice row, and left/right fold it in the form like a tree.
 		switch key.String() {
 		case "enter", " ", "/":
-			m.openTargets()
+			if m.fields[m.focus].kind == fieldPaths {
+				m.openPaths()
+			} else {
+				m.openTargets()
+			}
 			return nil
 		case "right", "l":
 			m.fields[m.focus].expanded = true
@@ -1185,7 +1220,7 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		return m.choiceChanged(previous)
-	case fieldProvider, fieldMultiChoice, fieldToolList, fieldTargets:
+	case fieldProvider, fieldMultiChoice, fieldToolList, fieldTargets, fieldPaths:
 		// Their values opened above; no other key changes them.
 		return nil
 	case fieldSecret:
@@ -2285,6 +2320,7 @@ func (m *Model) buildFields(name string) []field {
 			choiceField("credential", m.providerCredentials(provider), conn.Credential).
 				withHint(connectionCredentialHint),
 			targetsField(conn.TargetValues()),
+			pathsField(conn.Paths).withHint(pathsHint),
 			// Description and permissions explain the route the fields above define. Only the description
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
@@ -2414,6 +2450,11 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if list := m.field(toolListLabel); list != nil && m.fieldValue(toolsLabel) == toolsSelected {
 			tools = list.marked()
 		}
+		// No paths are written as none at all: an empty list would be refused.
+		var paths []string
+		if entries := pathEntries(m.fields); len(entries) > 0 {
+			paths = append(paths, entries...)
+		}
 		return cfg.SetConnection(name, config.Connection{
 			Service:     m.fieldValue("service"),
 			Credential:  m.fieldValue("credential"),
@@ -2422,9 +2463,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Description: m.fieldValue("description"),
 			Permissions: permissions,
 			Tools:       tools,
-			// The form has no field for paths yet; the connection keeps the ones it was saved with, so
-			// saving it here never widens where it applies.
-			Paths: append([]string(nil), cfg.Connections[m.editing].Paths...),
+			Paths:       paths,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))
@@ -2543,7 +2582,8 @@ func (m *Model) trimFields() {
 	for i := range m.fields {
 		f := &m.fields[i]
 		if f.kind == fieldChoice || f.kind == fieldProvider || f.kind == fieldMultiChoice || f.kind == fieldToolList ||
-			f.kind == fieldMasked || f.kind == fieldTargets || f.kind == fieldVaultState || f.kind == fieldVaultAction {
+			f.kind == fieldMasked || f.kind == fieldTargets || f.kind == fieldPaths || f.kind == fieldVaultState ||
+			f.kind == fieldVaultAction {
 			continue
 		}
 		if trimmed := strings.TrimSpace(f.input.Value()); trimmed != f.input.Value() {
@@ -2556,7 +2596,8 @@ func (m *Model) applyFocus() {
 	for i := range m.fields {
 		if i == m.focus && m.fields[i].kind != fieldChoice && m.fields[i].kind != fieldProvider &&
 			m.fields[i].kind != fieldMultiChoice && m.fields[i].kind != fieldToolList &&
-			m.fields[i].kind != fieldTargets && m.fields[i].kind != fieldVaultAction && !m.fields[i].readOnly {
+			m.fields[i].kind != fieldTargets && m.fields[i].kind != fieldPaths && m.fields[i].kind != fieldVaultAction &&
+			!m.fields[i].readOnly {
 			m.fields[i].input.Focus()
 			continue
 		}
@@ -2659,18 +2700,36 @@ func toggleMark(marks map[string]bool, choice string, permissions bool) {
 	}
 }
 
-// targetsLabel is the row of a connection's target list.
-const targetsLabel = "targets"
+// targetsLabel is the row of a connection's target list, pathsLabel the row of its path list.
+const (
+	targetsLabel = "targets"
+	pathsLabel   = "paths"
+)
 
 // targetsField is the target list row over the targets a connection holds now.
 func targetsField(values []string) field {
 	return field{label: targetsLabel, kind: fieldTargets, entries: values}
 }
 
+// pathsField is the path list row over the paths a connection holds now.
+func pathsField(values []string) field {
+	return field{label: pathsLabel, kind: fieldPaths, entries: values}
+}
+
 // targetEntries are the entries of the target list among fields, or none when there is no such row.
 func targetEntries(fields []field) []string {
 	for _, f := range fields {
 		if f.kind == fieldTargets {
+			return f.entries
+		}
+	}
+	return nil
+}
+
+// pathEntries are the entries of the path list among fields, or none when there is no such row.
+func pathEntries(fields []field) []string {
+	for _, f := range fields {
+		if f.kind == fieldPaths {
 			return f.entries
 		}
 	}
@@ -2692,17 +2751,30 @@ func splitTargets(values []string) (string, []string) {
 // targetSummary is the short form of a target list: a single target as it is, and otherwise how many there
 // are with the first two of them.
 func targetSummary(values []string) string {
+	return listSummary(values, "targets")
+}
+
+// listSummary is the short form of a list row whose entries are called plural.
+func listSummary(values []string, plural string) string {
 	switch len(values) {
 	case 0:
 		return ""
 	case 1:
 		return values[0]
 	}
-	text := fmt.Sprintf("%d targets: %s", len(values), strings.Join(values[:2], ", "))
+	text := fmt.Sprintf("%d %s: %s", len(values), plural, strings.Join(values[:2], ", "))
 	if len(values) > 2 {
 		text += fmt.Sprintf(", +%d", len(values)-2)
 	}
 	return text
+}
+
+// listLines is the unfolded form of a list row: every entry on a line of its own, under how many there are.
+func listLines(values []string, singular, plural string) string {
+	if len(values) == 1 {
+		return "1 " + singular + "\n" + values[0]
+	}
+	return fmt.Sprintf("%d %s\n%s", len(values), plural, strings.Join(values, "\n"))
 }
 
 func wrap(i, n int) int {
@@ -2796,6 +2868,8 @@ func (m *Model) editorView() string {
 		return m.updateView() + m.notes()
 	case screenTargets:
 		return m.targetsView()
+	case screenPaths:
+		return m.pathsView()
 	case screenLogs:
 		return m.logsView()
 	case screenLogDetail:
@@ -2841,7 +2915,7 @@ func (m *Model) editorView() string {
 			keys = "enter tick · tab move · " + choiceFormKeys
 		case fieldProvider:
 			keys = "enter choose provider in the table · tab move · " + choiceFormKeys
-		case fieldTargets:
+		case fieldTargets, fieldPaths:
 			keys = "enter edit list · right/left expand/collapse · tab move · " + choiceFormKeys
 		case fieldVaultAction:
 			keys = "enter run · tab move · " + choiceFormKeys
@@ -2965,8 +3039,11 @@ func (m *Model) leaveView() string {
 		warning, keys = "warning: the guided setup is not saved", "d discard setup · esc keep editing"
 		why = "Leaving for " + where + " drops every step, typed secrets included. Nothing was written yet."
 	}
-	if m.leaveFrom == screenTargets {
+	if m.leaveFrom == screenTargets || m.leaveFrom == screenPaths {
 		warning = "warning: the target list changed"
+		if m.leaveFrom == screenPaths {
+			warning = "warning: the path list changed"
+		}
 		keys = "k keep the list · d discard changes · esc keep editing"
 		why = "Closing the list without keeping it would lose the changes. Nothing was written yet."
 	}
@@ -3232,6 +3309,8 @@ func (m *Model) keepScrollPosition() {
 			return
 		}
 		m.targetList.offset, _ = m.targetWindow()
+	case screenPaths:
+		m.pathList.offset, _ = m.pathWindow()
 	}
 }
 
@@ -3906,13 +3985,15 @@ func (m *Model) renderField(f field, focused bool) string {
 		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
 		value = hintStyle.Render("(" + emptyTargets(metadata.Target) + ")")
 	case f.kind == fieldTargets && f.expanded:
-		// Every target stands on a line of its own, under how many there are.
-		value = fmt.Sprintf("%d targets\n%s", len(f.entries), strings.Join(f.entries, "\n"))
-		if len(f.entries) == 1 {
-			value = "1 target\n" + f.entries[0]
-		}
+		value = listLines(f.entries, "target", "targets")
 	case f.kind == fieldTargets:
 		value = targetSummary(f.entries)
+	case f.kind == fieldPaths && len(f.entries) == 0:
+		value = hintStyle.Render("(none: every project)")
+	case f.kind == fieldPaths && f.expanded:
+		value = listLines(f.entries, "path", "paths")
+	case f.kind == fieldPaths:
+		value = listSummary(f.entries, "paths")
 	case f.kind == fieldMultiChoice:
 		parts := make([]string, len(f.choices))
 		for i, choice := range f.choices {

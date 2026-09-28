@@ -192,6 +192,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"connection without targets reaches whatever its credential reaches, while SeaTable or Telegram\n" +
 			"cannot be saved without one, and Telegram takes one chat only. One target is saved as target,\n" +
 			"several as targets.\n\n" +
+			"The paths row of a connection form holds the directories the connection is bound to, each\n" +
+			"absolute or starting with ~/; without paths the connection applies in every project. The row\n" +
+			"opens its list like the targets row, with the same keys: a adds a path, enter or e edits the\n" +
+			"selected one, x or d removes it after asking, F2 keeps the list and saves the connection, and\n" +
+			"esc asks before it drops a changed list. While a path is typed, tab takes the suggested\n" +
+			"directory and up/down switch between several; only directories are suggested, and with nothing\n" +
+			"typed the directory the TUI was started in. A path that does not exist yet is taken as typed,\n" +
+			"and qatlas config validate warns about it.\n\n" +
 			"enter on a text row saves the form, or goes on to the next step of the guided setup; F2 does\n" +
 			"the same from every row, choice rows included. The summary of the guided setup saves with enter.\n\n" +
 			"A connection's tools row decides between every tool its permissions allow, which is how a\n" +

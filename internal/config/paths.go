@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,18 +24,8 @@ func validatePaths(name string, paths []string, report func(string, ...any)) {
 	}
 	seen := map[string]bool{}
 	for i, entry := range paths {
-		switch {
-		case strings.TrimSpace(entry) == "":
-			report("connections.%s.paths[%d]: must not be empty", name, i)
-			continue
-		case strings.TrimSpace(entry) != entry:
-			report("connections.%s.paths[%d]: must not start or end with blanks", name, i)
-			continue
-		case strings.ContainsAny(entry, "*?["):
-			report("connections.%s.paths[%d]: glob patterns are not supported; %s", name, i, pathRule)
-			continue
-		case !projectpath.IsHomeRelative(entry) && !filepath.IsAbs(entry):
-			report("connections.%s.paths[%d]: %s", name, i, pathRule)
+		if err := CheckPath(entry); err != nil {
+			report("connections.%s.paths[%d]: %s", name, i, err)
 			continue
 		}
 		key := filepath.Clean(entry)
@@ -43,6 +34,29 @@ func validatePaths(name string, paths []string, report func(string, ...any)) {
 		}
 		seen[key] = true
 	}
+}
+
+// CheckPath checks one paths entry on its own, by the rules the paths list of a connection applies to each
+// of its entries. Like those rules, the error never quotes the entry. Whether the directory exists is no
+// rule: PathWarnings names such an entry instead.
+func CheckPath(entry string) error {
+	switch {
+	case strings.TrimSpace(entry) == "":
+		return errors.New("must not be empty")
+	case strings.TrimSpace(entry) != entry:
+		return errors.New("must not start or end with blanks")
+	case strings.ContainsAny(entry, "*?["):
+		return errors.New("glob patterns are not supported; " + pathRule)
+	case !projectpath.IsHomeRelative(entry) && !filepath.IsAbs(entry):
+		return errors.New(pathRule)
+	}
+	return nil
+}
+
+// SamePath reports whether two entries name the same directory in the sense of the rule that lists a
+// directory only once.
+func SamePath(a, b string) bool {
+	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 // PathWarnings names every paths entry that does not name an existing directory, one line per entry, sorted
