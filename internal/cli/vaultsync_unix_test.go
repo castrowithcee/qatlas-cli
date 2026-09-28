@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package cli
 
@@ -36,7 +36,7 @@ func serveVaultInProcess(t *testing.T, dir string) (*vaultproc.Server, *vaultpro
 	original := vaultProcessSupported
 	vaultProcessSupported = true
 	t.Cleanup(func() { vaultProcessSupported = original })
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", shortRuntimeDir(t))
 
 	v := vault.New(dir)
 	if _, err := v.Unlock("s3cret-phrase"); err != nil {
@@ -162,7 +162,7 @@ func TestConnectionsShowTheLockedVault(t *testing.T) {
 	original := vaultProcessSupported
 	vaultProcessSupported = true
 	t.Cleanup(func() { vaultProcessSupported = original })
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", shortRuntimeDir(t))
 
 	code, stdout, stderr := runWithInput(t, &Options{}, "", "connections", "--config", configIn(dir), "--output", "json")
 	if code != exitOK || !strings.Contains(stdout, `"unusable":"vault-locked"`) {
@@ -257,7 +257,7 @@ func TestUpdateLocksTheVaultProcess(t *testing.T) {
 
 	// Without a vault process nothing is said about one.
 	dir := encryptedVaultFixture(t, "")
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", shortRuntimeDir(t))
 	updater := releaseUpdater(t, installedProgram(t), func() {})
 	code, _, stderr := runWithInput(t, &Options{Updater: updater}, "", "update", "--config", configIn(dir))
 	if code != exitOK || stderr != "" {

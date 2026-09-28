@@ -9,9 +9,9 @@
 // A secret leaves the process only for a connection the vault approved (see vault.Bindings), and only for
 // this very program run by this very user. Both ends check each other. The server checks the process that
 // connected, its user and its program, before it answers anything; see VerifyProgram. The client checks the
-// user of the process that listens and then challenges it to prove that it holds the vault's key, before it
-// sends anything else, not even a credential name; see Client. A connection therefore carries two exchanges: the challenge and its proof, then the request
-// and its answer.
+// user of the process that listens, on macOS its program as well, and then challenges it to prove that it
+// holds the vault's key, before it sends anything else, not even a credential name; see Client. A
+// connection therefore carries two exchanges: the challenge and its proof, then the request and its answer.
 //
 // While it runs, the process is the one writer of the invocation log that signs its entries: a client hands
 // it the fields of an invoke, and the process checks them, chains them, and signs them with the log key it
@@ -106,6 +106,10 @@ func checkPathLength(path string) error {
 // default. Its name is derived from the vault's absolute path, so a vault under another configuration
 // directory, a test's included, never reaches the process of another vault through the shared runtime
 // directory.
+//
+// On macOS, where a socket path holds fewer bytes, a path that would be too long there moves to qatlas in
+// the per-user temporary directory ($TMPDIR) instead; every other platform, and a path too long even
+// there, fails with a PathTooLongError.
 func SocketPath(vaultDir string) (string, error) {
 	abs, err := filepath.Abs(vaultDir)
 	if err != nil {
@@ -121,6 +125,9 @@ func SocketPath(vaultDir string) (string, error) {
 	}
 	path := filepath.Join(dir, name)
 	if err := checkPathLength(path); err != nil {
+		if fallback, ok := fallbackSocketDir(); ok && checkPathLength(filepath.Join(fallback, name)) == nil {
+			return filepath.Join(fallback, name), nil
+		}
 		return "", err
 	}
 	return path, nil

@@ -1,6 +1,6 @@
 // The vault state in the header and 'ctrl+l' (see vaultheader.go): the three states of the header, the
 // admin abbreviation, the tick that refreshes both, and 'ctrl+l' itself unlocking and locking the vault from
-// a list and a form. The Linux test with a real vaultproc.Server lives in vaultprocess_linux_test.go, beside
+// a list and a form. The Linux and macOS test with a real vaultproc.Server lives in vaultprocess_unix_test.go, beside
 // the package's other tests of that kind.
 package tui
 
@@ -21,9 +21,9 @@ import (
 )
 
 // TestMain keeps the ordinary test suite from ever spawning a second copy of this test binary as a vault
-// process: unlocking the vault, through 'ctrl+l' or otherwise, still tries to hand it to one on Linux (see
+// process: unlocking the vault, through 'ctrl+l' or otherwise, still tries to hand it to one on Linux and macOS (see
 // startVaultProcess), and only a test that explicitly wants a real one, through withStartableVaultProcess in
-// vaultprocess_linux_test.go, replaces this stub for its own duration. Package cli's own TestMain
+// vaultprocess_unix_test.go, replaces this stub for its own duration. Package cli's own TestMain
 // (internal/cli/admin_test.go) exists for the same reason, over 'qatlas vault unlock' itself.
 //
 // It also shrinks vaultTickInterval: deliver (update_test.go) calls a command's function directly, which for

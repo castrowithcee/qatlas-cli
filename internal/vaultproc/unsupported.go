@@ -1,4 +1,4 @@
-//go:build !linux
+//go:build !linux && !darwin
 
 package vaultproc
 
@@ -12,6 +12,8 @@ func VerifyProgram(net.Conn) error { return ErrUnsupported }
 
 // VerifyUser refuses every peer on this platform, like VerifyProgram.
 func VerifyUser(net.Conn) error { return ErrUnsupported }
+
+func verifyServer(net.Conn) error { return ErrUnsupported }
 
 func peerPID(net.Conn) int { return 0 }
 

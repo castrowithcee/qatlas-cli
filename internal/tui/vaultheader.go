@@ -156,7 +156,7 @@ func (m *Model) handleVaultLockKey() tea.Cmd {
 // vaultUnlockPrompt is the masked passphrase dialog 'ctrl+l' opens for a locked vault with no other action
 // pending (see handleVaultLockKey). It is deliberately its own small dialog rather than a third mode of
 // admin.go's adminAuth: unlike requireAdmin's "Unlock vault to continue", answering it does nothing but the
-// unlock itself, the vault process handoff on Linux (see startVaultProcess below), and starting this
+// unlock itself, the vault process handoff on Linux and macOS (see startVaultProcess below), and starting this
 // window's admin session; back is the screen it returns to either way, whichever one 'ctrl+l' was pressed
 // from.
 type vaultUnlockPrompt struct {
@@ -265,7 +265,7 @@ func (m *Model) beginVaultUnlock(passphrase string, back screen) tea.Cmd {
 // dialog with the error shown, the same pattern every other masked prompt of this editor follows. The right
 // one unlocks the vault in this process at once, starts this window's admin session too (the same passphrase
 // just proved both, the same reasoning requireAdmin's own locked case already follows), and, only then, hands
-// the vault to a vault process on Linux in the background (see startVaultProcess): that hand-off can take a
+// the vault to a vault process on Linux and macOS in the background (see startVaultProcess): that hand-off can take a
 // few seconds and must never delay returning control of the editor.
 func (m *Model) handleVaultUnlocked(msg vaultUnlockedMsg) tea.Cmd {
 	if msg.err != nil {
@@ -304,7 +304,7 @@ type vaultProcessStartedMsg struct{ err error }
 // building the snapshot, still runs for real.
 var startVaultProcessFn = vaultmigrate.StartProcess
 
-// startVaultProcess hands the just-unlocked vault to a vault process on Linux, exactly the way 'qatlas
+// startVaultProcess hands the just-unlocked vault to a vault process on Linux and macOS, exactly the way 'qatlas
 // vault unlock' does (see vaultmigrate.StartProcess, the shared core both run): nil where this platform
 // runs no vault process at all, so the caller never has to ask vaultproc.Supported itself. A process already
 // running elsewhere, or none running yet because this platform never starts one, stays silent; any other
@@ -421,7 +421,7 @@ func (m *Model) handleVaultLocked(msg vaultLockedMsg) tea.Cmd {
 type vaultProcessCheckMsg struct{ unlocked bool }
 
 // checkVaultProcess asks, off the event loop, whether a vault process holds the vault open right now (Linux
-// only), so the header can show "unlocked" for a vault this process itself has not unlocked. It asks only
+// and macOS only), so the header can show "unlocked" for a vault this process itself has not unlocked. It asks only
 // while there is something worth asking about: an encrypted, locked vault on a platform that runs
 // a vault process at all; every other case has nothing to gain from a round trip and returns nil, so
 // vaultTick's own tea.Batch simply carries nothing for it that tick.

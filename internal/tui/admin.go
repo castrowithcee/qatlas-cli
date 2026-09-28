@@ -2,7 +2,7 @@
 // vault is encrypted. The editor itself always opens read-only; the first managing action of this run asks
 // for the passphrase in a masked screen of its own, never on this process's terminal (see tuiSecrets in
 // internal/cli), and a right answer keeps only this window in "admin mode" until vault.admin_timeout passes
-// without a key press. Every other window, and the vault process a Linux build may hold unlocked outside
+// without a key press. Every other window, and the vault process a Linux or macOS build may hold unlocked outside
 // this run, never shares it: the passphrase is the proof the session rests on, not merely the vault's own
 // unlocked state (see vault.VerifyPassphrase, which checks it without relying on either).
 package tui

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +55,23 @@ func testBindings() vault.Bindings {
 		IDs:       map[string]string{"wiki-reader": testCredentialID},
 		Approvals: map[string]string{"wiki": vault.Fingerprint(*testScope(), testCredentialID)},
 	}
+}
+
+// shortTempDir returns a fresh directory that is removed after the test, short enough for a socket path
+// below it. t.TempDir nests the full test name, and on macOS the per-user temporary directory is long
+// already, so there it is created in /tmp instead.
+func shortTempDir(t *testing.T) string {
+	t.Helper()
+	base := ""
+	if runtime.GOOS == "darwin" {
+		base = "/tmp"
+	}
+	dir, err := os.MkdirTemp(base, "qv")
+	if err != nil {
+		t.Fatalf("MkdirTemp() error = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
 }
 
 func testServer() *Server {
@@ -292,9 +310,9 @@ func TestClientStopsWhenTheCallerCancels(t *testing.T) {
 
 func TestClientReportsAMissingProcess(t *testing.T) {
 	if !Supported {
-		t.Skip("the vault process runs only on Linux; elsewhere nothing dials or places its socket")
+		t.Skip("the vault process runs only on Linux and macOS; elsewhere nothing dials or places its socket")
 	}
-	c := NewClient(filepath.Join(t.TempDir(), "absent.sock"), testRecipient)
+	c := NewClient(filepath.Join(shortTempDir(t), "absent.sock"), testRecipient)
 	if _, err := c.Status(context.Background()); !errors.Is(err, ErrNotRunning) {
 		t.Fatalf("Status() without a process error = %v, want ErrNotRunning", err)
 	}
@@ -329,9 +347,9 @@ func TestLockOverwritesTheSecrets(t *testing.T) {
 
 func TestSocketPath(t *testing.T) {
 	if !Supported {
-		t.Skip("the vault process runs only on Linux; elsewhere nothing dials or places its socket")
+		t.Skip("the vault process runs only on Linux and macOS; elsewhere nothing dials or places its socket")
 	}
-	home := t.TempDir()
+	home := shortTempDir(t)
 	vaultDir := filepath.Join(home, ".qatlas", "cli", "vault")
 
 	t.Setenv("XDG_RUNTIME_DIR", "")
@@ -352,19 +370,21 @@ func TestSocketPath(t *testing.T) {
 		t.Fatalf("SocketPath() with a relative runtime directory = %s, %v, want it ignored", again, err)
 	}
 
-	runtimeDir := t.TempDir()
+	runtimeDir := shortTempDir(t)
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	inRuntime, err := SocketPath(vaultDir)
 	if err != nil || inRuntime != filepath.Join(runtimeDir, "qatlas", name) {
 		t.Fatalf("SocketPath() with a runtime directory = %s, %v, want %s", inRuntime, err,
 			filepath.Join(runtimeDir, "qatlas", name))
 	}
-	other, err := SocketPath(filepath.Join(t.TempDir(), "vault"))
+	other, err := SocketPath(filepath.Join(shortTempDir(t), "vault"))
 	if err != nil || other == inRuntime {
 		t.Fatalf("SocketPath() of another vault = %s, %v, want a socket of its own", other, err)
 	}
 
 	t.Setenv("XDG_RUNTIME_DIR", "/"+strings.Repeat("r", maxSocketPath))
+	// Too long for the per-user temporary directory macOS moves an overlong path to, too.
+	t.Setenv("TMPDIR", "/"+strings.Repeat("t", maxSocketPath))
 	var tooLong *PathTooLongError
 	if _, err := SocketPath(vaultDir); !errors.As(err, &tooLong) {
 		t.Fatalf("SocketPath() of an overlong path error = %v, want PathTooLongError", err)
