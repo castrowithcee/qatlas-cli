@@ -162,7 +162,7 @@ a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested proj
 check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, the
 workflow file or `.github/workflows` directory with the ref it was read at, `github.contents.get`'s path or
 the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s ref or its path at that ref,
-`github.commits.get`'s ref, `github.tags.get`'s tag, the discussion by its number, a notification thread as "this notification thread" (also for a thread of a repository the connection's targets do not admit), the subscription of a thread, a fork or the collaborators `github.repositories.fork` and
+`github.commits.get`'s ref, `github.tags.get`'s tag, the discussion by its number, a gist as "this gist" (also for a gist of a user the connection's targets do not name) and a user's gists as "the gists of users/LOGIN", a notification thread as "this notification thread" (also for a thread of a repository the connection's targets do not admit), the subscription of a thread, a fork or the collaborators `github.repositories.fork` and
 `github.collaborators.list` address, the pull request by its number, the sub-issues or the dependencies of an
 issue as "the sub-issues of issue #N", "a sub-issue of issue #N", "the sub-issue order of issue #N", "the
 issues blocking issue #N", "the issues issue #N blocks", or "a dependency of issue #N", or, for
@@ -245,6 +245,8 @@ discussions, and comments, replies, and edits comments under [Discussions](#disc
 discussion comment stays unticked, since it is offered only where a connection's `tools` list names it. The
 not-recommended profile `notifications` lists and reads notifications, marks a thread read or done, and sets
 thread and repository subscriptions under [Notifications](#notifications); marking everything read stays
+unticked, since it is offered only where a connection's `tools` list names it. The not-recommended
+profile `gists` lists and reads gists and creates and updates them under [Gists](#gists); deleting a gist stays
 unticked, since it is offered only where a connection's `tools` list names it. A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
@@ -1036,6 +1038,68 @@ tools; `github.notifications.markall` stays unticked, and the recommended profil
 | --- | --- | --- |
 | the thread tools, `github.notifications.list`, `.get`, `.dismiss`, `.markall`, and `github.threadsubscriptions.set` | `notifications` or `repo` | not supported, refused by Qatlas |
 | `github.repositorysubscriptions.set` | decided by GitHub per request | decided by GitHub per request |
+
+## Gists
+
+Five tools list, read, create, change, and delete gists. A gist belongs to a user account, not to a repository
+or a project, so these tools take no target argument. `github.gists.list` lists one bounded batch of the gists
+of the account behind the connection's token, secret ones included, or with `username` the public gists of one
+user, optionally updated `since` a date (`YYYY-MM-DD`, midnight UTC) or UTC time; `limit` is 1 through 100 (30
+when omitted) and `cursor` is the opaque `next_cursor`, bound to the user and the filter, and another one
+refuses it as an invalid request. An entry carries `id` (the `gist_id` of the other tools), `description`,
+`public`, `owner`, times, `url`, `file_count`, and the file names, media types, languages, and sizes (at most 20
+files, `files_truncated` says so), without content. `github.gists.get` reads one gist with its files: a file
+shows at most 20000 characters and all files together at most 100000, at most 50 files are shown, and every
+cut is marked (`content_truncated`, `files_truncated`); a binary file shows only its metadata
+(`binary=true`). Descriptions (cut at 500 characters, `description_truncated`) and file contents come from
+other accounts and are untrusted data. GitHub itself cuts a file over 1 MB, and a response over 4 MiB is
+refused as an invalid response.
+
+`github.gists.create` makes a gist from `files` (1 through 20 entries of `filename` and `content`, at most
+1 MiB together); it is secret unless `public=true`. `github.gists.update` changes the `description` (an empty
+text clears it), writes files (`files`: `filename` with `content` to add or replace it, `new_filename` to
+rename it), and removes files (`remove_files`) in one request. `github.gists.delete` removes a gist
+permanently and is offered only where the connection's `tools` list names it.
+
+The targets act as follows. A connection without targets reaches whatever its token reaches. A connection with
+targets must name at least one user as `users/LOGIN` and no repository and no project; otherwise every gist
+tool is an invalid request before a credential is resolved. Such a connection reaches only the gists of the
+users it names: `username` of the list must be one of them, the list without `username` and `create` need the
+account behind the token among them (checked with one read of the account), and `get`, `update`, and `delete`
+read the gist first and answer `not-found`, without a change, for a gist whose owner is no named user, or an
+anonymous one. An organization owner target does not count, since a gist belongs to a user.
+
+Every change needs `--confirm`, is sent once, and is never retried. A create is not idempotent; an update sets
+the named state and leaves the same state when repeated; GitHub documents no answer for repeating a delete, so
+it declares its idempotency as unknown, and a repeated delete can answer `not-found`.
+
+```sh
+qatlas invoke github.gists.list --connection code --arg username=octocat --arg limit=10
+qatlas invoke github.gists.get --connection code --arg gist_id=aa5a315d61ae9438b18d
+echo '{"description":"Notes","files":[{"filename":"notes.md","content":"# Notes"}]}' | qatlas invoke github.gists.create --connection code --confirm
+qatlas invoke github.gists.delete --connection code --arg gist_id=aa5a315d61ae9438b18d --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.gists.list` | read | safe | none | lists one bounded batch of gists without content |
+| `github.gists.get` | read | safe | none | reads one gist with bounded file contents |
+| `github.gists.create` | create | non-idempotent | required | creates a secret gist by default |
+| `github.gists.update` | update | idempotent | required | changes the description and writes, renames, or removes files |
+| `github.gists.delete` | delete | unknown | required | deletes a gist permanently; listed-only |
+
+The not-recommended setup profile `gists` ticks the list, the get, the create, and the update; `github.gists.delete`
+stays unticked, and the recommended profile `read` is unchanged.
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.gists.list`, `github.gists.get` | `gist` for secret gists; none for public ones | GitHub lists no permission for the reads |
+| `github.gists.create`, `.update`, `.delete` | `gist` | user permission Gists: read and write |
+
+Sources: https://docs.github.com/en/rest/gists/gists and
+https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
+(checked 2026-09-30; the second lists the create, update, and delete routes under the user permission Gists with
+write access and lists no gist read route).
 
 ## Milestones
 

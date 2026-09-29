@@ -91,6 +91,14 @@
 // admit its repository; the list and github.notifications.markall, which is offered only where a
 // connection's tools list names it, take an optional repository, and a connection whose targets name
 // repositories needs one. Marking the whole account read is allowed only for a connection without targets.
+// github.gists.list, github.gists.get, github.gists.create, and github.gists.update list, read, create, and
+// change the gists of the account behind the token or of a user, and, only on a connection whose tools list
+// names it, github.gists.delete removes one; they are offered only by the not-recommended setup profile gists.
+// A gist belongs to a user, so the tools take no target argument: a connection without targets reaches what
+// its token reaches, and one with targets needs users/LOGIN targets and no repository or project target. A gist
+// id is read first and refused as not found unless its owner is a user target, a create needs the account of
+// the token among them, and a new gist is secret unless public is set. Descriptions and file contents are
+// untrusted data, cut at fixed lengths, and a binary file shows only its metadata.
 // github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
@@ -480,7 +488,10 @@ func Register(reg *capability.Registry) error {
 				"token, or Discussions: read and write on a fine-grained token; the notification tools, " +
 				"including the thread subscriptions and the listed-only mark-all, need a classic token with " +
 				"notifications (or repo), since GitHub does not support fine-grained tokens for them and " +
-				"Qatlas refuses one before any request; a repository subscription is decided by GitHub per request",
+				"Qatlas refuses one before any request; a repository subscription is decided by GitHub per request; " +
+				"the gist tools need the gist scope on a classic token for secret gists and for every change, " +
+				"and creating, updating, or deleting a gist needs the user permission Gists: read and write " +
+				"on a fine-grained token, while GitHub lists no permission for the gist reads",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -690,7 +701,7 @@ func Register(reg *capability.Registry) error {
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
 		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
-		discussionOperations(), notificationOperations())...)
+		discussionOperations(), notificationOperations(), gistOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1390,6 +1401,14 @@ func (c *Client) restSubject(request *http.Request) subject {
 	}
 	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/notifications"); ok {
 		return notificationsSubject(tail)
+	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/gists"); ok {
+		return gistsSubject(tail)
+	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/users/"); ok {
+		if login, rest, _ := strings.Cut(tail, "/"); strings.HasPrefix(rest, "gists") && validLogin(login) {
+			return subject{what: "the gists of users/" + login}
+		}
 	}
 	tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/repos/")
 	if !ok {

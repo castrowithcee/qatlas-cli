@@ -197,8 +197,11 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 			descriptor.ID == customPropertiesSet.ID || descriptor.ID == issueFieldsList.ID ||
 			descriptor.ID == notificationsList.ID || descriptor.ID == notificationsGet.ID ||
 			descriptor.ID == notificationsDismiss.ID || descriptor.ID == notificationsMarkAll.ID ||
-			descriptor.ID == threadSubscriptionsSet.ID:
-			// The notification tools take an optional repository of their own or a thread id.
+			descriptor.ID == threadSubscriptionsSet.ID ||
+			descriptor.ID == gistsList.ID || descriptor.ID == gistsGet.ID || descriptor.ID == gistsCreate.ID ||
+			descriptor.ID == gistsUpdate.ID || descriptor.ID == gistsDelete.ID:
+			// The notification tools take an optional repository of their own or a thread id; the gist tools take a
+			// gist id or none.
 			names = []string{}
 		case descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
 			descriptor.ID == projectsCreate.ID || descriptor.ID == issueTypesList.ID ||

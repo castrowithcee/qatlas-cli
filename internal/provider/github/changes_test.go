@@ -370,6 +370,11 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.notifications.dismiss":     changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
 		"github.notifications.markall": guardedRisk(capability.EffectUpdate, capability.IdempotencyUnknown,
 			notificationSensitivity),
+		"github.gists.list":                  readRisk,
+		"github.gists.get":                   readRisk,
+		"github.gists.create":                changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.gists.update":                changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.gists.delete":                guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, gistSensitivity),
 		"github.threadsubscriptions.set":     changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
 		"github.repositorysubscriptions.set": changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
 	}

@@ -54,14 +54,15 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	// makes one; its own optional owner argument is defined on its descriptor directly. The ruleset tools, the
 	// custom properties tools, and github.issuefields.list take an exclusive repository or organization
 	// argument of their own, since exactly one of the two, never a default, addresses a call. The notification
-	// tools take an optional repository of their own, or a thread id whose repository is read and checked.
+	// tools take an optional repository of their own, or a thread id whose repository is read and checked. The
+	// gist tools belong to a user account and take a gist id or none, checked against the user targets.
 	switch d.ID {
 	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
 		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID, repositoriesCreate.ID,
 		rulesetsList.ID, rulesetsGet.ID, rulesetsCreate.ID, rulesetsUpdate.ID, rulesetsDelete.ID,
 		customPropertiesGet.ID, customPropertiesSet.ID, issueFieldsList.ID,
 		notificationsList.ID, notificationsGet.ID, notificationsDismiss.ID, notificationsMarkAll.ID,
-		threadSubscriptionsSet.ID:
+		threadSubscriptionsSet.ID, gistsList.ID, gistsGet.ID, gistsCreate.ID, gistsUpdate.ID, gistsDelete.ID:
 		return d
 	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument
