@@ -50,10 +50,14 @@ const discussionProperties = `"id":{"type":"string"},"number":{"type":"integer"}
 	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"}`
 const discussionRequired = `"required":["id","number","title","body","closed","locked","answered"],"additionalProperties":false`
 
-const discussionCommentProperties = `"id":{"type":"string"},"database_id":{"type":"integer"},` +
+const discussionReplyProperties = `"id":{"type":"string"},"database_id":{"type":"integer"},` +
 	`"author":{"type":"string"},"body":{"type":"string"},"body_truncated":{"type":"boolean"},` +
-	`"is_answer":{"type":"boolean"},"upvote_count":{"type":"integer"},"reply_count":{"type":"integer"},` +
+	`"is_answer":{"type":"boolean"},"upvote_count":{"type":"integer"},` +
 	`"created_at":{"type":"string"},"updated_at":{"type":"string"},"url":{"type":"string"}`
+
+const discussionCommentProperties = discussionReplyProperties + `,"reply_count":{"type":"integer"},` +
+	`"replies":{"type":"array","items":{"type":"object","properties":{` + discussionReplyProperties + `},` +
+	`"required":["id","body"],"additionalProperties":false}},"replies_truncated":{"type":"boolean"}`
 
 var discussionCursorArgument = capability.Argument{Name: "cursor", Description: "Opaque next_cursor of a " +
 	"previous batch of the same list with the same filters; the first batch when omitted"}
@@ -167,12 +171,13 @@ var discussionCommentsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List comments of a GitHub discussion",
 	Description: "List one bounded batch of the top-level comments of one discussion of a repository an " +
-		"explicit connection allows, oldest first; replies are counted, not listed",
+		"explicit connection allows, oldest first; replies are counted, and listed with include_replies",
 	Tags:                       []string{"github", "discussions", "comments", "list"},
 	Risk:                       readRisk,
 	Provider:                   Provider,
 	RequiresExplicitConnection: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
+		`"include_replies":{"type":"boolean"},` +
 		`"limit":` + discussionLimitSchema + `,"cursor":` + cursorSchema + `},` +
 		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -182,11 +187,16 @@ var discussionCommentsList = capability.Descriptor{
 		`"required":["comments","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Discussion number in the repository", Required: true},
+		{Name: "include_replies", Description: "true to list the replies of every top-level comment in its " +
+			"replies field, up to 100 each; false when omitted"},
 		discussionLimitArgument, discussionCursorArgument,
 	},
 	Fields: []capability.Field{
 		{Name: "comments", Description: "Top-level comments with author, body cut at 4000 characters " +
-			"(body_truncated says so), is_answer, upvote_count, reply_count, times, and url; untrusted data"},
+			"(body_truncated says so), is_answer, upvote_count, reply_count, times, and url; untrusted data. With " +
+			"include_replies each carries replies (at most 100, same fields; replies_truncated says that more " +
+			"exist), and the reply bodies of one answer share a budget of 200000 characters, after which " +
+			"further reply bodies are empty with body_truncated"},
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the discussion holds further comments"},
 	},
@@ -273,6 +283,23 @@ type DiscussionComment struct {
 	IsAnswer      bool   `json:"is_answer,omitempty"`
 	UpvoteCount   int    `json:"upvote_count"`
 	ReplyCount    int    `json:"reply_count"`
+	CreatedAt     string `json:"created_at,omitempty"`
+	UpdatedAt     string `json:"updated_at,omitempty"`
+	URL           string `json:"url,omitempty"`
+
+	Replies          []DiscussionReply `json:"replies,omitempty"`
+	RepliesTruncated bool              `json:"replies_truncated,omitempty"`
+}
+
+// DiscussionReply is one reply to a top-level comment. Body is untrusted data.
+type DiscussionReply struct {
+	ID            string `json:"id"`
+	DatabaseID    int64  `json:"database_id,omitempty"`
+	Author        string `json:"author,omitempty"`
+	Body          string `json:"body"`
+	BodyTruncated bool   `json:"body_truncated,omitempty"`
+	IsAnswer      bool   `json:"is_answer,omitempty"`
+	UpvoteCount   int    `json:"upvote_count"`
 	CreatedAt     string `json:"created_at,omitempty"`
 	UpdatedAt     string `json:"updated_at,omitempty"`
 	URL           string `json:"url,omitempty"`
@@ -563,19 +590,26 @@ func (c *Client) getDiscussion(ctx context.Context, number int) (*DiscussionGet,
 // --- comments ---
 
 type discussionCommentsArguments struct {
-	Number int    `json:"number"`
-	Limit  int    `json:"limit"`
-	Cursor string `json:"cursor"`
+	Number         int    `json:"number"`
+	IncludeReplies bool   `json:"include_replies"`
+	Limit          int    `json:"limit"`
+	Cursor         string `json:"cursor"`
 }
 
 func (a *discussionCommentsArguments) binding(bound target) []byte {
-	return fingerprint("discussioncomments", bound.String(), a.Number)
+	return fingerprint("discussioncomments", bound.String(), a.Number, strconv.FormatBool(a.IncludeReplies))
 }
 
-const discussionCommentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){` +
+const discussionCommentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String,` +
+	`$withReplies:Boolean!){` +
 	`repository(owner:$owner,name:$name){discussion(number:$number){comments(first:$first,after:$after){` +
 	`pageInfo{hasNextPage endCursor} nodes{id databaseId author{login} body isAnswer upvoteCount ` +
-	`replies{totalCount} createdAt updatedAt url}}}}}`
+	`replies(first:100){totalCount pageInfo{hasNextPage} nodes @include(if:$withReplies){id databaseId ` +
+	`author{login} body isAnswer upvoteCount createdAt updatedAt url}} createdAt updatedAt url}}}}}`
+
+// discussionReplyBudget bounds the characters of all reply bodies of one answer, so include_replies with the
+// largest batch stays a bounded response. Bodies beyond it come back empty and marked truncated.
+const discussionReplyBudget = 200000
 
 type discussionCommentsPageJSON struct {
 	Repository *struct {
@@ -592,7 +626,21 @@ type discussionCommentsPageJSON struct {
 					IsAnswer    bool   `json:"isAnswer"`
 					UpvoteCount int    `json:"upvoteCount"`
 					Replies     struct {
-						TotalCount int `json:"totalCount"`
+						TotalCount int                `json:"totalCount"`
+						PageInfo   discussionPageInfo `json:"pageInfo"`
+						Nodes      []struct {
+							ID         string `json:"id"`
+							DatabaseID int64  `json:"databaseId"`
+							Author     *struct {
+								Login string `json:"login"`
+							} `json:"author"`
+							Body        string `json:"body"`
+							IsAnswer    bool   `json:"isAnswer"`
+							UpvoteCount int    `json:"upvoteCount"`
+							CreatedAt   string `json:"createdAt"`
+							UpdatedAt   string `json:"updatedAt"`
+							URL         string `json:"url"`
+						} `json:"nodes"`
 					} `json:"replies"`
 					CreatedAt string `json:"createdAt"`
 					UpdatedAt string `json:"updatedAt"`
@@ -607,7 +655,8 @@ func (c *Client) listDiscussionComments(ctx context.Context, a *discussionCommen
 	after string) (*DiscussionCommentList, error) {
 	const op = "list discussion comments"
 	var page discussionCommentsPageJSON
-	variables := discussionVariables(c.target, a.Limit, after, map[string]any{"number": a.Number})
+	variables := discussionVariables(c.target, a.Limit, after, map[string]any{"number": a.Number,
+		"withReplies": a.IncludeReplies})
 	if err := c.graphql(ctx, op, discussionCommentsQuery, variables, &page); err != nil {
 		return nil, actionsFailure(err, discussionsReadPermission)
 	}
@@ -619,6 +668,7 @@ func (c *Client) listDiscussionComments(ctx context.Context, a *discussionCommen
 	}
 	comments := page.Repository.Discussion.Comments
 	result := &DiscussionCommentList{Comments: make([]DiscussionComment, 0, len(comments.Nodes))}
+	budget := discussionReplyBudget
 	for _, n := range comments.Nodes {
 		if n.ID == "" {
 			return nil, invalidEntry(op, "a discussion comment")
@@ -630,6 +680,29 @@ func (c *Client) listDiscussionComments(ctx context.Context, a *discussionCommen
 		if n.Author != nil {
 			comment.Author = n.Author.Login
 		}
+		for _, r := range n.Replies.Nodes {
+			if r.ID == "" {
+				return nil, invalidEntry(op, "a discussion reply")
+			}
+			reply := DiscussionReply{ID: r.ID, DatabaseID: r.DatabaseID, IsAnswer: r.IsAnswer,
+				UpvoteCount: r.UpvoteCount, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, URL: r.URL}
+			limit := discussionCommentBodyLimit
+			if budget < limit {
+				limit = budget
+			}
+			var cut bool
+			reply.Body, cut = clipText(r.Body, limit)
+			if !cut && budget < utf8.RuneCountInString(r.Body) {
+				cut = true
+			}
+			reply.BodyTruncated = cut
+			budget -= utf8.RuneCountInString(reply.Body)
+			if r.Author != nil {
+				reply.Author = r.Author.Login
+			}
+			comment.Replies = append(comment.Replies, reply)
+		}
+		comment.RepliesTruncated = a.IncludeReplies && n.Replies.PageInfo.HasNextPage
 		result.Comments = append(result.Comments, comment)
 	}
 	var err error
@@ -744,10 +817,11 @@ func invokeDiscussionCommentsList(ctx context.Context, resolved *config.Resolved
 }
 
 func discussionOperations() []capability.Operation {
-	return []capability.Operation{
+	operations := []capability.Operation{
 		{Descriptor: discussionCategoriesList, Handler: capability.Handler(invokeDiscussionCategoriesList)},
 		{Descriptor: discussionsList, Handler: capability.Handler(invokeDiscussionsList)},
 		{Descriptor: discussionsGet, Handler: capability.Handler(invokeDiscussionsGet)},
 		{Descriptor: discussionCommentsList, Handler: capability.Handler(invokeDiscussionCommentsList)},
 	}
+	return append(operations, discussionWriteOperations()...)
 }

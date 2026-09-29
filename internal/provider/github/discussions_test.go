@@ -1,12 +1,15 @@
 package github
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
@@ -31,7 +34,7 @@ func (d *fakeDiscussions) route(w http.ResponseWriter, req *http.Request) bool {
 	}
 	requests := d.f.recorded()
 	last := requests[len(requests)-1]
-	if !strings.Contains(last.document, "discussion") {
+	if !strings.Contains(strings.ToLower(last.document), "discussion") {
 		return false
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -41,6 +44,37 @@ func (d *fakeDiscussions) route(w http.ResponseWriter, req *http.Request) bool {
 		return true
 	}
 	switch {
+	case strings.Contains(last.document, "mutation"):
+		return d.mutation(w, last)
+	case strings.Contains(last.document, "on DiscussionComment"):
+		id, _ := last.variables["id"].(string)
+		repo, number, reply := `{"name":"example","owner":{"login":"octo-org"}}`, 12, "null"
+		switch id {
+		case "DC_top":
+		case "DC_reply":
+			reply = `{"id":"DC_top"}`
+		case "DC_other":
+			number = 13
+		case "DC_foreign":
+			repo = `{"name":"elsewhere","owner":{"login":"someone"}}`
+		default:
+			fmt.Fprint(w, `{"data":{"node":null}}`)
+			return true
+		}
+		fmt.Fprintf(w, `{"data":{"node":{"__typename":"DiscussionComment","id":%q,"replyTo":%s,`+
+			`"discussion":{"number":%d,"repository":%s}}}}`, id, reply, number, repo)
+	case strings.Contains(last.document, "on DiscussionCategory"):
+		repo := `{"name":"example","owner":{"login":"octo-org"}}`
+		switch last.variables["id"] {
+		case "DIC_cat1":
+		case "DIC_foreign":
+			repo = `{"name":"elsewhere","owner":{"login":"someone"}}`
+		default:
+			fmt.Fprint(w, `{"data":{"repository":{"id":"R_1"},"node":null}}`)
+			return true
+		}
+		fmt.Fprintf(w, `{"data":{"repository":{"id":"R_1"},"node":{"__typename":"DiscussionCategory",`+
+			`"id":"x","repository":%s}}}`, repo)
 	case strings.Contains(last.document, "discussionCategories("):
 		fmt.Fprint(w, `{"data":{"repository":{"discussionCategories":{"pageInfo":{"hasNextPage":true,`+
 			`"endCursor":"CUR1"},"nodes":[{"id":"DIC_cat1","name":"Q&A","slug":"q-a","description":"Ask",`+
@@ -54,11 +88,18 @@ func (d *fakeDiscussions) route(w http.ResponseWriter, req *http.Request) bool {
 			fmt.Fprint(w, `{"data":{"repository":{"discussion":null}}}`)
 			return true
 		}
-		fmt.Fprint(w, `{"data":{"repository":{"discussion":{"comments":{"pageInfo":{"hasNextPage":true,`+
+		replies := `{"totalCount":4,"pageInfo":{"hasNextPage":false}}`
+		if last.variables["withReplies"] == true {
+			replies = `{"totalCount":150,"pageInfo":{"hasNextPage":true},"nodes":[{"id":"DC_r1","databaseId":78,` +
+				`"author":{"login":"mona"},"body":"REPLYBODY","isAnswer":false,"upvoteCount":2,` +
+				`"createdAt":"2026-01-02T00:00:00Z","updatedAt":"2026-01-02T00:00:00Z","url":"https://x/r"}]}`
+			replies = strings.Replace(replies, "REPLYBODY", strings.Repeat("y", discussionCommentBodyLimit+5), 1)
+		}
+		fmt.Fprintf(w, `{"data":{"repository":{"discussion":{"comments":{"pageInfo":{"hasNextPage":true,`+
 			`"endCursor":"CUR3"},"nodes":[{"id":"DC_1","databaseId":77,"author":{"login":"hubot"},`+
-			`"body":"an answer","isAnswer":true,"upvoteCount":1,"replies":{"totalCount":4},`+
+			`"body":"an answer","isAnswer":true,"upvoteCount":1,"replies":%s,`+
 			`"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z",`+
-			`"url":"https://github.com/octo-org/example/discussions/12#discussioncomment-77"}]}}}}}`)
+			`"url":"https://github.com/octo-org/example/discussions/12#discussioncomment-77"}]}}}}}`, replies)
 	case strings.Contains(last.document, "discussion(number:$number)"):
 		if last.variables["number"] != float64(12) {
 			fmt.Fprint(w, `{"data":{"repository":{"discussion":null}}}`)
@@ -200,5 +241,150 @@ func TestDiscussionToolsRefuseBeforeIO(t *testing.T) {
 		if reads != 0 || len(d.f.recorded()) != before {
 			t.Errorf("%s %s reached the credential or GitHub", tt.id, tt.args)
 		}
+	}
+}
+
+func (d *fakeDiscussions) mutation(w http.ResponseWriter, last recorded) bool {
+	switch {
+	case strings.Contains(last.document, "createDiscussion("):
+		fmt.Fprint(w, `{"data":{"createDiscussion":{"discussion":{"id":"D_new","number":40,"url":"https://x/d/40"}}}}`)
+	case strings.Contains(last.document, "deleteDiscussionComment("):
+		fmt.Fprint(w, `{"data":{"deleteDiscussionComment":{"comment":{"id":"DC_top"}}}}`)
+	default:
+		fmt.Fprint(w, `{"data":{"addDiscussionComment":{"comment":{"id":"DC_new","databaseId":90,`+
+			`"author":{"login":"me"},"createdAt":"2026-01-03T00:00:00Z","updatedAt":"2026-01-03T00:00:00Z",`+
+			`"url":"https://x/c"}},"updateDiscussionComment":{"comment":{"id":"DC_top","databaseId":77,`+
+			`"createdAt":"2026-01-03T00:00:00Z","updatedAt":"2026-01-03T00:00:00Z","url":"https://x/c"}}}}`)
+	}
+	return true
+}
+
+func TestDiscussionCommentsListWithRepliesIsBounded(t *testing.T) {
+	core := discussionCore(t, &fakeDiscussions{}, nil)
+	plain, err := invoke(t, core, discussionCommentsList.ID, "repo", `{"number":12}`, false)
+	if err != nil || strings.Contains(string(plain), `"replies":`) {
+		t.Fatalf("without include_replies = %s, %v", plain, err)
+	}
+	result, err := invoke(t, core, discussionCommentsList.ID, "repo", `{"number":12,"include_replies":true}`, false)
+	if err != nil || !strings.Contains(string(result), `"id":"DC_r1"`) ||
+		!strings.Contains(string(result), `"replies_truncated":true`) || !strings.Contains(string(result), `"reply_count":150`) ||
+		!strings.Contains(string(result), `"body_truncated":true`) ||
+		strings.Contains(string(result), strings.Repeat("y", discussionCommentBodyLimit+1)) {
+		t.Fatalf("with include_replies = %.300s, %v", result, err)
+	}
+	// A cursor of the plain list does not continue the list with replies.
+	if _, err := invoke(t, core, discussionCommentsList.ID, "repo",
+		`{"number":12,"include_replies":true,"cursor":"`+extractCursor(t, plain)+`"}`, false); !isInvalidRequest(err) {
+		t.Errorf("cursor of another shape = %v, want invalid-request", err)
+	}
+}
+
+func discussionWriteConfig(base string) *config.Config {
+	cfg := coreConfig(base)
+	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
+		config.PermissionDelete}
+	cfg.Connections["repo"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget, Permissions: all}
+	cfg.Connections["repo-listed"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: repoTarget,
+		Permissions: all, Tools: []string{discussionCommentsDelete.ID}}
+	return cfg
+}
+
+func TestDiscussionWriteToolsBindObjectsAndConfirm(t *testing.T) {
+	d := &fakeDiscussions{}
+	f := &fakeGitHub{}
+	d.f = f
+	f.failure = d.route
+	red := &redact.Redactor{}
+	reads := 0
+	core := application.New(registry(t), discussionWriteConfig(serve(t, f)), resolver(red, &reads), red)
+
+	mutations := func() int {
+		n := 0
+		for _, r := range f.recorded() {
+			if strings.Contains(r.document, "mutation") {
+				n++
+			}
+		}
+		return n
+	}
+	// Without --confirm nothing reaches GitHub.
+	unconfirmed := &application.ConfirmationRequiredError{}
+	before := len(f.recorded())
+	if _, err := invoke(t, core, discussionCommentsCreate.ID, "repo", `{"number":12,"body":"hi"}`, false); !errors.As(err, &unconfirmed) {
+		t.Errorf("create without --confirm = %v, want confirmation-required", err)
+	}
+	if len(f.recorded()) != before {
+		t.Error("an unconfirmed change reached GitHub")
+	}
+
+	created, err := invoke(t, core, discussionCommentsCreate.ID, "repo", `{"number":12,"body":"secret body text"}`, true)
+	if err != nil || !strings.Contains(string(created), `"id":"DC_new"`) || strings.Contains(string(created), "secret body text") {
+		t.Fatalf("create = %s, %v", created, err)
+	}
+	if _, err := invoke(t, core, discussionCommentsCreate.ID, "repo", `{"number":12,"body":"r","reply_to":"DC_top"}`, true); err != nil {
+		t.Errorf("reply to a top-level comment = %v", err)
+	}
+	if _, err := invoke(t, core, discussionCommentsUpdate.ID, "repo", `{"comment_id":"DC_reply","body":"edit"}`, true); err != nil {
+		t.Errorf("update = %v", err)
+	}
+	if out, err := invoke(t, core, discussionsCreate.ID, "repo", `{"title":"T","body":"B","category_id":"DIC_cat1"}`, true); err != nil ||
+		!strings.Contains(string(out), `"number":40`) {
+		t.Errorf("discussions.create = %s, %v", out, err)
+	}
+
+	// Foreign or unsuitable objects are refused without a mutation.
+	before = mutations()
+	for _, tt := range []struct {
+		id, args string
+		class    string
+	}{
+		{discussionCommentsCreate.ID, `{"number":12,"body":"r","reply_to":"DC_reply"}`, "invalid"},
+		{discussionCommentsCreate.ID, `{"number":12,"body":"r","reply_to":"DC_other"}`, "invalid"},
+		{discussionCommentsCreate.ID, `{"number":12,"body":"r","reply_to":"DC_foreign"}`, "notfound"},
+		{discussionCommentsUpdate.ID, `{"comment_id":"DC_foreign","body":"x"}`, "notfound"},
+		{discussionCommentsUpdate.ID, `{"comment_id":"DC_unknown","body":"x"}`, "notfound"},
+		{discussionsCreate.ID, `{"title":"T","body":"B","category_id":"DIC_foreign"}`, "notfound"},
+		{discussionsCreate.ID, `{"title":"T","body":"B","category_id":"DIC_unknown"}`, "notfound"},
+	} {
+		_, err := invoke(t, core, tt.id, "repo", tt.args, true)
+		if (tt.class == "invalid" && !isInvalidRequest(err)) || (tt.class == "notfound" && classOf(err) != provider.ClassNotFound) {
+			t.Errorf("%s %s = %v, want %s", tt.id, tt.args, err, tt.class)
+		}
+	}
+	if mutations() != before {
+		t.Error("a refused change was sent to GitHub")
+	}
+
+	// delete is offered only where a connection lists it.
+	var unsupported *capability.UnsupportedError
+	if _, err := invoke(t, core, discussionCommentsDelete.ID, "repo", `{"comment_id":"DC_top"}`, true); !errors.As(err, &unsupported) {
+		t.Errorf("delete without a tools list = %v, want unsupported-capability", err)
+	}
+	if _, err := invoke(t, core, discussionCommentsDelete.ID, "repo-listed", `{"comment_id":"DC_top"}`, false); !errors.As(err, &unconfirmed) {
+		t.Errorf("delete without --confirm = %v, want confirmation-required", err)
+	}
+	if _, err := invoke(t, core, discussionCommentsDelete.ID, "repo-listed", `{"comment_id":"DC_foreign"}`, true); classOf(err) != provider.ClassNotFound {
+		t.Errorf("delete of a foreign comment = %v, want not-found", err)
+	}
+	if out, err := invoke(t, core, discussionCommentsDelete.ID, "repo-listed", `{"comment_id":"DC_top"}`, true); err != nil ||
+		!strings.Contains(string(out), `"deleted":true`) {
+		t.Errorf("delete = %s, %v", out, err)
+	}
+
+	// A repository outside the allow-list or a malformed id is refused before any secret read.
+	reads = 0
+	before = len(f.recorded())
+	for _, tt := range []struct{ id, args string }{
+		{discussionCommentsCreate.ID, `{"repository":"other/repo","number":1,"body":"x"}`},
+		{discussionsCreate.ID, `{"repository":"other/repo","title":"T","body":"B","category_id":"DIC_cat1"}`},
+		{discussionCommentsUpdate.ID, `{"comment_id":"bad id!","body":"x"}`},
+		{discussionsCreate.ID, `{"title":"T","body":"B","category_id":"!"}`},
+	} {
+		if _, err := invoke(t, core, tt.id, "repo", tt.args, true); !isInvalidRequest(err) {
+			t.Errorf("%s %s = %v, want invalid-request", tt.id, tt.args, err)
+		}
+	}
+	if reads != 0 || len(f.recorded()) != before {
+		t.Error("a refused request reached the credential or GitHub")
 	}
 }

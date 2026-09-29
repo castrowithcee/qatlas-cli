@@ -77,8 +77,11 @@
 // single mutation.
 // github.discussioncategories.list, github.discussions.list, github.discussions.get, and
 // github.discussioncomments.list read the discussion categories, the discussions, one discussion, and the
-// top-level comments of one discussion of a repository; they are offered only by the not-recommended setup
-// profile discussions and change nothing.
+// top-level comments of one discussion of a repository, with their replies on request; they are offered only
+// by the not-recommended setup profile discussions and change nothing. github.discussions.create starts a
+// discussion, github.discussioncomments.create adds a comment or a reply, and github.discussioncomments.update
+// and github.discussioncomments.delete change and remove one; the delete is offered only where a connection's
+// tools list names it.
 // github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
@@ -463,7 +466,9 @@ func Register(reg *capability.Registry) error {
 				"issue field values through github.issuefields.set, need the same scope as writing an issue: " +
 				"repo on a classic token, or Issues: read and write on a fine-grained token; reading the " +
 				"discussion categories, discussions, and discussion comments of a repository needs public_repo " +
-				"or repo on a classic token, or Discussions: read on a fine-grained token",
+				"or repo on a classic token, or Discussions: read on a fine-grained token; creating and changing " +
+				"discussions and discussion comments, including delete, needs public_repo or repo on a classic " +
+				"token, or Discussions: read and write on a fine-grained token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -625,10 +630,14 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "discussions", Title: "Discussions",
 			Description: "not recommended: reads the discussion categories of a repository, its discussions " +
-				"filtered by category, state, and answered status, one discussion, and the top-level comments " +
-				"of a discussion; changes nothing",
+				"filtered by category, state, and answered status, one discussion, and the comments of a " +
+				"discussion with their replies, starts discussions, and comments, replies, and edits comments; " +
+				"every change needs its own confirmation, and deleting a discussion comment stays unticked, " +
+				"since it is offered only where a connection's tools list names " +
+				"github.discussioncomments.delete",
 			Tools: []string{discussionCategoriesList.ID, discussionsList.ID, discussionsGet.ID,
-				discussionCommentsList.ID},
+				discussionCommentsList.ID, discussionsCreate.ID, discussionCommentsCreate.ID,
+				discussionCommentsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
