@@ -45,9 +45,14 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"session for vault.admin_timeout (default 10m idle, renewed by activity); admin_timeout: 0\n" +
 			"approves exactly the next change and nothing beyond it. A vault with no passphrase at all needs\n" +
 			"no approval beyond coupling, and the page says so.\n\n" +
-			"This run offers nothing else yet: no credential or connection write, no remote access. Ending\n" +
-			"the process, with a signal or otherwise, closes the listener and discards the session and any\n" +
-			"admin approval; nothing of this run answers again.\n\n" +
+			"With admin approval active, the coupled browser can also add a credential (keyring, vault, or\n" +
+			"env) and replace one secret role of an existing keyring or vault credential; a stored secret is\n" +
+			"never shown back. Every credential page reloads the configuration fresh, so a change made in this\n" +
+			"run is visible right away, and a save carries proof of the exact file it was shown, so a change\n" +
+			"from elsewhere in the meantime is refused as a conflict instead of being overwritten. This run\n" +
+			"offers no connection write yet and no remote access. Ending the process, with a signal or\n" +
+			"otherwise, closes the listener and discards the session and any admin approval; nothing of this\n" +
+			"run answers again.\n\n" +
 			"TUI, CLI, and MCP stay independently usable; this command only adds a local browser view beside\n" +
 			"them.",
 		Args: noArgs,
@@ -56,7 +61,8 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			if err != nil {
 				return err
 			}
-			cfg, err := config.Load(path, registry)
+			store := config.NewStore(path, registry)
+			cfg, err := store.Load()
 			if err != nil {
 				return classifyUserError(err)
 			}
@@ -66,7 +72,8 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 				return err
 			}
 
-			server, err := web.New(buildOverview(registry, cfg), secrets.Vault(), cfg.VaultAdminTimeout())
+			server, err := web.New(buildOverview(registry, cfg), secrets.Vault(), cfg.VaultAdminTimeout(),
+				store, secrets, opts.Redactor)
 			if err != nil {
 				return err
 			}

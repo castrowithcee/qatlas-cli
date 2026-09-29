@@ -13,10 +13,14 @@ import (
 	"html/template"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -110,13 +114,29 @@ type Server struct {
 	writeMu sync.Mutex
 
 	overview Overview
+
+	// store, secrets, and redactor back the credential forms (see credential.go). They are nil in a test
+	// that only exercises the overview and the admin guard, which never reaches a route that needs them.
+	store    *config.Store
+	secrets  *secret.Resolver
+	redactor *redact.Redactor
+
+	credTmpl *template.Template
 }
 
 // New starts listening on 127.0.0.1:0 (an OS-assigned port on the IPv4 loopback interface only) and
 // returns a server ready to run. overview is shown to the browser that redeems the printed URL's token. v is
 // this run's vault, or nil when none is configured; adminTimeout is vault.admin_timeout, read once at
 // startup exactly like every other vault-facing setting this run uses.
-func New(overview Overview, v *vault.Vault, adminTimeout time.Duration) (*Server, error) {
+//
+// store and secrets back the credential forms (see credential.go): store loads and saves the configuration
+// file this run uses, and secrets is the same resolver the rest of this run reads and writes credentials
+// through. redactor removes secret values from anything a credential form's own error text might otherwise
+// carry. All three may be nil, which leaves the overview and the admin approval usable and every credential
+// route refusing with a fixed, generic error, never a partial write: a test that only exercises those two
+// never has to build a configuration store or a resolver of its own.
+func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, store *config.Store,
+	secrets *secret.Resolver, redactor *redact.Redactor) (*Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
@@ -131,15 +151,24 @@ func New(overview Overview, v *vault.Vault, adminTimeout time.Duration) (*Server
 		_ = listener.Close()
 		return nil, err
 	}
+	credTmpl, err := template.New("credentials").Parse(credentialTemplates)
+	if err != nil {
+		_ = listener.Close()
+		return nil, err
+	}
 	s := &Server{
 		listener:     listener,
 		addr:         listener.Addr().String(),
 		tmpl:         tmpl,
+		credTmpl:     credTmpl,
 		now:          time.Now,
 		token:        token,
 		overview:     overview,
 		vault:        v,
 		adminTimeout: adminTimeout,
+		store:        store,
+		secrets:      secrets,
+		redactor:     redactor,
 	}
 	s.tokenAt = s.now()
 	s.http = &http.Server{Handler: s.mux()}
@@ -220,7 +249,27 @@ func (s *Server) mux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleRoot)
 	mux.HandleFunc("POST /admin", s.withSessionGuard(s.handleAdminAuth))
+	mux.HandleFunc("GET /credentials/new", s.withSession(s.handleNewCredentialForm))
+	mux.HandleFunc("POST /credentials/new", s.withAdminGuard(s.handleCreateCredential))
+	mux.HandleFunc("GET /credentials/{name}", s.withSession(s.handleCredentialForm))
+	mux.HandleFunc("POST /credentials/{name}/role", s.withAdminGuard(s.handleReplaceRole))
 	return s.withSecurityHeaders(s.withLocalBoundary(mux))
+}
+
+// withSession is the baseline every read-only credential page needs: this run's one coupled browser
+// session, and nothing beyond it. It never parses a body and never checks an Origin or a CSRF value, unlike
+// withSessionGuard, because a GET carries no form and has no effect to protect. It also renews the admin
+// approval's idle deadline, the same way handleRoot already does for the overview.
+func (s *Server) withSession(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie(sessionCookieName)
+		if err != nil || !s.validSession(cookie.Value) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		s.touchAdminIfActive()
+		next(w, r)
+	}
 }
 
 // withSecurityHeaders adds the headers every response of this server carries, whatever it answers:
@@ -343,6 +392,41 @@ type pageData struct {
 	AdminRemainingText string
 	AdminError         string
 	CSRF               string
+	// CredentialsUsable reports whether this run was given a configuration store and a resolver at all, so
+	// the overview page can hide the credential links rather than send a browser to a route that can only
+	// ever refuse.
+	CredentialsUsable bool
+}
+
+// credentialRows rebuilds the Credentials section of the overview from a freshly loaded configuration, the
+// way every credential route reads the configuration too (see credential.go): never from the one-time
+// snapshot New was built with. It reports an error rather than a partial list when the file cannot be read
+// right now, so a transient failure never replaces a real credential list with an empty one.
+func (s *Server) credentialRows() ([]CredentialRow, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("no configuration store is configured for this run")
+	}
+	cfg, err := s.store.Load()
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]CredentialRow, 0, len(cfg.Credentials))
+	for _, name := range sortedNames(cfg.Credentials) {
+		cred := cfg.Credentials[name]
+		rows = append(rows, CredentialRow{Name: name, Provider: cred.Provider, Type: cred.Type})
+	}
+	return rows, nil
+}
+
+// sortedNames returns the keys of m in stable, ascending order. It is web's own copy of the same one-line
+// helper internal/cli keeps for the same purpose: too small to be worth a shared package for.
+func sortedNames[V any](m map[string]V) []string {
+	names := make([]string, 0, len(m))
+	for name := range m {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // renderOverview shows the coupled browser this run's overview together with its admin status: active with
@@ -364,13 +448,23 @@ func (s *Server) renderOverview(w http.ResponseWriter, adminError string) {
 	csrf := s.csrf
 	s.mu.Unlock()
 
+	overview := s.overview
+	// The credential list is the one part of the overview that this run can change after it started (see
+	// credential.go): it is rebuilt from the configuration file, freshly read, every time this page is
+	// shown, so a credential just added or changed is visible in the same run without restarting it. Every
+	// other section keeps the one-time snapshot New was built with, exactly as the package comment promises.
+	if rows, err := s.credentialRows(); err == nil {
+		overview.Credentials = rows
+	}
+
 	data := pageData{
-		Overview:           s.overview,
+		Overview:           overview,
 		AdminActive:        active,
 		AdminUnprotected:   unprotected,
 		AdminRemainingText: remaining,
 		AdminError:         adminError,
 		CSRF:               csrf,
+		CredentialsUsable:  s.store != nil && s.secrets != nil,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -422,9 +516,10 @@ var overviewTemplate = strings.TrimSpace(`
 </table>
 
 <h2>Credentials</h2>
+{{if .CredentialsUsable}}<p><a href="/credentials/new">Add a credential</a></p>{{end}}
 <table border="1" cellpadding="4">
 <tr><th>Name</th><th>Provider</th><th>Type</th></tr>
-{{range .Credentials}}<tr><td>{{.Name}}</td><td>{{.Provider}}</td><td>{{.Type}}</td></tr>
+{{range .Credentials}}<tr><td>{{if $.CredentialsUsable}}<a href="/credentials/{{.Name}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td><td>{{.Provider}}</td><td>{{.Type}}</td></tr>
 {{end}}
 </table>
 

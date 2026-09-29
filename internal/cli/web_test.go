@@ -280,7 +280,7 @@ func TestRunTerminalAdminWithoutCoupledSession(t *testing.T) {
 		return "", nil
 	})
 
-	srv, err := web.New(web.Overview{}, nil, 0)
+	srv, err := web.New(web.Overview{}, nil, 0, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("web.New: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestRunTerminalAdminWrongPassphrase(t *testing.T) {
 		t.Fatalf("Encrypt: %v", err)
 	}
 
-	srv, err := web.New(web.Overview{}, vault.New(dir), 0)
+	srv, err := web.New(web.Overview{}, vault.New(dir), 0, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("web.New: %v", err)
 	}
