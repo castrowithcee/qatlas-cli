@@ -75,6 +75,10 @@
 // issue fields of a repository, inherited from its organization, or, with organization instead, directly of
 // an organization; github.issuefields.set writes one or more of their values on one issue, applied as a
 // single mutation.
+// github.discussioncategories.list, github.discussions.list, github.discussions.get, and
+// github.discussioncomments.list read the discussion categories, the discussions, one discussion, and the
+// top-level comments of one discussion of a repository; they are offered only by the not-recommended setup
+// profile discussions and change nothing.
 // github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
@@ -457,7 +461,9 @@ func Register(reg *capability.Registry) error {
 				"GitHub documents it, the organization permission Issue types: read, or Administration: read, " +
 				"on a fine-grained token; setting an issue's type through github.issues.update, and setting its " +
 				"issue field values through github.issuefields.set, need the same scope as writing an issue: " +
-				"repo on a classic token, or Issues: read and write on a fine-grained token",
+				"repo on a classic token, or Issues: read and write on a fine-grained token; reading the " +
+				"discussion categories, discussions, and discussion comments of a repository needs public_repo " +
+				"or repo on a classic token, or Discussions: read on a fine-grained token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -616,6 +622,13 @@ func Register(reg *capability.Registry) error {
 				commentsUpdate.ID, reactionsAdd.ID, reactionsRemove.ID, subIssuesList.ID, subIssuesAdd.ID,
 				subIssuesRemove.ID, subIssuesReprioritize.ID, issueDependenciesList.ID, issueDependenciesAdd.ID,
 				issueDependenciesRemove.ID, issueTypesList.ID, issueFieldsList.ID, issueFieldsSet.ID},
+		}, {
+			ID: "discussions", Title: "Discussions",
+			Description: "not recommended: reads the discussion categories of a repository, its discussions " +
+				"filtered by category, state, and answered status, one discussion, and the top-level comments " +
+				"of a discussion; changes nothing",
+			Tools: []string{discussionCategoriesList.ID, discussionsList.ID, discussionsGet.ID,
+				discussionCommentsList.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -646,7 +659,8 @@ func Register(reg *capability.Registry) error {
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
-		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations())...)
+		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
+		discussionOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1291,6 +1305,11 @@ func (c *Client) graphQLSubject(path []any, variables map[string]any) subject {
 			s.in, number = target{kind: kindRepository, owner: owner, repo: name}, variables["issue"]
 		}
 		switch {
+		case pathSegment(path, 1) == "discussion":
+			s.what = "this discussion"
+			if n, ok := number.(int); ok {
+				s.what = "discussion #" + strconv.Itoa(n)
+			}
 		case pathSegment(path, 1) == "issue" || pathSegment(path, 1) == "issueOrPullRequest":
 			s.what = "this issue"
 			if n, ok := number.(int); ok {

@@ -162,7 +162,7 @@ a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested proj
 check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, the
 workflow file or `.github/workflows` directory with the ref it was read at, `github.contents.get`'s path or
 the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s ref or its path at that ref,
-`github.commits.get`'s ref, `github.tags.get`'s tag, a fork or the collaborators `github.repositories.fork` and
+`github.commits.get`'s ref, `github.tags.get`'s tag, the discussion by its number, a fork or the collaborators `github.repositories.fork` and
 `github.collaborators.list` address, the pull request by its number, the sub-issues or the dependencies of an
 issue as "the sub-issues of issue #N", "a sub-issue of issue #N", "the sub-issue order of issue #N", "the
 issues blocking issue #N", "the issues issue #N blocks", or "a dependency of issue #N", or, for
@@ -237,7 +237,9 @@ comments, and pull request line comments under [Reactions](#reactions), lists, a
 reprioritizes sub-issues under [Sub-issues](#sub-issues), lists, adds, and removes issue dependencies
 under [Issue dependencies](#issue-dependencies), and lists issue types, lists issue fields, and sets issue
 field values under [Issue types](#issue-types) and [Issue fields](#issue-fields); deleting a label or a
-comment stays unticked, since each is offered only where a connection's `tools` list names it. A
+comment stays unticked, since each is offered only where a connection's `tools` list names it. The
+not-recommended profile `discussions` reads discussion categories, discussions, and discussion comments under
+[Discussions](#discussions). A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -885,6 +887,44 @@ listed-only, needs Issues: read and write instead:
 | --- | --- | --- |
 | `github.labels.list`, `github.labels.get` | `repo` (private) or none (public) | Issues: read |
 | `github.labels.create`, `github.labels.update`, `github.labels.delete` | `repo` | Issues: read and write |
+
+## Discussions
+
+Four read tools cover the GitHub Discussions of one repository, all through GraphQL and all taking
+`repository` like the other repository tools; a repository outside the connection's targets is refused as an
+invalid request before any credential is resolved. `github.discussioncategories.list` lists the categories
+(`id`, `name`, `slug`, `description`, `emoji`, `is_answerable`, times). `github.discussions.list` lists
+discussions, optionally filtered by `category` (a category `id`), `state` (`open` or `closed`), and `answered`
+(`true` or `false`), ordered by `order_by` (`created_at` or `updated_at`) and `direction` (`asc` or `desc`);
+each entry carries `number`, `title`, `body` (cut at 1000 characters, `body_truncated` says so), `author`,
+`category`, `closed`, `locked`, `answered`, `upvote_count`, `comment_count`, `labels`, times, and `url`.
+`github.discussions.get` reads one discussion by `number`, with its body cut at 20000 characters.
+`github.discussioncomments.list` lists the top-level comments of one discussion, oldest first, with `author`,
+`body` (cut at 4000 characters), `is_answer`, `upvote_count`, `reply_count`, times, and `url`; replies are
+counted, not listed. Titles, bodies, and comments come from other accounts and are untrusted data.
+
+The lists take `limit` (1 through 100, 30 when omitted) and an opaque `cursor`; a cursor belongs to the
+repository and the filters that produced it, and another filter, category, or discussion refuses it as an
+invalid request. A discussion that GitHub does not hold or does not show to the token is `not-found`, named
+as "discussion #N".
+
+```sh
+qatlas invoke github.discussioncategories.list --connection code
+qatlas invoke github.discussions.list --connection code --arg category=DIC_kwDOExample --arg answered=false
+qatlas invoke github.discussions.get --connection code --arg number=12
+qatlas invoke github.discussioncomments.list --connection code --arg number=12 --arg limit=10
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.discussioncategories.list` | read | safe | none | lists the discussion categories of a repository |
+| `github.discussions.list` | read | safe | none | lists one bounded batch of discussions, filtered by category, state, and answered status |
+| `github.discussions.get` | read | safe | none | reads one discussion by its number |
+| `github.discussioncomments.list` | read | safe | none | lists one bounded batch of the top-level comments of a discussion |
+
+The not-recommended setup profile `discussions` ticks `[read]` and these four tools; the recommended profile
+`read` is unchanged. Reading discussions needs `public_repo` (public repositories) or `repo` on a classic
+token, or Discussions: read on a fine-grained token.
 
 ## Milestones
 
