@@ -172,6 +172,7 @@ type Issue struct {
 	Assignees   []string `json:"assignees"`
 	Labels      []string `json:"labels"`
 	Milestone   string   `json:"milestone,omitempty"`
+	IssueType   string   `json:"issue_type,omitempty"`
 	URL         string   `json:"url,omitempty"`
 	CreatedAt   string   `json:"created_at,omitempty"`
 	UpdatedAt   string   `json:"updated_at,omitempty"`
@@ -198,6 +199,9 @@ type restIssueJSON struct {
 	Milestone *struct {
 		Title string `json:"title"`
 	} `json:"milestone"`
+	Type *struct {
+		Name string `json:"name"`
+	} `json:"type"`
 	NodeID      string    `json:"node_id"`
 	HTMLURL     string    `json:"html_url"`
 	CreatedAt   string    `json:"created_at"`
@@ -307,6 +311,26 @@ func (c *Client) issueDatabaseID(ctx context.Context, op string, repo target, nu
 	return raw.ID, nil
 }
 
+// issueNodeID resolves the GraphQL node identifier of one issue of the bound repository from its number, as
+// github.issuefields.set needs it to name the issue the setIssueFieldValue mutation changes; a pull request
+// of the same number is refused, the way readIssue refuses one.
+func (c *Client) issueNodeID(ctx context.Context, op string, number int) (string, error) {
+	if err := checkNumber(number); err != nil {
+		return "", err
+	}
+	var raw restIssueJSON
+	if err := c.rest(ctx, op, issuePath(c.target, number), &raw); err != nil {
+		return "", err
+	}
+	if raw.Number != number || raw.NodeID == "" {
+		return "", invalidEntry(op, "an issue")
+	}
+	if raw.PullRequest != nil {
+		return "", c.pullRequestRefusal(number)
+	}
+	return raw.NodeID, nil
+}
+
 func checkNumber(number int) error {
 	if number < 1 || number > 1000000000 {
 		return invalidRequest("number must be a positive issue number")
@@ -350,6 +374,9 @@ func issueOf(op string, raw restIssueJSON, number int, change bool) (*Issue, err
 	if raw.Milestone != nil {
 		issue.Milestone = raw.Milestone.Title
 	}
+	if raw.Type != nil {
+		issue.IssueType = raw.Type.Name
+	}
 	if raw.ClosedAt != nil {
 		issue.ClosedAt = *raw.ClosedAt
 	}
@@ -370,19 +397,24 @@ const (
 	maxLabels      = 20
 	maxLabelLength = 50
 	maxAssignees   = 10
+	maxTypeLength  = 100
 )
 
 // IssueContent is the content of a new issue, or the part of an existing issue a change replaces. A nil
 // field stays as it is; Labels and Assignees replace the whole set, and an empty list removes every entry.
-// Milestone is admitted only by github.issues.update's own input schema, so it stays nil for every other
-// user of this shape; a positive number sets that milestone, and 0 removes the current one, since GitHub
-// itself is asked with an explicit null in that case, and a milestone number is never 0.
+// Milestone and Type are admitted only by github.issues.update's own input schema, so they stay nil for
+// every other user of this shape; a positive Milestone number sets that milestone, and 0 removes the
+// current one, since GitHub itself is asked with an explicit null in that case, and a milestone number is
+// never 0; a non-empty Type sets that issue type by name, as github.issuetypes.list reports it, and an
+// empty Type removes the current one the same way GitHub itself is asked with an explicit null, since a
+// type name is never empty.
 type IssueContent struct {
 	Title     *string   `json:"title"`
 	Body      *string   `json:"body"`
 	Labels    *[]string `json:"labels"`
 	Assignees *[]string `json:"assignees"`
 	Milestone *int      `json:"milestone"`
+	Type      *string   `json:"type"`
 }
 
 // check applies the bounds of the issue content. A new issue needs a title; a change needs at least one
@@ -392,11 +424,17 @@ func (content IssueContent) check(create bool) error {
 	case create && content.Title == nil:
 		return invalidRequest("title is required")
 	case !create && content.Title == nil && content.Body == nil && content.Labels == nil &&
-		content.Assignees == nil && content.Milestone == nil:
-		return invalidRequest("name at least one of title, body, labels, assignees, or milestone to change")
+		content.Assignees == nil && content.Milestone == nil && content.Type == nil:
+		return invalidRequest("name at least one of title, body, labels, assignees, milestone, or type to change")
 	}
 	if content.Milestone != nil && (*content.Milestone < 0 || *content.Milestone > 1000000000) {
 		return invalidRequest("milestone must be 0 to remove the current milestone, or a positive milestone number")
+	}
+	if content.Type != nil && *content.Type != "" {
+		if length := utf8.RuneCountInString(*content.Type); length > maxTypeLength {
+			return invalidRequest(fmt.Sprintf("type must hold at most %d characters, or \"\" to remove the "+
+				"current issue type", maxTypeLength))
+		}
 	}
 	if content.Title != nil {
 		if length := utf8.RuneCountInString(*content.Title); strings.TrimSpace(*content.Title) == "" ||
@@ -450,6 +488,13 @@ func (content IssueContent) payload() map[string]any {
 			payload["milestone"] = nil
 		} else {
 			payload["milestone"] = *content.Milestone
+		}
+	}
+	if content.Type != nil {
+		if *content.Type == "" {
+			payload["type"] = nil
+		} else {
+			payload["type"] = *content.Type
 		}
 	}
 	return payload

@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-23
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # GitHub
@@ -234,8 +234,9 @@ schema under [Custom properties](#custom-properties). The not-recommended profil
 reads the labels of a repository, creates and updates them, under [Labels](#labels), lists the milestones
 under [Milestones](#milestones), updates issue comments under [Changes](#changes), reacts to issues,
 comments, and pull request line comments under [Reactions](#reactions), lists, adds, removes, and
-reprioritizes sub-issues under [Sub-issues](#sub-issues), and lists, adds, and removes issue dependencies
-under [Issue dependencies](#issue-dependencies); deleting a label or a
+reprioritizes sub-issues under [Sub-issues](#sub-issues), lists, adds, and removes issue dependencies
+under [Issue dependencies](#issue-dependencies), and lists issue types, lists issue fields, and sets issue
+field values under [Issue types](#issue-types) and [Issue fields](#issue-fields); deleting a label or a
 comment stays unticked, since each is offered only where a connection's `tools` list names it. A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
@@ -991,6 +992,98 @@ Verified 2026-09-29 against the official REST documentation
 blocked by, List issues blocking, and Add and Remove a blocked-by dependency are stable, generally available
 REST endpoints, not a preview feature; dependencies on issues reached general availability on 2025-08-21, per
 the GitHub changelog.
+
+## Issue types
+
+`github.issuetypes.list` reads every issue type an organization declares: `id`, `name`, `description`, `color`,
+and `is_enabled`. GitHub scopes issue types to an organization as a whole, never to one repository or one user,
+so the tool takes an `owner` argument (as `orgs/LOGIN`) checked the same broad way `github.repositories.list`
+checks its own owner argument: an explicit owner target, a repository target of that organization, or a
+connection without targets allow the call; a connection whose targets name only a project, or only a different
+organization, refuses it as an invalid request before any credential is resolved. `github.issues.update` takes
+an optional `type` (a type name `github.issuetypes.list` reports, or `""` to remove the issue's current one)
+alongside its existing arguments; a call that never names `type` behaves exactly as it did before this argument
+existed. GitHub silently drops a type change from a token without push access to the repository rather than
+refusing it, and reports the resulting type back as `issue_type` on every issue tool that reads or changes one:
+
+```sh
+qatlas invoke github.issuetypes.list --connection code --arg owner=orgs/octo-org
+echo '{"number":42,"type":"Bug"}' | qatlas invoke github.issues.update --connection maintainer --confirm
+echo '{"number":42,"type":""}' | qatlas invoke github.issues.update --connection maintainer --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.issuetypes.list` | read | safe | none | lists the issue types an organization declares |
+
+Defining, enabling, or disabling an organization's issue types (`POST`/`PUT`/`DELETE
+/orgs/{org}/issue-types`) is organization administration, out of this provider's scope; it is not offered.
+
+Reading the issue types of an organization needs `read:org` on a classic token, or, as far as GitHub documents
+it, the organization permission Issue types: read, or Administration: read, on a fine-grained token; setting an
+issue's type through `github.issues.update` needs the same scope as writing an issue: `repo` on a classic
+token, or Issues: read and write on a fine-grained token.
+
+Verified 2026-09-29 against the official REST documentation and the OpenAPI description that backs it
+(<https://docs.github.com/en/rest/orgs/issue-types>, <https://github.com/github/rest-api-description>,
+`X-GitHub-Api-Version: 2022-11-28`): "List issue types for an organization" (`GET /orgs/{org}/issue-types`) is
+a stable, generally available REST endpoint, not a preview feature, returning every issue type as a plain
+array with no pagination parameters of its own; "Update an issue" (`PATCH /repos/{owner}/{repo}/issues/{issue_number}`)
+documents its `type` request body property as `null`, a plain type-name string, or an object with metadata Qatlas
+does not send (see [Issue fields](#issue-fields)), and returns the resulting `type` as a full object with `id`,
+`node_id`, `name`, `description`, `color`, `created_at`, `updated_at`, and `is_enabled`, of which Qatlas keeps
+only the name.
+
+## Issue fields
+
+`github.issuefields.list` reads one bounded batch of the organization issue fields of a repository, inherited
+from its organization, or, with `organization` instead of `repository`, directly of an organization: text,
+number, date, single-select, and multi-select fields, each with `id`, `name`, `description`, `data_type`,
+`visibility`, and, for a select field, `options` (`id`, `name`, `description`, `color`). Exactly one of
+`repository` or `organization` is required, never both; a repository call is checked the way every other
+repository tool is, and the organization-wide call the same broad way `github.issuetypes.list` checks its own
+owner argument. `github.issuefields.set` writes one or more field values on one issue of a repository an
+explicit connection allows, each named by the `field_id` (and, for a select field, the option's own `id`)
+`github.issuefields.list` reports; GitHub applies every value of one call as a single mutation, so it either
+applies as a whole or not at all:
+
+```sh
+qatlas invoke github.issuefields.list --connection code --arg repository=octo-org/example
+qatlas invoke github.issuefields.list --connection code --arg organization=orgs/octo-org
+echo '{"number":42,"fields":[{"field_id":"IF_kwDOAxxxx","text_value":"Backend"},
+  {"field_id":"IF_kwDOAyyyy","single_select_option_id":"IFO_kwDOAzzzz"}]}' |
+  qatlas invoke github.issuefields.set --connection maintainer --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.issuefields.list` | read | safe | none | lists the issue fields of a repository or an organization |
+| `github.issuefields.set` | update | idempotent | required | sets or clears one or more issue field values |
+
+Each entry of `github.issuefields.set`'s own `fields` argument needs exactly one of `text_value`,
+`number_value`, `date_value` (`YYYY-MM-DD`), `single_select_option_id`, `multi_select_option_ids` (`[]` clears
+a multi-select field), or `delete: true` to remove the value; at most 20 entries per call.
+`github.issuefields.set` answers `url` (the issue's web address) and `updated` (the count of values sent, which
+GitHub applied as a whole). GitHub's `IssueFieldCreateOrUpdateInput` also carries `confidence`, `rationale`, and
+`suggest` properties the official `github/github-mcp-server` (MIT) exposes only behind its own
+`update_issue_suggestions` GraphQL feature-flag context, an agent-suggestion workflow of that server's own, not
+a capability GitHub documents as generally available to every token; Qatlas does not send them.
+
+Reading the issue fields of a repository or an organization needs `read:org` on a classic token, or, as far as
+GitHub documents it, the organization permission Issue types: read, or Administration: read, on a fine-grained
+token; setting a value needs the same scope as writing an issue: `repo` on a classic token, or Issues: read and
+write on a fine-grained token.
+
+Verified 2026-09-29 against GitHub's public GraphQL reference schema
+(<https://docs.github.com/public/fpt/schema.docs.graphql>, the schema backing
+<https://docs.github.com/en/graphql>): `Repository.issueFields` and `Organization.issueFields` (an
+`IssueFieldsConnection` of `IssueFieldText`, `IssueFieldNumber`, `IssueFieldDate`, `IssueFieldSingleSelect`,
+and `IssueFieldMultiSelect`) and the `setIssueFieldValue` mutation (`IssueFieldCreateOrUpdateInput` with
+`fieldId` and exactly one of `textValue`, `numberValue`, `dateValue`, `singleSelectOptionId`,
+`multiSelectOptionIds`, or `delete`) carry no `@preview` marker in this schema, the same stability signal
+[Sub-issues](#sub-issues) and [Issue dependencies](#issue-dependencies) were verified by; they are not yet
+reachable from the rendered pages under <https://docs.github.com/en/graphql/reference>, so this is stated on
+the schema alone, not on a rendered reference page.
 
 ## Reactions
 

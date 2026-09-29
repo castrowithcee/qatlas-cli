@@ -354,6 +354,9 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.issuedependencies.list":   readRisk,
 		"github.issuedependencies.add":    changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		"github.issuedependencies.remove": changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+		"github.issuetypes.list":          readRisk,
+		"github.issuefields.list":         readRisk,
+		"github.issuefields.set":          changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {
@@ -370,7 +373,7 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
 			descriptor.ID == projectsCreate.ID || descriptor.ID == projectsCopy.ID ||
 			descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID ||
-			descriptor.ID == repositoriesCreate.ID
+			descriptor.ID == repositoriesCreate.ID || descriptor.ID == issueTypesList.ID
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "document"} {
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("%s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
@@ -598,6 +601,61 @@ func TestIssueUpdateSetsAndRemovesTheMilestone(t *testing.T) {
 		if _, err := c.UpdateIssue(context.Background(), 42, IssueContent{Milestone: &bad}); !isInvalidRequest(err) {
 			t.Errorf("%s milestone = %v, want an invalid request", tt.name, err)
 		}
+	}
+}
+
+// github.issues.update's own type argument sets or removes an issue's type by name: "" is sent to GitHub as
+// an explicit null, since a type name is never empty, and a type-only change is enough on its own; a call
+// without type behaves exactly as it did before this argument existed.
+func TestIssueUpdateSetsAndRemovesTheType(t *testing.T) {
+	f := &fakeGitHub{}
+	base := serve(t, f)
+	c := client(t, base, repoTarget)
+
+	issueType := "Bug"
+	changed, err := c.UpdateIssue(context.Background(), 42, IssueContent{Type: &issueType})
+	if err != nil {
+		t.Fatalf("UpdateIssue() with a type = %v", err)
+	}
+	change := f.recorded()[len(f.recorded())-1]
+	if change.method != http.MethodPatch || change.body["type"] != "Bug" {
+		t.Errorf("change request = %+v, want type Bug", change)
+	}
+	if changed.IssueType != "Bug" {
+		t.Errorf("issue_type = %q, want Bug", changed.IssueType)
+	}
+
+	removed := ""
+	changed, err = c.UpdateIssue(context.Background(), 42, IssueContent{Type: &removed})
+	if err != nil {
+		t.Fatalf("UpdateIssue() removing a type = %v", err)
+	}
+	change = f.recorded()[len(f.recorded())-1]
+	if value, ok := change.body["type"]; !ok || value != nil {
+		t.Errorf("change request type = %v, want an explicit null", value)
+	}
+	if changed.IssueType != "" {
+		t.Errorf("issue_type after removal = %q, want none", changed.IssueType)
+	}
+
+	// A call that never names type behaves exactly as it did before this argument existed: no type key
+	// travels, and the response carries no issue type either, since the fake issue never had one set.
+	title := "Renamed"
+	unrelated, err := c.UpdateIssue(context.Background(), 42, IssueContent{Title: &title})
+	if err != nil {
+		t.Fatalf("UpdateIssue() without a type = %v", err)
+	}
+	change = f.recorded()[len(f.recorded())-1]
+	if _, ok := change.body["type"]; ok {
+		t.Errorf("change request = %+v, want no type key", change)
+	}
+	if unrelated.IssueType != "" {
+		t.Errorf("issue_type of an unrelated change = %q, want none", unrelated.IssueType)
+	}
+
+	tooLong := strings.Repeat("x", 101)
+	if _, err := c.UpdateIssue(context.Background(), 42, IssueContent{Type: &tooLong}); !isInvalidRequest(err) {
+		t.Errorf("an overlong type = %v, want an invalid request", err)
 	}
 }
 

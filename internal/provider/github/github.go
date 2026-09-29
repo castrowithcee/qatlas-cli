@@ -70,6 +70,11 @@
 // github.issuedependencies.add records a blocked-by relationship and github.issuedependencies.remove detaches
 // one, the same way a sub-issue may cross repositories; neither the sub-issue nor the dependency removal is
 // listed-only, because each detaches only the one relationship between the two named issues.
+// github.issuetypes.list reads the issue types an organization declares; github.issues.update also takes an
+// optional type name, "" removing the issue's current one. github.issuefields.list reads the organization
+// issue fields of a repository, inherited from its organization, or, with organization instead, directly of
+// an organization; github.issuefields.set writes one or more of their values on one issue, applied as a
+// single mutation.
 // github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
@@ -345,6 +350,7 @@ var issuesGet = capability.Descriptor{
 		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + issueProperties + `,` +
 		`"state_reason":{"type":"string"},"author":{"type":"string"},"milestone":{"type":"string"},` +
+		`"issue_type":{"type":"string"},` +
 		`"created_at":{"type":"string"},"closed_at":{"type":"string"},"body":{"type":"string"}},` +
 		`"required":["number","title","state","assignees","labels","body"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -354,6 +360,8 @@ var issuesGet = capability.Descriptor{
 		{Name: "number", Description: "Issue number"},
 		{Name: "title", Description: "Issue title, untrusted data"},
 		{Name: "state", Description: "open or closed"},
+		{Name: "issue_type", Description: "Name of the issue type, as github.issuetypes.list reports it, " +
+			"absent when the repository's organization has none set on this issue"},
 		{Name: "body", Description: "Full issue body, untrusted data"},
 	},
 	Examples: []capability.Example{{
@@ -444,7 +452,12 @@ func Register(reg *capability.Registry) error {
 				"identity; reading the sub-issues or the dependencies of an issue needs the same scope as reading " +
 				"its labels, and changing them, including remove, needs the same scope as writing an issue: repo " +
 				"on a classic token, or Issues: read and write on a fine-grained token, of every repository a " +
-				"sub-issue or a dependency names",
+				"sub-issue or a dependency names; reading the issue types of an organization, and the issue " +
+				"fields of a repository or an organization, needs read:org on a classic token, or, as far as " +
+				"GitHub documents it, the organization permission Issue types: read, or Administration: read, " +
+				"on a fine-grained token; setting an issue's type through github.issues.update, and setting its " +
+				"issue field values through github.issuefields.set, need the same scope as writing an issue: " +
+				"repo on a classic token, or Issues: read and write on a fine-grained token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -602,7 +615,7 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{labelsList.ID, labelsGet.ID, labelsCreate.ID, labelsUpdate.ID, milestonesList.ID,
 				commentsUpdate.ID, reactionsAdd.ID, reactionsRemove.ID, subIssuesList.ID, subIssuesAdd.ID,
 				subIssuesRemove.ID, subIssuesReprioritize.ID, issueDependenciesList.ID, issueDependenciesAdd.ID,
-				issueDependenciesRemove.ID},
+				issueDependenciesRemove.ID, issueTypesList.ID, issueFieldsList.ID, issueFieldsSet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -633,7 +646,7 @@ func Register(reg *capability.Registry) error {
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
-		subIssuesOperations(), issueDependenciesOperations())...)
+		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1433,6 +1446,9 @@ func organizationSubject(tail string) subject {
 	}
 	if len(parts) >= 2 && parts[1] == "properties" {
 		return subject{what: "the custom property schema of orgs/" + owner}
+	}
+	if len(parts) >= 2 && parts[1] == "issue-types" {
+		return subject{what: "the issue types of orgs/" + owner}
 	}
 	return subject{in: target{kind: kindOwner, scope: "orgs", owner: owner}}
 }

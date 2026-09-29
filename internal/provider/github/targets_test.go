@@ -194,10 +194,11 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 			descriptor.ID == rulesetsList.ID || descriptor.ID == rulesetsGet.ID ||
 			descriptor.ID == rulesetsCreate.ID || descriptor.ID == rulesetsUpdate.ID ||
 			descriptor.ID == rulesetsDelete.ID || descriptor.ID == customPropertiesGet.ID ||
-			descriptor.ID == customPropertiesSet.ID:
+			descriptor.ID == customPropertiesSet.ID || descriptor.ID == issueFieldsList.ID:
 			names = []string{}
 		case descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
-			descriptor.ID == projectsCreate.ID || descriptor.ID == organizationTeamsList.ID ||
+			descriptor.ID == projectsCreate.ID || descriptor.ID == issueTypesList.ID ||
+			descriptor.ID == organizationTeamsList.ID ||
 			descriptor.ID == teamMembersList.ID:
 			names = []string{"owner"}
 		case descriptor.ID == projectsCopy.ID:

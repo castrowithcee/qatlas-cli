@@ -96,6 +96,16 @@ type fakeGitHub struct {
 	searchRateLimited bool
 	// searchHasNextPage makes every search route announce a following page through the Link header.
 	searchHasNextPage bool
+	// issueTypes are the issue types octo-org declares.
+	issueTypes []fakeIssueType
+	// issueTypesForbidden refuses the organization issue type list like GitHub does for a token without read:org.
+	issueTypesForbidden bool
+	// issueFields are the issue fields of octo-org, read directly or inherited by repository octo-org/example.
+	issueFields []fakeIssueFieldDef
+	// issueFieldValues records the field values github.issuefields.set sent to issue 42, by field identifier.
+	issueFieldValues map[string]map[string]any
+	// issueType42 is the issue type issue 42 already carries, reported back until a change names another.
+	issueType42 string
 }
 
 // fakeTeam is one team of an organization.
@@ -149,9 +159,17 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if value, ok := record.body["state_reason"].(string); ok {
 			reason = `"` + value + `"`
 		}
+		issueType := "null"
+		if raw, has := record.body["type"]; has {
+			if value, ok := raw.(string); ok && value != "" {
+				issueType = fmt.Sprintf(`{"name":%q}`, value)
+			}
+		} else if f.issueType42 != "" {
+			issueType = fmt.Sprintf(`{"name":%q}`, f.issueType42)
+		}
 		fmt.Fprintf(w, `{"number":42,"node_id":"I_42","title":"Crash on start","state":%q,"state_reason":%s,`+
-			`"body":"%s","assignees":[],"labels":[],"html_url":"https://github.com/octo-org/example/issues/42"}`,
-			state, reason, bodyCanary)
+			`"body":"%s","assignees":[],"labels":[],"type":%s,"html_url":"https://github.com/octo-org/example/issues/42"}`,
+			state, reason, bodyCanary, issueType)
 	case r.Method == http.MethodPost && r.URL.Path == "/api/v3/repos/octo-org/example/issues/42/comments":
 		w.WriteHeader(http.StatusCreated)
 		fmt.Fprintf(w, `{"id":9,"node_id":"IC_new","user":{"login":"octocat"},"body":%q,`+
@@ -160,7 +178,7 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.URL.Path == "/api/v3/repos/octo-org/example":
 		fmt.Fprint(w, `{"full_name":"octo-org/example"}`)
 	case r.URL.Path == "/api/v3/repos/octo-org/example/issues/42":
-		fmt.Fprint(w, `{"number":42,"title":"Crash on start","state":"open","state_reason":null,`+
+		fmt.Fprint(w, `{"id":42000,"node_id":"I_42","number":42,"title":"Crash on start","state":"open","state_reason":null,`+
 			`"body":"`+bodyCanary+`","user":{"login":"octocat"},"assignees":[{"login":"hubot"}],`+
 			`"labels":[{"name":"bug"}],"milestone":{"title":"v1"},"html_url":"https://github.com/octo-org/example/issues/42",`+
 			`"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-02T00:00:00Z","closed_at":null,"comments":3}`)
@@ -174,6 +192,26 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			`"pull_request":{"url":"https://api.github.com/repos/octo-org/example/pulls/7"}}`)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/user":
 		fmt.Fprint(w, `{"login":"octocat","name":"The Octocat","type":"User","plan":{"name":"pro"}}`)
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/orgs/octo-org/issue-types":
+		if f.issueTypesForbidden {
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"Must have admin rights to Organization."}`)
+			return
+		}
+		items := []string{}
+		for _, it := range f.issueTypes {
+			description := "null"
+			if it.description != "" {
+				description = fmt.Sprintf("%q", it.description)
+			}
+			color := "null"
+			if it.color != "" {
+				color = fmt.Sprintf("%q", it.color)
+			}
+			items = append(items, fmt.Sprintf(`{"id":%d,"node_id":"IT_%d","name":%q,"description":%s,"color":%s,`+
+				`"is_enabled":%t}`, it.id, it.id, it.name, description, color, it.enabled))
+		}
+		fmt.Fprint(w, "["+strings.Join(items, ",")+"]")
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/orgs/octo-org/teams":
 		if f.orgTeamsForbidden {
 			w.WriteHeader(http.StatusForbidden)
@@ -290,6 +328,8 @@ func (f *fakeGitHub) graphql(w http.ResponseWriter, document string, variables m
 	case f.statusChange(w, document, variables):
 	case f.accessChange(w, document, variables):
 	case f.blame(w, document, variables):
+	case f.issueFieldsChange(w, document, variables):
+	case f.issueFieldsPage(w, document, variables):
 	case strings.Contains(document, "projectsV2(first") || strings.Contains(document, "repositories(first"):
 		f.ownerPage(w, document, variables)
 	case strings.HasPrefix(document, "mutation"):
@@ -798,7 +838,8 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "comments"} {
 			// Only the owner lists and the organization tools take an owner, as their target.
 			owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
-				descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID
+				descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID ||
+				descriptor.ID == issueTypesList.ID
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("descriptor %s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
@@ -808,8 +849,9 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		"github.branches.list", "github.code.search", "github.collaborators.list",
 		"github.comments.list", "github.commits.get", "github.commits.list", "github.commits.search",
 		"github.contents.get", "github.customproperties.get", "github.issuedependencies.list",
+		"github.issuefields.list",
 		"github.issues.get",
-		"github.issues.list", "github.issues.search", "github.labels.get", "github.labels.list",
+		"github.issues.list", "github.issues.search", "github.issuetypes.list", "github.labels.get", "github.labels.list",
 		"github.milestones.list",
 		"github.organizations.search", "github.projectfields.list",
 		"github.projectitems.get", "github.projectitems.list", "github.projects.list",
@@ -830,7 +872,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 155 {
+	if len(metadata.Tools) != 158 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

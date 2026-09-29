@@ -92,29 +92,40 @@ var issuesCreate = capability.Descriptor{
 // current milestone, since a milestone number is never 0.
 const milestoneUpdateSchema = `{"type":"integer","minimum":0,"maximum":1000000000}`
 
+// typeUpdateSchema is the bound of github.issues.update's own type argument: "" removes the current issue
+// type, since a type name is never empty; setting one needs an organization issue type of the same name, as
+// github.issuetypes.list reports it, and is silently dropped by GitHub without push access to the repository.
+const typeUpdateSchema = `{"type":"string","maxLength":100}`
+
 var issuesUpdate = capability.Descriptor{
 	ID:      Provider + ".issues.update",
 	Version: 1,
 	Title:   "Update a GitHub issue",
-	Description: "Replace the title, body, labels, assignees, or milestone of one issue of " +
-		"a repository an explicit connection allows; fields left out stay unchanged, and GitHub creates any " +
-		"label the repository does not have yet",
+	Description: "Replace the title, body, labels, assignees, milestone, or issue type of one issue of " +
+		"a repository an explicit connection allows; fields left out stay unchanged, GitHub creates any " +
+		"label the repository does not have yet, and a type change is silently dropped by GitHub without " +
+		"push access to the repository",
 	Tags:                       []string{"github", "issues", "update"},
 	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:                   Provider,
 	RequiresExplicitConnection: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
-		issueContentKeys + `,"milestone":` + milestoneUpdateSchema + `},"required":["number"],` +
-		`"additionalProperties":false}`),
+		issueContentKeys + `,"milestone":` + milestoneUpdateSchema + `,"type":` + typeUpdateSchema + `},` +
+		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: issuesGet.OutputSchema,
 	Arguments: append(append([]capability.Argument{
 		{Name: "number", Description: "Issue number in the repository", Required: true},
 	}, issueContentArguments...), capability.Argument{Name: "milestone", Description: "Milestone number to " +
-		"set, as github.milestones.list reports it; 0 removes the current milestone; left out leaves it unchanged"}),
+		"set, as github.milestones.list reports it; 0 removes the current milestone; left out leaves it unchanged"},
+		capability.Argument{Name: "type", Description: "Issue type name to set, as github.issuetypes.list " +
+			"reports it; \"\" removes the current type; left out leaves it unchanged"}),
 	Fields: issuesGet.Fields,
 	Examples: []capability.Example{{
 		Description: "Replace the body of an issue",
 		Arguments:   json.RawMessage(`{"number":42,"body":"Updated acceptance criteria"}`),
+	}, {
+		Description: "Set the issue type",
+		Arguments:   json.RawMessage(`{"number":42,"type":"Bug"}`),
 	}},
 }
 

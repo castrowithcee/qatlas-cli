@@ -51,14 +51,14 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	// The account tool, the star list, and the search tools name no repository, project, or owner: they read
 	// or, for the star list and the search tools, narrow by the connection's targets as a whole, not by a
 	// target argument of their own. github.repositories.create names no existing repository either, since it
-	// makes one; its own optional owner argument is defined on its descriptor directly. The ruleset tools and
-	// the custom properties tools take an exclusive repository or organization argument of their own, since
-	// exactly one of the two, never a default, addresses a call.
+	// makes one; its own optional owner argument is defined on its descriptor directly. The ruleset tools, the
+	// custom properties tools, and github.issuefields.list take an exclusive repository or organization
+	// argument of their own, since exactly one of the two, never a default, addresses a call.
 	switch d.ID {
 	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
 		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID, repositoriesCreate.ID,
 		rulesetsList.ID, rulesetsGet.ID, rulesetsCreate.ID, rulesetsUpdate.ID, rulesetsDelete.ID,
-		customPropertiesGet.ID, customPropertiesSet.ID:
+		customPropertiesGet.ID, customPropertiesSet.ID, issueFieldsList.ID:
 		return d
 	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument
@@ -70,6 +70,9 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	case d.ID == organizationTeamsList.ID || d.ID == teamMembersList.ID:
 		name, schema, argument = "owner", ownerSchema, organizationArgument
 		fields = []capability.Field{organizationField}
+	case d.ID == issueTypesList.ID:
+		name, schema, argument = "owner", ownerSchema, issueTypesOwnerArgument
+		fields = []capability.Field{issueTypesOwnerField}
 	case d.ID == projectsCreate.ID:
 		name, schema, argument = "owner", ownerSchema, newOwnerArgument
 		fields = []capability.Field{newOwnerField}
