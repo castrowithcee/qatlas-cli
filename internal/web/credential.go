@@ -772,8 +772,16 @@ Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt 
 <tr><th>Permissions</th><td>{{.Permissions}}</td></tr>
 <tr><th>Tools</th><td>{{.Tools}}</td></tr>
 </table>
-<p>This run does not yet grant this connection vault approval, and offers no connection test; both come
-with a later step of this same task.</p>
+
+{{if .TestResult}}<p>{{.TestResult}}</p>{{end}}
+{{if .TesterAvailable}}
+<form method="post" action="/connections/{{.Name}}/test">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<button type="submit">Test this connection</button>
+</form>
+{{else}}
+<p>Connection testing is not available for this run.</p>
+{{end}}
 </body>
 </html>
 {{end}}

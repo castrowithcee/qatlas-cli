@@ -19,10 +19,19 @@ import (
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
+
+// Tester runs the same safe connection test internal/tui's own editor runs, for one saved connection by
+// name. It is injected by the caller (see internal/cli/web.go's own connectionTester), exactly the way
+// internal/tui.Tester is: this package knows no provider and resolves nothing on its own, so the browser's
+// "Test this connection" button can never diverge from the TUI's own test path. A nil Tester leaves the
+// button unusable, but every earlier route unaffected: a test server built for the overview and the admin
+// guard alone (see New) never has to supply one.
+type Tester func(ctx context.Context, connection string) (provider.Class, error)
 
 // tokenTTL bounds how long the one-time access token stays valid before it must be discarded and a new
 // run started. It is short: the token only ever has to survive the moment between printing it and a
@@ -95,6 +104,11 @@ type Server struct {
 	sessionSet bool
 	session    string
 	csrf       string
+	// pendingNotice is a short-lived, one-time hint for this run's one coupled session: a route that just
+	// mutated something (see handleCreateConnection) sets it instead of carrying its message in a redirect's
+	// own URL, and the next page that shows it consumes it, so it never sits in the address bar, browser
+	// history, or a referrer. It never outlives the session it was set for (see close and redeem).
+	pendingNotice string
 
 	// vault is this run's vault, or nil when none is configured. The admin approval checks its live state
 	// through it and never resolves or caches a secret of its own.
@@ -121,6 +135,10 @@ type Server struct {
 	secrets  *secret.Resolver
 	redactor *redact.Redactor
 
+	// tester runs the connection test the result page's own button offers (see connection.go). It is nil in
+	// a test, or a run, that never wires one up, which only makes the button unusable, never any other route.
+	tester Tester
+
 	credTmpl *template.Template
 }
 
@@ -135,8 +153,12 @@ type Server struct {
 // carry. All three may be nil, which leaves the overview and the admin approval usable and every credential
 // route refusing with a fixed, generic error, never a partial write: a test that only exercises those two
 // never has to build a configuration store or a resolver of its own.
+//
+// tester runs the connection test the result page's "Test this connection" button offers (see
+// connection.go and internal/cli/web.go's own connectionTester); nil leaves the button unusable without
+// affecting anything else this run serves.
 func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, store *config.Store,
-	secrets *secret.Resolver, redactor *redact.Redactor) (*Server, error) {
+	secrets *secret.Resolver, redactor *redact.Redactor, tester Tester) (*Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
@@ -169,6 +191,7 @@ func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, store *c
 		store:        store,
 		secrets:      secrets,
 		redactor:     redactor,
+		tester:       tester,
 	}
 	s.tokenAt = s.now()
 	s.http = &http.Server{Handler: s.mux()}
@@ -240,7 +263,25 @@ func (s *Server) close() {
 	s.csrf = ""
 	s.adminUntil = time.Time{}
 	s.adminOnce = false
+	s.pendingNotice = ""
 	s.mu.Unlock()
+}
+
+// setNotice stores text as the coupled session's own one-time hint, replacing whatever it held before.
+func (s *Server) setNotice(text string) {
+	s.mu.Lock()
+	s.pendingNotice = text
+	s.mu.Unlock()
+}
+
+// takeNotice returns the coupled session's one-time hint and clears it, so the next page that asks finds
+// nothing left to show a second time.
+func (s *Server) takeNotice() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	notice := s.pendingNotice
+	s.pendingNotice = ""
+	return notice
 }
 
 const sessionCookieName = "qatlas_web_session"
@@ -257,6 +298,7 @@ func (s *Server) mux() http.Handler {
 	mux.HandleFunc("GET /connections/new/review", s.withSession(s.handleConnectionReview))
 	mux.HandleFunc("POST /connections/new/review", s.withAdminGuard(s.handleCreateConnection))
 	mux.HandleFunc("GET /connections/{name}", s.withSession(s.handleConnectionResult))
+	mux.HandleFunc("POST /connections/{name}/test", s.withSessionGuard(s.handleTestConnection))
 	return s.withSecurityHeaders(s.withLocalBoundary(mux))
 }
 

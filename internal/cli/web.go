@@ -46,13 +46,20 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"approves exactly the next change and nothing beyond it. A vault with no passphrase at all needs\n" +
 			"no approval beyond coupling, and the page says so.\n\n" +
 			"With admin approval active, the coupled browser can also add a credential (keyring, vault, or\n" +
-			"env) and replace one secret role of an existing keyring or vault credential; a stored secret is\n" +
-			"never shown back. Every credential page reloads the configuration fresh, so a change made in this\n" +
-			"run is visible right away, and a save carries proof of the exact file it was shown, so a change\n" +
-			"from elsewhere in the meantime is refused as a conflict instead of being overwritten. This run\n" +
-			"offers no connection write yet and no remote access. Ending the process, with a signal or\n" +
-			"otherwise, closes the listener and discards the session and any admin approval; nothing of this\n" +
-			"run answers again.\n\n" +
+			"env), replace one secret role of an existing keyring or vault credential, and walk a guided setup\n" +
+			"from a provider to a saved connection; a stored secret is never shown back, and a connection's own\n" +
+			"secrets are only ever typed on its own review page's one and only write. Every page reloads the\n" +
+			"configuration fresh, so a change made in this run is visible right away, and a save carries proof\n" +
+			"of the exact file it was shown, so a change from elsewhere in the meantime is refused as a\n" +
+			"conflict instead of being overwritten.\n\n" +
+			"Saving a connection over an encrypted, unlocked vault approves that connection alone, by the same\n" +
+			"rule the TUI's own guided setup uses: it stays open instead, with a reason, only when it was\n" +
+			"already open for something its own form never showed. Unlike the TUI, this never sweeps and\n" +
+			"approves any other connection the save happened to newly open; those stay open and 'qatlas vault\n" +
+			"approve' or the TUI's Approvals section releases them. The result page then offers the same\n" +
+			"connection test the TUI runs, redacted the same way. This run allows no remote access. Ending the\n" +
+			"process, with a signal or otherwise, closes the listener and discards the session and any admin\n" +
+			"approval; nothing of this run answers again.\n\n" +
 			"TUI, CLI, and MCP stay independently usable; this command only adds a local browser view beside\n" +
 			"them.",
 		Args: noArgs,
@@ -73,7 +80,7 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			}
 
 			server, err := web.New(buildOverview(registry, cfg), secrets.Vault(), cfg.VaultAdminTimeout(),
-				store, secrets, opts.Redactor)
+				store, secrets, opts.Redactor, web.Tester(connectionTester(store, opts, registry)))
 			if err != nil {
 				return err
 			}

@@ -40,7 +40,7 @@ func newTestServer(t *testing.T) *Server {
 
 func newTestServerWithVault(t *testing.T, v *vault.Vault, adminTimeout time.Duration) *Server {
 	t.Helper()
-	s, err := New(testOverview(), v, adminTimeout, nil, nil, nil)
+	s, err := New(testOverview(), v, adminTimeout, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestNoExternalAssetsInOverview(t *testing.T) {
 // TestServerServesOverRealLoopback proves the whole thing end to end: a real 127.0.0.1 socket, coupling
 // through it, and ctx cancellation actually closing the listener.
 func TestServerServesOverRealLoopback(t *testing.T) {
-	s, err := New(testOverview(), nil, defaultTestAdminTimeout, nil, nil, nil)
+	s, err := New(testOverview(), nil, defaultTestAdminTimeout, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

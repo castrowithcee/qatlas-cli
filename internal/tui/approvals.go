@@ -342,31 +342,6 @@ func openChange(report approval.Report, name string) (approval.Change, bool) {
 	return approval.Change{}, false
 }
 
-// directApprovable reports whether change - the direct connection's own open change just before it was
-// saved - is made entirely of fields its own form shows: permissions, targets, tools, or a plain rename of
-// its credential, never one "stored anew" (the vault holds a different entry under the same credential
-// name), which the form cannot tell apart from an ordinary rename. A connection that was never approved at
-// all (change.New) counts the same way: nothing in the form hid that either. Anything else - a changed
-// provider, a changed origin (a service's base_url), or a credential replaced under the same name - left it
-// open outside the fields the form shows, so saving unrelated fields must not approve it in passing.
-func directApprovable(change approval.Change) bool {
-	if change.New {
-		return true
-	}
-	for _, f := range change.Fields {
-		switch f.Field {
-		case approval.FieldPermissions, approval.FieldTargets, approval.FieldTools:
-		case approval.FieldCredential:
-			if strings.HasSuffix(f.After, " (stored anew)") {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	return true
-}
-
 // approvalSweepMsg carries the outcome of autoApprove or revokeApproval back into the event loop: both run
 // asynchronously, like every other write this editor sends to the vault (see runVaultActionField,
 // writeVaultSecret), as the automatic side effect of a save or delete that already succeeded on its own.
@@ -408,7 +383,7 @@ func (m *Model) autoApprove(before approvalBefore, direct string) tea.Cmd {
 		var stayedOpen string
 		for _, c := range report.Open {
 			switch {
-			case c.Connection == direct && (!directWasOpen || directApprovable(directChange)):
+			case c.Connection == direct && (!directWasOpen || approval.DirectApprovable(directChange)):
 				names = append(names, c.Connection)
 			case c.Connection == direct:
 				// Open for a reason the connection's own form never showed: only Approvals (6), or the form

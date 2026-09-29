@@ -67,7 +67,7 @@ func newCredentialTestServer(t *testing.T, v *vault.Vault) (*Server, *config.Sto
 		resolver.WithVault(v, nil)
 	}
 
-	s, err := New(testOverview(), v, defaultTestAdminTimeout, store, resolver, red)
+	s, err := New(testOverview(), v, defaultTestAdminTimeout, store, resolver, red, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

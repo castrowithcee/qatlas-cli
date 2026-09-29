@@ -70,7 +70,7 @@ func (bookCatalog) ProviderMetadataAll() []config.ProviderMetadata {
 // newConnectionTestServer returns a server wired for the guided connection routes, over a temporary
 // configuration file and an in-process credential store: never the real keyring, and never the real vault
 // under a person's home directory.
-func newConnectionTestServer(t *testing.T, v *vault.Vault) (*Server, *config.Store, *secret.MemoryStore, string) {
+func newConnectionTestServer(t *testing.T, v *vault.Vault, tester ...Tester) (*Server, *config.Store, *secret.MemoryStore, string) {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
@@ -89,7 +89,11 @@ func newConnectionTestServer(t *testing.T, v *vault.Vault) (*Server, *config.Sto
 		resolver.WithVault(v, nil)
 	}
 
-	s, err := New(testOverview(), v, defaultTestAdminTimeout, store, resolver, red)
+	var tst Tester
+	if len(tester) > 0 {
+		tst = tester[0]
+	}
+	s, err := New(testOverview(), v, defaultTestAdminTimeout, store, resolver, red, tst)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

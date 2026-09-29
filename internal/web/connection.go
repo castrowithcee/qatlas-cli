@@ -1,14 +1,17 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secretcommit"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // The guided connection setup leads a coupled browser from a provider to a saved connection, over the same
@@ -572,6 +575,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 			failReview(s.redact(err.Error()))
 			return
 		}
+		s.setNotice(s.approvalNotice(cand, connName))
 		http.Redirect(w, r, "/connections/"+url.PathEscape(connName)+"?created=1", http.StatusSeeOther)
 		return
 	}
@@ -595,24 +599,109 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	target := "/connections/" + url.PathEscape(connName) + "?created=1"
+	notice := s.approvalNotice(cand, connName)
 	if warning != "" {
-		target += "&warning=" + url.QueryEscape(warning)
+		warningText := "warning: " + s.redact(warning)
+		if notice != "" {
+			notice = warningText + "; " + notice
+		} else {
+			notice = warningText
+		}
 	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	s.setNotice(notice)
+	http.Redirect(w, r, "/connections/"+url.PathEscape(connName)+"?created=1", http.StatusSeeOther)
 }
 
-// connectionResultData is what the connection result page renders: a secretfree row of the connection just
-// saved, or any other connection reached by name, with a fixed placeholder for the vault approval and
-// connection test that a later run of this task adds; this run has no route for either yet.
+// approvalNotice approves, in an encrypted and unlocked vault only (vault.StateUnlocked),
+// the one connection connName of cand - the candidate configuration
+// handleCreateConnection just saved - by the very same rule internal/tui's own guided setup and Connections
+// section use, approval.DirectApprovable: a connection saved through this route is always new to the
+// vault's own approvals (its name could not already exist; see buildConnectionCandidate), so this only ever
+// finds it open for a reason outside the form (a stale approval left under the same name by something
+// outside this run, naming a provider, origin, or credential entry the form never showed) and leaves it
+// open then, never approving it.
+//
+// Any other vault-credential connection this create happened to newly open - most often every one of them
+// at once, the moment this very save is what first encrypts the vault - is deliberately left alone: unlike
+// internal/tui's own autoApprove, this never sweeps and approves the rest. This route approves only the
+// connection it just saved, never a silent grant of any other (a narrower reading than the TUI's own
+// sweep).
+//
+// "" means there is nothing to say: no vault, an unencrypted or missing vault (which binds no connection
+// at all), or a connection whose credential is not a vault credential in the first place.
+func (s *Server) approvalNotice(cand *config.Config, connName string) string {
+	v := s.secrets.Vault()
+	if v == nil {
+		return ""
+	}
+	state, err := v.State()
+	if err != nil || state != vault.StateUnlocked {
+		return ""
+	}
+	report, err := approval.Pending(cand, v)
+	if err != nil {
+		return "approval failed: " + s.redact(err.Error())
+	}
+	change, ok := approvalOpenChange(report, connName)
+	if !ok {
+		return ""
+	}
+	if !approval.DirectApprovable(change) {
+		return fmt.Sprintf("stays open: %s; approve it with `qatlas vault approve` or in the TUI's Approvals section",
+			approvalStaysOpenReason(change))
+	}
+	_, warning, err := approval.Approve(context.Background(), cand, v, []string{connName})
+	switch {
+	case err != nil:
+		return "approval failed: " + s.redact(err.Error())
+	case warning != "":
+		return "approval failed: " + s.redact(warning)
+	default:
+		return "approved"
+	}
+}
+
+// approvalOpenChange is the Change report holds for name, and whether it held one at all, the same small
+// lookup internal/tui's own openChange makes over its own report.
+func approvalOpenChange(report approval.Report, name string) (approval.Change, bool) {
+	for _, c := range report.Open {
+		if c.Connection == name {
+			return c, true
+		}
+	}
+	return approval.Change{}, false
+}
+
+// approvalStaysOpenReason is the short reason change stays open, the same words internal/tui's own
+// approvalSummary uses for its Approvals list.
+func approvalStaysOpenReason(c approval.Change) string {
+	if c.New {
+		return "new connection, not yet approved"
+	}
+	fields := make([]string, len(c.Fields))
+	for i, f := range c.Fields {
+		fields[i] = f.Field
+	}
+	return strings.Join(fields, ", ") + " changed"
+}
+
+// connectionResultData is what the connection result page renders: a secretfree row of the connection, this
+// run's one-time creation and approval notice when there is one, and, when this run was given a Tester, the
+// "Test this connection" form and the outcome of the last test run from this page.
 type connectionResultData struct {
 	Name, Provider, Service, Credential, Description, Targets, Permissions, Tools string
 	Notice, Error                                                                 string
+	CSRF                                                                          string
+	TesterAvailable                                                               bool
+	TestResult                                                                    string
 }
 
 // handleConnectionResult shows one connection: what the guided setup redirects to once it saved, and a
 // plain lookup for any other connection by name, secretfree, from a freshly loaded configuration the same
-// way handleCredentialForm already does.
+// way handleCredentialForm already does. The creation notice comes from the "created=1" flag the guided
+// setup's own redirect carries; the approval notice, and any vault-process warning alongside it, comes from
+// this run's own one-time hint (see approvalNotice, setNotice, takeNotice) and is consumed here, never
+// carried in the URL.
 func (s *Server) handleConnectionResult(w http.ResponseWriter, r *http.Request) {
 	if !s.credentialsReady(w) {
 		return
@@ -632,13 +721,20 @@ func (s *Server) handleConnectionResult(w http.ResponseWriter, r *http.Request) 
 	if r.URL.Query().Get("created") == "1" {
 		notice = "Connection created."
 	}
-	if warning := r.URL.Query().Get("warning"); warning != "" {
+	if extra := s.takeNotice(); extra != "" {
 		if notice != "" {
 			notice += " "
 		}
-		notice += warning
+		notice += extra
 	}
+	s.renderConnectionResult(w, cfg, name, conn, notice, "")
+}
 
+// renderConnectionResult builds and renders the connection result page: notice is this run's own creation
+// and approval hint (see handleConnectionResult), testResult the outcome of a test just run from this same
+// page (see handleTestConnection); each is "" when there is nothing of that kind to show.
+func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Config, name string,
+	conn config.Connection, notice, testResult string) {
 	targets := strings.Join(conn.TargetValues(), ", ")
 	tools := "all tools its permissions allow"
 	switch {
@@ -653,7 +749,7 @@ func (s *Server) handleConnectionResult(w http.ResponseWriter, r *http.Request) 
 		Name: name, Provider: provider, Service: conn.Service, Credential: conn.Credential,
 		Description: conn.Description, Targets: targets,
 		Permissions: config.FormatPermissions(cfg.ConnectionPermissions(name)), Tools: tools,
-		Notice: notice,
+		Notice: notice, CSRF: s.csrfValue(), TesterAvailable: s.tester != nil, TestResult: testResult,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.credTmpl.ExecuteTemplate(w, "connection-result", data); err != nil {

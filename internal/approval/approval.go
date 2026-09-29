@@ -186,6 +186,36 @@ func tools(values []string) string {
 	return list(values)
 }
 
+// DirectApprovable reports whether change - a connection's own open change, found right after some action
+// that saved it directly by name (internal/tui's own Connections section, or a guided setup, terminal or
+// browser, that just created it) - is made entirely of fields that action's own form shows: permissions,
+// targets, tools, or a plain rename of its credential, never one "stored anew" (the vault holds a different
+// entry under the same credential name), which a form cannot tell apart from an ordinary rename. A
+// connection that was never approved at all (change.New) counts the same way: nothing in the form hid that
+// either. Anything else - a changed provider, a changed origin (a service's base_url), or a credential
+// replaced under the same name - left it open outside the fields the form shows, so saving unrelated fields
+// must never approve it in passing.
+//
+// This is the one rule every caller that saves a connection directly by name uses to decide whether that
+// save may approve it on its own; nothing else decides that on its own.
+func DirectApprovable(change Change) bool {
+	if change.New {
+		return true
+	}
+	for _, f := range change.Fields {
+		switch f.Field {
+		case FieldPermissions, FieldTargets, FieldTools:
+		case FieldCredential:
+			if strings.HasSuffix(f.After, " (stored anew)") {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // ErrUnknownConnection reports a connection Approve was asked for that does not read a vault credential the
 // vault holds an entry for.
 var ErrUnknownConnection = errors.New("the connection does not read a secret stored in the vault")

@@ -281,7 +281,9 @@ func tuiSecrets(opts *Options) (*secret.Resolver, error) {
 	return secrets, nil
 }
 
-// connectionTester binds the editor to the shared core function. The editor itself knows no provider.
+// connectionTester binds the editor, or the browser's own result page (see internal/cli/web.go, which
+// converts this same func value to web.Tester), to the shared core function. Neither the editor nor
+// internal/web knows any provider; only this func value, built in this package, does.
 func connectionTester(store *config.Store, opts *Options, reg *capability.Registry) tui.Tester {
 	return func(ctx context.Context, connection string) (provider.Class, error) {
 		cfg, err := store.Load()
