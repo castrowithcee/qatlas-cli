@@ -53,12 +53,15 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	// target argument of their own. github.repositories.create names no existing repository either, since it
 	// makes one; its own optional owner argument is defined on its descriptor directly. The ruleset tools, the
 	// custom properties tools, and github.issuefields.list take an exclusive repository or organization
-	// argument of their own, since exactly one of the two, never a default, addresses a call.
+	// argument of their own, since exactly one of the two, never a default, addresses a call. The notification
+	// tools take an optional repository of their own, or a thread id whose repository is read and checked.
 	switch d.ID {
 	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
 		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID, repositoriesCreate.ID,
 		rulesetsList.ID, rulesetsGet.ID, rulesetsCreate.ID, rulesetsUpdate.ID, rulesetsDelete.ID,
-		customPropertiesGet.ID, customPropertiesSet.ID, issueFieldsList.ID:
+		customPropertiesGet.ID, customPropertiesSet.ID, issueFieldsList.ID,
+		notificationsList.ID, notificationsGet.ID, notificationsDismiss.ID, notificationsMarkAll.ID,
+		threadSubscriptionsSet.ID:
 		return d
 	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument

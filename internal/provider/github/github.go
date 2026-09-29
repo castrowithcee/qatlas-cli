@@ -82,6 +82,15 @@
 // discussion, github.discussioncomments.create adds a comment or a reply, and github.discussioncomments.update
 // and github.discussioncomments.delete change and remove one; the delete is offered only where a connection's
 // tools list names it.
+// github.notifications.list, github.notifications.get, github.notifications.dismiss,
+// github.threadsubscriptions.set, and github.repositorysubscriptions.set read and manage the notification
+// threads of the account behind the token and its subscriptions to a thread or a repository; they are
+// offered only by the not-recommended setup profile notifications. GitHub supports them only with a
+// personal access token (classic) that has the notifications scope, so a fine-grained token is refused
+// before any request. A thread is read before it is changed and refused unless the connection's targets
+// admit its repository; the list and github.notifications.markall, which is offered only where a
+// connection's tools list names it, take an optional repository, and a connection whose targets name
+// repositories needs one. Marking the whole account read is allowed only for a connection without targets.
 // github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
@@ -468,7 +477,10 @@ func Register(reg *capability.Registry) error {
 				"discussion categories, discussions, and discussion comments of a repository needs public_repo " +
 				"or repo on a classic token, or Discussions: read on a fine-grained token; creating and changing " +
 				"discussions and discussion comments, including delete, needs public_repo or repo on a classic " +
-				"token, or Discussions: read and write on a fine-grained token",
+				"token, or Discussions: read and write on a fine-grained token; the notification tools, " +
+				"including the thread subscriptions and the listed-only mark-all, need a classic token with " +
+				"notifications (or repo), since GitHub does not support fine-grained tokens for them and " +
+				"Qatlas refuses one before any request; a repository subscription is decided by GitHub per request",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -638,6 +650,15 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{discussionCategoriesList.ID, discussionsList.ID, discussionsGet.ID,
 				discussionCommentsList.ID, discussionsCreate.ID, discussionCommentsCreate.ID,
 				discussionCommentsUpdate.ID},
+		}, {
+			ID: "notifications", Title: "Notifications",
+			Description: "not recommended: lists the notification threads of the account behind a classic " +
+				"token, reads one, marks one read or done, sets a thread or repository subscription to watch, " +
+				"ignore, or none; every change needs its own confirmation, and marking everything read stays " +
+				"unticked, since it is offered only where a connection's tools list names " +
+				"github.notifications.markall",
+			Tools: []string{notificationsList.ID, notificationsGet.ID, notificationsDismiss.ID,
+				threadSubscriptionsSet.ID, repositorySubscriptionsSet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -669,7 +690,7 @@ func Register(reg *capability.Registry) error {
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
 		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
-		discussionOperations())...)
+		discussionOperations(), notificationOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1367,6 +1388,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/user"); ok {
 		return accountSubject(tail)
 	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/notifications"); ok {
+		return notificationsSubject(tail)
+	}
 	tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/repos/")
 	if !ok {
 		return fallback
@@ -1439,6 +1463,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := issueDependenciesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := notificationRepositorySubject(parts[2]); what != "" {
 			s.what = what
 		}
 	}
