@@ -10,9 +10,19 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 const syntheticSecret = "sk-test-synthetic-0123456789"
+
+// syntheticPassphrase is the passphrase every encrypted test vault of this package is set up with. It is
+// never a real credential, only a fixed value tests type back to prove the check that guards it.
+const syntheticPassphrase = "correct-horse-battery-staple-synthetic"
+
+// defaultTestAdminTimeout matches config.DefaultVaultAdminTimeout without this package importing the
+// config package for one constant.
+const defaultTestAdminTimeout = 10 * time.Minute
 
 func testOverview() Overview {
 	return Overview{
@@ -25,12 +35,103 @@ func testOverview() Overview {
 
 func newTestServer(t *testing.T) *Server {
 	t.Helper()
-	s, err := New(testOverview())
+	return newTestServerWithVault(t, nil, defaultTestAdminTimeout)
+}
+
+func newTestServerWithVault(t *testing.T, v *vault.Vault, adminTimeout time.Duration) *Server {
+	t.Helper()
+	s, err := New(testOverview(), v, adminTimeout)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 	t.Cleanup(s.close)
 	return s
+}
+
+// coupledServer returns a server already coupled to one session, and that session's cookie and CSRF value,
+// so an admin test can go straight to exercising the admin path instead of redeeming a token first.
+func coupledServer(t *testing.T, v *vault.Vault, adminTimeout time.Duration) (*Server, *http.Cookie, string) {
+	t.Helper()
+	s := newTestServerWithVault(t, v, adminTimeout)
+	link, err := url.Parse(s.URL())
+	if err != nil {
+		t.Fatalf("parse URL: %v", err)
+	}
+	redeem := s.request(t, http.MethodGet, link.RequestURI(), s.addr, nil, nil)
+	if redeem.Code != http.StatusSeeOther {
+		t.Fatalf("redeem status = %d, want %d", redeem.Code, http.StatusSeeOther)
+	}
+	cookies := redeem.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected one session cookie, got %v", cookies)
+	}
+	return s, cookies[0], s.csrf
+}
+
+// encryptedTestVault returns a fresh, temporary, synthetic vault encrypted with syntheticPassphrase, never
+// the real vault under a person's home directory.
+func encryptedTestVault(t *testing.T) *vault.Vault {
+	t.Helper()
+	v := vault.New(t.TempDir())
+	if err := v.Encrypt(syntheticPassphrase); err != nil {
+		t.Fatalf("Encrypt: %v", err)
+	}
+	return v
+}
+
+// postForm submits a POST to the server's own mux, as a properly coupled and CSRF-proven request unless
+// the test overrides one of host, cookie, csrf, or origin to prove a specific check.
+func (s *Server) postForm(t *testing.T, target, host string, cookie *http.Cookie, origin, csrf string, form url.Values) *httptest.ResponseRecorder {
+	t.Helper()
+	if csrf != "" {
+		form = cloneValues(form)
+		form.Set("csrf", csrf)
+	}
+	req := httptest.NewRequest(http.MethodPost, target, strings.NewReader(form.Encode()))
+	req.Host = host
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rec := httptest.NewRecorder()
+	s.mux().ServeHTTP(rec, req)
+	return rec
+}
+
+// recordHandler drives h directly with a POST built the same way postForm builds one, for tests that
+// exercise a guard not wired into the server's own mux (withAdminGuard has no production route yet; see
+// internal/web/admin.go).
+func recordHandler(h http.HandlerFunc, method, target, host string, cookie *http.Cookie, origin string, form url.Values) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(method, target, strings.NewReader(form.Encode()))
+	req.Host = host
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+	}
+	if cookie != nil {
+		req.AddCookie(cookie)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+// vaultAbsent returns a *vault.Vault over a fresh, empty, temporary directory: neither encrypted nor
+// holding a plaintext document yet, exactly vault.StateAbsent.
+func vaultAbsent(t *testing.T) *vault.Vault {
+	t.Helper()
+	return vault.New(t.TempDir())
+}
+
+func cloneValues(v url.Values) url.Values {
+	out := make(url.Values, len(v)+1)
+	for k, vs := range v {
+		out[k] = append([]string(nil), vs...)
+	}
+	return out
 }
 
 // request builds a request against the server's own mux, without opening a real socket, with req.Host set
@@ -194,7 +295,7 @@ func TestNoExternalAssetsInOverview(t *testing.T) {
 // TestServerServesOverRealLoopback proves the whole thing end to end: a real 127.0.0.1 socket, coupling
 // through it, and ctx cancellation actually closing the listener.
 func TestServerServesOverRealLoopback(t *testing.T) {
-	s, err := New(testOverview())
+	s, err := New(testOverview(), nil, defaultTestAdminTimeout)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

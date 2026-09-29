@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // tokenTTL bounds how long the one-time access token stays valid before it must be discarded and a new
@@ -88,13 +90,33 @@ type Server struct {
 	tokenUsed  bool
 	sessionSet bool
 	session    string
+	csrf       string
+
+	// vault is this run's vault, or nil when none is configured. The admin approval checks its live state
+	// through it and never resolves or caches a secret of its own.
+	vault *vault.Vault
+	// adminTimeout is vault.admin_timeout: how long an admin approval stays active without activity of the
+	// coupled session, or 0, which means an approval only ever covers exactly the next mutation.
+	adminTimeout time.Duration
+	// adminUntil is the admin approval's idle deadline for adminTimeout > 0; the zero value means no
+	// session-shaped approval is active.
+	adminUntil time.Time
+	// adminOnce is the one-shot admin approval adminTimeout == 0 grants: good for exactly the next mutation
+	// withAdminGuard lets through, then cleared.
+	adminOnce bool
+
+	// writeMu serializes every mutation this run's coupled session may make to config, keyring, or vault, so
+	// two concurrent writes from the same session can never interleave.
+	writeMu sync.Mutex
 
 	overview Overview
 }
 
 // New starts listening on 127.0.0.1:0 (an OS-assigned port on the IPv4 loopback interface only) and
-// returns a server ready to run. overview is shown to the browser that redeems the printed URL's token.
-func New(overview Overview) (*Server, error) {
+// returns a server ready to run. overview is shown to the browser that redeems the printed URL's token. v is
+// this run's vault, or nil when none is configured; adminTimeout is vault.admin_timeout, read once at
+// startup exactly like every other vault-facing setting this run uses.
+func New(overview Overview, v *vault.Vault, adminTimeout time.Duration) (*Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
@@ -110,12 +132,14 @@ func New(overview Overview) (*Server, error) {
 		return nil, err
 	}
 	s := &Server{
-		listener: listener,
-		addr:     listener.Addr().String(),
-		tmpl:     tmpl,
-		now:      time.Now,
-		token:    token,
-		overview: overview,
+		listener:     listener,
+		addr:         listener.Addr().String(),
+		tmpl:         tmpl,
+		now:          time.Now,
+		token:        token,
+		overview:     overview,
+		vault:        v,
+		adminTimeout: adminTimeout,
 	}
 	s.tokenAt = s.now()
 	s.http = &http.Server{Handler: s.mux()}
@@ -134,6 +158,16 @@ func randomToken() (string, error) {
 // randomSession returns a cryptographically random session value, distinct from any access token so a
 // leaked or logged token can never stand in for the browser session it once created.
 func randomSession() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+// randomCSRF returns a cryptographically random value, distinct from the session cookie, that a coupled
+// session's own form must echo back as proof it, and not some other origin, submitted the request.
+func randomCSRF() (string, error) {
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
@@ -166,13 +200,17 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 // close shuts the listener down and discards every credential of this run, so a request arriving after
-// Close is never coupled and never sees the overview again.
+// Close is never coupled and never sees the overview again. It also discards this run's admin approval,
+// whatever it was: stopping the process is exactly what "stopping the process discards the approval" means.
 func (s *Server) close() {
 	_ = s.http.Close()
 	s.mu.Lock()
 	s.tokenUsed = true
 	s.sessionSet = false
 	s.session = ""
+	s.csrf = ""
+	s.adminUntil = time.Time{}
+	s.adminOnce = false
 	s.mu.Unlock()
 }
 
@@ -181,13 +219,14 @@ const sessionCookieName = "qatlas_web_session"
 func (s *Server) mux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleRoot)
+	mux.HandleFunc("POST /admin", s.withSessionGuard(s.handleAdminAuth))
 	return s.withSecurityHeaders(s.withLocalBoundary(mux))
 }
 
 // withSecurityHeaders adds the headers every response of this server carries, whatever it answers:
-// nothing is ever cached, no referrer ever leaves this response, and a strict content security policy
-// keeps a browser from loading anything but the document itself, since the page ships no external asset
-// and no script.
+// nothing is ever cached, no referrer ever leaves this response, and a content security policy keeps a
+// browser from loading anything but the document itself and submitting its own forms back to it, since the
+// page ships no external asset and no script.
 func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -195,7 +234,7 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Content-Security-Policy",
 			"default-src 'none'; style-src 'none'; script-src 'none'; img-src 'none'; "+
-				"base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+				"base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
 	})
@@ -203,7 +242,10 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 
 // withLocalBoundary refuses a request that does not name this run's own loopback address as its Host, and
 // one whose Origin, when it sends one at all, names anything else. Neither check ever explains itself
-// beyond "forbidden": the reason is never handed to a caller that failed either check.
+// beyond "forbidden": the reason is never handed to a caller that failed either check. A mutating route
+// additionally requires an Origin at all (see withSessionGuard), since an absent one there proves nothing
+// about where the request came from; this boundary alone stays permissive about a missing Origin so an
+// ordinary GET, and an unknown method's own 405 from the mux, are unaffected by it.
 func (s *Server) withLocalBoundary(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Host != s.addr {
@@ -223,7 +265,8 @@ func (s *Server) withLocalBoundary(next http.Handler) http.Handler {
 // before this handler is ever reached, by the ServeMux's own routing.
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil && s.validSession(cookie.Value) {
-		s.renderOverview(w)
+		s.touchAdminIfActive()
+		s.renderOverview(w, "")
 		return
 	}
 	if token := r.URL.Query().Get("token"); token != "" {
@@ -263,9 +306,19 @@ func (s *Server) redeem(token string) (session string, ok bool) {
 	if err != nil {
 		return "", false
 	}
+	csrf, err := randomCSRF()
+	if err != nil {
+		return "", false
+	}
 	s.tokenUsed = true
 	s.session = newSession
 	s.sessionSet = true
+	s.csrf = csrf
+	// A freshly coupled session starts every run's admin approval from scratch, whatever an earlier
+	// coupling of this same run once had: close() already clears it when a session ends, but a fresh
+	// redeem is the other place an approval must never carry over from.
+	s.adminUntil = time.Time{}
+	s.adminOnce = false
 	return newSession, true
 }
 
@@ -279,23 +332,80 @@ func (s *Server) validSession(cookie string) bool {
 	return subtle.ConstantTimeCompare([]byte(cookie), []byte(s.session)) == 1
 }
 
-func (s *Server) renderOverview(w http.ResponseWriter) {
+// pageData is what the overview template renders: the secretfree Overview, together with this run's
+// current admin status and, only while an approval still needs proving, the CSRF value its own masked form
+// carries as a hidden field. adminError is never anything but a fixed, generic string: it never carries a
+// vault's own error text, so nothing about why a passphrase failed ever reaches the page.
+type pageData struct {
+	Overview
+	AdminActive        bool
+	AdminUnprotected   bool
+	AdminRemainingText string
+	AdminError         string
+	CSRF               string
+}
+
+// renderOverview shows the coupled browser this run's overview together with its admin status: active with
+// remaining time, not active with the masked passphrase form, or unprotected because this run's vault holds
+// no passphrase to prove at all. adminError, when not empty, is the one generic line a failed passphrase
+// attempt on the browser form is shown.
+func (s *Server) renderOverview(w http.ResponseWriter, adminError string) {
+	s.mu.Lock()
+	required, stateErr := s.adminRequiredLocked()
+	unprotected := stateErr == nil && !required
+	active := s.adminActiveLocked()
+	var remaining string
+	switch {
+	case active && required && s.adminOnce:
+		remaining = "the next change only"
+	case active && required && !s.adminUntil.IsZero():
+		remaining = s.adminUntil.Sub(s.now()).Round(time.Minute).String() + " left"
+	}
+	csrf := s.csrf
+	s.mu.Unlock()
+
+	data := pageData{
+		Overview:           s.overview,
+		AdminActive:        active,
+		AdminUnprotected:   unprotected,
+		AdminRemainingText: remaining,
+		AdminError:         adminError,
+		CSRF:               csrf,
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.Execute(w, s.overview); err != nil {
+	if err := s.tmpl.Execute(w, data); err != nil {
 		// The overview was already fixed at startup, so a template failure is a programming error; nothing
 		// of it, or of the partially written body, ever reaches the response as a detail.
 		http.Error(w, "internal error", http.StatusInternalServerError)
 	}
 }
 
-// overviewTemplate renders the secretfree overview with no external asset, no inline style, and no
-// script, so the strict content security policy this server sends is never a compromise.
+// overviewTemplate renders the secretfree overview, together with the admin status and its masked
+// passphrase form, with no external asset, no inline style, and no script, so the content security policy
+// this server sends is never a compromise; the form's own submission is the one thing form-action 'self'
+// loosens.
 var overviewTemplate = strings.TrimSpace(`
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>qatlas web</title></head>
 <body>
 <h1>qatlas</h1>
+
+<h2>Admin</h2>
+{{if .AdminUnprotected}}
+<p>This vault holds no passphrase: every coupled browser may manage without one.</p>
+{{else if .AdminActive}}
+<p>Admin approval active{{if .AdminRemainingText}} ({{.AdminRemainingText}}){{end}}.</p>
+{{else}}
+<p>Admin approval not active.</p>
+{{if .AdminError}}<p>{{.AdminError}}</p>{{end}}
+<form method="post" action="/admin">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<label>Vault passphrase <input type="password" name="passphrase" autocomplete="off"></label>
+<button type="submit">Approve</button>
+</form>
+{{end}}
 
 <h2>Providers</h2>
 <table border="1" cellpadding="4">

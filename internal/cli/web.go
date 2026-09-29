@@ -1,7 +1,11 @@
 package cli
 
 import (
+	"bufio"
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -15,6 +19,8 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/web"
 )
 
@@ -31,10 +37,17 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"it never sits in history, a bookmark, or a referrer. A reused or expired token is refused, and so\n" +
 			"is every request from a browser that never redeemed one.\n\n" +
 			"The coupled browser sees one page: the providers, services, credentials, and connections this\n" +
-			"configuration and this build's registry describe, with no secret value ever read or shown. This\n" +
-			"run offers nothing else: no write, no terminal, no remote access. Ending the process, with a\n" +
-			"signal or otherwise, closes the listener and discards the session; nothing of this run answers\n" +
-			"again.\n\n" +
+			"configuration and this build's registry describe, with no secret value ever read or shown, plus\n" +
+			"this run's admin status. A future write needs its own, separate admin approval: with an\n" +
+			"encrypted vault, either the coupled browser's own masked passphrase form, or, in this terminal\n" +
+			"while it stays interactive, pressing enter and then typing the passphrase covertly, the same\n" +
+			"hidden way every other management command reads one. A right passphrase approves the coupled\n" +
+			"session for vault.admin_timeout (default 10m idle, renewed by activity); admin_timeout: 0\n" +
+			"approves exactly the next change and nothing beyond it. A vault with no passphrase at all needs\n" +
+			"no approval beyond coupling, and the page says so.\n\n" +
+			"This run offers nothing else yet: no credential or connection write, no remote access. Ending\n" +
+			"the process, with a signal or otherwise, closes the listener and discards the session and any\n" +
+			"admin approval; nothing of this run answers again.\n\n" +
 			"TUI, CLI, and MCP stay independently usable; this command only adds a local browser view beside\n" +
 			"them.",
 		Args: noArgs,
@@ -48,7 +61,12 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 				return classifyUserError(err)
 			}
 
-			server, err := web.New(buildOverview(registry, cfg))
+			secrets, err := webSecrets(opts)
+			if err != nil {
+				return err
+			}
+
+			server, err := web.New(buildOverview(registry, cfg), secrets.Vault(), cfg.VaultAdminTimeout())
 			if err != nil {
 				return err
 			}
@@ -58,6 +76,12 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 
 			url := server.URL()
 			fmt.Fprintf(c.OutOrStdout(), "qatlas: open %s to couple this browser (valid once, expires soon)\n", url)
+			if checkInteractive() {
+				if required, err := server.AdminPassphraseRequired(); err == nil && required {
+					fmt.Fprintln(c.OutOrStdout(),
+						"qatlas: press enter here to approve the coupled browser with the vault passphrase")
+				}
+			}
 			open := opts.Opener
 			if open == nil {
 				open = openBrowser
@@ -66,8 +90,69 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 				fmt.Fprintln(c.ErrOrStderr(), "qatlas: could not open a browser automatically; use the URL above")
 			}
 
+			go runTerminalAdmin(ctx, c.InOrStdin(), c.OutOrStdout(), server)
+
 			return server.Run(ctx)
 		},
+	}
+}
+
+// webSecrets returns the resolver 'qatlas web' reads its vault through. Like tuiSecrets (see
+// internal/cli/tui.go) it never lets the resolver's own cascade ask this terminal for a passphrase on its
+// own: this run's admin session, not an implicit prompt buried in credential resolution, is the one place
+// a vault passphrase is ever asked for here, on the coupled browser's own masked form or explicitly on this
+// terminal (see runTerminalAdmin).
+func webSecrets(opts *Options) (*secret.Resolver, error) {
+	secrets, err := opts.resolver()
+	if err != nil {
+		return nil, err
+	}
+	if v := secrets.Vault(); v != nil {
+		secrets.WithVault(v, nil)
+	}
+	return secrets, nil
+}
+
+// runTerminalAdmin lets a person at this process's own terminal grant the coupled browser's admin
+// approval, alongside its masked form: each time stdin delivers a line (pressing enter is enough; its
+// content is discarded), it reads the vault passphrase covertly, the same hidden way every other management
+// command does, through readVaultPassphrase, and grants it to the currently coupled session through
+// server.VerifyAndGrantAdmin, the very check the browser's own form uses. It never runs at all without an
+// interactive terminal, so a piped or headless run never blocks waiting for a line nobody sends, and it
+// never accepts the passphrase as a command line argument, an environment variable, or a file. It returns
+// once stdin reaches its end; ctx cancellation alone does not interrupt an in-flight read, since the
+// process is exiting either way once the server itself stops.
+func runTerminalAdmin(ctx context.Context, stdin io.Reader, stdout io.Writer, server *web.Server) {
+	if !checkInteractive() {
+		return
+	}
+	scanner := bufio.NewScanner(stdin)
+	for scanner.Scan() {
+		if ctx.Err() != nil {
+			return
+		}
+		if !server.SessionCoupled() {
+			fmt.Fprintln(stdout, "qatlas: no browser is coupled yet; open the URL above first")
+			continue
+		}
+		if required, err := server.AdminPassphraseRequired(); err == nil && !required {
+			fmt.Fprintln(stdout, "qatlas: this vault has no passphrase; the coupled browser needs no approval")
+			continue
+		}
+		passphrase, err := readVaultPassphrase("vault passphrase: ")
+		if err != nil {
+			fmt.Fprintln(stdout, "qatlas: could not read the passphrase on this terminal")
+			continue
+		}
+		if err := server.VerifyAndGrantAdmin(passphrase); err != nil {
+			if errors.Is(err, vault.ErrWrongPassphrase) {
+				fmt.Fprintln(stdout, "qatlas: wrong passphrase")
+			} else {
+				fmt.Fprintln(stdout, "qatlas: admin approval refused")
+			}
+			continue
+		}
+		fmt.Fprintln(stdout, "qatlas: admin approval granted to the coupled browser")
 	}
 }
 
