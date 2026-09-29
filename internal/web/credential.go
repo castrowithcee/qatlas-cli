@@ -600,4 +600,181 @@ Type a passphrase, twice, to encrypt it instead.</p>
 </body>
 </html>
 {{end}}
+
+{{define "connection-provider"}}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>qatlas web · set up a connection</title></head>
+<body>
+<p><a href="/">&larr; overview</a></p>
+<h1>Set up a connection · step 1 of 3 · Provider</h1>
+<p>Choose the system to connect to. The next steps offer only what this provider defines.</p>
+{{if .Error}}<p>{{.Error}}</p>{{end}}
+<form method="get" action="/connections/new">
+<label>Provider
+<select name="provider">
+<option value="">choose a provider</option>
+{{range .Providers}}<option value="{{.}}">{{.}}</option>
+{{end}}
+</select>
+</label>
+<button type="submit">Choose</button>
+</form>
+</body>
+</html>
+{{end}}
+
+{{define "connection-build"}}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>qatlas web · set up a connection</title></head>
+<body>
+<p><a href="/connections/new">&larr; choose another provider</a></p>
+<h1>Set up a connection · step 2 of 3 · Service, credential, scope, permissions</h1>
+{{if .Error}}<p>{{.Error}}</p>{{end}}
+<form method="get" action="/connections/new/review">
+<input type="hidden" name="provider" value="{{.Provider}}">
+
+<h2>Service</h2>
+<label>Reuse a service, or choose {{printf "%s" "(new service)"}}
+<select name="service">
+{{range .Services}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+{{end}}
+</select>
+</label>
+<p><label>New service name <input type="text" name="svcname" value="{{.Form.SvcName}}" autocomplete="off"></label></p>
+<p><label>New service base URL <input type="text" name="svcbaseurl" value="{{.Form.SvcBaseURL}}" autocomplete="off"></label></p>
+
+<h2>Credential</h2>
+<label>Reuse a credential, or choose {{printf "%s" "(new credential)"}}
+<select name="credential">
+{{range .Credentials}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+{{end}}
+</select>
+</label>
+<p><label>New credential name <input type="text" name="credname" value="{{.Form.CredName}}" autocomplete="off"></label></p>
+<p>Secrets of a new credential are kept in:</p>
+<label><input type="radio" name="credstorage" value="keyring"{{if eq .Form.CredStorage "keyring"}} checked{{end}}> the system keyring</label><br>
+<label><input type="radio" name="credstorage" value="vault"{{if eq .Form.CredStorage "vault"}} checked{{end}}> the vault</label><br>
+<label><input type="radio" name="credstorage" value="env"{{if eq .Form.CredStorage "env"}} checked{{end}}> environment variables</label>
+<p>{{.StorageHint}}</p>
+{{$form := .Form}}
+{{range .Roles}}
+<p><label>{{.Name}} environment variable name, only used if a new credential keeps its secrets in environment variables
+<input type="text" name="envname_{{.Name}}" value="{{index $form.EnvNames .Name}}" autocomplete="off"></label>
+{{if .Description}}<br>{{.Description}}{{end}}
+{{if ne $form.CredStorage "env"}}<br>Its secret value, if kept in the system keyring or the vault, is typed on the next page.{{end}}</p>
+{{end}}
+
+<h2>Scope</h2>
+<p><label>Connection name <input type="text" name="connname" value="{{.Form.ConnName}}" autocomplete="off"></label></p>
+<p><label>Targets <input type="text" name="targets" value="{{.Form.Targets}}" autocomplete="off"></label><br>{{.TargetHint}}</p>
+<p><label>Description <input type="text" name="description" value="{{.Form.Description}}" autocomplete="off"></label></p>
+
+<h2>Permissions</h2>
+<label><input type="radio" name="permmode" value="default"{{if eq .Form.PermMode "default"}} checked{{end}}> use the provider's default</label><br>
+<label><input type="radio" name="permmode" value="custom"{{if eq .Form.PermMode "custom"}} checked{{end}}> choose explicitly</label>
+{{range .Permissions}}<br><label><input type="checkbox" name="perm" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label>
+{{end}}
+
+<h2>Tools</h2>
+<label><input type="radio" name="toolsmode" value="all"{{if eq .Form.ToolsMode "all"}} checked{{end}}> offer every tool the permissions allow</label><br>
+<label><input type="radio" name="toolsmode" value="selected"{{if eq .Form.ToolsMode "selected"}} checked{{end}}> offer only the tools ticked below</label>
+{{range .Tools}}<br><label><input type="checkbox" name="tool" value="{{.ID}}"{{if .Selected}} checked{{end}}> {{.ID}} ({{.Effect}})</label>
+{{end}}
+
+<p><button type="submit">Review</button></p>
+</form>
+</body>
+</html>
+{{end}}
+
+{{define "connection-review"}}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>qatlas web · set up a connection</title></head>
+<body>
+<p><a href="/connections/new?provider={{.Form.Provider}}">&larr; back</a></p>
+<h1>Set up a connection · step 3 of 3 · Review</h1>
+{{if .Error}}<p>{{.Error}}</p>{{end}}
+<p>Nothing is written yet. This summary carries no secret.</p>
+<table border="1" cellpadding="4">
+{{range .Summary}}<tr><th>{{.Label}}</th><td>{{.Value}}</td></tr>
+{{end}}
+</table>
+
+<form method="post" action="/connections/new/review">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<input type="hidden" name="cfgver" value="{{.CfgVer}}">
+<input type="hidden" name="provider" value="{{.Form.Provider}}">
+<input type="hidden" name="service" value="{{.Form.Service}}">
+<input type="hidden" name="svcname" value="{{.Form.SvcName}}">
+<input type="hidden" name="svcbaseurl" value="{{.Form.SvcBaseURL}}">
+<input type="hidden" name="credential" value="{{.Form.Credential}}">
+<input type="hidden" name="credname" value="{{.Form.CredName}}">
+<input type="hidden" name="credstorage" value="{{.Form.CredStorage}}">
+{{$form := .Form}}
+{{range $role, $value := .Form.EnvNames}}<input type="hidden" name="envname_{{$role}}" value="{{$value}}">
+{{end}}
+<input type="hidden" name="connname" value="{{.Form.ConnName}}">
+<input type="hidden" name="targets" value="{{.Form.Targets}}">
+<input type="hidden" name="description" value="{{.Form.Description}}">
+<input type="hidden" name="permmode" value="{{.Form.PermMode}}">
+{{range .Form.Perms}}<input type="hidden" name="perm" value="{{.}}">
+{{end}}
+<input type="hidden" name="toolsmode" value="{{.Form.ToolsMode}}">
+{{range .Form.Tools}}<input type="hidden" name="tool" value="{{.}}">
+{{end}}
+
+{{if .NewCredential}}
+<h2>Secrets for the new credential {{.CredentialName}}</h2>
+{{if eq .Storage "env"}}
+<p>This credential keeps its secrets in environment variables, already named on the previous page: nothing more to type here.</p>
+{{else}}
+{{range .Roles}}
+<fieldset>
+<legend>{{.Name}}</legend>
+{{if .Description}}<p>{{.Description}}</p>{{end}}
+<p><label>Secret value <input type="password" name="secret_{{.Name}}" autocomplete="new-password"></label></p>
+</fieldset>
+{{end}}
+<fieldset>
+<legend>Vault passphrase</legend>
+<p>Only used if this credential's secrets go to the vault and this is the vault's very first secret.
+Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt it instead.</p>
+<p><label>New passphrase <input type="password" name="vault_passphrase" autocomplete="new-password"></label></p>
+<p><label>Confirm <input type="password" name="vault_passphrase_confirm" autocomplete="new-password"></label></p>
+</fieldset>
+{{end}}
+{{end}}
+
+<button type="submit">Create connection</button>
+</form>
+</body>
+</html>
+{{end}}
+
+{{define "connection-result"}}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>qatlas web · {{.Name}}</title></head>
+<body>
+<p><a href="/">&larr; overview</a></p>
+<h1>{{.Name}}</h1>
+{{if .Notice}}<p>{{.Notice}}</p>{{end}}
+{{if .Error}}<p>{{.Error}}</p>{{end}}
+<table border="1" cellpadding="4">
+<tr><th>Provider</th><td>{{.Provider}}</td></tr>
+<tr><th>Service</th><td>{{.Service}}</td></tr>
+<tr><th>Credential</th><td>{{.Credential}}</td></tr>
+<tr><th>Targets</th><td>{{.Targets}}</td></tr>
+<tr><th>Description</th><td>{{.Description}}</td></tr>
+<tr><th>Permissions</th><td>{{.Permissions}}</td></tr>
+<tr><th>Tools</th><td>{{.Tools}}</td></tr>
+</table>
+<p>This run does not yet grant this connection vault approval, and offers no connection test; both come
+with a later step of this same task.</p>
+</body>
+</html>
+{{end}}
 `

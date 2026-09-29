@@ -253,6 +253,10 @@ func (s *Server) mux() http.Handler {
 	mux.HandleFunc("POST /credentials/new", s.withAdminGuard(s.handleCreateCredential))
 	mux.HandleFunc("GET /credentials/{name}", s.withSession(s.handleCredentialForm))
 	mux.HandleFunc("POST /credentials/{name}/role", s.withAdminGuard(s.handleReplaceRole))
+	mux.HandleFunc("GET /connections/new", s.withSession(s.handleConnectionsNew))
+	mux.HandleFunc("GET /connections/new/review", s.withSession(s.handleConnectionReview))
+	mux.HandleFunc("POST /connections/new/review", s.withAdminGuard(s.handleCreateConnection))
+	mux.HandleFunc("GET /connections/{name}", s.withSession(s.handleConnectionResult))
 	return s.withSecurityHeaders(s.withLocalBoundary(mux))
 }
 
@@ -456,6 +460,11 @@ func (s *Server) renderOverview(w http.ResponseWriter, adminError string) {
 	if rows, err := s.credentialRows(); err == nil {
 		overview.Credentials = rows
 	}
+	// The connection list is the other part of the overview this run can change after it started (see
+	// connection.go): rebuilt fresh for the same reason the credential list is.
+	if rows, err := s.connectionRows(); err == nil {
+		overview.Connections = rows
+	}
 
 	data := pageData{
 		Overview:           overview,
@@ -524,6 +533,7 @@ var overviewTemplate = strings.TrimSpace(`
 </table>
 
 <h2>Connections</h2>
+{{if .CredentialsUsable}}<p><a href="/connections/new">Set up a connection</a></p>{{end}}
 <table border="1" cellpadding="4">
 <tr><th>Name</th><th>Provider</th><th>Description</th><th>Permissions</th><th>Tools</th></tr>
 {{range .Connections}}<tr><td>{{.Name}}</td><td>{{.Provider}}</td><td>{{.Description}}</td><td>{{.Permissions}}</td><td>{{.Tools}}</td></tr>
