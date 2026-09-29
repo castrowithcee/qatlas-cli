@@ -36,6 +36,7 @@ credentials:
     type: env
     values:
       token-id: WEB_TEST_SYNTHETIC_SECRET_TOKEN
+      token-secret: WEB_TEST_SYNTHETIC_SECRET_KEY
 connections:
   wiki:
     service: wiki
@@ -80,7 +81,7 @@ func TestWebCommandStartsCouplesAndStopsOnSignal(t *testing.T) {
 
 	var openedMu sync.Mutex
 	var openedURL string
-	opts := &Options{Redactor: &redact.Redactor{}, Config: path}
+	opts := &Options{Redactor: &redact.Redactor{}}
 	opts.Opener = func(url string) error {
 		openedMu.Lock()
 		openedURL = url
@@ -92,7 +93,8 @@ func TestWebCommandStartsCouplesAndStopsOnSignal(t *testing.T) {
 	var stderr bytes.Buffer
 	codeCh := make(chan int, 1)
 	go func() {
-		codeCh <- run(newRootCommand(opts, defaultRegistry()), opts, []string{"web"}, stdout, &stderr)
+		codeCh <- run(newRootCommand(opts, defaultRegistry()), opts, []string{"web", "--config", path}, stdout,
+			&stderr)
 	}()
 
 	deadline := time.Now().Add(5 * time.Second)
@@ -100,7 +102,8 @@ func TestWebCommandStartsCouplesAndStopsOnSignal(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	if !strings.Contains(stdout.String(), "http://127.0.0.1:") {
-		t.Fatalf("'qatlas web' never printed a local coupling URL, stdout: %s", stdout.String())
+		t.Fatalf("'qatlas web' never printed a local coupling URL, stdout: %s, stderr: %s", stdout.String(),
+			stderr.String())
 	}
 
 	if runtime.GOOS == "windows" {
@@ -180,7 +183,6 @@ func TestWebCommandAdminApprovalBrowserAndTerminal(t *testing.T) {
 	t.Cleanup(func() { stdinW.Close() })
 	opts := &Options{
 		Redactor: red,
-		Config:   configIn(dir),
 		Input:    stdinR,
 		Secrets: secret.NewWith(os.Getenv, secret.NewMemoryStore(),
 			secret.NewFile(filepath.Join(dir, secret.FileName)), red).WithVault(vault.New(dir), vault.ReadPassphrase),
@@ -190,7 +192,8 @@ func TestWebCommandAdminApprovalBrowserAndTerminal(t *testing.T) {
 	var stderr bytes.Buffer
 	codeCh := make(chan int, 1)
 	go func() {
-		codeCh <- run(newRootCommand(opts, defaultRegistry()), opts, []string{"web"}, stdout, &stderr)
+		codeCh <- run(newRootCommand(opts, defaultRegistry()), opts, []string{"web", "--config", configIn(dir)},
+			stdout, &stderr)
 	}()
 	t.Cleanup(func() {
 		process, err := os.FindProcess(os.Getpid())
