@@ -369,6 +369,26 @@ func selectOrganization(resolved *config.Resolved, raw json.RawMessage) (target,
 	return owner, nil
 }
 
+// selectSecondaryRepository resolves an optional repository argument that names a second repository beside
+// the one withTargetArgument already bound to the tool's own "repository" argument, such as the repository of
+// a sub-issue or an issue dependency that lives outside the primary issue's own repository. An empty value
+// stays the bound repository. Resolution runs against the connection's targets exactly as choose does for the
+// primary target, before a credential is resolved, so a repository outside them is refused before any secret
+// access, and a repository the targets name exactly keeps its configured spelling.
+func selectSecondaryRepository(resolved *config.Resolved, bound target, value string) (target, error) {
+	if value == "" {
+		return bound, nil
+	}
+	if resolved == nil {
+		return target{}, providerError("open", "no connection was selected")
+	}
+	allowed, err := allowlistOf(resolved)
+	if err != nil {
+		return target{}, providerError("open", err.Error())
+	}
+	return allowed.choose(kindRepository, value)
+}
+
 // selectTarget reads the repository or project argument of a tool and resolves the target it acts on
 // against the connection's targets. It runs before a credential is resolved, so a refused target never
 // becomes a secret read or a provider call.

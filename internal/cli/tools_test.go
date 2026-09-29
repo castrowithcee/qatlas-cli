@@ -181,7 +181,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",148,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",155,0,0\n", ",\"\",3,0,0\n",
 		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",7,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -389,6 +389,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.customproperties.get",
 			"github.customproperties.set",
 			"github.files.push",
+			"github.issuedependencies.add", "github.issuedependencies.list", "github.issuedependencies.remove",
 			"github.issues.close", "github.issues.create",
 			"github.issues.get", "github.issues.list", "github.issues.reopen", "github.issues.search", "github.issues.update",
 			"github.labels.create", "github.labels.delete", "github.labels.get", "github.labels.list", "github.labels.update",
@@ -426,6 +427,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.rulesets.create", "github.rulesets.delete", "github.rulesets.get", "github.rulesets.list",
 			"github.rulesets.update",
 			"github.stars.add", "github.stars.list", "github.stars.remove",
+			"github.subissues.add", "github.subissues.list", "github.subissues.remove", "github.subissues.reprioritize",
 			"github.tags.get", "github.tags.list",
 			"github.teammembers.list", "github.teams.list", "github.trees.get", "github.users.search",
 			"github.workflowartifacts.list", "github.workflowfiles.create",

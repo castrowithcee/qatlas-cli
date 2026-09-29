@@ -345,8 +345,15 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.comments.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.comments.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
 			commentSensitivity),
-		"github.reactions.add":    changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
-		"github.reactions.remove": changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"github.reactions.add":            changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+		"github.reactions.remove":         changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"github.subissues.list":           readRisk,
+		"github.subissues.add":            changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.subissues.remove":         changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+		"github.subissues.reprioritize":   changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.issuedependencies.list":   readRisk,
+		"github.issuedependencies.add":    changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.issuedependencies.remove": changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {

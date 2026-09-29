@@ -63,6 +63,13 @@
 // github.labels.list and github.labels.get read the labels of a repository; github.labels.create and
 // github.labels.update change them; only on a connection whose tools list names it, github.labels.delete
 // removes one permanently, which also strips it from every issue and pull request that carries it.
+// github.subissues.list reads the sub-issues of one issue in their priority order; github.subissues.add and
+// github.subissues.reprioritize add one and reorder it, and github.subissues.remove detaches one; a
+// sub-issue may live in another repository the connection's targets allow as well.
+// github.issuedependencies.list reads the issues that block one issue and the issues it blocks;
+// github.issuedependencies.add records a blocked-by relationship and github.issuedependencies.remove detaches
+// one, the same way a sub-issue may cross repositories; neither the sub-issue nor the dependency removal is
+// listed-only, because each detaches only the one relationship between the two named issues.
 // github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
@@ -434,7 +441,10 @@ func Register(reg *capability.Registry) error {
 				"Issues: read and write on a fine-grained token; reacting to a pull request line comment needs " +
 				"repo on a classic token, or Pull requests: read and write on a fine-grained token; removing a " +
 				"reaction additionally reads the account behind the token, which needs no scope beyond its own " +
-				"identity",
+				"identity; reading the sub-issues or the dependencies of an issue needs the same scope as reading " +
+				"its labels, and changing them, including remove, needs the same scope as writing an issue: repo " +
+				"on a classic token, or Issues: read and write on a fine-grained token, of every repository a " +
+				"sub-issue or a dependency names",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -590,7 +600,9 @@ func Register(reg *capability.Registry) error {
 				"label or a comment stays unticked, since each is offered only where a connection's tools " +
 				"list names it",
 			Tools: []string{labelsList.ID, labelsGet.ID, labelsCreate.ID, labelsUpdate.ID, milestonesList.ID,
-				commentsUpdate.ID, reactionsAdd.ID, reactionsRemove.ID},
+				commentsUpdate.ID, reactionsAdd.ID, reactionsRemove.ID, subIssuesList.ID, subIssuesAdd.ID,
+				subIssuesRemove.ID, subIssuesReprioritize.ID, issueDependenciesList.ID, issueDependenciesAdd.ID,
+				issueDependenciesRemove.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -620,7 +632,8 @@ func Register(reg *capability.Registry) error {
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
 		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
-		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations())...)
+		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
+		subIssuesOperations(), issueDependenciesOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1379,6 +1392,12 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := reactionsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := subIssuesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := issueDependenciesSubject(parts[2]); what != "" {
 			s.what = what
 		}
 	}

@@ -163,7 +163,9 @@ check. Inside a repository it names the issue, the workflow run, job, or workflo
 workflow file or `.github/workflows` directory with the ref it was read at, `github.contents.get`'s path or
 the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s ref or its path at that ref,
 `github.commits.get`'s ref, `github.tags.get`'s tag, a fork or the collaborators `github.repositories.fork` and
-`github.collaborators.list` address, the pull request by its number, or, for
+`github.collaborators.list` address, the pull request by its number, the sub-issues or the dependencies of an
+issue as "the sub-issues of issue #N", "a sub-issue of issue #N", "the sub-issue order of issue #N", "the
+issues blocking issue #N", "the issues issue #N blocks", or "a dependency of issue #N", or, for
 `github.pullrequestchecks.list` once the pull request itself was found, the commit its checks were asked
 for, where the call named one:
 
@@ -230,8 +232,10 @@ and the not-recommended profile `repository-admin-reader` under
 rulesets under [Rulesets](#rulesets-repository-and-organization-governance) and the custom property values or
 schema under [Custom properties](#custom-properties). The not-recommended profile `issue-maintainer` lists and
 reads the labels of a repository, creates and updates them, under [Labels](#labels), lists the milestones
-under [Milestones](#milestones), updates issue comments under [Changes](#changes), and reacts to issues,
-comments, and pull request line comments under [Reactions](#reactions); deleting a label or a
+under [Milestones](#milestones), updates issue comments under [Changes](#changes), reacts to issues,
+comments, and pull request line comments under [Reactions](#reactions), lists, adds, removes, and
+reprioritizes sub-issues under [Sub-issues](#sub-issues), and lists, adds, and removes issue dependencies
+under [Issue dependencies](#issue-dependencies); deleting a label or a
 comment stays unticked, since each is offered only where a connection's `tools` list names it. A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
@@ -896,6 +900,97 @@ Nothing here creates, changes, or deletes a milestone; `github.issues.update` se
 of an existing issue instead, under [Changes](#changes). Reading the milestones of a repository needs the
 same scope as reading its labels: no scope for a public repository, or `repo` on a classic token, or Issues:
 read on a fine-grained token, for a private one.
+
+## Sub-issues
+
+`github.subissues.list` reads one bounded batch of the sub-issues of one issue in their priority order;
+`github.subissues.add` adds one and `github.subissues.reprioritize` moves one, both needing confirmation;
+`github.subissues.remove` detaches one and needs confirmation as well, but is not listed-only, because it only
+removes the relationship between the two named issues and deletes neither. A sub-issue is named by its issue
+`number`, in the bound repository unless `sub_issue_repository` (as `OWNER/REPO`) names another one; that other
+repository must lie inside the connection's targets as well, checked before any credential is resolved, since
+GitHub allows a sub-issue relationship to cross repositories and organizations:
+
+```sh
+qatlas invoke github.subissues.list --connection code --arg number=42
+echo '{"number":42,"sub_issue_number":43}' | qatlas invoke github.subissues.add --connection maintainer --confirm
+echo '{"number":42,"sub_issue_number":44,"after_number":43}' |
+  qatlas invoke github.subissues.reprioritize --connection maintainer --confirm
+echo '{"number":42,"sub_issue_number":43}' | qatlas invoke github.subissues.remove --connection maintainer --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.subissues.list` | read | safe | none | lists one bounded batch of the sub-issues of one issue |
+| `github.subissues.add` | create | non-idempotent | required | adds one issue as a sub-issue of another |
+| `github.subissues.remove` | delete | unknown | required | detaches one sub-issue from its parent |
+| `github.subissues.reprioritize` | update | idempotent | required | moves a sub-issue just after or just before a sibling |
+
+`github.subissues.list` answers `sub_issues`, each with `number`, `repository` (present only when it differs
+from the parent's), `title`, `state`, and `url`, paged the same way [labels](#labels) are. When the connection's
+targets name any, a sub-issue whose repository they do not cover is left out of `sub_issues` and counted in
+`withheld` instead, so a title or a state of an out-of-scope issue is never reported; the bound repository's own
+sub-issues are always shown. Without targets, nothing is withheld. `github.subissues.add`,
+`.remove`, and `.reprioritize` resolve the issue numbers they are given into the internal issue identifiers the
+REST routes need, in the same request budget as the change; `.add` and `.remove` answer `sub_issue` and, where
+GitHub reports it, `sub_issues_summary` (`total`, `completed`, `percent_completed`), and `.remove` also answers
+`removed`. `github.subissues.reprioritize` takes exactly one of `after_number` or `before_number`, looked up in
+the same repository as `sub_issue_number`; this is narrower than GitHub's own cross-repository reordering, which
+Qatlas does not offer a way to name.
+
+Reading the sub-issues of an issue needs the same scope as reading its labels: no scope for a public
+repository, or `repo` on a classic token, or Issues: read on a fine-grained token, for a private one; adding,
+removing, or reprioritizing needs Issues: read and write instead, of every repository a sub-issue names.
+
+Verified 2026-09-29 against the official REST documentation
+(<https://docs.github.com/en/rest/issues/sub-issues>, `X-GitHub-Api-Version: 2022-11-28`): List sub-issues, Add
+a sub-issue, Remove a sub-issue, and Reprioritize a sub-issue are stable, generally available REST endpoints,
+not a preview feature; sub-issues reached general availability on 2025-04-09 and the REST surface shipped in
+December 2024, per the GitHub changelog.
+
+## Issue dependencies
+
+`github.issuedependencies.list` reads both directions of one issue's dependencies: the issues that block it
+and the issues it blocks. `github.issuedependencies.add` records that one issue is blocked by another and needs
+confirmation; `github.issuedependencies.remove` detaches one blocked-by relationship and needs confirmation as
+well, but, like removing a sub-issue, only detaches the relationship and deletes neither issue, so it is not
+listed-only. GitHub exposes no route to add or remove a "blocking" entry directly; every change is made from
+the blocked issue's own blocked-by list, and the blocking direction is only ever read. The blocking issue may
+live in another repository, named by `blocking_issue_repository` (as `OWNER/REPO`), which must lie inside the
+connection's targets as well, checked before any credential is resolved:
+
+```sh
+qatlas invoke github.issuedependencies.list --connection code --arg number=42
+echo '{"number":42,"blocking_issue_number":40}' |
+  qatlas invoke github.issuedependencies.add --connection maintainer --confirm
+echo '{"number":42,"blocking_issue_number":40}' |
+  qatlas invoke github.issuedependencies.remove --connection maintainer --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.issuedependencies.list` | read | safe | none | lists the issues blocking one issue and the issues it blocks |
+| `github.issuedependencies.add` | create | non-idempotent | required | records that one issue is blocked by another |
+| `github.issuedependencies.remove` | delete | unknown | required | detaches one blocked-by relationship |
+
+`github.issuedependencies.list` answers `blocked_by` and `blocking`, each an array of issues shaped like
+`github.subissues.list`'s; both directions are paged together with the same page and page size, so a single
+cursor advances both, which is narrower than paging each direction on its own. When the connection's targets
+name any, a dependency whose repository they do not cover is left out of both arrays and counted, across both
+directions, in `withheld` instead; the bound repository's own dependencies are always shown. Without targets,
+nothing is withheld. `github.issuedependencies.add`
+and `.remove` resolve the blocking issue's number into its internal identifier the way the sub-issue tools do,
+and answer `blocker` and, for `.remove`, `removed`.
+
+Reading the dependencies of an issue needs the same scope as reading its labels: no scope for a public
+repository, or `repo` on a classic token, or Issues: read on a fine-grained token, for a private one; adding or
+removing needs Issues: read and write instead, of every repository a dependency names.
+
+Verified 2026-09-29 against the official REST documentation
+(<https://docs.github.com/en/rest/issues/issue-dependencies>, `X-GitHub-Api-Version: 2022-11-28`): List issues
+blocked by, List issues blocking, and Add and Remove a blocked-by dependency are stable, generally available
+REST endpoints, not a preview feature; dependencies on issues reached general availability on 2025-08-21, per
+the GitHub changelog.
 
 ## Reactions
 

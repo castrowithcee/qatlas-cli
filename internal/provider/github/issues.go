@@ -180,6 +180,7 @@ type Issue struct {
 }
 
 type restIssueJSON struct {
+	ID          int64   `json:"id"`
 	Number      int     `json:"number"`
 	Title       string  `json:"title"`
 	State       string  `json:"state"`
@@ -281,6 +282,29 @@ func (c *Client) pullRequestNumber(ctx context.Context, number int) bool {
 func (c *Client) pullRequestRefusal(number int) error {
 	return invalidRequest(subject{in: c.target, what: "number " + strconv.Itoa(number)}.String() +
 		" is a pull request; issue tools do not handle pull requests")
+}
+
+// issueDatabaseID resolves the internal numeric identifier of one issue of repo from its number, the way the
+// sub-issue and issue dependency routes need it instead of the number every other issue tool takes; a pull
+// request of the same number is refused, the way readIssue refuses one. repo need not be the bound
+// repository: a sub-issue or a dependency may live in another repository the connection's targets allow as
+// well, checked before this is ever called.
+func (c *Client) issueDatabaseID(ctx context.Context, op string, repo target, number int) (int64, error) {
+	if err := checkNumber(number); err != nil {
+		return 0, err
+	}
+	var raw restIssueJSON
+	if err := c.rest(ctx, op, issuePath(repo, number), &raw); err != nil {
+		return 0, err
+	}
+	if raw.Number != number || raw.ID < 1 {
+		return 0, invalidEntry(op, "an issue")
+	}
+	if raw.PullRequest != nil {
+		return 0, invalidRequest(subject{in: repo, what: "number " + strconv.Itoa(number)}.String() +
+			" is a pull request; sub-issues and dependencies apply to issues only")
+	}
+	return raw.ID, nil
 }
 
 func checkNumber(number int) error {
