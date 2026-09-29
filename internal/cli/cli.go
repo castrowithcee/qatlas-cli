@@ -41,6 +41,9 @@ type Options struct {
 	Output     string
 	Input      io.Reader
 	Updater    *selfupdate.Client
+	// Opener starts a browser on the given URL for 'qatlas web'. A test injects a fake so no run of the
+	// test suite ever spawns a real browser; nil selects the platform default.
+	Opener func(string) error
 
 	// Format is resolved from Output and Agent before a command runs.
 	Format output.Format
@@ -214,6 +217,7 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		newInvokeCommand(opts, reg),
 		newMCPCommand(opts, reg),
 		newTUICommand(opts, reg, version),
+		newWebCommand(opts, reg),
 		newUpdateCommand(opts, version),
 	)
 	// A command without a run function is a help topic: 'qatlas help <topic>' prints its text, and the

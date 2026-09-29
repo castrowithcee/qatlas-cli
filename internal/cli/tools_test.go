@@ -839,7 +839,7 @@ func TestPublicSurfaceIsTheToolTaxonomy(t *testing.T) {
 		"config", "config validate", "connections", "credential", "credential delete", "credential set",
 		"describe", "invoke", "mcp", "providers", "tools", "tui", "update", "vault", "vault approve",
 		"vault decrypt", "vault encrypt", "vault lock", "vault logs", "vault migrate", "vault passphrase",
-		"vault status", "vault token", "vault unlock",
+		"vault status", "vault token", "vault unlock", "web",
 	}
 	if got := commandNames(root); !reflect.DeepEqual(got, want) {
 		t.Errorf("commands = %v, want %v", got, want)
