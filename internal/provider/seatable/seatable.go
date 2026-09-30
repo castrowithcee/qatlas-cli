@@ -337,6 +337,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: optionsUpdate, Handler: invokeOptionsChange("update column options", "update", (*Client).UpdateOptions, "updated")},
 		capability.Operation{Descriptor: optionsDelete, Handler: invokeOptionsChange("delete column options", "delete", (*Client).DeleteOptions, "deleted")},
 		capability.Operation{Descriptor: viewsDelete, Handler: invokeViewsChange("delete view", "delete", (*Client).DeleteView, "deleted")},
+		capability.Operation{Descriptor: columnCreate, Handler: invokeColumnsChange("create column", "create", (*Client).CreateColumn, "created")},
+		capability.Operation{Descriptor: columnUpdate, Handler: invokeColumnsChange("update column", "update", (*Client).UpdateColumn, "updated")},
+		capability.Operation{Descriptor: columnDelete, Handler: invokeColumnsChange("delete column", "delete", (*Client).DeleteColumn, "deleted")},
 	)
 }
 

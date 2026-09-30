@@ -165,6 +165,44 @@ qatlas invoke seatable.columns.optionsadd --connection sales-rw --confirm --arg 
   --arg column=Status --arg options='[{"name":"Offen","color":"#FFE9A8"}]'
 ```
 
+## Columns
+
+`seatable.columns.create`, `seatable.columns.update`, and `seatable.columns.delete` create, change, and remove
+the columns of an allowed table. They are in no profile. `columns.delete` is offered only by a connection whose
+`tools` list names it; all three need the matching permission and `confirm`.
+
+- `columns.create` takes `table`, `name`, `type`, optional `data`, and optional `after` (name or key of the
+  column the new one follows; at the end by default). A name has 1 to 255 printable characters, no `.`, `{`,
+  `}`, or backtick, no surrounding blanks, is not a system column name, and does not exist yet.
+- `type` is one of `text`, `long-text`, `number`, `date`, `duration`, `single-select`, `multiple-select`,
+  `collaborator`, `image`, `file`, `email`, `checkbox`, `rate`, `creator`, `ctime`, `last-modifier`, `mtime`,
+  and `link`. Formula, button, auto-number, geolocation, and URL columns are not offered.
+- `data` has one bounded form per type and nothing else is accepted: `number` takes `format`, `decimal`,
+  `thousands`; `date` takes `format`; `duration` takes `duration_format`; `rate` takes `rate_max_number`,
+  `rate_style_color`, `rate_style_type`; the select types take `options` (up to 50: `name`, optional `color`
+  and `text_color` as `#RRGGBB`); `link` takes `link_table`. Omitted settings take fixed defaults.
+- `columns.update` takes `table`, `column` (name or key), and exactly one of `name` (rename), `type` with
+  `data` (change the type; existing cell values may be lost), `width` (50 to 1000), or `target` (name or key of
+  the column whose position it takes). One call sends one change.
+- A link column is created or set only when the joined table is inside the connection's allow-list. An
+  existing link column whose joined table is outside it can be neither changed nor deleted. The message never
+  names the other table.
+- System columns, unknown columns, a name that already exists, an unsupported type, or data that does not fit
+  the type are refused before the request. A table outside the allow-list, a selection narrowed to one view,
+  or a malformed request is refused before the credential is read and before SeaTable is contacted; the token
+  exchange and the metadata read are the only provider access that can precede another refusal.
+- `columns.delete` removes the column with its cell values.
+- Each change sends exactly one request and is never repeated. A timeout, a dropped connection, a 5xx answer,
+  or an unreadable answer is reported as uncertain: list the columns before repeating the change. An error
+  SeaTable reports is reported without the provider text.
+
+```sh
+qatlas invoke seatable.columns.create --connection sales-rw --confirm --arg table=id:0000 \
+  --arg name=Status --arg type=single-select --arg data='{"options":[{"name":"Offen"}]}'
+qatlas invoke seatable.columns.update --connection sales-rw --confirm --arg table=id:0000 \
+  --arg column=Status --arg name=Stand
+```
+
 ## Tables
 
 `seatable.tables.create`, `seatable.tables.rename`, `seatable.tables.duplicate`, and `seatable.tables.delete`
