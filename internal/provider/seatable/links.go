@@ -414,7 +414,7 @@ func (c *Client) changeOnce(ctx context.Context, op, method, path, token string,
 			Message: "SeaTable returned an invalid response" + uncertain}
 	}
 	if answer.Success != nil && !*answer.Success {
-		return providerError(op, "SeaTable did not apply the link change")
+		return providerError(op, "SeaTable did not apply the change")
 	}
 	return nil
 }

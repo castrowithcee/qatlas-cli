@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row, link, view, and history operations, permissions, and token limits.
+  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row, link, view, table change, and history operations, permissions, and token limits.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -137,6 +137,35 @@ names it.
 qatlas invoke seatable.views.list --connection sales-all-tables --arg table=id:0000
 qatlas invoke seatable.views.update --connection sales-rw --confirm --arg table=id:0000 --arg view=Aktive \
   --arg hidden_columns='["Notiz"]'
+```
+
+## Tables
+
+`seatable.tables.create`, `seatable.tables.rename`, `seatable.tables.duplicate`, and `seatable.tables.delete`
+manage the tables of the base. They are in no profile. `tables.delete` is offered only by a connection whose
+`tools` list names it; all four need the matching permission and `confirm`.
+
+- A change never widens the table boundary of a connection. A new or duplicated table is not in an
+  allow-list, so `tables.create` and `tables.duplicate` work only on a connection with `target: "*"`; any
+  other connection refuses them before the credential is read and before SeaTable is contacted.
+- `tables.create` makes an empty table from a `name`. `tables.duplicate` copies the table given by `table`,
+  with its rows only when `with_rows` is true. The copy is named by SeaTable; `tables.list` shows it.
+- `tables.rename` takes `table` and the new `name`. It is refused when the table is a connection target by
+  name, such as `Kunden`; a table bound as `id:TABLEID` can be renamed. The new name may not be the name of
+  an allow-list entry. Qatlas reads the base metadata to see whether the table is also bound by name; that
+  read is the only provider access that can precede such a refusal.
+- `tables.delete` removes the table with its rows and views. It works on a table in the allow-list, or on any
+  table with `*`.
+- `table` is a name or `id:TABLEID` exactly as the connection allows it; a table outside the allow-list, or a
+  selection narrowed to one view, is refused and never named in the message. A new name has 1 to 255
+  printable characters, no `/`, no surrounding blanks, no `id:` prefix, and is not `*`.
+- Each change sends exactly one request and is never repeated. A timeout, a dropped connection, a 5xx
+  answer, or an unreadable answer is reported as uncertain: list the tables before repeating the change. An
+  error SeaTable reports is reported without the provider text.
+
+```sh
+qatlas invoke seatable.tables.create --connection sales-all-tables --confirm --arg name=Angebote
+qatlas invoke seatable.tables.rename --connection sales-rw --confirm --arg table=id:0001 --arg name=Faelle
 ```
 
 ## Change history
