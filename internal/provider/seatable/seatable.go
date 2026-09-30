@@ -300,8 +300,8 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read tables and rows", Recommended: true,
-			Description: "lists tables and columns and reads rows; changes nothing in the base",
-			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsGet.ID},
+			Description: "lists tables and columns, reads and searches rows; changes nothing in the base",
+			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsSearch.ID, rowsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -310,6 +310,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: columnsList, Handler: capability.Handler(invokeColumnsList)},
 		capability.Operation{Descriptor: rowsList, Handler: capability.Handler(invokeRowsList)},
 		capability.Operation{Descriptor: rowsGet, Handler: capability.Handler(invokeRowsGet)},
+		capability.Operation{Descriptor: rowsSearch, Handler: capability.Handler(invokeRowsSearch)},
 		capability.Operation{Descriptor: rowsCreate, Handler: capability.Handler(invokeRowsCreate)},
 		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},
 		capability.Operation{Descriptor: rowsDelete, Handler: capability.Handler(invokeRowsDelete)},
@@ -442,8 +443,9 @@ type scope struct {
 // limit that token shares.
 //
 // A client is opened per request by the application core and is never shared between goroutines, so the
-// exchanged base token is kept in a plain field.
+// exchanged base token and the base metadata read through it are kept in plain fields.
 type Client struct {
+	meta     *metadataJSON
 	origin   string
 	apiToken string
 	scope    scope
@@ -717,14 +719,8 @@ func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
 // checkTarget reads the metadata of the base the API token belongs to and verifies every allow-listed
 // target. The metadata itself is never reported.
 func (c *Client) checkTarget(ctx context.Context, op string) error {
-	access, err := c.access(ctx, op)
+	document, err := c.metadata(ctx, op)
 	if err != nil {
-		return err
-	}
-
-	var document metadataJSON
-	if err := c.get(ctx, op, gatewayPath+url.PathEscape(access.uuid)+metadataPath, nil,
-		access.token, maxMetadataBytes, &document); err != nil {
 		return err
 	}
 
@@ -1010,7 +1006,12 @@ func (c *Client) ListColumns(ctx context.Context, options ColumnsOptions) (*Colu
 	return nil, providerError(op, "the selected SeaTable table no longer exists")
 }
 
+// metadata returns the base metadata, reading it once per client. Schema checks, link masking and row
+// search share that one read; a failed read is not cached.
 func (c *Client) metadata(ctx context.Context, op string) (metadataJSON, error) {
+	if c.meta != nil {
+		return *c.meta, nil
+	}
 	access, err := c.access(ctx, op)
 	if err != nil {
 		return metadataJSON{}, err
@@ -1020,6 +1021,7 @@ func (c *Client) metadata(ctx context.Context, op string) (metadataJSON, error) 
 		access.token, maxMetadataBytes, &document); err != nil {
 		return metadataJSON{}, err
 	}
+	c.meta = &document
 	return document, nil
 }
 
@@ -1311,7 +1313,7 @@ func (c *Client) changeRows(ctx context.Context, op, method, table string, paylo
 		return err
 	}
 	if values != nil {
-		if err := c.checkColumns(ctx, op, access, selected, values); err != nil {
+		if err := c.checkColumns(ctx, op, selected, values); err != nil {
 			return err
 		}
 	}
@@ -1323,11 +1325,10 @@ func (c *Client) changeRows(ctx context.Context, op, method, table string, paylo
 	return c.change(ctx, op, method, gatewayPath+url.PathEscape(access.uuid)+rowsPath, access.token, encoded)
 }
 
-func (c *Client) checkColumns(ctx context.Context, op string, access *baseAccess, selected target,
+func (c *Client) checkColumns(ctx context.Context, op string, selected target,
 	values map[string]json.RawMessage) error {
-	var document metadataJSON
-	if err := c.get(ctx, op, gatewayPath+url.PathEscape(access.uuid)+metadataPath, nil,
-		access.token, maxMetadataBytes, &document); err != nil {
+	document, err := c.metadata(ctx, op)
+	if err != nil {
 		return err
 	}
 	for _, table := range document.Metadata.Tables {

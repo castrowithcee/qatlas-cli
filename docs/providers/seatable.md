@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-09-23
+updated: 2026-09-30
 ---
 
 # SeaTable
@@ -23,7 +23,42 @@ types. A single-table connection needs no table argument. An allow-list or wildc
 qatlas invoke seatable.tables.list --connection sales-all-tables
 qatlas invoke seatable.columns.list --connection sales-all-tables --arg table=id:0000
 qatlas invoke seatable.rows.list --connection sales-all-tables --arg table=id:0000 --arg limit=25
+echo '{"table":"id:0000","filters":[{"column":"Name","op":"like","value":"Bike%"}],"sort":[{"column":"_ctime","direction":"desc"}],"limit":25}' \
+  | qatlas invoke seatable.rows.search --connection sales-all-tables
 ```
+
+## Row search
+
+`seatable.rows.search` filters, sorts, and pages the rows of an allowed table with structured arguments.
+It is the way to reach rows beyond the 10000-row window of `seatable.rows.list`: `start` accepts offsets up
+to 100000. Free SQL is not accepted. Qatlas builds exactly one statement shape from validated parts and
+sends every value in `parameters`, never inside the statement text:
+
+```sql
+SELECT * FROM `Table` WHERE `col` = ? AND `col2` IN (?, ?) ORDER BY `col` DESC LIMIT 25 OFFSET 0
+```
+
+- `filters` (up to 10, combined with `AND`): `column`, `op`, and `value`. The operators are `eq`, `ne`, `lt`,
+  `lte`, `gt`, `gte`, `like`, `is_null`, and `in`. `like` needs a text value, `is_null` takes no value, and
+  `in` takes `values` with 1 to 50 entries. A value is a string of up to 1024 characters, a number, or a
+  boolean.
+- `sort` (up to 3): `column` and `direction` `asc` (default) or `desc`. Without a sort the order of rows
+  is not defined, so paging with `start` should sort by a stable column such as `_id` or `_ctime`.
+- `limit` is 1 to 100 (25 by default). A page is full when it holds `limit` rows; `has_more` and
+  `next_start` follow the same rule as `seatable.rows.list`.
+- Columns are checked against the table metadata before the query is sent. The system columns `_id`,
+  `_ctime`, and `_mtime` are accepted. Names containing a backtick or backslash, unknown columns, and link
+  columns are refused.
+- The search covers the whole table. A view on the connection target, such as `Kunden/Aktive`, narrows
+  `seatable.rows.list` but is not applied to a search.
+- The table must be inside the connection allow-list; anything else is refused before the credential is
+  read and before SeaTable is contacted.
+- Link values in the result follow the same boundary as above. Link columns are recognised by their type in
+  the base metadata. For a table outside the allow-list, a link value keeps only the `row_id` of its
+  entries; a link value that does not have the expected form of entries with a `row_id` is left out of the
+  row.
+
+A client reads the base metadata once and reuses it for column checks, link masking, and searches.
 
 Link columns in row output follow the table boundary. When the linked table is outside the connection
 allow-list, or cannot be determined from the base metadata, each link entry is reduced to its `row_id` and
@@ -42,6 +77,6 @@ writer. An optional `tools` list narrows a connection further to named tools, fo
 `[seatable.rows.list]`; it never admits an effect `permissions` excludes and never widens the table scope.
 Qatlas exchanges the API token for a short-lived base token in memory. The terminal editor starts a new
 connection on the setup profile `read`, which ticks `[read]` and `[seatable.tables.list,
-seatable.columns.list, seatable.rows.list, seatable.rows.get]`. A profile is a visible starting selection, not
-a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
+seatable.columns.list, seatable.rows.list, seatable.rows.search, seatable.rows.get]`. A profile is a visible
+starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
 saved connection never follows a profile.

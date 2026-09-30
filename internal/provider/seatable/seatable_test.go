@@ -198,7 +198,7 @@ func rowRoute(base, id string) string {
 }
 
 // Register publishes the configuration metadata the TUI needs, schema discovery, and the row operations.
-func TestRegisterPublishesMetadataAndSevenOperations(t *testing.T) {
+func TestRegisterPublishesMetadataAndEightOperations(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
 		t.Fatalf("Register() = %v", err)
@@ -221,8 +221,8 @@ func TestRegisterPublishesMetadataAndSevenOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 7 {
-		t.Fatalf("operations = %d, want two schema and five row operations", len(operations))
+	if len(operations) != 8 {
+		t.Fatalf("operations = %d, want two schema and six row operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantSensitivity := dataSensitivity
@@ -247,7 +247,7 @@ func TestRegisterPublishesMetadataAndSevenOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "seatable.columns.list" || operations[6].ID != "seatable.tables.list" {
+	if operations[0].ID != "seatable.columns.list" || operations[7].ID != "seatable.tables.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1325,8 +1325,8 @@ func TestLinksToTablesOutsideTheAllowListKeepOnlyRowIdentifiers(t *testing.T) {
 				t.Errorf("target %q lost a row identifier: %s", target, output)
 			}
 		}
-		if calls != 2 {
-			t.Errorf("target %q metadata calls = %d, want one per read (list and get)", target, calls)
+		if calls != 1 {
+			t.Errorf("target %q metadata calls = %d, want one for the client (list and get share it)", target, calls)
 		}
 	}
 }
