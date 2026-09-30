@@ -441,7 +441,7 @@ var runsCancel = capability.Descriptor{
 // observerTools and operatorTools are the two tool groups of GitHub Actions and of their profiles.
 var (
 	observerTools = []string{workflowsList.ID, workflowsGet.ID, runsList.ID, runsGet.ID, jobsList.ID, jobsGet.ID,
-		jobsLog.ID, artifactsList.ID}
+		jobsLog.ID, artifactsList.ID, runsUsage.ID}
 	operatorTools = []string{workflowsDispatch.ID, runsRerun.ID, runsRerunFailed.ID, runsCancel.ID}
 )
 
@@ -485,6 +485,12 @@ func actionsOperations() []capability.Operation {
 		}),
 		bind(artifactsList, listCheck("artifacts"), func(ctx context.Context, c *Client, a *actionsArguments) (any, error) {
 			return c.listArtifacts(ctx, a)
+		}),
+		bind(runsUsage, checkRunArgument, func(ctx context.Context, c *Client, a *actionsArguments) (any, error) {
+			return c.runUsage(ctx, a.RunID)
+		}),
+		bind(runLogsDelete, checkRunArgument, func(ctx context.Context, c *Client, a *actionsArguments) (any, error) {
+			return c.deleteRunLogs(ctx, a.RunID)
 		}),
 		bind(workflowsDispatch, checkDispatchArguments, func(ctx context.Context, c *Client, a *actionsArguments) (any, error) {
 			return c.dispatchWorkflow(ctx, a.Workflow, a.Ref, a.inputs)

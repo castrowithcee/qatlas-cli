@@ -67,6 +67,8 @@ type fakeRun struct {
 type fakeActions struct {
 	storage string
 	runs    []fakeRun
+	// deleted holds the runs whose logs were deleted; GitHub answers a second delete with not found.
+	deleted map[string]bool
 }
 
 func actionsRuns() []fakeRun {
@@ -155,6 +157,20 @@ func (a *fakeActions) route(w http.ResponseWriter, r *http.Request) bool {
 				`"archive_download_url":"https://api.github.com/repos/octo-org/example/actions/artifacts/1/zip"}`,
 			`{"id":2,"name":"binary","size_in_bytes":99999999,"expired":true}`,
 		})
+	case r.Method == http.MethodGet && strings.HasPrefix(rest, "actions/runs/") && strings.HasSuffix(rest, "/timing"):
+		fmt.Fprint(w, `{"billable":{"UBUNTU":{"total_ms":180000,"jobs":2,"job_runs":[{"job_id":7001,"duration_ms":100000},`+
+			`{"job_id":7002,"duration_ms":80000}]},"MACOS":{"total_ms":60000,"jobs":1}},"run_duration_ms":200000}`)
+	case r.Method == http.MethodDelete && strings.HasPrefix(rest, "actions/runs/") && strings.HasSuffix(rest, "/logs"):
+		if a.deleted[rest] {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"message":"Not Found"}`)
+			return true
+		}
+		if a.deleted == nil {
+			a.deleted = map[string]bool{}
+		}
+		a.deleted[rest] = true
+		w.WriteHeader(http.StatusNoContent)
 	case r.Method == http.MethodGet && strings.HasPrefix(rest, "actions/runs/"):
 		id, _ := strconv.Atoi(strings.TrimPrefix(rest, "actions/runs/"))
 		for _, run := range a.runs {
@@ -270,6 +286,9 @@ func actionsConfig(base string) *config.Config {
 		config.PermissionUpdate}, nil)
 	cfg.Connections["listed"] = repo(execute, observer)
 	cfg.Connections["operator"] = repo(execute, all)
+	cfg.Connections["cleaner"] = repo([]config.Permission{config.PermissionRead, config.PermissionDelete},
+		[]string{runLogsDelete.ID})
+	cfg.Connections["nolist"] = repo([]config.Permission{config.PermissionRead, config.PermissionDelete}, nil)
 	cfg.Connections["project"] = config.Connection{Service: "gh", Credential: "gh-reader", Target: projectTarget,
 		Permissions: execute}
 	return cfg
@@ -297,11 +316,11 @@ func TestActionsProfilesSeparateObserverAndOperator(t *testing.T) {
 		t.Errorf("profiles = %+v, want the read profile unchanged and both Actions profiles not recommended", profiles)
 	}
 	if got := metadata.ProfilePermissions(observer); len(got) != 1 || got[0] != config.PermissionRead ||
-		len(observer.Tools) != 8 {
-		t.Errorf("observer = %v with %v, want the eight reads only", observer.Tools, got)
+		len(observer.Tools) != 9 {
+		t.Errorf("observer = %v with %v, want the nine reads only", observer.Tools, got)
 	}
 	got := metadata.ProfilePermissions(operator)
-	if len(got) != 2 || got[1] != config.PermissionExecute || len(operator.Tools) != 12 {
+	if len(got) != 2 || got[1] != config.PermissionExecute || len(operator.Tools) != 13 {
 		t.Errorf("operator = %v with %v, want the reads and the four executions", operator.Tools, got)
 	}
 }
@@ -323,8 +342,8 @@ func TestActionsOperatorToolsNeedExecuteAndTheirTools(t *testing.T) {
 		}
 	}
 	found, _ := core.Search(application.SearchRequest{Provider: Provider, Connection: "observer"})
-	if len(found.Operations) != 8 {
-		t.Errorf("observer discovers %d tools, want the eight observer tools", len(found.Operations))
+	if len(found.Operations) != 9 {
+		t.Errorf("observer discovers %d tools, want the nine observer tools", len(found.Operations))
 	}
 
 	dispatch := `{"workflow":"release.yml","ref":"main","inputs":{"channel":"beta"}}`
@@ -984,6 +1003,7 @@ func TestActionsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 		{"github.workflowjobs.get", `{"job_id":7001}`, false},
 		{"github.workflowjobs.log", `{"job_id":7001}`, false},
 		{"github.workflowartifacts.list", `{"run_id":5000}`, false},
+		{"github.workflowruns.usage", `{"run_id":5000}`, false},
 		{"github.workflows.dispatch", `{"workflow":"release.yml","ref":"main","inputs":{"channel":"stable"}}`, true},
 		{"github.workflowruns.rerun", `{"run_id":5000}`, true},
 		{"github.workflowruns.rerunfailed", `{"run_id":5000}`, true},
@@ -1002,5 +1022,74 @@ func TestActionsSatisfyTheirContractThroughTheApplicationCore(t *testing.T) {
 	if strings.Count(audit.String(), `"result":"success"`) != 5 || strings.Contains(audit.String(), logCanary) ||
 		strings.Contains(audit.String(), "stable") {
 		t.Errorf("audit = %s, want one content-free event per execution", audit.String())
+	}
+}
+
+// The usage of a run lists the billable time of each runner operating system GitHub reports, and only the
+// run addressed in the bound repository is read.
+func TestRunUsageIsCompactAndBelowTheRepository(t *testing.T) {
+	f, _, base := serveActions(t)
+	red := &redact.Redactor{}
+	core := application.New(registry(t), actionsConfig(base), resolver(red, nil), red)
+	result, err := invoke(t, core, "github.workflowruns.usage", "observer", `{"run_id":5000}`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var usage RunUsage
+	if err := json.Unmarshal(result, &usage); err != nil {
+		t.Fatal(err)
+	}
+	if usage.RunID != 5000 || usage.RunDurationMS == nil || *usage.RunDurationMS != 200000 || usage.Truncated ||
+		len(usage.Billable) != 2 || usage.Billable[0].OS != "UBUNTU" || usage.Billable[0].TotalMS != 180000 ||
+		len(usage.Billable[0].JobRuns) != 2 || usage.Billable[1].OS != "MACOS" || usage.Billable[1].Jobs != 1 {
+		t.Errorf("usage = %+v", usage)
+	}
+	if got := f.recorded(); len(got) == 0 || !strings.HasSuffix(got[len(got)-1].path, "/actions/runs/5000/timing") {
+		t.Errorf("requests = %+v, want the timing of run 5000 below the repository", got)
+	}
+}
+
+// The log deletion is offered only through a tools list, asks for confirmation, and treats logs that are
+// already gone as done; the target is refused before a secret is read.
+func TestRunLogsDeleteNeedsTheListConfirmationAndIsIdempotent(t *testing.T) {
+	f, _, base := serveActions(t)
+	reads := 0
+	red := &redact.Redactor{}
+	core := application.New(registry(t), actionsConfig(base), resolver(red, &reads), red)
+	const arguments = `{"run_id":5000}`
+
+	found, _ := core.Search(application.SearchRequest{Provider: Provider, Connection: "nolist"})
+	for _, operation := range found.Operations {
+		if operation.ID == runLogsDelete.ID {
+			t.Error("a connection without a tools list discovers the log deletion")
+		}
+	}
+	var unsupported *capability.UnsupportedError
+	if _, err := invoke(t, core, runLogsDelete.ID, "nolist", arguments, true); !errors.As(err, &unsupported) {
+		t.Errorf("delete without a tools list = %v, want unsupported", err)
+	}
+	reads = 0
+	before := len(f.recorded())
+	var confirm *application.ConfirmationRequiredError
+	if _, err := invoke(t, core, runLogsDelete.ID, "cleaner", arguments, false); !errors.As(err, &confirm) {
+		t.Errorf("unconfirmed delete = %v, want confirmation-required", err)
+	}
+	var invalid *application.InvalidRequestError
+	if _, err := invoke(t, core, runLogsDelete.ID, "cleaner", `{"run_id":5000,"repository":"octo-org/other"}`, true); !errors.As(err, &invalid) {
+		t.Errorf("delete outside the targets = %v, want invalid-request", err)
+	}
+	if reads != 0 || len(f.recorded()) != before {
+		t.Errorf("secret reads = %d, requests = %d; want none", reads, len(f.recorded())-before)
+	}
+
+	for i, want := range []RunLogsDeleted{{RunID: 5000, Deleted: true}, {RunID: 5000, Deleted: true, AlreadyDeleted: true}} {
+		result, err := invoke(t, core, runLogsDelete.ID, "cleaner", arguments, true)
+		var got RunLogsDeleted
+		if err != nil || json.Unmarshal(result, &got) != nil || got != want {
+			t.Errorf("delete %d = %s, %v; want %+v", i+1, result, err, want)
+		}
+	}
+	if _, err := invoke(t, core, runLogsDelete.ID, "cleaner", `{"run_id":999999}`, true); err == nil {
+		t.Error("delete of a missing run succeeded")
 	}
 }

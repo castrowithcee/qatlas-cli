@@ -232,6 +232,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.workflowjobs.get":         readRisk,
 		"github.workflowjobs.log":         jobsLog.Risk,
 		"github.workflowartifacts.list":   readRisk,
+		"github.workflowruns.usage":       readRisk,
+		"github.workflowrunlogs.delete":   guardedRisk(capability.EffectDelete, capability.IdempotencyIdempotent, logSensitivity),
 		"github.workflows.dispatch":       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
 		"github.workflowruns.rerun":       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
 		"github.workflowruns.rerunfailed": changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),

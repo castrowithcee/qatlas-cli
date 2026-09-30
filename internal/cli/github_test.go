@@ -66,7 +66,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[84]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
+		"tools[85]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
 		"  github.labels.list,List GitHub labels,read,code\n", "  github.labels.get,Get a GitHub label,read,code\n",
 		"  github.milestones.list,List GitHub milestones,read,code\n",
 		"  github.collaborators.list,List GitHub repository collaborators,read,code\n",
@@ -128,7 +128,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[190]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[192]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
 		"github.branches.create,Create a GitHub branch,create,", "github.contents.put,Create or update a GitHub repository file,update,",
 		"github.contents.delete,Delete a GitHub repository file,delete,",
@@ -175,7 +175,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		"github.projectworkflows.delete,Delete a GitHub project automation,delete,",
 		"github.workflows.list,List GitHub Actions workflows,read,", "github.workflows.get,Get a GitHub Actions workflow,read,", "github.workflowruns.list,List GitHub Actions workflow runs,read,",
 		"github.workflowruns.get,Get a GitHub Actions workflow run,read,", "github.workflowjobs.list,List GitHub Actions jobs of a run,read,", "github.workflowjobs.get,Get a GitHub Actions job,read,",
-		"github.workflowjobs.log,Read the end of a GitHub Actions job log,read,", "github.workflowartifacts.list,List GitHub Actions artifacts of a run,read,",
+		"github.workflowjobs.log,Read the end of a GitHub Actions job log,read,", "github.workflowartifacts.list,List GitHub Actions artifacts of a run,read,", "github.workflowruns.usage,Get the billable time of a GitHub Actions run,read,", "github.workflowrunlogs.delete,Delete the logs of a GitHub Actions run,delete,",
 		"github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,", "github.workflowruns.rerun,Re-run a GitHub Actions workflow run,execute,",
 		"github.workflowruns.rerunfailed,Re-run the failed jobs of a GitHub Actions run,execute,", "github.workflowruns.cancel,Cancel a GitHub Actions workflow run,execute,",
 		"github.workflowfiles.list,List GitHub workflow files,read,", "github.workflowfiles.get,Get a GitHub workflow file,read,", "github.workflowfiles.create,Create a GitHub workflow file,create,",

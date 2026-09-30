@@ -2060,14 +2060,16 @@ or a free REST path.
 | `github.workflowjobs.get` | read | safe | none | reads one job with its compact steps |
 | `github.workflowjobs.log` | read | safe | none | reads the last lines of one job log within a hard size limit |
 | `github.workflowartifacts.list` | read | safe | none | lists the artifact metadata of one run |
+| `github.workflowruns.usage` | read | safe | none | reads the billable time of one run for each runner operating system |
 | `github.workflows.dispatch` | execute | non-idempotent | required | starts one `workflow_dispatch` run on a branch or tag |
 | `github.workflowruns.rerun` | execute | non-idempotent | required | re-runs every job of a completed run |
 | `github.workflowruns.rerunfailed` | execute | non-idempotent | required | re-runs the failed jobs of a completed run and their dependents |
 | `github.workflowruns.cancel` | execute | idempotent | required | asks GitHub to cancel a run; a completed run is reported with its state |
+| `github.workflowrunlogs.delete` | delete | idempotent | required | deletes all logs of one run; listed-only, see [Deleting run logs](#deleting-run-logs) |
 
 No observer or operator tool changes a workflow file or a setting; that is the listed-only group under
 [workflow maintenance and Actions administration](#workflow-maintenance-and-actions-administration). No tool
-force-cancels a run, approves a deployment, deletes a log, or administers secrets, variables, environments,
+force-cancels a run, approves a deployment, or administers secrets, variables, environments,
 runners, deployments, or an organization.
 
 ### Observer and operator
@@ -2078,8 +2080,8 @@ operator tool. It neither discovers nor runs an operator tool: `qatlas tools`, `
 a secret is read. Planning permissions (`create`, `update`) never allow an execution; only `execute` does.
 
 The terminal editor offers two setup profiles that are never preselected. `actions-observer` ticks `[read]`
-and the eight observer tools. `actions-operator` ticks `[read, execute]`, the observer tools, and the four
-operator tools. The recommended profile `read` stays without Actions tools. A connection without a
+and the nine observer tools. `actions-operator` ticks `[read, execute]`, the observer tools, and the four
+operator tools. No profile ticks `github.workflowrunlogs.delete`. The recommended profile `read` stays without Actions tools. A connection without a
 `tools` list offers every read, the observer tools included, but never a listed-only tool; give it a `tools`
 list to narrow that.
 
@@ -2091,7 +2093,8 @@ connections:
     target: repos/octo-org/example
     permissions: [read]
     tools: [github.workflows.list, github.workflows.get, github.workflowruns.list, github.workflowruns.get,
-      github.workflowjobs.list, github.workflowjobs.get, github.workflowjobs.log, github.workflowartifacts.list]
+      github.workflowjobs.list, github.workflowjobs.get, github.workflowjobs.log, github.workflowartifacts.list,
+      github.workflowruns.usage]
   ci-operator:
     service: github
     credential: github-operator
@@ -2141,6 +2144,29 @@ Artifacts are zip archives. A bounded download would still be binary and would n
 so Qatlas reads only their metadata: identifier, name, size in bytes, expiry, and digest. Run logs, which
 GitHub serves as a zip archive as well, are read per job instead.
 
+### Billable time
+
+`github.workflowruns.usage` takes `run_id` and reads the billable time of that run in the chosen repository:
+`run_duration_ms` and, for each GitHub-hosted runner operating system GitHub reports (`UBUNTU`, `MACOS`,
+`WINDOWS`), `total_ms`, `jobs`, and `job_runs` with `job_id` and `duration_ms`. Re-runs are included; the
+macOS and Windows multiplier is not applied and nothing is rounded to whole minutes. Billable time only
+exists for private repositories on GitHub-hosted runners. At most 500 `job_runs` are answered for each
+operating system, and `truncated` is true when more were cut. GitHub has announced that this endpoint is being
+closed down; a refusal then comes back as GitHub answers it.
+
+The download of artifacts and of the log archive of a run, and their download links, are deliberately not
+offered: a signed link acts like a short-lived credential.
+
+### Deleting run logs
+
+`github.workflowrunlogs.delete` takes `run_id`, deletes all logs of that run in the chosen repository, and
+cannot be undone. It is listed-only: a connection offers it only while its `tools` list names it, and it needs
+`delete` in `permissions` and confirmation (`--confirm`). No profile selects it. Qatlas reads the run first,
+so a missing run is answered not found. It answers `run_id`, `deleted`, and `already_deleted`. GitHub
+documents only the success answer `204`; when GitHub answers the delete of an existing run with not found,
+Qatlas reads the logs as already deleted and answers `deleted: true` with `already_deleted: true`. The delete
+is sent once and never repeated.
+
 ### Executions
 
 Every execution needs `execute` in the connection's `permissions`, the tool in its `tools` list if it has
@@ -2185,6 +2211,8 @@ claims what the configured token holds.
 | observer tools | `repo` for a private repository; a public repository needs no scope | Actions: read |
 | `github.workflows.dispatch` | `repo` | Actions: read and write, and Contents: read for the workflow file |
 | re-runs and cancel | `repo` | Actions: read and write |
+| `github.workflowruns.usage` | `repo` for a private repository | Actions: read |
+| `github.workflowrunlogs.delete` | `repo` | Actions: write |
 
 A repository or organization policy may forbid an execution although the token would allow it. A classic
 token needs the `workflow` scope only to change workflow files, which only the listed-only

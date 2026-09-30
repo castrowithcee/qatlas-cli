@@ -181,7 +181,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",190,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",192,0,0\n", ",\"\",3,0,0\n",
 		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",7,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -447,9 +447,9 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.workflowartifacts.list", "github.workflowfiles.create",
 			"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowfiles.update",
 			"github.workflowjobs.get", "github.workflowjobs.list", "github.workflowjobs.log",
-			"github.workflowpermissions.get", "github.workflowpermissions.update", "github.workflowruns.cancel",
-			"github.workflowruns.get", "github.workflowruns.list", "github.workflowruns.rerun",
-			"github.workflowruns.rerunfailed", "github.workflows.disable", "github.workflows.dispatch",
+			"github.workflowpermissions.get", "github.workflowpermissions.update", "github.workflowrunlogs.delete",
+			"github.workflowruns.cancel", "github.workflowruns.get", "github.workflowruns.list", "github.workflowruns.rerun",
+			"github.workflowruns.rerunfailed", "github.workflowruns.usage", "github.workflows.disable", "github.workflows.dispatch",
 			"github.workflows.enable", "github.workflows.get", "github.workflows.list",
 		}},
 		{"namespace nextcloud", []string{"nextcloud"}, []string{

@@ -19,7 +19,8 @@
 // of its collaborators and link it to teams of its organization; the automation tools read its built-in workflows and, listed only, delete one;
 // the issue tools read, create, and change issues of a repository and read or write the comments of one issue on explicit
 // request. The Actions tools observe the GitHub Actions of a repository and, only with the execute permission,
-// dispatch, re-run, or cancel one named workflow or run. Only a connection whose tools list names them
+// dispatch, re-run, or cancel one named workflow or run; they read the billable time of a run and, listed
+// only, delete the logs of one. Only a connection whose tools list names them
 // maintains workflow files below .github/workflows/ and Actions settings. The pull request tools, offered only
 // by the not-recommended setup profile pull-requests, read the pull requests of a repository: their list, one
 // pull request, its changed files, its commits, its diff, and the checks at its head commit; the project
@@ -435,7 +436,8 @@ func Register(reg *capability.Registry) error {
 				"fine-grained with read access to issues and projects; project changes need project instead of " +
 				"read:project, and issue changes need write access to issues; Actions reads need Actions: read " +
 				"on a fine-grained token, and dispatches, re-runs, and cancels need repo on a classic token or " +
-				"Actions: read and write plus Contents: read on a fine-grained one; the listed-only workflow file " +
+				"Actions: read and write plus Contents: read on a fine-grained one; deleting the logs of a run, " +
+				"listed-only, needs repo on a classic token, or Actions: write on a fine-grained one; the listed-only workflow file " +
 				"changes need repo and workflow, or Contents and Workflows: read and write, and the Actions " +
 				"settings Administration: read and write; pull request reads need repo or public_repo on a " +
 				"classic token, or Pull requests: read, Checks: read, and Commit statuses: read on a " +
@@ -580,7 +582,7 @@ func Register(reg *capability.Registry) error {
 				statusList.ID, statusCreate.ID, statusUpdate.ID, teamsList.ID, projectWorkflowsList.ID},
 		}, {
 			ID: "actions-observer", Title: "Actions observer",
-			Description: "reads the workflows, runs, jobs, artifact metadata, and the end of job logs of a " +
+			Description: "reads the workflows, runs, their billable time, jobs, artifact metadata, and the end of job logs of a " +
 				"repository and starts nothing",
 			Tools: observerTools,
 		}, {
