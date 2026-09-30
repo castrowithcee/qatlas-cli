@@ -10,8 +10,10 @@
 // account; Qatlas adds its own boundary: the team targets of the connection (required) and an optional project
 // allow-list. Fixed commands are called, each from a handler that names it: get-teams, get-projects,
 // get-project-files, get-file-summary, get-page, the comment reads get-comment-threads and get-comments, and the
-// comment changes create-, update-, and delete-comment-thread or -comment, and the management changes
-// create-, rename-, and delete-project, create-file, rename-file, and move-files. A change is one request that is never
+// comment changes create-, update-, and delete-comment-thread or -comment, the management changes
+// create-, rename-, and delete-project, create-file, rename-file, and move-files, the snapshot read
+// get-file-snapshots and changes create- and restore-file-snapshot, and delete-file, the read
+// get-team-deleted-files and the changes restore-deleted-team-files and permanently-delete-team-files. A change is one request that is never
 // repeated; a failure that leaves its result open says so. No agent argument chooses a command, a path, a method,
 // or a body. Penpot documents no pagination for these commands; the answers are bounded on the client side.
 //
@@ -89,6 +91,14 @@ const (
 	cmdFileLibraries = "get-file-libraries"
 	cmdSetShared     = "set-file-shared"
 	cmdLinkLibrary   = "link-file-to-library"
+
+	cmdSnapshots       = "get-file-snapshots"
+	cmdDeletedFiles    = "get-team-deleted-files"
+	cmdCreateSnapshot  = "create-file-snapshot"
+	cmdRestoreSnapshot = "restore-file-snapshot"
+	cmdDeleteFile      = "delete-file"
+	cmdRestoreFiles    = "restore-deleted-team-files"
+	cmdPurgeFiles      = "permanently-delete-team-files"
 )
 
 // changeUncertain is appended to a failure of a change whose request may have reached Penpot. Qatlas never
@@ -169,7 +179,8 @@ func newHTTPClient() *http.Client {
 // commands that change data from the ones that only read.
 func isCommand(name string) bool {
 	switch name {
-	case cmdTeams, cmdProjects, cmdProjectFile, cmdSummary, cmdPage, cmdThreads, cmdComments, cmdFileLibraries:
+	case cmdTeams, cmdProjects, cmdProjectFile, cmdSummary, cmdPage, cmdThreads, cmdComments, cmdFileLibraries,
+		cmdSnapshots, cmdDeletedFiles:
 		return true
 	}
 	return isChange(name)
@@ -179,7 +190,7 @@ func isChange(name string) bool {
 	switch name {
 	case cmdCreateThread, cmdCreateComment, cmdUpdateThread, cmdUpdateComment, cmdDeleteThread, cmdDeleteComment,
 		cmdCreateProject, cmdRenameProject, cmdDeleteProject, cmdCreateFile, cmdRenameFile, cmdMoveFiles,
-		cmdSetShared, cmdLinkLibrary:
+		cmdSetShared, cmdLinkLibrary, cmdCreateSnapshot, cmdRestoreSnapshot, cmdDeleteFile, cmdRestoreFiles, cmdPurgeFiles:
 		return true
 	}
 	return false
@@ -493,5 +504,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: librariesList, Handler: capability.Handler(invokeLibrariesList)},
 		capability.Operation{Descriptor: librariesShare, Handler: capability.Handler(invokeLibrariesShare)},
 		capability.Operation{Descriptor: librariesLink, Handler: capability.Handler(invokeLibrariesLink)},
+		capability.Operation{Descriptor: snapshotsCreate, Handler: capability.Handler(invokeSnapshotsCreate)},
+		capability.Operation{Descriptor: snapshotsRestore, Handler: capability.Handler(invokeSnapshotsRestore)},
+		capability.Operation{Descriptor: filesDelete, Handler: capability.Handler(invokeFilesDelete)},
+		capability.Operation{Descriptor: filesRestore, Handler: capability.Handler(invokeFilesRestore)},
+		capability.Operation{Descriptor: filesPurge, Handler: capability.Handler(invokeFilesPurge)},
 	)
 }

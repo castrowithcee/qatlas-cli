@@ -115,12 +115,12 @@ func testConfig() *config.Config {
 			"two":    connection("team/"+teamA, "team/"+teamB),
 			"narrow": connection("team/"+teamA, "project/"+projectA1),
 			"write": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
-				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, libraryTools...)...)},
+				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, recoveryTools...)...)...)},
 			"writetwo": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA, "team/" + teamB},
-				Tools: append(manageTools, libraryTools...)},
+				Tools: append(manageTools, append(libraryTools, recoveryTools...)...)},
 			"writenarrow": {Service: "penpot", Credential: "token", Permissions: all,
 				Targets: []string{"team/" + teamA, "project/" + projectA1},
-				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, libraryTools...)...)},
+				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, recoveryTools...)...)...)},
 			"nodelete": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
 				Tools: []string{commentsCreate.ID, commentsUpdate.ID, projectsCreate.ID, projectsRename.ID, filesCreate.ID,
 					filesRename.ID, filesMove.ID}},
@@ -187,12 +187,17 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		projectsDelete.ID: config.PermissionDelete, filesCreate.ID: config.PermissionCreate,
 		filesRename.ID: config.PermissionUpdate, filesMove.ID: config.PermissionUpdate,
 		librariesList.ID: config.PermissionRead, librariesShare.ID: config.PermissionUpdate,
-		librariesLink.ID: config.PermissionUpdate}
+		librariesLink.ID:   config.PermissionUpdate,
+		snapshotsCreate.ID: config.PermissionCreate, snapshotsRestore.ID: config.PermissionUpdate,
+		filesDelete.ID: config.PermissionDelete, filesRestore.ID: config.PermissionUpdate,
+		filesPurge.ID: config.PermissionDelete}
+	explicit := map[string]bool{commentsDelete.ID: true, projectsDelete.ID: true, snapshotsRestore.ID: true,
+		filesDelete.ID: true, filesPurge.ID: true}
 	if len(metadata.Tools) != len(want) {
 		t.Fatalf("tools = %+v", metadata.Tools)
 	}
 	for _, tool := range metadata.Tools {
-		if effect, ok := want[tool.ID]; !ok || tool.Effect != effect || tool.RequiresToolAllowList != (tool.ID == commentsDelete.ID || tool.ID == projectsDelete.ID) {
+		if effect, ok := want[tool.ID]; !ok || tool.Effect != effect || tool.RequiresToolAllowList != explicit[tool.ID] {
 			t.Fatalf("tool %+v", tool)
 		}
 	}

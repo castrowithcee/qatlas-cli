@@ -12,7 +12,7 @@ updated: 2026-10-01
 # Penpot
 
 This provider reads teams, projects, files, and pages of a Penpot instance, Penpot Cloud or self-hosted, with an
-access token, creates, renames, deletes, and moves projects and files, and reads and manages the comments of a file. It changes nothing else: no file content, no libraries.
+access token, creates, renames, deletes, and moves projects and files, creates and restores file snapshots, restores and permanently deletes deleted files, and reads and manages the comments of a file. It edits no file content beyond restoring a snapshot.
 
 **Beta.** Penpot's backend RPC interface (`POST /api/rpc/command/<name>`) is documented only by its sources and
 carries no stability promise. A command or a field can change with a Penpot release; the forms used here are listed
@@ -87,6 +87,11 @@ connections:
 | `penpot.files.create` | create | required | `create-file` | creates an empty file in a project |
 | `penpot.files.rename` | update | required | `rename-file` | renames a file |
 | `penpot.files.move` | update | required | `move-files` | moves one file to another project |
+| `penpot.files.delete` | delete | required, tool allow-list | `delete-file` | soft-deletes one file |
+| `penpot.files.restore` | update | required | `restore-deleted-team-files` | restores one deleted file |
+| `penpot.files.purge` | delete | required, tool allow-list | `permanently-delete-team-files` | permanently deletes one deleted file |
+| `penpot.snapshots.create` | create | required | `create-file-snapshot` | creates a snapshot of a file |
+| `penpot.snapshots.restore` | update | required, tool allow-list | `restore-file-snapshot` | overwrites a file with one of its snapshots |
 | `penpot.libraries.list` | read | none | `get-file-libraries` | lists the libraries a file uses |
 | `penpot.libraries.share` | update | required | `set-file-shared` | shares a file as a library for the whole team, or stops sharing it |
 | `penpot.libraries.link` | update | required | `link-file-to-library` | links one file to a library file |
@@ -97,8 +102,9 @@ connections:
 | `penpot.comments.delete` | delete | required, tool allow-list | `delete-comment-thread` or `delete-comment` | deletes a thread or a comment |
 
 The recommended read profile offers the four tools for teams, projects, and files; the comment tools are enabled
-through the connection's permissions and `tools` list, and so are the project and file tools. `penpot.comments.delete`
-and `penpot.projects.delete` are offered only when the `tools` list names them. Every tool names its command itself; there is no `command` argument, no free path, method, or body.
+through the connection's permissions and `tools` list, and so are the project and file tools. `penpot.comments.delete`,
+`penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`, and `penpot.snapshots.restore` are offered only
+when the `tools` list names them. Every tool names its command itself; there is no `command` argument, no free path, method, or body.
 Reads use POST but are idempotent and safe.
 
 `files.get` takes `project_id`, `file_id`, and optionally `page_id` (the first page of the file when omitted). Its
@@ -153,6 +159,33 @@ never names the target.
 `share` and `link` ask for `confirm`, send exactly one request, and are never repeated; after a timeout, a connection
 reset, a 5xx answer, or an unreadable answer the error says that the change may have taken effect, so read the
 libraries before trying again. Refusals never name the target.
+
+## Snapshots and deleted files
+
+The five tools use the read commands `get-file-snapshots` and `get-team-deleted-files` for their checks; none of them
+is offered as a tool, so the IDs of older snapshots and deleted files come from the Penpot UI or from the answers of
+earlier calls.
+
+- `snapshots.create` takes `project_id`, `file_id`, and optionally `label` (1 to 250 characters; Penpot generates one
+  when omitted). The file is bound through its project. Penpot limits snapshots per file and team and refuses beyond
+  that. The answer has `created`, `snapshot_id`, `file_id`, `project_id`, and `revn`; the label is not repeated.
+- `snapshots.restore` takes `project_id`, `file_id`, and `snapshot_id`. **It overwrites the current content of the
+  file**; Penpot keeps a temporary backup snapshot of the state before. The snapshot ID must appear in the visible
+  snapshots of the bound file (`get-file-snapshots`), else the call is refused before anything is changed.
+- `files.delete` takes `project_id` and `file_id` (bound through its project) and soft-deletes the file: Penpot marks
+  it, removes the library links that point to it, and removes it after its deletion delay.
+- `files.restore` and `files.purge` take `project_id` and `file_id` of a file that is no longer in its project's file
+  list. The file is bound through `get-team-deleted-files` of each bound team: it must appear there and report the
+  given project, which must pass the allow-list. The team ID is taken from that binding; it is never an argument. A
+  file that is not deleted, or that lies in another project, is refused without naming it. Exactly one file is sent.
+  `files.restore` also removes the deletion mark of the file's project, as Penpot does. **`files.purge` deletes the
+  file for good, before its deletion delay ends, and cannot be undone.**
+
+Both commands answer with a server-sent event stream; the change counts as done only when its final event names the
+file. An error event, or an answer that does not name the file, is reported as a failure; a stream that ends without
+a final event is reported as uncertain. The same rules hold as for every change: `confirm` is required, exactly one
+request is sent, it is never repeated, and after a timeout, a connection reset, a 5xx answer, or an unreadable answer
+the error says that the change may have taken effect. Refusals never name the target.
 
 ## Comments
 
@@ -229,6 +262,15 @@ instance:
   timestamps), `set-file-shared` (`id`, `is-shared`), and `link-file-to-library` (`file-id`, `library-id`; requires
   edit permission on both files and the same team, answers the libraries of the library). Assumed: the answers of the
   two changes are not read.
+- Snapshots and deleted files (Penpot 2.18.0, `files_snapshot.clj`, `files.clj`): `get-file-snapshots` (`file-id`;
+  the visible snapshots with `id`, `label`, `revn`, `created-by`), `create-file-snapshot` (`file-id`, optional
+  `label`; needs edit permission; answers the snapshot with `id`, `revn`, `label`), `restore-file-snapshot` (`file-id`,
+  `id`; answers without a body), `delete-file` (`id`; answers without a body), `get-team-deleted-files` (`team-id`;
+  files with `id`, `project-id`, `team-id`, `name`, `will-be-deleted-at`), and `restore-deleted-team-files` and
+  `permanently-delete-team-files` (`team-id`, `ids`, a set of file IDs; both answer a server-sent event stream whose
+  `end` event carries the IDs acted on). The permanent deletion acts on any file ID of the team, so the tool checks the
+  deleted-file list first. Assumed: the stream lines are `event:` and `data:` with a JSON array in the `end` event, the
+  answers of the other changes are read only as far as stated, and the response is delivered with `Accept: application/json`.
 - Assumed, not documented: a `position` is sent as an object `{"x": ..., "y": ...}` and a thread's position is read
   the same way; a change that answers without a body is read as done; requests send kebab-case keys, responses are JSON when `Accept: application/json` is sent,
   and their keys are read case- and separator-insensitively (camelCase or kebab-case); the summary's categories carry
