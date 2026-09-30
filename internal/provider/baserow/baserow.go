@@ -1,12 +1,15 @@
-// Package baserow implements controlled, read-only access to the tables, fields, and rows of a Baserow
+// Package baserow implements controlled access to the tables, fields, and rows of a Baserow
 // instance, Baserow Cloud or self-hosted, through its REST API with a database token
 // (baserow.io/user-docs/database-api, checked 2026-09-30, not against a live instance).
 //
 // The token is sent as "Authorization: Token ...". A database token carries create, read, update, and
 // delete rights per workspace, database, or table; Qatlas adds its own boundary, the table allow-list of the
 // connection (table/ID entries or *). A table ID outside that allow-list is refused before the credential is
-// resolved and before any request is sent, and the refusal never names the table. Every request is a GET
-// built from fixed paths and validated integers, never from a free URL, method, or body of an agent.
+// resolved and before any request is sent, and the refusal never names the table. Every request is built from
+// fixed paths, fixed methods, and validated integers, never from a free URL or method of an agent. The body of
+// a row change carries only cell values whose field names the table's schema confirms as writable.
+//
+// A row change is one request without a retry; a failure that leaves its result open is reported as uncertain.
 //
 // Link fields (link_row) into a table outside the allow-list are reduced to row IDs: their display values
 // are dropped. A link field whose other table cannot be determined counts as outside. Lookup and formula
@@ -159,6 +162,12 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 
 // statusError maps an HTTP status to a stable class; the provider body is never read into the message.
 func (c *Client) statusError(op string, response *http.Response) *provider.Error {
+	return c.statusErrorFor(op, response, "read")
+}
+
+// statusErrorFor is statusError for an operation that needs the given token right: read, create, update, or
+// delete. A forbidden answer names that right, never the provider's text.
+func (c *Client) statusErrorFor(op string, response *http.Response, right string) *provider.Error {
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseSize))
 	status := response.StatusCode
 	switch {
@@ -166,7 +175,8 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Baserow rejected the database token"}
 	case status == http.StatusForbidden:
 		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this database token may not read this resource; check its read right for the table"}
+			Message: "this database token may not " + right + " this resource; check its " + right +
+				" right for the table"}
 	case status == http.StatusNotFound:
 		return &provider.Error{Class: provider.ClassNotFound, Op: op,
 			Message: "Baserow does not hold this resource or does not show it to this token"}
@@ -251,16 +261,18 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds the provider metadata, its connection test, and its four read operations.
+// Register adds the provider metadata, its connection test, its four read operations, and its four row
+// changes.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Baserow", DefaultBaseURL: cloudOrigin,
-		Description:        "Open-source no-code database, tables, fields, and rows read through a database token",
+		Description:        "Open-source no-code database, tables, fields, and rows through a database token",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleDatabaseToken,
-			Description: "Baserow database token, created under the account settings with the read right for " +
-				"the workspace, database, or tables this connection may reach; it is sent as " +
+			Description: "Baserow database token, created under the account settings with the read right, and the " +
+				"create, update, or delete right for changes, on the workspace, database, or tables this " +
+				"connection may reach; it is sent as " +
 				"'Authorization: Token ...'",
 		}},
 		Target: config.TargetMetadata{
@@ -292,5 +304,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: fieldsList, Handler: capability.Handler(invokeFieldsList)},
 		capability.Operation{Descriptor: rowsList, Handler: capability.Handler(invokeRowsList)},
 		capability.Operation{Descriptor: rowsGet, Handler: capability.Handler(invokeRowsGet)},
+		capability.Operation{Descriptor: rowsCreate, Handler: capability.Handler(invokeRowsCreate)},
+		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},
+		capability.Operation{Descriptor: rowsDelete, Handler: capability.Handler(invokeRowsDelete)},
+		capability.Operation{Descriptor: rowsMove, Handler: capability.Handler(invokeRowsMove)},
 	)
 }

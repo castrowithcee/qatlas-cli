@@ -88,6 +88,9 @@ func registry(t *testing.T) *capability.Registry {
 func testConfig() *config.Config {
 	credential := config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleDatabaseToken: tokenEnv}}
 	read := []config.Permission{config.PermissionRead}
+	allRights := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
+		config.PermissionDelete}
+	writeTools := []string{rowsCreate.ID, rowsUpdate.ID, rowsDelete.ID, rowsMove.ID, fieldsList.ID, rowsGet.ID}
 	return &config.Config{
 		Version:     1,
 		Services:    map[string]config.Service{"baserow": {Provider: Provider, BaseURL: baseURL}},
@@ -96,6 +99,11 @@ func testConfig() *config.Config {
 			"one":  {Service: "baserow", Credential: "token", Permissions: read, Target: "table/11"},
 			"list": {Service: "baserow", Credential: "token", Permissions: read, Targets: []string{"table/11", "table/12"}},
 			"all":  {Service: "baserow", Credential: "token", Permissions: read, Target: "*"},
+			"write": {Service: "baserow", Credential: "token", Permissions: allRights, Targets: []string{"table/11", "table/12"},
+				Tools: writeTools},
+			"writeall": {Service: "baserow", Credential: "token", Permissions: allRights, Target: "*", Tools: writeTools},
+			"writenodelete": {Service: "baserow", Credential: "token", Permissions: allRights, Target: "table/11",
+				Tools: []string{rowsCreate.ID, rowsUpdate.ID, rowsMove.ID}},
 		},
 	}
 }
@@ -142,12 +150,16 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		metadata.Target.Wildcard != "*" || metadata.Target.WildcardWarning == "" {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	want := map[string]bool{tablesList.ID: true, fieldsList.ID: true, rowsList.ID: true, rowsGet.ID: true}
+	want := map[string]config.Permission{tablesList.ID: config.PermissionRead, fieldsList.ID: config.PermissionRead,
+		rowsList.ID: config.PermissionRead, rowsGet.ID: config.PermissionRead,
+		rowsCreate.ID: config.PermissionCreate, rowsUpdate.ID: config.PermissionUpdate,
+		rowsDelete.ID: config.PermissionDelete, rowsMove.ID: config.PermissionUpdate}
 	if len(metadata.Tools) != len(want) {
 		t.Fatalf("tools = %+v", metadata.Tools)
 	}
 	for _, tool := range metadata.Tools {
-		if !want[tool.ID] || tool.RequiresToolAllowList || tool.Effect != config.PermissionRead {
+		effect, ok := want[tool.ID]
+		if !ok || tool.Effect != effect || tool.RequiresToolAllowList != (tool.ID == rowsDelete.ID) {
 			t.Fatalf("tool %+v", tool)
 		}
 	}

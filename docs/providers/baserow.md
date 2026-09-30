@@ -1,8 +1,9 @@
 ---
 description: >
   Describes the Baserow provider: the database token and Baserow Cloud or self-hosted base URL, the table
-  allow-list target, the four read tools, link-field masking outside the allow-list, bounds, errors, and the
-  documented limits of lookup and formula fields.
+  allow-list target, the four read tools and the four row changes, schema checks, link-field masking and
+  link values outside the allow-list, bounds, errors, uncertain results, and the documented limits of lookup
+  and formula fields.
 type: knowledge
 edit: shared
 created: 2026-09-30
@@ -12,13 +13,14 @@ updated: 2026-09-30
 # Baserow
 
 This provider reads tables, fields, and rows of a Baserow instance, Baserow Cloud or self-hosted, with a
-database token. It only reads; it changes nothing in Baserow.
+database token, and creates, changes, deletes, and moves single rows of the tables a connection allows.
 
 ## Credential and base URL
 
 The credential provides `database-token`: a Baserow database token, created in the account settings under
 database tokens. A token belongs to one workspace and carries the rights `create`, `read`, `update`, and
-`delete` per workspace, database, or table; this provider needs only `read`. The token is sent as
+`delete` per workspace, database, or table; reading needs `read`, and each row change needs its own right
+(`create`, `update`, or `delete`; a move needs `update`). The token is sent as
 `Authorization: Token ...` and is registered with the redactor.
 
 `base_url` is `https://api.baserow.io` by default (Baserow Cloud). A self-hosted instance uses its own `https`
@@ -64,11 +66,40 @@ narrow what the token itself may read, so grant the token only the rights the co
 | `baserow.rows.list` | read | none | lists one table's rows page by page |
 | `baserow.rows.get` | read | none | reads one row |
 
-The read profile offers all four. `rows.list` takes `table_id`, `page` (from 1; 1 when omitted), `size`
+| `baserow.rows.create` | create | required | creates one row from cell values keyed by field name |
+| `baserow.rows.update` | update | required | changes the named cells of one row |
+| `baserow.rows.delete` | delete | required, tool allow-list | deletes one row |
+| `baserow.rows.move` | update | required | moves one row within its table |
+
+The read profile offers the four read tools. `rows.list` takes `table_id`, `page` (from 1; 1 when omitted), `size`
 (1 to 200; 50 when omitted), and `user_field_names` (true when omitted: values keyed by field name; false:
 keyed `field_ID`). It answers `rows` (`id`, `order`, `fields`), `count` (the table's total row count as
 Baserow reports it), `page`, `size`, and `has_more`, which is true when Baserow reports a next page. It has
 no filters, search, or sorting. `rows.get` takes `table_id`, `row_id`, and `user_field_names`.
+
+## Row changes
+
+Each change takes `table_id` (inside the targets), needs `confirm`, and sends exactly one request. A change is
+never repeated by Qatlas: after a timeout, a connection reset, an unknown transport failure, an HTTP 5xx, or
+an unreadable answer the error says the change may have taken effect, and the row should be read before it is
+tried again. `rows.delete` runs only for a connection whose `tools` list names it.
+
+- `rows.create` takes `fields`, an object of cell values keyed by field name (`{}` creates an empty row), and
+  answers the new row like `rows.get`, with links masked.
+- `rows.update` takes `row_id` and `fields` with at least one cell and changes only those; it answers the row.
+- `rows.delete` takes `row_id` and answers `{"deleted": true, "row_id": N}`.
+- `rows.move` takes `row_id` and optionally `before_id`, a row of the same table to place it before (the end
+  of the table when omitted), and answers `{"moved": true, "row_id": N}`. Both rows belong to the table in
+  the path; another table cannot be reached.
+
+`rows.create` and `rows.update` read the table's fields first, the only provider request before a refusal
+based on the schema. A field name that does not exist, a field flagged read-only, and the computed types
+(formula, lookup, count, rollup, created on, last modified, created by, last modified by, autonumber, button,
+AI) are refused without quoting the name. A link field takes only an array of row IDs (or primary-field
+texts) and only when its other table is inside the targets; with `*` any table is allowed, and a link field
+whose other table cannot be determined is refused. The body is limited to 1 MiB and 500 cells. A missing
+token right is reported as a `permission` error naming the right to grant (`create`, `update`, or `delete`);
+Baserow's own text is never passed on.
 
 ## Links into other tables
 
@@ -86,7 +117,7 @@ file names and URLs; Qatlas does not fetch them.
 
 ## Bounds
 
-A response is read up to 4 MiB; a larger one is an `invalid-provider-response`. Names are cut at 512 bytes.
+A response is read up to 4 MiB; a larger one is an `invalid-provider-response`. A row change is refused above 1 MiB. Names are cut at 512 bytes.
 A cell value is bounded: strings at 2048 bytes, arrays and objects at 100 entries, nesting at 6 levels (deeper
 values become `null`). A row has at most 1000 cells, `tables.list` at most 1000 tables, `fields.list` at most
 500 fields with at most 100 options each. Requests to one token share a rate limit.
@@ -110,8 +141,13 @@ Checked against the official documentation (baserow.io/user-docs/database-api), 
 - `GET /api/database/rows/table/{table_id}/` with `page`, `size` (at most 200), and `user_field_names`,
   answering `count`, `next`, `previous`, and `results`.
 - `GET /api/database/rows/table/{table_id}/{row_id}/` with `user_field_names`.
+- `POST /api/database/rows/table/{table_id}/`, `PATCH .../{row_id}/`, `DELETE .../{row_id}/`, and
+  `PATCH .../{row_id}/move/` as the four row endpoints (listed in the official documentation).
 
-Assumed, not verified here: the object shapes of a table and a field as listed above, link entries as objects
-with `id` and `value`, `link_row_table_id` being null when the other table is not available, and that the
+Assumed, not verified here: `user_field_names=true` and a JSON body keyed by field name for create and update,
+the row object as the answer of create, update, and move (move's answer is not read), an empty answer with
+status 204 for delete, `before_id` as the query parameter of move, `403` for a missing token right,
+the field flags and types listed above, link values as arrays of row IDs or texts, the object shapes of a table and a field as listed above, link
+entries as objects with `id` and `value`, `link_row_table_id` being null when the other table is not available, and that the
 table list of a token also contains the tables its token may not read, which is why the target filter is
 applied to it.

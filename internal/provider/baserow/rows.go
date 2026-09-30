@@ -249,6 +249,15 @@ func (c *Client) maskLinks(ctx context.Context, op string, tableID int64, byName
 	if err != nil {
 		return err
 	}
+	c.maskWith(fields, byName, rows)
+	return nil
+}
+
+// maskWith applies the link masking of maskLinks with the table's fields already at hand.
+func (c *Client) maskWith(fields []fieldJSON, byName bool, rows []Row) {
+	if c.scope.wildcard {
+		return
+	}
 	byKey := map[string]fieldJSON{}
 	for _, field := range fields {
 		key := field.Name
@@ -278,7 +287,6 @@ func (c *Client) maskLinks(ctx context.Context, op string, tableID int64, byName
 			row.Fields[key] = masked
 		}
 	}
-	return nil
 }
 
 // linkEntries reports the row identifiers of a cell that holds link-shaped entries: an array with at least one
