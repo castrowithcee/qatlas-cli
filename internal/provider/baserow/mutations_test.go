@@ -331,3 +331,34 @@ func (e *environment) invokeConfirmed(operation, connection, arguments string) (
 	})
 	return string(response.Result), err
 }
+
+func TestRowsUpdateSendsLinkIDsAndMasksTheAnswer(t *testing.T) {
+	var calls []call
+	var bodies []string
+	env := newEnvironment(t, &calls, mutationServer(200,
+		`{"id":7,"Auftraege":[{"id":4,"value":"kept"}],"Lieferant":[{"id":5,"value":"secret-supplier"}]}`, &bodies))
+	result, err := env.invokeConfirmed(rowsUpdate.ID, "write", `{"table_id":11,"row_id":7,"fields":{"Auftraege":[4,5]}}`)
+	if err != nil || strings.Contains(result, "secret-supplier") {
+		t.Fatalf("result = %s, err = %v", result, err)
+	}
+	got := changes(calls)
+	if len(got) != 1 || got[0].method != http.MethodPatch || len(bodies) != 1 || bodies[0] != `{"Auftraege":[4,5]}` {
+		t.Fatalf("calls = %+v, bodies = %v", calls, bodies)
+	}
+	if calls[0].method != http.MethodGet || !strings.HasPrefix(calls[0].path, "/api/database/fields/") {
+		t.Fatalf("the field read must come first: %+v", calls)
+	}
+}
+
+func TestRowsUpdateRefusesForeignLinkBeforeTheChange(t *testing.T) {
+	var calls []call
+	var bodies []string
+	env := newEnvironment(t, &calls, mutationServer(200, `{"id":7}`, &bodies))
+	_, err := env.invokeConfirmed(rowsUpdate.ID, "write", `{"table_id":11,"row_id":7,"fields":{"Lieferant":[4]}}`)
+	if !isInvalidRequest(err) || strings.Contains(err.Error(), "Lieferant") || strings.Contains(err.Error(), "99") {
+		t.Fatalf("err = %v", err)
+	}
+	if len(calls) != 1 || calls[0].method != http.MethodGet || len(bodies) != 0 {
+		t.Fatalf("calls = %+v, want only the field read", calls)
+	}
+}

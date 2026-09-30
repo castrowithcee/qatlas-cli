@@ -102,6 +102,10 @@ func TestBatchSchemaRefusalsSendNoChange(t *testing.T) {
 			t.Errorf("accepted %s", rows)
 		}
 	}
+	if _, err := env.invokeConfirmed(rowsBatchUpdate.ID, "write",
+		`{"table_id":11,"rows":[{"row_id":9,"fields":{"Lieferant":[1]}}]}`); err == nil {
+		t.Error("batch update accepted a link to a foreign table")
+	}
 	if len(changes(calls)) != 0 {
 		t.Fatalf("changes = %+v", changes(calls))
 	}
