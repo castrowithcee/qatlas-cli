@@ -249,7 +249,7 @@ defaults:
 		// is, the note the configuration keeps on it, how many tools it offers, how many configured
 		// connections can run them, and how many are configured. A provider without a route is visible
 		// as exactly that.
-		if !strings.HasPrefix(stdout, "providers[14]{provider,description,note,tools,connections,configured}:\n") {
+		if !strings.HasPrefix(stdout, "providers[15]{provider,description,note,tools,connections,configured}:\n") {
 			t.Errorf("stdout = %q, want a TOON index of the compiled namespaces", stdout)
 		}
 		rows := map[string][3]string{}
@@ -262,7 +262,7 @@ defaults:
 			"bookstack": {"5", "2", "2"}, "telegram": {"3", "0", "0"}, "lexware": {"3", "0", "0"},
 			"twentycrm": {"5", "0", "0"}, "seatable": {"40", "0", "0"}, "nextcloud": {"6", "0", "0"},
 			"github": {"192", "0", "0"}, "todoist": {"39", "0", "0"}, "n8n": {"10", "0", "0"},
-			"make": {"10", "0", "0"}, "seatableaccount": {"2", "0", "0"}, "baserow": {"14", "0", "0"},
+			"make": {"10", "0", "0"}, "seatableaccount": {"2", "0", "0"}, "baserow": {"14", "0", "0"}, "penpot": {"4", "0", "0"},
 		} {
 			if rows[provider] != want {
 				t.Errorf("%s = %v tools and connections, want %v:\n%s", provider, rows[provider], want, stdout)
