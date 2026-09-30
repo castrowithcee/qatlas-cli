@@ -839,26 +839,26 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 			// Only the owner lists and the organization tools take an owner, as their target.
 			owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
 				descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID ||
-				descriptor.ID == issueTypesList.ID
+				descriptor.ID == issueTypesList.ID || descriptor.ID == organizationAdvisoriesList.ID
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("descriptor %s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
 		}
 	}
 	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.blame.get",
-		"github.branches.list", "github.code.search", "github.codescanningalerts.get", "github.codescanningalerts.list",
+		"github.branches.list", "github.code.search", "github.codequalityfindings.get", "github.codescanningalerts.get", "github.codescanningalerts.list",
 		"github.collaborators.list",
 
 		"github.comments.list", "github.commits.get", "github.commits.list", "github.commits.search",
 		"github.contents.get", "github.customproperties.get", "github.dependabotalerts.get",
 		"github.dependabotalerts.list", "github.discussioncategories.list",
-		"github.discussioncomments.list", "github.discussions.get", "github.discussions.list", "github.gists.get", "github.gists.list",
+		"github.discussioncomments.list", "github.discussions.get", "github.discussions.list", "github.gists.get", "github.gists.list", "github.globaladvisories.get", "github.globaladvisories.list",
 		"github.issuedependencies.list",
 		"github.issuefields.list",
 		"github.issues.get",
 		"github.issues.list", "github.issues.search", "github.issuetypes.list", "github.labels.get", "github.labels.list",
 		"github.milestones.list", "github.notifications.get", "github.notifications.list",
-		"github.organizations.search", "github.projectfields.list",
+		"github.organizationadvisories.list", "github.organizations.search", "github.projectfields.list",
 		"github.projectitems.get", "github.projectitems.list", "github.projects.list",
 		"github.projectstatus.list", "github.projectteams.list", "github.projectviews.list", "github.projectworkflows.list",
 		"github.pullrequestchecks.list", "github.pullrequestcomments.list", "github.pullrequestcommits.list",
@@ -866,7 +866,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		"github.pullrequestreviews.list", "github.pullrequestreviewthreads.list", "github.pullrequests.get",
 		"github.pullrequests.list", "github.pullrequests.search",
 		"github.releaseassets.list", "github.releases.get", "github.releases.list",
-		"github.repositories.list", "github.repositories.search", "github.rulesets.get", "github.rulesets.list",
+		"github.repositories.list", "github.repositories.search", "github.repositoryadvisories.list", "github.rulesets.get", "github.rulesets.list",
 		"github.secretscanningalerts.get", "github.secretscanningalerts.list", "github.stars.list", "github.subissues.list", "github.tags.get",
 		"github.tags.list", "github.teammembers.list",
 		"github.teams.list", "github.trees.get", "github.users.search",
@@ -877,7 +877,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 183 {
+	if len(metadata.Tools) != 188 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

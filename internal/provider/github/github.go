@@ -104,6 +104,13 @@
 // repository; they are offered only by the not-recommended setup profile security and change nothing. Alert
 // texts are untrusted data, cut at fixed lengths. A secret scanning alert never shows the found secret: the
 // request asks GitHub to hide it and the answer has no field for it.
+// github.globaladvisories.list and .get read the global security advisories of the GitHub Advisory Database,
+// github.repositoryadvisories.list the repository security advisories of a repository,
+// github.organizationadvisories.list those of the repositories of an organization, and
+// github.codequalityfindings.get one code quality finding of a repository; they belong to the same
+// profile security and change nothing. The global tools are GitHub-wide and refused on a connection whose
+// targets name a repository or a project; the organization tool needs an organization owner. Advisory and
+// finding texts are untrusted data, cut at fixed lengths, and every cut says so.
 // github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
@@ -499,7 +506,13 @@ func Register(reg *capability.Registry) error {
 				"on a fine-grained token, while GitHub lists no permission for the gist reads; the security alert " +
 				"tools need security_events or repo on a classic token (public_repo for a public repository), " +
 				"or Code scanning alerts: read, Dependabot alerts: read, and Secret scanning alerts: read on a " +
-				"fine-grained token",
+				"fine-grained token; the global advisory tools need no scope; the repository advisory list needs repo or " +
+				"repository_advisories:read on a classic token, or Repository security advisories: read on a " +
+				"fine-grained token, and the organization advisory list, although it only reads, needs repo or " +
+				"repository_advisories:write on a classic token, or Repository security advisories: write on a " +
+				"fine-grained token, and an organization owner or security manager; the code quality finding " +
+				"read needs repo on a classic token (public_repo for a public repository), or Code quality: " +
+				"read on a fine-grained token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -681,8 +694,8 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "security", Title: "Security alerts",
 			Description: "not recommended: lists and reads the code scanning, Dependabot, and secret scanning " +
-				"alerts of a repository; the found secret of a secret scanning alert is never shown; changes " +
-				"nothing",
+				"alerts of a repository, the global and repository security advisories, and code quality " +
+				"findings; the found secret of a secret scanning alert is never shown; changes nothing",
 			Tools: securityAlertTools,
 		}},
 	}, TestConnection); err != nil {
@@ -715,7 +728,7 @@ func Register(reg *capability.Registry) error {
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
 		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
-		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations())...)
+		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations(), advisoryOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1407,6 +1420,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/search/"); ok {
 		return searchSubject(tail)
 	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/advisories"); ok {
+		return globalAdvisoriesSubject(tail)
+	}
 	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/orgs/"); ok {
 		return organizationSubject(tail)
 	}
@@ -1483,6 +1499,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := alertsSubject(parts[2]); what != "" {
 			s.what = what
 		}
+		if what := advisoriesSubject(parts[2]); what != "" {
+			s.what = what
+		}
 		if what := labelsSubject(parts[2]); what != "" {
 			s.what = what
 		}
@@ -1537,6 +1556,9 @@ func organizationSubject(tail string) subject {
 	}
 	if len(parts) >= 2 && parts[1] == "properties" {
 		return subject{what: "the custom property schema of orgs/" + owner}
+	}
+	if len(parts) >= 2 && parts[1] == "security-advisories" {
+		return subject{what: "the repository security advisories of orgs/" + owner}
 	}
 	if len(parts) >= 2 && parts[1] == "issue-types" {
 		return subject{what: "the issue types of orgs/" + owner}

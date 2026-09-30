@@ -376,6 +376,11 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.dependabotalerts.get":        readRisk,
 		"github.secretscanningalerts.list":   readRisk,
 		"github.secretscanningalerts.get":    readRisk,
+		"github.globaladvisories.list":       readRisk,
+		"github.globaladvisories.get":        readRisk,
+		"github.repositoryadvisories.list":   readRisk,
+		"github.organizationadvisories.list": readRisk,
+		"github.codequalityfindings.get":     readRisk,
 		"github.gists.list":                  readRisk,
 		"github.gists.get":                   readRisk,
 		"github.gists.create":                changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
@@ -399,7 +404,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
 			descriptor.ID == projectsCreate.ID || descriptor.ID == projectsCopy.ID ||
 			descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID ||
-			descriptor.ID == repositoriesCreate.ID || descriptor.ID == issueTypesList.ID
+			descriptor.ID == repositoriesCreate.ID || descriptor.ID == issueTypesList.ID ||
+			descriptor.ID == organizationAdvisoriesList.ID
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "document"} {
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("%s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)

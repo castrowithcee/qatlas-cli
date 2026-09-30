@@ -66,7 +66,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[79]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
+		"tools[84]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
 		"  github.labels.list,List GitHub labels,read,code\n", "  github.labels.get,Get a GitHub label,read,code\n",
 		"  github.milestones.list,List GitHub milestones,read,code\n",
 		"  github.collaborators.list,List GitHub repository collaborators,read,code\n",
@@ -128,7 +128,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[183]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[188]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
 		"github.branches.create,Create a GitHub branch,create,", "github.contents.put,Create or update a GitHub repository file,update,",
 		"github.contents.delete,Delete a GitHub repository file,delete,",
@@ -138,6 +138,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		"github.codescanningalerts.list,List GitHub code scanning alerts,read,",
 		"github.dependabotalerts.get,Get a GitHub Dependabot alert,read,",
 		"github.secretscanningalerts.list,List GitHub secret scanning alerts,read,",
+		"github.globaladvisories.list,List GitHub global security advisories,read,",
+		"github.codequalityfindings.get,Get a GitHub code quality finding,read,",
 		"github.blame.get,Get the GitHub blame of a file,read,",
 		"github.commits.list,List GitHub commits,read,", "github.commits.get,Get a GitHub commit,read,",
 		"github.branches.list,List GitHub branches,read,", "github.tags.list,List GitHub tags,read,",

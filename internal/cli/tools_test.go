@@ -181,7 +181,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",183,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",188,0,0\n", ",\"\",3,0,0\n",
 		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",7,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -380,7 +380,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.branches.create",
 			"github.branches.list",
 			"github.code.search",
-			"github.codescanningalerts.get", "github.codescanningalerts.list",
+			"github.codequalityfindings.get", "github.codescanningalerts.get", "github.codescanningalerts.list",
 			"github.collaborators.list",
 			"github.comments.create", "github.comments.delete", "github.comments.list", "github.comments.update",
 			"github.commits.get", "github.commits.list", "github.commits.search",
@@ -395,6 +395,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.discussions.create", "github.discussions.get", "github.discussions.list",
 			"github.files.push",
 			"github.gists.create", "github.gists.delete", "github.gists.get", "github.gists.list", "github.gists.update",
+			"github.globaladvisories.get", "github.globaladvisories.list",
 			"github.issuedependencies.add", "github.issuedependencies.list", "github.issuedependencies.remove",
 			"github.issuefields.list", "github.issuefields.set",
 			"github.issues.close", "github.issues.create",
@@ -404,7 +405,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.milestones.list",
 			"github.notifications.dismiss", "github.notifications.get", "github.notifications.list",
 			"github.notifications.markall",
-			"github.organizations.search",
+			"github.organizationadvisories.list", "github.organizations.search",
 			"github.projectcollaborators.update", "github.projectdrafts.convert", "github.projectdrafts.create", "github.projectdrafts.update",
 			"github.projectfieldoptions.delete", "github.projectfields.create",
 			"github.projectfields.delete", "github.projectfields.list", "github.projectfields.update",
@@ -433,7 +434,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.releaseassets.list", "github.releases.create", "github.releases.delete",
 			"github.releases.get", "github.releases.list", "github.releases.update",
 			"github.repositories.create", "github.repositories.delete", "github.repositories.fork",
-			"github.repositories.list", "github.repositories.search", "github.repositorysubscriptions.set",
+			"github.repositories.list", "github.repositories.search", "github.repositoryadvisories.list", "github.repositorysubscriptions.set",
 			"github.rulesets.create", "github.rulesets.delete", "github.rulesets.get", "github.rulesets.list",
 			"github.rulesets.update",
 			"github.secretscanningalerts.get", "github.secretscanningalerts.list",

@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, release reads and changes, the account behind a connection's token, organization teams and their members, and the account's starred repositories: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the account and organization discovery tools, starring and unstarring, repository create and fork, the listed-only repository delete, repository collaborators, the cursor contract, notification threads with their thread and repository subscriptions, and token scopes.
+  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, release reads and changes, the account behind a connection's token, organization teams and their members, and the account's starred repositories: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the account and organization discovery tools, starring and unstarring, repository create and fork, the listed-only repository delete, repository collaborators, the cursor contract, security alerts, advisories, and code quality findings, notification threads with their thread and repository subscriptions, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -162,7 +162,7 @@ a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested proj
 check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, the
 workflow file or `.github/workflows` directory with the ref it was read at, `github.contents.get`'s path or
 the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s ref or its path at that ref,
-`github.commits.get`'s ref, `github.tags.get`'s tag, the discussion by its number, a code scanning, Dependabot, or secret scanning alert as "code scanning alert N", "Dependabot alert N", or "secret scanning alert N" and their lists as "the code scanning alerts of this repository" and so on, a gist as "this gist" (also for a gist of a user the connection's targets do not name) and a user's gists as "the gists of users/LOGIN", a notification thread as "this notification thread" (also for a thread of a repository the connection's targets do not admit), the subscription of a thread, a fork or the collaborators `github.repositories.fork` and
+`github.commits.get`'s ref, `github.tags.get`'s tag, the discussion by its number, a code scanning, Dependabot, or secret scanning alert as "code scanning alert N", "Dependabot alert N", or "secret scanning alert N" and their lists as "the code scanning alerts of this repository" and so on, a code quality finding as "code quality finding N", the repository security advisories as "the repository security advisories" (of a repository or of "orgs/LOGIN"), and a global advisory as "global security advisory GHSA-..." (the list as "the global security advisories"), a gist as "this gist" (also for a gist of a user the connection's targets do not name) and a user's gists as "the gists of users/LOGIN", a notification thread as "this notification thread" (also for a thread of a repository the connection's targets do not admit), the subscription of a thread, a fork or the collaborators `github.repositories.fork` and
 `github.collaborators.list` address, the pull request by its number, the sub-issues or the dependencies of an
 issue as "the sub-issues of issue #N", "a sub-issue of issue #N", "the sub-issue order of issue #N", "the
 issues blocking issue #N", "the issues issue #N blocks", or "a dependency of issue #N", or, for
@@ -248,8 +248,9 @@ thread and repository subscriptions under [Notifications](#notifications); marki
 unticked, since it is offered only where a connection's `tools` list names it. The not-recommended
 profile `gists` lists and reads gists and creates and updates them under [Gists](#gists); deleting a gist stays
 unticked, since it is offered only where a connection's `tools` list names it. The not-recommended profile
-`security` lists and reads the code scanning, Dependabot, and secret scanning alerts of a repository under
-[Security alerts](#security-alerts) and changes nothing. A
+`security` lists and reads the code scanning, Dependabot, and secret scanning alerts of a repository, the global
+and repository security advisories, and code quality findings under [Security alerts](#security-alerts) and
+changes nothing. A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -1141,7 +1142,8 @@ qatlas invoke github.secretscanningalerts.list --connection code --arg state=ope
 | `github.secretscanningalerts.list` | read | safe | none | lists secret scanning alerts without the secret |
 | `github.secretscanningalerts.get` | read | safe | none | reads one secret scanning alert without the secret |
 
-The not-recommended setup profile `security` ticks all six; the recommended profile `read` is unchanged.
+The not-recommended setup profile `security` ticks these six and the tools of the next subsection; the
+recommended profile `read` is unchanged.
 
 | Tool | Classic token | Fine-grained token |
 | --- | --- | --- |
@@ -1156,6 +1158,77 @@ https://docs.github.com/en/rest/dependabot/alerts,
 https://docs.github.com/en/rest/secret-scanning/secret-scanning, and
 https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
 (checked 2026-09-30).
+
+### Advisories and code quality findings
+
+Five more tools read advisories and code quality findings; they change nothing, so an advisory is neither created,
+edited, published, nor closed.
+
+- `github.globaladvisories.list` reads the GitHub Advisory Database, GitHub-wide. It filters by `ghsa_id`, `type`
+  (reviewed, malware, unreviewed; GitHub answers reviewed when omitted), `cve_id`, `ecosystem` (actions, composer,
+  erlang, go, maven, npm, nuget, other, pip, pub, rubygems, rust, swift), `severity` (unknown, low, medium, high,
+  critical), `cwes` (a list of up to 20 numbers), `is_withdrawn` (true returns only withdrawn advisories; false adds
+  no filter), `affects` (such as `package1,package2@1.0.0`), and `published`, `updated`, and `modified` (an ISO 8601
+  date or range). `github.globaladvisories.get` reads one advisory by `ghsa_id`, with its description and up to 20
+  references.
+- `github.repositoryadvisories.list` reads the repository security advisories of one repository, filtered by
+  `state` (triage, draft, published, closed), `sort` (created, updated, published; created when omitted), and
+  `direction` (asc, desc; desc when omitted). `github.organizationadvisories.list` does the same for the
+  repositories of an organization.
+- `github.codequalityfindings.get` reads one code quality finding by `finding_number`, with its rule, location,
+  and message. GitHub also lists findings; that list is not offered.
+
+The global tools name no repository: a connection without targets, or one whose targets name only owners, may use
+them, and a connection whose targets name a repository or a project is refused as `invalid-request` before a
+credential is resolved. The organization list takes the optional `owner` argument as `orgs/LOGIN`, which must be
+an organization the connection's targets name as an owner (or any organization on a connection without targets);
+a user owner and a repository or project target alone are refused the same way. The repository list and the
+finding read take the optional `repository` argument like the alert tools.
+
+The lists page by the `after` cursor GitHub announces in its `Link` header; `next_cursor` carries it together
+with the batch size of the first batch and belongs to the tool, the target, and the filters of that batch.
+
+Advisory summaries, descriptions, references, package names, and finding messages come from other accounts and are
+untrusted data. Summaries, rule descriptions, and messages are cut at 500 characters, a global advisory
+description of a `.get` and a rule help at 4000, and the description of a repository advisory in a list at 2000;
+vulnerabilities are capped at 20 per advisory, functions at 10 per vulnerability, references at 20, and `truncated`
+says so. Draft and triage advisories hold non-public vulnerability details; they reach only a token whose account
+GitHub allows to see them.
+
+```sh
+qatlas invoke github.globaladvisories.list --connection open --arg ecosystem=npm --arg severity=critical
+qatlas invoke github.repositoryadvisories.list --connection code --arg state=draft
+qatlas invoke github.organizationadvisories.list --connection org --arg owner=orgs/octo-org
+qatlas invoke github.codequalityfindings.get --connection code --arg finding_number=12
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.globaladvisories.list` | read | safe | none | lists global security advisories |
+| `github.globaladvisories.get` | read | safe | none | reads one global security advisory |
+| `github.repositoryadvisories.list` | read | safe | none | lists the security advisories of a repository |
+| `github.organizationadvisories.list` | read | safe | none | lists the security advisories of an organization's repositories |
+| `github.codequalityfindings.get` | read | safe | none | reads one code quality finding |
+
+The not-recommended setup profile `security` ticks these five and the six alert tools, eleven in all; the
+recommended profile `read` is unchanged.
+
+| Tool | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.globaladvisories.*` | none | none |
+| `github.repositoryadvisories.list` | `repo` or `repository_advisories:read` for a private repository or an unpublished advisory | Repository security advisories: read |
+| `github.organizationadvisories.list` | `repo` or `repository_advisories:write`, and an organization owner or security manager | Repository security advisories: write |
+| `github.codequalityfindings.get` | `repo`; `public_repo` for a public repository | Code quality: read |
+
+The organization list needs the write-level permission although it only reads; that is how GitHub documents it.
+GitHub answers the finding read with 403 when code quality is not enabled or the token may not read it, and the
+repository list with `not-found` for a repository the token cannot see. Sources:
+https://docs.github.com/en/rest/security-advisories/global-advisories,
+https://docs.github.com/en/rest/security-advisories/repository-advisories, and
+https://docs.github.com/en/rest/code-quality/code-quality (checked 2026-09-30).
+
+The alert filters above match the official GitHub MCP server (MIT, `pkg/github/code_scanning.go`, `dependabot.go`,
+`secret_scanning.go` at commit 85598ba): no filter of the official server is missing.
 
 ## Milestones
 

@@ -55,14 +55,17 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	// custom properties tools, and github.issuefields.list take an exclusive repository or organization
 	// argument of their own, since exactly one of the two, never a default, addresses a call. The notification
 	// tools take an optional repository of their own, or a thread id whose repository is read and checked. The
-	// gist tools belong to a user account and take a gist id or none, checked against the user targets.
+	// gist tools belong to a user account and take a gist id or none, checked against the user targets. The
+	// global advisory tools are GitHub-wide and name no target; the organization advisory list takes the owner
+	// of an organization like the team lists.
 	switch d.ID {
 	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
 		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID, repositoriesCreate.ID,
 		rulesetsList.ID, rulesetsGet.ID, rulesetsCreate.ID, rulesetsUpdate.ID, rulesetsDelete.ID,
 		customPropertiesGet.ID, customPropertiesSet.ID, issueFieldsList.ID,
 		notificationsList.ID, notificationsGet.ID, notificationsDismiss.ID, notificationsMarkAll.ID,
-		threadSubscriptionsSet.ID, gistsList.ID, gistsGet.ID, gistsCreate.ID, gistsUpdate.ID, gistsDelete.ID:
+		threadSubscriptionsSet.ID, gistsList.ID, gistsGet.ID, gistsCreate.ID, gistsUpdate.ID, gistsDelete.ID,
+		globalAdvisoriesList.ID, globalAdvisoriesGet.ID:
 		return d
 	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument
@@ -71,7 +74,7 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	case d.ID == projectsList.ID || d.ID == repositoriesList.ID:
 		name, schema, argument = "owner", ownerSchema, ownerArgument
 		fields = []capability.Field{ownerField}
-	case d.ID == organizationTeamsList.ID || d.ID == teamMembersList.ID:
+	case d.ID == organizationTeamsList.ID || d.ID == teamMembersList.ID || d.ID == organizationAdvisoriesList.ID:
 		name, schema, argument = "owner", ownerSchema, organizationArgument
 		fields = []capability.Field{organizationField}
 	case d.ID == issueTypesList.ID:

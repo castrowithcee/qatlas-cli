@@ -253,9 +253,10 @@ var secretScanningAlertsGet = capability.Descriptor{
 	Examples: []capability.Example{{Description: "Read one alert", Arguments: json.RawMessage(`{"alert_number":3}`)}},
 }
 
-// securityAlertTools are the tools of the not-recommended setup profile security.
-var securityAlertTools = []string{codeScanningAlertsList.ID, codeScanningAlertsGet.ID, dependabotAlertsList.ID,
-	dependabotAlertsGet.ID, secretScanningAlertsList.ID, secretScanningAlertsGet.ID}
+// securityAlertTools are the tools of the not-recommended setup profile security: the alert tools, then
+// the advisory tools and the code quality finding read.
+var securityAlertTools = append([]string{codeScanningAlertsList.ID, codeScanningAlertsGet.ID, dependabotAlertsList.ID,
+	dependabotAlertsGet.ID, secretScanningAlertsList.ID, secretScanningAlertsGet.ID}, advisoryTools...)
 
 // alertArguments holds the arguments of every alert tool; the input schema of each admits only its own.
 type alertArguments struct {

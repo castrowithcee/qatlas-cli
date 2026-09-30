@@ -224,7 +224,7 @@ func TestSecurityProfileIsReadOnlyAndNotRecommended(t *testing.T) {
 	for _, profile := range metadata.Profiles {
 		switch profile.ID {
 		case "security":
-			if profile.Recommended || len(profile.Tools) != 6 {
+			if profile.Recommended || len(profile.Tools) != 11 {
 				t.Errorf("security = %+v", profile)
 			}
 			if got := metadata.ProfilePermissions(profile); len(got) != 1 || got[0] != config.PermissionRead {
