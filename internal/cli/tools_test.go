@@ -174,9 +174,9 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	if !strings.HasPrefix(stdout, "providers[13]{provider,description,note,tools,connections,configured}:\n") ||
+	if !strings.HasPrefix(stdout, "providers[14]{provider,description,note,tools,connections,configured}:\n") ||
 		!strings.HasSuffix(stdout, "\n") || strings.Contains(stdout, "\r") {
-		t.Errorf("stdout = %q, want an LF TOON table of thirteen namespace rows", stdout)
+		t.Errorf("stdout = %q, want an LF TOON table of fourteen namespace rows", stdout)
 	}
 	for _, want := range []string{
 		// BookStack has exactly one configured connection, Telegram one, and every other compiled

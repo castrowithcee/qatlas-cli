@@ -2,6 +2,7 @@ package cli
 
 import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/baserow"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/infomaniakchat"
@@ -59,6 +60,9 @@ func defaultRegistry() *capability.Registry {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := seatableaccount.Register(reg); err != nil {
+		panic("provider registration is static and must not fail: " + err.Error())
+	}
+	if err := baserow.Register(reg); err != nil {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	// Tool profiles name registered tools, so they are checked once every provider has registered its own.
