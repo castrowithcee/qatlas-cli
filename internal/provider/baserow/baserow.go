@@ -309,5 +309,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},
 		capability.Operation{Descriptor: rowsDelete, Handler: capability.Handler(invokeRowsDelete)},
 		capability.Operation{Descriptor: rowsMove, Handler: capability.Handler(invokeRowsMove)},
+		capability.Operation{Descriptor: rowsBatchCreate, Handler: capability.Handler(invokeRowsBatchCreate)},
+		capability.Operation{Descriptor: rowsBatchUpdate, Handler: capability.Handler(invokeRowsBatchUpdate)},
+		capability.Operation{Descriptor: rowsBatchDelete, Handler: capability.Handler(invokeRowsBatchDelete)},
 	)
 }

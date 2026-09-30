@@ -71,6 +71,9 @@ narrow what the token itself may read, so grant the token only the rights the co
 | `baserow.rows.update` | update | required | changes the named cells of one row |
 | `baserow.rows.delete` | delete | required, tool allow-list | deletes one row |
 | `baserow.rows.move` | update | required | moves one row within its table |
+| `baserow.rows.batchcreate` | create | required | creates 1 to 200 rows in one request |
+| `baserow.rows.batchupdate` | update | required | changes the named cells of 1 to 200 rows in one request |
+| `baserow.rows.batchdelete` | delete | required, tool allow-list | deletes 1 to 200 rows in one request |
 
 The read profile offers the five read tools. `rows.list` takes `table_id`, `page` (from 1; 1 when omitted), `size`
 (1 to 200; 50 when omitted), and `user_field_names` (true when omitted: values keyed by field name; false:
@@ -125,6 +128,25 @@ texts) and only when its other table is inside the targets; with `*` any table i
 whose other table cannot be determined is refused. The body is limited to 1 MiB and 500 cells. A missing
 token right is reported as a `permission` error naming the right to grant (`create`, `update`, or `delete`);
 Baserow's own text is never passed on.
+
+## Batch changes
+
+The batch tools take `table_id` and apply the rules of the row changes: confirmation, the table boundary before
+the credential, exactly one change request, no retry, and the uncertainty message. `batchdelete` runs only for a
+connection whose `tools` list names it. The tool IDs use no underscore (`batchcreate`, not `batch_create`).
+
+- `rows.batchcreate` takes `rows`, 1 to 200 objects of cell values keyed by field name, and answers
+  `{"rows": [...], "count": N}` with the new rows in request order, links masked.
+- `rows.batchupdate` takes `rows`, 1 to 200 objects with `row_id` and `fields` (at least one cell), and answers
+  like `batchcreate`. Row IDs must be distinct; a field named `id` is refused because the batch body uses `id`
+  for the row.
+- `rows.batchdelete` takes `row_ids`, 1 to 200 distinct IDs, and answers `{"deleted": true, "count": N}`.
+
+More than 200 rows, none, a repeated or non-positive row ID, and a body above 1 MiB are refused before any
+request. Create and update read the table's fields once and check every row like the single-row tools; one
+refused row refuses the whole batch without a change request. An answer whose item count differs from the
+request is an `invalid-provider-response` with the uncertainty message. Baserow applies a batch atomically as
+far as the documentation says; Qatlas does not rely on it and reports the uncertainty after an unclear result.
 
 ## Links into other tables
 
@@ -181,3 +203,9 @@ the field flags and types listed above, link values as arrays of row IDs or text
 entries as objects with `id` and `value`, `link_row_table_id` being null when the other table is not available, and that the
 table list of a token also contains the tables its token may not read, which is why the target filter is
 applied to it.
+
+Batch endpoints (assumed from the documented API shape, not fetched or tried against an instance in this
+change): `POST .../table/{table_id}/batch/` with `{"items": [cells]}` and `PATCH .../batch/` with
+`{"items": [{"id": N, ...cells}]}`, both with `user_field_names=true` and answering `{"items": [rows]}` in request
+order; `POST .../batch-delete/` with `{"items": [ids]}` and an empty 204 answer; a limit of 200 rows per call
+(`BATCH_ROWS_SIZE_LIMIT`).
