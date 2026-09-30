@@ -846,9 +846,12 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		}
 	}
 	equalIDs(t, ids, []string{"github.accounts.me", "github.actionspermissions.get", "github.blame.get",
-		"github.branches.list", "github.code.search", "github.collaborators.list",
+		"github.branches.list", "github.code.search", "github.codescanningalerts.get", "github.codescanningalerts.list",
+		"github.collaborators.list",
+
 		"github.comments.list", "github.commits.get", "github.commits.list", "github.commits.search",
-		"github.contents.get", "github.customproperties.get", "github.discussioncategories.list",
+		"github.contents.get", "github.customproperties.get", "github.dependabotalerts.get",
+		"github.dependabotalerts.list", "github.discussioncategories.list",
 		"github.discussioncomments.list", "github.discussions.get", "github.discussions.list", "github.gists.get", "github.gists.list",
 		"github.issuedependencies.list",
 		"github.issuefields.list",
@@ -864,7 +867,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		"github.pullrequests.list", "github.pullrequests.search",
 		"github.releaseassets.list", "github.releases.get", "github.releases.list",
 		"github.repositories.list", "github.repositories.search", "github.rulesets.get", "github.rulesets.list",
-		"github.stars.list", "github.subissues.list", "github.tags.get",
+		"github.secretscanningalerts.get", "github.secretscanningalerts.list", "github.stars.list", "github.subissues.list", "github.tags.get",
 		"github.tags.list", "github.teammembers.list",
 		"github.teams.list", "github.trees.get", "github.users.search",
 		"github.workflowartifacts.list",
@@ -874,7 +877,7 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 	if jobsLog.Risk.DataSensitivity != logSensitivity {
 		t.Errorf("the job log is classified as %q, want %q", jobsLog.Risk.DataSensitivity, logSensitivity)
 	}
-	if len(metadata.Tools) != 177 {
+	if len(metadata.Tools) != 183 {
 		t.Errorf("tools = %+v, want every operation offered to connection allow-lists", metadata.Tools)
 	}
 }

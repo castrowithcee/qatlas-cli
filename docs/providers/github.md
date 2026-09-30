@@ -162,7 +162,7 @@ a REST 404 or a GraphQL `NOT_FOUND`, or an answer that leaves the requested proj
 check. Inside a repository it names the issue, the workflow run, job, or workflow by its identifier, the
 workflow file or `.github/workflows` directory with the ref it was read at, `github.contents.get`'s path or
 the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s ref or its path at that ref,
-`github.commits.get`'s ref, `github.tags.get`'s tag, the discussion by its number, a gist as "this gist" (also for a gist of a user the connection's targets do not name) and a user's gists as "the gists of users/LOGIN", a notification thread as "this notification thread" (also for a thread of a repository the connection's targets do not admit), the subscription of a thread, a fork or the collaborators `github.repositories.fork` and
+`github.commits.get`'s ref, `github.tags.get`'s tag, the discussion by its number, a code scanning, Dependabot, or secret scanning alert as "code scanning alert N", "Dependabot alert N", or "secret scanning alert N" and their lists as "the code scanning alerts of this repository" and so on, a gist as "this gist" (also for a gist of a user the connection's targets do not name) and a user's gists as "the gists of users/LOGIN", a notification thread as "this notification thread" (also for a thread of a repository the connection's targets do not admit), the subscription of a thread, a fork or the collaborators `github.repositories.fork` and
 `github.collaborators.list` address, the pull request by its number, the sub-issues or the dependencies of an
 issue as "the sub-issues of issue #N", "a sub-issue of issue #N", "the sub-issue order of issue #N", "the
 issues blocking issue #N", "the issues issue #N blocks", or "a dependency of issue #N", or, for
@@ -247,7 +247,9 @@ not-recommended profile `notifications` lists and reads notifications, marks a t
 thread and repository subscriptions under [Notifications](#notifications); marking everything read stays
 unticked, since it is offered only where a connection's `tools` list names it. The not-recommended
 profile `gists` lists and reads gists and creates and updates them under [Gists](#gists); deleting a gist stays
-unticked, since it is offered only where a connection's `tools` list names it. A
+unticked, since it is offered only where a connection's `tools` list names it. The not-recommended profile
+`security` lists and reads the code scanning, Dependabot, and secret scanning alerts of a repository under
+[Security alerts](#security-alerts) and changes nothing. A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -1100,6 +1102,60 @@ Sources: https://docs.github.com/en/rest/gists/gists and
 https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
 (checked 2026-09-30; the second lists the create, update, and delete routes under the user permission Gists with
 write access and lists no gist read route).
+
+## Security alerts
+
+Six tools read the alerts of one repository; they change nothing, so an alert is neither closed, dismissed, nor
+assigned. `github.codescanningalerts.list` filters by `state` (open, closed, dismissed, fixed), `severity`
+(critical, high, medium, low, warning, note, error), `tool_name`, and `ref`; `github.dependabotalerts.list`
+filters by `state` (open, fixed, dismissed, auto_dismissed) and `severity` (critical, high, medium, low);
+`github.secretscanningalerts.list` filters by `state` (open, resolved), `secret_type` (a comma-separated list of
+type names), and `resolution` (false_positive, wont_fix, revoked, pattern_edited, pattern_deleted,
+used_in_tests). Each list answers one bounded batch, newest first, with `limit`, `next_cursor`, and `has_more`;
+a cursor belongs to the repository and the filters of its first batch. Each `.get` takes an `alert_number` as the
+list reports it. Every tool takes the optional `repository` argument and is checked against the connection's
+targets before a credential is resolved; an organization-wide alert list is not offered.
+
+Alert texts (rule and advisory descriptions, messages, dismissal comments, paths) come from scanners and other
+accounts and are untrusted data. Each is cut at 500 characters (4000 for the rule help and the advisory
+description of a `.get`), and `truncated` says so.
+
+A secret scanning alert never shows the found secret. The request asks GitHub to hide it (`hide_secret=true`),
+and the answer is decoded into a shape that has no field for a secret value, a snippet, or a comment, so nothing
+else GitHub sends can reach a result, an error, or a log. An answer that cannot be read or is too large fails
+with a fixed message that quotes nothing of it. An alert reports its type, state, resolution, validity, times,
+and the first location (kind, path, lines) only.
+
+```sh
+qatlas invoke github.codescanningalerts.list --connection code --arg state=open --arg severity=high
+qatlas invoke github.dependabotalerts.get --connection code --arg alert_number=7
+qatlas invoke github.secretscanningalerts.list --connection code --arg state=open
+```
+
+| Tool | Effect | Idempotency | Confirmation | Does |
+| --- | --- | --- | --- | --- |
+| `github.codescanningalerts.list` | read | safe | none | lists code scanning alerts |
+| `github.codescanningalerts.get` | read | safe | none | reads one code scanning alert with the rule help |
+| `github.dependabotalerts.list` | read | safe | none | lists Dependabot alerts |
+| `github.dependabotalerts.get` | read | safe | none | reads one Dependabot alert with the advisory description |
+| `github.secretscanningalerts.list` | read | safe | none | lists secret scanning alerts without the secret |
+| `github.secretscanningalerts.get` | read | safe | none | reads one secret scanning alert without the secret |
+
+The not-recommended setup profile `security` ticks all six; the recommended profile `read` is unchanged.
+
+| Tool | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.codescanningalerts.*` | `security_events` or `repo`; `public_repo` for a public repository | Code scanning alerts: read |
+| `github.dependabotalerts.*` | `security_events` or `repo`; `public_repo` for a public repository | Dependabot alerts: read |
+| `github.secretscanningalerts.*` | `repo` or `security_events` | Secret scanning alerts: read |
+
+GitHub answers `not-found` for a repository without the feature enabled or not visible to the token, and code
+scanning answers 403 without GitHub Advanced Security. Sources:
+https://docs.github.com/en/rest/code-scanning/code-scanning,
+https://docs.github.com/en/rest/dependabot/alerts,
+https://docs.github.com/en/rest/secret-scanning/secret-scanning, and
+https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens
+(checked 2026-09-30).
 
 ## Milestones
 

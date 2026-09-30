@@ -99,6 +99,11 @@
 // id is read first and refused as not found unless its owner is a user target, a create needs the account of
 // the token among them, and a new gist is secret unless public is set. Descriptions and file contents are
 // untrusted data, cut at fixed lengths, and a binary file shows only its metadata.
+// github.codescanningalerts.list and .get, github.dependabotalerts.list and .get, and
+// github.secretscanningalerts.list and .get read the code scanning, Dependabot, and secret scanning alerts of a
+// repository; they are offered only by the not-recommended setup profile security and change nothing. Alert
+// texts are untrusted data, cut at fixed lengths. A secret scanning alert never shows the found secret: the
+// request asks GitHub to hide it and the answer has no field for it.
 // github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
@@ -491,7 +496,10 @@ func Register(reg *capability.Registry) error {
 				"Qatlas refuses one before any request; a repository subscription is decided by GitHub per request; " +
 				"the gist tools need the gist scope on a classic token for secret gists and for every change, " +
 				"and creating, updating, or deleting a gist needs the user permission Gists: read and write " +
-				"on a fine-grained token, while GitHub lists no permission for the gist reads",
+				"on a fine-grained token, while GitHub lists no permission for the gist reads; the security alert " +
+				"tools need security_events or repo on a classic token (public_repo for a public repository), " +
+				"or Code scanning alerts: read, Dependabot alerts: read, and Secret scanning alerts: read on a " +
+				"fine-grained token",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -670,6 +678,12 @@ func Register(reg *capability.Registry) error {
 				"github.notifications.markall",
 			Tools: []string{notificationsList.ID, notificationsGet.ID, notificationsDismiss.ID,
 				threadSubscriptionsSet.ID, repositorySubscriptionsSet.ID},
+		}, {
+			ID: "security", Title: "Security alerts",
+			Description: "not recommended: lists and reads the code scanning, Dependabot, and secret scanning " +
+				"alerts of a repository; the found secret of a secret scanning alert is never shown; changes " +
+				"nothing",
+			Tools: securityAlertTools,
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -701,7 +715,7 @@ func Register(reg *capability.Registry) error {
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
 		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
-		discussionOperations(), notificationOperations(), gistOperations())...)
+		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1464,6 +1478,9 @@ func (c *Client) restSubject(request *http.Request) subject {
 			s.what = what
 		}
 		if what := customPropertiesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := alertsSubject(parts[2]); what != "" {
 			s.what = what
 		}
 		if what := labelsSubject(parts[2]); what != "" {

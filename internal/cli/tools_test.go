@@ -181,7 +181,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",177,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",183,0,0\n", ",\"\",3,0,0\n",
 		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",7,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -380,6 +380,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.branches.create",
 			"github.branches.list",
 			"github.code.search",
+			"github.codescanningalerts.get", "github.codescanningalerts.list",
 			"github.collaborators.list",
 			"github.comments.create", "github.comments.delete", "github.comments.list", "github.comments.update",
 			"github.commits.get", "github.commits.list", "github.commits.search",
@@ -388,6 +389,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.contents.put",
 			"github.customproperties.get",
 			"github.customproperties.set",
+			"github.dependabotalerts.get", "github.dependabotalerts.list",
 			"github.discussioncategories.list", "github.discussioncomments.create", "github.discussioncomments.delete",
 			"github.discussioncomments.list", "github.discussioncomments.update",
 			"github.discussions.create", "github.discussions.get", "github.discussions.list",
@@ -434,6 +436,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.repositories.list", "github.repositories.search", "github.repositorysubscriptions.set",
 			"github.rulesets.create", "github.rulesets.delete", "github.rulesets.get", "github.rulesets.list",
 			"github.rulesets.update",
+			"github.secretscanningalerts.get", "github.secretscanningalerts.list",
 			"github.stars.add", "github.stars.list", "github.stars.remove",
 			"github.subissues.add", "github.subissues.list", "github.subissues.remove", "github.subissues.reprioritize",
 			"github.tags.get", "github.tags.list",
