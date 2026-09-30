@@ -1,7 +1,7 @@
 ---
 description: >
   Describes the Penpot provider (beta): the access token and the Penpot Cloud or self-hosted base URL, the team and
-  project targets, the read tools, the comment tools that read and change, the bounds, errors, and the RPC forms it
+  project targets, the read tools, the tools that manage projects and files, the comment tools that read and change, the bounds, errors, and the RPC forms it
   relies on.
 type: knowledge
 edit: shared
@@ -12,7 +12,7 @@ updated: 2026-10-01
 # Penpot
 
 This provider reads teams, projects, files, and pages of a Penpot instance, Penpot Cloud or self-hosted, with an
-access token, and reads and manages the comments of a file. Comments are the only thing it changes.
+access token, creates, renames, deletes, and moves projects and files, and reads and manages the comments of a file. It changes nothing else: no file content, no libraries.
 
 **Beta.** Penpot's backend RPC interface (`POST /api/rpc/command/<name>`) is documented only by its sources and
 carries no stability promise. A command or a field can change with a Penpot release; the forms used here are listed
@@ -81,6 +81,12 @@ connections:
 | `penpot.projects.list` | read | none | `get-projects` | lists the projects of one bound team |
 | `penpot.files.list` | read | none | `get-project-files` | lists the files of one project |
 | `penpot.files.get` | read | none | `get-file-summary`, `get-page` | reads a file's library summary and one page |
+| `penpot.projects.create` | create | required | `create-project` | creates a project in a bound team |
+| `penpot.projects.rename` | update | required | `rename-project` | renames a project |
+| `penpot.projects.delete` | delete | required, tool allow-list | `delete-project` | deletes a project with its files |
+| `penpot.files.create` | create | required | `create-file` | creates an empty file in a project |
+| `penpot.files.rename` | update | required | `rename-file` | renames a file |
+| `penpot.files.move` | update | required | `move-files` | moves one file to another project |
 | `penpot.comments.threads` | read | none | `get-comment-threads` | lists the comment threads of a file |
 | `penpot.comments.list` | read | none | `get-comments` | lists the comments of one thread |
 | `penpot.comments.create` | create | required | `create-comment-thread` or `create-comment` | starts a thread or adds a comment |
@@ -88,8 +94,8 @@ connections:
 | `penpot.comments.delete` | delete | required, tool allow-list | `delete-comment-thread` or `delete-comment` | deletes a thread or a comment |
 
 The recommended read profile offers the four tools for teams, projects, and files; the comment tools are enabled
-through the connection's permissions and `tools` list, and `penpot.comments.delete` only when the `tools` list
-names it. Every tool names its command itself; there is no `command` argument, no free path, method, or body.
+through the connection's permissions and `tools` list, and so are the project and file tools. `penpot.comments.delete`
+and `penpot.projects.delete` are offered only when the `tools` list names them. Every tool names its command itself; there is no `command` argument, no free path, method, or body.
 Reads use POST but are idempotent and safe.
 
 `files.get` takes `project_id`, `file_id`, and optionally `page_id` (the first page of the file when omitted). Its
@@ -99,6 +105,32 @@ and `name`) and `page` (`id`, `name`, `shape_count`, `truncated`, and up to 200 
 references, text content, and every other shape property are not returned (a deliberate limit: geometry and identity
 only). A file's page list is not offered: the summary carries none, so other pages are reached only through a
 known `page_id`.
+
+## Projects and files
+
+The management tools take IDs from the list tools and change one thing with one fixed command. Names have 1 to 250
+characters (Penpot's own limit), are not blank, and carry no control characters; an answer never repeats a name, only
+IDs.
+
+- `projects.create` takes `team_id` and `name` and answers `project_id` and `team_id`. The team must be a bound team.
+  **A connection with a project allow-list refuses it**, because a new project could not be inside that list.
+- `projects.rename` takes `project_id` and `name`; `projects.delete` takes `project_id`. The project must pass the
+  allow-list and lie in a bound team (proved with `get-projects`). Penpot marks a deleted project and removes it and its
+  files after its deletion delay, and refuses the default project of a team. A project that is in the allow-list may be
+  deleted; the boundary is not widened by that.
+- `files.create` takes `project_id` and `name` and answers `file_id` and `project_id`; the project is bound as above.
+- `files.rename` takes `project_id`, `file_id`, and `name`. The file is bound through its project (project located,
+  file found in its file list) before anything is sent.
+- `files.move` takes `project_id` (where the file is now), `file_id`, and `target_project_id`. Both projects must pass
+  the allow-list and lie in bound teams, and they must differ; the file is bound through the source project. A move
+  between two bound teams is allowed when Penpot allows it. Penpot drops library links of the moved file that would
+  cross teams. The answer has `moved`, `file_id`, `project_id` (the new project), and `previous_project_id`.
+
+Every change asks for `confirm`, sends exactly one request, and is never repeated. After a timeout, a connection
+reset, a 5xx answer, or an unreadable answer (for a creation also an answer without the new ID) the error says that the
+change may have taken effect; read the projects or files before trying again. A refusal for a target outside the
+connection comes before the credential is resolved when the allow-list decides it, and otherwise after reads only; it
+never names the target.
 
 ## Comments
 
@@ -163,8 +195,16 @@ instance:
   `update-comment` (`id`, `content`), `delete-comment-thread` and `delete-comment` (`id`). The update and delete
   commands check that the caller owns the comment or thread and answer without a body. `share-id` and `mentions`
   are optional and never sent.
+- Project and file management (Penpot 2.18.0, `projects.clj`, `files.clj`, `files_create.clj`, `management.clj`):
+  `create-project` (`team-id`, `name`; answers the project with `id`), `rename-project` (`id`, `name`),
+  `delete-project` (`id`; marks the project deleted, refuses the default project), `create-file` (`project-id`,
+  `name`; answers the file with `id`), `rename-file` (`id`, `name`; answers `id`, `name`, timestamps), and
+  `move-files` (`ids`, a set of file IDs, and `project-id`, the target; refuses a move into the same project; answers
+  without a body). Names are at most 250 characters. The optional `id` (user-provided UUID), `is-shared`, and
+  `features` of the create commands are never sent.
 - Assumed, not documented: a `position` is sent as an object `{"x": ..., "y": ...}` and a thread's position is read
   the same way; a change that answers without a body is read as done; requests send kebab-case keys, responses are JSON when `Accept: application/json` is sent,
   and their keys are read case- and separator-insensitively (camelCase or kebab-case); the summary's categories carry
-  `count` and `sample`; a page's `objects` map is keyed by shape ID with `type`, `name`, `parent-id`, `frame-id`, `x`,
+  `count` and `sample`; the answers of `create-project` and `create-file` carry the new ID as `id`, and the other
+  management changes answer without a readable body that Qatlas needs; a page's `objects` map is keyed by shape ID with `type`, `name`, `parent-id`, `frame-id`, `x`,
   `y`, `width`, `height`. A different form yields empty fields, not an error.

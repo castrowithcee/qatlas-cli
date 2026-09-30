@@ -1,5 +1,6 @@
 // Package penpot implements controlled access to a Penpot instance, Penpot Cloud or self-hosted: its teams,
-// projects, files, and pages (read only) and the comment threads and comments of its files (read and change),
+// projects, files, and pages (read), the creation, renaming, deletion, and moving of projects and files, and the
+// comment threads and comments of its files (read and change),
 // through the backend RPC interface
 // (POST /api/rpc/command/<name>, help.penpot.app/technical-guide/integration, and the command sources of
 // penpot 2.18.0, backend/src/app/rpc/commands, read 2026-09-30, not against a live instance). The RPC
@@ -9,7 +10,8 @@
 // account; Qatlas adds its own boundary: the team targets of the connection (required) and an optional project
 // allow-list. Fixed commands are called, each from a handler that names it: get-teams, get-projects,
 // get-project-files, get-file-summary, get-page, the comment reads get-comment-threads and get-comments, and the
-// comment changes create-, update-, and delete-comment-thread or -comment. A change is one request that is never
+// comment changes create-, update-, and delete-comment-thread or -comment, and the management changes
+// create-, rename-, and delete-project, create-file, rename-file, and move-files. A change is one request that is never
 // repeated; a failure that leaves its result open says so. No agent argument chooses a command, a path, a method,
 // or a body. Penpot documents no pagination for these commands; the answers are bounded on the client side.
 //
@@ -76,11 +78,18 @@ const (
 	cmdUpdateComment = "update-comment"
 	cmdDeleteThread  = "delete-comment-thread"
 	cmdDeleteComment = "delete-comment"
+
+	cmdCreateProject = "create-project"
+	cmdRenameProject = "rename-project"
+	cmdDeleteProject = "delete-project"
+	cmdCreateFile    = "create-file"
+	cmdRenameFile    = "rename-file"
+	cmdMoveFiles     = "move-files"
 )
 
 // changeUncertain is appended to a failure of a change whose request may have reached Penpot. Qatlas never
 // repeats such a request by itself.
-const changeUncertain = "; this change may have taken effect, read the comments of the file before repeating it"
+const changeUncertain = "; this change may have taken effect, read the current state in Penpot before repeating it"
 
 var limiters = ratelimit.NewRegistry(0)
 
@@ -164,7 +173,8 @@ func isCommand(name string) bool {
 
 func isChange(name string) bool {
 	switch name {
-	case cmdCreateThread, cmdCreateComment, cmdUpdateThread, cmdUpdateComment, cmdDeleteThread, cmdDeleteComment:
+	case cmdCreateThread, cmdCreateComment, cmdUpdateThread, cmdUpdateComment, cmdDeleteThread, cmdDeleteComment,
+		cmdCreateProject, cmdRenameProject, cmdDeleteProject, cmdCreateFile, cmdRenameFile, cmdMoveFiles:
 		return true
 	}
 	return false
@@ -469,5 +479,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: commentsCreate, Handler: capability.Handler(invokeCommentsCreate)},
 		capability.Operation{Descriptor: commentsUpdate, Handler: capability.Handler(invokeCommentsUpdate)},
 		capability.Operation{Descriptor: commentsDelete, Handler: capability.Handler(invokeCommentsDelete)},
+		capability.Operation{Descriptor: projectsCreate, Handler: capability.Handler(invokeProjectsCreate)},
+		capability.Operation{Descriptor: projectsRename, Handler: capability.Handler(invokeProjectsRename)},
+		capability.Operation{Descriptor: projectsDelete, Handler: capability.Handler(invokeProjectsDelete)},
+		capability.Operation{Descriptor: filesCreate, Handler: capability.Handler(invokeFilesCreate)},
+		capability.Operation{Descriptor: filesRename, Handler: capability.Handler(invokeFilesRename)},
+		capability.Operation{Descriptor: filesMove, Handler: capability.Handler(invokeFilesMove)},
 	)
 }

@@ -149,16 +149,38 @@ func selectTeam(resolved *config.Resolved, raw string) (string, error) {
 // before any secret is resolved and before any request is sent. Whether the project lies in a bound team is
 // checked afterwards with a request (see (*Client).locateProject).
 func selectProject(resolved *config.Resolved, raw string) (string, error) {
+	return selectProjectAs(resolved, "project_id", raw)
+}
+
+// selectProjectAs is selectProject for an argument with another name, such as the target of a move.
+func selectProjectAs(resolved *config.Resolved, field, raw string) (string, error) {
 	bound, err := boundScope(resolved)
 	if err != nil {
 		return "", err
 	}
 	id, ok := parseUUID(raw)
 	if !ok {
-		return "", invalidRequest("project_id must be a UUID")
+		return "", invalidRequest(field + " must be a UUID")
 	}
 	if !bound.allowsProject(id) {
-		return "", invalidRequest("project_id is outside the targets of this connection")
+		return "", invalidRequest(field + " is outside the targets of this connection")
+	}
+	return id, nil
+}
+
+// selectTeamForNewProject is selectTeam for a new project: a connection narrowed by a project allow-list
+// refuses it, since the new project could not lie inside that list. The refusal comes before any secret.
+func selectTeamForNewProject(resolved *config.Resolved, raw string) (string, error) {
+	id, err := selectTeam(resolved, raw)
+	if err != nil {
+		return "", err
+	}
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return "", err
+	}
+	if len(bound.projects) > 0 {
+		return "", invalidRequest("a connection with a project allow-list cannot create projects")
 	}
 	return id, nil
 }

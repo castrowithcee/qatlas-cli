@@ -119,6 +119,11 @@ func (c *Client) projectsOf(ctx context.Context, op, teamID string) ([]Project, 
 // locateProject proves that a project lies in one of the bound teams: it reads the projects of each bound team
 // until the project appears. A project that is not found is refused like one outside the targets.
 func (c *Client) locateProject(ctx context.Context, op, projectID string) error {
+	return c.locateProjectAs(ctx, op, "project_id", projectID)
+}
+
+// locateProjectAs is locateProject for an argument with another name.
+func (c *Client) locateProjectAs(ctx context.Context, op, field, projectID string) error {
 	for _, teamID := range c.scope.teams {
 		projects, err := c.projectsOf(ctx, op, teamID)
 		if err != nil {
@@ -130,5 +135,5 @@ func (c *Client) locateProject(ctx context.Context, op, projectID string) error 
 			}
 		}
 	}
-	return invalidRequest("project_id is outside the targets of this connection")
+	return invalidRequest(field + " is outside the targets of this connection")
 }

@@ -115,12 +115,15 @@ func testConfig() *config.Config {
 			"two":    connection("team/"+teamA, "team/"+teamB),
 			"narrow": connection("team/"+teamA, "project/"+projectA1),
 			"write": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
-				Tools: []string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}},
+				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, manageTools...)},
+			"writetwo": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA, "team/" + teamB},
+				Tools: manageTools},
 			"writenarrow": {Service: "penpot", Credential: "token", Permissions: all,
 				Targets: []string{"team/" + teamA, "project/" + projectA1},
-				Tools:   []string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}},
+				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, manageTools...)},
 			"nodelete": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
-				Tools: []string{commentsCreate.ID, commentsUpdate.ID}},
+				Tools: []string{commentsCreate.ID, commentsUpdate.ID, projectsCreate.ID, projectsRename.ID, filesCreate.ID,
+					filesRename.ID, filesMove.ID}},
 		},
 	}
 }
@@ -179,12 +182,15 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		filesList.ID: config.PermissionRead, filesGet.ID: config.PermissionRead,
 		commentsThreads.ID: config.PermissionRead, commentsList.ID: config.PermissionRead,
 		commentsCreate.ID: config.PermissionCreate, commentsUpdate.ID: config.PermissionUpdate,
-		commentsDelete.ID: config.PermissionDelete}
+		commentsDelete.ID: config.PermissionDelete,
+		projectsCreate.ID: config.PermissionCreate, projectsRename.ID: config.PermissionUpdate,
+		projectsDelete.ID: config.PermissionDelete, filesCreate.ID: config.PermissionCreate,
+		filesRename.ID: config.PermissionUpdate, filesMove.ID: config.PermissionUpdate}
 	if len(metadata.Tools) != len(want) {
 		t.Fatalf("tools = %+v", metadata.Tools)
 	}
 	for _, tool := range metadata.Tools {
-		if effect, ok := want[tool.ID]; !ok || tool.Effect != effect || tool.RequiresToolAllowList != (tool.ID == commentsDelete.ID) {
+		if effect, ok := want[tool.ID]; !ok || tool.Effect != effect || tool.RequiresToolAllowList != (tool.ID == commentsDelete.ID || tool.ID == projectsDelete.ID) {
 			t.Fatalf("tool %+v", tool)
 		}
 	}
