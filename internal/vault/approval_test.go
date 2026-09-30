@@ -184,3 +184,38 @@ func TestApprovalsExistOnlyWhileEncrypted(t *testing.T) {
 		t.Errorf("CheckApproval() after a planted plaintext approval = %v, want ErrApprovalRequired", err)
 	}
 }
+
+// A scope without local file directories keeps the fingerprint it had before the field existed; the value
+// was computed from the canonical form of that time.
+func TestFingerprintWithoutFilesIsUnchanged(t *testing.T) {
+	const want = "4e83b7a5c7201175c9e37bccbfb39049023b62d0e8d15ea98e0e2205ca0e928a"
+	if got := Fingerprint(wikiScope(), "id-1"); got != want {
+		t.Fatalf("Fingerprint() = %s, want %s", got, want)
+	}
+	empty := wikiScope()
+	empty.FilesRead, empty.FilesWrite = []string{}, []string{}
+	if got := Fingerprint(empty, "id-1"); got != want {
+		t.Errorf("Fingerprint() with empty files = %s, want %s", got, want)
+	}
+}
+
+func TestFingerprintCoversFiles(t *testing.T) {
+	base := Fingerprint(wikiScope(), "id-1")
+	with := func(read, write []string) string {
+		s := wikiScope()
+		s.FilesRead, s.FilesWrite = read, write
+		return Fingerprint(s, "id-1")
+	}
+	if with([]string{"/a"}, nil) == base || with(nil, []string{"/a"}) == base {
+		t.Error("a released directory does not change the fingerprint")
+	}
+	if with([]string{"/a"}, nil) == with(nil, []string{"/a"}) {
+		t.Error("read and write are not told apart")
+	}
+	if with([]string{"/a", "/b"}, nil) != with([]string{"/b", "/a"}, nil) {
+		t.Error("the order of directories changes the fingerprint")
+	}
+	if with([]string{"/a"}, nil) == with([]string{"/a", "/b"}, nil) {
+		t.Error("another directory does not change the fingerprint")
+	}
+}

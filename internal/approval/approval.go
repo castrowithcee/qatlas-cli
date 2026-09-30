@@ -31,6 +31,7 @@ const (
 	FieldTargets     = "targets"
 	FieldTools       = "tools"
 	FieldPaths       = "paths"
+	FieldFiles       = "files"
 )
 
 // FieldChange is one field of a connection's scope that differs from what was approved, each side written as
@@ -161,6 +162,7 @@ func diff(approved vault.Approval, now vault.Scope, id string) []FieldChange {
 	add(FieldTargets, list(before.Targets), list(after.Targets))
 	add(FieldTools, tools(before.Tools), tools(after.Tools))
 	add(FieldPaths, PathsText(before.Paths), PathsText(after.Paths))
+	add(FieldFiles, FilesText(before.FilesRead, before.FilesWrite), FilesText(after.FilesRead, after.FilesWrite))
 	return fields
 }
 
@@ -177,6 +179,21 @@ func PathsText(values []string) string {
 		return "(every project)"
 	}
 	return list(values)
+}
+
+// FilesText is the local directories a connection releases as a person reads them, per direction.
+func FilesText(read, write []string) string {
+	if len(read) == 0 && len(write) == 0 {
+		return "(no local files)"
+	}
+	var parts []string
+	if len(read) > 0 {
+		parts = append(parts, "read: "+list(read))
+	}
+	if len(write) > 0 {
+		parts = append(parts, "write: "+list(write))
+	}
+	return strings.Join(parts, "; ")
 }
 
 func tools(values []string) string {

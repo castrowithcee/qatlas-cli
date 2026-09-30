@@ -25,6 +25,7 @@ const (
 	GapTools       = "tools"
 	GapTargets     = "targets"
 	GapPaths       = "paths"
+	GapFiles       = "files"
 	// GapVorbild marks a change to a connection that is itself the vorbild of an agent token, which no
 	// token may change or delete.
 	GapVorbild = "vorbild"
@@ -72,7 +73,8 @@ type model struct {
 // A change is covered when a vorbild V of the token, as V is approved, not as it may be configured now, has
 // the same service (provider and endpoint) and the same credential entry, and the change stays inside V:
 // its permissions a subset of V's; its tools a subset of V's tools list, where V has one; its targets among
-// V's, where V has any; its paths inside V's, where V is bound to any. A delete is covered when the
+// V's, where V has any; its paths inside V's, where V is bound to any; its local file directories, per
+// direction, inside V's of that direction, and none where V has none. A delete is covered when the
 // approval it removes was. A vorbild counts only while it is a connection in current and its approval still
 // reads the credential entry it was given for. A change to a connection that is the vorbild of any token is
 // never covered. A change partly outside stays open whole.
@@ -252,6 +254,9 @@ func coverGaps(vorbild Approval, scope Scope, id string) []string {
 	if len(ceiling.Paths) > 0 && !pathsWithin(change.Paths, ceiling.Paths) {
 		gaps = append(gaps, GapPaths)
 	}
+	if !filesWithin(change.FilesRead, ceiling.FilesRead) || !filesWithin(change.FilesWrite, ceiling.FilesWrite) {
+		gaps = append(gaps, GapFiles)
+	}
 	return gaps
 }
 
@@ -262,6 +267,13 @@ func subset(values, of []string) bool {
 		}
 	}
 	return true
+}
+
+// filesWithin reports whether every entry of files lies inside one of bases, the entries of the same
+// direction in the vorbild. No entries are always covered, since they release nothing; any entry is
+// uncovered where the vorbild releases nothing in that direction.
+func filesWithin(files, bases []string) bool {
+	return len(files) == 0 || pathsWithin(files, bases)
 }
 
 // pathsWithin reports whether paths is not empty and every entry lies inside one of bases. An empty paths

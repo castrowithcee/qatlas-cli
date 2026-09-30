@@ -404,6 +404,8 @@ type ConnectionSummary struct {
 	Permissions string  `json:"permissions"`
 	Tools       string  `json:"tools"`
 	Unusable    *string `json:"unusable,omitempty"`
+	// Files names the local directories the connection releases, per direction; absent when none.
+	Files *FilesRef `json:"files,omitempty"`
 }
 
 // ConnectionsResponse is the payload inside the CLI envelope.
@@ -462,7 +464,7 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 		}
 		summary := ConnectionSummary{
 			Name: name, Provider: owner, Description: connection.Description,
-			Permissions: strings.Join(effects, " "), Tools: tools,
+			Permissions: strings.Join(effects, " "), Tools: tools, Files: filesRef(connection.Files),
 		}
 		if len(reasons) > 0 {
 			reason := reasons[name]
@@ -636,9 +638,35 @@ type DescribeRequest struct {
 // carries; Description is the optional line its owner maintains and is empty when there is none. The
 // description informs a person or an agent that already asked for this contract, and never selects a
 // route by itself.
+//
+// Files is present only when the connection releases local directories, and names them per direction: Read
+// for the directories tools may read files from, Write for those they may write files to. It is the one
+// place discovery names a path, so a caller knows where a tool may work.
 type ConnectionRef struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Files       *FilesRef `json:"files,omitempty"`
+}
+
+// FilesRef is the local directories a connection releases, as configured, per direction.
+type FilesRef struct {
+	Read  []string `json:"read,omitempty"`
+	Write []string `json:"write,omitempty"`
+}
+
+// filesRef returns the discovery view of files, or nil when no directory is released.
+func filesRef(files config.Files) *FilesRef {
+	if files.Empty() {
+		return nil
+	}
+	copied := files.Clone()
+	if len(copied.Read) == 0 {
+		copied.Read = nil
+	}
+	if len(copied.Write) == 0 {
+		copied.Write = nil
+	}
+	return &FilesRef{Read: copied.Read, Write: copied.Write}
 }
 
 // DescribeResponse is the complete operation contract and its possible configured routes.
@@ -955,6 +983,7 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		Permissions: c.config.ConnectionPermissions(name),
 		Tools:       connection.ToolsList(),
 		Paths:       append([]string(nil), connection.Paths...),
+		Files:       connection.Files.Clone(),
 	}, nil
 }
 
@@ -1031,6 +1060,10 @@ func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) 
 		switch c.config.ConnectionRefusal(name, descriptor.Tool()) {
 		case "":
 			return ""
+		case config.RefusalNoLocalFiles:
+			if closest == config.RefusalEffect {
+				closest = config.RefusalNoLocalFiles
+			}
 		case config.RefusalToolsList:
 			closest = config.RefusalToolsList
 		case config.RefusalToolAllowList:
@@ -1049,7 +1082,15 @@ func (c *Core) connectionRef(name string) ConnectionRef {
 	if c.redactor != nil {
 		description = c.redactor.Apply(description)
 	}
-	return ConnectionRef{Name: name, Description: description}
+	files := filesRef(c.config.Connections[name].Files)
+	if files != nil && c.redactor != nil {
+		for _, list := range [][]string{files.Read, files.Write} {
+			for i := range list {
+				list[i] = c.redactor.Apply(list[i])
+			}
+		}
+	}
+	return ConnectionRef{Name: name, Description: description, Files: files}
 }
 
 func (c *Core) connectionNames(provider string) []string {

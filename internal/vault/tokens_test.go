@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -185,6 +186,8 @@ func TestApproveWithTokenCoverage(t *testing.T) {
 		{"path outside", func(s *Scope) { s.Paths = []string{t.TempDir()} }, []string{GapPaths}},
 		{"path through a link out", func(s *Scope) { s.Paths = []string{outsideLink} }, []string{GapPaths}},
 		{"no paths", func(s *Scope) { s.Paths = nil }, []string{GapPaths}},
+		{"files read released", func(s *Scope) { s.FilesRead = []string{inside} }, []string{GapFiles}},
+		{"files write released", func(s *Scope) { s.FilesWrite = []string{inside} }, []string{GapFiles}},
 		{"partly outside", func(s *Scope) {
 			s.Permissions, s.Targets = []string{"read"}, []string{"repos/o/a", "repos/o/z"}
 		}, []string{GapTargets}},
@@ -461,5 +464,52 @@ func TestFindAgentTokenOrder(t *testing.T) {
 	}
 	if value, _ := find(env(map[string]string{AgentTokenEnv: "  "})); value != "qat_project" {
 		t.Errorf("with a blank environment variable = %q, want the files", value)
+	}
+}
+
+// Local file directories are covered per direction: inside the vorbild's entries of the same direction, none
+// where the vorbild has none, and never across directions.
+func TestCoverGapsFiles(t *testing.T) {
+	base := t.TempDir()
+	in, out := filepath.Join(base, "in"), filepath.Join(base, "out")
+	for _, dir := range []string{filepath.Join(in, "sub"), out, filepath.Join(base, "inx")} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	outside := filepath.Join(base, "inx")
+	link := filepath.Join(in, "link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	vorbild := Approval{CredentialID: "id", Scope: Scope{Connection: "v", Credential: "c", Provider: "p",
+		Origin: "o", FilesRead: []string{in}, FilesWrite: []string{out}}}
+	plain := Approval{CredentialID: "id", Scope: Scope{Connection: "v", Credential: "c", Provider: "p", Origin: "o"}}
+	change := func(read, write []string) Scope {
+		return Scope{Connection: "x", Credential: "c", Provider: "p", Origin: "o", FilesRead: read, FilesWrite: write}
+	}
+	for _, tc := range []struct {
+		name    string
+		vorbild Approval
+		change  Scope
+		covered bool
+	}{
+		{"same", vorbild, change([]string{in}, []string{out}), true},
+		{"narrower", vorbild, change([]string{filepath.Join(in, "sub")}, nil), true},
+		{"none at all", vorbild, change(nil, nil), true},
+		{"read outside", vorbild, change([]string{out}, nil), false},
+		{"write in the read directory", vorbild, change(nil, []string{in}), false},
+		{"read in the write directory", vorbild, change([]string{out}, []string{out}), false},
+		{"sibling with the same prefix", vorbild, change([]string{outside}, nil), false},
+		{"link out", vorbild, change([]string{link}, nil), false},
+		{"one entry outside", vorbild, change([]string{in, outside}, nil), false},
+		{"plain vorbild, none", plain, change(nil, nil), true},
+		{"plain vorbild, read", plain, change([]string{in}, nil), false},
+		{"plain vorbild, write", plain, change(nil, []string{in}), false},
+	} {
+		gaps := coverGaps(tc.vorbild, tc.change, "id")
+		if covered := len(gaps) == 0; covered != tc.covered || (!covered && !reflect.DeepEqual(gaps, []string{GapFiles})) {
+			t.Errorf("%s: gaps = %v, want covered = %v", tc.name, gaps, tc.covered)
+		}
 	}
 }

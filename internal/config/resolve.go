@@ -22,6 +22,8 @@ type Resolved struct {
 	Tools []string
 	// Paths is the connection's paths list as configured, nil when it applies in every project.
 	Paths []string
+	// Files is the local directories the connection releases, as configured; empty grants no file access.
+	Files Files
 }
 
 // ToolsList returns a copy of the connection's tools list that keeps a missing list, nil, apart from an
@@ -79,5 +81,6 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 		Permissions: c.ConnectionPermissions(name),
 		Tools:       conn.ToolsList(),
 		Paths:       append([]string(nil), conn.Paths...),
+		Files:       conn.Files.Clone(),
 	}, nil
 }

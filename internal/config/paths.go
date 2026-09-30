@@ -3,7 +3,6 @@ package config
 import (
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -66,14 +65,7 @@ func (c *Config) PathWarnings() []string {
 	var warnings []string
 	for _, name := range sortedKeys(c.Connections) {
 		for i, entry := range c.Connections[name].Paths {
-			dir, err := projectpath.Expand(entry)
-			if err == nil {
-				var info os.FileInfo
-				if info, err = os.Stat(dir); err == nil && !info.IsDir() {
-					err = fmt.Errorf("not a directory")
-				}
-			}
-			if err != nil {
+			if !isExistingDir(entry) {
 				warnings = append(warnings, fmt.Sprintf("connection %q: paths[%d] names no existing directory, "+
 					"so no project lies inside it", name, i))
 			}

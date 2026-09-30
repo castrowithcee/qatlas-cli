@@ -90,20 +90,24 @@ type Example struct {
 // RequiresToolAllowList marks a high-risk operation that no connection offers because of its permissions
 // alone: only a connection whose tools list names it does, see config.ToolMetadata.
 type Descriptor struct {
-	ID                    string          `json:"id"`
-	Version               int             `json:"version"`
-	Title                 string          `json:"title"`
-	Description           string          `json:"description"`
-	Tags                  []string        `json:"tags"`
-	Risk                  Risk            `json:"risk"`
-	Provider              string          `json:"provider"`
-	RequiresToolAllowList bool            `json:"requires_tool_allow_list"`
-	InputSchema           json.RawMessage `json:"input_schema"`
-	OutputSchema          json.RawMessage `json:"output_schema"`
-	Arguments             []Argument      `json:"arguments"`
-	Fields                []Field         `json:"fields"`
-	ImpliedFields         []ImpliedField  `json:"implied_fields,omitempty"`
-	Examples              []Example       `json:"examples"`
+	ID                    string   `json:"id"`
+	Version               int      `json:"version"`
+	Title                 string   `json:"title"`
+	Description           string   `json:"description"`
+	Tags                  []string `json:"tags"`
+	Risk                  Risk     `json:"risk"`
+	Provider              string   `json:"provider"`
+	RequiresToolAllowList bool     `json:"requires_tool_allow_list"`
+	// LocalFiles is empty for an operation without local file access, otherwise the direction it reads
+	// or writes local files in. Only a connection whose files list releases a directory of that direction
+	// offers it.
+	LocalFiles    config.LocalFiles `json:"local_files,omitempty"`
+	InputSchema   json.RawMessage   `json:"input_schema"`
+	OutputSchema  json.RawMessage   `json:"output_schema"`
+	Arguments     []Argument        `json:"arguments"`
+	Fields        []Field           `json:"fields"`
+	ImpliedFields []ImpliedField    `json:"implied_fields,omitempty"`
+	Examples      []Example         `json:"examples"`
 }
 
 // Handler is the provider-independent dispatch seam used by the application core. Implementations open
@@ -392,8 +396,15 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 	// The tool list is what configuration validates a connection's tools against and what an editor
 	// offers, so both follow the registered operations instead of a list of their own.
 	metadata.Tools = metadata.Tools[:0]
+	metadata.LocalFiles = config.LocalFilesSupport{}
 	for _, descriptor := range sorted(r.byProvider[provider]) {
 		metadata.Tools = append(metadata.Tools, descriptor.Tool())
+		switch descriptor.LocalFiles {
+		case config.LocalFilesRead:
+			metadata.LocalFiles.Read = true
+		case config.LocalFilesWrite:
+			metadata.LocalFiles.Write = true
+		}
 	}
 	r.metadata[provider] = metadata
 	return nil
@@ -403,7 +414,7 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 // checked against.
 func (d Descriptor) Tool() config.ToolMetadata {
 	return config.ToolMetadata{ID: d.ID, Title: d.Title, Effect: config.Permission(d.Risk.Effect),
-		RequiresToolAllowList: d.RequiresToolAllowList}
+		RequiresToolAllowList: d.RequiresToolAllowList, LocalFiles: d.LocalFiles}
 }
 
 // Provider returns the descriptors of one provider type, sorted by ID. The result is a copy, so a
@@ -488,6 +499,12 @@ func (d Descriptor) validate(provider string) error {
 	}
 	if d.Description == "" {
 		return fmt.Errorf("operation %q: description must not be empty", d.ID)
+	}
+	switch d.LocalFiles {
+	case "", config.LocalFilesRead, config.LocalFilesWrite:
+	default:
+		return fmt.Errorf("operation %q: local files must be empty, %q or %q", d.ID, config.LocalFilesRead,
+			config.LocalFilesWrite)
 	}
 	if err := d.Risk.validate(d.ID); err != nil {
 		return err
