@@ -20,3 +20,23 @@ func Confirmed(ctx context.Context) bool {
 	confirmed, _ := ctx.Value(confirmedKey{}).(bool)
 	return confirmed
 }
+
+// replacedKey carries the callback that hears of a local file replaced by a confirmed request.
+type replacedKey struct{}
+
+// WithReplacedReporter returns a copy of ctx whose ReportReplaced calls report. Only the core sets it, to
+// record the replacement without learning which file it was.
+func WithReplacedReporter(ctx context.Context, report func()) context.Context {
+	return context.WithValue(ctx, replacedKey{}, report)
+}
+
+// ReportReplaced tells the core that an existing local file was replaced under the request's confirmation.
+// It carries no path. Without a reporter in ctx, nil included, it does nothing.
+func ReportReplaced(ctx context.Context) {
+	if ctx == nil {
+		return
+	}
+	if report, _ := ctx.Value(replacedKey{}).(func()); report != nil {
+		report()
+	}
+}

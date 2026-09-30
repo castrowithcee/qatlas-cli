@@ -128,9 +128,18 @@ func candidates(connections []ConnectionRef) string {
 }
 
 // ConfirmationRequiredError reports a mutating request without its request-bound confirmation.
-type ConfirmationRequiredError struct{ Operation string }
+//
+// Overwrite is set where the tool itself needs no confirmation but would replace an existing local file.
+type ConfirmationRequiredError struct {
+	Operation string
+	Overwrite bool
+}
 
 func (e *ConfirmationRequiredError) Error() string {
+	if e.Overwrite {
+		return fmt.Sprintf("tool %q would replace an existing local file; repeat the request with confirmation "+
+			"to replace it", e.Operation)
+	}
 	return fmt.Sprintf("tool %q requires confirmation in this invoke request", e.Operation)
 }
 
@@ -142,9 +151,15 @@ func (e *PolicyDeniedError) Error() string {
 }
 
 // InvalidProviderResponseError reports output that does not satisfy the registered contract.
-type InvalidProviderResponseError struct{ Operation string }
+//
+// Reason, when set, says how downloaded content deviated from what the provider announced; it never holds a
+// path.
+type InvalidProviderResponseError struct{ Operation, Reason string }
 
 func (e *InvalidProviderResponseError) Error() string {
+	if e.Reason != "" {
+		return fmt.Sprintf("tool %q returned an invalid provider response: %s", e.Operation, e.Reason)
+	}
 	return fmt.Sprintf("tool %q returned an invalid provider response", e.Operation)
 }
 

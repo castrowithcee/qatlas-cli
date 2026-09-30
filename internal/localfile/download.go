@@ -270,6 +270,7 @@ func (d *Download) commit() error {
 		return nil
 	}
 	info, err := d.dir.Lstat(d.name)
+	replaced := err == nil
 	switch {
 	case err == nil && !info.Mode().IsRegular():
 		return pathError(config.LocalFilesWrite, reasonNotRegular)
@@ -278,6 +279,9 @@ func (d *Download) commit() error {
 	}
 	if err := d.dir.Rename(d.temp, d.name); err != nil {
 		return failure("replacing", err)
+	}
+	if replaced {
+		capability.ReportReplaced(d.ctx)
 	}
 	return nil
 }

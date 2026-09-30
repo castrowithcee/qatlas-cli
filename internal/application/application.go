@@ -20,6 +20,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/localfile"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/projectpath"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -775,11 +776,14 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	if handler == nil {
 		return InvokeResponse{}, fmt.Errorf("operation %q has an invalid handler", descriptor.ID)
 	}
-	if descriptor.Risk.Confirmation == capability.ConfirmationRequired {
-		requestID, requestErr := newRequestID()
-		if requestErr != nil {
+	requestID := ""
+	if descriptor.Risk.Confirmation == capability.ConfirmationRequired || descriptor.LocalFiles != "" {
+		var requestErr error
+		if requestID, requestErr = newRequestID(); requestErr != nil {
 			return InvokeResponse{}, fmt.Errorf("create audit request ID: %w", requestErr)
 		}
+	}
+	if descriptor.Risk.Confirmation == capability.ConfirmationRequired {
 		defer func() {
 			c.writeAudit(auditEvent{
 				RequestID: requestID, Operation: descriptor.ID, Connection: resolved.Name,
@@ -789,9 +793,20 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	}
 	// The secrets of the handler are resolved for the selected connection alone: an encrypted vault hands
 	// them out only when it approved that connection as it is configured now.
-	value, err := handler(secret.ForConnection(ctx, resolved), resolved, c.secrets, c.redactor, request.Arguments)
+	handlerCtx := secret.ForConnection(ctx, resolved)
+	// The confirmation reaches the handler only from the request itself, also where the tool needs none of
+	// its own: a tool with local file access asks for it before it replaces a file.
+	if request.Confirmed {
+		handlerCtx = capability.WithConfirmed(handlerCtx)
+	}
+	if descriptor.LocalFiles != "" {
+		handlerCtx = capability.WithReplacedReporter(handlerCtx, func() {
+			c.writeReplacedAudit(requestID, descriptor.ID, resolved.Name)
+		})
+	}
+	value, err := handler(handlerCtx, resolved, c.secrets, c.redactor, request.Arguments)
 	if err != nil {
-		return InvokeResponse{}, err
+		return InvokeResponse{}, mapLocalFileError(descriptor, err)
 	}
 	normalized, err := normalize(value)
 	if err != nil {
@@ -866,6 +881,47 @@ type auditEvent struct {
 	Confirmed  bool      `json:"confirmed"`
 	Result     string    `json:"result"`
 	Time       time.Time `json:"time"`
+}
+
+// replacedAuditEvent records that a confirmed request replaced an existing local file. It names neither the
+// file nor its directory.
+type replacedAuditEvent struct {
+	Event      string    `json:"event"`
+	RequestID  string    `json:"request_id"`
+	Operation  string    `json:"operation"`
+	Connection string    `json:"connection"`
+	Time       time.Time `json:"time"`
+}
+
+// auditEventLocalFileReplaced is the kind of a replacedAuditEvent.
+const auditEventLocalFileReplaced = "local-file-replaced"
+
+func (c *Core) writeReplacedAudit(requestID, operation, connection string) {
+	if c.audit == nil {
+		return
+	}
+	_ = json.NewEncoder(c.audit).Encode(replacedAuditEvent{
+		Event: auditEventLocalFileReplaced, RequestID: requestID, Operation: operation,
+		Connection: connection, Time: time.Now().UTC(),
+	})
+}
+
+// mapLocalFileError turns the failures of the local file access into the errors of the core, so they carry
+// the provider-independent codes. Any other error passes unchanged. None of the messages names a path.
+func mapLocalFileError(descriptor capability.Descriptor, err error) error {
+	var (
+		pathErr      *localfile.PathError
+		integrityErr *localfile.IntegrityError
+	)
+	switch {
+	case errors.Is(err, localfile.ErrOverwriteNeedsConfirmation):
+		return &ConfirmationRequiredError{Operation: descriptor.ID, Overwrite: true}
+	case errors.As(err, &pathErr):
+		return &InvalidRequestError{Message: pathErr.Error()}
+	case errors.As(err, &integrityErr):
+		return &InvalidProviderResponseError{Operation: descriptor.ID, Reason: integrityErr.Reason}
+	}
+	return err
 }
 
 func newRequestID() (string, error) {
