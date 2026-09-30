@@ -44,7 +44,7 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { retu
 
 type call struct {
 	method, host, path, auth, contentType string
-	body                                  map[string]string
+	body                                  map[string]any
 }
 
 func (c call) command() string { return strings.TrimPrefix(c.path, commandPrefix) }
@@ -102,6 +102,7 @@ func registry(t *testing.T) *capability.Registry {
 func testConfig() *config.Config {
 	credential := config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleAccessToken: tokenEnv}}
 	read := []config.Permission{config.PermissionRead}
+	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
 	connection := func(targets ...string) config.Connection {
 		return config.Connection{Service: "penpot", Credential: "token", Permissions: read, Targets: targets}
 	}
@@ -113,6 +114,13 @@ func testConfig() *config.Config {
 			"one":    connection("team/" + teamA),
 			"two":    connection("team/"+teamA, "team/"+teamB),
 			"narrow": connection("team/"+teamA, "project/"+projectA1),
+			"write": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
+				Tools: []string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}},
+			"writenarrow": {Service: "penpot", Credential: "token", Permissions: all,
+				Targets: []string{"team/" + teamA, "project/" + projectA1},
+				Tools:   []string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}},
+			"nodelete": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
+				Tools: []string{commentsCreate.ID, commentsUpdate.ID}},
 		},
 	}
 }
@@ -167,12 +175,16 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	want := map[string]bool{teamsList.ID: true, projectsList.ID: true, filesList.ID: true, filesGet.ID: true}
+	want := map[string]config.Permission{teamsList.ID: config.PermissionRead, projectsList.ID: config.PermissionRead,
+		filesList.ID: config.PermissionRead, filesGet.ID: config.PermissionRead,
+		commentsThreads.ID: config.PermissionRead, commentsList.ID: config.PermissionRead,
+		commentsCreate.ID: config.PermissionCreate, commentsUpdate.ID: config.PermissionUpdate,
+		commentsDelete.ID: config.PermissionDelete}
 	if len(metadata.Tools) != len(want) {
 		t.Fatalf("tools = %+v", metadata.Tools)
 	}
 	for _, tool := range metadata.Tools {
-		if !want[tool.ID] || tool.Effect != config.PermissionRead || tool.RequiresToolAllowList {
+		if effect, ok := want[tool.ID]; !ok || tool.Effect != effect || tool.RequiresToolAllowList != (tool.ID == commentsDelete.ID) {
 			t.Fatalf("tool %+v", tool)
 		}
 	}
@@ -323,6 +335,15 @@ func TestOnlyFixedCommandsAreSent(t *testing.T) {
 	c := &Client{}
 	if err := c.do(context.Background(), "x", "update-file", nil, nil); err == nil {
 		t.Fatal("a command outside the fixed set must be refused")
+	}
+	if _, err := c.change(context.Background(), "x", "update-file", nil); err == nil {
+		t.Fatal("a change command outside the fixed set must be refused")
+	}
+	if err := c.do(context.Background(), "x", cmdDeleteComment, nil, nil); err == nil {
+		t.Fatal("a read must not send a change command")
+	}
+	if _, err := c.change(context.Background(), "x", cmdThreads, nil); err == nil {
+		t.Fatal("a change must not send a read command")
 	}
 }
 

@@ -1,13 +1,16 @@
-// Package penpot implements controlled, read-only access to the teams, projects, files, and pages of a
-// Penpot instance, Penpot Cloud or self-hosted, through the backend RPC interface
+// Package penpot implements controlled access to a Penpot instance, Penpot Cloud or self-hosted: its teams,
+// projects, files, and pages (read only) and the comment threads and comments of its files (read and change),
+// through the backend RPC interface
 // (POST /api/rpc/command/<name>, help.penpot.app/technical-guide/integration, and the command sources of
 // penpot 2.18.0, backend/src/app/rpc/commands, read 2026-09-30, not against a live instance). The RPC
 // interface carries no stability promise; this provider is a beta.
 //
 // The access token is sent as "Authorization: Token ...". It has no scopes and acts for every team of its
 // account; Qatlas adds its own boundary: the team targets of the connection (required) and an optional project
-// allow-list. Five fixed commands are called, each from a handler that names it: get-teams, get-projects,
-// get-project-files, get-file-summary, and get-page. No agent argument chooses a command, a path, a method,
+// allow-list. Fixed commands are called, each from a handler that names it: get-teams, get-projects,
+// get-project-files, get-file-summary, get-page, the comment reads get-comment-threads and get-comments, and the
+// comment changes create-, update-, and delete-comment-thread or -comment. A change is one request that is never
+// repeated; a failure that leaves its result open says so. No agent argument chooses a command, a path, a method,
 // or a body. Penpot documents no pagination for these commands; the answers are bounded on the client side.
 //
 // A team or project ID that is outside the targets is refused before the credential is resolved and before
@@ -64,7 +67,20 @@ const (
 	cmdProjectFile = "get-project-files"
 	cmdSummary     = "get-file-summary"
 	cmdPage        = "get-page"
+
+	cmdThreads       = "get-comment-threads"
+	cmdComments      = "get-comments"
+	cmdCreateThread  = "create-comment-thread"
+	cmdCreateComment = "create-comment"
+	cmdUpdateThread  = "update-comment-thread"
+	cmdUpdateComment = "update-comment"
+	cmdDeleteThread  = "delete-comment-thread"
+	cmdDeleteComment = "delete-comment"
 )
+
+// changeUncertain is appended to a failure of a change whose request may have reached Penpot. Qatlas never
+// repeats such a request by itself.
+const changeUncertain = "; this change may have taken effect, read the comments of the file before repeating it"
 
 var limiters = ratelimit.NewRegistry(0)
 
@@ -136,23 +152,59 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// isCommand keeps the client from sending anything but one of the fixed commands.
+// isCommand keeps the client from sending anything but one of the fixed commands; isChange tells the
+// commands that change data from the ones that only read.
 func isCommand(name string) bool {
 	switch name {
-	case cmdTeams, cmdProjects, cmdProjectFile, cmdSummary, cmdPage:
+	case cmdTeams, cmdProjects, cmdProjectFile, cmdSummary, cmdPage, cmdThreads, cmdComments:
+		return true
+	}
+	return isChange(name)
+}
+
+func isChange(name string) bool {
+	switch name {
+	case cmdCreateThread, cmdCreateComment, cmdUpdateThread, cmdUpdateComment, cmdDeleteThread, cmdDeleteComment:
 		return true
 	}
 	return false
 }
 
 // do sends one bounded read command as a POST with a JSON body and decodes the JSON answer into out. The
-// body holds only validated UUIDs under fixed keys. A read is never retried.
-func (c *Client) do(ctx context.Context, op, command string, params map[string]string, out any) error {
-	if !isCommand(command) {
+// body holds only validated values under fixed keys. A read is never retried.
+func (c *Client) do(ctx context.Context, op, command string, params map[string]any, out any) error {
+	if isChange(command) {
 		return providerError(op, "the command is not offered")
 	}
+	data, err := c.exchange(ctx, op, command, params, false)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return invalidResponse(op, "Penpot returned an invalid response")
+	}
+	return nil
+}
+
+// change sends one change command exactly once and returns the bounded answer, which may be empty. A failure
+// that leaves the result open carries the uncertain hint.
+func (c *Client) change(ctx context.Context, op, command string, params map[string]any) ([]byte, error) {
+	if !isChange(command) {
+		return nil, providerError(op, "the command is not offered")
+	}
+	return c.exchange(ctx, op, command, params, true)
+}
+
+func (c *Client) exchange(ctx context.Context, op, command string, params map[string]any, change bool) ([]byte, error) {
+	if !isCommand(command) {
+		return nil, providerError(op, "the command is not offered")
+	}
+	hint := ""
+	if change {
+		hint = changeUncertain
+	}
 	if err := c.limiter.Wait(ctx); err != nil {
-		return provider.Waited(op, "Penpot", err)
+		return nil, provider.Waited(op, "Penpot", err)
 	}
 	body, err := json.Marshal(params)
 	if err != nil || params == nil {
@@ -160,7 +212,7 @@ func (c *Client) do(ctx context.Context, op, command string, params map[string]s
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.origin+commandPrefix+command, bytes.NewReader(body))
 	if err != nil {
-		return providerError(op, "the request could not be built")
+		return nil, providerError(op, "the request could not be built")
 	}
 	req.Header.Set("Authorization", "Token "+c.token)
 	req.Header.Set("Accept", "application/json")
@@ -168,20 +220,26 @@ func (c *Client) do(ctx context.Context, op, command string, params map[string]s
 	req.Header.Set("User-Agent", "qatlas-cli")
 	response, err := c.http.Do(req)
 	if err != nil {
-		return provider.Transport(op, "Penpot", err)
+		failure := provider.Transport(op, "Penpot", err)
+		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
+			failure.Cause == provider.CauseUnknown) {
+			failure.Message += hint
+		}
+		return nil, failure
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return c.statusError(op, response)
+		failure := c.statusError(op, response)
+		if change && response.StatusCode >= 500 {
+			failure.Message += hint
+		}
+		return nil, failure
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseSize+1))
 	if err != nil || len(data) > maxResponseSize {
-		return invalidResponse(op, "the Penpot response could not be read within the size limit")
+		return nil, invalidResponse(op, "the Penpot response could not be read within the size limit"+hint)
 	}
-	if err := json.Unmarshal(data, out); err != nil {
-		return invalidResponse(op, "Penpot returned an invalid response")
-	}
-	return nil
+	return data, nil
 }
 
 // statusError maps an HTTP status to a stable class; the provider body is never read into the message.
@@ -363,7 +421,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds the provider metadata, its connection test, and its four read operations.
+// Register adds the provider metadata, its connection test, and its operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Penpot", DefaultBaseURL: cloudOrigin,
@@ -406,5 +464,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: projectsList, Handler: capability.Handler(invokeProjectsList)},
 		capability.Operation{Descriptor: filesList, Handler: capability.Handler(invokeFilesList)},
 		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
+		capability.Operation{Descriptor: commentsThreads, Handler: capability.Handler(invokeCommentsThreads)},
+		capability.Operation{Descriptor: commentsList, Handler: capability.Handler(invokeCommentsList)},
+		capability.Operation{Descriptor: commentsCreate, Handler: capability.Handler(invokeCommentsCreate)},
+		capability.Operation{Descriptor: commentsUpdate, Handler: capability.Handler(invokeCommentsUpdate)},
+		capability.Operation{Descriptor: commentsDelete, Handler: capability.Handler(invokeCommentsDelete)},
 	)
 }

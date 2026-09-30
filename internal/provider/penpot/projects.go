@@ -94,7 +94,7 @@ func invokeProjectsList(ctx context.Context, resolved *config.Resolved, secrets 
 // projectsOf reads the projects of one team. A project that reports another team is dropped.
 func (c *Client) projectsOf(ctx context.Context, op, teamID string) ([]Project, error) {
 	var raw json.RawMessage
-	if err := c.do(ctx, op, cmdProjects, map[string]string{"team-id": teamID}, &raw); err != nil {
+	if err := c.do(ctx, op, cmdProjects, map[string]any{"team-id": teamID}, &raw); err != nil {
 		return nil, err
 	}
 	entries, ok := objects(raw)

@@ -179,7 +179,7 @@ func invokeFilesList(ctx context.Context, resolved *config.Resolved, secrets *se
 // filesOf reads the files of one project. A file that reports another project is dropped.
 func (c *Client) filesOf(ctx context.Context, op, projectID string) ([]File, error) {
 	var raw json.RawMessage
-	if err := c.do(ctx, op, cmdProjectFile, map[string]string{"project-id": projectID}, &raw); err != nil {
+	if err := c.do(ctx, op, cmdProjectFile, map[string]any{"project-id": projectID}, &raw); err != nil {
 		return nil, err
 	}
 	entries, ok := objects(raw)
@@ -199,6 +199,24 @@ func (c *Client) filesOf(ctx context.Context, op, projectID string) ([]File, err
 			ModifiedAt: entry.str("modifiedat"), Revn: entry.integer("revn"), IsShared: entry.boolean("isshared")})
 	}
 	return files, nil
+}
+
+// fileOf binds a file through its project: the project is located in the bound teams and the file in the
+// project's file list. Both are requests made with the credential; neither refusal names the target.
+func (c *Client) fileOf(ctx context.Context, op, projectID, fileID string) (*File, error) {
+	if err := c.locateProject(ctx, op, projectID); err != nil {
+		return nil, err
+	}
+	files, err := c.filesOf(ctx, op, projectID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range files {
+		if files[i].ID == fileID {
+			return &files[i], nil
+		}
+	}
+	return nil, invalidRequest("file_id is not a file of this project")
 }
 
 func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -230,32 +248,19 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if err != nil {
 		return nil, err
 	}
-	if err := client.locateProject(ctx, op, projectID); err != nil {
-		return nil, err
-	}
-	files, err := client.filesOf(ctx, op, projectID)
+	file, err := client.fileOf(ctx, op, projectID, fileID)
 	if err != nil {
 		return nil, err
 	}
-	var file *File
-	for i := range files {
-		if files[i].ID == fileID {
-			file = &files[i]
-			break
-		}
-	}
-	if file == nil {
-		return nil, invalidRequest("file_id is not a file of this project")
-	}
 	detail := &FileDetail{ID: file.ID, ProjectID: projectID, Name: file.Name}
 	var summary json.RawMessage
-	if err := client.do(ctx, op, cmdSummary, map[string]string{"id": fileID}, &summary); err != nil {
+	if err := client.do(ctx, op, cmdSummary, map[string]any{"id": fileID}, &summary); err != nil {
 		return nil, err
 	}
 	if err := detail.readSummary(summary); err != nil {
 		return nil, invalidResponse(op, "Penpot returned an invalid response")
 	}
-	params := map[string]string{"file-id": fileID}
+	params := map[string]any{"file-id": fileID}
 	if pageID != "" {
 		params["page-id"] = pageID
 	}
