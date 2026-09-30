@@ -333,6 +333,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: viewsGet, Handler: capability.Handler(invokeViewsGet)},
 		capability.Operation{Descriptor: viewsCreate, Handler: invokeViewsChange("create view", "create", (*Client).CreateView, "created")},
 		capability.Operation{Descriptor: viewsUpdate, Handler: invokeViewsChange("update view", "update", (*Client).UpdateView, "updated")},
+		capability.Operation{Descriptor: optionsAdd, Handler: invokeOptionsChange("add column options", "add", (*Client).AddOptions, "added")},
+		capability.Operation{Descriptor: optionsUpdate, Handler: invokeOptionsChange("update column options", "update", (*Client).UpdateOptions, "updated")},
+		capability.Operation{Descriptor: optionsDelete, Handler: invokeOptionsChange("delete column options", "delete", (*Client).DeleteOptions, "deleted")},
 		capability.Operation{Descriptor: viewsDelete, Handler: invokeViewsChange("delete view", "delete", (*Client).DeleteView, "deleted")},
 	)
 }
@@ -1468,6 +1471,9 @@ type columnJSON struct {
 		TableID      string `json:"table_id"`
 		OtherTableID string `json:"other_table_id"`
 		LinkID       string `json:"link_id"`
+		Options      []struct {
+			Name string `json:"name"`
+		} `json:"options"`
 	} `json:"data"`
 }
 

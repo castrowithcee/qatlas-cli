@@ -139,6 +139,32 @@ qatlas invoke seatable.views.update --connection sales-rw --confirm --arg table=
   --arg hidden_columns='["Notiz"]'
 ```
 
+## Column options
+
+`seatable.columns.optionsadd`, `seatable.columns.optionsupdate`, and `seatable.columns.optionsdelete` maintain
+the options of single-select and multiple-select columns of an allowed table. They are in no profile.
+`optionsdelete` is offered only by a connection whose `tools` list names it; all three need the matching
+permission and `confirm`.
+
+- The agent passes `table` (as for rows), `column` (name or key, resolved in the base metadata), and
+  `options` (up to 50; `optionsadd`: `name`, optional `color` and `text_color` as `#RRGGBB`; `optionsupdate`:
+  existing `name` plus `new_name`, `color`, or `text_color`) or, for `optionsdelete`, `names` (up to 50).
+  Names have up to 255 printable characters and may not repeat within a call.
+- Any other column type, an unknown column, an option that already exists on add, or an option that does
+  not exist on update or delete is refused before the request. A table outside the allow-list, a selection
+  narrowed to one view, or a malformed request is refused before the credential is read and before SeaTable
+  is contacted; the token exchange and the metadata read are the only provider access that can precede
+  another refusal. The message never names another table.
+- Deleting an option clears the cells that hold it.
+- Each change sends exactly one request and is never repeated. A timeout, a dropped connection, a 5xx answer,
+  or an unreadable answer is reported as uncertain: list the columns before repeating the change. An error
+  SeaTable reports is reported without the provider text.
+
+```sh
+qatlas invoke seatable.columns.optionsadd --connection sales-rw --confirm --arg table=id:0000 \
+  --arg column=Status --arg options='[{"name":"Offen","color":"#FFE9A8"}]'
+```
+
 ## Tables
 
 `seatable.tables.create`, `seatable.tables.rename`, `seatable.tables.duplicate`, and `seatable.tables.delete`
