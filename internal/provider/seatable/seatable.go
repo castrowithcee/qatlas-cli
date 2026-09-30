@@ -310,6 +310,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: columnsList, Handler: capability.Handler(invokeColumnsList)},
 		capability.Operation{Descriptor: rowsList, Handler: capability.Handler(invokeRowsList)},
 		capability.Operation{Descriptor: rowsGet, Handler: capability.Handler(invokeRowsGet)},
+		capability.Operation{Descriptor: rowsActivities, Handler: capability.Handler(invokeRowsActivities)},
+		capability.Operation{Descriptor: baseOperations, Handler: capability.Handler(invokeBaseOperations)},
 		capability.Operation{Descriptor: rowsSearch, Handler: capability.Handler(invokeRowsSearch)},
 		capability.Operation{Descriptor: rowsCreate, Handler: capability.Handler(invokeRowsCreate)},
 		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},

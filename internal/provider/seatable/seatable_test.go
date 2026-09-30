@@ -198,7 +198,7 @@ func rowRoute(base, id string) string {
 }
 
 // Register publishes the configuration metadata the TUI needs, schema discovery, and the row operations.
-func TestRegisterPublishesMetadataAndTwentyOneOperations(t *testing.T) {
+func TestRegisterPublishesMetadataAndTwentyThreeOperations(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
 		t.Fatalf("Register() = %v", err)
@@ -221,13 +221,16 @@ func TestRegisterPublishesMetadataAndTwentyOneOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 21 {
-		t.Fatalf("operations = %d, want two schema, six row, three batch row, one snapshot, four link, and five view operations", len(operations))
+	if len(operations) != 23 {
+		t.Fatalf("operations = %d, want two schema, six row, three batch row, one snapshot, four link, five view, and two history operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantSensitivity := dataSensitivity
 		if descriptor.ID == "seatable.columns.list" || descriptor.ID == "seatable.tables.list" {
 			wantSensitivity = schemaSensitivity
+		}
+		if descriptor.ID == "seatable.rows.activities" || descriptor.ID == "seatable.base.operations" {
+			wantSensitivity = historySensitivity
 		}
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != wantSensitivity {
@@ -247,7 +250,7 @@ func TestRegisterPublishesMetadataAndTwentyOneOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "seatable.columns.list" || operations[20].ID != "seatable.views.update" {
+	if operations[0].ID != "seatable.base.operations" || operations[22].ID != "seatable.views.update" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
