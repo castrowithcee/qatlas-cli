@@ -1,6 +1,6 @@
 module github.com/castrowithcee/qatlas-cli
 
-go 1.24.2
+go 1.25
 
 require (
 	filippo.io/age v1.3.0
