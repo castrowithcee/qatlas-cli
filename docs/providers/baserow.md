@@ -65,17 +65,42 @@ narrow what the token itself may read, so grant the token only the rights the co
 | `baserow.fields.list` | read | none | lists one table's fields: `id`, `name`, `type`, `primary`, `read_only`, select options |
 | `baserow.rows.list` | read | none | lists one table's rows page by page |
 | `baserow.rows.get` | read | none | reads one row |
+| `baserow.rows.search` | read | none | searches, filters, and sorts one table's rows page by page |
 
 | `baserow.rows.create` | create | required | creates one row from cell values keyed by field name |
 | `baserow.rows.update` | update | required | changes the named cells of one row |
 | `baserow.rows.delete` | delete | required, tool allow-list | deletes one row |
 | `baserow.rows.move` | update | required | moves one row within its table |
 
-The read profile offers the four read tools. `rows.list` takes `table_id`, `page` (from 1; 1 when omitted), `size`
+The read profile offers the five read tools. `rows.list` takes `table_id`, `page` (from 1; 1 when omitted), `size`
 (1 to 200; 50 when omitted), and `user_field_names` (true when omitted: values keyed by field name; false:
 keyed `field_ID`). It answers `rows` (`id`, `order`, `fields`), `count` (the table's total row count as
 Baserow reports it), `page`, `size`, and `has_more`, which is true when Baserow reports a next page. It has
-no filters, search, or sorting. `rows.get` takes `table_id`, `row_id`, and `user_field_names`.
+no filters, search, or sorting; `rows.search` does. `rows.get` takes `table_id`, `row_id`, and `user_field_names`.
+
+## Searching rows
+
+`baserow.rows.search` takes `table_id` (inside the targets), `page`, `size` (as `rows.list`), and:
+
+- `search` (up to 256 characters) and `search_mode` (`full-text`, `full-text-with-count`, or `compat`; needs `search`).
+- `filters` (up to 10): objects with `field` (a field name), `type`, and `value` (a string up to 256 characters,
+  omitted for `empty` and `not_empty`, required for the others). Types: `equal`, `not_equal`, `contains`,
+  `contains_not`, `higher_than`, `higher_than_or_equal`, `lower_than`, `lower_than_or_equal`, `empty`,
+  `not_empty`. `filter_type` is `AND` (default) or `OR`. The same field and type may not repeat.
+- `order_by` (up to 5): objects with `field` and `direction` (`asc` default, `desc`).
+- `view_id`: a view of this table.
+
+There is no free filter passthrough: values travel only as URL-encoded query parameters built from these
+fields. Field names must exist in the table's schema, be of a plain type (text, long text, number, boolean,
+date, rating, single select, email, URL, phone number, autonumber, UUID, created on, last modified), and not
+contain `__` or `,` or begin with `-` or `+`. Link, lookup, formula, rollup, and count fields cannot be filtered
+or sorted: such a filter would show whether a value exists in another table. For the same reason `search` is
+refused on a table that has such a field unless the connection targets `*`.
+
+Order of checks: the table (before the credential), argument shape and limits (before any request), then one
+read of the table's fields, after which an unknown or unsuitable field, or a refused search, is rejected. Only
+then, with `view_id`, the table's view list is read; a view that is not in it is rejected. The rows request
+follows last. The answer is the shape of `rows.list` (rows keyed by field name), link-masked and bounded the same way.
 
 ## Row changes
 
@@ -143,6 +168,11 @@ Checked against the official documentation (baserow.io/user-docs/database-api), 
 - `GET /api/database/rows/table/{table_id}/{row_id}/` with `user_field_names`.
 - `POST /api/database/rows/table/{table_id}/`, `PATCH .../{row_id}/`, `DELETE .../{row_id}/`, and
   `PATCH .../{row_id}/move/` as the four row endpoints (listed in the official documentation).
+
+Not checked against the official documentation in this change, taken from the Baserow list-rows API as
+known: the query parameters `search`, `search_mode`, `filter__{field}__{type}` with `user_field_names=true`,
+`filter_type`, `order_by` (comma-separated, `-` prefix for descending), and `view_id`, the filter type names
+listed above, and `GET /api/database/views/table/{table_id}/` answering a list of views with `id`.
 
 Assumed, not verified here: `user_field_names=true` and a JSON body keyed by field name for create and update,
 the row object as the answer of create, update, and move (move's answer is not read), an empty answer with

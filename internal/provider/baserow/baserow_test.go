@@ -151,7 +151,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	want := map[string]config.Permission{tablesList.ID: config.PermissionRead, fieldsList.ID: config.PermissionRead,
-		rowsList.ID: config.PermissionRead, rowsGet.ID: config.PermissionRead,
+		rowsList.ID: config.PermissionRead, rowsGet.ID: config.PermissionRead, rowsSearch.ID: config.PermissionRead,
 		rowsCreate.ID: config.PermissionCreate, rowsUpdate.ID: config.PermissionUpdate,
 		rowsDelete.ID: config.PermissionDelete, rowsMove.ID: config.PermissionUpdate}
 	if len(metadata.Tools) != len(want) {
@@ -164,7 +164,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	profile, ok := metadata.RecommendedProfile()
-	if !ok || len(profile.Tools) != 4 {
+	if !ok || len(profile.Tools) != 5 {
 		t.Fatalf("recommended profile = %+v", profile)
 	}
 }

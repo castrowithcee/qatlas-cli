@@ -261,7 +261,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds the provider metadata, its connection test, its four read operations, and its four row
+// Register adds the provider metadata, its connection test, its five read operations, and its four row
 // changes.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
@@ -294,7 +294,7 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read tables and rows", Recommended: true,
 			Description: "lists tables and fields and reads rows; changes nothing",
-			Tools:       []string{tablesList.ID, fieldsList.ID, rowsList.ID, rowsGet.ID},
+			Tools:       []string{tablesList.ID, fieldsList.ID, rowsList.ID, rowsGet.ID, rowsSearch.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -304,6 +304,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: fieldsList, Handler: capability.Handler(invokeFieldsList)},
 		capability.Operation{Descriptor: rowsList, Handler: capability.Handler(invokeRowsList)},
 		capability.Operation{Descriptor: rowsGet, Handler: capability.Handler(invokeRowsGet)},
+		capability.Operation{Descriptor: rowsSearch, Handler: capability.Handler(invokeRowsSearch)},
 		capability.Operation{Descriptor: rowsCreate, Handler: capability.Handler(invokeRowsCreate)},
 		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},
 		capability.Operation{Descriptor: rowsDelete, Handler: capability.Handler(invokeRowsDelete)},
