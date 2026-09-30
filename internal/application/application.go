@@ -304,9 +304,9 @@ const (
 // target, or a secret source.
 //
 // Unusable is present exactly while a listed connection cannot read its secrets from the vault: the error
-// code an invoke through such a connection ends with, vault-locked while the vault is locked, or
-// approval-required while the vault has not approved the connection as it is configured now, and empty for
-// every other connection of the list.
+// code an invoke through such a connection ends with, vault-locked while the vault is locked,
+// approval-required while the vault has not approved the connection as it is configured now, or the code of
+// a vault process that runs but cannot be asked, and empty for every other connection of the list.
 type ConnectionSummary struct {
 	Name        string  `json:"name"`
 	Provider    string  `json:"provider"`

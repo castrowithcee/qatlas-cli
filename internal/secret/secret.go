@@ -641,8 +641,11 @@ func (r *Resolver) processClient() *vaultproc.Client {
 }
 
 // Usable reports, without reading a secret or asking for a passphrase, why the connection resolved describes
-// cannot read its vault credential now: a *VaultLockedError while the vault is encrypted and locked, or a
-// *ApprovalRequiredError while the vault has not approved the connection as it is now. It is nil for every
+// cannot read its vault credential now: a *VaultLockedError while the vault is encrypted and locked, a
+// *ApprovalRequiredError while the vault has not approved the connection as it is now, or a
+// *VaultProcessError while a running vault process cannot be asked, for it refuses this program, speaks
+// another version or does not answer; calling that locked would send the user to unlock a vault that is
+// unlocked. It is nil for every
 // other connection, for an unencrypted vault, and where the answer cannot be told; the invoke itself then
 // reports what stands in its way. A running vault process is asked, which ends with ctx at the latest.
 func (r *Resolver) Usable(ctx context.Context, resolved *config.Resolved) error {
@@ -669,8 +672,10 @@ func (r *Resolver) Usable(ctx context.Context, resolved *config.Resolved) error 
 		case err == nil:
 		case errors.Is(err, vault.ErrApprovalRequired):
 			return refused
-		default:
+		case errors.Is(err, vaultproc.ErrNotRunning):
 			return &VaultLockedError{}
+		default:
+			return &VaultProcessError{Credential: resolved.Credential, Err: err}
 		}
 	}
 	return nil
