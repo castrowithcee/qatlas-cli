@@ -481,9 +481,11 @@ func permissionViolations(metadata config.ProviderMetadata, descriptors []capabi
 			unsupported = append(unsupported, permission)
 		}
 	}
+	// A tool with local file access needs a released directory of its direction to be offered at all.
+	files := config.Files{Read: []string{"/srv/qatlas-conformance"}, Write: []string{"/srv/qatlas-conformance"}}
 	harness, err := newConformanceHarness(metadata, descriptors, map[string]config.Connection{
-		"supported":   {Permissions: append([]config.Permission{}, metadata.SupportedPermissions...), Tools: ids},
-		"unsupported": {Permissions: append([]config.Permission{}, unsupported...), Tools: ids},
+		"supported":   {Permissions: append([]config.Permission{}, metadata.SupportedPermissions...), Tools: ids, Files: files},
+		"unsupported": {Permissions: append([]config.Permission{}, unsupported...), Tools: ids, Files: files},
 	})
 	if err != nil {
 		return []string{err.Error()}
@@ -535,11 +537,20 @@ func routingViolations(metadata config.ProviderMetadata, d capability.Descriptor
 		}
 	}
 	offers := map[string]bool{"listed": true, "unlisted": false, "denied": false, "open": !d.RequiresToolAllowList}
+	// A tool with local file access is offered only to a connection that releases a directory for its
+	// direction, so every connection of the harness releases one.
+	var files config.Files
+	switch d.LocalFiles {
+	case config.LocalFilesRead:
+		files.Read = []string{"/srv/qatlas-conformance"}
+	case config.LocalFilesWrite:
+		files.Write = []string{"/srv/qatlas-conformance"}
+	}
 	harness, err := newConformanceHarness(metadata, []capability.Descriptor{d}, map[string]config.Connection{
-		"listed":   {Permissions: []config.Permission{effect}, Tools: []string{d.ID}},
-		"unlisted": {Permissions: []config.Permission{effect}, Tools: []string{}},
-		"denied":   {Permissions: others, Tools: []string{d.ID}},
-		"open":     {Permissions: []config.Permission{effect}},
+		"listed":   {Permissions: []config.Permission{effect}, Tools: []string{d.ID}, Files: files},
+		"unlisted": {Permissions: []config.Permission{effect}, Tools: []string{}, Files: files},
+		"denied":   {Permissions: others, Tools: []string{d.ID}, Files: files},
+		"open":     {Permissions: []config.Permission{effect}, Files: files},
 	})
 	if err != nil {
 		return []string{err.Error()}

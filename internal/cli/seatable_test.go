@@ -114,7 +114,7 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[37]{id,title,effect,requires,confirm,reason}:", "seatable.base.operations,List SeaTable base operations,read,", "seatable.collaborators.list,List SeaTable collaborators,read,", "seatable.columns.create,Create a SeaTable column,create,", "seatable.columns.delete,Delete a SeaTable column,delete,", "seatable.columns.list,List SeaTable columns,read,", "seatable.columns.optionsadd,Add SeaTable column options,create,", "seatable.columns.optionsdelete,Delete SeaTable column options,delete,", "seatable.columns.optionsupdate,Update SeaTable column options,update,", "seatable.columns.update,Update a SeaTable column,update,", "seatable.comments.create,Create a SeaTable row comment,create,", "seatable.comments.delete,Delete a SeaTable row comment,delete,", "seatable.comments.list,List SeaTable row comments,read,", "seatable.links.create,Create SeaTable links,create,", "seatable.links.delete,Delete SeaTable links,delete,", "seatable.links.list,List SeaTable links,read,", "seatable.links.update,Update SeaTable links,update,", "seatable.rows.activities,List SeaTable row activities,read,", "seatable.rows.batchcreate,Create up to 100 SeaTable rows,create,", "seatable.rows.batchdelete,Delete up to 100 SeaTable rows,delete,", "seatable.rows.batchupdate,Update up to 100 SeaTable rows,update,", "seatable.rows.create,Create a SeaTable row,create,",
+		"tools[40]{id,title,effect,requires,confirm,reason}:", "seatable.base.operations,List SeaTable base operations,read,", "seatable.collaborators.list,List SeaTable collaborators,read,", "seatable.columns.create,Create a SeaTable column,create,", "seatable.columns.delete,Delete a SeaTable column,delete,", "seatable.columns.list,List SeaTable columns,read,", "seatable.columns.optionsadd,Add SeaTable column options,create,", "seatable.columns.optionsdelete,Delete SeaTable column options,delete,", "seatable.columns.optionsupdate,Update SeaTable column options,update,", "seatable.columns.update,Update a SeaTable column,update,", "seatable.comments.create,Create a SeaTable row comment,create,", "seatable.comments.delete,Delete a SeaTable row comment,delete,", "seatable.comments.list,List SeaTable row comments,read,", "seatable.files.delete,Delete a SeaTable cell file,delete,", "seatable.files.get,Download a file of a SeaTable cell,read,", "seatable.files.upload,Upload a file to a SeaTable cell,create,", "seatable.links.create,Create SeaTable links,create,", "seatable.links.delete,Delete SeaTable links,delete,", "seatable.links.list,List SeaTable links,read,", "seatable.links.update,Update SeaTable links,update,", "seatable.rows.activities,List SeaTable row activities,read,", "seatable.rows.batchcreate,Create up to 100 SeaTable rows,create,", "seatable.rows.batchdelete,Delete up to 100 SeaTable rows,delete,", "seatable.rows.batchupdate,Update up to 100 SeaTable rows,update,", "seatable.rows.create,Create a SeaTable row,create,",
 		"seatable.rows.delete,Delete a SeaTable row,delete,", "seatable.rows.get,Get a SeaTable row,read,", "seatable.rows.list,List SeaTable rows,read,", "seatable.rows.search,Search SeaTable rows,read,",
 		"seatable.rows.update,Update a SeaTable row,update,", "seatable.snapshots.create,Create a SeaTable snapshot,create,", "seatable.tables.create,Create a SeaTable table,create,", "seatable.tables.delete,Delete a SeaTable table,delete,", "seatable.tables.duplicate,Duplicate a SeaTable table,create,", "seatable.tables.list,List SeaTable tables,read,", "seatable.tables.rename,Rename a SeaTable table,update,", "seatable.views.create,Create a SeaTable view,create,", "seatable.views.delete,Delete a SeaTable view,delete,", "seatable.views.get,Get a SeaTable view,read,", "seatable.views.list,List SeaTable views,read,", "seatable.views.update,Update a SeaTable view,update,",
 	} {
@@ -122,8 +122,8 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--all", "--config", path))); len(got) != 37 {
-		t.Errorf("seatable tools = %v, want schema discovery, all five row tools, three batch row tools, the snapshot tool, four link tools, and five view tools", got)
+	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--all", "--config", path))); len(got) != 40 {
+		t.Errorf("seatable tools = %v, want schema discovery, all five row tools, three batch row tools, the snapshot tool, four link tools, five view tools, and the three file tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -274,8 +274,8 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 37 || searched.Operations[0].ID != "seatable.base.operations" ||
-		searched.Operations[36].ID != "seatable.views.update" {
+	if len(searched.Operations) != 40 || searched.Operations[0].ID != "seatable.base.operations" ||
+		searched.Operations[39].ID != "seatable.views.update" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 

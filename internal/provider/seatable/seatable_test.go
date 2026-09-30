@@ -221,8 +221,8 @@ func TestRegisterPublishesMetadataAndThirtyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 37 {
-		t.Fatalf("operations = %d, want two schema, six row, three batch row, one snapshot, four link, five view, four table change, three column option, three column, two history, three comment, and one collaborator operation", len(operations))
+	if len(operations) != 40 {
+		t.Fatalf("operations = %d, want two schema, six row, three batch row, one snapshot, four link, five view, four table change, three column option, three column, two history, three comment, one collaborator, and three file operation", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantSensitivity := dataSensitivity
@@ -253,7 +253,7 @@ func TestRegisterPublishesMetadataAndThirtyOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "seatable.base.operations" || operations[36].ID != "seatable.views.update" {
+	if operations[0].ID != "seatable.base.operations" || operations[39].ID != "seatable.views.update" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }

@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row, link, view, table change, and history operations, permissions, and token limits.
+  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row, link, view, table change, history, and cell file operations, permissions, and token limits.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -300,6 +300,58 @@ qatlas invoke seatable.comments.list --connection sales-all-tables --arg table=i
 qatlas invoke seatable.comments.create --connection sales-rw --confirm --arg table=id:0000 \
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg comment="Please check this row"
 qatlas invoke seatable.collaborators.list --connection sales-all-tables
+```
+
+## Cell files
+
+`seatable.files.upload`, `seatable.files.get`, and `seatable.files.delete` attach, read, and delete the files
+and images of a `file` or `image` column of one row of an allowed table. None of them is in a profile.
+`files.delete` is offered only by a connection whose `tools` list names it.
+
+- The agent passes `table` (as for rows), `row_id`, and `column` (name of a column of type `file` or
+  `image`). A table outside the allow-list or a malformed request is refused before the credential is read
+  and before SeaTable is contacted; the refusal does not name the rejected table. The token exchange and the
+  metadata read are the only provider access that can precede another refusal, such as a column of another
+  type.
+- `files.get` and `files.delete` address an entry of the current cell with `name` (file name) or `index`
+  (position, starting at 0). Qatlas reads the row first and takes the asset path from the cell value of
+  that row; a path is never an argument. Without a selector, `files.get` uses the only entry of the cell;
+  `files.delete` always needs one. A name that occurs twice needs `index`. An entry that is not a file or
+  image stored by SeaTable in this base, such as a custom-folder asset or an address of another server,
+  is refused.
+- `files.upload` takes the file from `local_path` or inline from `content_base64` (up to 4 MiB) together
+  with `name`; the two sources exclude each other. It asks for an upload link, sends the file in exactly one
+  upload request, and appends the entry to the cell with exactly one row update. The cell is read before, so
+  a change to the same cell between the read and the update is overwritten. SeaTable may rename the file to
+  keep names in the month folder unique; the result reports the stored name. The result carries `id`,
+  `name`, `size`, and `sha256`.
+- `files.get` returns the content in `content_base64` up to 4 MiB, or writes it to `local_path` and then
+  returns only `name`, `size`, and `sha256`. A larger file needs `local_path`.
+- `files.delete` deletes the stored asset of the entry. The entry stays in the cell; removing it is a row
+  update, and Qatlas does not delete an asset when an entry leaves a cell.
+- Local files follow the `files` setting of the connection: `files.read` is a list of directories the
+  upload may read, `files.write` a list of directories the download may write. Both tools declare local
+  file access, so a connection without a matching `files` entry is not offered `files.upload` (`read`) or
+  `files.get` (`write`) at all, and inline content is usable only on a connection that releases a
+  directory. A download writes only into an existing directory of the release, through a temporary file,
+  checks the announced size, and replaces an existing file only with `confirm`; the replacement is logged as
+  an audit event without the path. Messages never name a path.
+- SeaTable hands out the upload and download address as a link that works without a credential. Qatlas
+  uses it only when its host is the configured service, never follows a redirect, sends no credential to
+  it, and never reports it: it appears neither in results, errors, logs, nor audit events. Content
+  transfers have a timeout of 30 minutes; every other request keeps 30 seconds.
+- `files.upload` needs `create` and `confirm`; `files.delete` needs `delete` and `confirm`. Each sends
+  exactly one request per step and is never repeated. A timeout, a dropped connection, a 5xx answer, or an
+  unreadable answer is reported as uncertain: read the cell before repeating the change. If the upload
+  succeeded but the update did not, the file stays stored without an entry. Errors never carry provider text.
+- Folders other than the automatic month folders of files and images, and the asset endpoints of the account,
+  are not offered.
+
+```sh
+qatlas invoke seatable.files.upload --connection sales-rw --confirm --arg table=id:0000 \
+  --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg column=Anhang --arg local_path=~/uploads/offer.pdf
+qatlas invoke seatable.files.get --connection sales-rw --arg table=id:0000 \
+  --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg column=Anhang --arg name=offer.pdf --arg local_path=~/downloads/offer.pdf
 ```
 
 ## Batch rows and snapshots

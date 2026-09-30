@@ -343,6 +343,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: viewsDelete, Handler: invokeViewsChange("delete view", "delete", (*Client).DeleteView, "deleted")},
 		capability.Operation{Descriptor: columnCreate, Handler: invokeColumnsChange("create column", "create", (*Client).CreateColumn, "created")},
 		capability.Operation{Descriptor: columnUpdate, Handler: invokeColumnsChange("update column", "update", (*Client).UpdateColumn, "updated")},
+		capability.Operation{Descriptor: filesUpload, Handler: capability.Handler(invokeFilesUpload)},
+		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
+		capability.Operation{Descriptor: filesDelete, Handler: capability.Handler(invokeFilesDelete)},
 		capability.Operation{Descriptor: columnDelete, Handler: invokeColumnsChange("delete column", "delete", (*Client).DeleteColumn, "deleted")},
 	)
 }
@@ -487,9 +490,10 @@ type Client struct {
 // baseAccess is the result of one token exchange: the base the API token belongs to, and the short-lived
 // token that authenticates the base routes. Neither value is ever written outside this process.
 type baseAccess struct {
-	uuid  string
-	token string
-	name  string
+	uuid        string
+	token       string
+	name        string
+	workspaceID int64
 }
 
 // Open resolves the API token of one selected connection and returns a client for its configured origin.
@@ -826,7 +830,8 @@ func (c *Client) access(ctx context.Context, op string) (*baseAccess, error) {
 	if c.redactor != nil {
 		c.redactor.Add(exchanged.AccessToken, "Bearer "+exchanged.AccessToken)
 	}
-	c.base = &baseAccess{uuid: exchanged.DTableUUID, token: exchanged.AccessToken, name: exchanged.DTableName}
+	c.base = &baseAccess{uuid: exchanged.DTableUUID, token: exchanged.AccessToken, name: exchanged.DTableName,
+		workspaceID: exchanged.WorkspaceID}
 	return c.base, nil
 }
 
@@ -1459,6 +1464,7 @@ type baseTokenJSON struct {
 	DTableUUID   string `json:"dtable_uuid"`
 	DTableServer string `json:"dtable_server"`
 	DTableName   string `json:"dtable_name"`
+	WorkspaceID  int64  `json:"workspace_id"`
 }
 
 // metadataJSON mirrors the part of the base metadata the connection test inspects.
