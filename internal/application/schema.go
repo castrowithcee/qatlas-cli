@@ -301,6 +301,24 @@ func Compact(d capability.Descriptor) CompactDescriptor {
 	}
 }
 
+// requiredArguments names the required top-level arguments of d as the compact contract lists them, each
+// followed by :form where it has one. Members of an object argument are not listed: they are
+// required only within that object.
+func requiredArguments(d capability.Descriptor) []string {
+	var required []string
+	for _, row := range Compact(d).Arguments {
+		if !row.Required || strings.ContainsAny(row.Name, ".[") {
+			continue
+		}
+		if row.Form != "" {
+			required = append(required, row.Name+":"+row.Form)
+		} else {
+			required = append(required, row.Name)
+		}
+	}
+	return required
+}
+
 // schemaNode is the part of a JSON schema the compact contract reads. A bound that is absent stays empty.
 type schemaNode struct {
 	Type          string                 `json:"type"`

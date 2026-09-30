@@ -92,17 +92,25 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 	// every tool with the same reason on both surfaces.
 	noConnection := config.RefusalNoConnection
 	for _, metadata := range reg.ProviderMetadataAll() {
-		want := []application.ToolSummary{}
-		for _, descriptor := range reg.Provider(metadata.ID) {
-			want = append(want, application.ToolSummary{
-				ID: descriptor.ID, Title: descriptor.Title, Effect: descriptor.Risk.Effect, Reason: &noConnection,
-			})
+		want := []application.SearchHit{}
+		indexed := toolSummaries(t, string(cliJSON("tools", metadata.ID, "--all")))
+		for i, descriptor := range reg.Provider(metadata.ID) {
+			hit := application.SearchHit{
+				ID: descriptor.ID, Title: descriptor.Title, Effect: descriptor.Risk.Effect, Reason: noConnection,
+				Confirm: descriptor.Risk.Confirmation == capability.ConfirmationRequired,
+			}
+			// The required arguments are derived from the compact contract, which the application tests
+			// check; here both surfaces must publish the same ones.
+			if i < len(indexed) {
+				hit.Requires = indexed[i].Requires
+			}
+			want = append(want, hit)
 		}
-		if indexed := toolSummaries(t, string(cliJSON("tools", metadata.ID, "--all"))); !reflect.DeepEqual(indexed, want) {
+		if !reflect.DeepEqual(indexed, want) {
 			t.Errorf("CLI tools %s = %+v, want %+v", metadata.ID, indexed, want)
 		}
 
-		searched := []application.ToolSummary{}
+		searched := []application.SearchHit{}
 		arguments := `{"provider":"` + metadata.ID + `","all":true}`
 		for {
 			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
@@ -114,13 +122,7 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 			}
 			var page application.SearchResponse
 			decodeRaw(t, result.Structured, &page)
-			for _, hit := range page.Operations {
-				reason := hit.Reason
-				searched = append(searched, application.ToolSummary{
-					ID: hit.ID, Title: hit.Title, Effect: hit.Effect, Connections: strings.Join(hit.Connections, " "),
-					Reason: &reason,
-				})
-			}
+			searched = append(searched, page.Operations...)
 			if !page.HasMore {
 				break
 			}

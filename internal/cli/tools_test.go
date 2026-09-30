@@ -122,17 +122,21 @@ func jsonEqual(a, b []byte) bool {
 
 // toolSummaries decodes the compact index. Decoding into the core type is what proves that the command
 // publishes that model and nothing else: a stray field would fail the strict decoder below.
-func toolSummaries(t *testing.T, stdout string) []application.ToolSummary {
+func toolSummaries(t *testing.T, stdout string) []application.SearchHit {
 	t.Helper()
-	var document struct {
-		Tools []application.ToolSummary `json:"tools"`
-	}
+	return toolIndex(t, stdout).Tools
+}
+
+// toolIndex decodes the whole answer of 'qatlas tools': the connections named once and the entries.
+func toolIndex(t *testing.T, stdout string) application.ToolsResponse {
+	t.Helper()
+	var document application.ToolsResponse
 	decoder := json.NewDecoder(strings.NewReader(stdout))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&document); err != nil {
 		t.Fatalf("tools output is not the compact index: %v: %s", err, stdout)
 	}
-	return document.Tools
+	return document
 }
 
 func toolIDs(t *testing.T, stdout string) []string {
@@ -278,9 +282,12 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	// The wiki connection keeps the read-only default permissions, so it offers the two read tools only.
-	if want := "tools[2]{id,title,effect,connections}:\n" +
-		"  bookstack.pages.get,Get a BookStack page,read,wiki\n" +
-		"  bookstack.pages.list,List BookStack pages,read,wiki\n"; stdout != want {
+	// The connection is named once; both tools are offered by it, so no row repeats it. The entries share
+	// their columns, so the listing stays a table with one row per tool.
+	if want := "connections[1]: wiki\n" +
+		"tools[2]{id,title,effect,requires}:\n" +
+		"  bookstack.pages.get,Get a BookStack page,read,id\n" +
+		"  bookstack.pages.list,List BookStack pages,read,\"\"\n"; stdout != want {
 		t.Errorf("stdout = %q, want %q", stdout, want)
 	}
 	for _, absent := range []string{"description", "tags", "version", "reason", "alerts", "read-only account"} {
@@ -318,17 +325,17 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Fatalf("exit=%d stderr=%q", code, stderr)
 		}
 		for _, want := range []string{
-			"tools[5]{id,title,effect,connections,reason}:\n",
-			`  bookstack.pages.create,Create a BookStack page,create,"",effect-not-permitted` + "\n",
-			`  bookstack.pages.delete,Delete a BookStack page,delete,"",effect-not-permitted` + "\n",
-			`  bookstack.pages.get,Get a BookStack page,read,wiki,""` + "\n",
+			"connections[1]: wiki\ntools[5]{id,title,effect,requires,confirm,reason}:\n",
+			`  bookstack.pages.create,Create a BookStack page,create,name; markdown,true,effect-not-permitted` + "\n",
+			`  bookstack.pages.delete,Delete a BookStack page,delete,id,true,effect-not-permitted` + "\n",
+			`  bookstack.pages.get,Get a BookStack page,read,id,false,""` + "\n",
 		} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout does not contain %q:\n%s", want, stdout)
 			}
 		}
 		code, stdout, stderr = runTools(t, nil, "tools", "lexware", "--all", "--config", cfg)
-		if code != exitOK || stderr != "" || !strings.Contains(stdout, `  lexware.invoices.list,List open Lexware invoices,read,"",no-connection`) {
+		if code != exitOK || stderr != "" || !strings.Contains(stdout, `  lexware.invoices.list,List open Lexware invoices,read,"",false,no-connection`) {
 			t.Errorf("a namespace without a connection: exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
 		}
 	})
@@ -500,8 +507,8 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 				t.Errorf("tools = %v, want %v", got, tt.want)
 			}
 			for _, tool := range toolSummaries(t, stdout) {
-				if tool.Connections == "" || tool.Reason != nil {
-					t.Errorf("%s = %+v, want its connections and no reason", tool.ID, tool)
+				if tool.Reason != "" {
+					t.Errorf("%s = %+v, want no reason", tool.ID, tool)
 				}
 			}
 		})
@@ -984,7 +991,7 @@ func TestToolCommandsKeepTheDataOfTheRemovedCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Tools() = %v", err)
 	}
-	if got := toolSummaries(t, stdout); !reflect.DeepEqual(got, catalog.Tools) {
+	if got := toolSummaries(t, stdout); !reflect.DeepEqual(got, []application.SearchHit(catalog.Tools)) {
 		t.Errorf("tools = %+v, want %+v", got, catalog.Tools)
 	}
 	// The cascade must still reach every compiled operation: walking the namespaces and listing each one
@@ -1191,7 +1198,7 @@ func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 		if code != exitOK || stderr != "" {
 			t.Fatalf("CLI %v: exit=%d stderr=%q", args, code, stderr)
 		}
-		indexed := toolSummaries(t, stdout)
+		indexed := toolIndex(t, stdout)
 
 		input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"
@@ -1199,18 +1206,77 @@ func TestMCPSearchFollowsTheCatalogRule(t *testing.T) {
 			&Options{Config: cfg, Redactor: &redact.Redactor{}})
 		var page application.SearchResponse
 		decodeRaw(t, toolResultFrom(t, responses["1"]).Structured, &page)
-		if mcpStderr != "" || len(page.Operations) != len(indexed) {
-			t.Fatalf("all=%v: search = %+v, index = %+v", all, page.Operations, indexed)
+		if mcpStderr != "" || !reflect.DeepEqual(page.Connections, indexed.Connections) ||
+			!reflect.DeepEqual(page.Operations, indexed.Tools) {
+			t.Fatalf("all=%v: search = %+v, index = %+v", all, page, indexed)
 		}
-		for i, hit := range page.Operations {
-			reason := ""
-			if indexed[i].Reason != nil {
-				reason = string(*indexed[i].Reason)
+	}
+}
+
+// A hit is enough for an ordinary call, for every provider alike: the required arguments with their form,
+// the confirmation, and the connections named once. A query also finds a tool whose description alone
+// carries the term, listed below the tools that carry it in the ID or title.
+func TestToolsQueryFindsByDescriptionAndCarriesTheCallContract(t *testing.T) {
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	cfg := writeConfig(t, `version: 1
+services:
+  gh:
+    provider: github
+    base_url: https://api.example.invalid
+credentials:
+  token:
+    type: env
+    values:
+      token: TOOLS_GITHUB_TOKEN
+connections:
+  kunde-a:
+    service: gh
+    credential: token
+    permissions: [read, create, update, delete]
+  kunde-b:
+    service: gh
+    credential: token
+    permissions: [read]
+defaults: {}
+`)
+	code, stdout, stderr := runTools(t, nil, "tools", "--config", cfg, "--query", "issues", "--output", "json")
+	if code != exitOK || stderr != "" {
+		t.Fatalf("exit=%d stderr=%q", code, stderr)
+	}
+	index := toolIndex(t, stdout)
+	if want := []string{"kunde-a", "kunde-b"}; !reflect.DeepEqual(index.Connections, want) {
+		t.Errorf("connections = %v, want %v once", index.Connections, want)
+	}
+	position := map[string]int{}
+	var changing bool
+	for i, tool := range index.Tools {
+		position[tool.ID] = i
+		if tool.Effect == capability.EffectRead {
+			if tool.Connections != "" {
+				t.Errorf("%s names its connections %v although every connection offers it", tool.ID, tool.Connections)
 			}
-			if hit.ID != indexed[i].ID || strings.Join(hit.Connections, " ") != indexed[i].Connections ||
-				string(hit.Reason) != reason || (indexed[i].Reason != nil) != all {
-				t.Errorf("all=%v: search[%d] = %+v, index = %+v", all, i, hit, indexed[i])
-			}
+			continue
+		}
+		// Only kunde-a may change data, so a changing tool refers to it and, where needed, says confirm.
+		if tool.Connections != "kunde-a" {
+			t.Errorf("%s connections = %q, want kunde-a", tool.ID, tool.Connections)
+		}
+		changing = changing || tool.Confirm
+		if tool.ID == "github.issues.update" && tool.Requires != "number" {
+			t.Errorf("github.issues.update requires %q, want only number", tool.Requires)
+		}
+	}
+	if !changing {
+		t.Errorf("no listed changing tool needs confirmation: %s", stdout)
+	}
+	items, listed := position["github.projectitems.list"]
+	if !listed {
+		t.Fatalf("issues does not find github.projectitems.list: %v", toolIDs(t, stdout))
+	}
+	for _, id := range []string{"github.issues.list", "github.issues.get"} {
+		if at, ok := position[id]; !ok || at > items {
+			t.Errorf("%s at %d, want before github.projectitems.list at %d", id, at, items)
 		}
 	}
 }

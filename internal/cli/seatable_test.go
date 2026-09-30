@@ -114,7 +114,7 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[7]{id,title,effect,connections,reason}:", "seatable.columns.list,List SeaTable columns,read,", "seatable.rows.create,Create a SeaTable row,create,",
+		"tools[7]{id,title,effect,requires,confirm,reason}:", "seatable.columns.list,List SeaTable columns,read,", "seatable.rows.create,Create a SeaTable row,create,",
 		"seatable.rows.delete,Delete a SeaTable row,delete,", "seatable.rows.get,Get a SeaTable row,read,", "seatable.rows.list,List SeaTable rows,read,",
 		"seatable.rows.update,Update a SeaTable row,update,", "seatable.tables.list,List SeaTable tables,read,",
 	} {

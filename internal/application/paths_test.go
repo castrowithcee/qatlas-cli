@@ -146,8 +146,8 @@ func TestABoundConnectionIsMissingEverywhereOutsideItsProject(t *testing.T) {
 		t.Fatalf("Tools() = %+v, %v", tools, err)
 	}
 	for _, tool := range tools.Tools {
-		if tool.Connections != "kunde-a open" {
-			t.Errorf("Tools() %s offered by %q, want kunde-a open", tool.ID, tool.Connections)
+		if got := strings.Join(offeredBy(tools.Connections, tool), " "); got != "kunde-a open" {
+			t.Errorf("Tools() %s offered by %q, want kunde-a open", tool.ID, got)
 		}
 	}
 	searched, err := core.Search(SearchRequest{Query: "page"})
@@ -155,8 +155,8 @@ func TestABoundConnectionIsMissingEverywhereOutsideItsProject(t *testing.T) {
 		t.Fatalf("Search() = %+v, %v", searched, err)
 	}
 	for _, hit := range searched.Operations {
-		if strings.Join(hit.Connections, " ") != "kunde-a open" {
-			t.Errorf("Search() %s offered by %v, want kunde-a open", hit.ID, hit.Connections)
+		if got := offeredBy(searched.Connections, hit); strings.Join(got, " ") != "kunde-a open" {
+			t.Errorf("Search() %s offered by %v, want kunde-a open", hit.ID, got)
 		}
 	}
 	described, err := core.Describe(DescribeRequest{Operation: "fake.pages.get"})

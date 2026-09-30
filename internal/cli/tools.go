@@ -126,14 +126,24 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 		Use:   "tools <namespace>",
 		Short: "List the tools the configured connections offer",
 		Long: "Tools lists the tools of one namespace that a configured connection offers, each with its ID,\n" +
-			"its title, whether it reads or changes the remote system, and the names of the connections that\n" +
-			"offer it, separated by spaces. It is answered from the local configuration alone: no provider is\n" +
-			"contacted and no secret is read.\n\n" +
+			"its title, whether it reads or changes the remote system, the arguments it requires, and\n" +
+			"whether it needs confirmation. It is answered from the local configuration alone: no provider\n" +
+			"is contacted and no secret is read.\n\n" +
+			"An entry carries what an ordinary call needs. requires lists the required arguments as\n" +
+			"name:form, separated by semicolons, with the written form or the allowed values after the\n" +
+			"colon where there is one, such as repository:OWNER/REPO; confirm is true for a tool that needs\n" +
+			"--confirm. Optional arguments stay with 'qatlas describe'. connections names once, at the top,\n" +
+			"every connection that offers one of the listed tools; an entry has its own connections, separated\n" +
+			"by spaces, only where fewer of them offer it, and none offers a tool that has a reason and no\n" +
+			"connections. All entries share one set of columns, so the listing is a table with a row per\n" +
+			"tool; a column that no entry uses is left out, and an empty value is \"\".\n\n" +
 			"The namespace argument is the provider prefix of the tool IDs; 'qatlas providers' lists the\n" +
 			"namespaces. --query answers the same form for a targeted search and may be used without a\n" +
 			"namespace, keeping only the tools where every term occurs in the ID, title, description, or\n" +
 			"tags, in the description or note of the provider, or in the description of a connection that\n" +
-			"offers the tool, so a word such as wiki or crm finds the provider or route it names.\n\n" +
+			"offers the tool, so a word such as wiki or crm finds the provider or route it names. The best\n" +
+			"matches come first: a term in the ID or title outweighs one in the description or tags, which\n" +
+			"outweighs one in the provider or connection text; equal matches keep the ID order.\n\n" +
 			"A connection offers a tool when its permissions allow the tool's effect and, if the connection\n" +
 			"has a tools list, that list names the tool; without a tools list every tool of an allowed effect\n" +
 			"is offered, except a high-risk tool whose contract says requires_tool_allow_list, which only a\n" +
@@ -142,7 +152,7 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"Describe, invoke and the MCP broker apply the same rule, and invoke refuses before any secret is\n" +
 			"read or any provider is contacted.\n\n" +
 			"--connection keeps only the tools that connection offers. --all lists the tools no connection\n" +
-			"offers as well, and adds a reason to every row: empty for an offered tool, otherwise one of\n\n" +
+			"offers as well, each with a reason, one of\n\n" +
 			"  effect-not-permitted      the permissions do not allow the tool's effect\n" +
 			"  requires-tool-allow-list  the tool needs a tools list that names it, and there is none\n" +
 			"  not-in-tools-list         the tools list does not name the tool\n" +
@@ -151,7 +161,7 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"tool for different reasons, the reason of the one closest to offering it is shown, in the order\n" +
 			"not-in-tools-list, requires-tool-allow-list, effect-not-permitted. 'qatlas tui' changes what a\n" +
 			"connection offers.\n\n" +
-			"Everything else about a tool, including its arguments, its risk, and the descriptions of the\n" +
+			"Everything else about a tool, including its optional arguments, its risk, and the descriptions of the\n" +
 			"connections that can run it, is one 'qatlas describe <tool-id>' away.\n\n" +
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
 			"JSON. When no connection offers a listed tool, the list is empty and a note on stderr points to\n" +

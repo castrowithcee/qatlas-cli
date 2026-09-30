@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -29,8 +30,13 @@ func TestSearchAndDescribeAreLocalAndDeterministic(t *testing.T) {
 	if len(got.Operations) != 1 || got.Operations[0].ID != "fake.pages.get" {
 		t.Fatalf("Search() = %+v", got)
 	}
-	if want := []string{"archive", "primary"}; !reflect.DeepEqual(got.Operations[0].Connections, want) {
-		t.Errorf("connections = %v, want %v", got.Operations[0].Connections, want)
+	// Both connections offer the tool, so the answer names them once and the entry does not repeat them.
+	if want := []string{"archive", "primary"}; !reflect.DeepEqual(got.Connections, want) ||
+		got.Operations[0].Connections != "" {
+		t.Errorf("connections = %v, entry %v, want %v once", got.Connections, got.Operations[0].Connections, want)
+	}
+	if want := "id"; got.Operations[0].Requires != want || got.Operations[0].Confirm {
+		t.Errorf("entry = %+v, want required %q and no confirmation", got.Operations[0], want)
 	}
 
 	described, err := core.Describe(DescribeRequest{Operation: "fake.pages.get", Version: 1})
@@ -144,7 +150,7 @@ func TestConnectionToolsFilterEveryPathTheSameWay(t *testing.T) {
 	}
 	routes := map[string][]string{}
 	for _, hit := range searched.Operations {
-		routes[hit.ID] = hit.Connections
+		routes[hit.ID] = offeredBy(searched.Connections, hit)
 	}
 	if want := map[string][]string{
 		"fake.pages.get": {"getter", "open"}, "fake.pages.list": {"lister", "open"},
@@ -1210,31 +1216,21 @@ func TestCatalogNamesWhyAToolIsNotOffered(t *testing.T) {
 		}
 		got := map[string]string{}
 		for _, tool := range listed.Tools {
-			reason := "-"
-			if tool.Reason != nil {
-				reason = string(*tool.Reason)
-			}
-			got[tool.ID] = tool.Connections + "|" + reason
+			got[tool.ID] = strings.Join(offeredBy(listed.Connections, tool), " ") + "|" + string(tool.Reason)
 		}
 		// The bounded search answers the same question with the same reasons.
 		searched, err := core.Search(request)
 		if err != nil || len(searched.Operations) != len(listed.Tools) {
 			t.Fatalf("Search(%+v) = %+v, %v", request, searched, err)
 		}
-		for i, hit := range searched.Operations {
-			want := ""
-			if listed.Tools[i].Reason != nil {
-				want = string(*listed.Tools[i].Reason)
-			}
-			if hit.ID != listed.Tools[i].ID || string(hit.Reason) != want ||
-				strings.Join(hit.Connections, " ") != listed.Tools[i].Connections {
-				t.Errorf("Search(%+v)[%d] = %+v, want the entry %+v", request, i, hit, listed.Tools[i])
-			}
+		if !reflect.DeepEqual(searched.Connections, listed.Connections) ||
+			!reflect.DeepEqual(searched.Operations, listed.Tools) {
+			t.Errorf("Search(%+v) = %+v, want the entries of Tools %+v", request, searched, listed)
 		}
 		return got
 	}
 
-	if got, want := reasons(SearchRequest{}), map[string]string{"fake.pages.get": "reader|-"}; !reflect.DeepEqual(got, want) {
+	if got, want := reasons(SearchRequest{}), map[string]string{"fake.pages.get": "reader|"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("default catalog = %v, want %v", got, want)
 	}
 	all := map[string]string{
@@ -1438,5 +1434,200 @@ func TestCandidateDiagnosticsNameTheRoutes(t *testing.T) {
 	}
 	if got := len([]rune(shortened)); got != maxCandidateDescription {
 		t.Errorf("shortened description has %d characters, want %d", got, maxCandidateDescription)
+	}
+}
+
+// offeredBy is the connections one entry of a discovery answer stands for: its own list, else the ones the
+// answer names once, unless a reason says that none offers it.
+func offeredBy(all []string, hit SearchHit) []string {
+	switch {
+	case hit.Connections != "":
+		return strings.Fields(hit.Connections)
+	case hit.Reason != "":
+		return nil
+	}
+	return all
+}
+
+// searchContractCore registers tools whose contracts differ: one with a required argument that has a form
+// and a required enum, one that needs confirmation and has an object argument, and one whose description
+// alone names the search term. Two connections offer them, one through a tools list.
+func searchContractCore(t *testing.T) *Core {
+	t.Helper()
+	handler := capability.Handler(func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+		json.RawMessage) (any, error) {
+		return map[string]any{"ok": true}, nil
+	})
+	list := testDescriptor("fake.issues.list", capability.EffectRead, capability.ConfirmationNone)
+	list.Title, list.Description, list.Tags = "List issues", "List the issues of a repository", nil
+	list.InputSchema = json.RawMessage(`{"type":"object","properties":{` +
+		`"repository":{"type":"string","x-form":"OWNER/REPO"},` +
+		`"state":{"type":"string","enum":["open","closed"]},"limit":{"type":"integer"}},` +
+		`"required":["repository","state"],"additionalProperties":false}`)
+	items := testDescriptor("fake.items.list", capability.EffectRead, capability.ConfirmationNone)
+	items.Title, items.Description, items.Tags = "List items", "List items, such as issues and drafts", nil
+	items.InputSchema = json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer"}},` +
+		`"additionalProperties":false}`)
+	remove := testDescriptor("fake.pages.delete", capability.EffectDelete, capability.ConfirmationRequired)
+	remove.Title, remove.Description, remove.Tags = "Delete a page", "Remove one page", nil
+	remove.InputSchema = json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},` +
+		`"address":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}},` +
+		`"required":["id"],"additionalProperties":false}`)
+	registry := capability.NewRegistry()
+	for _, descriptor := range []capability.Descriptor{list, items, remove} {
+		if err := registry.Register("fake", capability.Operation{Descriptor: descriptor, Handler: handler}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := config.New()
+	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["shared"] = config.Credential{
+		Type: config.CredentialTypeEnv, Values: map[string]string{"token": "FAKE_TOKEN"},
+	}
+	every := []config.Permission{config.PermissionRead, config.PermissionDelete}
+	cfg.Connections["a"] = config.Connection{Service: "service", Credential: "shared", Permissions: every}
+	cfg.Connections["b"] = config.Connection{
+		Service: "service", Credential: "shared", Permissions: every,
+		Tools: []string{"fake.issues.list", "fake.items.list"},
+	}
+	return New(registry, cfg, nil, nil)
+}
+
+// A hit carries the required arguments with their form, and whether confirmation is needed, taken from the
+// compact contract; optional arguments and members of an object argument stay with describe.
+func TestSearchHitsNameRequiredArgumentsAndConfirmation(t *testing.T) {
+	core := searchContractCore(t)
+	got, err := core.Search(SearchRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]SearchHit{}
+	for _, hit := range got.Operations {
+		byID[hit.ID] = hit
+	}
+	if want := "repository:OWNER/REPO; state:open|closed"; byID["fake.issues.list"].Requires != want ||
+		byID["fake.issues.list"].Confirm {
+		t.Errorf("issues.list = %+v, want requires %q", byID["fake.issues.list"], want)
+	}
+	if hit := byID["fake.items.list"]; hit.Requires != "" || hit.Confirm {
+		t.Errorf("items.list = %+v, want no required arguments and no confirmation", hit)
+	}
+	if hit := byID["fake.pages.delete"]; hit.Requires != "id" || !hit.Confirm {
+		t.Errorf("pages.delete = %+v, want required id and confirmation", hit)
+	}
+}
+
+// The entries of an answer share one field set, so TOON prints them as a table: a column no entry uses is
+// left out, and one that any entry uses is present in every entry.
+func TestSearchHitsShareOneFieldSet(t *testing.T) {
+	names := func(raw []byte) []string {
+		var entries []map[string]any
+		if err := json.Unmarshal(raw, &entries); err != nil {
+			t.Fatal(err)
+		}
+		var keys []string
+		for i, entry := range entries {
+			var own []string
+			for key := range entry {
+				own = append(own, key)
+			}
+			sort.Strings(own)
+			if i == 0 {
+				keys = own
+			} else if !reflect.DeepEqual(keys, own) {
+				t.Errorf("entry %d has fields %v, want %v", i, own, keys)
+			}
+		}
+		return keys
+	}
+	plain, _ := json.Marshal(Hits{{ID: "a.b", Title: "t", Effect: capability.EffectRead}})
+	if want := []string{"effect", "id", "title"}; !reflect.DeepEqual(names(plain), want) {
+		t.Errorf("unused columns are present: %s", plain)
+	}
+	mixed, _ := json.Marshal(Hits{
+		{ID: "a.b", Title: "t", Effect: capability.EffectRead},
+		{ID: "a.c", Title: "u", Effect: capability.EffectDelete, Requires: "id", Confirm: true, Connections: "x"},
+	})
+	if want := []string{"confirm", "connections", "effect", "id", "requires", "title"}; !reflect.DeepEqual(names(mixed), want) {
+		t.Errorf("mixed entries: %s", mixed)
+	}
+}
+
+// The connections that take part in an answer are named once. An entry refers to connections only when a
+// connection of that list does not offer it, and a tool nobody offers keeps its reason instead.
+func TestSearchNamesTheConnectionsOnceAndRefersOnlyOnDeviation(t *testing.T) {
+	core := searchContractCore(t)
+	got, err := core.Search(SearchRequest{All: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"a", "b"}; !reflect.DeepEqual(got.Connections, want) {
+		t.Errorf("connections = %v, want %v", got.Connections, want)
+	}
+	for _, hit := range got.Operations {
+		switch hit.ID {
+		case "fake.pages.delete":
+			// b's tools list does not name it: only a offers it.
+			if hit.Connections != "a" || hit.Reason != "" {
+				t.Errorf("%s = %+v, want a alone", hit.ID, hit)
+			}
+		default:
+			if hit.Connections != "" {
+				t.Errorf("%s = %+v, want no reference: every connection offers it", hit.ID, hit)
+			}
+		}
+	}
+	// Without a connection at all, every tool keeps its reason and there is nothing to name.
+	empty := New(core.registry, config.New(), nil, nil)
+	none, err := empty.Search(SearchRequest{All: true})
+	if err != nil || none.Connections != nil || len(none.Operations) != 3 {
+		t.Fatalf("Search(all) without connections = %+v, %v", none, err)
+	}
+	for _, hit := range none.Operations {
+		if hit.Reason != config.RefusalNoConnection || hit.Connections != "" {
+			t.Errorf("%s = %+v, want the reason alone", hit.ID, hit)
+		}
+	}
+}
+
+// A term found in the description alone still finds the tool, below the tools that carry the term in the
+// ID or title. Equal relevance keeps the ID order, and paging reads every match exactly once in that order.
+func TestSearchRanksTheDescriptionBelowTheTitle(t *testing.T) {
+	core := searchContractCore(t)
+	ids := func(response SearchResponse) []string {
+		var got []string
+		for _, hit := range response.Operations {
+			got = append(got, hit.ID)
+		}
+		return got
+	}
+	got, err := core.Search(SearchRequest{Query: "issues"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"fake.issues.list", "fake.items.list"}; !reflect.DeepEqual(ids(got), want) {
+		t.Errorf("Search(issues) = %v, want %v", ids(got), want)
+	}
+	tools, err := core.Tools(SearchRequest{Query: "issues"})
+	if err != nil || len(tools.Tools) != 2 || tools.Tools[0].ID != "fake.issues.list" ||
+		tools.Tools[1].ID != "fake.items.list" {
+		t.Errorf("Tools(issues) = %+v, %v, want the order of Search", tools, err)
+	}
+
+	var paged []string
+	request := SearchRequest{Query: "issues", Limit: 1}
+	for {
+		page, err := core.Search(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		paged = append(paged, ids(page)...)
+		if !page.HasMore {
+			break
+		}
+		request.Cursor = page.NextCursor
+	}
+	if want := []string{"fake.issues.list", "fake.items.list"}; !reflect.DeepEqual(paged, want) {
+		t.Errorf("paged Search(issues) = %v, want %v", paged, want)
 	}
 }

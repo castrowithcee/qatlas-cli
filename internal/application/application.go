@@ -135,24 +135,86 @@ type SearchRequest struct {
 	Cursor     string            `json:"cursor,omitempty"`
 }
 
-// SearchHit is the bounded discovery view of one descriptor: the same entry as ToolSummary, so a search
-// costs what the index costs, with the offering connections as a list. Description, version, and tags are
-// one describe away. Connections names every connection that offers it; Reason is set only on a tool none
-// of them offers, which only a request with All returns.
+// SearchHit is the bounded discovery view of one descriptor, and the entry of both discovery answers: it
+// carries what an ordinary call needs, so describe is only one step away when the contract is unclear.
+//
+// Every value is a scalar, so the entries of an answer share one field set and TOON prints them as a table
+// with one row per tool. Requires names the required arguments separated by "; ", each as name:form where
+// the compact contract of describe gives a written form or the allowed values, and as the bare name
+// otherwise; optional arguments and members of object arguments stay with describe. Confirm is true for a
+// tool that needs confirmation. Connections names, separated by spaces, the connections that offer the tool
+// only where they differ from those the answer names once at its top. Reason is set only by a request with
+// All, on a tool the request's connections do not offer; a tool with a reason and no connections is offered
+// by none. Hits marshals only the columns some entry uses.
 type SearchHit struct {
 	ID          string            `json:"id"`
 	Title       string            `json:"title"`
 	Effect      capability.Effect `json:"effect"`
-	Connections []string          `json:"connections"`
-	Reason      config.Refusal    `json:"reason,omitempty"`
+	Requires    string            `json:"requires"`
+	Confirm     bool              `json:"confirm"`
+	Connections string            `json:"connections"`
+	Reason      config.Refusal    `json:"reason"`
 }
 
-// SearchResponse is the payload inside the CLI envelope. HasMore is true exactly when another match
-// follows this page; NextCursor is then the cursor of the following page and absent otherwise.
+// Hits is the list of entries of a discovery answer. It marshals every entry with the same fields: id, title,
+// and effect always, and requires, confirm, connections, and reason only when at least one entry has a
+// value there, so an unused column costs nothing and the entries still form one table.
+type Hits []SearchHit
+
+// MarshalJSON writes the entries with a common field set, in the order of the fields of SearchHit.
+func (h Hits) MarshalJSON() ([]byte, error) {
+	var requires, confirm, connections, reason bool
+	for _, hit := range h {
+		requires = requires || hit.Requires != ""
+		confirm = confirm || hit.Confirm
+		connections = connections || hit.Connections != ""
+		reason = reason || hit.Reason != ""
+	}
+	out := []byte{'['}
+	for i, hit := range h {
+		if i > 0 {
+			out = append(out, ',')
+		}
+		fields := []struct {
+			name  string
+			use   bool
+			value any
+		}{
+			{"id", true, hit.ID}, {"title", true, hit.Title}, {"effect", true, hit.Effect},
+			{"requires", requires, hit.Requires}, {"confirm", confirm, hit.Confirm},
+			{"connections", connections, hit.Connections}, {"reason", reason, hit.Reason},
+		}
+		out = append(out, '{')
+		first := true
+		for _, field := range fields {
+			if !field.use {
+				continue
+			}
+			value, err := json.Marshal(field.value)
+			if err != nil {
+				return nil, err
+			}
+			if !first {
+				out = append(out, ',')
+			}
+			first = false
+			out = append(out, fmt.Sprintf("%q:", field.name)...)
+			out = append(out, value...)
+		}
+		out = append(out, '}')
+	}
+	return append(out, ']'), nil
+}
+
+// SearchResponse is the payload inside the CLI envelope. Connections names once every connection that
+// offers one of the listed tools; a hit refers to connections only when it is offered by fewer of them.
+// HasMore is true exactly when another match follows this page; NextCursor is then the cursor of the
+// following page and absent otherwise.
 type SearchResponse struct {
-	Operations []SearchHit `json:"operations"`
-	HasMore    bool        `json:"has_more"`
-	NextCursor string      `json:"next_cursor,omitempty"`
+	Connections []string `json:"connections,omitempty"`
+	Operations  Hits     `json:"operations"`
+	HasMore     bool     `json:"has_more"`
+	NextCursor  string   `json:"next_cursor,omitempty"`
 }
 
 // Search performs deterministic local discovery and never resolves credentials or calls a provider. Its
@@ -179,19 +241,47 @@ func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
 		descriptors = descriptors[:limit]
 		response.NextCursor = searchCursor(request, descriptors[limit-1].ID)
 	}
-	hits := make([]SearchHit, 0, len(descriptors))
+	response.Connections, response.Operations = c.hits(request, descriptors)
+	return response, nil
+}
+
+// hits projects descriptors onto the entries of a discovery answer, and names the connections they share
+// once: every connection that offers one of them, sorted by name. An entry keeps its own list only when a
+// connection of that set does not offer it, or when it carries a reason: with a reason and without a list a
+// tool is offered by none.
+func (c *Core) hits(request SearchRequest, descriptors []capability.Descriptor) ([]string, Hits) {
+	hits := make(Hits, 0, len(descriptors))
+	offered := make([][]string, 0, len(descriptors))
+	var connections []string
+	seen := map[string]bool{}
 	for _, descriptor := range descriptors {
 		title := descriptor.Title
 		if title == "" {
 			title = descriptor.Description
 		}
+		names := c.connectionNamesFor(descriptor)
+		for _, name := range names {
+			if !seen[name] {
+				seen[name] = true
+				connections = append(connections, name)
+			}
+		}
+		offered = append(offered, names)
 		hits = append(hits, SearchHit{
 			ID: descriptor.ID, Title: title, Effect: descriptor.Risk.Effect,
-			Connections: c.connectionNamesFor(descriptor), Reason: c.refusal(request, descriptor),
+			Requires: strings.Join(requiredArguments(descriptor), "; "),
+			Confirm:  descriptor.Risk.Confirmation == capability.ConfirmationRequired,
+			Reason:   c.refusal(request, descriptor),
 		})
 	}
-	response.Operations = hits
-	return response, nil
+	sort.Strings(connections)
+	for i := range hits {
+		if hits[i].Reason == "" && len(offered[i]) == len(connections) {
+			continue
+		}
+		hits[i].Connections = strings.Join(offered[i], " ")
+	}
+	return connections, hits
 }
 
 // searchCursor encodes the continuation after the operation ID last. It binds the cursor to the filters of
@@ -389,29 +479,15 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 	return ConnectionsResponse{Connections: connections}
 }
 
-// ToolSummary is the index entry of one tool: the ID an invoke request carries, what the tool does,
-// whether it reads or changes the remote system, and the connections that offer it. That is what choosing
-// between the tools of one namespace needs; schemas, tags, examples and descriptions of the routes are one
-// describe away.
-//
-// Connections holds the offering connection names separated by single spaces, so the index stays one
-// table row per tool. Reason is present exactly in a listing of all tools: empty for an offered tool, and
-// otherwise the refusal that says why no connection offers it.
-type ToolSummary struct {
-	ID          string            `json:"id"`
-	Title       string            `json:"title"`
-	Effect      capability.Effect `json:"effect"`
-	Connections string            `json:"connections"`
-	Reason      *config.Refusal   `json:"reason,omitempty"`
-}
-
-// ToolsResponse is the payload inside the CLI envelope.
+// ToolsResponse is the payload inside the CLI envelope: the entries and the connections of the search
+// answer, without paging.
 type ToolsResponse struct {
-	Tools []ToolSummary `json:"tools"`
+	Connections []string `json:"connections,omitempty"`
+	Tools       Hits     `json:"tools"`
 }
 
 // Tools is the second step of discovery: the tools of one namespace, or of one targeted query. It applies
-// the same filters as Search to the same descriptors but publishes only what picking a tool needs.
+// the same filters as Search to the same descriptors in the same order and publishes the same entries.
 //
 // The catalog view answers what this installation offers, so a truncated answer would read as a complete
 // one; the bounded Search response stays the contract of the request-bound agent surface.
@@ -421,29 +497,15 @@ func (c *Core) Tools(request SearchRequest) (ToolsResponse, error) {
 	if err != nil {
 		return ToolsResponse{}, err
 	}
-	tools := make([]ToolSummary, 0, len(descriptors))
-	for _, descriptor := range descriptors {
-		title := descriptor.Title
-		if title == "" {
-			title = descriptor.Description
-		}
-		summary := ToolSummary{
-			ID: descriptor.ID, Title: title, Effect: descriptor.Risk.Effect,
-			Connections: strings.Join(c.connectionNamesFor(descriptor), " "),
-		}
-		if request.All {
-			reason := c.refusal(request, descriptor)
-			summary.Reason = &reason
-		}
-		tools = append(tools, summary)
-	}
-	return ToolsResponse{Tools: tools}, nil
+	connections, tools := c.hits(request, descriptors)
+	return ToolsResponse{Connections: connections, Tools: tools}, nil
 }
 
-// catalog filters the registry deterministically and returns the matching descriptors in registry order,
-// which is sorted by ID. Both discovery views project this one result, so the compact index and the
-// bounded search answer cannot disagree about which tools exist. A non-empty after skips every descriptor
-// up to and including that ID. A limit of zero or less returns every match.
+// catalog filters the registry deterministically and returns the matching descriptors, which both discovery
+// views project, so the compact index and the bounded search answer cannot disagree about which tools exist
+// or in which order. Without a query the order is the registry's, sorted by ID. With one, the most relevant
+// tool comes first and equal relevance keeps the ID order; see relevance. A non-empty after skips every
+// descriptor up to and including that ID in this order. A limit of zero or less returns every match.
 func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capability.Descriptor, error) {
 	if request.Effect != "" && !validEffect(request.Effect) {
 		return nil, &InvalidRequestError{Message: fmt.Sprintf("unknown effect %q", request.Effect)}
@@ -467,11 +529,12 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 	}
 
 	terms := strings.Fields(strings.ToLower(request.Query))
-	matches := make([]capability.Descriptor, 0)
+	type match struct {
+		descriptor capability.Descriptor
+		score      int
+	}
+	var matches []match
 	for _, descriptor := range c.registry.All() {
-		if after != "" && descriptor.ID <= after {
-			continue
-		}
 		if request.Provider != "" && descriptor.Provider != request.Provider {
 			continue
 		}
@@ -484,39 +547,79 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 		if request.Effect != "" && descriptor.Risk.Effect != request.Effect {
 			continue
 		}
-		haystack := strings.ToLower(strings.Join(c.searchText(request, descriptor), " "))
-		matched := true
-		for _, term := range terms {
-			if !strings.Contains(haystack, term) {
-				matched = false
+		score, ok := c.relevance(request, descriptor, terms)
+		if !ok {
+			continue
+		}
+		matches = append(matches, match{descriptor, score})
+	}
+	if len(terms) > 0 {
+		sort.SliceStable(matches, func(i, j int) bool { return matches[i].score > matches[j].score })
+	}
+	start := 0
+	if after != "" {
+		start = -1
+		for i, m := range matches {
+			if m.descriptor.ID == after {
+				start = i + 1
 				break
 			}
 		}
-		if !matched {
-			continue
+		if start < 0 {
+			return nil, &InvalidRequestError{Message: "cursor is not a next_cursor of this search; " +
+				"start the search again without cursor"}
 		}
-		matches = append(matches, descriptor)
-		if len(matches) == limit {
+	}
+	descriptors := make([]capability.Descriptor, 0, len(matches)-start)
+	for _, m := range matches[start:] {
+		if limit > 0 && len(descriptors) == limit {
 			break
 		}
+		descriptors = append(descriptors, m.descriptor)
 	}
-	return matches, nil
+	return descriptors, nil
 }
 
-// searchText is everything a query term may match for one tool: its ID, title, description, and tags, the
-// description of its provider and the note the user keeps on that provider, and the descriptions of the
-// connections that offer it, or with a connection filter of that connection alone. A word of a task such
-// as "wiki" or "CRM" thus finds the tools of the provider or route it names, without a list of synonyms.
-func (c *Core) searchText(request SearchRequest, descriptor capability.Descriptor) []string {
+// Relevance weights of where a query term is found, the best place of each term counting once. The ID and
+// the title name what a tool is; its description and tags say what it is for; the provider, its note, and
+// the connections only say where it runs.
+const (
+	weightName    = 4
+	weightPurpose = 2
+	weightContext = 1
+)
+
+// relevance scores one tool for the terms of a query and reports whether every term occurs somewhere. The
+// places are: the ID and title, the description and tags, and the description of the provider, the note
+// the user keeps on that provider, and the descriptions of the connections that offer the tool, or with a
+// connection filter of that connection alone. A word of a task such as "wiki" or "CRM" thus finds the
+// tools of the provider or route it names, without a list of synonyms, and a tool whose title lacks the
+// word but whose description has it still matches, below the tools that carry it in the title or ID.
+func (c *Core) relevance(request SearchRequest, descriptor capability.Descriptor, terms []string) (int, bool) {
 	metadata, _ := c.registry.ProviderMetadata(descriptor.Provider)
-	text := append([]string{descriptor.ID, descriptor.Title, descriptor.Description}, descriptor.Tags...)
-	text = append(text, metadata.Description, c.config.ProviderNotes[descriptor.Provider])
-	for _, name := range c.connectionNamesFor(descriptor) {
-		if request.Connection == "" || name == request.Connection {
-			text = append(text, c.config.Connections[name].Description)
+	name := strings.ToLower(descriptor.ID + " " + descriptor.Title)
+	purpose := strings.ToLower(strings.Join(append([]string{descriptor.Description}, descriptor.Tags...), " "))
+	place := []string{metadata.Description, c.config.ProviderNotes[descriptor.Provider]}
+	for _, connection := range c.connectionNamesFor(descriptor) {
+		if request.Connection == "" || connection == request.Connection {
+			place = append(place, c.config.Connections[connection].Description)
 		}
 	}
-	return text
+	context := strings.ToLower(strings.Join(place, " "))
+	score := 0
+	for _, term := range terms {
+		switch {
+		case strings.Contains(name, term):
+			score += weightName
+		case strings.Contains(purpose, term):
+			score += weightPurpose
+		case strings.Contains(context, term):
+			score += weightContext
+		default:
+			return 0, false
+		}
+	}
+	return score, true
 }
 
 // DescribeRequest selects exactly one versioned descriptor. Connection only restricts its possible routes.

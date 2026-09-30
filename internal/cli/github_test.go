@@ -66,30 +66,33 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[85]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
-		"  github.labels.list,List GitHub labels,read,code\n", "  github.labels.get,Get a GitHub label,read,code\n",
-		"  github.milestones.list,List GitHub milestones,read,code\n",
-		"  github.collaborators.list,List GitHub repository collaborators,read,code\n",
-		"  github.contents.get,Get GitHub repository contents,read,code\n",
-		"  github.trees.get,Get a GitHub repository tree,read,code\n",
-		"  github.blame.get,Get the GitHub blame of a file,read,code\n",
-		"  github.commits.list,List GitHub commits,read,code\n",
-		"  github.commits.get,Get a GitHub commit,read,code\n",
-		"  github.branches.list,List GitHub branches,read,code\n",
-		"  github.tags.list,List GitHub tags,read,code\n",
-		"  github.tags.get,Get a GitHub tag,read,code\n",
-		"  github.projectitems.list,List GitHub project items,read,code planning roadmap\n", "  github.projectitems.update,Update GitHub project item fields,update,roadmap\n",
-		"  github.accounts.me,Get the GitHub account behind this connection,read,code\n",
-		"  github.stars.list,List the GitHub repositories starred by this account,read,code\n",
-		"  github.teams.list,List the teams of a GitHub organization,read,code\n",
-		"  github.teammembers.list,List the members of a GitHub team,read,code\n",
-		"  github.repositories.search,Search GitHub repositories,read,code\n",
-		"  github.code.search,Search GitHub code,read,code\n",
-		"  github.issues.search,Search GitHub issues,read,code\n",
-		"  github.pullrequests.search,Search GitHub pull requests,read,code\n",
-		"  github.commits.search,Search GitHub commits,read,code\n",
-		"  github.users.search,Search GitHub users,read,code\n",
-		"  github.organizations.search,Search GitHub organizations,read,code\n",
+		"tools[85]{id,title,effect,requires,confirm,connections}:\n",
+		"  github.issues.get,Get a GitHub issue,read,number,false,code\n",
+		"  github.labels.list,List GitHub labels,read,\"\",false,code\n",
+		"  github.labels.get,Get a GitHub label,read,name,false,code\n",
+		"  github.milestones.list,List GitHub milestones,read,\"\",false,code\n",
+		"  github.collaborators.list,List GitHub repository collaborators,read,\"\",false,code\n",
+		"  github.contents.get,Get GitHub repository contents,read,\"\",false,code\n",
+		"  github.trees.get,Get a GitHub repository tree,read,ref,false,code\n",
+		"  github.blame.get,Get the GitHub blame of a file,read,path,false,code\n",
+		"  github.commits.list,List GitHub commits,read,\"\",false,code\n",
+		"  github.commits.get,Get a GitHub commit,read,ref,false,code\n",
+		"  github.branches.list,List GitHub branches,read,\"\",false,code\n",
+		"  github.tags.list,List GitHub tags,read,\"\",false,code\n",
+		"  github.tags.get,Get a GitHub tag,read,tag,false,code\n",
+		"  github.projectitems.list,List GitHub project items,read,\"\",false,\"\"\n",
+		"  github.projectitems.update,Update GitHub project item fields,update,item_id; fields,true,roadmap\n",
+		"  github.accounts.me,Get the GitHub account behind this connection,read,\"\",false,code\n",
+		"  github.stars.list,List the GitHub repositories starred by this account,read,\"\",false,code\n",
+		"  github.teams.list,List the teams of a GitHub organization,read,\"\",false,code\n",
+		"  github.teammembers.list,List the members of a GitHub team,read,team,false,code\n",
+		"  github.repositories.search,Search GitHub repositories,read,terms,false,code\n",
+		"  github.code.search,Search GitHub code,read,terms,false,code\n",
+		"  github.issues.search,Search GitHub issues,read,terms,false,code\n",
+		"  github.pullrequests.search,Search GitHub pull requests,read,terms,false,code\n",
+		"  github.commits.search,Search GitHub commits,read,terms,false,code\n",
+		"  github.users.search,Search GitHub users,read,terms,false,code\n",
+		"  github.organizations.search,Search GitHub organizations,read,terms,false,code\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -108,9 +111,10 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		`  github.issues.get,Get a GitHub issue,read,code,""`, `  github.issues.create,Create a GitHub issue,create,"",not-in-tools-list`,
-		`  github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,"",effect-not-permitted`,
-		`  github.workflowfiles.get,Get a GitHub workflow file,read,"",not-in-tools-list`,
+		`  github.issues.get,Get a GitHub issue,read,number,false,code,""`,
+		`  github.issues.create,Create a GitHub issue,create,title,true,"",not-in-tools-list`,
+		`  github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,`,
+		`  github.workflowfiles.get,Get a GitHub workflow file,read,`,
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools --all output does not contain %q:\n%s", want, stdout)
@@ -119,8 +123,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--connection", "code",
 		"--config", path)
 	if code != exitOK || stderr != "" ||
-		!strings.Contains(stdout, `  github.workflowfiles.get,Get a GitHub workflow file,read,"",requires-tool-allow-list`) ||
-		!strings.Contains(stdout, `  github.issues.create,Create a GitHub issue,create,"",effect-not-permitted`) {
+		!strings.Contains(stdout, `,false,"",requires-tool-allow-list`) ||
+		!strings.Contains(stdout, `  github.issues.create,Create a GitHub issue,create,title,true,"",effect-not-permitted`) {
 		t.Errorf("tools --all --connection code: exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
 	}
 	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--config", path)
@@ -128,7 +132,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[192]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[192]{id,title,effect,requires,confirm,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
 		"github.branches.create,Create a GitHub branch,create,", "github.contents.put,Create or update a GitHub repository file,update,",
 		"github.contents.delete,Delete a GitHub repository file,delete,",

@@ -123,26 +123,18 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 	if search.IsError {
 		t.Fatalf("search returned an error: %s", search.Content[0].Text)
 	}
-	var searchResult struct {
-		Operations []application.SearchHit `json:"operations"`
-	}
+	var searchResult application.SearchResponse
 	decodeRaw(t, search.Structured, &searchResult)
 	if len(searchResult.Operations) != 2 {
 		t.Fatalf("search operations = %d, want 2", len(searchResult.Operations))
 	}
-	// qatlas.search pages the entries of the CLI index and lists their connections instead of joining them.
-	// What must agree is which tools they name, in which order, and what each entry says.
-	indexed := toolSummaries(t, string(runFakeCLIJSON(t, "", "tools", "--query", "page", "--config", path,
+	// qatlas.search pages the entries of the CLI index; the entries and the connections named once are the
+	// same, entry by entry, in the same order.
+	indexed := toolIndex(t, string(runFakeCLIJSON(t, "", "tools", "--query", "page", "--config", path,
 		"--output", "json")))
-	if len(indexed) != len(searchResult.Operations) {
-		t.Fatalf("index = %+v, want the %d searched operations", indexed, len(searchResult.Operations))
-	}
-	for i, tool := range indexed {
-		hit := searchResult.Operations[i]
-		if tool.ID != hit.ID || tool.Title != hit.Title || tool.Effect != hit.Effect ||
-			tool.Connections != strings.Join(hit.Connections, " ") {
-			t.Errorf("index[%d] = %+v, want %+v", i, tool, hit)
-		}
+	if !reflect.DeepEqual(indexed.Connections, searchResult.Connections) ||
+		!reflect.DeepEqual(indexed.Tools, searchResult.Operations) {
+		t.Fatalf("index = %+v, want the searched operations %+v", indexed, searchResult)
 	}
 
 	describe := toolResultFrom(t, responses[`"describe"`])
@@ -638,9 +630,9 @@ func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
 	}
 }
 
-// A qatlas.search hit carries what picking a tool needs, in the order of the CLI index: id, title, effect,
-// and the offering connections as a list, plus the reason only in a search with all. Description, version,
-// tags, and provider stay one describe away.
+// A qatlas.search hit carries what a call needs, in the order of the CLI index: id, title, effect, and the
+// columns some hit uses (requires, confirm, connections, reason); the connections are named once beside the
+// hits. Description, version, tags, and provider stay one describe away.
 func TestMCPSearchHitsAreCompact(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
@@ -660,11 +652,11 @@ func TestMCPSearchHitsAreCompact(t *testing.T) {
 	}
 
 	for id, want := range map[string]string{
-		`"offered"`: `{"operations":[{"id":"bookstack.pages.get","title":"Read one page","effect":"read",` +
-			`"connections":["wiki"]}],"has_more":false}`,
-		`"all"`: `{"operations":[{"id":"bookstack.pages.get","title":"Read one page","effect":"read",` +
-			`"connections":["wiki"]},{"id":"bookstack.pages.list","title":"List pages","effect":"read",` +
-			`"connections":[],"reason":"not-in-tools-list"}],"has_more":false}`,
+		`"offered"`: `{"connections":["wiki"],"operations":[{"id":"bookstack.pages.get","title":"Read one page",` +
+			`"effect":"read"}],"has_more":false}`,
+		`"all"`: `{"connections":["wiki"],"operations":[{"id":"bookstack.pages.get","title":"Read one page",` +
+			`"effect":"read","reason":""},{"id":"bookstack.pages.list","title":"List pages","effect":"read",` +
+			`"reason":"not-in-tools-list"}],"has_more":false}`,
 	} {
 		result := toolResultFrom(t, responses[id])
 		if result.IsError || string(result.Structured) != want || result.Content[0].Text != want {

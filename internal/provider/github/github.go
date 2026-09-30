@@ -252,7 +252,7 @@ var itemsList = capability.Descriptor{
 	Version: 2,
 	Title:   "List GitHub project items",
 	Description: "List one bounded, server-side filtered batch of compact items of " +
-		"a GitHub project a connection allows; without a status filter only items whose status is not Done are listed",
+		"a GitHub project a connection allows, its issues, pull requests, and draft issues; without a status filter only items whose status is not Done are listed",
 	Tags:     []string{"github", "projects", "items", "list", "planning"},
 	Risk:     readRisk,
 	Provider: Provider,
