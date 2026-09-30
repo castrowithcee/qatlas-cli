@@ -576,6 +576,7 @@ func (c *Core) Describe(request DescribeRequest) (DescribeResponse, error) {
 		}
 		connections = []ConnectionRef{c.connectionRef(request.Connection)}
 	}
+	descriptor.OutputSchema = PublishedOutputSchema(descriptor.OutputSchema)
 	return DescribeResponse{Operation: descriptor, Connections: connections}, nil
 }
 
@@ -664,7 +665,9 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	if err := validateValue(descriptor.OutputSchema, normalized); err != nil {
 		return InvokeResponse{}, &InvalidProviderResponseError{Operation: descriptor.ID}
 	}
-	result, err := json.Marshal(normalized)
+	// Only what passed the output schema is compacted: empty values are dropped afterwards, for every
+	// provider alike, so CLI and MCP publish the same result.
+	result, err := json.Marshal(dropEmpty(normalized))
 	if err != nil {
 		return InvokeResponse{}, &InvalidProviderResponseError{Operation: descriptor.ID}
 	}

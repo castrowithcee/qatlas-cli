@@ -232,8 +232,8 @@ func TestProjectViewChangesSendOneMutationEach(t *testing.T) {
 			[]string{"filter:"},
 			map[string]string{"project": projectID, "name": "Triage", "layout": "TABLE_LAYOUT",
 				"configuration": "map[visibleFieldIds:[F_prio F_status]]"},
-			`{"complete":true,"project":"orgs/octo-org/projects/7","view":{"column_by":[],"fields":["Title",` +
-				`"Priority","Status"],"filter":"","group_by":[],"layout":"table","name":"Triage","number":4,"sort_by":[]}}`},
+			`{"complete":true,"project":"orgs/octo-org/projects/7","view":{"fields":["Title",` +
+				`"Priority","Status"],"filter":"","layout":"table","name":"Triage","number":4}}`},
 		{"create a roadmap with GitHub's fields", viewsCreate.ID, `{"name":"Plan","layout":"roadmap"}`, nil, nil,
 			map[string]string{"layout": "ROADMAP_LAYOUT", "configuration": "<nil>"}, `"complete":true`},
 		{"create a board with an empty filter", viewsCreate.ID, `{"name":"Bugs","layout":"board","filter":""}`, nil,
@@ -244,8 +244,8 @@ func TestProjectViewChangesSendOneMutationEach(t *testing.T) {
 				"$layout:ProjectV2ViewLayout!"},
 			[]string{"configuration:"},
 			map[string]string{"view": "V_2", "name": "Open", "layout": "BOARD_LAYOUT", "filter": "-status:Done"},
-			`"view":{"column_by":[],"fields":["Title"],"filter":"-status:Done","group_by":[],"layout":"board",` +
-				`"name":"Open","number":2,"sort_by":[]}`},
+			`"view":{"fields":["Title"],"filter":"-status:Done","layout":"board",` +
+				`"name":"Open","number":2}`},
 		{"remove a filter", viewsUpdate.ID, `{"view":1,"filter":""}`,
 			[]string{"updateProjectV2View(input:{viewId:$view,filter:$filter})"}, nil,
 			map[string]string{"view": "V_1", "filter": ""}, `"filter":""`},

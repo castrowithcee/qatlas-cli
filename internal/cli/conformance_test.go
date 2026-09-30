@@ -131,10 +131,12 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 		}
 	}
 
-	// describe publishes the compact contract by default and the registered descriptor on request, and the
+	// describe publishes the compact contract by default and the registered descriptor, with its output schema as published, on request, and the
 	// CLI and the MCP broker publish the same one either way.
 	for _, descriptor := range reg.All() {
-		registered, err := json.Marshal(descriptor)
+		published := descriptor
+		published.OutputSchema = application.PublishedOutputSchema(descriptor.OutputSchema)
+		registered, err := json.Marshal(published)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -831,5 +833,39 @@ func conformantAllowListed() capability.Descriptor {
 		RequiresToolAllowList:      true,
 		InputSchema:                json.RawMessage(`{"type":"object","additionalProperties":false}`),
 		OutputSchema:               json.RawMessage(`{"type":"object"}`),
+	}
+}
+
+// The output schema every shipped tool publishes stays a valid schema, and only ever requires less than
+// the schema its answer is validated against, since empty members are left out of results.
+func TestPublishedOutputSchemasStayValid(t *testing.T) {
+	reg := defaultRegistry()
+	cfg := config.New()
+	core := application.New(reg, cfg, nil, nil)
+	for _, descriptor := range reg.All() {
+		described, err := core.Describe(application.DescribeRequest{Operation: descriptor.ID})
+		if err != nil {
+			t.Errorf("%s: %v", descriptor.ID, err)
+			continue
+		}
+		published := described.Operation
+		if !json.Valid(published.OutputSchema) {
+			t.Errorf("%s publishes an invalid output schema", descriptor.ID)
+			continue
+		}
+		var before, after struct {
+			Type     string   `json:"type"`
+			Required []string `json:"required"`
+		}
+		_ = json.Unmarshal(descriptor.OutputSchema, &before)
+		_ = json.Unmarshal(published.OutputSchema, &after)
+		if after.Type != before.Type {
+			t.Errorf("%s: type changed to %q", descriptor.ID, after.Type)
+		}
+		for _, name := range after.Required {
+			if !slices.Contains(before.Required, name) {
+				t.Errorf("%s: published requires %q, which the validated schema does not", descriptor.ID, name)
+			}
+		}
 	}
 }

@@ -603,7 +603,7 @@ func TestListsReadOnePageAndCursorsStayOpaque(t *testing.T) {
 
 	// A page the scope emptied still announces the next one.
 	result, err = env.invoke("todoist.tasks.list", "one", `{"due_from":"2030-01-01"}`)
-	if err != nil || !strings.Contains(result, `"tasks":[]`) || !strings.Contains(result, `"has_more":true`) {
+	if err != nil || strings.Contains(result, `"tasks"`) || !strings.Contains(result, `"has_more":true`) {
 		t.Errorf("filtered page = %s, %v; want an empty page that continues", result, err)
 	}
 

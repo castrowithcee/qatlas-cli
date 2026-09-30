@@ -24,7 +24,7 @@ func TestIssueDependenciesToolsSatisfyTheirContractThroughTheApplicationCore(t *
 
 	listed, err := invoke(t, core, issueDependenciesList.ID, "repo", `{"repository":"octo-org/example","number":42}`, false)
 	if err != nil || !strings.Contains(string(listed), `"blocked_by":[{`) || !strings.Contains(string(listed), `"number":40`) ||
-		!strings.Contains(string(listed), `"blocking":[]`) {
+		strings.Contains(string(listed), `"blocking"`) {
 		t.Fatalf("list = %s, %v", listed, err)
 	}
 

@@ -338,7 +338,7 @@ func TestRateLimitIsClassifiedAndHeld(t *testing.T) {
 		t.Fatalf("invoke() after the rate limit = %v, want it to succeed once Infomaniak answers again", err)
 	}
 	var page FolderPage
-	if err := json.Unmarshal([]byte(result), &page); err != nil || page.Entries == nil {
+	if err := json.Unmarshal([]byte(result), &page); err != nil || page.DriveID != ownDrive {
 		t.Fatalf("result = %s, %v", result, err)
 	}
 }
