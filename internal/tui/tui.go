@@ -234,6 +234,9 @@ const (
 	// pathsHint says what the path list of a connection does.
 	pathsHint = "the connection is offered only in projects inside these directories, absolute or starting " +
 		"with ~/; none means every project"
+	// filesHint says what the two directory lists of a connection release.
+	filesHint = "local directories the tools of this connection may %s, absolute or starting with ~/; a " +
+		"directory gives access to it and everything below; none releases no local files"
 	toolListHint = "enter opens this provider's tools to tick; a tool is offered only when the permissions " +
 		"above allow its effect as well"
 	toolListOffHint = "not used while every tool the permissions allow is offered; choose only selected " +
@@ -1540,6 +1543,7 @@ func (m *Model) connectionProviderChosen() {
 		target.hint = m.targetHint(m.fieldValue("service"))
 	}
 	m.replacePermissionChoices(provider)
+	m.syncFilesRows()
 	if list := m.field(toolListLabel); list != nil {
 		// Tool IDs carry their provider, so no tick survives a change of provider.
 		list.choices, list.selected = m.toolChoices(provider, nil), map[string]bool{}
@@ -2204,6 +2208,7 @@ func (m *Model) openForm(name string) tea.Cmd {
 			m.applyRecommendedProfile()
 		}
 		m.syncProfile()
+		m.syncFilesRows()
 	}
 	m.focus = m.firstEditable()
 	m.applyFocus()
@@ -2400,6 +2405,8 @@ func (m *Model) buildFields(name string) []field {
 				withHint(connectionCredentialHint),
 			targetsField(conn.TargetValues()),
 			pathsField(conn.Paths).withHint(pathsHint),
+			filesField(filesReadLabel, conn.Files.Read),
+			filesField(filesWriteLabel, conn.Files.Write),
 			// Description and permissions explain the route the fields above define. Only the description
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
@@ -2538,6 +2545,14 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if entries := pathEntries(m.fields); len(entries) > 0 {
 			paths = append(paths, entries...)
 		}
+		// Like paths, a direction without entries is written as none at all.
+		var files config.Files
+		if entries := filesEntries(m.fields, filesReadLabel); len(entries) > 0 {
+			files.Read = append(files.Read, entries...)
+		}
+		if entries := filesEntries(m.fields, filesWriteLabel); len(entries) > 0 {
+			files.Write = append(files.Write, entries...)
+		}
 		return cfg.SetConnection(name, config.Connection{
 			Service:     m.fieldValue("service"),
 			Credential:  m.fieldValue("credential"),
@@ -2547,6 +2562,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Permissions: permissions,
 			Tools:       tools,
 			Paths:       paths,
+			Files:       files,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))
@@ -2788,6 +2804,46 @@ const (
 	targetsLabel = "targets"
 	pathsLabel   = "paths"
 )
+
+// The rows of the two directory lists of a connection: the directories its tools may read files from
+// (uploads) and write files to (downloads).
+const (
+	filesReadLabel  = "uploads"
+	filesWriteLabel = "downloads"
+)
+
+// filesField is a directory list row of the local file release, a list like the path list.
+func filesField(label string, values []string) field {
+	verb := "read files from"
+	if label == filesWriteLabel {
+		verb = "write files to"
+	}
+	return field{label: label, kind: fieldPaths, entries: values}.withHint(fmt.Sprintf(filesHint, verb))
+}
+
+// isFilesLabel reports whether label is one of the two local file rows.
+func isFilesLabel(label string) bool { return label == filesReadLabel || label == filesWriteLabel }
+
+// filesEntries are the entries of the local file row with label among fields, or none.
+func filesEntries(fields []field, label string) []string {
+	for _, f := range fields {
+		if f.kind == fieldPaths && f.label == label {
+			return f.entries
+		}
+	}
+	return nil
+}
+
+// syncFilesRows shows a local file row only for a direction the form's provider has a tool for, or while it
+// still holds entries: such a row stays editable, so the refusal of the core has something to act on.
+func (m *Model) syncFilesRows() {
+	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+	for label, offered := range map[string]bool{filesReadLabel: metadata.LocalFiles.Read, filesWriteLabel: metadata.LocalFiles.Write} {
+		if f := m.field(label); f != nil {
+			f.hidden = !offered && len(f.entries) == 0
+		}
+	}
+}
 
 // targetsField is the target list row over the targets a connection holds now.
 func targetsField(values []string) field {
@@ -3138,6 +3194,9 @@ func (m *Model) leaveView() string {
 		warning = "warning: the target list changed"
 		if m.leaveFrom == screenPaths {
 			warning = "warning: the path list changed"
+			if isFilesLabel(m.fields[m.focus].label) {
+				warning = "warning: the " + m.fields[m.focus].label + " list changed"
+			}
 		}
 		keys = "k keep the list · d discard changes · esc keep editing"
 		why = "Closing the list without keeping it would lose the changes. Nothing was written yet."
@@ -4120,6 +4179,12 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = listLines(f.entries, "target", "targets")
 	case f.kind == fieldTargets:
 		value = targetSummary(f.entries)
+	case f.kind == fieldPaths && isFilesLabel(f.label) && len(f.entries) == 0:
+		value = hintStyle.Render("(none: no local files released)")
+	case f.kind == fieldPaths && isFilesLabel(f.label) && f.expanded:
+		value = listLines(f.entries, "directory", "directories")
+	case f.kind == fieldPaths && isFilesLabel(f.label):
+		value = listSummary(f.entries, "directories")
 	case f.kind == fieldPaths && len(f.entries) == 0:
 		value = hintStyle.Render("(none: every project)")
 	case f.kind == fieldPaths && f.expanded:

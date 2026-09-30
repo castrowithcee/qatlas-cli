@@ -58,3 +58,24 @@ func TestWrapIndentsContinuations(t *testing.T) {
 		}
 	}
 }
+
+// The files release and its refusal are explained where an agent and a person look for them.
+func TestTopicsExplainLocalFiles(t *testing.T) {
+	var configuration, agents string
+	for _, topic := range All() {
+		switch topic.Name {
+		case "configuration":
+			configuration = topic.Text
+		case "agents":
+			agents = topic.Text
+		}
+	}
+	for _, want := range []string{"files.read", "files.write", "no-local-files", "needs a new approval"} {
+		if !strings.Contains(configuration, want) {
+			t.Errorf("the configuration topic does not mention %q", want)
+		}
+	}
+	if !strings.Contains(agents, "no-local-files") {
+		t.Error("the agents topic does not name the refusal no-local-files")
+	}
+}

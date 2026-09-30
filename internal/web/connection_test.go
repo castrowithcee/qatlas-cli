@@ -44,6 +44,8 @@ var bookMetadata = config.ProviderMetadata{
 	Profiles: []config.ToolProfile{
 		{ID: "reader", Title: "Reader", Recommended: true, Tools: []string{"book.read"}},
 	},
+	// book has a tool that reads local files, and none that writes them.
+	LocalFiles: config.LocalFilesSupport{Read: true},
 }
 
 var otherMetadata = config.ProviderMetadata{
@@ -467,4 +469,101 @@ func assertStoreUnchanged(t *testing.T, store *config.Store, wantServices, wantC
 		t.Fatalf("configuration changed: services=%d credentials=%d connections=%d, want %d/%d/%d",
 			len(cfg.Services), len(cfg.Credentials), len(cfg.Connections), wantServices, wantCredentials, wantConnections)
 	}
+}
+
+// filesFormValues is a complete, valid guided connection form for the book provider over an env credential,
+// which needs no secret page, with extra values added on top.
+func filesFormValues(extra url.Values) url.Values {
+	v := url.Values{
+		"provider": {"book"}, "service": {newServiceChoice}, "svcname": {"book-cloud"},
+		"svcbaseurl": {"https://books.example.test"},
+		"credential": {newCredentialChoice}, "credname": {"book-reader"}, "credstorage": {"env"},
+		"envname_token-id": {"BOOK_TOKEN_ID"}, "envname_token-secret": {"BOOK_TOKEN_SECRET"},
+		"connname": {"book-conn"}, "permmode": {"default"}, "toolsmode": {"all"},
+	}
+	for key, vals := range extra {
+		v[key] = vals
+	}
+	return v
+}
+
+// TestGuidedConnectionOffersFilesFieldsByDirection proves a directory field appears only for a direction the
+// provider has a tool for.
+func TestGuidedConnectionOffersFilesFieldsByDirection(t *testing.T) {
+	s, _, _, _ := newConnectionTestServer(t, nil)
+	cookie, _ := coupleAndApprove(t, s, nil)
+
+	body := s.request(t, http.MethodGet, "/connections/new?provider=book", s.addr, cookie, nil).Body.String()
+	if !strings.Contains(body, `name="filesread"`) {
+		t.Errorf("build page of a provider that reads local files has no upload field:\n%s", body)
+	}
+	if strings.Contains(body, `name="fileswrite"`) {
+		t.Errorf("build page of a provider that writes no local files offers a download field:\n%s", body)
+	}
+	body = s.request(t, http.MethodGet, "/connections/new?provider=other", s.addr, cookie, nil).Body.String()
+	if strings.Contains(body, `name="filesread"`) || strings.Contains(body, `name="fileswrite"`) {
+		t.Errorf("build page of a provider without local files offers a directory field:\n%s", body)
+	}
+}
+
+// TestGuidedConnectionFilesRoundTrip proves the directories typed on the build page reach the review page
+// and the saved connection, one per line, and show on the result page.
+func TestGuidedConnectionFilesRoundTrip(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, csrf := coupleAndApprove(t, s, nil)
+	extra := url.Values{"filesread": {"/srv/in-a\r\n\n /srv/in-b "}}
+
+	review := s.request(t, http.MethodGet, "/connections/new/review?"+filesFormValues(extra).Encode(),
+		s.addr, cookie, nil)
+	if review.Code != http.StatusOK {
+		t.Fatalf("review status = %d, want 200, body: %s", review.Code, review.Body.String())
+	}
+	body := review.Body.String()
+	if !strings.Contains(body, "read: /srv/in-a /srv/in-b") {
+		t.Errorf("review page does not summarise the files release:\n%s", body)
+	}
+	form := filesFormValues(extra)
+	form.Set("cfgver", extractHiddenValue(t, body, "cfgver"))
+	rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST status = %d, want 303, body: %s", rec.Code, rec.Body.String())
+	}
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatalf("store.Load: %v", err)
+	}
+	got := cfg.Connections["book-conn"].Files
+	if want := []string{"/srv/in-a", "/srv/in-b"}; len(got.Read) != 2 || got.Read[0] != want[0] || got.Read[1] != want[1] || len(got.Write) != 0 {
+		t.Fatalf("saved files = %+v, want read %v and no write", got, want)
+	}
+	result := s.request(t, http.MethodGet, rec.Header().Get("Location"), s.addr, cookie, nil).Body.String()
+	if !strings.Contains(result, "read: /srv/in-a /srv/in-b") {
+		t.Errorf("result page does not show the files release:\n%s", result)
+	}
+}
+
+// TestGuidedConnectionRejectsFilesWithoutDirection proves a directory for a direction the provider has no
+// tool for is refused before any write, however the request was made, and that the refusal names no path.
+func TestGuidedConnectionRejectsFilesWithoutDirection(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, csrf := coupleAndApprove(t, s, nil)
+
+	for name, extra := range map[string]url.Values{
+		"write on a read-only provider": {"fileswrite": {"/srv/secret-out"}},
+		"too broad an entry":            {"filesread": {"/"}},
+	} {
+		form := filesFormValues(extra)
+		form.Set("cfgver", "whatever")
+		rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, form)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, want 200 (rejected)", name, rec.Code)
+		}
+		if !strings.Contains(rec.Body.String(), "files.") {
+			t.Errorf("%s: body does not report the refused files entry:\n%s", name, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "secret-out") {
+			t.Errorf("%s: body quotes the refused path", name)
+		}
+	}
+	assertStoreUnchanged(t, store, 0, 0, 0)
 }

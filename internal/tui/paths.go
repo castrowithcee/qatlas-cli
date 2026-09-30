@@ -184,7 +184,12 @@ func (m *Model) takePath() {
 		m.fail = "a path must not be empty; esc cancels the entry"
 		return
 	}
-	if err := config.CheckPath(value); err != nil {
+	if isFilesLabel(m.fields[m.focus].label) {
+		if err := config.CheckFilesEntry(value); err != nil {
+			m.fail = "directory: " + err.Error()
+			return
+		}
+	} else if err := config.CheckPath(value); err != nil {
 		m.fail = "path: " + err.Error()
 		return
 	}
@@ -309,7 +314,15 @@ func (m *Model) pathsView() string {
 // them the path being typed with its suggestions or the remove question, the keys and the notes.
 func (m *Model) pathFrame() (string, string) {
 	total := len(m.pathList.all)
-	title := "Paths"
+	title, hint, none := "Paths", pathsHint, "(none: the connection applies in every project; a adds one)"
+	if label := m.fields[m.focus].label; isFilesLabel(label) {
+		verb := "read files from"
+		if label == filesWriteLabel {
+			verb = "write files to"
+		}
+		title, hint = "Directories for "+label, fmt.Sprintf(filesHint, verb)
+		none = "(none: no local files released; a adds one)"
+	}
 	if name := m.fieldValue("name"); name != "" {
 		title += " of " + name
 	}
@@ -318,9 +331,9 @@ func (m *Model) pathFrame() (string, string) {
 	}
 	var head strings.Builder
 	head.WriteString(m.wrapped(titleStyle, title) + "\n")
-	head.WriteString(m.wrapped(hintStyle, pathsHint) + "\n\n")
+	head.WriteString(m.wrapped(hintStyle, hint) + "\n\n")
 	if total == 0 {
-		head.WriteString(m.wrapped(hintStyle, "(none: the connection applies in every project; a adds one)") + "\n")
+		head.WriteString(m.wrapped(hintStyle, none) + "\n")
 	}
 
 	var foot strings.Builder

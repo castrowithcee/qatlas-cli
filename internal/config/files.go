@@ -96,6 +96,10 @@ func validateFiles(name string, files Files, support LocalFilesSupport, report f
 	}
 }
 
+// CheckFilesEntry reports why entry cannot be a files entry, for an editor that checks one entry when it is
+// typed. The message never quotes the entry.
+func CheckFilesEntry(entry string) error { return checkFilesEntry(entry) }
+
 // checkFilesEntry checks one files entry: the paths rules, and no root, no bare home, no '..'.
 func checkFilesEntry(entry string) error {
 	if err := CheckPath(entry); err != nil {

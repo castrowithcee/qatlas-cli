@@ -670,6 +670,12 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <p><label>Connection name <input type="text" name="connname" value="{{.Form.ConnName}}" autocomplete="off"></label></p>
 <p><label>Targets <input type="text" name="targets" value="{{.Form.Targets}}" autocomplete="off"></label><br>{{.TargetHint}}</p>
 <p><label>Description <input type="text" name="description" value="{{.Form.Description}}" autocomplete="off"></label></p>
+{{if or .FilesRead .FilesWrite}}
+<h2>Local files</h2>
+<p>Directories on this machine the tools of this connection may use, absolute or starting with ~/, one per line. A directory gives access to it and everything below. Leave a field empty to release nothing. A change later needs a new approval.</p>
+{{if .FilesRead}}<p><label>Upload directories (files the tools may read)<br><textarea name="filesread" rows="3" cols="60" autocomplete="off">{{.Form.FilesRead}}</textarea></label></p>{{end}}
+{{if .FilesWrite}}<p><label>Download directories (where the tools may write files)<br><textarea name="fileswrite" rows="3" cols="60" autocomplete="off">{{.Form.FilesWrite}}</textarea></label></p>{{end}}
+{{end}}
 
 <h2>Permissions</h2>
 <label><input type="radio" name="permmode" value="default"{{if eq .Form.PermMode "default"}} checked{{end}}> use the provider's default</label><br>
@@ -719,6 +725,8 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <input type="hidden" name="connname" value="{{.Form.ConnName}}">
 <input type="hidden" name="targets" value="{{.Form.Targets}}">
 <input type="hidden" name="description" value="{{.Form.Description}}">
+<input type="hidden" name="filesread" value="{{.Form.FilesRead}}">
+<input type="hidden" name="fileswrite" value="{{.Form.FilesWrite}}">
 <input type="hidden" name="permmode" value="{{.Form.PermMode}}">
 {{range .Form.Perms}}<input type="hidden" name="perm" value="{{.}}">
 {{end}}
@@ -768,6 +776,7 @@ Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt 
 <tr><th>Service</th><td>{{.Service}}</td></tr>
 <tr><th>Credential</th><td>{{.Credential}}</td></tr>
 <tr><th>Targets</th><td>{{.Targets}}</td></tr>
+<tr><th>Files</th><td>{{.Files}}</td></tr>
 <tr><th>Description</th><td>{{.Description}}</td></tr>
 <tr><th>Permissions</th><td>{{.Permissions}}</td></tr>
 <tr><th>Tools</th><td>{{.Tools}}</td></tr>

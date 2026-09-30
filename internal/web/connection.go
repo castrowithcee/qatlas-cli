@@ -45,6 +45,7 @@ type connectionForm struct {
 	Credential, CredName, CredStorage string
 	EnvNames                          map[string]string
 	ConnName, Targets, Description    string
+	FilesRead, FilesWrite             string
 	PermMode                          string
 	Perms                             []string
 	ToolsMode                         string
@@ -72,6 +73,8 @@ func parseConnectionForm(v url.Values) connectionForm {
 		ConnName:    v.Get("connname"),
 		Targets:     v.Get("targets"),
 		Description: v.Get("description"),
+		FilesRead:   v.Get("filesread"),
+		FilesWrite:  v.Get("fileswrite"),
 		PermMode:    v.Get("permmode"),
 		Perms:       v["perm"],
 		ToolsMode:   v.Get("toolsmode"),
@@ -153,6 +156,7 @@ func buildConnectionCandidate(cfg *config.Config, f connectionForm) (cand *confi
 	target, targets := splitTargetInput(f.Targets)
 	newConn := config.Connection{
 		Service: serviceName, Credential: credName, Target: target, Targets: targets, Description: f.Description,
+		Files: config.Files{Read: splitDirectoryLines(f.FilesRead), Write: splitDirectoryLines(f.FilesWrite)},
 	}
 	if f.PermMode == "custom" {
 		if len(f.Perms) == 0 {
@@ -204,6 +208,20 @@ func splitTargetInput(raw string) (target string, targets []string) {
 	default:
 		return "", values
 	}
+}
+
+// splitDirectoryLines reads a files field, one directory per line, into the list a connection stores; blank
+// lines are dropped and none at all is nil. Whether a direction may be used, and every entry, is left to the
+// core's own validation of the candidate; a direction the provider has no tool for is refused there, whatever
+// the page offered.
+func splitDirectoryLines(raw string) []string {
+	var values []string
+	for _, line := range strings.Split(raw, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			values = append(values, line)
+		}
+	}
+	return values
 }
 
 // applyConnectionDefaults fills a fresh build page's own starting choices: the connection name defaults to
@@ -306,10 +324,13 @@ type connectionBuildData struct {
 	Roles       []roleField
 	Form        connectionForm
 	TargetHint  string
-	Permissions []optionRow
-	Tools       []toolOption
-	StorageHint string
-	Error       string
+	// FilesRead and FilesWrite say whether the provider has a tool that reads, or writes, local files; only
+	// then does the page offer the matching directory field.
+	FilesRead, FilesWrite bool
+	Permissions           []optionRow
+	Tools                 []toolOption
+	StorageHint           string
+	Error                 string
 }
 
 // toolOption is one row of the tool checklist: its ID, the effect it needs permission for, and whether this
@@ -380,6 +401,8 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		Roles:       roles,
 		Form:        f,
 		TargetHint:  targetHintFor(metadata),
+		FilesRead:   metadata.LocalFiles.Read,
+		FilesWrite:  metadata.LocalFiles.Write,
 		Permissions: checkedOptions(permissionNames, f.Perms),
 		Tools:       tools,
 		StorageHint: storageHintText,
@@ -456,6 +479,7 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 		{"connection", f.ConnName},
 		{"targets", targets},
 		{"description", conn.Description},
+		{"files", approval.FilesText(conn.Files.Read, conn.Files.Write)},
 		{"permissions", permissions},
 		{"tools", tools},
 	}
@@ -690,6 +714,7 @@ func approvalStaysOpenReason(c approval.Change) string {
 // "Test this connection" form and the outcome of the last test run from this page.
 type connectionResultData struct {
 	Name, Provider, Service, Credential, Description, Targets, Permissions, Tools string
+	Files                                                                         string
 	Notice, Error                                                                 string
 	CSRF                                                                          string
 	TesterAvailable                                                               bool
@@ -748,6 +773,7 @@ func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Confi
 	data := connectionResultData{
 		Name: name, Provider: provider, Service: conn.Service, Credential: conn.Credential,
 		Description: conn.Description, Targets: targets,
+		Files:       approval.FilesText(conn.Files.Read, conn.Files.Write),
 		Permissions: config.FormatPermissions(cfg.ConnectionPermissions(name)), Tools: tools,
 		Notice: notice, CSRF: s.csrfValue(), TesterAvailable: s.tester != nil, TestResult: testResult,
 	}
