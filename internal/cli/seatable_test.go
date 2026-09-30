@@ -114,16 +114,16 @@ func TestSeaTableToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[12]{id,title,effect,requires,confirm,reason}:", "seatable.columns.list,List SeaTable columns,read,", "seatable.links.create,Create SeaTable links,create,", "seatable.links.delete,Delete SeaTable links,delete,", "seatable.links.list,List SeaTable links,read,", "seatable.links.update,Update SeaTable links,update,", "seatable.rows.create,Create a SeaTable row,create,",
+		"tools[17]{id,title,effect,requires,confirm,reason}:", "seatable.columns.list,List SeaTable columns,read,", "seatable.links.create,Create SeaTable links,create,", "seatable.links.delete,Delete SeaTable links,delete,", "seatable.links.list,List SeaTable links,read,", "seatable.links.update,Update SeaTable links,update,", "seatable.rows.create,Create a SeaTable row,create,",
 		"seatable.rows.delete,Delete a SeaTable row,delete,", "seatable.rows.get,Get a SeaTable row,read,", "seatable.rows.list,List SeaTable rows,read,", "seatable.rows.search,Search SeaTable rows,read,",
-		"seatable.rows.update,Update a SeaTable row,update,", "seatable.tables.list,List SeaTable tables,read,",
+		"seatable.rows.update,Update a SeaTable row,update,", "seatable.tables.list,List SeaTable tables,read,", "seatable.views.create,Create a SeaTable view,create,", "seatable.views.delete,Delete a SeaTable view,delete,", "seatable.views.get,Get a SeaTable view,read,", "seatable.views.list,List SeaTable views,read,", "seatable.views.update,Update a SeaTable view,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--all", "--config", path))); len(got) != 12 {
-		t.Errorf("seatable tools = %v, want schema discovery, all five row tools, and four link tools", got)
+	if got := toolIDs(t, string(runSeatableJSON(t, "", "tools", "seatable", "--all", "--config", path))); len(got) != 17 {
+		t.Errorf("seatable tools = %v, want schema discovery, all five row tools, four link tools, and five view tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -274,8 +274,8 @@ func TestSeaTableMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 12 || searched.Operations[0].ID != "seatable.columns.list" ||
-		searched.Operations[11].ID != "seatable.tables.list" {
+	if len(searched.Operations) != 17 || searched.Operations[0].ID != "seatable.columns.list" ||
+		searched.Operations[16].ID != "seatable.views.update" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 

@@ -393,12 +393,12 @@ func (c *Client) ChangeLinks(ctx context.Context, op, method string, input linkI
 	if err != nil || len(body) > maxRequestBytes {
 		return providerError(op, "the request exceeds the size limit")
 	}
-	return c.changeLink(ctx, op, method, gatewayPath+url.PathEscape(access.uuid)+linksPath, access.token, body)
+	return c.changeOnce(ctx, op, method, gatewayPath+url.PathEscape(access.uuid)+linksPath, access.token, body, linkUncertain)
 }
 
-// changeLink sends one link change. It never repeats the request; a failure that leaves the result open
-// is reported as uncertain.
-func (c *Client) changeLink(ctx context.Context, op, method, path, token string, body []byte) error {
+// changeOnce sends one change. It never repeats the request; a failure that leaves the result open is
+// reported as uncertain, with the given hint appended.
+func (c *Client) changeOnce(ctx context.Context, op, method, path, token string, body []byte, uncertain string) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "SeaTable", err)
 	}
@@ -415,7 +415,7 @@ func (c *Client) changeLink(ctx context.Context, op, method, path, token string,
 		var providerErr *provider.Error
 		if errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
 			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
-			providerErr.Message += linkUncertain
+			providerErr.Message += uncertain
 		}
 		return failure
 	}
@@ -426,7 +426,7 @@ func (c *Client) changeLink(ctx context.Context, op, method, path, token string,
 		if response.StatusCode >= 500 {
 			var providerErr *provider.Error
 			if errors.As(failure, &providerErr) {
-				providerErr.Message += linkUncertain
+				providerErr.Message += uncertain
 			}
 		}
 		return failure
@@ -434,7 +434,7 @@ func (c *Client) changeLink(ctx context.Context, op, method, path, token string,
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil || len(data) > maxResponseBytes {
 		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-			Message: "the SeaTable response could not be read within the size limit" + linkUncertain}
+			Message: "the SeaTable response could not be read within the size limit" + uncertain}
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		return nil
@@ -444,7 +444,7 @@ func (c *Client) changeLink(ctx context.Context, op, method, path, token string,
 	}
 	if json.Unmarshal(data, &answer) != nil {
 		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-			Message: "SeaTable returned an invalid response" + linkUncertain}
+			Message: "SeaTable returned an invalid response" + uncertain}
 	}
 	if answer.Success != nil && !*answer.Success {
 		return providerError(op, "SeaTable did not apply the link change")

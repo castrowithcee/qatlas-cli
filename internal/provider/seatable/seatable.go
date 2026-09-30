@@ -300,8 +300,8 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read tables and rows", Recommended: true,
-			Description: "lists tables and columns, reads and searches rows, lists row links; changes nothing in the base",
-			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsSearch.ID, rowsGet.ID, linksList.ID},
+			Description: "lists tables and columns, reads and searches rows, lists row links, reads views; changes nothing in the base",
+			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsSearch.ID, rowsGet.ID, linksList.ID, viewsList.ID, viewsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -319,6 +319,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: linksCreate, Handler: invokeLinksChange("create links", http.MethodPost, "created")},
 		capability.Operation{Descriptor: linksUpdate, Handler: invokeLinksChange("update links", http.MethodPut, "updated")},
 		capability.Operation{Descriptor: linksDelete, Handler: invokeLinksChange("delete links", http.MethodDelete, "deleted")},
+		capability.Operation{Descriptor: viewsList, Handler: capability.Handler(invokeViewsList)},
+		capability.Operation{Descriptor: viewsGet, Handler: capability.Handler(invokeViewsGet)},
+		capability.Operation{Descriptor: viewsCreate, Handler: invokeViewsChange("create view", "create", (*Client).CreateView, "created")},
+		capability.Operation{Descriptor: viewsUpdate, Handler: invokeViewsChange("update view", "update", (*Client).UpdateView, "updated")},
+		capability.Operation{Descriptor: viewsDelete, Handler: invokeViewsChange("delete view", "delete", (*Client).DeleteView, "deleted")},
 	)
 }
 

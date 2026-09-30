@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row and link operations, permissions, and token limits.
+  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row, link, and view operations, permissions, and token limits.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -101,6 +101,44 @@ qatlas invoke seatable.links.create --connection sales-rw --confirm --arg table=
   --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg other_row_ids='["Ab12Cd34Ef56Gh78Ij90Kl"]'
 ```
 
+## Views
+
+`seatable.views.list`, `seatable.views.get`, `seatable.views.create`, `seatable.views.update`, and
+`seatable.views.delete` manage the views of an allowed table. `views.list` and `views.get` are part of the
+`read` profile; `views.delete` is in no profile and is offered only by a connection whose `tools` list
+names it.
+
+- The agent passes `table` (as for rows) and, for `get`, `update`, and `delete`, `view`: a view name or
+  `id:VIEWID`, as returned by `views.list`. Qatlas resolves the table and the view in the base metadata and
+  sends the table and view names to SeaTable; a view that the table does not hold, including a view of another
+  table, is refused. The token exchange and the metadata read are the only provider access that can precede
+  such a refusal; a table outside the allow-list, or a malformed request, is refused before the credential is
+  read and before SeaTable is contacted.
+- A connection target that names a view, such as `Kunden/Aktive`, narrows the views tools to that view:
+  `views.list` lists only it, `views.get` refuses every other view, and `views.create` is refused. The
+  message never names another table or view.
+- A view that is configured as a connection target cannot be updated or deleted, whichever way the
+  selection addresses it (name or `id:`).
+- `views.list` returns up to 200 views with identifier, name, type, filter conjunction, filters, sorts, and
+  hidden columns. Columns are referred to by key. Filter terms are data from the base and untrusted.
+- `views.create` makes an empty view from a `name` (up to 255 printable characters, no `/`). Filters, sorts,
+  and hidden columns are set afterwards with `views.update`.
+- `views.update` renames a view (`name`) and replaces `filters` (up to 10: `column`, lowercase `predicate`,
+  optional scalar `term`), `filter_conjunction` (`and` or `or`), `sorts` (up to 3: `column`, `direction`),
+  and `hidden_columns` (up to 100). Only the given parts change. Every column is checked against the table
+  metadata, may be named by name or key, and is sent as its key; an unknown column is refused before the
+  request. An empty update is refused.
+- The three changes need the matching permission (`create`, `update`, `delete`) and `confirm`. Each sends
+  exactly one request and is never repeated. A timeout, a dropped connection, a 5xx answer, or an unreadable
+  answer is reported as uncertain: read the view before repeating the change. An error SeaTable reports is
+  reported without the provider text.
+
+```sh
+qatlas invoke seatable.views.list --connection sales-all-tables --arg table=id:0000
+qatlas invoke seatable.views.update --connection sales-rw --confirm --arg table=id:0000 --arg view=Aktive \
+  --arg hidden_columns='["Notiz"]'
+```
+
 The connection can list and read rows (`read`) and create, update, or delete rows with the matching
 permission. Mutations require confirmation, reject system-column names, and are bounded to 1 MiB. They can
 never select a table outside the connection allow-list. A view narrows listing but does not redirect a
@@ -112,6 +150,6 @@ writer. An optional `tools` list narrows a connection further to named tools, fo
 `[seatable.rows.list]`; it never admits an effect `permissions` excludes and never widens the table scope.
 Qatlas exchanges the API token for a short-lived base token in memory. The terminal editor starts a new
 connection on the setup profile `read`, which ticks `[read]` and `[seatable.tables.list,
-seatable.columns.list, seatable.rows.list, seatable.rows.search, seatable.rows.get, seatable.links.list]`. A profile is a visible
+seatable.columns.list, seatable.rows.list, seatable.rows.search, seatable.rows.get, seatable.links.list, seatable.views.list, seatable.views.get]`. A profile is a visible
 starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
 saved connection never follows a profile.
