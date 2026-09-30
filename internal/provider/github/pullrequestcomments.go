@@ -25,11 +25,10 @@ var pullRequestCommentsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub pull request comments",
 	Description: "List one bounded batch of the conversation comments of one pull request of a repository " +
-		"an explicit connection allows, oldest first; an issue number is refused",
-	Tags:                       []string{"github", "pulls", "pullrequests", "comments", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"a connection allows, oldest first; an issue number is refused",
+	Tags:     []string{"github", "pulls", "pullrequests", "comments", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":` + cursorSchema + `},` +
 		`"required":["number"],"additionalProperties":false}`),
@@ -61,10 +60,9 @@ var pullRequestCommentsCreate = capability.Descriptor{
 	Title:   "Comment on a GitHub pull request",
 	Description: "Write exactly one conversation comment on one pull request of a repository an explicit " +
 		"connection allows; a repeated call writes a second comment; an issue number is refused",
-	Tags:                       []string{"github", "pulls", "pullrequests", "comments", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "pulls", "pullrequests", "comments", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
 		`"body":{"type":"string","minLength":1,"maxLength":65536}},"required":["number","body"],` +
 		`"additionalProperties":false}`),

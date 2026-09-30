@@ -793,7 +793,6 @@ func conformantDescriptor() capability.Descriptor {
 			Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: "sample-items",
 		},
-		RequiresExplicitConnection: true,
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,` +
 			`"pattern":"^[a-z]+$"}},"required":["name"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"object"}`),
@@ -828,10 +827,9 @@ func conformantAllowListed() capability.Descriptor {
 			Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 			Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: "sample-settings",
 		},
-		RequiresExplicitConnection: true,
-		RequiresToolAllowList:      true,
-		InputSchema:                json.RawMessage(`{"type":"object","additionalProperties":false}`),
-		OutputSchema:               json.RawMessage(`{"type":"object"}`),
+		RequiresToolAllowList: true,
+		InputSchema:           json.RawMessage(`{"type":"object","additionalProperties":false}`),
+		OutputSchema:          json.RawMessage(`{"type":"object"}`),
 	}
 }
 

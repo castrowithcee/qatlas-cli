@@ -196,7 +196,6 @@ defaults: {}
 	}
 	descriptor := capability.Descriptor{
 		ID: "fake.messages.send", Version: 1, Description: "Send one message", Provider: "fake",
-		RequiresExplicitConnection: true,
 		Risk: capability.Risk{
 			Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: "message",
@@ -267,7 +266,6 @@ defaults: {}
 	}
 	descriptor := capability.Descriptor{
 		ID: "fake.messages.send", Version: 1, Description: "Send one message", Provider: "fake",
-		RequiresExplicitConnection: true,
 		Risk: capability.Risk{
 			Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: "message",
@@ -317,7 +315,7 @@ defaults: {}
 	}
 }
 
-func TestExplicitConnectionDiagnosticStopsBeforeSecretsAndAudit(t *testing.T) {
+func TestDefaultConnectionRefusalStopsBeforeSecretsAndAudit(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
 	cfg := writeConfig(t, `version: 1
@@ -347,7 +345,6 @@ defaults:
 	}
 	descriptor := capability.Descriptor{
 		ID: "fake.messages.send", Version: 1, Description: "Send one message", Provider: "fake",
-		RequiresExplicitConnection: true,
 		Risk: capability.Risk{
 			Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: "message",
@@ -379,7 +376,8 @@ defaults:
 		t.Fatalf("exit=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 	first, _, _ := strings.Cut(stderr.String(), "\n")
-	want := `qatlas: connection-selection: tool "fake.messages.send" requires an explicit connection in this invoke request`
+	want := `qatlas: unsupported-capability: connection "alerts" does not offer tool "fake.messages.send" (effect-not-permitted); ` +
+		`'qatlas describe fake.messages.send' names the connections that offer it, or change the connection in 'qatlas tui'`
 	if first != want {
 		t.Fatalf("first stderr line = %q, want %q", first, want)
 	}

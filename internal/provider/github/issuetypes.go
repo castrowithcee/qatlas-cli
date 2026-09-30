@@ -45,14 +45,13 @@ var issueTypesList = capability.Descriptor{
 	ID:      Provider + ".issuetypes.list",
 	Version: 1,
 	Title:   "List GitHub issue types",
-	Description: "List the issue types an organization declares, that an explicit connection allows: name, " +
+	Description: "List the issue types an organization declares, that a connection allows: name, " +
 		"description, color, and whether each is enabled; github.issues.update's own type argument names one " +
 		"of these by name",
-	Tags:                       []string{"github", "issues", "issuetypes", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	Tags:        []string{"github", "issues", "issuetypes", "list"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"issue_types":{"type":"array","items":` +
 		`{"type":"object","properties":{` + issueTypeProperties + `},` + issueTypeRequired + `}}},` +
 		`"required":["issue_types"],"additionalProperties":false}`),

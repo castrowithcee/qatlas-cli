@@ -18,8 +18,8 @@ import (
 )
 
 // Repository lifecycle and collaborators. github.repositories.create makes one new repository, under the
-// token's own account or, with owner, an organization an explicit connection names as an owner target;
-// private by default. github.repositories.fork forks one repository an explicit connection allows into the
+// token's own account or, with owner, an organization a connection names as an owner target;
+// private by default. github.repositories.fork forks one repository a connection allows into the
 // token's own account or, with organization, an organization it names as an owner target; GitHub answers
 // asynchronously, so the fork may still be importing when the answer names it. Creating or forking under the
 // token's own account, rather than a repository or a project the connection names, reads the account behind
@@ -60,12 +60,11 @@ var repositoriesCreate = capability.Descriptor{
 	Version: 1,
 	Title:   "Create a GitHub repository",
 	Description: "Create one new repository under the token's own account, or, with owner, under an " +
-		"organization an explicit connection names as an owner target; private by default; a repeated call " +
+		"organization a connection names as an owner target; private by default; a repeated call " +
 		"creates a second repository",
-	Tags:                       []string{"github", "repositories", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "repositories", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"owner":`+ownerSchema+`,"name":`+repositoryNameSchema+`,"description":`+
 		repositoryDescriptionSchema+`,"private":{"type":"boolean"},"auto_init":{"type":"boolean"}`, "name"),
 	OutputSchema: json.RawMessage(repositoryCreatedOutput),
@@ -101,13 +100,12 @@ var repositoriesFork = capability.Descriptor{
 	ID:      Provider + ".repositories.fork",
 	Version: 1,
 	Title:   "Fork a GitHub repository",
-	Description: "Fork a repository an explicit connection allows into the token's own account or, with " +
+	Description: "Fork a repository a connection allows into the token's own account or, with " +
 		"organization, an organization the connection names as an owner target; GitHub creates the fork " +
 		"asynchronously, so it may still be importing once this answers",
-	Tags:                       []string{"github", "repositories", "fork", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "repositories", "fork", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"organization":` + ownerSchema + `,"name":` + repositoryNameSchema +
 		`,"default_branch_only":{"type":"boolean"}`),
 	OutputSchema: json.RawMessage(repositoryForkOutput),
@@ -135,16 +133,15 @@ var repositoriesDelete = capability.Descriptor{
 	ID:      Provider + ".repositories.delete",
 	Version: 1,
 	Title:   "Delete a GitHub repository",
-	Description: "Delete one repository an explicit connection allows permanently, with its issues, pull " +
+	Description: "Delete one repository a connection allows permanently, with its issues, pull " +
 		"requests, and history; confirm_name must repeat the repository as owner/name exactly, checked before " +
 		"any credential is resolved, since this cannot be undone. Offered only by a connection whose tools " +
 		"list names it",
-	Tags:                       []string{"github", "repositories", "delete"},
-	Risk:                       guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, dataSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                inputSchema(`"confirm_name":`+repoSchema, "confirm_name"),
+	Tags:                  []string{"github", "repositories", "delete"},
+	Risk:                  guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, dataSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           inputSchema(`"confirm_name":`+repoSchema, "confirm_name"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
 		`"required":["deleted"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -179,12 +176,11 @@ var collaboratorsList = capability.Descriptor{
 	ID:      Provider + ".collaborators.list",
 	Version: 1,
 	Title:   "List GitHub repository collaborators",
-	Description: "List one bounded batch of the collaborators of a repository an explicit connection allows, " +
+	Description: "List one bounded batch of the collaborators of a repository a connection allows, " +
 		"with login, account type, role, and permissions; never an email address or another personal detail",
-	Tags:                       []string{"github", "repositories", "collaborators", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "repositories", "collaborators", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"affiliation":{"type":"string","enum":["outside","direct","all"]},` +
 		`"permission":{"type":"string","enum":["pull","triage","push","maintain","admin"]},` + pagingKeys),
 	OutputSchema: listOutput("collaborators", collaboratorProperties, collaboratorRequired),

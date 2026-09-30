@@ -111,7 +111,7 @@ func TestLexwareToolContractExposesOnlyControlledFilters(t *testing.T) {
 	}
 	for _, want := range []string{
 		"id: lexware.invoices.list", "version: 1", "effect: read", "idempotency: safe",
-		"confirmation: none", "requires_explicit_connection: true", "voucher_number", "voucher_date_from",
+		"confirmation: none", "voucher_number", "voucher_date_from",
 		"page", "size", "sort", "direction",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -157,9 +157,9 @@ func TestLexwareInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 		code  string
 	}{
 		{
-			name: "no explicit connection", input: `{}`,
+			name: "several connections without a default", input: `{}`,
 			args: []string{"invoke", "lexware.invoices.list", "--config", path},
-			code: "connection-selection",
+			code: "connection-ambiguous",
 		},
 		{
 			name: "an unknown argument", input: `{"voucher_status":"paid"}`,

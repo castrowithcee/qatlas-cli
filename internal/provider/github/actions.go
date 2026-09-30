@@ -146,15 +146,14 @@ var workflowsList = capability.Descriptor{
 	ID:      Provider + ".workflows.list",
 	Version: 1,
 	Title:   "List GitHub Actions workflows",
-	Description: "List one bounded batch of the workflows of a repository an explicit connection allows, " +
+	Description: "List one bounded batch of the workflows of a repository a connection allows, " +
 		"without their files",
-	Tags:                       []string{"github", "actions", "workflows", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(pagingKeys),
-	OutputSchema:               listOutput("workflows", workflowProperties, workflowRequired),
-	Arguments:                  pagingArguments,
+	Tags:         []string{"github", "actions", "workflows", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(pagingKeys),
+	OutputSchema: listOutput("workflows", workflowProperties, workflowRequired),
+	Arguments:    pagingArguments,
 	Fields: append([]capability.Field{
 		{Name: "workflows", Description: "Workflows with identifier, name, file path, and state"},
 	}, pagingFields...),
@@ -162,16 +161,15 @@ var workflowsList = capability.Descriptor{
 }
 
 var workflowsGet = capability.Descriptor{
-	ID:                         Provider + ".workflows.get",
-	Version:                    1,
-	Title:                      "Get a GitHub Actions workflow",
-	Description:                "Read one workflow of a repository an explicit connection allows, without its file",
-	Tags:                       []string{"github", "actions", "workflows", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"workflow":`+workflowSchema, "workflow"),
-	OutputSchema:               json.RawMessage(`{"type":"object","properties":{` + workflowProperties + `},` + workflowRequired + `}`),
+	ID:           Provider + ".workflows.get",
+	Version:      1,
+	Title:        "Get a GitHub Actions workflow",
+	Description:  "Read one workflow of a repository a connection allows, without its file",
+	Tags:         []string{"github", "actions", "workflows", "get"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"workflow":`+workflowSchema, "workflow"),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + workflowProperties + `},` + workflowRequired + `}`),
 	Arguments: []capability.Argument{
 		{Name: "workflow", Description: "Workflow identifier or file name such as ci.yml", Required: true},
 	},
@@ -188,11 +186,10 @@ var runsList = capability.Descriptor{
 	Version: 2,
 	Title:   "List GitHub Actions workflow runs",
 	Description: "List one bounded, filtered batch of compact workflow runs of " +
-		"a repository an explicit connection allows, newest first",
-	Tags:                       []string{"github", "actions", "runs", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"a repository a connection allows, newest first",
+	Tags:     []string{"github", "actions", "runs", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"workflow":` + workflowSchema + `,` +
 		`"status":{"type":"string","enum":["` + strings.Join(runStatuses, `","`) + `"]},` +
 		`"branch":` + refSchema + `,"event":{"type":"string","maxLength":50,"pattern":"` + eventPattern + `"},` +
@@ -220,17 +217,16 @@ var runsList = capability.Descriptor{
 }
 
 var runsGet = capability.Descriptor{
-	ID:                         Provider + ".workflowruns.get",
-	Version:                    1,
-	Title:                      "Get a GitHub Actions workflow run",
-	Description:                "Read one workflow run of a repository an explicit connection allows",
-	Tags:                       []string{"github", "actions", "runs", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
-	OutputSchema:               json.RawMessage(`{"type":"object","properties":{` + runProperties + `},` + runRequired + `}`),
-	Arguments:                  []capability.Argument{{Name: "run_id", Description: "Workflow run identifier", Required: true}},
+	ID:           Provider + ".workflowruns.get",
+	Version:      1,
+	Title:        "Get a GitHub Actions workflow run",
+	Description:  "Read one workflow run of a repository a connection allows",
+	Tags:         []string{"github", "actions", "runs", "get"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + runProperties + `},` + runRequired + `}`),
+	Arguments:    []capability.Argument{{Name: "run_id", Description: "Workflow run identifier", Required: true}},
 	Fields: []capability.Field{
 		{Name: "status", Description: "queued, in_progress, completed, or another GitHub run status"},
 		{Name: "conclusion", Description: "Outcome of a completed run, such as success or failure"},
@@ -244,11 +240,10 @@ var jobsList = capability.Descriptor{
 	Version: 2,
 	Title:   "List GitHub Actions jobs of a run",
 	Description: "List one bounded batch of compact jobs of one workflow run of " +
-		"a repository an explicit connection allows, without steps or logs",
-	Tags:                       []string{"github", "actions", "jobs", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"a repository a connection allows, without steps or logs",
+	Tags:     []string{"github", "actions", "jobs", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"run_id":`+actionsIDSchema+`,"filter":{"type":"string","enum":["latest","all"]},`+
 		pagingKeys, "run_id"),
 	OutputSchema: listOutput("jobs", jobPropertiesCommon, jobRequired),
@@ -267,13 +262,12 @@ var jobsGet = capability.Descriptor{
 	ID:      Provider + ".workflowjobs.get",
 	Version: 1,
 	Title:   "Get a GitHub Actions job",
-	Description: "Read one job of a workflow run of a repository an explicit connection allows with its " +
+	Description: "Read one job of a workflow run of a repository a connection allows with its " +
 		"compact steps, without its log",
-	Tags:                       []string{"github", "actions", "jobs", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"job_id":`+actionsIDSchema, "job_id"),
+	Tags:        []string{"github", "actions", "jobs", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"job_id":`+actionsIDSchema, "job_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + jobProperties + `,` + stepsProperty + `},` +
 		jobRequired + `}`),
 	Arguments: []capability.Argument{{Name: "job_id", Description: "Job identifier, as github.workflowjobs.list reports it",
@@ -288,13 +282,12 @@ var jobsLog = capability.Descriptor{
 	ID:      Provider + ".workflowjobs.log",
 	Version: 1,
 	Title:   "Read the end of a GitHub Actions job log",
-	Description: "Read the last lines of the log of one job of a repository an explicit connection allows, " +
+	Description: "Read the last lines of the log of one job of a repository a connection allows, " +
 		"within a hard size limit; the log is never stored",
 	Tags: []string{"github", "actions", "jobs", "logs", "get"},
 	Risk: capability.Risk{Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 		Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: logSensitivity},
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Provider: Provider,
 	InputSchema: inputSchema(`"job_id":`+actionsIDSchema+`,"lines":{"type":"integer","minimum":1,"maximum":500},`+
 		`"max_bytes":{"type":"integer","minimum":1024,"maximum":65536}`, "job_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"job_id":{"type":"integer"},"log":{"type":"string"},` +
@@ -322,13 +315,12 @@ var artifactsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub Actions artifacts of a run",
 	Description: "List one bounded batch of artifact metadata of one workflow run of " +
-		"a repository an explicit connection allows; artifact contents are never downloaded",
-	Tags:                       []string{"github", "actions", "artifacts", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"run_id":`+actionsIDSchema+`,`+pagingKeys, "run_id"),
-	OutputSchema:               listOutput("artifacts", artifactProperties, artifactRequired),
+		"a repository a connection allows; artifact contents are never downloaded",
+	Tags:         []string{"github", "actions", "artifacts", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"run_id":`+actionsIDSchema+`,`+pagingKeys, "run_id"),
+	OutputSchema: listOutput("artifacts", artifactProperties, artifactRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "run_id", Description: "Workflow run identifier", Required: true},
 	}, pagingArguments...),
@@ -350,12 +342,11 @@ var workflowsDispatch = capability.Descriptor{
 	ID:      Provider + ".workflows.dispatch",
 	Version: 1,
 	Title:   "Dispatch a GitHub Actions workflow",
-	Description: "Start one workflow_dispatch run of one workflow of a repository an explicit connection allows " +
+	Description: "Start one workflow_dispatch run of one workflow of a repository a connection allows " +
 		"on a branch or tag, with inputs the workflow declares; a repeated call starts a second run",
-	Tags:                       []string{"github", "actions", "workflows", "dispatch", "execute"},
-	Risk:                       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "actions", "workflows", "dispatch", "execute"},
+	Risk:     changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"workflow":`+workflowSchema+`,"ref":`+refSchema+`,"inputs":{"type":"object"}`,
 		"workflow", "ref"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"workflow_id":{"type":"integer"},` +
@@ -383,16 +374,15 @@ var runsRerun = capability.Descriptor{
 	Version: 1,
 	Title:   "Re-run a GitHub Actions workflow run",
 	Description: "Re-run every job of one completed workflow run of " +
-		"a repository an explicit connection allows; a repeated call starts another attempt",
-	Tags:                       []string{"github", "actions", "runs", "rerun", "execute"},
-	Risk:                       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
-	OutputSchema:               json.RawMessage(runChangeOutput),
-	Arguments:                  []capability.Argument{{Name: "run_id", Description: "Completed workflow run identifier", Required: true}},
-	Fields:                     runChangeFields,
-	Examples:                   []capability.Example{{Description: "Re-run a run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
+		"a repository a connection allows; a repeated call starts another attempt",
+	Tags:         []string{"github", "actions", "runs", "rerun", "execute"},
+	Risk:         changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
+	OutputSchema: json.RawMessage(runChangeOutput),
+	Arguments:    []capability.Argument{{Name: "run_id", Description: "Completed workflow run identifier", Required: true}},
+	Fields:       runChangeFields,
+	Examples:     []capability.Example{{Description: "Re-run a run", Arguments: json.RawMessage(`{"run_id":30433642}`)}},
 }
 
 var runsRerunFailed = capability.Descriptor{
@@ -400,15 +390,14 @@ var runsRerunFailed = capability.Descriptor{
 	Version: 1,
 	Title:   "Re-run the failed jobs of a GitHub Actions run",
 	Description: "Re-run the failed jobs and their dependents of one completed workflow run of " +
-		"a repository an explicit connection allows; a repeated call starts another attempt",
-	Tags:                       []string{"github", "actions", "runs", "rerun", "execute"},
-	Risk:                       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
-	OutputSchema:               json.RawMessage(runChangeOutput),
-	Arguments:                  []capability.Argument{{Name: "run_id", Description: "Completed workflow run identifier", Required: true}},
-	Fields:                     runChangeFields,
+		"a repository a connection allows; a repeated call starts another attempt",
+	Tags:         []string{"github", "actions", "runs", "rerun", "execute"},
+	Risk:         changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
+	OutputSchema: json.RawMessage(runChangeOutput),
+	Arguments:    []capability.Argument{{Name: "run_id", Description: "Completed workflow run identifier", Required: true}},
+	Fields:       runChangeFields,
 	Examples: []capability.Example{{Description: "Re-run the failed jobs of a run",
 		Arguments: json.RawMessage(`{"run_id":30433642}`)}},
 }
@@ -417,13 +406,12 @@ var runsCancel = capability.Descriptor{
 	ID:      Provider + ".workflowruns.cancel",
 	Version: 1,
 	Title:   "Cancel a GitHub Actions workflow run",
-	Description: "Ask GitHub to cancel one workflow run of a repository an explicit connection allows; jobs end " +
+	Description: "Ask GitHub to cancel one workflow run of a repository a connection allows; jobs end " +
 		"as GitHub cancels them, and a run that has already completed is left as it is and reported with its state",
-	Tags:                       []string{"github", "actions", "runs", "cancel", "execute"},
-	Risk:                       changeRisk(capability.EffectExecute, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
+	Tags:        []string{"github", "actions", "runs", "cancel", "execute"},
+	Risk:        changeRisk(capability.EffectExecute, capability.IdempotencyIdempotent),
+	Provider:    Provider,
+	InputSchema: inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"run_id":{"type":"integer"},` +
 		`"accepted":{"type":"boolean"},"status":{"type":"string"},"conclusion":{"type":"string"}},` +
 		`"required":["run_id","accepted"],"additionalProperties":false}`),

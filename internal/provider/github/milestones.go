@@ -27,14 +27,13 @@ var milestonesList = capability.Descriptor{
 	ID:      Provider + ".milestones.list",
 	Version: 1,
 	Title:   "List GitHub milestones",
-	Description: "List one bounded batch of the milestones of a repository an explicit connection allows, " +
+	Description: "List one bounded batch of the milestones of a repository a connection allows, " +
 		"with their state, due date, and open and closed issue counts",
-	Tags:                       []string{"github", "milestones", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"state":{"type":"string","enum":["open","closed","all"]},` + pagingKeys),
-	OutputSchema:               listOutput("milestones", milestoneProperties, milestoneRequired),
+	Tags:         []string{"github", "milestones", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"state":{"type":"string","enum":["open","closed","all"]},` + pagingKeys),
+	OutputSchema: listOutput("milestones", milestoneProperties, milestoneRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "state", Description: "open, closed, or all; open when omitted"},
 	}, pagingArguments...),

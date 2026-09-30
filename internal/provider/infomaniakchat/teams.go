@@ -33,10 +33,9 @@ var teamsList = capability.Descriptor{
 	Title:   "List Infomaniak kChat teams",
 	Description: "List the teams this connection is bound to that the current kChat token is actually a " +
 		"member of, page by page, transparently",
-	Tags:                       []string{"infomaniak", "kchat", "teams", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"infomaniak", "kchat", "teams", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"page":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":` +
 		itoa(maxListLimit) + `}},"additionalProperties":false}`),

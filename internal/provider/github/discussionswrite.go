@@ -37,12 +37,11 @@ var discussionCommentsCreate = capability.Descriptor{
 	ID:      Provider + ".discussioncomments.create",
 	Version: 1,
 	Title:   "Comment on a GitHub discussion",
-	Description: "Add a top-level comment to a discussion of a repository an explicit connection allows, or, " +
+	Description: "Add a top-level comment to a discussion of a repository a connection allows, or, " +
 		"with reply_to, a reply to a top-level comment of the same discussion; the written body is not echoed",
-	Tags:                       []string{"github", "discussions", "comments", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "discussions", "comments", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"body":{"type":"string","minLength":1,"maxLength":65536},`+
 		`"reply_to":`+discussionIDSchema, "number", "body"),
 	OutputSchema: json.RawMessage(discussionCommentWriteOutput),
@@ -67,12 +66,11 @@ var discussionCommentsUpdate = capability.Descriptor{
 	ID:      Provider + ".discussioncomments.update",
 	Version: 1,
 	Title:   "Update a GitHub discussion comment",
-	Description: "Replace the body of one discussion comment or reply of a repository an explicit connection " +
+	Description: "Replace the body of one discussion comment or reply of a repository a connection " +
 		"allows, by its node id; a comment of another repository is refused",
-	Tags:                       []string{"github", "discussions", "comments", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "discussions", "comments", "update"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"comment_id":`+discussionIDSchema+`,"body":{"type":"string","minLength":1,`+
 		`"maxLength":65536}`, "comment_id", "body"),
 	OutputSchema: json.RawMessage(discussionCommentWriteOutput),
@@ -96,15 +94,14 @@ var discussionCommentsDelete = capability.Descriptor{
 	ID:      Provider + ".discussioncomments.delete",
 	Version: 1,
 	Title:   "Delete a GitHub discussion comment",
-	Description: "Delete one discussion comment or reply of a repository an explicit connection allows " +
+	Description: "Delete one discussion comment or reply of a repository a connection allows " +
 		"permanently, by its node id; offered only where a connection's tools list names it; a comment of " +
 		"another repository is refused",
-	Tags:                       []string{"github", "discussions", "comments", "delete"},
-	Risk:                       guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, discussionCommentSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                inputSchema(`"comment_id":`+discussionIDSchema, "comment_id"),
+	Tags:                  []string{"github", "discussions", "comments", "delete"},
+	Risk:                  guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, discussionCommentSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           inputSchema(`"comment_id":`+discussionIDSchema, "comment_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"},` +
 		`"comment_id":{"type":"string"}},"required":["deleted","comment_id"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -124,12 +121,11 @@ var discussionsCreate = capability.Descriptor{
 	ID:      Provider + ".discussions.create",
 	Version: 1,
 	Title:   "Create a GitHub discussion",
-	Description: "Start a discussion in a category of a repository an explicit connection allows; the category " +
+	Description: "Start a discussion in a category of a repository a connection allows; the category " +
 		"must belong to that repository",
-	Tags:                       []string{"github", "discussions", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "discussions", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"title":`+titleSchema+`,"body":{"type":"string","minLength":1,"maxLength":65536},`+
 		`"category_id":`+discussionIDSchema, "title", "body", "category_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},` +

@@ -108,10 +108,9 @@ var gistsList = capability.Descriptor{
 	Description: "List one bounded batch of the gists of the account behind the connection's token, or of one " +
 		"user, newest first, with file metadata and no content; a connection with targets needs a user target " +
 		"users/LOGIN for the account or the user listed and no repository or project target",
-	Tags:                       []string{"github", "gists", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "gists", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"username":` + gistLoginSchema + `,"since":` + timeSchema + `,"limit":` +
 		limitSchema + `,"cursor":` + cursorSchema),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"gists":{"type":"array","items":` +
@@ -140,11 +139,10 @@ var gistsGet = capability.Descriptor{
 	Description: "Read one gist by its id with its files; a file shows at most 20000 characters and all files " +
 		"together at most 100000, a binary file only its metadata, and every cut says so; with targets a gist " +
 		"of a user no user target names is refused",
-	Tags:                       []string{"github", "gists", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"gist_id":`+gistIDSchema, "gist_id"),
+	Tags:        []string{"github", "gists", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"gist_id":`+gistIDSchema, "gist_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + gistDetailProperties + `},` +
 		gistSummaryRequired + `}`),
 	Arguments: []capability.Argument{
@@ -171,10 +169,9 @@ var gistsCreate = capability.Descriptor{
 	Description: "Create a gist of one or more files (at most 20, 1 MiB in total) for the account behind the " +
 		"connection's token; secret unless public is true; a connection with targets needs that account as a " +
 		"user target and no repository or project target",
-	Tags:                       []string{"github", "gists", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "gists", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"description":`+gistDescSchema+`,"public":{"type":"boolean"},"files":`+gistFilesInput,
 		"files"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + gistSummaryProperties + `},` +
@@ -202,10 +199,9 @@ var gistsUpdate = capability.Descriptor{
 	Description: "Change the description of a gist, and add, replace, or rename its files, or remove files, with " +
 		"one request; the gist is read first when the connection has targets and a gist of a user no user target " +
 		"names is refused; at least one change is required",
-	Tags:                       []string{"github", "gists", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "gists", "update"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"gist_id":`+gistIDSchema+`,"description":`+gistDescSchema+`,"files":`+
 		gistUpdateFilesInput+`,"remove_files":{"type":"array","minItems":1,"maxItems":20,"items":`+
 		gistFilenameSchema+`}`, "gist_id"),
@@ -231,12 +227,11 @@ var gistsDelete = capability.Descriptor{
 	Title:   "Delete a GitHub gist",
 	Description: "Delete one gist permanently; offered only where a connection's tools list names it; the gist " +
 		"is read first when the connection has targets and a gist of a user no user target names is refused",
-	Tags:                       []string{"github", "gists", "delete"},
-	Risk:                       guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, gistSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                inputSchema(`"gist_id":`+gistIDSchema, "gist_id"),
+	Tags:                  []string{"github", "gists", "delete"},
+	Risk:                  guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, gistSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           inputSchema(`"gist_id":`+gistIDSchema, "gist_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"gist_id":{"type":"string"},` +
 		`"deleted":{"type":"boolean"}},"required":["gist_id","deleted"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{

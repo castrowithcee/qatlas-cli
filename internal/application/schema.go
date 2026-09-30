@@ -227,20 +227,19 @@ func isType(kind string, value any) bool {
 // the contract answer; these, the types of the result fields, and both schemas stay in the complete
 // descriptor. Arguments are always validated against the complete input schema, not against this view.
 type CompactDescriptor struct {
-	ID                         string                  `json:"id"`
-	Version                    int                     `json:"version"`
-	Title                      string                  `json:"title"`
-	Description                string                  `json:"description"`
-	Effect                     capability.Effect       `json:"effect"`
-	Idempotency                capability.Idempotency  `json:"idempotency"`
-	Confirmation               capability.Confirmation `json:"confirmation"`
-	OpenWorld                  bool                    `json:"open_world"`
-	DataSensitivity            string                  `json:"data_sensitivity"`
-	RequiresExplicitConnection bool                    `json:"requires_explicit_connection"`
-	Arguments                  []ArgumentRow           `json:"arguments"`
-	Fields                     []capability.Field      `json:"fields"`
-	SelectableFields           []string                `json:"selectable_fields,omitempty"`
-	Examples                   []capability.Example    `json:"examples"`
+	ID               string                  `json:"id"`
+	Version          int                     `json:"version"`
+	Title            string                  `json:"title"`
+	Description      string                  `json:"description"`
+	Effect           capability.Effect       `json:"effect"`
+	Idempotency      capability.Idempotency  `json:"idempotency"`
+	Confirmation     capability.Confirmation `json:"confirmation"`
+	OpenWorld        bool                    `json:"open_world"`
+	DataSensitivity  string                  `json:"data_sensitivity"`
+	Arguments        []ArgumentRow           `json:"arguments"`
+	Fields           []capability.Field      `json:"fields"`
+	SelectableFields []string                `json:"selectable_fields,omitempty"`
+	Examples         []capability.Example    `json:"examples"`
 }
 
 // ArgumentRow is one argument of a compact contract, derived from the input schema. A member of an object
@@ -296,7 +295,7 @@ func Compact(d capability.Descriptor) CompactDescriptor {
 		ID: d.ID, Version: d.Version, Title: d.Title, Description: d.Description,
 		Effect: d.Risk.Effect, Idempotency: d.Risk.Idempotency, Confirmation: d.Risk.Confirmation,
 		OpenWorld: d.Risk.OpenWorld, DataSensitivity: d.Risk.DataSensitivity,
-		RequiresExplicitConnection: d.RequiresExplicitConnection, Arguments: arguments, Fields: fields,
+		Arguments: arguments, Fields: fields,
 		SelectableFields: SelectableFields(d),
 		Examples:         append([]capability.Example{}, d.Examples...),
 	}

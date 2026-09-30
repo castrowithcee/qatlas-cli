@@ -57,14 +57,13 @@ var reactionsAdd = capability.Descriptor{
 	Version: 1,
 	Title:   "Add a reaction to a GitHub issue, comment, or line comment",
 	Description: "React to one issue, issue or pull request conversation comment, or pull request line " +
-		"comment of a repository an explicit connection allows, with the account behind its token; a " +
+		"comment of a repository a connection allows, with the account behind its token; a " +
 		"reaction this account already left with the same content is left as it is and reported without a " +
 		"further request",
-	Tags:                       []string{"github", "reactions", "add"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(reactionInputKeys, "kind", "id", "content"),
+	Tags:        []string{"github", "reactions", "add"},
+	Risk:        changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+	Provider:    Provider,
+	InputSchema: inputSchema(reactionInputKeys, "kind", "id", "content"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + reactionOutputProperties +
 		`,"added":{"type":"boolean"}},"required":["kind","id","content","added"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{reactionKindArgument, reactionIDArgument, reactionContentArgument},
@@ -86,14 +85,13 @@ var reactionsRemove = capability.Descriptor{
 	Version: 1,
 	Title:   "Remove a reaction from a GitHub issue, comment, or line comment",
 	Description: "Remove the reaction of this content the account behind the connection's token left on one " +
-		"issue, issue or pull request conversation comment, or pull request line comment of a repository an " +
-		"explicit connection allows; only this account's own reaction is ever removed, never another " +
+		"issue, issue or pull request conversation comment, or pull request line comment of a repository a " +
+		"connection allows; only this account's own reaction is ever removed, never another " +
 		"account's, and a reaction this account never left is reported without a further request",
-	Tags:                       []string{"github", "reactions", "remove"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(reactionInputKeys, "kind", "id", "content"),
+	Tags:        []string{"github", "reactions", "remove"},
+	Risk:        changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+	Provider:    Provider,
+	InputSchema: inputSchema(reactionInputKeys, "kind", "id", "content"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + reactionOutputProperties +
 		`,"removed":{"type":"boolean"}},"required":["kind","id","content","removed"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{reactionKindArgument, reactionIDArgument, reactionContentArgument},

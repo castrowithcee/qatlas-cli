@@ -14,7 +14,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// Issue dependencies of a repository an explicit connection allows: github.issuedependencies.list reads both
+// Issue dependencies of a repository a connection allows: github.issuedependencies.list reads both
 // directions of one issue, the issues that block it and the issues it blocks; github.issuedependencies.add
 // records that one issue blocks another and needs its own confirmation; github.issuedependencies.remove
 // detaches one blocked-by relationship and needs its own confirmation as well, but, like removing a
@@ -42,15 +42,14 @@ var issueDependenciesList = capability.Descriptor{
 	ID:      Provider + ".issuedependencies.list",
 	Version: 1,
 	Title:   "List GitHub issue dependencies",
-	Description: "List the issues that block one issue and the issues it blocks, of a repository an " +
-		"explicit connection allows; a dependency may cross repositories, named in full when it does; when " +
+	Description: "List the issues that block one issue and the issues it blocks, of a repository a " +
+		"connection allows; a dependency may cross repositories, named in full when it does; when " +
 		"the connection's targets name any, a dependency outside them is withheld and counted in withheld " +
 		"instead of being listed",
-	Tags:                       []string{"github", "issues", "issuedependencies", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
+	Tags:        []string{"github", "issues", "issuedependencies", "list"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"blocked_by":{"type":"array","items":` + issueRefOutput + `},` +
 		`"blocking":{"type":"array","items":` + issueRefOutput + `},` +
@@ -76,14 +75,13 @@ var issueDependenciesAdd = capability.Descriptor{
 	ID:      Provider + ".issuedependencies.add",
 	Version: 1,
 	Title:   "Add a GitHub issue dependency",
-	Description: "Record that one issue of a repository an explicit connection allows is blocked by " +
+	Description: "Record that one issue of a repository a connection allows is blocked by " +
 		"another; the blocking issue may live in another repository named by blocking_issue_repository, " +
 		"which must lie inside the connection's targets as well; refused when the dependency already exists " +
 		"or would create a cycle, so a repeated call changes nothing further",
-	Tags:                       []string{"github", "issues", "issuedependencies", "add"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "issuedependencies", "add"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"blocking_issue_number":`+numberSchema+
 		`,"blocking_issue_repository":`+repoSchema, "number", "blocking_issue_number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +
@@ -107,13 +105,12 @@ var issueDependenciesRemove = capability.Descriptor{
 	ID:      Provider + ".issuedependencies.remove",
 	Version: 1,
 	Title:   "Remove a GitHub issue dependency",
-	Description: "Remove that one issue of a repository an explicit connection allows is blocked by " +
+	Description: "Remove that one issue of a repository a connection allows is blocked by " +
 		"another; this only detaches the relationship between the two named issues and deletes neither, so " +
 		"it is not listed-only the way removing a label is",
-	Tags:                       []string{"github", "issues", "issuedependencies", "remove"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "issuedependencies", "remove"},
+	Risk:     changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"blocking_issue_number":`+numberSchema+
 		`,"blocking_issue_repository":`+repoSchema, "number", "blocking_issue_number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +

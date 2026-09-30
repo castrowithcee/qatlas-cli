@@ -455,7 +455,7 @@ private repositories. User and organization search need no scope beyond the toke
 
 ## Repository contents, tree, blame, commits, branches, and tags
 
-`github.contents.get` reads one file or one directory listing of a repository an explicit connection allows
+`github.contents.get` reads one file or one directory listing of a repository a connection allows
 at a ref; `github.trees.get` reads its Git tree at a ref, optionally every entry below every directory;
 `github.blame.get` reads, through GraphQL, the commit that last changed each line of one file over a bounded
 line range; `github.commits.list` and `github.commits.get` read its commits, filtered and paged, or one by
@@ -557,7 +557,7 @@ recommended profile, which stays `read`, unchanged.
 
 ## Repository writes: branches and file contents
 
-`github.branches.create` makes one new branch of a repository an explicit connection allows from `from`, a
+`github.branches.create` makes one new branch of a repository a connection allows from `from`, a
 branch, a tag, or a commit SHA, or, when `from` is left out, the repository's default branch, resolved
 through the same commits route `github.commits.get` uses, so the branch always starts at a real commit;
 `github.contents.put` creates a new file, or, while `sha` names its
@@ -642,8 +642,8 @@ the read eight plus `github.branches.create` and `github.contents.put`; `github.
 ## Repository lifecycle and collaborators
 
 `github.repositories.create` makes one new repository under the token's own account, or, with `owner`, under
-an organization an explicit connection names as an owner target; private by default. `github.repositories.
-fork` forks a repository an explicit connection allows into the token's own account or, with `organization`,
+an organization a connection names as an owner target; private by default. `github.repositories.
+fork` forks a repository a connection allows into the token's own account or, with `organization`,
 an organization the connection names as an owner target; GitHub answers this asynchronously, so a large
 repository may still be importing once the call returns. Creating or forking under the token's own account,
 rather than an organization, reads the account behind the token as a whole, the same account-wide guard the
@@ -716,7 +716,7 @@ it is not the recommended profile, which stays `read`, unchanged.
 ## Rulesets: repository and organization governance
 
 `github.rulesets.list` and `github.rulesets.get` read the rulesets of a repository or, with `organization`
-instead of `repository`, an organization an explicit connection allows. `github.rulesets.create`,
+instead of `repository`, an organization a connection allows. `github.rulesets.create`,
 `github.rulesets.update`, and `github.rulesets.delete` change them and are offered only where a connection's
 `tools` list names them, since a ruleset governs what a repository or an organization allows at all:
 
@@ -1438,7 +1438,7 @@ number, date, single-select, and multi-select fields, each with `id`, `name`, `d
 `repository` or `organization` is required, never both; a repository call is checked the way every other
 repository tool is, and the organization-wide call the same broad way `github.issuetypes.list` checks its own
 owner argument. `github.issuefields.set` writes one or more field values on one issue of a repository an
-explicit connection allows, each named by the `field_id` (and, for a select field, the option's own `id`)
+connection allows, each named by the `field_id` (and, for a select field, the option's own `id`)
 `github.issuefields.list` reports; GitHub applies every value of one call as a single mutation, so it either
 applies as a whole or not at all:
 

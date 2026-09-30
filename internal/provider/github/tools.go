@@ -66,12 +66,11 @@ var issuesCreate = capability.Descriptor{
 	ID:      Provider + ".issues.create",
 	Version: 1,
 	Title:   "Create a GitHub issue",
-	Description: "Open one issue in a repository an explicit connection allows; a repeated call opens a " +
+	Description: "Open one issue in a repository a connection allows; a repeated call opens a " +
 		"second issue, and GitHub creates any label the repository does not have yet",
-	Tags:                       []string{"github", "issues", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + issueContentKeys + `},` +
 		`"required":["title"],"additionalProperties":false}`),
 	OutputSchema: issuesGet.OutputSchema,
@@ -102,13 +101,12 @@ var issuesUpdate = capability.Descriptor{
 	Version: 1,
 	Title:   "Update a GitHub issue",
 	Description: "Replace the title, body, labels, assignees, milestone, or issue type of one issue of " +
-		"a repository an explicit connection allows; fields left out stay unchanged, GitHub creates any " +
+		"a repository a connection allows; fields left out stay unchanged, GitHub creates any " +
 		"label the repository does not have yet, and a type change is silently dropped by GitHub without " +
 		"push access to the repository",
-	Tags:                       []string{"github", "issues", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "update"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
 		issueContentKeys + `,"milestone":` + milestoneUpdateSchema + `,"type":` + typeUpdateSchema + `},` +
 		`"required":["number"],"additionalProperties":false}`),
@@ -130,14 +128,13 @@ var issuesUpdate = capability.Descriptor{
 }
 
 var issuesClose = capability.Descriptor{
-	ID:                         Provider + ".issues.close",
-	Version:                    1,
-	Title:                      "Close a GitHub issue",
-	Description:                "Close one issue of a repository an explicit connection allows with a reason",
-	Tags:                       []string{"github", "issues", "close", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	ID:          Provider + ".issues.close",
+	Version:     1,
+	Title:       "Close a GitHub issue",
+	Description: "Close one issue of a repository a connection allows with a reason",
+	Tags:        []string{"github", "issues", "close", "update"},
+	Risk:        changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
 		`"state_reason":{"type":"string","enum":["completed","not_planned","duplicate"]}},` +
 		`"required":["number"],"additionalProperties":false}`),
@@ -154,14 +151,13 @@ var issuesClose = capability.Descriptor{
 }
 
 var issuesReopen = capability.Descriptor{
-	ID:                         Provider + ".issues.reopen",
-	Version:                    1,
-	Title:                      "Reopen a GitHub issue",
-	Description:                "Open one closed issue of a repository an explicit connection allows again",
-	Tags:                       []string{"github", "issues", "reopen", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	ID:          Provider + ".issues.reopen",
+	Version:     1,
+	Title:       "Reopen a GitHub issue",
+	Description: "Open one closed issue of a repository a connection allows again",
+	Tags:        []string{"github", "issues", "reopen", "update"},
+	Risk:        changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `},` +
 		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: issuesGet.OutputSchema,
@@ -192,11 +188,10 @@ var commentsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List comments of a GitHub issue",
 	Description: "List one bounded batch of comments of one issue of " +
-		"a repository an explicit connection allows, oldest first",
-	Tags:                       []string{"github", "issues", "comments", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"a repository a connection allows, oldest first",
+	Tags:     []string{"github", "issues", "comments", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":` + cursorSchema + `},` +
 		`"required":["number"],"additionalProperties":false}`),
@@ -226,12 +221,11 @@ var commentsCreate = capability.Descriptor{
 	ID:      Provider + ".comments.create",
 	Version: 1,
 	Title:   "Comment on a GitHub issue",
-	Description: "Write exactly one comment on one issue of a repository an explicit connection allows; a " +
+	Description: "Write exactly one comment on one issue of a repository a connection allows; a " +
 		"repeated call writes a second comment",
-	Tags:                       []string{"github", "issues", "comments", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "comments", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
 		`"body":{"type":"string","minLength":1,"maxLength":65536}},"required":["number","body"],` +
 		`"additionalProperties":false}`),
@@ -257,11 +251,10 @@ var itemsUpdate = capability.Descriptor{
 	Version: 1,
 	Title:   "Update GitHub project item fields",
 	Description: "Set or clear single-select, multi-select, text, number, date, and iteration fields of one item of " +
-		"a GitHub project an explicit connection allows, by field and option name",
-	Tags:                       []string{"github", "projects", "items", "fields", "update", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"a GitHub project a connection allows, by field and option name",
+	Tags:     []string{"github", "projects", "items", "fields", "update", "planning"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":` + itemIDSchema + `,` +
 		`"fields":` + fieldsSchema + `},"required":["item_id","fields"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(planningOutput),
@@ -280,12 +273,11 @@ var itemsAdd = capability.Descriptor{
 	ID:      Provider + ".projectitems.add",
 	Version: 1,
 	Title:   "Add a GitHub issue to the project",
-	Description: "Add one existing issue of a repository an explicit connection allows to a GitHub project it " +
+	Description: "Add one existing issue of a repository a connection allows to a GitHub project it " +
 		"allows, then set field values; an issue already in the project keeps its item",
-	Tags:                       []string{"github", "projects", "items", "add", "planning"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "items", "add", "planning"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"repository":` + repoSchema + `,` +
 		`"number":` + numberSchema + `,"fields":` + fieldsSchema + `},"required":["number"],` +
 		`"additionalProperties":false}`),
@@ -306,12 +298,11 @@ var itemsArchive = capability.Descriptor{
 	ID:      Provider + ".projectitems.archive",
 	Version: 1,
 	Title:   "Archive a GitHub project item",
-	Description: "Archive one item of a GitHub project an explicit connection allows; GitHub keeps it " +
+	Description: "Archive one item of a GitHub project a connection allows; GitHub keeps it " +
 		"restorable",
-	Tags:                       []string{"github", "projects", "items", "archive", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "items", "archive", "planning"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":` + itemIDSchema + `},` +
 		`"required":["item_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":{"type":"string"},` +
@@ -330,12 +321,11 @@ var draftsCreate = capability.Descriptor{
 	ID:      Provider + ".projectdrafts.create",
 	Version: 1,
 	Title:   "Create a GitHub project draft",
-	Description: "Add one draft issue to a GitHub project an explicit connection allows, then set field " +
+	Description: "Add one draft issue to a GitHub project a connection allows, then set field " +
 		"values; a repeated call adds a second draft",
-	Tags:                       []string{"github", "projects", "drafts", "create", "planning"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "drafts", "create", "planning"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"title":` + titleSchema + `,` +
 		`"body":` + bodySchema + `,"fields":` + fieldsSchema + `},"required":["title"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(planningOutput),
@@ -355,13 +345,12 @@ var projectIssuesCreate = capability.Descriptor{
 	ID:      Provider + ".projectissues.create",
 	Version: 1,
 	Title:   "Create a planned GitHub issue",
-	Description: "Open one issue in a repository an explicit connection allows, add it to a GitHub project it " +
+	Description: "Open one issue in a repository a connection allows, add it to a GitHub project it " +
 		"allows, then set field values; a repeated call opens a second issue, and GitHub creates any label the " +
 		"repository does not have yet",
-	Tags:                       []string{"github", "projects", "issues", "create", "planning"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "issues", "create", "planning"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"repository":` + repoSchema + `,` +
 		issueContentKeys + `,"fields":` + fieldsSchema + `},"required":["title"],` +
 		`"additionalProperties":false}`),

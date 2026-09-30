@@ -31,12 +31,11 @@ var commentsUpdate = capability.Descriptor{
 	ID:      Provider + ".comments.update",
 	Version: 1,
 	Title:   "Update a GitHub issue comment",
-	Description: "Replace the body of one comment of a repository an explicit connection allows, by its " +
+	Description: "Replace the body of one comment of a repository a connection allows, by its " +
 		"comment_id; a comment of another repository, or a pull request conversation comment, is refused",
-	Tags:                       []string{"github", "issues", "comments", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "comments", "update"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"comment_id":`+actionsIDSchema+`,"body":{"type":"string","minLength":1,`+
 		`"maxLength":65536}`, "comment_id", "body"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + commentProperties + `},` + commentRequired + `}`),
@@ -64,16 +63,15 @@ var commentsDelete = capability.Descriptor{
 	ID:      Provider + ".comments.delete",
 	Version: 1,
 	Title:   "Delete a GitHub issue comment",
-	Description: "Delete one comment of a repository an explicit connection allows permanently, by its " +
+	Description: "Delete one comment of a repository a connection allows permanently, by its " +
 		"comment_id; offered only where a connection's tools list names it; a comment of another repository, " +
 		"or a pull request conversation comment, is refused",
-	Tags:                       []string{"github", "issues", "comments", "delete"},
-	Risk:                       guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, commentSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                inputSchema(`"comment_id":`+actionsIDSchema, "comment_id"),
-	OutputSchema:               json.RawMessage(commentDeletedOutput),
+	Tags:                  []string{"github", "issues", "comments", "delete"},
+	Risk:                  guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, commentSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           inputSchema(`"comment_id":`+actionsIDSchema, "comment_id"),
+	OutputSchema:          json.RawMessage(commentDeletedOutput),
 	Arguments: []capability.Argument{
 		{Name: "comment_id", Description: "Numeric identifier of the issue comment to delete", Required: true},
 	},

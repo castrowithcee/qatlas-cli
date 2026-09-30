@@ -129,10 +129,9 @@ var tablesList = capability.Descriptor{
 	Title:   "List SeaTable tables",
 	Description: "List one bounded page of tables visible through an explicit SeaTable connection, " +
 		"including the reference accepted by row and column operations",
-	Tags:                       []string{"seatable", "base", "tables", "schema", "list"},
-	Risk:                       seatableSchemaRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"seatable", "base", "tables", "schema", "list"},
+	Risk:     seatableSchemaRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100}},` +
@@ -163,10 +162,9 @@ var columnsList = capability.Descriptor{
 	Title:   "List SeaTable columns",
 	Description: "List one bounded page of columns of an allowed table through an explicit SeaTable " +
 		"connection; table is optional only when the connection resolves to one table",
-	Tags:                       []string{"seatable", "base", "table", "columns", "schema", "list"},
-	Risk:                       seatableSchemaRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"seatable", "base", "table", "columns", "schema", "list"},
+	Risk:     seatableSchemaRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"table":` + tableSelectionSchema + `,` +
 		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
@@ -195,14 +193,13 @@ var columnsList = capability.Descriptor{
 }
 
 var rowsList = capability.Descriptor{
-	ID:                         Provider + ".rows.list",
-	Version:                    1,
-	Title:                      "List SeaTable rows",
-	Description:                "List one bounded page of rows from a table allowed by an explicit SeaTable connection",
-	Tags:                       []string{"seatable", "base", "rows", "list", "table"},
-	Risk:                       seatableReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	ID:          Provider + ".rows.list",
+	Version:     1,
+	Title:       "List SeaTable rows",
+	Description: "List one bounded page of rows from a table allowed by an explicit SeaTable connection",
+	Tags:        []string{"seatable", "base", "rows", "list", "table"},
+	Risk:        seatableReadRisk,
+	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"table":` + tableSelectionSchema + `,` +
 		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
@@ -237,10 +234,9 @@ var rowsGet = capability.Descriptor{
 	Title:   "Get a SeaTable row",
 	Description: "Read one row of a table allowed by an explicit SeaTable connection by its row " +
 		"identifier",
-	Tags:                       []string{"seatable", "base", "rows", "get", "table"},
-	Risk:                       seatableReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"seatable", "base", "rows", "get", "table"},
+	Risk:     seatableReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"table":` + tableSelectionSchema + `,"row_id":{"type":"string",` +
 		`"minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"}},` +
 		`"required":["row_id"],"additionalProperties":false}`),
@@ -275,7 +271,7 @@ func rowMutationDescriptor(action string, effect capability.Effect, idempotency 
 	return capability.Descriptor{ID: Provider + ".rows." + action, Version: 1,
 		Title:       strings.ToUpper(action[:1]) + action[1:] + " a SeaTable row",
 		Description: strings.ToUpper(action[:1]) + action[1:] + " one row in a table allowed by an explicit SeaTable connection",
-		Tags:        []string{"seatable", "base", "rows", action, "table"}, Provider: Provider, RequiresExplicitConnection: true,
+		Tags:        []string{"seatable", "base", "rows", action, "table"}, Provider: Provider,
 		Risk:        capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
 		InputSchema: json.RawMessage(input), OutputSchema: json.RawMessage(output)}
 }

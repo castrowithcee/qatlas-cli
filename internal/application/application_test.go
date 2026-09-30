@@ -204,13 +204,17 @@ func TestConnectionToolsFilterEveryPathTheSameWay(t *testing.T) {
 	if !errors.As(err, &unsupported) {
 		t.Fatalf("Invoke(list) over a default without the tool = %T %v", err, err)
 	}
-	// Conflicting defaults stay ambiguous, and a default that cannot take the tool is no candidate.
+	// The default of the tool wins over the default of its provider, even where the latter cannot take it.
 	cfg.Defaults.Connections["fake.pages.list"] = "lister"
-	_, err = core.Invoke(context.Background(), InvokeRequest{
-		Operation: "fake.pages.list", Arguments: json.RawMessage(`{"id":"1"}`),
-	})
-	if !errors.As(err, &ambiguous) || !reflect.DeepEqual(ambiguous.Connections, []ConnectionRef{{Name: "lister"}}) {
-		t.Fatalf("Invoke(list) over conflicting defaults = %T %v, want lister as the only candidate", err, err)
+	listDescriptor, _, _ := core.registry.Lookup("fake.pages.list")
+	if resolved, err := core.selectConnection("", listDescriptor); err != nil || resolved.Name != "lister" {
+		t.Fatalf("selectConnection(list) over conflicting defaults = %v, %v, want lister", resolved, err)
+	}
+	// A tool default the tool cannot use is refused; the provider default behind it is not tried.
+	cfg.Defaults.Connections["fake.pages.list"] = "getter"
+	cfg.Defaults.Connections["fake"] = "lister"
+	if _, err := core.selectConnection("", listDescriptor); !errors.As(err, &unsupported) {
+		t.Fatalf("selectConnection(list) over a tool default without the tool = %v, want unsupported", err)
 	}
 	delete(cfg.Defaults.Connections, "fake.pages.list")
 	delete(cfg.Defaults.Connections, "fake")
@@ -537,6 +541,7 @@ func TestInvokeConnectionSelection(t *testing.T) {
 		connections []string
 		defaults    map[string]string
 		explicit    string
+		op          string
 		want        string
 		wantErr     any
 		// candidates are the routes an ambiguity names: every one that can take the operation, each with
@@ -555,34 +560,52 @@ func TestInvokeConnectionSelection(t *testing.T) {
 			candidates: []ConnectionRef{
 				{Name: "archive", Description: testDescriptions["archive"]}, {Name: "primary"}, {Name: "primary-2"},
 			}},
-		{name: "conflicting defaults", connections: []string{"primary", "archive", "spare"}, defaults: map[string]string{"fake": "primary", "fake.pages.get": "archive"}, wantErr: new(ConnectionAmbiguousError),
+		{name: "operation default before provider default", connections: []string{"primary", "archive", "spare"}, defaults: map[string]string{"fake": "primary", "fake.pages.get": "archive"}, want: "archive"},
+		{name: "operation default before provider default, mutating tool", connections: []string{"primary", "archive"}, defaults: map[string]string{"fake": "primary", "fake.pages.delete": "archive"}, op: "fake.pages.delete", want: "archive"},
+		{name: "default of another tool is no default", connections: []string{"primary", "archive"}, defaults: map[string]string{"fake.pages.delete": "archive"}, op: "fake.pages.get", wantErr: new(ConnectionAmbiguousError),
 			candidates: []ConnectionRef{{Name: "archive", Description: testDescriptions["archive"]}, {Name: "primary"}}},
+		{name: "default of an unknown connection", connections: []string{"primary"}, defaults: map[string]string{"fake": "missing"}, wantErr: new(capability.UnknownConnectionError)},
 	}
 
+	// Every case runs for a reading tool, and for the mutating one unless it names its own tool: a
+	// connection is chosen the same way for both, and a change still needs its confirmation.
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			core, _ := testCore(t, tt.connections, tt.defaults, true)
-			got, err := core.Invoke(context.Background(), InvokeRequest{
-				Operation: "fake.pages.get", Connection: tt.explicit,
-				Arguments: json.RawMessage(`{"id":"42"}`),
+		operations := []string{"fake.pages.get", "fake.pages.delete"}
+		if tt.op != "" {
+			operations = []string{tt.op}
+		}
+		for _, operation := range operations {
+			t.Run(tt.name+"/"+operation, func(t *testing.T) {
+				defaults := map[string]string{}
+				for key, name := range tt.defaults {
+					if key == "fake.pages.get" && operation != "fake.pages.get" {
+						key = operation
+					}
+					defaults[key] = name
+				}
+				core, _ := testCore(t, tt.connections, defaults, true)
+				got, err := core.Invoke(context.Background(), InvokeRequest{
+					Operation: operation, Connection: tt.explicit, Confirmed: true,
+					Arguments: json.RawMessage(`{"id":"42"}`),
+				})
+				if tt.wantErr != nil {
+					if !errorAs(err, tt.wantErr) {
+						t.Fatalf("Invoke() error = %T %v, want %T", err, err, tt.wantErr)
+					}
+					var ambiguous *ConnectionAmbiguousError
+					if errors.As(err, &ambiguous) && !reflect.DeepEqual(ambiguous.Connections, tt.candidates) {
+						t.Errorf("candidates = %#v, want %#v", ambiguous.Connections, tt.candidates)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("Invoke() = %v", err)
+				}
+				if got.Connection != tt.want {
+					t.Errorf("connection = %q, want %q", got.Connection, tt.want)
+				}
 			})
-			if tt.wantErr != nil {
-				if !errorAs(err, tt.wantErr) {
-					t.Fatalf("Invoke() error = %T %v, want %T", err, err, tt.wantErr)
-				}
-				var ambiguous *ConnectionAmbiguousError
-				if errors.As(err, &ambiguous) && !reflect.DeepEqual(ambiguous.Connections, tt.candidates) {
-					t.Errorf("candidates = %#v, want %#v", ambiguous.Connections, tt.candidates)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("Invoke() = %v", err)
-			}
-			if got.Connection != tt.want {
-				t.Errorf("connection = %q, want %q", got.Connection, tt.want)
-			}
-		})
+		}
 	}
 }
 
@@ -713,10 +736,9 @@ func TestInvokeDispatchesReadAndConfirmedMutation(t *testing.T) {
 	}
 }
 
-func TestExplicitConnectionAndConfirmationPrecedeSecretsIOAndAudit(t *testing.T) {
+func TestConnectionAndConfirmationPrecedeSecretsIOAndAudit(t *testing.T) {
 	secretReads, handlerCalls := 0, 0
 	descriptor := testDescriptor("fake.messages.send", capability.EffectCreate, capability.ConfirmationRequired)
-	descriptor.RequiresExplicitConnection = true
 	descriptor.InputSchema = json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","minLength":1,"maxLength":4}},"required":["id"],"additionalProperties":false}`)
 	handler := capability.Handler(func(_ context.Context, resolved *config.Resolved, resolver *secret.Resolver,
 		_ *redact.Redactor, _ json.RawMessage) (any, error) {
@@ -756,10 +778,10 @@ func TestExplicitConnectionAndConfirmationPrecedeSecretsIOAndAudit(t *testing.T)
 			wantErr: new(InvalidRequestError),
 		},
 		{
-			name: "default is ignored",
-			request: InvokeRequest{Operation: descriptor.ID, Confirmed: true,
+			name: "confirmation missing with the default connection",
+			request: InvokeRequest{Operation: descriptor.ID,
 				Arguments: json.RawMessage(`{"id":"1"}`)},
-			wantErr: new(ConnectionSelectionError),
+			wantErr: new(ConfirmationRequiredError),
 		},
 		{
 			name: "confirmation missing",
@@ -1035,6 +1057,9 @@ func errorAs(err error, target any) bool {
 		return errors.As(err, &typed)
 	case *ConnectionSelectionError:
 		var typed *ConnectionSelectionError
+		return errors.As(err, &typed)
+	case *capability.UnknownConnectionError:
+		var typed *capability.UnknownConnectionError
 		return errors.As(err, &typed)
 	case *ConfirmationRequiredError:
 		var typed *ConfirmationRequiredError
@@ -1407,15 +1432,9 @@ func TestCandidateDiagnosticsNameTheRoutes(t *testing.T) {
 	if got := (&ConnectionAmbiguousError{Operation: "fake.pages.get", Connections: refs}).Error(); got != want {
 		t.Errorf("ambiguous = %q, want %q", got, want)
 	}
-	want = `tool "fake.pages.get" requires an explicit connection in this invoke request; the connections ` +
-		`that offer it: short (team pages), plain, long (` + shortened + `)`
-	selection := &ConnectionSelectionError{Operation: "fake.pages.get", ExplicitRequired: true, Connections: refs}
-	if got := selection.Error(); got != want {
-		t.Errorf("selection = %q, want %q", got, want)
-	}
-	selection.Connections = nil
-	if got := selection.Error(); got != `tool "fake.pages.get" requires an explicit connection in this invoke request` {
-		t.Errorf("selection without candidates = %q", got)
+	selection := &ConnectionSelectionError{Operation: "fake.pages.get"}
+	if got := selection.Error(); got != `no configured connection can invoke tool "fake.pages.get"` {
+		t.Errorf("selection = %q", got)
 	}
 	if got := len([]rune(shortened)); got != maxCandidateDescription {
 		t.Errorf("shortened description has %d characters, want %d", got, maxCandidateDescription)

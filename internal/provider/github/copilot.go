@@ -46,14 +46,13 @@ var copilotAssignmentsCreate = capability.Descriptor{
 	ID:      Provider + ".copilotassignments.create",
 	Version: 1,
 	Title:   "Assign GitHub Copilot to an issue",
-	Description: "Assign the Copilot coding agent to one issue of a repository an explicit connection allows, " +
+	Description: "Assign the Copilot coding agent to one issue of a repository a connection allows, " +
 		"keeping the issue's other assignees; optionally name the branch it starts from, extra instructions, and " +
 		"the intent behind the choice (rationale and confidence), or record only a pending suggestion that does " +
 		"not start the agent. A repository without Copilot as an assignable actor is refused and nothing changes",
-	Tags:                       []string{"github", "issues", "copilot", "assignments", "create"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "copilot", "assignments", "create"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"base_ref":`+refSchema+
 		`,"custom_instructions":{"type":"string","maxLength":10000},"rationale":{"type":"string","maxLength":280},`+
 		`"confidence":`+confidenceSchema+`,"is_suggestion":{"type":"boolean"}`, "number"),
@@ -81,17 +80,16 @@ var copilotReviewsRequest = capability.Descriptor{
 	ID:      Provider + ".copilotreviews.request",
 	Version: 1,
 	Title:   "Request a GitHub Copilot review",
-	Description: "Request Copilot as a reviewer of one pull request of a repository an explicit connection " +
+	Description: "Request Copilot as a reviewer of one pull request of a repository a connection " +
 		"allows; requesting it again leaves it requested. The answer is the pull request, as " +
 		"github.pullrequests.get reports it",
-	Tags:                       []string{"github", "pulls", "pullrequests", "copilot", "reviews", "request"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema, "number"),
-	OutputSchema:               pullsGet.OutputSchema,
-	Arguments:                  []capability.Argument{{Name: "number", Description: "Pull request number in the repository", Required: true}},
-	Fields:                     pullsGet.Fields,
+	Tags:         []string{"github", "pulls", "pullrequests", "copilot", "reviews", "request"},
+	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"number":`+numberSchema, "number"),
+	OutputSchema: pullsGet.OutputSchema,
+	Arguments:    []capability.Argument{{Name: "number", Description: "Pull request number in the repository", Required: true}},
+	Fields:       pullsGet.Fields,
 	Examples: []capability.Example{{
 		Description: "Request a Copilot review",
 		Arguments:   json.RawMessage(`{"number":42}`),

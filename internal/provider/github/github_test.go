@@ -830,10 +830,10 @@ func TestRegisterPublishesMetadataAndTheReadOperations(t *testing.T) {
 		}
 		ids = append(ids, descriptor.ID)
 		if descriptor.Risk.Effect != capability.EffectRead || descriptor.Risk.Idempotency != capability.IdempotencySafe ||
-			descriptor.Risk.Confirmation != capability.ConfirmationNone || !descriptor.RequiresExplicitConnection ||
+			descriptor.Risk.Confirmation != capability.ConfirmationNone ||
 			(descriptor.Risk.DataSensitivity != dataSensitivity && descriptor.ID != jobsLog.ID &&
 				!descriptor.RequiresToolAllowList) {
-			t.Errorf("descriptor %s = %+v, want a safe read requiring an explicit connection", descriptor.ID, descriptor.Risk)
+			t.Errorf("descriptor %s = %+v, want a safe read", descriptor.ID, descriptor.Risk)
 		}
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "comments"} {
 			// Only the owner lists and the organization tools take an owner, as their target.
@@ -1447,7 +1447,7 @@ func TestTheCoreRefusesRequestsOutsideTheTargetBeforeIO(t *testing.T) {
 		{"too many values", "github.projectitems.list", "planning",
 			`{"labels":["a","b","c","d","e","f","g","h","i","j","k"]}`, "invalid"},
 		{"a foreign cursor", "github.projectitems.list", "planning", `{"cursor":"AAAAAAAAAAAAAAAAY3VyLTM"}`, "invalid"},
-		{"no explicit connection", "github.projectitems.list", "", `{}`, "selection"},
+		{"no connection among several", "github.projectitems.list", "", `{}`, "ambiguous"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1457,7 +1457,7 @@ func TestTheCoreRefusesRequestsOutsideTheTargetBeforeIO(t *testing.T) {
 				Operation: tt.operation, Connection: tt.connection, Arguments: json.RawMessage(tt.arguments)})
 			var (
 				unsupported *capability.UnsupportedError
-				selection   *application.ConnectionSelectionError
+				ambiguous   *application.ConnectionAmbiguousError
 			)
 			switch tt.code {
 			case "unsupported":
@@ -1468,9 +1468,9 @@ func TestTheCoreRefusesRequestsOutsideTheTargetBeforeIO(t *testing.T) {
 				if !isInvalidRequest(err) {
 					t.Errorf("err = %v, want an invalid request", err)
 				}
-			case "selection":
-				if !errors.As(err, &selection) {
-					t.Errorf("err = %v, want an explicit connection to be required", err)
+			case "ambiguous":
+				if !errors.As(err, &ambiguous) {
+					t.Errorf("err = %v, want several matching connections", err)
 				}
 			}
 			if reads != 0 || len(f.recorded()) != before {

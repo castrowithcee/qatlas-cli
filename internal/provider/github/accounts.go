@@ -26,11 +26,10 @@ var accountsMe = capability.Descriptor{
 	Description: "Read the login, display name, account type, and billing plan of the user GitHub " +
 		"authenticates the connection's token as; offered only by a connection whose targets name no " +
 		"repository and no project",
-	Tags:                       []string{"github", "account", "discovery", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(""),
+	Tags:        []string{"github", "account", "discovery", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(""),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + accountProperties + `},` +
 		`"required":["login","type"],"additionalProperties":false}`),
 	Fields: []capability.Field{

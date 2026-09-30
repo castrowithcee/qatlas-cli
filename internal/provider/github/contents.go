@@ -69,15 +69,14 @@ var contentsGet = capability.Descriptor{
 	ID:      Provider + ".contents.get",
 	Version: 1,
 	Title:   "Get GitHub repository contents",
-	Description: "Read one file or one directory listing of a repository an explicit connection allows at a " +
+	Description: "Read one file or one directory listing of a repository a connection allows at a " +
 		"ref; a text file within the size limit is returned in full, or, past it, cut from its start with the " +
 		"cut visible; a binary file, a file past the size limit, a symlink, or a submodule is metadata only: " +
 		"path, size, sha, and type",
-	Tags:                       []string{"github", "contents", "repository", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"path":` + contentsPathSchema + `,"ref":` + refSchema),
+	Tags:        []string{"github", "contents", "repository", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"path":` + contentsPathSchema + `,"ref":` + refSchema),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + contentsProperties + `},` +
 		`"required":["path","type"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -114,14 +113,13 @@ var treesGet = capability.Descriptor{
 	ID:      Provider + ".trees.get",
 	Version: 1,
 	Title:   "Get a GitHub repository tree",
-	Description: "Read the Git tree of one ref of a repository an explicit connection allows, optionally " +
+	Description: "Read the Git tree of one ref of a repository a connection allows, optionally " +
 		"every entry below every directory, bounded to a maximum number of entries with GitHub's own " +
 		"truncation, when either applies, visible",
-	Tags:                       []string{"github", "trees", "contents", "repository", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"ref":`+refSchema+`,"recursive":{"type":"boolean"}`, "ref"),
+	Tags:        []string{"github", "trees", "contents", "repository", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"ref":`+refSchema+`,"recursive":{"type":"boolean"}`, "ref"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + treesProperties + `},` +
 		`"required":["sha","entries","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{

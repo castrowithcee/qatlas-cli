@@ -197,7 +197,7 @@ func newRootCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 
 	f := cmd.PersistentFlags()
 	f.StringVar(&opts.Config, "config", "", "path to the configuration file")
-	f.StringVar(&opts.Connection, "connection", "", "name of the connection to use")
+	f.StringVar(&opts.Connection, "connection", "", "name of the connection to use; left out, the default or the one connection that offers the tool is used")
 	f.BoolVar(&opts.Agent, "agent", false, "agent mode: machine-readable output without prose or color")
 	// The default depends on the command, so the flag carries none of its own; resolveFormat and the
 	// commands with a narrower choice apply it.

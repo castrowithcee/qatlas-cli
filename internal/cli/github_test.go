@@ -268,8 +268,6 @@ func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--config", path}},
 		{"a foreign cursor", `{"cursor":"AAAAAAAAAAAAAAAAY3VyLTM"}`, "invalid-request",
 			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--config", path}},
-		{"no explicit connection", `{"number":1}`, "connection-selection",
-			[]string{"invoke", "github.issues.get", "--config", path}},
 		{"an unconfirmed change", `{"item_id":"PVTI_x1","fields":{"Status":"Done"}}`, "confirmation-required",
 			[]string{"invoke", "github.projectitems.update", "--connection", "roadmap", "--config", path}},
 		{"a change the permissions exclude", `{"title":"x"}`, "unsupported-capability",

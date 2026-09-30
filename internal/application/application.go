@@ -792,30 +792,14 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 		}
 		return resolved, nil
 	}
-	if descriptor.RequiresExplicitConnection {
-		return nil, &ConnectionSelectionError{
-			Operation: descriptor.ID, ExplicitRequired: true, Connections: c.connectionRefs(descriptor),
-		}
-	}
-
-	defaults := map[string]bool{}
+	// The tool default wins over the provider default; a default that names a connection the tool cannot use
+	// is refused, never skipped for the next stage. The view of the current project already leaves out a
+	// default that names a connection bound to another project.
 	for _, key := range []string{descriptor.ID, descriptor.Provider} {
-		if name := c.config.Defaults.Connections[key]; name != "" {
-			defaults[name] = true
+		name := c.config.Defaults.Connections[key]
+		if name == "" {
+			continue
 		}
-	}
-	if len(defaults) > 1 {
-		// Conflicting defaults name the candidates, but only those that can actually take the operation.
-		candidates := make([]ConnectionRef, 0, len(defaults))
-		for _, name := range sortedSet(defaults) {
-			if resolved, err := c.connection(name); err == nil && resolved.Provider == descriptor.Provider &&
-				c.connectionAllows(name, descriptor) {
-				candidates = append(candidates, c.connectionRef(name))
-			}
-		}
-		return nil, &ConnectionAmbiguousError{Operation: descriptor.ID, Connections: candidates}
-	}
-	for name := range defaults {
 		resolved, err := c.connection(name)
 		if err != nil {
 			return nil, err

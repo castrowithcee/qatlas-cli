@@ -52,15 +52,14 @@ var labelsList = capability.Descriptor{
 	ID:      Provider + ".labels.list",
 	Version: 1,
 	Title:   "List GitHub labels",
-	Description: "List one bounded batch of the labels of a repository an explicit connection allows, with " +
+	Description: "List one bounded batch of the labels of a repository a connection allows, with " +
 		"their color, description, and whether GitHub created them by default",
-	Tags:                       []string{"github", "labels", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(pagingKeys),
-	OutputSchema:               listOutput("labels", labelProperties, labelRequired),
-	Arguments:                  pagingArguments,
+	Tags:         []string{"github", "labels", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(pagingKeys),
+	OutputSchema: listOutput("labels", labelProperties, labelRequired),
+	Arguments:    pagingArguments,
 	Fields: append([]capability.Field{
 		{Name: "labels", Description: "Labels with name, color, description, and default (true for a label " +
 			"GitHub created with the repository, such as bug or enhancement)"},
@@ -69,16 +68,15 @@ var labelsList = capability.Descriptor{
 }
 
 var labelsGet = capability.Descriptor{
-	ID:                         Provider + ".labels.get",
-	Version:                    1,
-	Title:                      "Get a GitHub label",
-	Description:                "Read one label of a repository an explicit connection allows, matched by name exactly",
-	Tags:                       []string{"github", "labels", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"name":`+labelNameSchema, "name"),
-	OutputSchema:               json.RawMessage(labelOutput),
+	ID:           Provider + ".labels.get",
+	Version:      1,
+	Title:        "Get a GitHub label",
+	Description:  "Read one label of a repository a connection allows, matched by name exactly",
+	Tags:         []string{"github", "labels", "get"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"name":`+labelNameSchema, "name"),
+	OutputSchema: json.RawMessage(labelOutput),
 	Arguments: []capability.Argument{
 		{Name: "name", Description: "Label name, matched exactly", Required: true},
 	},
@@ -94,13 +92,12 @@ var labelsCreate = capability.Descriptor{
 	ID:      Provider + ".labels.create",
 	Version: 1,
 	Title:   "Create a GitHub label",
-	Description: "Create one new label in a repository an explicit connection allows; name must not already " +
+	Description: "Create one new label in a repository a connection allows; name must not already " +
 		"name a label of the repository, refused with a clear message otherwise; not idempotent, since a " +
 		"repeated call with a new name creates a second label",
-	Tags:                       []string{"github", "labels", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "labels", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"name":`+labelNameSchema+`,"color":`+labelColorSchema+`,"description":`+
 		labelDescriptionSchema, "name", "color"),
 	OutputSchema: json.RawMessage(labelOutput),
@@ -119,13 +116,12 @@ var labelsUpdate = capability.Descriptor{
 	ID:      Provider + ".labels.update",
 	Version: 1,
 	Title:   "Update a GitHub label",
-	Description: "Change the name, color, or description of one label of a repository an explicit connection " +
+	Description: "Change the name, color, or description of one label of a repository a connection " +
 		"allows, matched by its current name exactly; at least one of new_name, color, or description is " +
 		"required; idempotent, since sending the same values again leaves GitHub in the same state",
-	Tags:                       []string{"github", "labels", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "labels", "update"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"name":`+labelNameSchema+`,"new_name":`+labelNameSchema+`,"color":`+
 		labelColorSchema+`,"description":`+labelDescriptionSchema, "name"),
 	OutputSchema: json.RawMessage(labelOutput),
@@ -148,16 +144,15 @@ var labelsDelete = capability.Descriptor{
 	ID:      Provider + ".labels.delete",
 	Version: 1,
 	Title:   "Delete a GitHub label",
-	Description: "Delete one label of a repository an explicit connection allows permanently, removing it " +
+	Description: "Delete one label of a repository a connection allows permanently, removing it " +
 		"from every issue and pull request that carries it; offered only where a connection's tools list " +
 		"names it",
-	Tags:                       []string{"github", "labels", "delete"},
-	Risk:                       guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, labelSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                inputSchema(`"name":`+labelNameSchema, "name"),
-	OutputSchema:               json.RawMessage(labelDeletedOutput),
+	Tags:                  []string{"github", "labels", "delete"},
+	Risk:                  guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, labelSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           inputSchema(`"name":`+labelNameSchema, "name"),
+	OutputSchema:          json.RawMessage(labelDeletedOutput),
 	Arguments: []capability.Argument{
 		{Name: "name", Description: "Label name to delete, matched exactly", Required: true},
 	},

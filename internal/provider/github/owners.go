@@ -30,13 +30,12 @@ var projectsList = capability.Descriptor{
 	ID:      Provider + ".projects.list",
 	Version: 1,
 	Title:   "List GitHub projects of an owner",
-	Description: "List one bounded batch of the projects of a user or an organization an explicit connection " +
+	Description: "List one bounded batch of the projects of a user or an organization a connection " +
 		"allows, in number order, with number, title, URL, and whether each is closed",
-	Tags:                       []string{"github", "projects", "owner", "list", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(ownerListInput),
+	Tags:        []string{"github", "projects", "owner", "list", "planning"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: json.RawMessage(ownerListInput),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"projects":{"type":"array","items":{"type":"object","properties":{"project":{"type":"string"},` +
 		`"number":{"type":"integer"},"title":{"type":"string"},"url":{"type":"string"},"closed":{"type":"boolean"}},` +
@@ -63,11 +62,10 @@ var repositoriesList = capability.Descriptor{
 	Title:   "List GitHub repositories of an owner",
 	Description: "List one bounded batch of the repositories a user or an organization owns and an explicit " +
 		"connection allows, in name order, with visibility and whether each is archived",
-	Tags:                       []string{"github", "repositories", "owner", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(ownerListInput),
+	Tags:        []string{"github", "repositories", "owner", "list"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: json.RawMessage(ownerListInput),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"repositories":{"type":"array","items":{"type":"object","properties":{"repository":{"type":"string"},` +
 		`"visibility":{"type":"string"},"archived":{"type":"boolean"}},` +

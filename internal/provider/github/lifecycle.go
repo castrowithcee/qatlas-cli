@@ -47,12 +47,11 @@ var projectsCreate = capability.Descriptor{
 	ID:      Provider + ".projects.create",
 	Version: 1,
 	Title:   "Create a GitHub project",
-	Description: "Create one empty project of a user or an organization an explicit connection names as an " +
+	Description: "Create one empty project of a user or an organization a connection names as an " +
 		"owner target; a repeated call creates a second project",
-	Tags:                       []string{"github", "projects", "create", "planning"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "create", "planning"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"title":` + titleSchema + `},` +
 		`"required":["title"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(createdOutput),
@@ -70,12 +69,11 @@ var projectsUpdate = capability.Descriptor{
 	ID:      Provider + ".projects.update",
 	Version: 1,
 	Title:   "Update a GitHub project",
-	Description: "Change the title, short description, readme, or visibility of one GitHub project an " +
-		"explicit connection allows, or close or reopen it; settings left out stay unchanged",
-	Tags:                       []string{"github", "projects", "update", "close", "reopen", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Description: "Change the title, short description, readme, or visibility of one GitHub project a " +
+		"connection allows, or close or reopen it; settings left out stay unchanged",
+	Tags:     []string{"github", "projects", "update", "close", "reopen", "planning"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"title":` + titleSchema + `,` +
 		`"short_description":{"type":"string","maxLength":1024},"readme":` + bodySchema + `,` +
 		`"public":{"type":"boolean"},"closed":{"type":"boolean"}},"additionalProperties":false}`),
@@ -105,15 +103,14 @@ var projectsDelete = capability.Descriptor{
 	ID:      Provider + ".projects.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project",
-	Description: "Delete one GitHub project an explicit connection allows permanently, with its items, " +
+	Description: "Delete one GitHub project a connection allows permanently, with its items, " +
 		"fields, and views; the issues and pull requests of its items stay. Offered only by a connection whose " +
 		"tools list names it",
-	Tags:                       []string{"github", "projects", "delete"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	Tags:                  []string{"github", "projects", "delete"},
+	Risk:                  changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
 		`"required":["deleted"],"additionalProperties":false}`),
 	Fields: []capability.Field{{Name: "deleted", Description: "True once GitHub deleted the project"}},
@@ -127,13 +124,12 @@ var projectsCopy = capability.Descriptor{
 	ID:      Provider + ".projects.copy",
 	Version: 1,
 	Title:   "Copy a GitHub project",
-	Description: "Copy one GitHub project an explicit connection allows, with its fields and views and, on " +
+	Description: "Copy one GitHub project a connection allows, with its fields and views and, on " +
 		"request, its draft issues, into a new project of an owner the connection names as an owner target; a " +
 		"repeated call creates a second copy",
-	Tags:                       []string{"github", "projects", "copy", "create", "planning"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "copy", "create", "planning"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"owner":` + ownerSchema + `,` +
 		`"title":` + titleSchema + `,"include_drafts":{"type":"boolean"}},"required":["title"],` +
 		`"additionalProperties":false}`),
@@ -158,16 +154,15 @@ var projectsLink = capability.Descriptor{
 	ID:      Provider + ".projects.link",
 	Version: 1,
 	Title:   "Link a GitHub project to a repository",
-	Description: "Link one GitHub project an explicit connection allows to one repository it allows, so the " +
+	Description: "Link one GitHub project a connection allows to one repository it allows, so the " +
 		"project appears in the repository; a linked project stays linked once",
-	Tags:                       []string{"github", "projects", "repositories", "link", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(linkInput),
-	OutputSchema:               json.RawMessage(linkedOutput),
-	Arguments:                  []capability.Argument{repositoryArgument},
-	Fields:                     []capability.Field{linkedField},
+	Tags:         []string{"github", "projects", "repositories", "link", "planning"},
+	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  json.RawMessage(linkInput),
+	OutputSchema: json.RawMessage(linkedOutput),
+	Arguments:    []capability.Argument{repositoryArgument},
+	Fields:       []capability.Field{linkedField},
 	Examples: []capability.Example{{
 		Description: "Link a project to a repository",
 		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7","repository":"octo-org/example"}`),
@@ -178,16 +173,15 @@ var projectsUnlink = capability.Descriptor{
 	ID:      Provider + ".projects.unlink",
 	Version: 1,
 	Title:   "Unlink a GitHub project from a repository",
-	Description: "Remove the link between one GitHub project an explicit connection allows and one repository " +
+	Description: "Remove the link between one GitHub project a connection allows and one repository " +
 		"it allows; the project and its items stay",
-	Tags:                       []string{"github", "projects", "repositories", "unlink", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(linkInput),
-	OutputSchema:               json.RawMessage(linkedOutput),
-	Arguments:                  []capability.Argument{repositoryArgument},
-	Fields:                     []capability.Field{linkedField},
+	Tags:         []string{"github", "projects", "repositories", "unlink", "planning"},
+	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  json.RawMessage(linkInput),
+	OutputSchema: json.RawMessage(linkedOutput),
+	Arguments:    []capability.Argument{repositoryArgument},
+	Fields:       []capability.Field{linkedField},
 	Examples: []capability.Example{{
 		Description: "Unlink a project from a repository",
 		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7","repository":"octo-org/example"}`),
@@ -210,15 +204,14 @@ var templatesMark = capability.Descriptor{
 	ID:      Provider + ".projecttemplates.mark",
 	Version: 1,
 	Title:   "Mark a GitHub project as a template",
-	Description: "Mark one project of an organization an explicit connection allows as a template, which the " +
+	Description: "Mark one project of an organization a connection allows as a template, which the " +
 		"organization offers when a project is created; GitHub marks no project of a user",
-	Tags:                       []string{"github", "projects", "templates", "update", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	OutputSchema:               json.RawMessage(templateOutput),
-	Fields:                     templateFields,
+	Tags:         []string{"github", "projects", "templates", "update", "planning"},
+	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(templateOutput),
+	Fields:       templateFields,
 	Examples: []capability.Example{{
 		Description: "Offer a project as a template",
 		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7"}`),
@@ -229,15 +222,14 @@ var templatesUnmark = capability.Descriptor{
 	ID:      Provider + ".projecttemplates.unmark",
 	Version: 1,
 	Title:   "Unmark a GitHub project as a template",
-	Description: "Stop offering one project an explicit connection allows as a template; the project itself " +
+	Description: "Stop offering one project a connection allows as a template; the project itself " +
 		"stays unchanged",
-	Tags:                       []string{"github", "projects", "templates", "update", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
-	OutputSchema:               json.RawMessage(templateOutput),
-	Fields:                     templateFields,
+	Tags:         []string{"github", "projects", "templates", "update", "planning"},
+	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(templateOutput),
+	Fields:       templateFields,
 	Examples: []capability.Example{{
 		Description: "Withdraw a template",
 		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7"}`),

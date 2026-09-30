@@ -399,7 +399,7 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 	}
 	for _, descriptor := range operations {
 		risk, ok := want[descriptor.ID]
-		if !ok || descriptor.Risk != risk || !descriptor.RequiresExplicitConnection {
+		if !ok || descriptor.Risk != risk {
 			t.Errorf("%s risk = %+v, want %+v", descriptor.ID, descriptor.Risk, risk)
 		}
 		if descriptor.Risk.Effect != capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationRequired {

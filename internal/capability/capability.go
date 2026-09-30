@@ -90,21 +90,20 @@ type Example struct {
 // RequiresToolAllowList marks a high-risk operation that no connection offers because of its permissions
 // alone: only a connection whose tools list names it does, see config.ToolMetadata.
 type Descriptor struct {
-	ID                         string          `json:"id"`
-	Version                    int             `json:"version"`
-	Title                      string          `json:"title"`
-	Description                string          `json:"description"`
-	Tags                       []string        `json:"tags"`
-	Risk                       Risk            `json:"risk"`
-	Provider                   string          `json:"provider"`
-	RequiresExplicitConnection bool            `json:"requires_explicit_connection"`
-	RequiresToolAllowList      bool            `json:"requires_tool_allow_list"`
-	InputSchema                json.RawMessage `json:"input_schema"`
-	OutputSchema               json.RawMessage `json:"output_schema"`
-	Arguments                  []Argument      `json:"arguments"`
-	Fields                     []Field         `json:"fields"`
-	ImpliedFields              []ImpliedField  `json:"implied_fields,omitempty"`
-	Examples                   []Example       `json:"examples"`
+	ID                    string          `json:"id"`
+	Version               int             `json:"version"`
+	Title                 string          `json:"title"`
+	Description           string          `json:"description"`
+	Tags                  []string        `json:"tags"`
+	Risk                  Risk            `json:"risk"`
+	Provider              string          `json:"provider"`
+	RequiresToolAllowList bool            `json:"requires_tool_allow_list"`
+	InputSchema           json.RawMessage `json:"input_schema"`
+	OutputSchema          json.RawMessage `json:"output_schema"`
+	Arguments             []Argument      `json:"arguments"`
+	Fields                []Field         `json:"fields"`
+	ImpliedFields         []ImpliedField  `json:"implied_fields,omitempty"`
+	Examples              []Example       `json:"examples"`
 }
 
 // Handler is the provider-independent dispatch seam used by the application core. Implementations open

@@ -14,7 +14,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// Sub-issues of an issue of a repository an explicit connection allows: github.subissues.list reads the
+// Sub-issues of an issue of a repository a connection allows: github.subissues.list reads the
 // sub-issues of one issue in their priority order; github.subissues.add and github.subissues.reprioritize
 // change them and need their own confirmation; github.subissues.remove detaches one and needs its own
 // confirmation as well, but, unlike removing a label or a ruleset, touches only the one relationship between
@@ -136,11 +136,10 @@ var subIssuesList = capability.Descriptor{
 		"connection allows, in their priority order; a sub-issue may live in another repository, named in " +
 		"full when it does; when the connection's targets name any, a sub-issue outside them is withheld " +
 		"and counted in withheld instead of being listed",
-	Tags:                       []string{"github", "issues", "subissues", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
+	Tags:        []string{"github", "issues", "subissues", "list"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"sub_issues":{"type":"array","items":` +
 		`{"type":"object","properties":{` + issueRefProperties + `},` + issueRefRequired + `}},` +
 		`"withheld":{"type":"integer"},"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},` +
@@ -163,14 +162,13 @@ var subIssuesAdd = capability.Descriptor{
 	ID:      Provider + ".subissues.add",
 	Version: 1,
 	Title:   "Add a GitHub sub-issue",
-	Description: "Add one issue as a sub-issue of another issue of a repository an explicit connection " +
+	Description: "Add one issue as a sub-issue of another issue of a repository a connection " +
 		"allows; the sub-issue may live in another repository named by sub_issue_repository, which must lie " +
 		"inside the connection's targets as well; refused when it is already a sub-issue of this or another " +
 		"issue, or would create a cycle, so a repeated call changes nothing further",
-	Tags:                       []string{"github", "issues", "subissues", "add"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "subissues", "add"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"sub_issue_number":`+numberSchema+
 		`,"sub_issue_repository":`+repoSchema+`,"replace_parent":{"type":"boolean"}`, "number", "sub_issue_number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +
@@ -198,13 +196,12 @@ var subIssuesRemove = capability.Descriptor{
 	ID:      Provider + ".subissues.remove",
 	Version: 1,
 	Title:   "Remove a GitHub sub-issue",
-	Description: "Detach one sub-issue from its parent issue of a repository an explicit connection allows; " +
+	Description: "Detach one sub-issue from its parent issue of a repository a connection allows; " +
 		"this only removes the relationship and deletes neither issue, so it is not listed-only the way " +
 		"removing a label is",
-	Tags:                       []string{"github", "issues", "subissues", "remove"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "subissues", "remove"},
+	Risk:     changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"sub_issue_number":`+numberSchema+
 		`,"sub_issue_repository":`+repoSchema, "number", "sub_issue_number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +
@@ -232,13 +229,12 @@ var subIssuesReprioritize = capability.Descriptor{
 	ID:      Provider + ".subissues.reprioritize",
 	Version: 1,
 	Title:   "Reorder a GitHub sub-issue",
-	Description: "Move one sub-issue of a repository an explicit connection allows to just after or just " +
+	Description: "Move one sub-issue of a repository a connection allows to just after or just " +
 		"before another sub-issue of the same parent; the reference sub-issue is looked up in the same " +
 		"repository as the sub-issue being moved",
-	Tags:                       []string{"github", "issues", "subissues", "reprioritize"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "subissues", "reprioritize"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"sub_issue_number":`+numberSchema+
 		`,"sub_issue_repository":`+repoSchema+`,"after_number":`+numberSchema+`,"before_number":`+numberSchema,
 		"number", "sub_issue_number"),

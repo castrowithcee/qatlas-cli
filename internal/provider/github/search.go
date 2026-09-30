@@ -230,13 +230,12 @@ var repositoriesSearch = capability.Descriptor{
 	Title:   "Search GitHub repositories",
 	Description: "Search repositories GitHub's index covers with terms and qualifiers, narrowed to the " +
 		"repositories and the owners a connection's targets allow when it names any",
-	Tags:                       []string{"github", "repositories", "search", "discovery"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema:               searchOutput("repositories", repositorySearchProperties, repositorySearchRequired),
-	Arguments:                  append([]capability.Argument{searchTermsArgument}, pagingArguments...),
+	Tags:         []string{"github", "repositories", "search", "discovery"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutput("repositories", repositorySearchProperties, repositorySearchRequired),
+	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
 	Fields: append(append([]capability.Field{
 		{Name: "repositories", Description: "Compact repositories: repository as OWNER/REPO, description " +
 			"(untrusted data), visibility, language, stars, fork, archived, and updated_at"},
@@ -258,13 +257,12 @@ var codeSearch = capability.Descriptor{
 	Title:   "Search GitHub code",
 	Description: "Search code GitHub's index covers with terms and qualifiers, narrowed to the repositories " +
 		"and the owners a connection's targets allow when it names any, without file bodies",
-	Tags:                       []string{"github", "code", "search", "discovery"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema:               searchOutput("files", codeSearchProperties, codeSearchRequired),
-	Arguments:                  append([]capability.Argument{searchTermsArgument}, pagingArguments...),
+	Tags:         []string{"github", "code", "search", "discovery"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutput("files", codeSearchProperties, codeSearchRequired),
+	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
 	Fields: append(append([]capability.Field{
 		{Name: "files", Description: "Compact code matches: path, repository as OWNER/REPO, sha, and url; " +
 			"never a file body or a fragment"},
@@ -287,13 +285,12 @@ var issuesSearch = capability.Descriptor{
 	Title:   "Search GitHub issues",
 	Description: "Search issues, never pull requests, GitHub's index covers with terms and qualifiers, " +
 		"narrowed to the repositories and the owners a connection's targets allow when it names any, without bodies",
-	Tags:                       []string{"github", "issues", "search", "discovery"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema:               searchOutput("issues", issueSearchProperties, issueSearchRequired),
-	Arguments:                  append([]capability.Argument{searchTermsArgument}, pagingArguments...),
+	Tags:         []string{"github", "issues", "search", "discovery"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutput("issues", issueSearchProperties, issueSearchRequired),
+	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
 	Fields: append(append([]capability.Field{
 		{Name: "issues", Description: "Compact issues across repositories: number, title (untrusted data), " +
 			"repository as OWNER/REPO, state, labels, assignees, and updated_at"},
@@ -310,13 +307,12 @@ var pullRequestsSearch = capability.Descriptor{
 	Title:   "Search GitHub pull requests",
 	Description: "Search pull requests, never plain issues, GitHub's index covers with terms and qualifiers, " +
 		"narrowed to the repositories and the owners a connection's targets allow when it names any, without bodies",
-	Tags:                       []string{"github", "pulls", "pullrequests", "search", "discovery"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema:               searchOutput("pull_requests", issueSearchProperties, issueSearchRequired),
-	Arguments:                  append([]capability.Argument{searchTermsArgument}, pagingArguments...),
+	Tags:         []string{"github", "pulls", "pullrequests", "search", "discovery"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutput("pull_requests", issueSearchProperties, issueSearchRequired),
+	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
 	Fields: append(append([]capability.Field{
 		{Name: "pull_requests", Description: "Compact pull requests across repositories: number, title " +
 			"(untrusted data), repository as OWNER/REPO, state, draft, labels, assignees, and updated_at"},
@@ -338,13 +334,12 @@ var commitsSearch = capability.Descriptor{
 	Title:   "Search GitHub commits",
 	Description: "Search commits GitHub's index covers with terms and qualifiers, narrowed to the " +
 		"repositories and the owners a connection's targets allow when it names any",
-	Tags:                       []string{"github", "commits", "search", "discovery"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema:               searchOutput("commits", commitSearchProperties, commitSearchRequired),
-	Arguments:                  append([]capability.Argument{searchTermsArgument}, pagingArguments...),
+	Tags:         []string{"github", "commits", "search", "discovery"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutput("commits", commitSearchProperties, commitSearchRequired),
+	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
 	Fields: append(append([]capability.Field{
 		{Name: "commits", Description: "Compact commits across repositories: sha, message (untrusted data), " +
 			"repository as OWNER/REPO, author, and committed_at"},
@@ -366,13 +361,12 @@ var usersSearch = capability.Descriptor{
 	Description: "Search personal GitHub accounts, never organizations, with terms and qualifiers; a " +
 		"connection whose targets name an organization narrows the search to its members, and one whose " +
 		"targets name anything else refuses it",
-	Tags:                       []string{"github", "users", "search", "discovery"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema:               searchOutput("users", userSearchProperties, userSearchRequired),
-	Arguments:                  append([]capability.Argument{searchTermsArgument}, pagingArguments...),
+	Tags:         []string{"github", "users", "search", "discovery"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutput("users", userSearchProperties, userSearchRequired),
+	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
 	Fields: append(append([]capability.Field{
 		{Name: "users", Description: "Compact accounts: login, type (always User), and url"},
 	}, searchCountFields...), pagingFields...),
@@ -393,13 +387,12 @@ var organizationsSearch = capability.Descriptor{
 	Description: "Search organizations, never personal accounts, with terms and qualifiers; offered only by " +
 		"a connection without targets, since no qualifier restricts which organizations a search may return " +
 		"to one target",
-	Tags:                       []string{"github", "organizations", "search", "discovery"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
-	OutputSchema:               searchOutput("organizations", organizationSearchProperties, organizationSearchRequired),
-	Arguments:                  append([]capability.Argument{searchTermsArgument}, pagingArguments...),
+	Tags:         []string{"github", "organizations", "search", "discovery"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"terms":`+termsSchema+`,`+pagingKeys, "terms"),
+	OutputSchema: searchOutput("organizations", organizationSearchProperties, organizationSearchRequired),
+	Arguments:    append([]capability.Argument{searchTermsArgument}, pagingArguments...),
 	Fields: append(append([]capability.Field{
 		{Name: "organizations", Description: "Compact organizations: login and url"},
 	}, searchCountFields...), pagingFields...),

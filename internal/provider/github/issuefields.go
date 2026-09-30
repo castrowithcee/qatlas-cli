@@ -16,7 +16,7 @@ import (
 // github.rulesets.list applies, except that the organization branch is checked the broad way
 // github.issuetypes.list checks its own owner argument, since organization-wide issue fields are exactly as
 // broad a resource as an organization's issue types. github.issuefields.set writes one or more field values
-// of an issue of a repository an explicit connection allows, by the field and option identifiers
+// of an issue of a repository a connection allows, by the field and option identifiers
 // github.issuefields.list reports; GitHub applies every value of one call as a single mutation, so it either
 // applies as a whole or not at all.
 //
@@ -69,14 +69,13 @@ var issueFieldsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub issue fields",
 	Description: "List one bounded batch of the organization issue fields of a repository, inherited from " +
-		"its organization, or, with organization instead, directly of an organization an explicit connection " +
+		"its organization, or, with organization instead, directly of an organization a connection " +
 		"allows: text, number, date, single-select, and multi-select fields with the options of a select " +
 		"field; exactly one of repository or organization is required",
-	Tags:                       []string{"github", "issues", "issuefields", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"repository":` + repoSchema + `,"organization":` + ownerSchema + `,` + pagingKeys),
+	Tags:        []string{"github", "issues", "issuefields", "list"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"repository":` + repoSchema + `,"organization":` + ownerSchema + `,` + pagingKeys),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"issue_fields":{"type":"array","items":{"type":"object","properties":{` + issueFieldProperties + `},` +
 		issueFieldRequired + `}},"repository":{"type":"string"},"organization":{"type":"string"},` +
@@ -112,13 +111,12 @@ var issueFieldsSet = capability.Descriptor{
 	Version: 1,
 	Title:   "Set GitHub issue field values",
 	Description: "Set or clear text, number, date, single-select, and multi-select organization issue field " +
-		"values on one issue of a repository an explicit connection allows, by field and option identifier, " +
+		"values on one issue of a repository a connection allows, by field and option identifier, " +
 		"as github.issuefields.list reports them; GitHub applies every value of one call as a single mutation",
-	Tags:                       []string{"github", "issues", "issuefields", "set"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema+`,"fields":`+issueFieldValuesSchema, "number", "fields"),
+	Tags:        []string{"github", "issues", "issuefields", "set"},
+	Risk:        changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:    Provider,
+	InputSchema: inputSchema(`"number":`+numberSchema+`,"fields":`+issueFieldValuesSchema, "number", "fields"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +
 		`"url":{"type":"string"},"updated":{"type":"integer"}},` +
 		`"required":["number","updated"],"additionalProperties":false}`),

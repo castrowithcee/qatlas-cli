@@ -46,12 +46,11 @@ var teamsList = capability.Descriptor{
 	ID:      Provider + ".projectteams.list",
 	Version: 1,
 	Title:   "List the teams of a GitHub project",
-	Description: "Read one bounded batch of the teams one GitHub project an explicit connection allows is " +
+	Description: "Read one bounded batch of the teams one GitHub project a connection allows is " +
 		"linked to, in name order, with slug and name",
-	Tags:                       []string{"github", "projects", "teams", "access", "list", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "teams", "access", "list", "planning"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":1,` +
 		`"maximum":100},"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"teams":{"type":"array","items":{` +
@@ -78,14 +77,13 @@ var collaboratorsUpdate = capability.Descriptor{
 	ID:      Provider + ".projectcollaborators.update",
 	Version: 1,
 	Title:   "Change the collaborators of a GitHub project",
-	Description: "Grant users or teams a role on one GitHub project an explicit connection allows, change it, " +
+	Description: "Grant users or teams a role on one GitHub project a connection allows, change it, " +
 		"or remove their direct access; this changes who may read, edit, or manage the project. Offered only " +
 		"by a connection whose tools list names it",
-	Tags:                       []string{"github", "projects", "collaborators", "access", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "projects", "collaborators", "access", "update"},
+	Risk:                  changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"collaborators":` + collaboratorsSchema + `},` +
 		`"required":["collaborators"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(collaboratorsOutput),
@@ -108,16 +106,15 @@ var teamsLink = capability.Descriptor{
 	ID:      Provider + ".projects.linkteam",
 	Version: 1,
 	Title:   "Link a GitHub project to a team",
-	Description: "Link one project of an organization an explicit connection allows to a team of that " +
+	Description: "Link one project of an organization a connection allows to a team of that " +
 		"organization, which grants the team read access to the project. Offered only by a connection whose " +
 		"tools list names it",
-	Tags:                       []string{"github", "projects", "teams", "access", "link"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                json.RawMessage(teamInput),
-	OutputSchema:               json.RawMessage(teamOutput),
+	Tags:                  []string{"github", "projects", "teams", "access", "link"},
+	Risk:                  changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           json.RawMessage(teamInput),
+	OutputSchema:          json.RawMessage(teamOutput),
 	Arguments: []capability.Argument{{Name: "team", Description: "Slug of a team of the organization that " +
 		"owns the project", Required: true}},
 	Fields: []capability.Field{
@@ -134,18 +131,17 @@ var teamsUnlink = capability.Descriptor{
 	ID:      Provider + ".projects.unlinkteam",
 	Version: 1,
 	Title:   "Unlink a GitHub project from a team",
-	Description: "Remove the link between one project of an organization an explicit connection allows and a " +
+	Description: "Remove the link between one project of an organization a connection allows and a " +
 		"team of that organization, with the read access it granted. Offered only by a connection whose tools " +
 		"list names it",
-	Tags:                       []string{"github", "projects", "teams", "access", "unlink"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                json.RawMessage(teamInput),
-	OutputSchema:               json.RawMessage(teamOutput),
-	Arguments:                  teamsLink.Arguments,
-	Fields:                     teamsLink.Fields,
+	Tags:                  []string{"github", "projects", "teams", "access", "unlink"},
+	Risk:                  changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           json.RawMessage(teamInput),
+	OutputSchema:          json.RawMessage(teamOutput),
+	Arguments:             teamsLink.Arguments,
+	Fields:                teamsLink.Fields,
 	Examples: []capability.Example{{
 		Description: "Unlink a project from a team",
 		Arguments:   json.RawMessage(`{"project":"orgs/octo-org/projects/7","team":"design"}`),

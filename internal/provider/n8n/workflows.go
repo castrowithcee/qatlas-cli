@@ -80,10 +80,9 @@ var workflowsList = capability.Descriptor{
 	Title:   "List n8n workflows",
 	Description: "List the workflows of the bound n8n instance, restricted to its project and workflow " +
 		"allow-lists when it has them; page by page with an opaque cursor",
-	Tags:                       []string{"n8n", "workflows", "list", "automation"},
-	Risk:                       n8nReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"n8n", "workflows", "list", "automation"},
+	Risk:     n8nReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
@@ -129,10 +128,9 @@ var workflowsGet = capability.Descriptor{
 	Title:   "Get an n8n workflow",
 	Description: "Read one workflow of the bound n8n instance, including its nodes and their connections; " +
 		"never a credential's value, only the id and name n8n itself attaches to a node",
-	Tags:                       []string{"n8n", "workflows", "get", "automation"},
-	Risk:                       n8nReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"n8n", "workflows", "get", "automation"},
+	Risk:     n8nReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"workflow_id":` + targetIDSchema + `},` +
 		`"required":["workflow_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(workflowDetailSchema),
@@ -675,10 +673,9 @@ var workflowsCreate = capability.Descriptor{
 	Description: "Create one workflow of the bound n8n instance from its name, nodes, connections, and " +
 		"settings; a repeated call creates a second workflow. There is no tool to start the created workflow: " +
 		"the Public API documents no endpoint for that",
-	Tags:                       []string{"n8n", "workflows", "create", "automation"},
-	Risk:                       n8nChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"n8n", "workflows", "create", "automation"},
+	Risk:     n8nChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + workflowWriteInputProperties + `,` +
 		`"project_id":` + targetIDSchema + `},"required":["name","nodes","connections","settings"],` +
 		`"additionalProperties":false}`),
@@ -775,10 +772,9 @@ var workflowsUpdate = capability.Descriptor{
 	Description: "Replace one workflow's name, nodes, connections, and settings of the bound n8n instance " +
 		"with a full PUT, exactly as n8n's own updateWorkflow endpoint is: fields left out are not kept, they " +
 		"are cleared. Never changes the active state; workflows.activate and workflows.deactivate own that",
-	Tags:                       []string{"n8n", "workflows", "update", "automation"},
-	Risk:                       n8nChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"n8n", "workflows", "update", "automation"},
+	Risk:     n8nChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"workflow_id":` + targetIDSchema + `,` +
 		workflowWriteInputProperties + `,"publish_if_active":{"type":"boolean"}},` +
 		`"required":["workflow_id","name","nodes","connections","settings"],"additionalProperties":false}`),
@@ -864,14 +860,13 @@ func (c *Client) UpdateWorkflow(ctx context.Context, workflowID string, body map
 // take only workflow_id and answer the same re-read WorkflowDetail workflows.get would.
 func workflowActivationDescriptor(action, title, description string) capability.Descriptor {
 	return capability.Descriptor{
-		ID:                         Provider + ".workflows." + action,
-		Version:                    1,
-		Title:                      title,
-		Description:                description,
-		Tags:                       []string{"n8n", "workflows", action, "automation"},
-		Risk:                       n8nChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		Provider:                   Provider,
-		RequiresExplicitConnection: true,
+		ID:          Provider + ".workflows." + action,
+		Version:     1,
+		Title:       title,
+		Description: description,
+		Tags:        []string{"n8n", "workflows", action, "automation"},
+		Risk:        n8nChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		Provider:    Provider,
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"workflow_id":` + targetIDSchema + `},` +
 			`"required":["workflow_id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(workflowDetailSchema),

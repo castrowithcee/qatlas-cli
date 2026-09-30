@@ -301,8 +301,8 @@ func TestMCPBrokerArgumentErrorsNameTheField(t *testing.T) {
 	}
 }
 
-// A tool that requires an explicit connection is refused without one over the tool CLI and the MCP broker
-// alike, and both name the routes that offer it as the same detail.
+// Several connections without a default are refused over the tool CLI and the MCP broker alike, and both
+// name the routes that offer the tool as the same detail.
 func TestConnectionSelectionNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
@@ -314,7 +314,6 @@ func TestConnectionSelectionNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	if err := registry.Register("fake", capability.Operation{
 		Descriptor: capability.Descriptor{
 			ID: "fake.pages.get", Version: 1, Description: "Read a fake page", Provider: "fake",
-			RequiresExplicitConnection: true,
 			Risk: capability.Risk{
 				Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 				Confirmation: capability.ConfirmationNone, DataSensitivity: "test",
@@ -353,7 +352,7 @@ defaults: {}
 	code := run(newRootCommand(options, registry), options,
 		[]string{"invoke", "fake.pages.get", "--config", path}, &stdout, &stderr)
 	lines := strings.Split(stderr.String(), "\n")
-	if code != exitUsage || len(lines) < 2 || !strings.HasPrefix(lines[0], "qatlas: connection-selection: ") {
+	if code != exitUsage || len(lines) < 2 || !strings.HasPrefix(lines[0], "qatlas: connection-ambiguous: ") {
 		t.Fatalf("exit=%d stderr=%q", code, stderr.String())
 	}
 
@@ -361,15 +360,15 @@ defaults: {}
 		`,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","arguments":{}}}}` + "\n"
 	responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 	invoke := toolResultFrom(t, responses["1"])
-	if !invoke.IsError || !strings.HasPrefix(invoke.Content[0].Text, "connection-selection: ") {
+	if !invoke.IsError || !strings.HasPrefix(invoke.Content[0].Text, "connection-ambiguous: ") {
 		t.Fatalf("invoke = %+v", invoke)
 	}
 	if !jsonEqual([]byte(lines[1]), invoke.Structured) {
 		t.Fatalf("CLI detail = %s, MCP detail = %s", lines[1], invoke.Structured)
 	}
 	// A client that shows only the text still learns the candidates, and both routes say the same.
-	wantText := `connection-selection: tool "fake.pages.get" requires an explicit connection in this invoke ` +
-		`request; the connections that offer it: primary (team pages), secondary`
+	wantText := `connection-ambiguous: tool "fake.pages.get" has multiple matching connections: ` +
+		`primary (team pages), secondary`
 	if invoke.Content[0].Text != wantText || lines[0] != "qatlas: "+wantText {
 		t.Fatalf("CLI text = %q, MCP text = %q, want %q", lines[0], invoke.Content[0].Text, wantText)
 	}
@@ -380,7 +379,7 @@ defaults: {}
 	}
 	decodeRaw(t, invoke.Structured, &detail)
 	want := []application.ConnectionRef{{Name: "primary", Description: "team pages"}, {Name: "secondary"}}
-	if detail.Code != string(output.CodeConnectionSelection) || detail.Operation != "fake.pages.get" ||
+	if detail.Code != string(output.CodeConnectionAmbiguous) || detail.Operation != "fake.pages.get" ||
 		!reflect.DeepEqual(detail.Connections, want) {
 		t.Fatalf("detail = %+v, want the candidates %+v", detail, want)
 	}
@@ -828,7 +827,6 @@ func mcpSendRegistry(t *testing.T) (*capability.Registry, string) {
 	}
 	descriptor := capability.Descriptor{
 		ID: "fake.messages.send", Version: 1, Description: "Send a fake message", Provider: "fake",
-		RequiresExplicitConnection: true,
 		Risk: capability.Risk{
 			Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: "message",

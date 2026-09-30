@@ -69,12 +69,11 @@ var discussionCategoriesList = capability.Descriptor{
 	ID:      Provider + ".discussioncategories.list",
 	Version: 1,
 	Title:   "List GitHub discussion categories",
-	Description: "List one bounded batch of the discussion categories of a repository an explicit connection " +
+	Description: "List one bounded batch of the discussion categories of a repository a connection " +
 		"allows: id, name, slug, description, emoji, and whether answers can be chosen",
-	Tags:                       []string{"github", "discussions", "categories", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "discussions", "categories", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"limit":` + discussionLimitSchema +
 		`,"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"categories":{"type":"array","items":` +
@@ -99,13 +98,12 @@ var discussionsList = capability.Descriptor{
 	ID:      Provider + ".discussions.list",
 	Version: 1,
 	Title:   "List GitHub discussions",
-	Description: "List one bounded batch of the discussions of a repository an explicit connection allows, " +
+	Description: "List one bounded batch of the discussions of a repository a connection allows, " +
 		"filtered by category, state, and answered status, ordered by creation or update time; bodies are " +
 		"shortened",
-	Tags:                       []string{"github", "discussions", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "discussions", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"category":` + discussionIDSchema + `,` +
 		`"state":{"type":"string","enum":["open","closed"]},"answered":{"type":"boolean"},` +
 		`"order_by":{"type":"string","enum":["created_at","updated_at"]},` +
@@ -142,12 +140,11 @@ var discussionsGet = capability.Descriptor{
 	ID:      Provider + ".discussions.get",
 	Version: 1,
 	Title:   "Get a GitHub discussion",
-	Description: "Read one discussion of a repository an explicit connection allows by its number, with its " +
+	Description: "Read one discussion of a repository a connection allows by its number, with its " +
 		"body; comments are read by github.discussioncomments.list",
-	Tags:                       []string{"github", "discussions", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "discussions", "get"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `},` +
 		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"discussion":{"type":"object",` +
@@ -170,12 +167,11 @@ var discussionCommentsList = capability.Descriptor{
 	ID:      Provider + ".discussioncomments.list",
 	Version: 1,
 	Title:   "List comments of a GitHub discussion",
-	Description: "List one bounded batch of the top-level comments of one discussion of a repository an " +
-		"explicit connection allows, oldest first; replies are counted, and listed with include_replies",
-	Tags:                       []string{"github", "discussions", "comments", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Description: "List one bounded batch of the top-level comments of one discussion of a repository a " +
+		"connection allows, oldest first; replies are counted, and listed with include_replies",
+	Tags:     []string{"github", "discussions", "comments", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
 		`"include_replies":{"type":"boolean"},` +
 		`"limit":` + discussionLimitSchema + `,"cursor":` + cursorSchema + `},` +

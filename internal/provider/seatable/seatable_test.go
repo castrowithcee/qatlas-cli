@@ -230,9 +230,8 @@ func TestRegisterPublishesMetadataAndSevenOperations(t *testing.T) {
 			wantSensitivity = schemaSensitivity
 		}
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
-			!descriptor.RequiresExplicitConnection ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != wantSensitivity {
-			t.Errorf("descriptor %s = %+v, want a bounded operation requiring an explicit connection",
+			t.Errorf("descriptor %s = %+v, want a bounded operation",
 				descriptor.ID, descriptor)
 		}
 		if descriptor.Risk.Effect == capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationNone {

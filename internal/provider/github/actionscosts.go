@@ -29,16 +29,15 @@ var runsUsage = capability.Descriptor{
 	ID:      Provider + ".workflowruns.usage",
 	Version: 1,
 	Title:   "Get the billable time of a GitHub Actions run",
-	Description: "Read the billable time of one workflow run of a repository an explicit connection allows, " +
+	Description: "Read the billable time of one workflow run of a repository a connection allows, " +
 		"in milliseconds for each GitHub-hosted runner operating system, re-runs included, without the " +
 		"multiplier of macOS and Windows runners; GitHub is closing this endpoint down",
-	Tags:                       []string{"github", "actions", "runs", "usage", "billing", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
-	OutputSchema:               json.RawMessage(usageOutput),
-	Arguments:                  []capability.Argument{{Name: "run_id", Description: "Workflow run identifier", Required: true}},
+	Tags:         []string{"github", "actions", "runs", "usage", "billing", "get"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
+	OutputSchema: json.RawMessage(usageOutput),
+	Arguments:    []capability.Argument{{Name: "run_id", Description: "Workflow run identifier", Required: true}},
 	Fields: []capability.Field{
 		{Name: "run_duration_ms", Description: "Duration of the whole run in milliseconds, absent when GitHub gives none"},
 		{Name: "billable", Description: "Entries for UBUNTU, MACOS, and WINDOWS that GitHub reports: os, total_ms, " +
@@ -52,15 +51,14 @@ var runLogsDelete = capability.Descriptor{
 	ID:      Provider + ".workflowrunlogs.delete",
 	Version: 1,
 	Title:   "Delete the logs of a GitHub Actions run",
-	Description: "Delete all logs of one workflow run of a repository an explicit connection allows; the logs " +
+	Description: "Delete all logs of one workflow run of a repository a connection allows; the logs " +
 		"cannot be restored. A run whose logs are already gone counts as done. Offered only by a connection " +
 		"whose tools list names it",
-	Tags:                       []string{"github", "actions", "runs", "logs", "delete"},
-	Risk:                       guardedRisk(capability.EffectDelete, capability.IdempotencyIdempotent, logSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
+	Tags:                  []string{"github", "actions", "runs", "logs", "delete"},
+	Risk:                  guardedRisk(capability.EffectDelete, capability.IdempotencyIdempotent, logSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           inputSchema(`"run_id":`+actionsIDSchema, "run_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"run_id":{"type":"integer"},` +
 		`"deleted":{"type":"boolean"},"already_deleted":{"type":"boolean"}},` +
 		`"required":["run_id","deleted","already_deleted"],"additionalProperties":false}`),

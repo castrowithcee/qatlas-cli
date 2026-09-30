@@ -37,7 +37,7 @@
 // type, and plan of the account behind the connection's token; it and the star list, which reads the
 // account's starred repositories, name no repository, project, or owner and are offered only by a connection
 // whose targets name neither a repository nor a project. The star tools also star and unstar one repository
-// an explicit connection allows. The organization tools read the teams of an organization and the members of
+// a connection allows. The organization tools read the teams of an organization and the members of
 // one of its teams, an organization the connection's targets must allow as an owner. The repository tools
 // read the contents of a file or a directory, the Git tree of a ref, through GraphQL the blame of a file
 // over a bounded line range, the commits of a repository or one commit with its stats and changed files, and
@@ -49,7 +49,7 @@
 // branch that moved since it was read is refused with nothing written; none of the four ever touches a path
 // below .github/workflows/, which the listed-only workflow maintainer covers instead. github.repositories.
 // create makes one new repository, under the token's own account or an organization the connection names as
-// an owner target; github.repositories.fork forks a repository an explicit connection allows the same way,
+// an owner target; github.repositories.fork forks a repository a connection allows the same way,
 // answered asynchronously; only on a connection whose tools list names it, github.repositories.delete deletes
 // one repository permanently, once confirm_name repeats its owner/name exactly. github.collaborators.list
 // reads the collaborators of a repository with their login, account type, role, and permissions, never an
@@ -252,11 +252,10 @@ var itemsList = capability.Descriptor{
 	Version: 2,
 	Title:   "List GitHub project items",
 	Description: "List one bounded, server-side filtered batch of compact items of " +
-		"a GitHub project an explicit connection allows; without a status filter only items whose status is not Done are listed",
-	Tags:                       []string{"github", "projects", "items", "list", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"a GitHub project a connection allows; without a status filter only items whose status is not Done are listed",
+	Tags:     []string{"github", "projects", "items", "list", "planning"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"status":` + filterListSchema + `,"status_not":` + filterListSchema + `,` +
 		`"type":{"type":"string","enum":["issue","pull_request","draft_issue"]},` +
@@ -301,12 +300,11 @@ var itemsGet = capability.Descriptor{
 	ID:      Provider + ".projectitems.get",
 	Version: 1,
 	Title:   "Get a GitHub project item",
-	Description: "Read one item of a GitHub project an explicit connection allows with its project fields " +
+	Description: "Read one item of a GitHub project a connection allows with its project fields " +
 		"and, for an issue or a draft issue, its full body, without comments",
-	Tags:                       []string{"github", "projects", "items", "get", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "items", "get", "planning"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"item_id":{"type":"string","minLength":4,"maxLength":200,"pattern":"` + nodeIDPattern + `"}},` +
 		`"required":["item_id"],"additionalProperties":false}`),
@@ -342,12 +340,11 @@ var issuesList = capability.Descriptor{
 	ID:      Provider + ".issues.list",
 	Version: 2,
 	Title:   "List GitHub issues",
-	Description: "List one bounded batch of compact issues of a repository an explicit connection allows, " +
+	Description: "List one bounded batch of compact issues of a repository a connection allows, " +
 		"newest first, without bodies, comments, or pull requests",
-	Tags:                       []string{"github", "issues", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"state":{"type":"string","enum":["open","closed","all"]},` +
 		`"labels":` + filterListSchema + `,` +
@@ -382,14 +379,13 @@ var issuesList = capability.Descriptor{
 }
 
 var issuesGet = capability.Descriptor{
-	ID:                         Provider + ".issues.get",
-	Version:                    1,
-	Title:                      "Get a GitHub issue",
-	Description:                "Read one issue of a repository an explicit connection allows with its full body, without comments",
-	Tags:                       []string{"github", "issues", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	ID:          Provider + ".issues.get",
+	Version:     1,
+	Title:       "Get a GitHub issue",
+	Description: "Read one issue of a repository a connection allows with its full body, without comments",
+	Tags:        []string{"github", "issues", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"number":{"type":"integer","minimum":1,"maximum":1000000000}},` +
 		`"required":["number"],"additionalProperties":false}`),

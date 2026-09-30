@@ -124,9 +124,9 @@ func TestHelpTopicsNameWhatExists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(agents, "requires_explicit_connection") ||
-		!strings.Contains(string(contract), `"requires_explicit_connection"`) {
-		t.Errorf("the agents topic names a contract field the contract does not have")
+	if strings.Contains(agents, "requires_explicit_connection") ||
+		strings.Contains(string(contract), "requires_explicit_connection") {
+		t.Errorf("the contract or the agents topic still names requires_explicit_connection")
 	}
 	for _, want := range []string{"AGENTS.md", "CLAUDE.md", "<name>", "Exit code 0", "Exit code 2", "Exit code 1",
 		`--arg 'labels=["bug"]'`, "on stdin"} {

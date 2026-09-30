@@ -120,12 +120,11 @@ var rulesetsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub rulesets",
 	Description: "List one bounded batch of the rulesets of a repository or, with organization instead, an " +
-		"organization an explicit connection allows, compactly: identifier, name, target, enforcement, and " +
+		"organization a connection allows, compactly: identifier, name, target, enforcement, and " +
 		"source; exactly one of repository or organization is required",
-	Tags:                       []string{"github", "rulesets", "governance", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "rulesets", "governance", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"repository":` + repoSchema + `,"organization":` + ownerSchema +
 		`,"includes_parents":{"type":"boolean"},` + pagingKeys),
 	OutputSchema: json.RawMessage(rulesetListOutput),
@@ -154,10 +153,9 @@ var rulesetsGet = capability.Descriptor{
 	Description: "Read one ruleset of a repository or, with organization instead, an organization an explicit " +
 		"connection allows, with its conditions, rules, and bypass actors; exactly one of repository or " +
 		"organization is required",
-	Tags:                       []string{"github", "rulesets", "governance", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "rulesets", "governance", "get"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"repository":`+repoSchema+`,"organization":`+ownerSchema+`,"id":`+rulesetIDSchema,
 		"id"),
 	OutputSchema: json.RawMessage(rulesetOutput),
@@ -176,14 +174,13 @@ var rulesetsCreate = capability.Descriptor{
 	ID:      Provider + ".rulesets.create",
 	Version: 1,
 	Title:   "Create a GitHub ruleset",
-	Description: "Create one new ruleset in a repository or, with organization instead, an organization an " +
-		"explicit connection allows; exactly one of repository or organization is required; not idempotent, " +
+	Description: "Create one new ruleset in a repository or, with organization instead, an organization a " +
+		"connection allows; exactly one of repository or organization is required; not idempotent, " +
 		"since a repeated call creates a second ruleset; offered only where a connection's tools list names it",
-	Tags:                       []string{"github", "rulesets", "governance", "create"},
-	Risk:                       guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent, rulesetSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "rulesets", "governance", "create"},
+	Risk:                  guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent, rulesetSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: inputSchema(`"repository":`+repoSchema+`,"organization":`+ownerSchema+`,"name":`+rulesetNameSchema+
 		`,"target":`+rulesetTargetSchema+`,"enforcement":`+rulesetEnforcementSchema+`,"conditions":`+
 		rulesetConditionsSchema+`,"rules":`+rulesetRulesSchema+`,"bypass_actors":`+rulesetBypassActorsSchema,
@@ -204,16 +201,15 @@ var rulesetsUpdate = capability.Descriptor{
 	ID:      Provider + ".rulesets.update",
 	Version: 1,
 	Title:   "Update a GitHub ruleset",
-	Description: "Replace one ruleset of a repository or, with organization instead, an organization an " +
-		"explicit connection allows, as a whole: name, target, enforcement, conditions, rules, and bypass " +
+	Description: "Replace one ruleset of a repository or, with organization instead, an organization a " +
+		"connection allows, as a whole: name, target, enforcement, conditions, rules, and bypass " +
 		"actors all set to the given values, since GitHub replaces a ruleset together; exactly one of " +
 		"repository or organization is required; idempotent, since sending the same definition again leaves " +
 		"GitHub in the same state; offered only where a connection's tools list names it",
-	Tags:                       []string{"github", "rulesets", "governance", "update"},
-	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, rulesetSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "rulesets", "governance", "update"},
+	Risk:                  guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, rulesetSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: inputSchema(`"repository":`+repoSchema+`,"organization":`+ownerSchema+`,"id":`+rulesetIDSchema+
 		`,"name":`+rulesetNameSchema+`,"target":`+rulesetTargetSchema+`,"enforcement":`+rulesetEnforcementSchema+
 		`,"conditions":`+rulesetConditionsSchema+`,"rules":`+rulesetRulesSchema+`,"bypass_actors":`+
@@ -237,14 +233,13 @@ var rulesetsDelete = capability.Descriptor{
 	ID:      Provider + ".rulesets.delete",
 	Version: 1,
 	Title:   "Delete a GitHub ruleset",
-	Description: "Delete one ruleset of a repository or, with organization instead, an organization an " +
-		"explicit connection allows permanently; exactly one of repository or organization is required; " +
+	Description: "Delete one ruleset of a repository or, with organization instead, an organization a " +
+		"connection allows permanently; exactly one of repository or organization is required; " +
 		"offered only where a connection's tools list names it",
-	Tags:                       []string{"github", "rulesets", "governance", "delete"},
-	Risk:                       guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, rulesetSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "rulesets", "governance", "delete"},
+	Risk:                  guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, rulesetSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: inputSchema(`"repository":`+repoSchema+`,"organization":`+ownerSchema+`,"id":`+rulesetIDSchema,
 		"id"),
 	OutputSchema: json.RawMessage(rulesetDeletedOutput),

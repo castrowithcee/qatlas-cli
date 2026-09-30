@@ -98,10 +98,9 @@ var notificationsList = capability.Descriptor{
 		"token, unread ones unless include_read is set; needs a classic token; with a repository " +
 		"only that repository's threads; a connection whose targets name repositories needs repository, one " +
 		"whose targets name only owners lists just the threads of those owners",
-	Tags:                       []string{"github", "notifications", "inbox", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "notifications", "inbox", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"include_read":{"type":"boolean"},"participating":{"type":"boolean"},` +
 		`"since":` + timeSchema + `,"before":` + timeSchema + `,"repository":` + repoSchema + `,` + notificationKeys),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"notifications":{"type":"array","items":` +
@@ -134,11 +133,10 @@ var notificationsGet = capability.Descriptor{
 	Title:   "Get a GitHub notification",
 	Description: "Read one notification thread by its id; needs a classic token; a thread of a repository " +
 		"outside the connection's targets is refused",
-	Tags:                       []string{"github", "notifications", "inbox", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"thread_id":`+threadIDSchema, "thread_id"),
+	Tags:        []string{"github", "notifications", "inbox", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"thread_id":`+threadIDSchema, "thread_id"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + notificationProperties + `},` +
 		notificationRequired + `}`),
 	Arguments: []capability.Argument{
@@ -157,10 +155,9 @@ var notificationsDismiss = capability.Descriptor{
 	Title:   "Dismiss a GitHub notification",
 	Description: "Mark one notification thread read, or done so it leaves the inbox; the thread is read first " +
 		"and a thread of a repository outside the connection's targets is refused; needs a classic token",
-	Tags:                       []string{"github", "notifications", "inbox", "dismiss"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "notifications", "inbox", "dismiss"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
+	Provider: Provider,
 	InputSchema: inputSchema(`"thread_id":`+threadIDSchema+`,"state":{"type":"string","enum":["read","done"]}`,
 		"thread_id", "state"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"thread_id":{"type":"string"},` +
@@ -188,12 +185,11 @@ var notificationsMarkAll = capability.Descriptor{
 	Description: "Mark every notification thread of the account, or of one repository, read, optionally only " +
 		"those last read before a time; offered only where a connection's tools list names it; without a " +
 		"repository only a connection without targets may mark the whole account",
-	Tags:                       []string{"github", "notifications", "inbox", "markall"},
-	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyUnknown, notificationSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                inputSchema(`"repository":` + repoSchema + `,"last_read_at":` + timeSchema),
+	Tags:                  []string{"github", "notifications", "inbox", "markall"},
+	Risk:                  guardedRisk(capability.EffectUpdate, capability.IdempotencyUnknown, notificationSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           inputSchema(`"repository":` + repoSchema + `,"last_read_at":` + timeSchema),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"marked":{"type":"boolean"},` +
 		`"queued":{"type":"boolean"},"repository":{"type":"string"}},"required":["marked","queued"],` +
 		`"additionalProperties":false}`),
@@ -224,10 +220,9 @@ var threadSubscriptionsSet = capability.Descriptor{
 	Description: "Subscribe to one notification thread (watch), mute it (ignore), or remove the subscription " +
 		"(delete); the thread is read first and a thread of a repository outside the connection's targets is " +
 		"refused; needs a classic token",
-	Tags:                       []string{"github", "notifications", "subscriptions", "thread"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "notifications", "subscriptions", "thread"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
+	Provider: Provider,
 	InputSchema: inputSchema(`"thread_id":`+threadIDSchema+`,"action":{"type":"string",`+subscriptionActions+`}`,
 		"thread_id", "action"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"thread_id":{"type":"string"},` +
@@ -256,13 +251,12 @@ var repositorySubscriptionsSet = capability.Descriptor{
 	ID:      Provider + ".repositorysubscriptions.set",
 	Version: 1,
 	Title:   "Set a GitHub repository subscription",
-	Description: "Watch a repository an explicit connection allows, ignore all its notifications, or remove the " +
+	Description: "Watch a repository a connection allows, ignore all its notifications, or remove the " +
 		"subscription (delete) for the account behind the token",
-	Tags:                       []string{"github", "notifications", "subscriptions", "repository"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"action":{"type":"string",`+subscriptionActions+`}`, "action"),
+	Tags:        []string{"github", "notifications", "subscriptions", "repository"},
+	Risk:        changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
+	Provider:    Provider,
+	InputSchema: inputSchema(`"action":{"type":"string",`+subscriptionActions+`}`, "action"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"action":{"type":"string"},` +
 		`"subscribed":{"type":"boolean"},"ignored":{"type":"boolean"}},` +
 		`"required":["action","subscribed","ignored"],"additionalProperties":false}`),

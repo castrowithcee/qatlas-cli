@@ -35,12 +35,11 @@ var pullRequestReviewersRequest = capability.Descriptor{
 	Version: 1,
 	Title:   "Request GitHub pull request reviewers",
 	Description: "Request the given users, teams, or both as reviewers of one pull request of a repository " +
-		"an explicit connection allows; a reviewer already requested, or the pull request's author, is left " +
+		"a connection allows; a reviewer already requested, or the pull request's author, is left " +
 		"as it is",
-	Tags:                       []string{"github", "pulls", "pullrequests", "reviewers", "request"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "pulls", "pullrequests", "reviewers", "request"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"reviewers":`+reviewersSchema+`,"team_reviewers":`+
 		teamReviewersSchema, "number"),
 	OutputSchema: pullsGet.OutputSchema,
@@ -57,11 +56,10 @@ var pullRequestReviewersRemove = capability.Descriptor{
 	Version: 1,
 	Title:   "Remove GitHub pull request reviewers",
 	Description: "Remove the given users, teams, or both from the requested reviewers of one pull request " +
-		"of a repository an explicit connection allows; a reviewer not requested is left as it is",
-	Tags:                       []string{"github", "pulls", "pullrequests", "reviewers", "remove"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"of a repository a connection allows; a reviewer not requested is left as it is",
+	Tags:     []string{"github", "pulls", "pullrequests", "reviewers", "remove"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"reviewers":`+reviewersSchema+`,"team_reviewers":`+
 		teamReviewersSchema, "number"),
 	OutputSchema: pullsGet.OutputSchema,

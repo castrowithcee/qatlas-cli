@@ -48,15 +48,14 @@ var branchesCreate = capability.Descriptor{
 	ID:      Provider + ".branches.create",
 	Version: 1,
 	Title:   "Create a GitHub branch",
-	Description: "Create one new branch of a repository an explicit connection allows from a branch, a tag, " +
+	Description: "Create one new branch of a repository a connection allows from a branch, a tag, " +
 		"or a commit SHA, or, when from is left out, the repository's default branch; a branch name already " +
 		"taken is refused with a clear message instead of a second attempt",
-	Tags:                       []string{"github", "branches", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"name":`+refSchema+`,"from":`+refSchema, "name"),
-	OutputSchema:               json.RawMessage(branchCreatedOutput),
+	Tags:         []string{"github", "branches", "create"},
+	Risk:         changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"name":`+refSchema+`,"from":`+refSchema, "name"),
+	OutputSchema: json.RawMessage(branchCreatedOutput),
 	Arguments: []capability.Argument{
 		{Name: "name", Description: "Name of the new branch", Required: true},
 		{Name: "from", Description: "Branch, tag, or commit SHA the new branch starts at; the repository's " +
@@ -87,13 +86,12 @@ var contentsPut = capability.Descriptor{
 	Version: 1,
 	Title:   "Create or update a GitHub repository file",
 	Description: "Create one new file, or, while sha names its current blob, update an existing one, of a " +
-		"repository an explicit connection allows; content is written as UTF-8 text and never below " +
+		"repository a connection allows; content is written as UTF-8 text and never below " +
 		".github/workflows/, which the workflow file tools maintain instead; not idempotent, since a repeated " +
 		"call without the file's new sha is refused",
-	Tags:                       []string{"github", "contents", "put"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "contents", "put"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"path":`+contentsPathSchema+`,"content":`+workflowTextSchema+`,"message":`+
 		commitMessageSchema+`,"sha":`+blobSHASchema+`,"branch":`+refSchema, "path", "content", "message"),
 	OutputSchema: json.RawMessage(contentsPutOutput),
@@ -126,14 +124,13 @@ var contentsDelete = capability.Descriptor{
 	ID:      Provider + ".contents.delete",
 	Version: 1,
 	Title:   "Delete a GitHub repository file",
-	Description: "Delete one file of a repository an explicit connection allows, with its current blob sha; " +
+	Description: "Delete one file of a repository a connection allows, with its current blob sha; " +
 		"never below .github/workflows/, which has no delete tool of its own; offered only where a connection's " +
 		"tools list names it, because deleting a file the wrong branch relied on cannot be undone",
-	Tags:                       []string{"github", "contents", "delete"},
-	Risk:                       guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, dataSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "contents", "delete"},
+	Risk:                  guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, dataSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: inputSchema(`"path":`+contentsPathSchema+`,"sha":`+blobSHASchema+`,"message":`+commitMessageSchema+
 		`,"branch":`+refSchema, "path", "sha", "message"),
 	OutputSchema: json.RawMessage(contentsDeletedOutput),
@@ -180,18 +177,17 @@ var filesPush = capability.Descriptor{
 	ID:      Provider + ".files.push",
 	Version: 1,
 	Title:   "Push several GitHub repository files as one commit",
-	Description: "Write several files of a repository an explicit connection allows as one commit on an " +
+	Description: "Write several files of a repository a connection allows as one commit on an " +
 		"existing branch, through the Git Data API: reads the branch's current head and tree, creates a blob " +
 		"per file and one new tree, creates one commit with the read head as its only parent, and moves the " +
 		"branch to it with a fast-forward-only update, refused with nothing written when the branch moved " +
 		"since the read; content is written as UTF-8 text and never below .github/workflows/, which the " +
 		"workflow file tools maintain instead; offered only where a connection's tools list names it, since " +
 		"several files land in one commit that cannot be undone by halves",
-	Tags:                       []string{"github", "files", "contents", "push", "commit"},
-	Risk:                       guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent, dataSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "files", "contents", "push", "commit"},
+	Risk:                  guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent, dataSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: inputSchema(`"branch":`+refSchema+`,"message":`+commitMessageSchema+`,"files":`+
 		filesPushFilesSchema+`,"expected_head_sha":`+blobSHASchema, "branch", "message", "files"),
 	OutputSchema: json.RawMessage(filesPushOutput),

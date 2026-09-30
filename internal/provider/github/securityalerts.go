@@ -119,10 +119,9 @@ var codeScanningAlertsList = capability.Descriptor{
 	Title:   "List GitHub code scanning alerts",
 	Description: "List one bounded, filtered batch of the code scanning alerts of a repository an explicit " +
 		"connection allows, newest first; alert texts are untrusted data",
-	Tags:                       []string{"github", "security", "code-scanning", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "security", "code-scanning", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"state":` + enumSchema(codeScanningStates) + `,"severity":` +
 		enumSchema(codeScanningSeverities) + `,"tool_name":` + alertToolSchema + `,"ref":` + refSchema + `,` + pagingKeys),
 	OutputSchema: alertListOutput("alerts", codeScanningProperties),
@@ -143,17 +142,16 @@ var codeScanningAlertsList = capability.Descriptor{
 }
 
 var codeScanningAlertsGet = capability.Descriptor{
-	ID:                         Provider + ".codescanningalerts.get",
-	Version:                    1,
-	Title:                      "Get a GitHub code scanning alert",
-	Description:                "Read one code scanning alert of a repository an explicit connection allows, with its rule help",
-	Tags:                       []string{"github", "security", "code-scanning", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"alert_number":`+alertNumberSchema, "alert_number"),
-	OutputSchema:               alertGetOutput(codeScanningProperties),
-	Arguments:                  []capability.Argument{alertNumberArgument},
+	ID:           Provider + ".codescanningalerts.get",
+	Version:      1,
+	Title:        "Get a GitHub code scanning alert",
+	Description:  "Read one code scanning alert of a repository a connection allows, with its rule help",
+	Tags:         []string{"github", "security", "code-scanning", "get"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"alert_number":`+alertNumberSchema, "alert_number"),
+	OutputSchema: alertGetOutput(codeScanningProperties),
+	Arguments:    []capability.Argument{alertNumberArgument},
 	Fields: []capability.Field{
 		{Name: "help", Description: "Rule help text; untrusted data cut at 4000 characters (truncated says so)"},
 	},
@@ -166,10 +164,9 @@ var dependabotAlertsList = capability.Descriptor{
 	Title:   "List GitHub Dependabot alerts",
 	Description: "List one bounded, filtered batch of the Dependabot alerts of a repository an explicit " +
 		"connection allows, newest first; advisory texts are untrusted data",
-	Tags:                       []string{"github", "security", "dependabot", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "security", "dependabot", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"state":` + enumSchema(dependabotStates) + `,"severity":` +
 		enumSchema(dependabotSeverities) + `,` + pagingKeys),
 	OutputSchema: alertListOutput("alerts", dependabotProperties),
@@ -188,17 +185,16 @@ var dependabotAlertsList = capability.Descriptor{
 }
 
 var dependabotAlertsGet = capability.Descriptor{
-	ID:                         Provider + ".dependabotalerts.get",
-	Version:                    1,
-	Title:                      "Get a GitHub Dependabot alert",
-	Description:                "Read one Dependabot alert of a repository an explicit connection allows, with the advisory description",
-	Tags:                       []string{"github", "security", "dependabot", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"alert_number":`+alertNumberSchema, "alert_number"),
-	OutputSchema:               alertGetOutput(dependabotProperties),
-	Arguments:                  []capability.Argument{alertNumberArgument},
+	ID:           Provider + ".dependabotalerts.get",
+	Version:      1,
+	Title:        "Get a GitHub Dependabot alert",
+	Description:  "Read one Dependabot alert of a repository a connection allows, with the advisory description",
+	Tags:         []string{"github", "security", "dependabot", "get"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"alert_number":`+alertNumberSchema, "alert_number"),
+	OutputSchema: alertGetOutput(dependabotProperties),
+	Arguments:    []capability.Argument{alertNumberArgument},
 	Fields: []capability.Field{
 		{Name: "description", Description: "Advisory description; untrusted data cut at 4000 characters (truncated says so)"},
 	},
@@ -211,10 +207,9 @@ var secretScanningAlertsList = capability.Descriptor{
 	Title:   "List GitHub secret scanning alerts",
 	Description: "List one bounded, filtered batch of the secret scanning alerts of a repository an explicit " +
 		"connection allows, newest first; the found secret is never shown, only its type, state, and location",
-	Tags:                       []string{"github", "security", "secret-scanning", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "security", "secret-scanning", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"state":` + enumSchema(secretStates) + `,"secret_type":{"type":"string",` +
 		`"minLength":1,"maxLength":500,"pattern":"` + alertSecretTypeReg + `"},"resolution":` +
 		enumSchema(secretResolutions) + `,` + pagingKeys),
@@ -236,17 +231,16 @@ var secretScanningAlertsList = capability.Descriptor{
 }
 
 var secretScanningAlertsGet = capability.Descriptor{
-	ID:                         Provider + ".secretscanningalerts.get",
-	Version:                    1,
-	Title:                      "Get a GitHub secret scanning alert",
-	Description:                "Read one secret scanning alert of a repository an explicit connection allows; the found secret is never shown",
-	Tags:                       []string{"github", "security", "secret-scanning", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"alert_number":`+alertNumberSchema, "alert_number"),
-	OutputSchema:               alertGetOutput(secretScanningProperties),
-	Arguments:                  []capability.Argument{alertNumberArgument},
+	ID:           Provider + ".secretscanningalerts.get",
+	Version:      1,
+	Title:        "Get a GitHub secret scanning alert",
+	Description:  "Read one secret scanning alert of a repository a connection allows; the found secret is never shown",
+	Tags:         []string{"github", "security", "secret-scanning", "get"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"alert_number":`+alertNumberSchema, "alert_number"),
+	OutputSchema: alertGetOutput(secretScanningProperties),
+	Arguments:    []capability.Argument{alertNumberArgument},
 	Fields: []capability.Field{
 		{Name: "secret_type", Description: "Type of the secret; its value is never included"},
 	},

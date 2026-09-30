@@ -26,15 +26,14 @@ var itemsDelete = capability.Descriptor{
 	ID:      Provider + ".projectitems.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project item",
-	Description: "Remove one item from a GitHub project an explicit connection allows, with its field values; " +
+	Description: "Remove one item from a GitHub project a connection allows, with its field values; " +
 		"an issue or pull request stays in its repository, while a draft issue is deleted with its item. " +
 		"Offered only by a connection whose tools list names it",
-	Tags:                       []string{"github", "projects", "items", "delete"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                json.RawMessage(itemIDInput),
+	Tags:                  []string{"github", "projects", "items", "delete"},
+	Risk:                  changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           json.RawMessage(itemIDInput),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":{"type":"string"},` +
 		`"deleted":{"type":"boolean"}},"required":["item_id","deleted"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{itemIDArgument},
@@ -46,18 +45,17 @@ var itemsDelete = capability.Descriptor{
 }
 
 var itemsUnarchive = capability.Descriptor{
-	ID:                         Provider + ".projectitems.unarchive",
-	Version:                    1,
-	Title:                      "Restore an archived GitHub project item",
-	Description:                "Restore one archived item of a GitHub project an explicit connection allows",
-	Tags:                       []string{"github", "projects", "items", "unarchive", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(itemIDInput),
-	OutputSchema:               itemsArchive.OutputSchema,
-	Arguments:                  []capability.Argument{itemIDArgument},
-	Fields:                     []capability.Field{{Name: "archived", Description: "False once the item is restored"}},
+	ID:           Provider + ".projectitems.unarchive",
+	Version:      1,
+	Title:        "Restore an archived GitHub project item",
+	Description:  "Restore one archived item of a GitHub project a connection allows",
+	Tags:         []string{"github", "projects", "items", "unarchive", "planning"},
+	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  json.RawMessage(itemIDInput),
+	OutputSchema: itemsArchive.OutputSchema,
+	Arguments:    []capability.Argument{itemIDArgument},
+	Fields:       []capability.Field{{Name: "archived", Description: "False once the item is restored"}},
 	Examples: []capability.Example{{
 		Description: "Restore one item",
 		Arguments:   json.RawMessage(`{"item_id":"PVTI_lADOAAAAAAAAAAAAzgAAAAA"}`),
@@ -68,12 +66,11 @@ var itemsMove = capability.Descriptor{
 	ID:      Provider + ".projectitems.move",
 	Version: 1,
 	Title:   "Move a GitHub project item",
-	Description: "Place one item of a GitHub project an explicit connection allows directly after another item " +
+	Description: "Place one item of a GitHub project a connection allows directly after another item " +
 		"of it, or first without after_id; this is the project order that views without a sort show",
-	Tags:                       []string{"github", "projects", "items", "move", "order", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "items", "move", "order", "planning"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":` + itemIDSchema + `,` +
 		`"after_id":` + itemIDSchema + `},"required":["item_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":{"type":"string"},` +
@@ -100,10 +97,9 @@ var draftsUpdate = capability.Descriptor{
 	Title:   "Update a GitHub project draft",
 	Description: "Replace the title, body, or assignees of one draft issue of a GitHub project an explicit " +
 		"connection allows; fields left out stay unchanged",
-	Tags:                       []string{"github", "projects", "drafts", "update", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "drafts", "update", "planning"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":` + itemIDSchema + `,` +
 		`"title":` + titleSchema + `,"body":` + bodySchema + `,"assignees":` + assigneesSchema + `},` +
 		`"required":["item_id"],"additionalProperties":false}`),
@@ -132,13 +128,12 @@ var draftsConvert = capability.Descriptor{
 	ID:      Provider + ".projectdrafts.convert",
 	Version: 1,
 	Title:   "Convert a GitHub project draft into an issue",
-	Description: "Turn one draft issue of a GitHub project an explicit connection allows into an issue of a " +
+	Description: "Turn one draft issue of a GitHub project a connection allows into an issue of a " +
 		"repository it allows; the item keeps its place and field values. A converted item is no draft any " +
 		"more, so a repeated call is refused and opens no second issue",
-	Tags:                       []string{"github", "projects", "drafts", "issues", "convert", "planning"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "drafts", "issues", "convert", "planning"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":` + itemIDSchema + `,` +
 		`"repository":` + repoSchema + `},"required":["item_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"item_id":{"type":"string"},` +

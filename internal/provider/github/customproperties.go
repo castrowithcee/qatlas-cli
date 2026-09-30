@@ -111,14 +111,13 @@ var customPropertiesGet = capability.Descriptor{
 	Description: "Read the custom property values of a repository or, with organization instead, the custom " +
 		"property definitions (schema) an organization declares; exactly one of repository or organization is " +
 		"required",
-	Tags:                       []string{"github", "customproperties", "governance", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"repository":` + repoSchema + `,"organization":` + ownerSchema),
-	OutputSchema:               json.RawMessage(customPropertiesOutput),
-	Arguments:                  []capability.Argument{customPropertiesRepositoryArgument, customPropertiesOrganizationArgument},
-	Fields:                     customPropertiesFields,
+	Tags:         []string{"github", "customproperties", "governance", "get"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"repository":` + repoSchema + `,"organization":` + ownerSchema),
+	OutputSchema: json.RawMessage(customPropertiesOutput),
+	Arguments:    []capability.Argument{customPropertiesRepositoryArgument, customPropertiesOrganizationArgument},
+	Fields:       customPropertiesFields,
 	Examples: []capability.Example{{
 		Description: "Read the custom property values of a repository",
 		Arguments:   json.RawMessage(`{"repository":"octo-org/example"}`),
@@ -137,11 +136,10 @@ var customPropertiesSet = capability.Descriptor{
 		"organization declares; exactly one of repository or organization is required, matched by exactly one " +
 		"of properties or definitions; sent at most once. Offered only where a connection's tools list names " +
 		"it, since a custom property can gate what a ruleset condition matches",
-	Tags:                       []string{"github", "customproperties", "governance", "set"},
-	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, customPropertySensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "customproperties", "governance", "set"},
+	Risk:                  guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, customPropertySensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: inputSchema(`"repository":` + repoSchema + `,"organization":` + ownerSchema +
 		`,"properties":` + customPropertyValuesSchema + `,"definitions":` + customPropertyDefinitionsSchema),
 	OutputSchema: json.RawMessage(customPropertiesOutput),

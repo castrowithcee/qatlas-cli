@@ -139,10 +139,9 @@ var filesList = capability.Descriptor{
 	Title:   "List Nextcloud files",
 	Description: "List the immediate children of the fixed root folder, or of one folder below it, of an " +
 		"explicit Nextcloud connection; the listing is one level deep and never reads file content",
-	Tags:                       []string{"nextcloud", "files", "webdav", "list", "folder"},
-	Risk:                       nextcloudReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"nextcloud", "files", "webdav", "list", "folder"},
+	Risk:     nextcloudReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"path":` + pathSchema + `},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -169,10 +168,9 @@ var filesStat = capability.Descriptor{
 	Title:   "Get Nextcloud file metadata",
 	Description: "Read the metadata of exactly one file or folder below the fixed root folder of an " +
 		"explicit Nextcloud connection; file content is never read",
-	Tags:                       []string{"nextcloud", "files", "webdav", "stat", "metadata"},
-	Risk:                       nextcloudReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"nextcloud", "files", "webdav", "stat", "metadata"},
+	Risk:     nextcloudReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"path":` + pathSchema + `},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(entrySchema),
@@ -188,8 +186,8 @@ var filesStat = capability.Descriptor{
 
 var filesGet = capability.Descriptor{
 	ID: Provider + ".files.get", Version: 1, Title: "Read Nextcloud file content",
-	Description: "Read one bounded file below the fixed root of an explicit connection as base64",
-	Tags:        []string{"nextcloud", "files", "webdav", "get", "content"}, Risk: nextcloudReadRisk, Provider: Provider, RequiresExplicitConnection: true,
+	Description: "Read one bounded file below the fixed root of a connection as base64",
+	Tags:        []string{"nextcloud", "files", "webdav", "get", "content"}, Risk: nextcloudReadRisk, Provider: Provider,
 	InputSchema:  json.RawMessage(`{"type":"object","properties":{"path":` + pathSchema + `},"required":["path"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"},"content_base64":{"type":"string"},"content_type":{"type":"string"},"size":{"type":"integer"},"etag":{"type":"string"}},"required":["path","content_base64","size"],"additionalProperties":false}`),
 }
@@ -201,8 +199,8 @@ var filesDelete = fileMutationDescriptor("delete", capability.EffectDelete, `{"t
 func fileMutationDescriptor(action string, effect capability.Effect, input string) capability.Descriptor {
 	return capability.Descriptor{ID: Provider + ".files." + action, Version: 1,
 		Title:       strings.ToUpper(action[:1]) + action[1:] + " a Nextcloud file",
-		Description: strings.ToUpper(action[:1]) + action[1:] + " one file below the fixed root of an explicit connection",
-		Tags:        []string{"nextcloud", "files", "webdav", action}, Provider: Provider, RequiresExplicitConnection: true,
+		Description: strings.ToUpper(action[:1]) + action[1:] + " one file below the fixed root of a connection",
+		Tags:        []string{"nextcloud", "files", "webdav", action}, Provider: Provider,
 		Risk:        capability.Risk{Effect: effect, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
 		InputSchema: json.RawMessage(input), OutputSchema: json.RawMessage(`{"type":"object","properties":{"` + action + `d":{"type":"boolean"},"etag":{"type":"string"}},"required":["` + action + `d"],"additionalProperties":false}`)}
 }

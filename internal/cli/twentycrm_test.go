@@ -114,7 +114,7 @@ func TestTwentyToolContractExposesOnlyTheStableCoreProjection(t *testing.T) {
 	}
 	for _, want := range []string{
 		"id: twentycrm.companies.list", "version: 1", "effect: read", "idempotency: safe",
-		"confirmation: none", "requires_explicit_connection: true", "name_contains", "domain_contains",
+		"confirmation: none", "name_contains", "domain_contains",
 		"limit", "sort", "direction", "cursor",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -164,9 +164,9 @@ func TestTwentyInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 		code  string
 	}{
 		{
-			name: "two workspaces without an explicit connection", input: `{}`,
+			name: "two workspaces without a default", input: `{}`,
 			args: []string{"invoke", "twentycrm.companies.list", "--config", path},
-			code: "connection-selection",
+			code: "connection-ambiguous",
 		},
 		{
 			name: "an unknown argument", input: `{"depth":1}`,
@@ -267,8 +267,8 @@ func TestTwentyMCPAndCLIShareTheCoreContracts(t *testing.T) {
 
 	// The broker does not pick one of the two workspaces either.
 	ambiguous := toolResultFrom(t, responses[`"ambiguous"`])
-	if !ambiguous.IsError || !strings.HasPrefix(ambiguous.Content[0].Text, "connection-selection:") {
-		t.Fatalf("ambiguous invoke = %+v, want an explicit connection to be required", ambiguous)
+	if !ambiguous.IsError || !strings.HasPrefix(ambiguous.Content[0].Text, "connection-ambiguous:") {
+		t.Fatalf("ambiguous invoke = %+v, want several matching connections", ambiguous)
 	}
 }
 

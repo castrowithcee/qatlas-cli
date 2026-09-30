@@ -99,24 +99,11 @@ func (e *ConnectionAmbiguousError) Error() string {
 }
 
 // ConnectionSelectionError reports a registered operation for which no connection can be selected.
-// ExplicitRequired distinguishes an operation contract that deliberately refuses defaults and the
-// single-connection fallback. Agent requests carry that connection in JSON rather than a CLI flag.
-// Connections holds every route that offers the operation, each with the description its owner maintains,
-// so the caller can name one; it is empty when no configured connection offers it.
 type ConnectionSelectionError struct {
-	Operation        string
-	ExplicitRequired bool
-	Connections      []ConnectionRef
+	Operation string
 }
 
 func (e *ConnectionSelectionError) Error() string {
-	if e.ExplicitRequired {
-		message := fmt.Sprintf("tool %q requires an explicit connection in this invoke request", e.Operation)
-		if len(e.Connections) > 0 {
-			message += "; the connections that offer it: " + candidates(e.Connections)
-		}
-		return message
-	}
 	return fmt.Sprintf("no configured connection can invoke tool %q", e.Operation)
 }
 
