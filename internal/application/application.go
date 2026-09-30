@@ -587,6 +587,8 @@ type InvokeRequest struct {
 	Connection string          `json:"connection,omitempty"`
 	Arguments  json.RawMessage `json:"arguments"`
 	Confirmed  bool            `json:"confirm,omitempty"`
+	// Fields selects the members of the entries of the tool's result list; the provider never sees it.
+	Fields []string `json:"fields,omitempty"`
 }
 
 // InvokeResponse records the exact operation contract and route that produced Result.
@@ -619,6 +621,10 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	}
 	if err := ValidateJSON(descriptor.InputSchema, request.Arguments); err != nil {
 		return InvokeResponse{}, &InvalidRequestError{Message: err.Error()}
+	}
+
+	if err := validateFields(descriptor, request.Fields); err != nil {
+		return InvokeResponse{}, err
 	}
 
 	resolved, err = c.selectConnection(request.Connection, descriptor)
@@ -666,7 +672,8 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	}
 	// Only what passed the output schema is compacted: empty values are dropped afterwards, for every
 	// provider alike, so CLI and MCP publish the same result.
-	result, err := json.Marshal(dropEmpty(dropImplied(descriptor, request.Arguments, normalized)))
+	result, err := json.Marshal(dropEmpty(selectFields(descriptor, request.Fields,
+		dropImplied(descriptor, request.Arguments, normalized))))
 	if err != nil {
 		return InvokeResponse{}, &InvalidProviderResponseError{Operation: descriptor.ID}
 	}

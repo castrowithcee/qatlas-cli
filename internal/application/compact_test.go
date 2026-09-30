@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -149,5 +150,71 @@ func TestDropImpliedOnlyForAnExplicitFixingValue(t *testing.T) {
 	}
 	if got := string(relaxImplied(descriptor)); !strings.Contains(got, `"required":["n"]`) {
 		t.Errorf("published schema = %s, want state no longer required", got)
+	}
+}
+
+func TestFieldsSelectOnlyEntriesOfTheResultList(t *testing.T) {
+	calls := 0
+	registry := capability.NewRegistry()
+	descriptor := testDescriptor("fake.things.list", capability.EffectRead, capability.ConfirmationNone)
+	descriptor.InputSchema = json.RawMessage(`{"type":"object"}`)
+	descriptor.OutputSchema = json.RawMessage(`{"type":"object","properties":{"things":{"type":"array","items":` +
+		`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}}},` +
+		`"labels":{"type":"array","items":{"type":"string"}},"has_more":{"type":"boolean"}}}`)
+	two := descriptor
+	two.ID = "fake.pairs.list"
+	two.OutputSchema = json.RawMessage(`{"type":"object","properties":{` +
+		`"a":{"type":"array","items":{"type":"object","properties":{"x":{"type":"string"}}}},` +
+		`"b":{"type":"array","items":{"type":"object","properties":{"y":{"type":"string"}}}}}}`)
+	handler := capability.Handler(func(context.Context, *config.Resolved, *secret.Resolver,
+		*redact.Redactor, json.RawMessage) (any, error) {
+		calls++
+		return map[string]any{"things": []any{map[string]any{"id": 1, "name": "n"}}, "labels": []any{"l"},
+			"has_more": true, "a": []any{}, "b": []any{}}, nil
+	})
+	for _, d := range []capability.Descriptor{descriptor, two} {
+		if err := registry.Register("fake", capability.Operation{Descriptor: d, Handler: handler}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := config.New()
+	cfg.Services["fake"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["reader"] = config.Credential{Type: config.CredentialTypeKeyring}
+	cfg.Connections["primary"] = config.Connection{Service: "fake", Credential: "reader"}
+	core := New(registry, cfg, nil, nil)
+
+	invoke := func(id string, fields []string) (string, error) {
+		response, err := core.Invoke(context.Background(), InvokeRequest{Operation: id, Fields: fields})
+		return string(response.Result), err
+	}
+	if got, err := invoke("fake.things.list", []string{"name"}); err != nil ||
+		got != `{"has_more":true,"labels":["l"],"things":[{"name":"n"}]}` {
+		t.Fatalf("selected = %s (%v)", got, err)
+	}
+	if got, _ := invoke("fake.things.list", nil); !strings.Contains(got, `"id":1`) {
+		t.Fatalf("without fields = %s", got)
+	}
+	calls = 0
+	for _, tt := range []struct {
+		id     string
+		fields []string
+		want   string
+	}{
+		{"fake.things.list", []string{"nme"}, `unknown field "nme" (did you mean "name"?); valid fields: id, name`},
+		{"fake.things.list", []string{}, "fields must name at least one field; valid fields: id, name"},
+		{"fake.pairs.list", []string{"x"}, "fields is not supported: fake.pairs.list returns no result list"},
+	} {
+		_, err := invoke(tt.id, tt.fields)
+		var invalid *InvalidRequestError
+		if !errors.As(err, &invalid) || invalid.Message != tt.want {
+			t.Errorf("%s %v: err = %v, want %q", tt.id, tt.fields, err, tt.want)
+		}
+	}
+	if calls != 0 {
+		t.Fatalf("provider ran %d times for refused selections", calls)
+	}
+	if got := Compact(descriptor).SelectableFields; !equalStrings(got, []string{"id", "name"}) ||
+		Compact(two).SelectableFields != nil {
+		t.Fatalf("selectable fields = %v", got)
 	}
 }

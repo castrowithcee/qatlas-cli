@@ -2,6 +2,8 @@ package application
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 )
@@ -209,4 +211,74 @@ func relaxImplied(descriptor capability.Descriptor) json.RawMessage {
 func PublishedDescriptor(descriptor capability.Descriptor) capability.Descriptor {
 	descriptor.OutputSchema = PublishedOutputSchema(relaxImplied(descriptor))
 	return descriptor
+}
+
+// resultList names the result list of a tool and the members of its entries, both read from the output
+// schema: exactly one top-level member that is an array of objects with declared members. A schema with
+// none or several such members has no result list, so which one a selection meant is never guessed.
+func resultList(schema json.RawMessage) (string, []string) {
+	root := parseSchema(schema)
+	list := ""
+	for name, node := range root.Properties {
+		if node != nil && node.Type == "array" && node.Items != nil && node.Items.Type == "object" {
+			if list != "" {
+				return "", nil
+			}
+			list = name
+		}
+	}
+	if list == "" || len(root.Properties[list].Items.Properties) == 0 {
+		return "", nil
+	}
+	return list, memberOrder(*root.Properties[list].Items, nil)
+}
+
+// SelectableFields returns the members of the result list entries that a selection can name, or nil where
+// the tool has no result list.
+func SelectableFields(descriptor capability.Descriptor) []string {
+	_, names := resultList(descriptor.OutputSchema)
+	return names
+}
+
+// validateFields checks a field selection against the tool's result list. It runs before any route is
+// chosen, so a refused selection never reaches a provider.
+func validateFields(descriptor capability.Descriptor, fields []string) error {
+	if fields == nil {
+		return nil
+	}
+	names := SelectableFields(descriptor)
+	if len(names) == 0 {
+		return &InvalidRequestError{Message: fmt.Sprintf("fields is not supported: %s returns no result list", descriptor.ID)}
+	}
+	if len(fields) == 0 {
+		return &InvalidRequestError{Message: "fields must name at least one field; valid fields: " + strings.Join(names, ", ")}
+	}
+	for _, field := range fields {
+		if !containsString(names, field) {
+			return &InvalidRequestError{Message: fmt.Sprintf("unknown field %q", field) +
+				DidYouMean(Suggest(field, names)) + "; valid fields: " + strings.Join(names, ", ")}
+		}
+	}
+	return nil
+}
+
+// selectFields keeps, in each entry of the result list, only the selected members. Every other member of
+// the result stays as it is.
+func selectFields(descriptor capability.Descriptor, fields []string, value any) any {
+	list, _ := resultList(descriptor.OutputSchema)
+	root, ok := value.(map[string]any)
+	if !ok || fields == nil || list == "" {
+		return value
+	}
+	entries, _ := root[list].([]any)
+	for _, entry := range entries {
+		if object, ok := entry.(map[string]any); ok {
+			for key := range object {
+				if !containsString(fields, key) {
+					delete(object, key)
+				}
+			}
+		}
+	}
+	return value
 }

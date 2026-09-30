@@ -269,7 +269,7 @@ func newDescribeCommand(opts *Options, registry *capability.Registry, use string
 // from --arg or stdin, so an agent can never smuggle a route, a header, or a credential past the contract.
 func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Command {
 	var confirm bool
-	var flagArgs []string
+	var flagArgs, fields []string
 	cmd := &cobra.Command{
 		Use:   "invoke <tool-id>",
 		Short: "Invoke one tool",
@@ -283,6 +283,10 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			"--arg 'labels=[\"bug\"]'.\n\n" +
 			"--connection selects the route when the configuration leaves more than one possibility, and\n" +
 			"--confirm carries the confirmation a mutating tool requires for this request.\n\n" +
+			"--fields keeps only the named members in each entry of the tool's result list, as a comma\n" +
+			"separated list or repeated; the other members of the result stay. The selectable names are the\n" +
+			"selectable_fields of 'qatlas describe'. An unknown name, or a tool without a result list, is\n" +
+			"refused with invalid-request before any provider is contacted.\n\n" +
 			"Every invoke ends within 60 seconds, reading stdin, resolving the secret, waiting for a rate\n" +
 			"limit, and the provider's requests included. What reaches that limit ends with timeout and\n" +
 			"the next step; a rate-limit pause that would outlast it ends at once with rate-limited and the\n" +
@@ -315,6 +319,7 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 			core.SetAudit(&audit)
 			response, err := core.Invoke(ctx, application.InvokeRequest{
 				Operation: args[0], Connection: opts.Connection, Arguments: arguments, Confirmed: confirm,
+				Fields: fields,
 			})
 			if err != nil {
 				if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -331,6 +336,8 @@ func newInvokeCommand(opts *Options, registry *capability.Registry) *cobra.Comma
 	}
 	cmd.Flags().BoolVar(&confirm, "confirm", false,
 		"confirm this exact request; required by a tool whose contract demands confirmation")
+	cmd.Flags().StringSliceVar(&fields, "fields", nil,
+		"keep only these members in each entry of the result list, comma separated or repeated")
 	cmd.Flags().StringArrayVar(&flagArgs, "arg", nil,
 		"one tool argument as name=value, repeated per argument; typed by the input schema")
 	return cmd

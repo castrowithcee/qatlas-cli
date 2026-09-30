@@ -219,6 +219,9 @@ func isType(kind string, value any) bool {
 // are those of its entries. The members of the risk stand beside the others rather than in an object of
 // their own, and all are ordered by meaning: the identifier, its descriptions, the risk, then the tables.
 //
+// SelectableFields names the members of the result list entries that invoke can select with fields; it is
+// left out for a tool without a result list.
+//
 // The provider is the prefix of the ID, the tags serve the search that found the tool, and whether a tool
 // needs a tools list that names it only decides which connections offer it, which the connections beside
 // the contract answer; these, the types of the result fields, and both schemas stay in the complete
@@ -236,6 +239,7 @@ type CompactDescriptor struct {
 	RequiresExplicitConnection bool                    `json:"requires_explicit_connection"`
 	Arguments                  []ArgumentRow           `json:"arguments"`
 	Fields                     []capability.Field      `json:"fields"`
+	SelectableFields           []string                `json:"selectable_fields,omitempty"`
 	Examples                   []capability.Example    `json:"examples"`
 }
 
@@ -293,7 +297,8 @@ func Compact(d capability.Descriptor) CompactDescriptor {
 		Effect: d.Risk.Effect, Idempotency: d.Risk.Idempotency, Confirmation: d.Risk.Confirmation,
 		OpenWorld: d.Risk.OpenWorld, DataSensitivity: d.Risk.DataSensitivity,
 		RequiresExplicitConnection: d.RequiresExplicitConnection, Arguments: arguments, Fields: fields,
-		Examples: append([]capability.Example{}, d.Examples...),
+		SelectableFields: SelectableFields(d),
+		Examples:         append([]capability.Example{}, d.Examples...),
 	}
 }
 
