@@ -11,6 +11,11 @@
 //
 // A row change is one request without a retry; a failure that leaves its result open is reported as uncertain.
 //
+// A file is uploaded and attached to a file field of one row in two requests (upload, then row change), and
+// downloaded from the cell as it is now. Addresses of files come from the provider: one is used only on the
+// host of the connection and for exactly the picked file, without the token and without a redirect. A URL that
+// Baserow is asked to fetch must be https on a public host name; Baserow's own guard covers the resolution.
+//
 // Link fields (link_row) into a table outside the allow-list are reduced to row IDs: their display values
 // are dropped. A link field whose other table cannot be determined counts as outside. Lookup and formula
 // fields can carry values of other tables and are passed through as the instance reports them; this is a
@@ -68,6 +73,7 @@ type Client struct {
 	scope   scope
 	http    *http.Client
 	limiter *ratelimit.Limiter
+	red     *redact.Redactor
 }
 
 // Open resolves the database token of one selected connection and returns a client for its origin.
@@ -102,7 +108,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{origin: origin, token: value.Secret, scope: bound, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{origin: origin, token: value.Secret, scope: bound, http: newHTTPClient(), limiter: lim, red: red}, nil
 }
 
 // originOf accepts an https URL of a Baserow instance: Cloud or self-hosted, optionally below an installation
@@ -261,8 +267,8 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds the provider metadata, its connection test, its five read operations, and its four row
-// changes.
+// Register adds the provider metadata, its connection test, its five read operations, its row changes, and
+// its two file operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Baserow", DefaultBaseURL: cloudOrigin,
@@ -312,5 +318,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: rowsBatchCreate, Handler: capability.Handler(invokeRowsBatchCreate)},
 		capability.Operation{Descriptor: rowsBatchUpdate, Handler: capability.Handler(invokeRowsBatchUpdate)},
 		capability.Operation{Descriptor: rowsBatchDelete, Handler: capability.Handler(invokeRowsBatchDelete)},
+		capability.Operation{Descriptor: filesUpload, Handler: capability.Handler(invokeFilesUpload)},
+		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
 	)
 }

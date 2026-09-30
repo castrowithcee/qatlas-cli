@@ -336,6 +336,17 @@ func invokeRowsMove(ctx context.Context, resolved *config.Resolved, secrets *sec
 // The provider's body is never copied into an error.
 func (c *Client) sendOnce(ctx context.Context, op, method, path string, query url.Values, body []byte,
 	right string) ([]byte, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	return c.send(ctx, c.http, op, method, path, query, reader, "application/json", right, rowUncertain)
+}
+
+// send is sendOnce for any body: the client carries the timeout, contentType names the body, and uncertain is
+// the hint of a failure whose result may be open. A body of a known length is the caller's to announce.
+func (c *Client) send(ctx context.Context, hc *http.Client, op, method, path string, query url.Values, body io.Reader,
+	contentType, right, uncertain string) ([]byte, error) {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return nil, provider.Waited(op, "Baserow", err)
 	}
@@ -343,11 +354,7 @@ func (c *Client) sendOnce(ctx context.Context, op, method, path string, query ur
 	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
-	var reader io.Reader
-	if body != nil {
-		reader = bytes.NewReader(body)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
 	}
@@ -355,14 +362,17 @@ func (c *Client) sendOnce(ctx context.Context, op, method, path string, query ur
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "qatlas-cli")
 	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 	}
-	response, err := c.http.Do(req)
+	if length, ok := sizedBody(body); ok {
+		req.ContentLength = length
+	}
+	response, err := hc.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "Baserow", err)
 		if failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
 			failure.Cause == provider.CauseUnknown {
-			failure.Message += rowUncertain
+			failure.Message += uncertain
 		}
 		return nil, failure
 	}
@@ -370,13 +380,22 @@ func (c *Client) sendOnce(ctx context.Context, op, method, path string, query ur
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		failure := c.statusErrorFor(op, response, right)
 		if response.StatusCode >= 500 {
-			failure.Message += rowUncertain
+			failure.Message += uncertain
 		}
 		return nil, failure
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseSize+1))
 	if err != nil || len(data) > maxResponseSize {
-		return nil, invalidResponse(op, "the Baserow response could not be read within the size limit"+rowUncertain)
+		return nil, invalidResponse(op, "the Baserow response could not be read within the size limit"+uncertain)
 	}
 	return data, nil
+}
+
+// sizedBody reports the length of a body that announces it, which is how a hand-framed upload sets its
+// Content-Length.
+func sizedBody(body io.Reader) (int64, bool) {
+	if sized, ok := body.(interface{ announcedLength() int64 }); ok {
+		return sized.announcedLength(), true
+	}
+	return 0, false
 }

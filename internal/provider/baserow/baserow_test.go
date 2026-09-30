@@ -90,7 +90,7 @@ func testConfig() *config.Config {
 	read := []config.Permission{config.PermissionRead}
 	allRights := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
 		config.PermissionDelete}
-	writeTools := []string{rowsCreate.ID, rowsUpdate.ID, rowsDelete.ID, rowsMove.ID, rowsBatchCreate.ID, rowsBatchUpdate.ID, rowsBatchDelete.ID, fieldsList.ID, rowsGet.ID}
+	writeTools := []string{rowsCreate.ID, rowsUpdate.ID, rowsDelete.ID, rowsMove.ID, rowsBatchCreate.ID, rowsBatchUpdate.ID, rowsBatchDelete.ID, fieldsList.ID, rowsGet.ID, filesUpload.ID, filesGet.ID}
 	return &config.Config{
 		Version:     1,
 		Services:    map[string]config.Service{"baserow": {Provider: Provider, BaseURL: baseURL}},
@@ -155,7 +155,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		rowsCreate.ID: config.PermissionCreate, rowsUpdate.ID: config.PermissionUpdate,
 		rowsDelete.ID: config.PermissionDelete, rowsMove.ID: config.PermissionUpdate,
 		rowsBatchCreate.ID: config.PermissionCreate, rowsBatchUpdate.ID: config.PermissionUpdate,
-		rowsBatchDelete.ID: config.PermissionDelete}
+		rowsBatchDelete.ID: config.PermissionDelete,
+		filesUpload.ID:     config.PermissionUpdate, filesGet.ID: config.PermissionRead}
 	if len(metadata.Tools) != len(want) {
 		t.Fatalf("tools = %+v", metadata.Tools)
 	}
