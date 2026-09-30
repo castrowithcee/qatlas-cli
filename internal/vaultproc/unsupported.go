@@ -15,6 +15,9 @@ func VerifyUser(net.Conn) error { return ErrUnsupported }
 
 func peerPID(net.Conn) int { return 0 }
 
+// userRuntimeDir finds no runtime directory without XDG_RUNTIME_DIR on this platform.
+func userRuntimeDir() string { return "" }
+
 // Listen does not open a vault socket on this platform.
 func Listen(string) (net.Listener, error) { return nil, ErrUnsupported }
 
