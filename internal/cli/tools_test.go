@@ -186,7 +186,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
 		"  github,Code hosting and software collaboration platform,\"\",192,0,0\n", ",\"\",3,0,0\n",
-		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",17,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
+		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",21,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -379,7 +379,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		{"namespace twentycrm", []string{"twentycrm"}, []string{
 			"twentycrm.companies.create", "twentycrm.companies.delete", "twentycrm.companies.get", "twentycrm.companies.list", "twentycrm.companies.update",
 		}},
-		{"namespace seatable", []string{"seatable"}, []string{"seatable.columns.list", "seatable.links.create", "seatable.links.delete", "seatable.links.list", "seatable.links.update", "seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.search", "seatable.rows.update", "seatable.tables.list", "seatable.views.create", "seatable.views.delete", "seatable.views.get", "seatable.views.list", "seatable.views.update"}},
+		{"namespace seatable", []string{"seatable"}, []string{"seatable.columns.list", "seatable.links.create", "seatable.links.delete", "seatable.links.list", "seatable.links.update", "seatable.rows.batchcreate", "seatable.rows.batchdelete", "seatable.rows.batchupdate", "seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.search", "seatable.rows.update", "seatable.snapshots.create", "seatable.tables.list", "seatable.views.create", "seatable.views.delete", "seatable.views.get", "seatable.views.list", "seatable.views.update"}},
 		{"namespace github", []string{"github"}, []string{
 			"github.accounts.me",
 			"github.actionspermissions.get", "github.actionspermissions.update",

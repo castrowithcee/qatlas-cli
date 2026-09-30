@@ -139,6 +139,39 @@ qatlas invoke seatable.views.update --connection sales-rw --confirm --arg table=
   --arg hidden_columns='["Notiz"]'
 ```
 
+## Batch rows and snapshots
+
+`seatable.rows.batchcreate`, `seatable.rows.batchupdate`, `seatable.rows.batchdelete`, and
+`seatable.snapshots.create` change several rows in one confirmed call and create a restore point before a
+mass change. None of them is in a profile. `batchdelete` is offered only by a connection whose `tools` list
+names it.
+
+- One call holds 1 to 100 rows and at most 1 MiB. Both limits, the row identifiers (22 characters), and
+  duplicate identifiers are checked before the credential is read and before SeaTable is contacted.
+- `batchcreate` takes `rows`, a list of column-name-to-value objects. `batchupdate` takes `rows`, a list of
+  `row_id` plus `values`. `batchdelete` takes `row_ids`. The `table` argument works as for single rows and
+  cannot leave the connection allow-list; a table outside it is refused before the credential is read.
+- Every column of every row is checked against the table metadata, because SeaTable silently ignores unknown
+  columns. System and empty column names and link columns are refused; link columns are changed with the
+  link tools. The metadata read is the only provider access that can precede such a refusal.
+- Each change needs the matching permission (`create`, `update`, `delete`) and `confirm`, sends exactly one
+  request, and is never repeated. A timeout, a dropped connection, a 5xx answer, or an unreadable answer is
+  reported as uncertain: read the rows before repeating the change. SeaTable reports no failure per row, so
+  the answer names `requested` (rows in the call) and, when SeaTable gives one, `reported` (rows it
+  reported as created or deleted). An update has no reported count. Compare the counts and read the rows
+  when they differ.
+- `snapshots.create` asks SeaTable for a snapshot of the whole base of the credential, not of one table, and
+  needs `create` and `confirm`. SeaTable creates a snapshot only when the base changed since the last one
+  and at least 10 minutes have passed; otherwise Qatlas reports that rule in its own words and never the
+  provider text. A 5xx answer or a timeout is reported as uncertain: check the snapshots of the base before
+  repeating it.
+
+```sh
+qatlas invoke seatable.snapshots.create --connection sales-rw --confirm
+echo '{"table":"id:0000","rows":[{"row_id":"Qtf7xPmoRaiFyQPO1aENTj","values":{"Status":"closed"}}]}' \
+  | qatlas invoke seatable.rows.batchupdate --connection sales-rw --confirm
+```
+
 The connection can list and read rows (`read`) and create, update, or delete rows with the matching
 permission. Mutations require confirmation, reject system-column names, and are bounded to 1 MiB. They can
 never select a table outside the connection allow-list. A view narrows listing but does not redirect a

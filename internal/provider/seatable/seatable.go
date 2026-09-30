@@ -314,6 +314,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: rowsCreate, Handler: capability.Handler(invokeRowsCreate)},
 		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},
 		capability.Operation{Descriptor: rowsDelete, Handler: capability.Handler(invokeRowsDelete)},
+		capability.Operation{Descriptor: rowsBatchCreate, Handler: capability.Handler(invokeRowsBatchCreate)},
+		capability.Operation{Descriptor: rowsBatchUpdate, Handler: capability.Handler(invokeRowsBatchUpdate)},
+		capability.Operation{Descriptor: rowsBatchDelete, Handler: capability.Handler(invokeRowsBatchDelete)},
+		capability.Operation{Descriptor: snapshotsCreate, Handler: capability.Handler(invokeSnapshotsCreate)},
 		capability.Operation{Descriptor: tablesList, Handler: capability.Handler(invokeTablesList)},
 		capability.Operation{Descriptor: linksList, Handler: capability.Handler(invokeLinksList)},
 		capability.Operation{Descriptor: linksCreate, Handler: invokeLinksChange("create links", http.MethodPost, "created")},
@@ -469,6 +473,7 @@ type Client struct {
 type baseAccess struct {
 	uuid  string
 	token string
+	name  string
 }
 
 // Open resolves the API token of one selected connection and returns a client for its configured origin.
@@ -805,7 +810,7 @@ func (c *Client) access(ctx context.Context, op string) (*baseAccess, error) {
 	if c.redactor != nil {
 		c.redactor.Add(exchanged.AccessToken, "Bearer "+exchanged.AccessToken)
 	}
-	c.base = &baseAccess{uuid: exchanged.DTableUUID, token: exchanged.AccessToken}
+	c.base = &baseAccess{uuid: exchanged.DTableUUID, token: exchanged.AccessToken, name: exchanged.DTableName}
 	return c.base, nil
 }
 
@@ -1303,39 +1308,56 @@ func (c *Client) DeleteRowFrom(ctx context.Context, table, rowID string) error {
 
 func (c *Client) changeRows(ctx context.Context, op, method, table string, payload map[string]any,
 	values map[string]json.RawMessage, rowID string) error {
+	var sets []map[string]json.RawMessage
 	if values != nil {
+		sets = []map[string]json.RawMessage{values}
+	}
+	path, token, encoded, err := c.prepareRows(ctx, op, table, payload, sets, false)
+	if err != nil {
+		return err
+	}
+	return c.change(ctx, op, method, path, token, encoded)
+}
+
+// prepareRows validates the column sets of a row mutation against the base metadata, binds the payload to
+// the selected table, and returns the route, the base token, and the encoded body. It performs no change.
+// A single-row and a batch mutation share it; noLinks additionally refuses link columns, which only the
+// link tools may write.
+func (c *Client) prepareRows(ctx context.Context, op, table string, payload map[string]any,
+	sets []map[string]json.RawMessage, noLinks bool) (string, string, []byte, error) {
+	for _, values := range sets {
 		if len(values) == 0 {
-			return providerError(op, "at least one column value is required")
+			return "", "", nil, providerError(op, "at least one column value is required")
 		}
 		for name := range values {
 			if name == "" || strings.HasPrefix(name, systemPrefix) {
-				return providerError(op, "system and empty column names cannot be written")
+				return "", "", nil, providerError(op, "system and empty column names cannot be written")
 			}
 		}
 	}
 	selected, err := c.scope.selectTarget(table)
 	if err != nil {
-		return providerError(op, err.Error())
+		return "", "", nil, providerError(op, err.Error())
 	}
 	access, err := c.access(ctx, op)
 	if err != nil {
-		return err
+		return "", "", nil, err
 	}
-	if values != nil {
-		if err := c.checkColumns(ctx, op, selected, values); err != nil {
-			return err
+	if len(sets) > 0 {
+		if err := c.checkColumns(ctx, op, selected, sets, noLinks); err != nil {
+			return "", "", nil, err
 		}
 	}
 	payload[selected.tableParam] = selected.table
 	encoded, err := json.Marshal(payload)
 	if err != nil || len(encoded) > maxRequestBytes {
-		return providerError(op, "the request exceeds the size limit")
+		return "", "", nil, providerError(op, "the request exceeds the size limit")
 	}
-	return c.change(ctx, op, method, gatewayPath+url.PathEscape(access.uuid)+rowsPath, access.token, encoded)
+	return gatewayPath + url.PathEscape(access.uuid) + rowsPath, access.token, encoded, nil
 }
 
 func (c *Client) checkColumns(ctx context.Context, op string, selected target,
-	values map[string]json.RawMessage) error {
+	sets []map[string]json.RawMessage, noLinks bool) error {
 	document, err := c.metadata(ctx, op)
 	if err != nil {
 		return err
@@ -1344,13 +1366,19 @@ func (c *Client) checkColumns(ctx context.Context, op string, selected target,
 		if !matchesTable(selected, table) {
 			continue
 		}
-		columns := make(map[string]bool, len(table.Columns))
+		columns := make(map[string]columnJSON, len(table.Columns))
 		for _, column := range table.Columns {
-			columns[column.Name] = true
+			columns[column.Name] = column
 		}
-		for name := range values {
-			if !columns[name] {
-				return providerError(op, "the selected SeaTable table does not define every requested column")
+		for _, values := range sets {
+			for name := range values {
+				column, ok := columns[name]
+				if !ok {
+					return providerError(op, "the selected SeaTable table does not define every requested column")
+				}
+				if noLinks && column.Type == "link" {
+					return providerError(op, "link columns cannot be written here, use the link tools")
+				}
 			}
 		}
 		return nil
@@ -1414,6 +1442,7 @@ type baseTokenJSON struct {
 	AccessToken  string `json:"access_token"`
 	DTableUUID   string `json:"dtable_uuid"`
 	DTableServer string `json:"dtable_server"`
+	DTableName   string `json:"dtable_name"`
 }
 
 // metadataJSON mirrors the part of the base metadata the connection test inspects.

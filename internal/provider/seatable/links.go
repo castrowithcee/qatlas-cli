@@ -399,42 +399,9 @@ func (c *Client) ChangeLinks(ctx context.Context, op, method string, input linkI
 // changeOnce sends one change. It never repeats the request; a failure that leaves the result open is
 // reported as uncertain, with the given hint appended.
 func (c *Client) changeOnce(ctx context.Context, op, method, path, token string, body []byte, uncertain string) error {
-	if err := c.limiter.Wait(ctx); err != nil {
-		return provider.Waited(op, "SeaTable", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, c.origin+path, bytes.NewReader(body))
+	data, err := c.sendOnce(ctx, op, method, path, token, body, uncertain, statusError)
 	if err != nil {
-		return providerError(op, "the request could not be built")
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	response, err := c.http.Do(req)
-	if err != nil {
-		failure := transportError(op, err)
-		var providerErr *provider.Error
-		if errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
-			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
-			providerErr.Message += uncertain
-		}
-		return failure
-	}
-	defer response.Body.Close()
-	c.observeRateLimit(response.Header)
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		failure := statusError(op, response.StatusCode)
-		if response.StatusCode >= 500 {
-			var providerErr *provider.Error
-			if errors.As(failure, &providerErr) {
-				providerErr.Message += uncertain
-			}
-		}
-		return failure
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil || len(data) > maxResponseBytes {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-			Message: "the SeaTable response could not be read within the size limit" + uncertain}
+		return err
 	}
 	if len(bytes.TrimSpace(data)) == 0 {
 		return nil
@@ -450,4 +417,49 @@ func (c *Client) changeOnce(ctx context.Context, op, method, path, token string,
 		return providerError(op, "SeaTable did not apply the link change")
 	}
 	return nil
+}
+
+// sendOnce sends one request without a retry and returns the bounded answer body. A failure that leaves
+// the result open (timeout, reset, unknown transport failure, 5xx, unreadable answer) carries the
+// uncertain hint. The classify function maps a non-2xx status to an error and never copies provider text.
+func (c *Client) sendOnce(ctx context.Context, op, method, path, token string, body []byte, uncertain string,
+	classify func(op string, status int) error) ([]byte, error) {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return nil, provider.Waited(op, "SeaTable", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.origin+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, providerError(op, "the request could not be built")
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	response, err := c.http.Do(req)
+	if err != nil {
+		failure := transportError(op, err)
+		var providerErr *provider.Error
+		if errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
+			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
+			providerErr.Message += uncertain
+		}
+		return nil, failure
+	}
+	defer response.Body.Close()
+	c.observeRateLimit(response.Header)
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		failure := classify(op, response.StatusCode)
+		if response.StatusCode >= 500 {
+			var providerErr *provider.Error
+			if errors.As(failure, &providerErr) {
+				providerErr.Message += uncertain
+			}
+		}
+		return nil, failure
+	}
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil || len(data) > maxResponseBytes {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "the SeaTable response could not be read within the size limit" + uncertain}
+	}
+	return data, nil
 }
