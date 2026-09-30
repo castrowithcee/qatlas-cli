@@ -198,7 +198,7 @@ func rowRoute(base, id string) string {
 }
 
 // Register publishes the configuration metadata the TUI needs, schema discovery, and the row operations.
-func TestRegisterPublishesMetadataAndEightOperations(t *testing.T) {
+func TestRegisterPublishesMetadataAndTwelveOperations(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
 		t.Fatalf("Register() = %v", err)
@@ -221,8 +221,8 @@ func TestRegisterPublishesMetadataAndEightOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 8 {
-		t.Fatalf("operations = %d, want two schema and six row operations", len(operations))
+	if len(operations) != 12 {
+		t.Fatalf("operations = %d, want two schema, six row, and four link operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantSensitivity := dataSensitivity
@@ -247,7 +247,7 @@ func TestRegisterPublishesMetadataAndEightOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "seatable.columns.list" || operations[7].ID != "seatable.tables.list" {
+	if operations[0].ID != "seatable.columns.list" || operations[11].ID != "seatable.tables.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }

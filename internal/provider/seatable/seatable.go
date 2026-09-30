@@ -300,8 +300,8 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read tables and rows", Recommended: true,
-			Description: "lists tables and columns, reads and searches rows; changes nothing in the base",
-			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsSearch.ID, rowsGet.ID},
+			Description: "lists tables and columns, reads and searches rows, lists row links; changes nothing in the base",
+			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsSearch.ID, rowsGet.ID, linksList.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -315,6 +315,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},
 		capability.Operation{Descriptor: rowsDelete, Handler: capability.Handler(invokeRowsDelete)},
 		capability.Operation{Descriptor: tablesList, Handler: capability.Handler(invokeTablesList)},
+		capability.Operation{Descriptor: linksList, Handler: capability.Handler(invokeLinksList)},
+		capability.Operation{Descriptor: linksCreate, Handler: invokeLinksChange("create links", http.MethodPost, "created")},
+		capability.Operation{Descriptor: linksUpdate, Handler: invokeLinksChange("update links", http.MethodPut, "updated")},
+		capability.Operation{Descriptor: linksDelete, Handler: invokeLinksChange("delete links", http.MethodDelete, "deleted")},
 	)
 }
 
@@ -1423,6 +1427,7 @@ type columnJSON struct {
 	Data struct {
 		TableID      string `json:"table_id"`
 		OtherTableID string `json:"other_table_id"`
+		LinkID       string `json:"link_id"`
 	} `json:"data"`
 }
 

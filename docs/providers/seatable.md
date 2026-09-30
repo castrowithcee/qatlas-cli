@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row operations, permissions, and token limits.
+  Describes SeaTable schema discovery, table allow-lists, wildcard scope, row and link operations, permissions, and token limits.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -66,6 +66,41 @@ carries no `display_value`. A wildcard connection keeps display values. The same
 and `seatable.rows.get`, whichever way the table is addressed. Lookup and formula columns are returned as the
 provider computes them.
 
+## Row links
+
+`seatable.links.list`, `seatable.links.create`, `seatable.links.update`, and `seatable.links.delete` read
+and change the links between rows of two tables through one link column.
+
+- The agent passes `table` and `column` (name or key of a column of type `link`). Qatlas takes the link
+  identifier and the joined table from the base metadata; neither is an argument.
+- Both tables must be inside the connection allow-list. A wildcard connection allows every table; a
+  counterpart table reached by name or by `id:` is checked the same way. A link column into a table outside
+  the allow-list is refused without a link request, and the message does not name that table. The
+  connection's own table is checked before the credential is read and before SeaTable is contacted. To find
+  the counterpart table, Qatlas first exchanges the token and reads the base metadata; that is the only
+  provider access that can precede a refusal.
+- An unknown column, or a column that is not a link column, is refused before the link request.
+- `seatable.links.list` takes 1 to 10 `row_ids`, `start` (0 to 10000), and `limit` (1 to 100, 25 by default)
+  per source row. Each entry carries the `row_id` and, when SeaTable sends one, a `display_value` of up to
+  4096 bytes. `has_more` is true when a source row returned a full page. It is part of the `read` profile.
+- `seatable.links.create` adds links from one `row_id` to 1 to 50 `other_row_ids`. `seatable.links.update`
+  replaces all links of that row in the column with the given 1 to 50 rows; an empty list is refused before
+  the credential is read, because removing links is what `seatable.links.delete` is for.
+  `seatable.links.delete` removes the listed links and is offered only by a connection whose `tools` list
+  names it.
+- Row identifiers are 22 characters of letters, digits, `-`, or `_`, and must not repeat in one call.
+- The three changes need the matching permission (`create`, `update`, `delete`) and `confirm`. Each sends
+  exactly one request and is never repeated. A timeout, a dropped connection, a 5xx answer, or an unreadable
+  answer is reported as uncertain: read the links before repeating the change. An error SeaTable reports,
+  for example a duplicate link, is reported without the provider text.
+
+```sh
+qatlas invoke seatable.links.list --connection sales-all-tables --arg table=id:0000 --arg column=Tickets \
+  --arg row_ids='["Qtf7xPmoRaiFyQPO1aENTj"]'
+qatlas invoke seatable.links.create --connection sales-rw --confirm --arg table=id:0000 --arg column=Tickets \
+  --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg other_row_ids='["Ab12Cd34Ef56Gh78Ij90Kl"]'
+```
+
 The connection can list and read rows (`read`) and create, update, or delete rows with the matching
 permission. Mutations require confirmation, reject system-column names, and are bounded to 1 MiB. They can
 never select a table outside the connection allow-list. A view narrows listing but does not redirect a
@@ -77,6 +112,6 @@ writer. An optional `tools` list narrows a connection further to named tools, fo
 `[seatable.rows.list]`; it never admits an effect `permissions` excludes and never widens the table scope.
 Qatlas exchanges the API token for a short-lived base token in memory. The terminal editor starts a new
 connection on the setup profile `read`, which ticks `[read]` and `[seatable.tables.list,
-seatable.columns.list, seatable.rows.list, seatable.rows.search, seatable.rows.get]`. A profile is a visible
+seatable.columns.list, seatable.rows.list, seatable.rows.search, seatable.rows.get, seatable.links.list]`. A profile is a visible
 starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
 saved connection never follows a profile.
