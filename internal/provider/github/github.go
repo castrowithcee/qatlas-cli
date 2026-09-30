@@ -372,6 +372,9 @@ var issuesList = capability.Descriptor{
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the repository holds further matching issues"},
 	},
+	ImpliedFields: []capability.ImpliedField{
+		{List: "issues", Argument: "state", Values: []string{"open", "closed"}, Field: "state"},
+	},
 	Examples: []capability.Example{{
 		Description: "List open issues labeled bug",
 		Arguments:   json.RawMessage(`{"labels":["bug"],"limit":30}`),

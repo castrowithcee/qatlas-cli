@@ -400,3 +400,25 @@ func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 		t.Errorf("test of an absent repository = %q, %v; want not-found", class, err)
 	}
 }
+
+// A state the request fixes is left out of every listed issue; without it, or with all, it stays.
+func TestIssueListDropsTheStateAFilterFixes(t *testing.T) {
+	f := &fakeGitHub{issues: []fakeIssue{{number: 1, state: "open"}}}
+	base := serve(t, f)
+	reads := 0
+	red := &redact.Redactor{}
+	core := application.New(registry(t), targetsConfig(base), resolver(red, &reads), red)
+	for arguments, want := range map[string]bool{
+		`{"repository":"octo-org/example","state":"open"}`: false,
+		`{"repository":"octo-org/example","state":"all"}`:  true,
+		`{"repository":"octo-org/example"}`:                true,
+	} {
+		out, err := invoke(t, core, "github.issues.list", "owner", arguments, false)
+		if err != nil {
+			t.Fatalf("%s: %v", arguments, err)
+		}
+		if got := strings.Contains(string(out), `"state"`); got != want {
+			t.Errorf("%s: state present = %v in %s, want %v", arguments, got, out, want)
+		}
+	}
+}

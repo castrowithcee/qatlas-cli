@@ -2,6 +2,8 @@ package application
 
 import (
 	"encoding/json"
+
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
 )
 
 // dropEmpty removes, recursively, every object member whose value is null, an empty array or an empty
@@ -130,4 +132,81 @@ func relaxSchema(raw json.RawMessage) (json.RawMessage, bool, bool) {
 		return raw, false, false
 	}
 	return encoded, canBeEmpty, true
+}
+
+// dropImplied removes from each entry of the declared result lists the member a filter argument fixes, but
+// only where the request set that argument explicitly to one of the declared values.
+func dropImplied(descriptor capability.Descriptor, arguments json.RawMessage, value any) any {
+	if len(descriptor.ImpliedFields) == 0 {
+		return value
+	}
+	var set map[string]any
+	if json.Unmarshal(arguments, &set) != nil {
+		return value
+	}
+	root, ok := value.(map[string]any)
+	if !ok {
+		return value
+	}
+	for _, implied := range descriptor.ImpliedFields {
+		given, ok := set[implied.Argument].(string)
+		if !ok || !containsString(implied.Values, given) {
+			continue
+		}
+		entries, _ := root[implied.List].([]any)
+		for _, entry := range entries {
+			if object, ok := entry.(map[string]any); ok {
+				delete(object, implied.Field)
+			}
+		}
+	}
+	return value
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+// relaxImplied drops the implied members from the required members of the published list entries, since
+// they can be missing.
+func relaxImplied(descriptor capability.Descriptor) json.RawMessage {
+	raw := descriptor.OutputSchema
+	var schema map[string]any
+	if len(descriptor.ImpliedFields) == 0 || json.Unmarshal(raw, &schema) != nil {
+		return raw
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	for _, implied := range descriptor.ImpliedFields {
+		list, _ := properties[implied.List].(map[string]any)
+		items, _ := list["items"].(map[string]any)
+		required, _ := items["required"].([]any)
+		kept := make([]any, 0, len(required))
+		for _, name := range required {
+			if name != implied.Field {
+				kept = append(kept, name)
+			}
+		}
+		if len(kept) == 0 {
+			delete(items, "required")
+		} else {
+			items["required"] = kept
+		}
+	}
+	encoded, err := json.Marshal(schema)
+	if err != nil {
+		return raw
+	}
+	return encoded
+}
+
+// PublishedDescriptor returns the descriptor as describe publishes it: its output schema relaxed for the
+// members a result can lack.
+func PublishedDescriptor(descriptor capability.Descriptor) capability.Descriptor {
+	descriptor.OutputSchema = PublishedOutputSchema(relaxImplied(descriptor))
+	return descriptor
 }

@@ -576,8 +576,7 @@ func (c *Core) Describe(request DescribeRequest) (DescribeResponse, error) {
 		}
 		connections = []ConnectionRef{c.connectionRef(request.Connection)}
 	}
-	descriptor.OutputSchema = PublishedOutputSchema(descriptor.OutputSchema)
-	return DescribeResponse{Operation: descriptor, Connections: connections}, nil
+	return DescribeResponse{Operation: PublishedDescriptor(descriptor), Connections: connections}, nil
 }
 
 // InvokeRequest is one direct, request-bound invocation. Confirmed is consumed only by this value and is
@@ -667,7 +666,7 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	}
 	// Only what passed the output schema is compacted: empty values are dropped afterwards, for every
 	// provider alike, so CLI and MCP publish the same result.
-	result, err := json.Marshal(dropEmpty(normalized))
+	result, err := json.Marshal(dropEmpty(dropImplied(descriptor, request.Arguments, normalized)))
 	if err != nil {
 		return InvokeResponse{}, &InvalidProviderResponseError{Operation: descriptor.ID}
 	}

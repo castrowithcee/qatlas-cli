@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -121,5 +122,32 @@ func TestInvokeDropsEmptyValuesAfterValidation(t *testing.T) {
 	if _, err := core.Invoke(context.Background(), InvokeRequest{Operation: "fake.pages.list",
 		Arguments: json.RawMessage(`{"id":"7"}`)}); err == nil {
 		t.Fatal("an answer without a required member was accepted")
+	}
+}
+
+func TestDropImpliedOnlyForAnExplicitFixingValue(t *testing.T) {
+	descriptor := capability.Descriptor{
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{"issues":{"type":"array","items":` +
+			`{"type":"object","properties":{"state":{"type":"string"},"n":{"type":"integer"}},"required":["n","state"]}}}}`),
+		ImpliedFields: []capability.ImpliedField{
+			{List: "issues", Argument: "state", Values: []string{"open", "closed"}, Field: "state"},
+		},
+	}
+	tests := []struct{ name, arguments, want string }{
+		{"open", `{"state":"open"}`, `{"issues":[{"n":1}]}`},
+		{"closed", `{"state":"closed"}`, `{"issues":[{"n":1}]}`},
+		{"all", `{"state":"all"}`, `{"issues":[{"n":1,"state":"open"}]}`},
+		{"unset", `{}`, `{"issues":[{"n":1,"state":"open"}]}`},
+	}
+	for _, tt := range tests {
+		var value any
+		_ = json.Unmarshal([]byte(`{"issues":[{"n":1,"state":"open"}]}`), &value)
+		got, _ := json.Marshal(dropImplied(descriptor, json.RawMessage(tt.arguments), value))
+		if string(got) != tt.want {
+			t.Errorf("%s: %s, want %s", tt.name, got, tt.want)
+		}
+	}
+	if got := string(relaxImplied(descriptor)); !strings.Contains(got, `"required":["n"]`) {
+		t.Errorf("published schema = %s, want state no longer required", got)
 	}
 }

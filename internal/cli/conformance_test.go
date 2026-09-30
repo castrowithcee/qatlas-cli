@@ -134,8 +134,7 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 	// describe publishes the compact contract by default and the registered descriptor, with its output schema as published, on request, and the
 	// CLI and the MCP broker publish the same one either way.
 	for _, descriptor := range reg.All() {
-		published := descriptor
-		published.OutputSchema = application.PublishedOutputSchema(descriptor.OutputSchema)
+		published := application.PublishedDescriptor(descriptor)
 		registered, err := json.Marshal(published)
 		if err != nil {
 			t.Fatal(err)

@@ -68,6 +68,16 @@ type Field struct {
 	Description string `json:"description"`
 }
 
+// ImpliedField declares that a filter argument fixes one member of every entry of a result list. When the
+// request sets Argument explicitly to one of Values, the member Field is left out of each entry of List:
+// the request already says its value. Any other value (such as "all") or an unset argument keeps the member.
+type ImpliedField struct {
+	List     string   `json:"list"`
+	Argument string   `json:"argument"`
+	Values   []string `json:"values"`
+	Field    string   `json:"field"`
+}
+
 // Example is a secret-free example invocation of an operation.
 type Example struct {
 	Description string          `json:"description,omitempty"`
@@ -93,6 +103,7 @@ type Descriptor struct {
 	OutputSchema               json.RawMessage `json:"output_schema"`
 	Arguments                  []Argument      `json:"arguments"`
 	Fields                     []Field         `json:"fields"`
+	ImpliedFields              []ImpliedField  `json:"implied_fields,omitempty"`
 	Examples                   []Example       `json:"examples"`
 }
 
@@ -425,7 +436,14 @@ func (d Descriptor) clone() Descriptor {
 	out := d
 	out.InputSchema = append(json.RawMessage(nil), d.InputSchema...)
 	out.OutputSchema = append(json.RawMessage(nil), d.OutputSchema...)
-	out.Tags, out.Arguments, out.Fields, out.Examples = nil, nil, nil, nil
+	out.Tags, out.Arguments, out.Fields, out.Examples, out.ImpliedFields = nil, nil, nil, nil, nil
+	if len(d.ImpliedFields) > 0 {
+		out.ImpliedFields = make([]ImpliedField, len(d.ImpliedFields))
+		for i, implied := range d.ImpliedFields {
+			out.ImpliedFields[i] = implied
+			out.ImpliedFields[i].Values = append([]string(nil), implied.Values...)
+		}
+	}
 	if len(d.Tags) > 0 {
 		out.Tags = append([]string(nil), d.Tags...)
 	}
@@ -487,9 +505,46 @@ func (d Descriptor) validate(provider string) error {
 	if err := uniqueNames("field", len(d.Fields), func(i int) string { return d.Fields[i].Name }); err != nil {
 		return fmt.Errorf("operation %q: %w", d.ID, err)
 	}
+	if err := d.validateImplied(); err != nil {
+		return err
+	}
 	for i, example := range d.Examples {
 		if err := validateSchemaValue(example.Arguments); err != nil {
 			return fmt.Errorf("operation %q: example %d arguments %w", d.ID, i+1, err)
+		}
+	}
+	return nil
+}
+
+// validateImplied checks that every implied field names an argument of the input schema, a list of the
+// output schema, and a member of that list's entries, with at least one fixing value.
+func (d Descriptor) validateImplied() error {
+	for _, implied := range d.ImpliedFields {
+		if len(implied.Values) == 0 {
+			return fmt.Errorf("operation %q: implied field %q declares no value", d.ID, implied.Field)
+		}
+		var input, output struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		}
+		if json.Unmarshal(d.InputSchema, &input) != nil {
+			return fmt.Errorf("operation %q: input schema cannot be read", d.ID)
+		}
+		if _, ok := input.Properties[implied.Argument]; !ok {
+			return fmt.Errorf("operation %q: implied field %q names unknown argument %q", d.ID, implied.Field, implied.Argument)
+		}
+		if json.Unmarshal(d.OutputSchema, &output) != nil {
+			return fmt.Errorf("operation %q: output schema cannot be read", d.ID)
+		}
+		var list struct {
+			Items struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+			} `json:"items"`
+		}
+		if json.Unmarshal(output.Properties[implied.List], &list) != nil || list.Items.Properties == nil {
+			return fmt.Errorf("operation %q: implied field %q names unknown list %q", d.ID, implied.Field, implied.List)
+		}
+		if _, ok := list.Items.Properties[implied.Field]; !ok {
+			return fmt.Errorf("operation %q: implied field %q is not a member of the entries of %q", d.ID, implied.Field, implied.List)
 		}
 	}
 	return nil
