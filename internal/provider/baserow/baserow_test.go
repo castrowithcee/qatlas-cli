@@ -165,6 +165,16 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			t.Fatalf("tool %+v", tool)
 		}
 	}
+	for _, id := range []string{Provider + ".rows.history", Provider + ".rows.comments"} {
+		if _, ok := want[id]; ok {
+			t.Fatalf("%s must not be offered: its endpoint accepts no database token", id)
+		}
+		for _, tool := range metadata.Tools {
+			if tool.ID == id {
+				t.Fatalf("%s is registered", id)
+			}
+		}
+	}
 	profile, ok := metadata.RecommendedProfile()
 	if !ok || len(profile.Tools) != 5 {
 		t.Fatalf("recommended profile = %+v", profile)

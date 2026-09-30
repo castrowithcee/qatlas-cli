@@ -81,6 +81,15 @@ keyed `field_ID`). It answers `rows` (`id`, `order`, `fields`), `count` (the tab
 Baserow reports it), `page`, `size`, and `has_more`, which is true when Baserow reports a next page. It has
 no filters, search, or sorting; `rows.search` does. `rows.get` takes `table_id`, `row_id`, and `user_field_names`.
 
+## Not offered: row history and comments
+
+Row history (`GET /api/database/rows/table/{table_id}/{row_id}/history/`) and row comments
+(`GET /api/row_comments/{table_id}/{row_id}/`, a premium feature) are not tools. The official API schema of
+the instance (Baserow 2.4.0, `/api/schema.json`) lists only JWT (user session) authentication for both
+endpoints, while the row endpoints list JWT and database token. A database token therefore cannot be shown to
+work for them, and Qatlas does not send a user session. Both stay out until the official documentation
+lists the database token for them.
+
 ## Searching rows
 
 `baserow.rows.search` takes `table_id` (inside the targets), `page`, `size` (as `rows.list`), and:
@@ -190,6 +199,9 @@ Checked against the official documentation (baserow.io/user-docs/database-api), 
 - `GET /api/database/rows/table/{table_id}/{row_id}/` with `user_field_names`.
 - `POST /api/database/rows/table/{table_id}/`, `PATCH .../{row_id}/`, `DELETE .../{row_id}/`, and
   `PATCH .../{row_id}/move/` as the four row endpoints (listed in the official documentation).
+
+- The official API schema (Baserow 2.4.0) lists JWT only for the row history and row comment endpoints, and
+  JWT or database token for the row endpoints; hence the two are not offered.
 
 Not checked against the official documentation in this change, taken from the Baserow list-rows API as
 known: the query parameters `search`, `search_mode`, `filter__{field}__{type}` with `user_field_names=true`,
