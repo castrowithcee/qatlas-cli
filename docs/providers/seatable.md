@@ -266,6 +266,42 @@ qatlas invoke seatable.rows.activities --connection sales-all-tables --arg table
 qatlas invoke seatable.base.operations --connection sales-all-tables --arg page=1
 ```
 
+## Comments and collaborators
+
+`seatable.comments.list`, `seatable.comments.create`, `seatable.comments.delete`, and
+`seatable.collaborators.list` work with the comments of one row and with the people of the base. None of
+them is in a profile. `comments.delete` is offered only by a connection whose `tools` list names it.
+
+- All three comment tools take `row_id` and `table` (as for rows). The table must be inside the connection
+  allow-list and the row must exist in it: Qatlas reads the row in the selected table before any comment
+  route is used, so a row of another table, or a deleted row, gives no access. A table outside the
+  allow-list or a malformed request is refused before the credential is read and before SeaTable is
+  contacted; the refusal does not name the rejected table or row.
+- `comments.list` reports `id`, `author`, `comment`, `created_at`, `updated_at`, and `resolved` of the
+  comments of the row as untrusted data, at most 100 per call with `has_more`; entries that name another row
+  are left out. Comments and their authors are classified `seatable-base-people`.
+- `comments.create` takes `comment` (1 to 4096 bytes of text, not blank) and sends exactly one request that
+  adds it as the user of the API token. It needs `confirm`.
+- `comments.delete` takes `comment_id`. Qatlas first lists the comments of the requested row and deletes only
+  a comment found there; any other identifier is refused without a delete request. It needs `confirm`.
+- A change is never repeated. After a timeout, a connection reset, a 5xx status, or an unreadable answer the
+  error says the change may have taken effect; list the comments of the row before repeating it.
+- `collaborators.list` takes no arguments and reports `name`, `email`, and `contact_email` of the people of
+  the whole base, at most 500 with `has_more`; the avatar address is left out. It is not bound to the tables
+  of the connection: every connection to the base may read all collaborators, so offer it only where that is
+  intended. The sensitivity class `seatable-base-people` covers names and mail addresses; values of this
+  class never enter the audit trail or the invoke log.
+- Every answer is limited to 1 MiB, strings are shortened to 4096 bytes, and errors never carry provider
+  text. Comments across the whole base are not offered.
+
+```sh
+qatlas invoke seatable.comments.list --connection sales-all-tables --arg table=id:0000 \
+  --arg row_id=Qtf7xPmoRaiFyQPO1aENTj
+qatlas invoke seatable.comments.create --connection sales-rw --confirm --arg table=id:0000 \
+  --arg row_id=Qtf7xPmoRaiFyQPO1aENTj --arg comment="Please check this row"
+qatlas invoke seatable.collaborators.list --connection sales-all-tables
+```
+
 ## Batch rows and snapshots
 
 `seatable.rows.batchcreate`, `seatable.rows.batchupdate`, `seatable.rows.batchdelete`, and

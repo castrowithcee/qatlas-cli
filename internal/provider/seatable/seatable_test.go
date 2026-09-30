@@ -221,8 +221,8 @@ func TestRegisterPublishesMetadataAndThirtyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 33 {
-		t.Fatalf("operations = %d, want two schema, six row, three batch row, one snapshot, four link, five view, four table change, three column option, three column, and two history operations", len(operations))
+	if len(operations) != 37 {
+		t.Fatalf("operations = %d, want two schema, six row, three batch row, one snapshot, four link, five view, four table change, three column option, three column, two history, three comment, and one collaborator operation", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantSensitivity := dataSensitivity
@@ -231,6 +231,9 @@ func TestRegisterPublishesMetadataAndThirtyOperations(t *testing.T) {
 		}
 		if descriptor.ID == "seatable.rows.activities" || descriptor.ID == "seatable.base.operations" {
 			wantSensitivity = historySensitivity
+		}
+		if descriptor.ID == "seatable.comments.list" || descriptor.ID == "seatable.collaborators.list" {
+			wantSensitivity = peopleSensitivity
 		}
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != wantSensitivity {
@@ -250,7 +253,7 @@ func TestRegisterPublishesMetadataAndThirtyOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "seatable.base.operations" || operations[32].ID != "seatable.views.update" {
+	if operations[0].ID != "seatable.base.operations" || operations[36].ID != "seatable.views.update" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
