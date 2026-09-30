@@ -823,7 +823,6 @@ func toolResult(data any, err error, redactor *redact.Redactor) map[string]any {
 		return result
 	}
 	result["content"] = []map[string]string{{"type": "text", "text": string(encoded)}}
-	result["structuredContent"] = data
 	result["isError"] = false
 	return result
 }

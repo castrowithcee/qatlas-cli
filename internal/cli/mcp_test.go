@@ -1099,6 +1099,18 @@ func toolResultFrom(t *testing.T, response decodedMCPResponse) mcpToolResult {
 	if len(result.Content) != 1 || result.Content[0].Type != "text" {
 		t.Fatalf("tool content = %+v", result.Content)
 	}
+	if !result.IsError {
+		// A success is transferred once: no structuredContent, and the single text block is the JSON result.
+		if result.Structured != nil {
+			t.Fatalf("success carries structuredContent %s", result.Structured)
+		}
+		if !json.Valid([]byte(result.Content[0].Text)) {
+			t.Fatalf("success text is not JSON: %q", result.Content[0].Text)
+		}
+		result.Structured = json.RawMessage(result.Content[0].Text)
+	} else if len(result.Structured) == 0 {
+		t.Fatalf("error lacks structuredContent: %+v", result)
+	}
 	return result
 }
 

@@ -646,6 +646,20 @@ type mcpResponse struct {
 	Error json.RawMessage `json:"error"`
 }
 
+// singleMCPSuccess checks that a success is transferred once, as one JSON text block without
+// structuredContent, and exposes that JSON as Structured for the assertions.
+func singleMCPSuccess(t *testing.T, response *mcpResponse) {
+	t.Helper()
+	if len(response.Error) != 0 || response.Result.IsError {
+		return
+	}
+	if len(response.Result.Structured) != 0 || len(response.Result.Content) != 1 ||
+		!json.Valid([]byte(response.Result.Content[0].Text)) {
+		t.Fatalf("MCP success is not a single JSON text block: %+v", response.Result)
+	}
+	response.Result.Structured = json.RawMessage(response.Result.Content[0].Text)
+}
+
 func decodeMCP(t *testing.T, stdout string) map[string]mcpResponse {
 	t.Helper()
 	responses := map[string]mcpResponse{}
@@ -657,6 +671,7 @@ func decodeMCP(t *testing.T, stdout string) map[string]mcpResponse {
 		} else if err != nil {
 			t.Fatalf("decoding MCP output %q: %v", stdout, err)
 		}
+		singleMCPSuccess(t, &response)
 		responses[strings.Trim(string(response.ID), `"`)] = response
 	}
 	return responses
