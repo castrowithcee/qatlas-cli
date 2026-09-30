@@ -128,7 +128,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[188]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[190]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
 		"github.branches.create,Create a GitHub branch,create,", "github.contents.put,Create or update a GitHub repository file,update,",
 		"github.contents.delete,Delete a GitHub repository file,delete,",
@@ -139,6 +139,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		"github.dependabotalerts.get,Get a GitHub Dependabot alert,read,",
 		"github.secretscanningalerts.list,List GitHub secret scanning alerts,read,",
 		"github.globaladvisories.list,List GitHub global security advisories,read,",
+		"github.copilotassignments.create,Assign GitHub Copilot to an issue,update,",
+		"github.copilotreviews.request,Request a GitHub Copilot review,update,",
 		"github.codequalityfindings.get,Get a GitHub code quality finding,read,",
 		"github.blame.get,Get the GitHub blame of a file,read,",
 		"github.commits.list,List GitHub commits,read,", "github.commits.get,Get a GitHub commit,read,",

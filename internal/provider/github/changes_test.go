@@ -381,6 +381,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.repositoryadvisories.list":   readRisk,
 		"github.organizationadvisories.list": readRisk,
 		"github.codequalityfindings.get":     readRisk,
+		"github.copilotassignments.create":   changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
+		"github.copilotreviews.request":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 		"github.gists.list":                  readRisk,
 		"github.gists.get":                   readRisk,
 		"github.gists.create":                changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),

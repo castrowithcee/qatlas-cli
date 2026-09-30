@@ -111,6 +111,11 @@
 // profile security and change nothing. The global tools are GitHub-wide and refused on a connection whose
 // targets name a repository or a project; the organization tool needs an organization owner. Advisory and
 // finding texts are untrusted data, cut at fixed lengths, and every cut says so.
+// github.copilotassignments.create assigns the Copilot coding agent to an issue of a repository, optionally with
+// a base branch, extra instructions, and the intent behind the choice, and github.copilotreviews.request
+// requests a Copilot review of a pull request; they are offered only by the not-recommended setup profile
+// copilot. An assignment reads the issue and the assignable actors of the same repository first, keeps the
+// other assignees, and refuses with a permission error, changing nothing, where Copilot is not assignable.
 // github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
 // takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
 // the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
@@ -512,7 +517,11 @@ func Register(reg *capability.Registry) error {
 				"repository_advisories:write on a classic token, or Repository security advisories: write on a " +
 				"fine-grained token, and an organization owner or security manager; the code quality finding " +
 				"read needs repo on a classic token (public_repo for a public repository), or Code quality: " +
-				"read on a fine-grained token",
+				"read on a fine-grained token; the Copilot tools need a user token, never an app installation " +
+				"token: assigning Copilot to an issue needs repo on a classic token, or Metadata: read plus " +
+				"Actions, Contents, Issues, and Pull requests: read and write on a fine-grained token, and " +
+				"requesting a Copilot review needs repo on a classic token, or Pull requests: read and write on a " +
+				"fine-grained token, plus write access to the repository",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -697,6 +706,12 @@ func Register(reg *capability.Registry) error {
 				"alerts of a repository, the global and repository security advisories, and code quality " +
 				"findings; the found secret of a secret scanning alert is never shown; changes nothing",
 			Tools: securityAlertTools,
+		}, {
+			ID: "copilot", Title: "Copilot",
+			Description: "not recommended: assigns the Copilot coding agent to an issue, optionally with a base " +
+				"branch, instructions, and intent, and requests a Copilot review of a pull request; every " +
+				"change needs its own confirmation",
+			Tools: copilotTools,
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -728,7 +743,8 @@ func Register(reg *capability.Registry) error {
 		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
 		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
 		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
-		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations(), advisoryOperations())...)
+		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations(), advisoryOperations(),
+		copilotOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1837,7 +1853,13 @@ func (c *Client) authorize(req *http.Request) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", apiVersion)
 	req.Header.Set("User-Agent", "qatlas-cli")
+	if features, ok := req.Context().Value(graphQLFeaturesKey{}).(string); ok {
+		req.Header.Set("GraphQL-Features", features)
+	}
 }
+
+// graphQLFeaturesKey carries the GraphQL feature flag a request needs for a preview field.
+type graphQLFeaturesKey struct{}
 
 // observeRateLimit reads the primary budget headers. When the budget of this token is spent, the next
 // request of this process waits for the reported reset instead of running into a refusal.

@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, release reads and changes, the account behind a connection's token, organization teams and their members, and the account's starred repositories: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the account and organization discovery tools, starring and unstarring, repository create and fork, the listed-only repository delete, repository collaborators, the cursor contract, security alerts, advisories, and code quality findings, notification threads with their thread and repository subscriptions, and token scopes.
+  Describes GitHub project and issue planning, GitHub Actions, pull request reads and changes, pull request reviews, line comments, review threads, and requested reviewers, release reads and changes, the account behind a connection's token, organization teams and their members, and the account's starred repositories: targets as an optional allow-list, target arguments and their defaults, the owner lists of projects and repositories, the project lifecycle and templates, the project field schema, project views, status updates, collaborators and teams, and built-in automations, reads, confirmed changes of issues, comments, project fields, project items, and drafts, batches, partial results, the Actions observer and operator tools, log limits, the listed-only workflow maintainer and Actions administrator tools, pull request reads, confirmed changes, the listed-only merge and its conflicts, pull request conversation comments, reviews with bundled line comments, replies, review threads, requested reviewers, and the listed-only approve, release reads and confirmed changes, the listed-only delete, the account and organization discovery tools, starring and unstarring, repository create and fork, the listed-only repository delete, repository collaborators, the cursor contract, security alerts, advisories, and code quality findings, assigning Copilot to issues and requesting Copilot reviews, notification threads with their thread and repository subscriptions, and token scopes.
 type: knowledge
 edit: shared
 created: 2026-09-23
@@ -163,7 +163,7 @@ check. Inside a repository it names the issue, the workflow run, job, or workflo
 workflow file or `.github/workflows` directory with the ref it was read at, `github.contents.get`'s path or
 the repository root with its ref, `github.trees.get`'s ref, `github.blame.get`'s ref or its path at that ref,
 `github.commits.get`'s ref, `github.tags.get`'s tag, the discussion by its number, a code scanning, Dependabot, or secret scanning alert as "code scanning alert N", "Dependabot alert N", or "secret scanning alert N" and their lists as "the code scanning alerts of this repository" and so on, a code quality finding as "code quality finding N", the repository security advisories as "the repository security advisories" (of a repository or of "orgs/LOGIN"), and a global advisory as "global security advisory GHSA-..." (the list as "the global security advisories"), a gist as "this gist" (also for a gist of a user the connection's targets do not name) and a user's gists as "the gists of users/LOGIN", a notification thread as "this notification thread" (also for a thread of a repository the connection's targets do not admit), the subscription of a thread, a fork or the collaborators `github.repositories.fork` and
-`github.collaborators.list` address, the pull request by its number, the sub-issues or the dependencies of an
+`github.collaborators.list` address, the pull request by its number (also for a Copilot review request), the issue a Copilot assignment addresses by its number, the sub-issues or the dependencies of an
 issue as "the sub-issues of issue #N", "a sub-issue of issue #N", "the sub-issue order of issue #N", "the
 issues blocking issue #N", "the issues issue #N blocks", or "a dependency of issue #N", or, for
 `github.pullrequestchecks.list` once the pull request itself was found, the commit its checks were asked
@@ -250,7 +250,8 @@ profile `gists` lists and reads gists and creates and updates them under [Gists]
 unticked, since it is offered only where a connection's `tools` list names it. The not-recommended profile
 `security` lists and reads the code scanning, Dependabot, and secret scanning alerts of a repository, the global
 and repository security advisories, and code quality findings under [Security alerts](#security-alerts) and
-changes nothing. A
+changes nothing. The not-recommended profile `copilot` assigns Copilot to an issue and requests a Copilot review
+of a pull request under [Copilot](#copilot); every change needs its own confirmation. A
 profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
 changed before saving, and a saved connection never follows a profile.
@@ -1229,6 +1230,56 @@ https://docs.github.com/en/rest/code-quality/code-quality (checked 2026-09-30).
 
 The alert filters above match the official GitHub MCP server (MIT, `pkg/github/code_scanning.go`, `dependabot.go`,
 `secret_scanning.go` at commit 85598ba): no filter of the official server is missing.
+
+## Copilot
+
+Two tools use Copilot in a repository. Both take `repository` like the other repository tools and address the issue
+or pull request `number` in that repository; a connection without a matching repository target is refused as an
+invalid request before a credential is resolved. Both are covered by a confirmation, and neither waits for what
+Copilot does afterwards.
+
+`github.copilotassignments.create` assigns the Copilot coding agent to one issue and keeps the other assignees. It
+first reads the issue and the actors the repository lists as assignable, all in the bound repository. `base_ref`
+names the branch the agent starts from (the default branch when absent) and `custom_instructions` adds up to
+10000 characters of instructions. `rationale` (at most 280 characters) and `confidence` (`LOW`, `MEDIUM`, `HIGH`)
+record why Copilot was chosen and must be named together; `is_suggestion=true` then records only a pending
+assignment that does not start the agent and excludes `base_ref` and `custom_instructions`. Without any of the three
+intent fields the plain assignment is sent. The answer is the issue `number`, its `url`, and `is_suggestion`. Where
+Copilot is not among the assignable actors (no Copilot license with the coding agent, or the agent is not enabled for
+the repository) the call fails as `permission` with that reason and changes nothing; an issue that the repository
+does not hold is `not-found`. The tool is non-idempotent: a repeated call asks the agent again.
+
+`github.copilotreviews.request` requests Copilot as reviewer of one pull request and answers with the pull request
+as `github.pullrequests.get` reports it. It is idempotent: requesting again leaves Copilot requested. GitHub
+answers a missing write access with `permission`, and a request it rejects with an error that names the license or
+the repository setting as the likely reason.
+
+Both cover the official tools `assign_copilot_to_issue`, `assign_copilot_to_issue_with_intent`, and
+`request_copilot_review` of the GitHub MCP server (MIT, `pkg/github/copilot.go` at commit 85598ba) in one tool per
+operation. Unlike the official assignment tools they do not poll for the pull request the agent opens later.
+
+```
+qatlas invoke github.copilotassignments.create --connection code --arg number=42 --arg base_ref=main --confirm
+qatlas invoke github.copilotreviews.request --connection code --arg number=7 --confirm
+```
+
+| Tool | Effect | Idempotency | Confirmation | Notes |
+| --- | --- | --- | --- | --- |
+| `github.copilotassignments.create` | update | non-idempotent | required | assigns Copilot to an issue, optionally with intent |
+| `github.copilotreviews.request` | update | idempotent | required | requests a Copilot review of a pull request |
+
+The not-recommended setup profile `copilot` ticks both tools; the recommended profile `read` is unchanged. Both need a
+user token, never a GitHub App installation token.
+
+| Tools | Classic token | Fine-grained token |
+| --- | --- | --- |
+| `github.copilotassignments.create` | `repo` | Metadata: read; Actions, Contents, Issues, and Pull requests: read and write |
+| `github.copilotreviews.request` | `repo`, and write access to the repository | Pull requests: read and write, and write access to the repository |
+
+Sources: https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/use-cloud-agent-via-the-api (user
+token only, the fine-grained permissions for the assignment, and the check of Copilot among the repository's
+`suggestedActors`) and https://docs.github.com/en/rest/pulls/review-requests (checked 2026-09-30). The docs name no
+classic scope for the assignment; `repo` is the scope of the issue and pull request routes it changes.
 
 ## Milestones
 
