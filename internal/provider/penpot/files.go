@@ -204,7 +204,12 @@ func (c *Client) filesOf(ctx context.Context, op, projectID string) ([]File, err
 // fileOf binds a file through its project: the project is located in the bound teams and the file in the
 // project's file list. Both are requests made with the credential; neither refusal names the target.
 func (c *Client) fileOf(ctx context.Context, op, projectID, fileID string) (*File, error) {
-	if err := c.locateProject(ctx, op, projectID); err != nil {
+	return c.fileOfAs(ctx, op, "project_id", "file_id", projectID, fileID)
+}
+
+// fileOfAs is fileOf for arguments with other names, such as a library file.
+func (c *Client) fileOfAs(ctx context.Context, op, projectField, fileField, projectID, fileID string) (*File, error) {
+	if err := c.locateProjectAs(ctx, op, projectField, projectID); err != nil {
 		return nil, err
 	}
 	files, err := c.filesOf(ctx, op, projectID)
@@ -216,7 +221,7 @@ func (c *Client) fileOf(ctx context.Context, op, projectID, fileID string) (*Fil
 			return &files[i], nil
 		}
 	}
-	return nil, invalidRequest("file_id is not a file of this project")
+	return nil, invalidRequest(fileField + " is not a file of this project")
 }
 
 func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

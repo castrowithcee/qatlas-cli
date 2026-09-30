@@ -85,6 +85,10 @@ const (
 	cmdCreateFile    = "create-file"
 	cmdRenameFile    = "rename-file"
 	cmdMoveFiles     = "move-files"
+
+	cmdFileLibraries = "get-file-libraries"
+	cmdSetShared     = "set-file-shared"
+	cmdLinkLibrary   = "link-file-to-library"
 )
 
 // changeUncertain is appended to a failure of a change whose request may have reached Penpot. Qatlas never
@@ -165,7 +169,7 @@ func newHTTPClient() *http.Client {
 // commands that change data from the ones that only read.
 func isCommand(name string) bool {
 	switch name {
-	case cmdTeams, cmdProjects, cmdProjectFile, cmdSummary, cmdPage, cmdThreads, cmdComments:
+	case cmdTeams, cmdProjects, cmdProjectFile, cmdSummary, cmdPage, cmdThreads, cmdComments, cmdFileLibraries:
 		return true
 	}
 	return isChange(name)
@@ -174,7 +178,8 @@ func isCommand(name string) bool {
 func isChange(name string) bool {
 	switch name {
 	case cmdCreateThread, cmdCreateComment, cmdUpdateThread, cmdUpdateComment, cmdDeleteThread, cmdDeleteComment,
-		cmdCreateProject, cmdRenameProject, cmdDeleteProject, cmdCreateFile, cmdRenameFile, cmdMoveFiles:
+		cmdCreateProject, cmdRenameProject, cmdDeleteProject, cmdCreateFile, cmdRenameFile, cmdMoveFiles,
+		cmdSetShared, cmdLinkLibrary:
 		return true
 	}
 	return false
@@ -485,5 +490,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: filesCreate, Handler: capability.Handler(invokeFilesCreate)},
 		capability.Operation{Descriptor: filesRename, Handler: capability.Handler(invokeFilesRename)},
 		capability.Operation{Descriptor: filesMove, Handler: capability.Handler(invokeFilesMove)},
+		capability.Operation{Descriptor: librariesList, Handler: capability.Handler(invokeLibrariesList)},
+		capability.Operation{Descriptor: librariesShare, Handler: capability.Handler(invokeLibrariesShare)},
+		capability.Operation{Descriptor: librariesLink, Handler: capability.Handler(invokeLibrariesLink)},
 	)
 }

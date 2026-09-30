@@ -87,6 +87,9 @@ connections:
 | `penpot.files.create` | create | required | `create-file` | creates an empty file in a project |
 | `penpot.files.rename` | update | required | `rename-file` | renames a file |
 | `penpot.files.move` | update | required | `move-files` | moves one file to another project |
+| `penpot.libraries.list` | read | none | `get-file-libraries` | lists the libraries a file uses |
+| `penpot.libraries.share` | update | required | `set-file-shared` | shares a file as a library for the whole team, or stops sharing it |
+| `penpot.libraries.link` | update | required | `link-file-to-library` | links one file to a library file |
 | `penpot.comments.threads` | read | none | `get-comment-threads` | lists the comment threads of a file |
 | `penpot.comments.list` | read | none | `get-comments` | lists the comments of one thread |
 | `penpot.comments.create` | create | required | `create-comment-thread` or `create-comment` | starts a thread or adds a comment |
@@ -131,6 +134,25 @@ reset, a 5xx answer, or an unreadable answer (for a creation also an answer with
 change may have taken effect; read the projects or files before trying again. A refusal for a target outside the
 connection comes before the credential is resolved when the allow-list decides it, and otherwise after reads only; it
 never names the target.
+
+## Libraries
+
+- `libraries.list` takes `project_id` and `file_id` (the file is bound through its project) and reads the libraries the
+  file uses. Only libraries whose team is bound and whose project passes the allow-list are described (`id`, `name`,
+  `project_id`, `is_shared`, `is_indirect`); every other library is only counted in `outside_targets`, never named.
+  At most 200 libraries are returned.
+- `libraries.share` takes `project_id`, `file_id`, and `shared`. **Sharing makes the file visible as a library to the
+  whole team that owns it**, not only to this connection's projects. Unsharing removes the links of other files and
+  copies the library's assets into them. The file is bound through its project first. The answer has `shared`,
+  `file_id`, and `project_id`.
+- `libraries.link` takes `project_id` and `file_id` (the file that uses the library) and `library_project_id` and
+  `library_id` (the library file). Both files are bound through their projects, which must pass the allow-list and lie
+  in bound teams, so a link is only made between bound files. Penpot itself refuses a link to the file itself, across
+  teams, and a circular link. The answer has `linked`, `file_id`, and `library_id`.
+
+`share` and `link` ask for `confirm`, send exactly one request, and are never repeated; after a timeout, a connection
+reset, a 5xx answer, or an unreadable answer the error says that the change may have taken effect, so read the
+libraries before trying again. Refusals never name the target.
 
 ## Comments
 
@@ -202,6 +224,11 @@ instance:
   `move-files` (`ids`, a set of file IDs, and `project-id`, the target; refuses a move into the same project; answers
   without a body). Names are at most 250 characters. The optional `id` (user-provided UUID), `is-shared`, and
   `features` of the create commands are never sent.
+- Libraries (Penpot 2.18.0, `files.clj`): `get-file-libraries` (`file-id`; the libraries the file uses, directly or
+  through another library, each with `id`, `name`, `project-id`, `team-id`, `is-shared`, `is-indirect`, and
+  timestamps), `set-file-shared` (`id`, `is-shared`), and `link-file-to-library` (`file-id`, `library-id`; requires
+  edit permission on both files and the same team, answers the libraries of the library). Assumed: the answers of the
+  two changes are not read.
 - Assumed, not documented: a `position` is sent as an object `{"x": ..., "y": ...}` and a thread's position is read
   the same way; a change that answers without a body is read as done; requests send kebab-case keys, responses are JSON when `Accept: application/json` is sent,
   and their keys are read case- and separator-insensitively (camelCase or kebab-case); the summary's categories carry

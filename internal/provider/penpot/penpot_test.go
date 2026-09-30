@@ -115,12 +115,12 @@ func testConfig() *config.Config {
 			"two":    connection("team/"+teamA, "team/"+teamB),
 			"narrow": connection("team/"+teamA, "project/"+projectA1),
 			"write": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
-				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, manageTools...)},
+				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, libraryTools...)...)},
 			"writetwo": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA, "team/" + teamB},
-				Tools: manageTools},
+				Tools: append(manageTools, libraryTools...)},
 			"writenarrow": {Service: "penpot", Credential: "token", Permissions: all,
 				Targets: []string{"team/" + teamA, "project/" + projectA1},
-				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, manageTools...)},
+				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, libraryTools...)...)},
 			"nodelete": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
 				Tools: []string{commentsCreate.ID, commentsUpdate.ID, projectsCreate.ID, projectsRename.ID, filesCreate.ID,
 					filesRename.ID, filesMove.ID}},
@@ -185,7 +185,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		commentsDelete.ID: config.PermissionDelete,
 		projectsCreate.ID: config.PermissionCreate, projectsRename.ID: config.PermissionUpdate,
 		projectsDelete.ID: config.PermissionDelete, filesCreate.ID: config.PermissionCreate,
-		filesRename.ID: config.PermissionUpdate, filesMove.ID: config.PermissionUpdate}
+		filesRename.ID: config.PermissionUpdate, filesMove.ID: config.PermissionUpdate,
+		librariesList.ID: config.PermissionRead, librariesShare.ID: config.PermissionUpdate,
+		librariesLink.ID: config.PermissionUpdate}
 	if len(metadata.Tools) != len(want) {
 		t.Fatalf("tools = %+v", metadata.Tools)
 	}
