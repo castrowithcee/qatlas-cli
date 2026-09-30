@@ -174,9 +174,9 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	if !strings.HasPrefix(stdout, "providers[12]{provider,description,note,tools,connections,configured}:\n") ||
+	if !strings.HasPrefix(stdout, "providers[13]{provider,description,note,tools,connections,configured}:\n") ||
 		!strings.HasSuffix(stdout, "\n") || strings.Contains(stdout, "\r") {
-		t.Errorf("stdout = %q, want an LF TOON table of twelve namespace rows", stdout)
+		t.Errorf("stdout = %q, want an LF TOON table of thirteen namespace rows", stdout)
 	}
 	for _, want := range []string{
 		// BookStack has exactly one configured connection, Telegram one, and every other compiled
@@ -186,7 +186,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
 		"  github,Code hosting and software collaboration platform,\"\",192,0,0\n", ",\"\",3,0,0\n",
-		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",37,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n",
+		",\"\",4,0,0\n", ",\"\",6,0,0\n", ",\"\",37,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n", ",\"\",2,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)

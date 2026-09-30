@@ -11,6 +11,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider/n8n"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/nextcloud"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/seatable"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/seatableaccount"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/telegram"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/todoist"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/twentycrm"
@@ -55,6 +56,9 @@ func defaultRegistry() *capability.Registry {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := makeapi.Register(reg); err != nil {
+		panic("provider registration is static and must not fail: " + err.Error())
+	}
+	if err := seatableaccount.Register(reg); err != nil {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	// Tool profiles name registered tools, so they are checked once every provider has registered its own.
