@@ -1082,6 +1082,9 @@ func (c *Client) ListRows(ctx context.Context, options ListOptions) (*ListResult
 		}
 		rows = append(rows, *row)
 	}
+	if err := c.maskLinks(ctx, op, selected, rows); err != nil {
+		return nil, err
+	}
 
 	result := &ListResult{
 		Rows: rows, Start: options.Start, Limit: options.Limit,
@@ -1133,7 +1136,125 @@ func (c *Client) GetRowFrom(ctx context.Context, table, rowID string) (*Row, err
 			Message: "SeaTable answered with a different row than the requested one",
 		}
 	}
+	if err := c.maskLinks(ctx, op, selected, []Row{*row}); err != nil {
+		return nil, err
+	}
 	return row, nil
+}
+
+// maskLinks reduces every link entry that points into a table outside the connection's allow-list to its
+// row identifier, so a display value never leaves through a table the connection may not read. A wildcard
+// connection reads every table and keeps the display values. The metadata is requested only when a row
+// carries link entries at all. A counter table that cannot be determined counts as not allowed.
+func (c *Client) maskLinks(ctx context.Context, op string, selected target, rows []Row) error {
+	if c.scope.wildcard {
+		return nil
+	}
+	found := false
+	for _, row := range rows {
+		for _, value := range row.Values {
+			if _, ok := linkEntries(value); ok {
+				found = true
+			}
+		}
+	}
+	if !found {
+		return nil
+	}
+	document, err := c.metadata(ctx, op)
+	if err != nil {
+		return err
+	}
+	var current *tableJSON
+	for i := range document.Metadata.Tables {
+		if matchesTable(selected, document.Metadata.Tables[i]) {
+			current = &document.Metadata.Tables[i]
+			break
+		}
+	}
+	for _, row := range rows {
+		for name, value := range row.Values {
+			entries, ok := linkEntries(value)
+			if !ok || c.linkAllowed(document, current, name) {
+				continue
+			}
+			masked := make([]map[string]string, 0, len(entries))
+			for _, id := range entries {
+				masked = append(masked, map[string]string{"row_id": id})
+			}
+			encoded, err := json.Marshal(masked)
+			if err != nil {
+				return providerError(op, "a link value could not be masked")
+			}
+			row.Values[name] = encoded
+		}
+	}
+	return nil
+}
+
+// linkEntries reports the row identifiers of a cell that holds link entries: an array with at least one
+// object that carries a row_id. Entries without a usable row_id are not reported.
+func linkEntries(value json.RawMessage) ([]string, bool) {
+	var items []json.RawMessage
+	if json.Unmarshal(value, &items) != nil {
+		return nil, false
+	}
+	ids := []string{}
+	found := false
+	for _, item := range items {
+		var entry map[string]json.RawMessage
+		if json.Unmarshal(item, &entry) != nil {
+			continue
+		}
+		raw, ok := entry["row_id"]
+		if !ok {
+			continue
+		}
+		found = true
+		if id := decodeString(raw); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids, found
+}
+
+// linkAllowed reports whether the table a link column points to is inside the allow-list. Only a column of
+// type link whose two table identifiers name the current table and one other table is resolved; every
+// other case is not allowed.
+func (c *Client) linkAllowed(document metadataJSON, current *tableJSON, column string) bool {
+	if current == nil {
+		return false
+	}
+	for _, candidate := range current.Columns {
+		if candidate.Name != column {
+			continue
+		}
+		if candidate.Type != "link" {
+			return false
+		}
+		first, second := candidate.Data.TableID, candidate.Data.OtherTableID
+		var other string
+		switch {
+		case first == current.ID && second != "":
+			other = second
+		case second == current.ID && first != "":
+			other = first
+		default:
+			return false
+		}
+		for _, table := range document.Metadata.Tables {
+			if table.ID != other {
+				continue
+			}
+			for _, allowed := range c.scope.targets {
+				if matchesTable(allowed, table) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return false
 }
 
 func (c *Client) CreateRow(ctx context.Context, values map[string]json.RawMessage) error {
@@ -1292,15 +1413,23 @@ type metadataJSON struct {
 	} `json:"metadata"`
 }
 
+// columnJSON mirrors the column properties this provider reads. Data carries the two table identifiers of
+// a link column, which name the tables the link joins.
+type columnJSON struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Data struct {
+		TableID      string `json:"table_id"`
+		OtherTableID string `json:"other_table_id"`
+	} `json:"data"`
+}
+
 type tableJSON struct {
-	ID      string `json:"_id"`
-	Name    string `json:"name"`
-	Columns []struct {
-		Key  string `json:"key"`
-		Name string `json:"name"`
-		Type string `json:"type"`
-	} `json:"columns"`
-	Views []struct {
+	ID      string       `json:"_id"`
+	Name    string       `json:"name"`
+	Columns []columnJSON `json:"columns"`
+	Views   []struct {
 		ID   string `json:"_id"`
 		Name string `json:"name"`
 	} `json:"views"`

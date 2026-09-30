@@ -25,6 +25,12 @@ qatlas invoke seatable.columns.list --connection sales-all-tables --arg table=id
 qatlas invoke seatable.rows.list --connection sales-all-tables --arg table=id:0000 --arg limit=25
 ```
 
+Link columns in row output follow the table boundary. When the linked table is outside the connection
+allow-list, or cannot be determined from the base metadata, each link entry is reduced to its `row_id` and
+carries no `display_value`. A wildcard connection keeps display values. The same applies to `seatable.rows.list`
+and `seatable.rows.get`, whichever way the table is addressed. Lookup and formula columns are returned as the
+provider computes them.
+
 The connection can list and read rows (`read`) and create, update, or delete rows with the matching
 permission. Mutations require confirmation, reject system-column names, and are bounded to 1 MiB. They can
 never select a table outside the connection allow-list. A view narrows listing but does not redirect a
