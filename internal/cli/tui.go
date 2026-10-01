@@ -43,6 +43,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"the guided setup, and q quits; ctrl+c quits anywhere without saving. esc only ever steps back one\n" +
 			"level: it clears a filter, cancels a running test, closes a picker, a table, or a question, or\n" +
 			"leaves a form.\n\n" +
+			"Services, credentials, connections, and agent tokens can be copied. p duplicates the selected\n" +
+			"entry into a filled form of a new entry named <name>-copy (or <name>-copy-2, and so on), and n\n" +
+			"first asks whether the new entry starts empty or from an existing one, which is chosen in a\n" +
+			"searchable list; c asks the same for the guided setup, which then starts from a connection. A\n" +
+			"copy is saved like any new entry, in an admin session. Secret values are never copied: a copied\n" +
+			"credential keeps only where its secrets are kept and you store its secrets afterwards, and a\n" +
+			"copied agent token keeps its vorbilder and an expiry that still lies ahead, but gets its own\n" +
+			"value.\n\n" +
 			"A form with unsaved changes is never left silently. esc first asks: s saves through the same\n" +
 			"checks as F2 and goes on only when the save succeeds, d discards the changes\n" +
 			"and goes on, and esc keeps editing with every input intact. An unchanged form closes at once. An\n" +

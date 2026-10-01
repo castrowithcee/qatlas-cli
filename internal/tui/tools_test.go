@@ -75,7 +75,7 @@ func TestTheToolListOffersTheRegisteredToolsOfTheChosenProvider(t *testing.T) {
 	m, _ := toolsModel(t, reg, nil)
 	mustNoError(t, m.cfg.SetService("chat", config.Service{Provider: "telegram", BaseURL: "https://api.telegram.org"}))
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 
 	var want []string
 	for _, descriptor := range reg.Provider("bookstack") {
@@ -119,7 +119,7 @@ func TestAConnectionWithoutToolsIsSavedWithoutTools(t *testing.T) {
 		t.Fatalf("an untouched connection gained a tools list:\n%s", data)
 	}
 
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "fresh")
 	pump(t, m, "enter")
 	if m.fail != "" {

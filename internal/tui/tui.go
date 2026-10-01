@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strconv"
@@ -119,6 +120,9 @@ const (
 	screenLogs
 	// screenLogDetail shows every field of one log entry.
 	screenLogDetail
+	// screenTemplate asks whether a new entry or the guided setup starts empty or from an existing entry, and
+	// lists the entries to start from in a searchable picker; see template.go.
+	screenTemplate
 )
 
 type fieldKind int
@@ -364,11 +368,18 @@ type Model struct {
 	list    filterList
 
 	editing string
-	fields  []field
-	focus   int
+	// copyFrom names the entry a new form was filled from. The form is still a new entry (editing stays
+	// empty); this only says where its values came from. See template.go.
+	copyFrom string
+	// template is the question or picker of screenTemplate while it is open.
+	template *templateChoice
+	fields   []field
+	focus    int
 	// picker holds the values of the focused choice row while it is searched. The row itself changes only
 	// when a value is taken.
 	picker filterList
+	// templateList holds the entries of screenTemplate's picker.
+	templateList filterList
 	// pickerMarks holds the ticks of a tool list or the permissions while their picker is open, and is nil
 	// for a single choice. The row takes them over only when they are kept.
 	pickerMarks map[string]bool
@@ -549,6 +560,8 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
 	m.picker = newFilterList(choiceText)
+	m.templateList = newFilterList(m.templateText)
+	m.templateList.input.Placeholder = "Type to search"
 	m.picker.input.Placeholder = "Type to search"
 	m.targetList = newFilterList(func(target string) string { return target })
 	m.targetInput = textField("", "", false).input
@@ -700,6 +713,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateLogs(msg)
 		case screenLogDetail:
 			cmd = m.updateLogDetail(msg)
+		case screenTemplate:
+			cmd = m.updateTemplate(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -747,7 +762,7 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	case "enter", "tab":
 		return m.focusList()
 	case "c":
-		m.startSetup()
+		m.askSetupTemplate()
 	case "?":
 		m.openHelp()
 	case "u":
@@ -766,6 +781,15 @@ func (m *Model) newEntry() tea.Cmd {
 		m.fail = reason
 		return nil
 	}
+	if m.templateOffered() {
+		m.askTemplate(false)
+		return nil
+	}
+	return m.newEmptyEntry()
+}
+
+// newEmptyEntry opens the form of a new entry that starts empty.
+func (m *Model) newEmptyEntry() tea.Cmd {
 	if m.section == sectionTokens {
 		return m.newToken()
 	}
@@ -828,7 +852,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		// Below the sidebar width, left/right stay in the list: the navigation line above it, not beside it,
 		// is where those keys belong instead (see updateNav).
 	case "c":
-		m.startSetup()
+		m.askSetupTemplate()
 	case "?":
 		m.openHelp()
 	case "u":
@@ -859,6 +883,8 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		m.jumpList(key.String())
 	case "n":
 		return m.newEntry()
+	case "p":
+		return m.duplicateSelected()
 	case "enter":
 		if (m.section == sectionApprovals || m.section == sectionTokens) && m.vaultLocked() {
 			// Nothing is listed while the vault is locked (see approvalsReport); enter is a managing action
@@ -1012,6 +1038,10 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return nil
 	case screenLogDetail:
 		m.screen = screenLogs
+		return nil
+	case screenTemplate:
+		m.template = nil
+		m.screen = m.templateFromScreen()
 		return nil
 	case screenLeave:
 		// Staying is the answer that loses nothing.
@@ -2128,7 +2158,7 @@ func (m *Model) returnToList(name string) tea.Cmd {
 func (m *Model) showList() tea.Cmd {
 	m.stopTest()
 	m.testName = ""
-	m.editing = ""
+	m.editing, m.copyFrom = "", ""
 	m.confirmRole = ""
 	m.clearMessages()
 	if m.section == sectionVault {
@@ -2198,15 +2228,20 @@ func (m *Model) entryNames(s section) []string {
 }
 
 // openForm builds the form for a new entry, or for the named existing one.
-func (m *Model) openForm(name string) tea.Cmd {
-	m.editing = name
+func (m *Model) openForm(name string) tea.Cmd { return m.openEntry(name, "") }
+
+// openEntry builds the form for a new entry (name and source empty), for the named existing one, or, with
+// a source and no name, for a new entry filled from that source.
+func (m *Model) openEntry(name, source string) tea.Cmd {
+	m.editing, m.copyFrom = name, source
 	m.screen = screenForm
 	m.clearMessages()
-	m.fields = m.buildFields(name)
+	m.fields = m.buildFieldsFrom(name, source)
 	if m.section == sectionConnections {
 		// A new connection starts on the recommended profile, ticked and visible; a saved one opens as it
-		// is saved, with the profile row only saying which profile its ticks match.
-		if name == "" {
+		// is saved, with the profile row only saying which profile its ticks match. A copy keeps the ticks
+		// it was copied with.
+		if name == "" && source == "" {
 			m.applyRecommendedProfile()
 		}
 		m.syncProfile()
@@ -2343,11 +2378,20 @@ func (m *Model) credentialTypeChosen() tea.Cmd {
 	return nil
 }
 
-func (m *Model) buildFields(name string) []field {
+func (m *Model) buildFields(name string) []field { return m.buildFieldsFrom(name, "") }
+
+// buildFieldsFrom builds the rows of an entry form. The values come from the entry name, or, for a new
+// entry filled from another (name empty, source set), from source; the name row is then the suggested copy
+// name and stays editable, because the entry is still new.
+func (m *Model) buildFieldsFrom(edit, source string) []field {
 	if m.section == sectionTokens {
-		return m.tokenFields()
+		return m.tokenFields(source)
 	}
-	key := textField("name", name, name != "").withHint(nameHint)
+	name, shown := edit, edit
+	if source != "" {
+		name, shown = source, m.copyName(source)
+	}
+	key := textField("name", shown, edit != "").withHint(nameHint)
 	if m.section == sectionDefaults {
 		key.label, key.hint = "domain", domainHint
 	}
@@ -2365,7 +2409,7 @@ func (m *Model) buildFields(name string) []field {
 			providerField(m.cfg.Providers(), s.Provider),
 			textField("base url", s.BaseURL, false).withHint(baseURLHint),
 		)
-		if name == "" {
+		if name == "" && source == "" {
 			metadata, _ := m.cfg.ProviderMetadata(fields[1].value())
 			fields[2].input.SetValue(metadata.DefaultBaseURL)
 		}
@@ -2511,7 +2555,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if err := cfg.SetService(name, config.Service{
 			Provider: provider,
 			BaseURL:  m.fieldValue("base url"),
-			Options:  cfg.Services[name].Options,
+			Options:  maps.Clone(cfg.Services[m.sourceEntry(name)].Options),
 		}); err != nil {
 			return err
 		}
@@ -3012,6 +3056,8 @@ func (m *Model) editorView() string {
 		return m.logsView()
 	case screenLogDetail:
 		return m.logDetailView() + m.notes()
+	case screenTemplate:
+		return m.templateView()
 	}
 	var b strings.Builder
 	switch m.screen {
@@ -3019,6 +3065,11 @@ func (m *Model) editorView() string {
 		what := "New " + m.section.entry()
 		if m.editing != "" {
 			what = "Edit " + m.editing
+		} else if m.copyFrom != "" {
+			what += ", from " + m.copyFrom
+			if !m.sidebarLayout() {
+				what = "New " + m.section.entry() + "\nfrom " + m.copyFrom
+			}
 		} else if m.section == sectionVault {
 			what = "Vault"
 		}
@@ -3044,6 +3095,9 @@ func (m *Model) editorView() string {
 			if warning := m.fieldWarning(f); warning != "" {
 				b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 			}
+		}
+		if m.copyFrom != "" && m.editing == "" && m.wizard == nil {
+			b.WriteString("\n" + m.wrapped(hintStyle, m.copyNote()) + "\n")
 		}
 		if m.section == sectionTokens && m.wizard == nil {
 			b.WriteString(m.tokenFormNotes())
@@ -3290,10 +3344,13 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
 		keys = "1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionTokens:
-		keys = "/ filter · n new · enter show · x revoke · 1-8 or " + back + " · ? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter show · x revoke · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-8 or " + back + " · " +
-			"? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter edit · d delete · t test · c guided setup · 1-8 or " + back +
+			" · ? help · q quit"
+	case m.templateSection(m.section):
+		keys = "/ filter · n new · p duplicate · enter edit · d delete · c guided setup · 1-8 or " + back +
+			" · ? help · q quit"
 	default:
 		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-8 or " + back + " · ? help · q quit"
 	}
@@ -3474,6 +3531,10 @@ func (m *Model) keepScrollPosition() {
 		m.list.offset, _ = m.listWindow()
 	case screenPicker:
 		m.picker.offset, _ = m.pickerWindow()
+	case screenTemplate:
+		if m.template != nil && m.template.picking {
+			m.templateList.offset, _ = m.templateWindow()
+		}
 	case screenProviders:
 		m.providers.list.offset, _ = m.providerTableWindow()
 	case screenTargets:

@@ -61,7 +61,7 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	wideEnoughFor(m, root)
 	first, second, third := filepath.Join(root, "a"), filepath.Join(root, "b"), filepath.Join(root, "c")
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "gh")
 	if view := screenOf(m); !strings.Contains(view, "(none: every project)") {
 		t.Fatalf("the empty row does not say what it means:\n%s", view)

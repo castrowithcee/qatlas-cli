@@ -68,7 +68,7 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
 	m, path := toolsModel(t, reg, nil)
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "gh")
 	openTargetList(t, m)
 	if view := screenOf(m); !strings.Contains(view, "whatever its credential reaches") {
@@ -183,7 +183,7 @@ func TestARequiredSingleTargetIsKeptToOne(t *testing.T) {
 	reg := targetsRegistry(t, telegram.Register)
 	m, path := toolsModel(t, reg, nil)
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "chat")
 	if hint := m.field(targetsLabel).hint; !strings.Contains(hint, "one chat ID at most") ||
 		!strings.Contains(hint, "an empty list cannot be saved") {
@@ -212,7 +212,7 @@ func TestARequiredTargetListTakesSeveral(t *testing.T) {
 	reg := targetsRegistry(t, seatable.Register)
 	m, path := toolsModel(t, reg, nil)
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "rows")
 	press(t, m, "f2")
 	if !strings.Contains(m.fail, "requires table") {
@@ -478,7 +478,7 @@ func build(t *testing.T, m *Model, kind string, steps ...string) {
 func TestAddingOffersTheTargetsOfTheSameService(t *testing.T) {
 	m, path, reg := knownTargetsModel(t)
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "gh")
 	focusField(t, m, "service")
 	if m.fieldValue("service") != "wiki" {
@@ -633,7 +633,7 @@ func TestAProviderWithoutKindsOffersKnownTargets(t *testing.T) {
 	m, path := toolsModel(t, reg, map[string]config.Connection{
 		"rows-a": {Service: "wiki", Credential: "reader", Targets: []string{"Kunden", "Tickets"}}})
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "rows")
 	openTargetList(t, m)
 	press(t, m, "a")
@@ -653,7 +653,7 @@ func TestAProviderWithoutKindsOffersKnownTargets(t *testing.T) {
 func TestTheGuidedSetupOffersKnownTargetsAndTheBuilder(t *testing.T) {
 	m, path, reg := knownTargetsModel(t)
 	m.screen = screenNav
-	press(t, m, "c", "enter", "f2", "f2")
+	press(t, m, "c", "enter", "enter", "f2", "f2")
 	if m.wizard == nil || m.wizard.step != stepScope {
 		t.Fatalf("the setup did not reach its scope step: %+v, error %q", m.wizard, m.fail)
 	}

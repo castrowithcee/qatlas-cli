@@ -103,7 +103,7 @@ func newVaultResolver(t *testing.T, dir string) (*secret.Resolver, *secret.Memor
 func addVaultCredential(t *testing.T, m *Model, name string) {
 	t.Helper()
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -191,7 +191,7 @@ func openSectionByName(t *testing.T, m *Model, s section) {
 func addService(t *testing.T, m *Model, name, baseURL string) {
 	t.Helper()
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	press(t, m, "tab") // provider, the only choice is preselected
 	press(t, m, "tab")
@@ -204,7 +204,7 @@ func addService(t *testing.T, m *Model, name, baseURL string) {
 func addCredential(t *testing.T, m *Model, name string, envNames ...string) {
 	t.Helper()
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	// A credential may name its provider; these helpers leave that choice empty, which is what an entry
 	// written before the field looks like, and then every compiled role is offered.
@@ -223,7 +223,7 @@ func addCredential(t *testing.T, m *Model, name string, envNames ...string) {
 func addKeyringCredential(t *testing.T, m *Model, name string) {
 	t.Helper()
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -237,7 +237,7 @@ func addKeyringCredential(t *testing.T, m *Model, name string) {
 func addConnection(t *testing.T, m *Model, name, service, credential string) {
 	t.Helper()
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	// The provider row stands between the name and the service; it narrows both rows below it, and the
 	// service the caller asks for names the provider it belongs to.
@@ -388,7 +388,7 @@ func TestNavigation(t *testing.T) {
 
 	t.Run("form focus wraps in both directions", func(t *testing.T) {
 		openSectionByName(t, m, sectionServices)
-		press(t, m, "n")
+		pressNew(t, m)
 		last := len(m.fields) - 1
 		press(t, m, "shift+tab")
 		if m.focus != last {
@@ -619,7 +619,7 @@ func TestDirectSectionKeys(t *testing.T) {
 	}
 
 	// In a form the digits are text, with no alt+digit section key: the global shortcut was removed.
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "2")
 	if m.section != sectionServices || m.fieldValue("name") != "2" {
 		t.Fatalf("a digit escaped the form: section %v name %q", m.section, m.fieldValue("name"))
@@ -728,7 +728,7 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		m, _, path := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 		openSectionByName(t, m, sectionServices)
-		press(t, m, "n")
+		pressNew(t, m)
 		typeText(t, m, "wiki")
 		press(t, m, "tab", "tab")
 		typeText(t, m, "https://wiki.example.invalid")
@@ -1043,7 +1043,7 @@ func TestCancelWritesNothing(t *testing.T) {
 	}
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "discarded")
 	// Leaving a changed form asks; discarding is the explicit answer.
 	press(t, m, "esc", "d")
@@ -1073,7 +1073,7 @@ func TestValidationErrorsAreShown(t *testing.T) {
 			name: "an empty name is refused",
 			build: func(t *testing.T, m *Model) {
 				openSectionByName(t, m, sectionServices)
-				press(t, m, "n")
+				pressNew(t, m)
 				press(t, m, "enter")
 			},
 			wantIn: "name must not be empty",
@@ -1082,7 +1082,7 @@ func TestValidationErrorsAreShown(t *testing.T) {
 			name: "a missing base url is refused by the core",
 			build: func(t *testing.T, m *Model) {
 				openSectionByName(t, m, sectionServices)
-				press(t, m, "n")
+				pressNew(t, m)
 				typeText(t, m, "wiki")
 				press(t, m, "enter")
 			},
@@ -1241,7 +1241,7 @@ func TestNoSecretValues(t *testing.T) {
 	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections, sectionDefaults} {
 		openSectionByName(t, m, s)
 		rendered.WriteString(screenOf(m))
-		press(t, m, "n")
+		pressNew(t, m)
 		rendered.WriteString(screenOf(m))
 		press(t, m, "esc")
 	}
@@ -1299,7 +1299,7 @@ func TestPastedSecretIsRefusedWithoutEchoingIt(t *testing.T) {
 	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections, sectionDefaults} {
 		openSectionByName(t, m, s)
 		rendered.WriteString(screenOf(m))
-		press(t, m, "n")
+		pressNew(t, m)
 		rendered.WriteString(screenOf(m))
 		press(t, m, "esc")
 		rendered.WriteString(screenOf(m))
@@ -1344,7 +1344,7 @@ func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 
 	m, _, _ := newModel(t)
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	press(t, m, "tab", "tab") // name, provider, base url
 	typeText(t, m, url)
 
@@ -1386,7 +1386,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	m, _, _ := newModel(t)
 
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	if view := screenOf(m); !strings.Contains(view, "a key you choose, without spaces") {
 		t.Errorf("the name field has no hint:\n%s", view)
 	}
@@ -1425,7 +1425,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	}
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	if view := screenOf(m); !strings.Contains(view, nameHint) {
 		t.Errorf("the service form does not show %q:\n%s", nameHint, view)
 	}
@@ -1601,7 +1601,7 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 func TestSpacesAtTheEdgesAreTrimmedVisibly(t *testing.T) {
 	m, store, _ := newModel(t)
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "  wiki  ")
 	press(t, m, "tab")
 
@@ -1770,7 +1770,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 	m, _, path := newModel(t)
 
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-reader")
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -1961,7 +1961,7 @@ func TestAHintBelongsToTheFieldAboveIt(t *testing.T) {
 		m, _, _ := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: width})
 		openSectionByName(t, m, sectionCredentials)
-		press(t, m, "n")
+		pressNew(t, m)
 		press(t, m, "tab")
 		press(t, m, "tab")
 		selectChoice(t, m, storageEnv)
@@ -2017,7 +2017,7 @@ func TestNoHintStandsTwice(t *testing.T) {
 	m, _, _ := newModel(t)
 
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	press(t, m, "tab")
 	press(t, m, "tab")
 	selectChoice(t, m, storageEnv)

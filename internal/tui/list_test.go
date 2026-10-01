@@ -207,7 +207,7 @@ func TestActionsFollowTheFilteredSelection(t *testing.T) {
 		t.Errorf("after deleting: selected %q with filter %q, want wiki-a with wiki", got, m.list.query())
 	}
 
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-c")
 	press(t, m, "tab", "tab")
 	typeText(t, m, "https://wiki-c.example.invalid")

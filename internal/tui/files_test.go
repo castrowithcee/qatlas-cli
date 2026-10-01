@@ -104,7 +104,7 @@ func TestFilesRowsFollowTheDirectionsOfTheProvider(t *testing.T) {
 	// A row holding entries is kept visible even without a direction.
 	m, _, _ := filesModel(t, config.LocalFilesSupport{}, nil)
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	m.field(filesReadLabel).entries = []string{"/srv/in"}
 	m.syncFilesRows()
 	if rowHidden(m, filesReadLabel) {

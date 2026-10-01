@@ -75,6 +75,8 @@ const (
 type setup struct {
 	step     int
 	provider string
+	// template names the connection the setup started from, "" for one that started empty; see template.go.
+	template string
 	pages    [][]field
 	// candidate and plan are what the permissions step left behind: the configuration to save, and what
 	// has to be written besides it.
@@ -134,10 +136,13 @@ func (m *Model) setupShow(step int) {
 	fresh := step == len(w.pages)
 	if fresh {
 		w.pages = append(w.pages, m.setupPage(step))
+		if w.template != "" {
+			m.setupPrefill(step, w.pages[step])
+		}
 	}
 	m.fields = w.pages[step]
 	m.screen = screenForm
-	if fresh && step == stepPermissions {
+	if fresh && step == stepPermissions && w.template == "" {
 		// The permissions of a new connection start on the provider's recommended profile, ticked and
 		// visible; going back and forth keeps whatever was changed since.
 		m.applyRecommendedProfile()
@@ -271,7 +276,7 @@ func (m *Model) setupNext() {
 	if w.step == stepProvider {
 		if provider := m.fieldValue(providerLabel); provider != w.provider {
 			// Every later step offers what this provider defines, so none of them survives a change.
-			w.provider, w.pages = provider, w.pages[:1]
+			w.provider, w.pages, w.template = provider, w.pages[:1], ""
 		}
 	} else {
 		candidate, plan, err := m.setupCandidate(w.step)
@@ -415,6 +420,9 @@ func (m *Model) setupCandidate(upto int) (*config.Config, setupPlan, error) {
 					}
 				}
 			}
+		}
+		if w.template != "" {
+			m.setupTemplateExtras(&conn)
 		}
 		if err := cfg.SetConnection(plan.connection, conn); err != nil {
 			return nil, plan, err
