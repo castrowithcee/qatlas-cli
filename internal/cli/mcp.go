@@ -134,6 +134,8 @@ func mcpCommandLong() string {
 		"seconds for the answer. Where the client offers no roots, names none, answers with an error, or not\n" +
 		"in time, and for every request that declares MCP 2026-07-28, the project is the directory the\n" +
 		"server was started in; an answer that arrives late applies to the calls that follow.\n\n" +
+		"On Linux the server restarts itself after an update replaces the program: it runs the new one in\n" +
+		"place, keeping the session, and only the vault needs a new 'qatlas vault unlock'.\n\n" +
 		"The guide below is exactly what server/discover and initialize hand the client as instructions;\n" +
 		"'qatlas agents' covers the same ground, and more, at CLI length.\n\n" +
 		helptopics.MCP().Text
