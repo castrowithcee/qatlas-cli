@@ -68,7 +68,12 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			// Nobody watches the requests of a server, so the keyring must not wait for an unlock prompt.
 			opts.unattended = true
 			server := newMCPServer(opts, registry, c.OutOrStdout(), c.ErrOrStderr())
-			return server.serve(c.Context(), c.InOrStdin())
+			input := c.InOrStdin()
+			if handoff := takeMCPHandoff(); handoff != nil {
+				server.adopt(handoff)
+				input = io.MultiReader(bytes.NewReader(handoff.Input), input)
+			}
+			return server.serve(c.Context(), input)
 		},
 	}
 }
@@ -155,6 +160,14 @@ type mcpServer struct {
 	roots     mcpRoots
 	rootsWait time.Duration
 
+	// restart restarts the server after an update replaced its program. restartFrom is the version that
+	// handed its session over, or empty; resumeRoots asks for roots again once the loop starts. Only the
+	// reading loop touches them.
+	restart     mcpRestart
+	version     string
+	restartFrom string
+	resumeRoots bool
+
 	coreMu   sync.Mutex
 	outMu    sync.Mutex
 	errMu    sync.Mutex
@@ -197,15 +210,18 @@ func newMCPServer(opts *Options, registry *capability.Registry, stdout, stderr i
 	return &mcpServer{
 		opts: opts, registry: registry, stdout: stdout, stderr: stderr,
 		timeout: invokeTimeout, rootsWait: mcpRootsWait, pending: make(map[string]*mcpPending),
+		restart: platformMCPRestart(), version: version,
 	}
 }
 
 func (s *mcpServer) serve(ctx context.Context, input io.Reader) error {
 	reader := bufio.NewReader(input)
+	s.resume()
 	for {
 		line, err := readMCPLine(reader)
 		switch {
 		case err == nil:
+			s.restartIfReplaced(reader, line)
 			s.handle(ctx, line)
 		case errors.Is(err, io.EOF):
 			s.wg.Wait()

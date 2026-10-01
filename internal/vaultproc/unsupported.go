@@ -23,3 +23,6 @@ func Listen(string) (net.Listener, error) { return nil, ErrUnsupported }
 
 // Harden has nothing to protect the vault process with on this platform.
 func Harden() error { return ErrUnsupported }
+
+// ReplacedProgram cannot tell on this platform whether the running program was replaced.
+func ReplacedProgram() (string, bool) { return "", false }

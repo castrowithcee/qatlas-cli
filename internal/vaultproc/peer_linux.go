@@ -112,11 +112,11 @@ func checkProcess(pid int, uid uint32) error {
 // programOf reads the program a /proc/<pid>/exe link points to, both as the path the kernel reports and as
 // the file.
 func programOf(link string) (string, fs.FileInfo, error) {
-	path, err := os.Readlink(link)
+	path, replaced, err := readProgramLink(link)
 	if err != nil {
-		return "", nil, errors.New("cannot be read")
+		return "", nil, err
 	}
-	if strings.HasSuffix(path, deletedSuffix) {
+	if replaced {
 		return "", nil, errors.New("was removed or replaced since it started")
 	}
 	info, err := os.Stat(link)
@@ -124,6 +124,29 @@ func programOf(link string) (string, fs.FileInfo, error) {
 		return "", nil, errors.New("cannot be read")
 	}
 	return path, info, nil
+}
+
+// readProgramLink reads the path a /proc/<pid>/exe link points to, without the suffix the kernel appends
+// once the file was removed or replaced, and whether it did. It is the one place that decides what a
+// replaced program is.
+func readProgramLink(link string) (path string, replaced bool, err error) {
+	path, err = os.Readlink(link)
+	if err != nil {
+		return "", false, errors.New("cannot be read")
+	}
+	path, replaced = strings.CutSuffix(path, deletedSuffix)
+	return path, replaced, nil
+}
+
+// ReplacedProgram returns the path this process was started from and whether its file was removed or
+// replaced since, as an update does. The path is the one the program had at its start. It reads the same
+// /proc/self/exe link VerifyProgram refuses a replaced program by, and tells nothing about the vault.
+func ReplacedProgram() (string, bool) {
+	path, replaced, err := readProgramLink("/proc/self/exe")
+	if err != nil {
+		return "", false
+	}
+	return path, replaced
 }
 
 // Harden keeps other processes of the same user from reading this process's memory and the system from
