@@ -496,6 +496,8 @@ type Model struct {
 	updating   bool
 	updated    string
 	updateFrom screen
+	// updateText is what the update question says an installation does, set when it opens.
+	updateText string
 
 	// Vault header and 'ctrl+l' state (see vaultheader.go). vaultProcessUnlocked caches whether a vault
 	// process holds a locked vault open, refreshed by a tick and right after this window's own lock and

@@ -304,13 +304,42 @@ func connectionTester(store *config.Store, opts *Options, reg *capability.Regist
 }
 
 // tuiUpdater returns what the editor checks for a newer release with, or nil where it must not check: in a
-// dev build, which has no release to compare with, and when QATLAS_NO_UPDATE_CHECK is set.
+// dev build, which has no release to compare with, and when QATLAS_NO_UPDATE_CHECK is set. Its installation
+// locks a running vault process right before the program is replaced, the way 'qatlas update' does.
 func tuiUpdater(opts *Options, buildVersion string) tui.Updater {
 	if buildVersion == "" || buildVersion == "dev" || os.Getenv(noUpdateCheck) != "" {
 		return nil
 	}
-	if opts.Updater != nil {
-		return opts.Updater
+	client := opts.Updater
+	if client == nil {
+		client = selfupdate.New(buildVersion)
 	}
-	return selfupdate.New(buildVersion)
+	return &lockingUpdater{opts: opts, client: client}
 }
+
+// lockingUpdater is the editor's updater: the client with the vault lock of 'qatlas update' before the
+// replacement. Note keeps what that lock had to say, for the editor's status line.
+type lockingUpdater struct {
+	opts   *Options
+	client *selfupdate.Client
+	note   string
+}
+
+func (u *lockingUpdater) Check(ctx context.Context) (selfupdate.Result, error) {
+	return u.client.Check(ctx)
+}
+
+func (u *lockingUpdater) Update(ctx context.Context) (selfupdate.Result, error) {
+	replacing := *u.client
+	replacing.BeforeReplace = func(ctx context.Context) {
+		u.note = lockVaultProcessOf(ctx, u.opts, "before qatlas was replaced",
+			"run 'qatlas vault unlock' to unlock the vault again")
+		if u.client.BeforeReplace != nil {
+			u.client.BeforeReplace(ctx)
+		}
+	}
+	return replacing.Update(ctx)
+}
+
+// Note is what locking the vault process said during the last installation.
+func (u *lockingUpdater) Note() string { return u.note }

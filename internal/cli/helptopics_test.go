@@ -214,7 +214,7 @@ func TestTUIUpdaterIsGated(t *testing.T) {
 		t.Error("a release build got no updater")
 	}
 	seam := selfupdate.New("v0.4.0")
-	if updater := tuiUpdater(&Options{Updater: seam}, "v0.4.0"); updater != seam {
+	if updater, ok := tuiUpdater(&Options{Updater: seam}, "v0.4.0").(*lockingUpdater); !ok || updater.client != seam {
 		t.Errorf("the updater seam was not used: %v", updater)
 	}
 
