@@ -35,10 +35,9 @@ var channelsList = capability.Descriptor{
 	Title:   "List Infomaniak kChat channels",
 	Description: "List the current token's channels of one team this connection is bound to, restricted to " +
 		"this connection's channel allow-list when it has one, page by page, transparently",
-	Tags:                       []string{"infomaniak", "kchat", "channels", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"infomaniak", "kchat", "channels", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"team_id":` + idSchema + `,"page":{"type":"integer","minimum":1},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},` +

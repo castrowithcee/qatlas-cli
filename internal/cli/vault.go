@@ -93,9 +93,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Short: "Show whether the vault exists, is encrypted, and is unlocked",
 		Long: "Reports the vault's state (absent, unencrypted, locked, or unlocked), how many credentials it\n" +
 			"holds, and how many entries are queued in pending, added or changed while it was locked. The\n" +
-			"entry count is unknown while the vault is locked: counting it needs the passphrase, the same\n" +
-			"way reading a secret does. For an encrypted vault it also reports whether a vault process holds\n" +
-			"it unlocked (process running, with its pid and when it locks itself, or none); for an\n" +
+			"entry count is unknown unless this run holds the key: counting needs the passphrase, the same\n" +
+			"way reading a secret does. The state is the effective one: unlocked while a vault process holds\n" +
+			"the vault open for every connection. For an encrypted vault it also reports that process\n" +
+			"(process running, with its pid and when it locks itself, or none); for an\n" +
 			"unencrypted one it warns that connections are not bound to approvals. It asks for no\n" +
 			"passphrase and shows no secret value.",
 		Args: noArgs,
@@ -816,13 +817,22 @@ func plural(n int, singular, plural string) string {
 	return plural
 }
 
+// vaultStatusObject reports the vault's effective state: a vault locked in this process but held open by a
+// running vault process is unlocked for every connection, and the TUI shows it so as well.
 func vaultStatusObject(status vault.Status, process vaultProcessState) output.Object {
+	state := status.State
+	if state == vault.StateLocked && process.State == "running" {
+		state = vault.StateUnlocked
+	}
 	entries := "unknown, locked"
-	if status.Entries >= 0 {
+	switch {
+	case status.Entries >= 0:
 		entries = strconv.Itoa(status.Entries)
+	case state == vault.StateUnlocked:
+		entries = "unknown"
 	}
 	fields := []output.Field{
-		{Name: "state", Value: string(status.State)},
+		{Name: "state", Value: string(state)},
 		{Name: "entries", Value: entries},
 		{Name: "pending", Value: int64(status.Pending)},
 	}

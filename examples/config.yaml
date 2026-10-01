@@ -536,10 +536,11 @@ provider_notes:
   bookstack: team wiki
   twentycrm: CRM of the sales team
 
-# Defaults are useful for read operations. The key under connections is a tool namespace such as
-# bookstack, or a complete tool ID such as bookstack.pages.list when one tool needs its own route.
-# Confirmed Telegram sends and the Lexware, Twenty CRM, SeaTable, Nextcloud, GitHub and Todoist tools
-# deliberately ignore defaults and require the connection in the exact invoke request.
+# A call without a connection uses the default of its tool ID, then the default of its provider, then the
+# one connection of the current project that offers the tool. The key under connections is a tool
+# namespace such as bookstack, or a complete tool ID such as bookstack.pages.list when one tool needs its
+# own route. A default that names a connection the tool does not offer is refused, and several connections
+# without a default make the call ask for a connection.
 #
 # secret_store names the credential type `qatlas tui` and `qatlas credential set` start a new credential
 # from: keyring, this default, or vault, for a machine without a usable system keyring. Leaving it out

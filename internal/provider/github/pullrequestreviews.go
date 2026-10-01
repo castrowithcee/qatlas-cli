@@ -71,12 +71,11 @@ var pullRequestReviewsList = capability.Descriptor{
 	Title:   "List GitHub pull request reviews",
 	Description: "List one bounded batch of the reviews of one pull request of a repository an explicit " +
 		"connection allows, in GitHub's own order",
-	Tags:                       []string{"github", "pulls", "pullrequests", "reviews", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
-	OutputSchema:               listOutput("reviews", reviewProperties, reviewRequired),
+	Tags:         []string{"github", "pulls", "pullrequests", "reviews", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
+	OutputSchema: listOutput("reviews", reviewProperties, reviewRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	}, pagingArguments...),
@@ -91,14 +90,13 @@ var pullRequestReviewsCreate = capability.Descriptor{
 	ID:      Provider + ".pullrequestreviews.create",
 	Version: 1,
 	Title:   "Create a GitHub pull request review",
-	Description: "Submit one review of one pull request of a repository an explicit connection allows, as a " +
+	Description: "Submit one review of one pull request of a repository a connection allows, as a " +
 		"comment or a request for changes, with its line comments bundled into this one call; only while its " +
 		"head is still the given commit, so a head that changed since is refused instead of reviewing the " +
 		"wrong diff. Not offered for approving, which is github.pullrequestreviews.approve",
-	Tags:                       []string{"github", "pulls", "pullrequests", "reviews", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "pulls", "pullrequests", "reviews", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"sha":`+blobSHASchema+`,"event":{"type":"string",`+
 		`"enum":["comment","request_changes"]},"body":`+bodySchema+`,"line_notes":`+lineNotesSchema,
 		"number", "sha", "event"),
@@ -124,15 +122,14 @@ var pullRequestReviewsApprove = capability.Descriptor{
 	ID:      Provider + ".pullrequestreviews.approve",
 	Version: 1,
 	Title:   "Approve a GitHub pull request",
-	Description: "Approve one pull request of a repository an explicit connection allows, with an optional " +
+	Description: "Approve one pull request of a repository a connection allows, with an optional " +
 		"body and line comments bundled into this one call; only while its head is still the given commit. " +
 		"Offered only where a connection's tools list names it, because approving is the one outcome the " +
 		"other review tools cannot reach; already approving one's own pull request is refused by GitHub",
-	Tags:                       []string{"github", "pulls", "pullrequests", "reviews", "approve"},
-	Risk:                       guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent, dataSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "pulls", "pullrequests", "reviews", "approve"},
+	Risk:                  guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent, dataSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"sha":`+blobSHASchema+`,"body":`+bodySchema+`,`+
 		`"line_notes":`+lineNotesSchema, "number", "sha"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + reviewProperties + `},` + reviewRequired + `}`),

@@ -25,11 +25,10 @@ var pullRequestCommentsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List GitHub pull request comments",
 	Description: "List one bounded batch of the conversation comments of one pull request of a repository " +
-		"an explicit connection allows, oldest first; an issue number is refused",
-	Tags:                       []string{"github", "pulls", "pullrequests", "comments", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"a connection allows, oldest first; an issue number is refused",
+	Tags:     []string{"github", "pulls", "pullrequests", "comments", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":` + cursorSchema + `},` +
 		`"required":["number"],"additionalProperties":false}`),
@@ -45,6 +44,7 @@ var pullRequestCommentsList = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "comments", Description: "Conversation comments with author, body, and times, untrusted data"},
+		commentDatabaseIDField,
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the pull request holds further comments"},
 	},
@@ -60,10 +60,9 @@ var pullRequestCommentsCreate = capability.Descriptor{
 	Title:   "Comment on a GitHub pull request",
 	Description: "Write exactly one conversation comment on one pull request of a repository an explicit " +
 		"connection allows; a repeated call writes a second comment; an issue number is refused",
-	Tags:                       []string{"github", "pulls", "pullrequests", "comments", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "pulls", "pullrequests", "comments", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"number":` + numberSchema + `,` +
 		`"body":{"type":"string","minLength":1,"maxLength":65536}},"required":["number","body"],` +
 		`"additionalProperties":false}`),
@@ -74,6 +73,7 @@ var pullRequestCommentsCreate = capability.Descriptor{
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Comment identifier"},
+		commentDatabaseIDField,
 		{Name: "url", Description: "Web address of the comment"},
 	},
 	Examples: []capability.Example{{
@@ -218,7 +218,7 @@ func (c *Client) checkPullRequestForComment(ctx context.Context, op string, numb
 // issueOrPullRequest, so it never answers for an issue number.
 const pullRequestCommentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){` +
 	`repository(owner:$owner,name:$name){pullRequest(number:$number){comments(first:$first,after:$after){` +
-	`pageInfo{hasNextPage endCursor} nodes{id author{login} body createdAt updatedAt url}}}}}`
+	`pageInfo{hasNextPage endCursor} nodes{id databaseId author{login} body createdAt updatedAt url}}}}}`
 
 type pullRequestCommentsPageJSON struct {
 	Repository *struct {
@@ -229,8 +229,9 @@ type pullRequestCommentsPageJSON struct {
 					EndCursor   string `json:"endCursor"`
 				} `json:"pageInfo"`
 				Nodes []struct {
-					ID     string `json:"id"`
-					Author *struct {
+					ID         string `json:"id"`
+					DatabaseID int64  `json:"databaseId"`
+					Author     *struct {
 						Login string `json:"login"`
 					} `json:"author"`
 					Body      string `json:"body"`
@@ -272,8 +273,8 @@ func (c *Client) listPullRequestComments(ctx context.Context, a *pullRequestComm
 			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 				Message: "GitHub returned a comment without a usable identifier"}
 		}
-		comment := Comment{ID: node.ID, Body: node.Body, CreatedAt: node.CreatedAt, UpdatedAt: node.UpdatedAt,
-			URL: node.URL}
+		comment := Comment{ID: node.ID, DatabaseID: node.DatabaseID, Body: node.Body, CreatedAt: node.CreatedAt,
+			UpdatedAt: node.UpdatedAt, URL: node.URL}
 		if node.Author != nil {
 			comment.Author = node.Author.Login
 		}
@@ -305,8 +306,8 @@ func (c *Client) createPullRequestComment(ctx context.Context, number int, body 
 	if raw.NodeID == "" {
 		return nil, invalidResponse(op, true)
 	}
-	comment := &Comment{ID: raw.NodeID, Body: raw.Body, CreatedAt: raw.CreatedAt, UpdatedAt: raw.UpdatedAt,
-		URL: raw.HTMLURL}
+	comment := &Comment{ID: raw.NodeID, DatabaseID: raw.ID, Body: raw.Body, CreatedAt: raw.CreatedAt,
+		UpdatedAt: raw.UpdatedAt, URL: raw.HTMLURL}
 	if raw.User != nil {
 		comment.Author = raw.User.Login
 	}

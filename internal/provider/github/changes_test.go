@@ -92,9 +92,10 @@ func (f *fakeGitHub) commentsPage(w http.ResponseWriter, variables map[string]an
 	end := min(start+int(variables["first"].(float64)), f.comments)
 	nodes := []string{}
 	for i := start; i < end; i++ {
-		nodes = append(nodes, fmt.Sprintf(`{"id":"IC_%d","author":{"login":"octocat"},"body":"comment %d",`+
-			`"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z","url":"https://github.com/c/%d"}`,
-			i, i, i))
+		nodes = append(nodes, fmt.Sprintf(`{"id":"IC_%d","databaseId":%d,"author":{"login":"octocat"},`+
+			`"body":"comment %d","createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z",`+
+			`"url":"https://github.com/c/%d"}`,
+			i, 1000+i, i, i))
 	}
 	fmt.Fprintf(w, `{"data":{"repository":{"issueOrPullRequest":{"__typename":"Issue","comments":{"pageInfo":`+
 		`{"hasNextPage":%t,"endCursor":"ccur-%d"},`+
@@ -231,6 +232,8 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.workflowjobs.get":         readRisk,
 		"github.workflowjobs.log":         jobsLog.Risk,
 		"github.workflowartifacts.list":   readRisk,
+		"github.workflowruns.usage":       readRisk,
+		"github.workflowrunlogs.delete":   guardedRisk(capability.EffectDelete, capability.IdempotencyIdempotent, logSensitivity),
 		"github.workflows.dispatch":       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
 		"github.workflowruns.rerun":       changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
 		"github.workflowruns.rerunfailed": changeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
@@ -310,8 +313,85 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		"github.commits.list":                 readRisk,
 		"github.commits.get":                  readRisk,
 		"github.branches.list":                readRisk,
+		"github.branches.create":              changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 		"github.tags.list":                    readRisk,
 		"github.tags.get":                     readRisk,
+		"github.contents.put":                 changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
+		"github.contents.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
+			dataSensitivity),
+		"github.files.push": guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent,
+			dataSensitivity),
+		"github.repositories.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.repositories.fork":   changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+		"github.repositories.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
+			dataSensitivity),
+		"github.collaborators.list": readRisk,
+		"github.rulesets.list":      readRisk,
+		"github.rulesets.get":       readRisk,
+		"github.rulesets.create": guardedRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent,
+			rulesetSensitivity),
+		"github.rulesets.update": guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent,
+			rulesetSensitivity),
+		"github.rulesets.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
+			rulesetSensitivity),
+		"github.customproperties.get": readRisk,
+		"github.customproperties.set": guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent,
+			customPropertySensitivity),
+		"github.labels.list":   readRisk,
+		"github.labels.get":    readRisk,
+		"github.labels.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.labels.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.labels.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
+			labelSensitivity),
+		"github.milestones.list": readRisk,
+		"github.comments.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.comments.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown,
+			commentSensitivity),
+		"github.reactions.add":             changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+		"github.reactions.remove":          changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		"github.subissues.list":            readRisk,
+		"github.subissues.add":             changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.subissues.remove":          changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+		"github.subissues.reprioritize":    changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.issuedependencies.list":    readRisk,
+		"github.issuedependencies.add":     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.issuedependencies.remove":  changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+		"github.issuetypes.list":           readRisk,
+		"github.issuefields.list":          readRisk,
+		"github.issuefields.set":           changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.discussioncategories.list": readRisk,
+		"github.discussions.list":          readRisk,
+		"github.discussions.get":           readRisk,
+		"github.discussioncomments.list":   readRisk,
+		"github.discussioncomments.create": changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.discussioncomments.update": changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.discussioncomments.delete": guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, discussionCommentSensitivity),
+		"github.discussions.create":        changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.notifications.list":        readRisk,
+		"github.notifications.get":         readRisk,
+		"github.notifications.dismiss":     changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
+		"github.notifications.markall": guardedRisk(capability.EffectUpdate, capability.IdempotencyUnknown,
+			notificationSensitivity),
+		"github.codescanningalerts.list":     readRisk,
+		"github.codescanningalerts.get":      readRisk,
+		"github.dependabotalerts.list":       readRisk,
+		"github.dependabotalerts.get":        readRisk,
+		"github.secretscanningalerts.list":   readRisk,
+		"github.secretscanningalerts.get":    readRisk,
+		"github.globaladvisories.list":       readRisk,
+		"github.globaladvisories.get":        readRisk,
+		"github.repositoryadvisories.list":   readRisk,
+		"github.organizationadvisories.list": readRisk,
+		"github.codequalityfindings.get":     readRisk,
+		"github.copilotassignments.create":   changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
+		"github.copilotreviews.request":      changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.gists.list":                  readRisk,
+		"github.gists.get":                   readRisk,
+		"github.gists.create":                changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+		"github.gists.update":                changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		"github.gists.delete":                guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, gistSensitivity),
+		"github.threadsubscriptions.set":     changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
+		"github.repositorysubscriptions.set": changeRisk(capability.EffectUpdate, capability.IdempotencyUnknown),
 	}
 	operations := reg.Provider(Provider)
 	if len(operations) != len(want) {
@@ -319,7 +399,7 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 	}
 	for _, descriptor := range operations {
 		risk, ok := want[descriptor.ID]
-		if !ok || descriptor.Risk != risk || !descriptor.RequiresExplicitConnection {
+		if !ok || descriptor.Risk != risk {
 			t.Errorf("%s risk = %+v, want %+v", descriptor.ID, descriptor.Risk, risk)
 		}
 		if descriptor.Risk.Effect != capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationRequired {
@@ -327,7 +407,9 @@ func TestRegisterPublishesTheChangeContracts(t *testing.T) {
 		}
 		owners := descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
 			descriptor.ID == projectsCreate.ID || descriptor.ID == projectsCopy.ID ||
-			descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID
+			descriptor.ID == organizationTeamsList.ID || descriptor.ID == teamMembersList.ID ||
+			descriptor.ID == repositoriesCreate.ID || descriptor.ID == issueTypesList.ID ||
+			descriptor.ID == organizationAdvisoriesList.ID
 		for _, forbidden := range []string{"owner", "base_url", "query\"", "project_id", "document"} {
 			if strings.Contains(string(descriptor.InputSchema), forbidden) && !(owners && forbidden == "owner") {
 				t.Errorf("%s input offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
@@ -518,6 +600,101 @@ func TestIssueChangesUseRESTAndRefusePullRequests(t *testing.T) {
 	}
 }
 
+// github.issues.update's own milestone argument sets or removes an issue's milestone: 0 is sent to GitHub
+// as an explicit null, since a milestone number is never 0, and a milestone-only change is enough on its
+// own, without a title, body, labels, or assignees.
+func TestIssueUpdateSetsAndRemovesTheMilestone(t *testing.T) {
+	f := &fakeGitHub{}
+	base := serve(t, f)
+	c := client(t, base, repoTarget)
+
+	milestone := 5
+	if _, err := c.UpdateIssue(context.Background(), 42, IssueContent{Milestone: &milestone}); err != nil {
+		t.Fatalf("UpdateIssue() with a milestone = %v", err)
+	}
+	change := f.recorded()[len(f.recorded())-1]
+	if change.method != http.MethodPatch || fmt.Sprint(change.body["milestone"]) != "5" {
+		t.Errorf("change request = %+v, want milestone 5", change)
+	}
+
+	removed := 0
+	if _, err := c.UpdateIssue(context.Background(), 42, IssueContent{Milestone: &removed}); err != nil {
+		t.Fatalf("UpdateIssue() removing a milestone = %v", err)
+	}
+	change = f.recorded()[len(f.recorded())-1]
+	if change.method != http.MethodPatch {
+		t.Fatalf("change request = %+v", change)
+	}
+	if value, ok := change.body["milestone"]; !ok || value != nil {
+		t.Errorf("change request milestone = %v, want an explicit null", value)
+	}
+
+	for _, tt := range []struct {
+		name  string
+		value int
+	}{{"negative", -1}, {"too large", 1000000001}} {
+		bad := tt.value
+		if _, err := c.UpdateIssue(context.Background(), 42, IssueContent{Milestone: &bad}); !isInvalidRequest(err) {
+			t.Errorf("%s milestone = %v, want an invalid request", tt.name, err)
+		}
+	}
+}
+
+// github.issues.update's own type argument sets or removes an issue's type by name: "" is sent to GitHub as
+// an explicit null, since a type name is never empty, and a type-only change is enough on its own; a call
+// without type behaves exactly as it did before this argument existed.
+func TestIssueUpdateSetsAndRemovesTheType(t *testing.T) {
+	f := &fakeGitHub{}
+	base := serve(t, f)
+	c := client(t, base, repoTarget)
+
+	issueType := "Bug"
+	changed, err := c.UpdateIssue(context.Background(), 42, IssueContent{Type: &issueType})
+	if err != nil {
+		t.Fatalf("UpdateIssue() with a type = %v", err)
+	}
+	change := f.recorded()[len(f.recorded())-1]
+	if change.method != http.MethodPatch || change.body["type"] != "Bug" {
+		t.Errorf("change request = %+v, want type Bug", change)
+	}
+	if changed.IssueType != "Bug" {
+		t.Errorf("issue_type = %q, want Bug", changed.IssueType)
+	}
+
+	removed := ""
+	changed, err = c.UpdateIssue(context.Background(), 42, IssueContent{Type: &removed})
+	if err != nil {
+		t.Fatalf("UpdateIssue() removing a type = %v", err)
+	}
+	change = f.recorded()[len(f.recorded())-1]
+	if value, ok := change.body["type"]; !ok || value != nil {
+		t.Errorf("change request type = %v, want an explicit null", value)
+	}
+	if changed.IssueType != "" {
+		t.Errorf("issue_type after removal = %q, want none", changed.IssueType)
+	}
+
+	// A call that never names type behaves exactly as it did before this argument existed: no type key
+	// travels, and the response carries no issue type either, since the fake issue never had one set.
+	title := "Renamed"
+	unrelated, err := c.UpdateIssue(context.Background(), 42, IssueContent{Title: &title})
+	if err != nil {
+		t.Fatalf("UpdateIssue() without a type = %v", err)
+	}
+	change = f.recorded()[len(f.recorded())-1]
+	if _, ok := change.body["type"]; ok {
+		t.Errorf("change request = %+v, want no type key", change)
+	}
+	if unrelated.IssueType != "" {
+		t.Errorf("issue_type of an unrelated change = %q, want none", unrelated.IssueType)
+	}
+
+	tooLong := strings.Repeat("x", 101)
+	if _, err := c.UpdateIssue(context.Background(), 42, IssueContent{Type: &tooLong}); !isInvalidRequest(err) {
+		t.Errorf("an overlong type = %v, want an invalid request", err)
+	}
+}
+
 // Comments are read and written only by their own tools, for one issue at a time.
 func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 	f := &fakeGitHub{comments: 45}
@@ -526,6 +703,7 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 
 	options := CommentListOptions{Number: 42}
 	var ids []string
+	var databaseIDs []int64
 	for batch := 0; ; batch++ {
 		page, err := c.ListComments(context.Background(), options)
 		if err != nil {
@@ -536,6 +714,7 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 		}
 		for _, comment := range page.Comments {
 			ids = append(ids, comment.ID)
+			databaseIDs = append(databaseIDs, comment.DatabaseID)
 		}
 		if !page.HasMore {
 			break
@@ -544,6 +723,11 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 	}
 	if len(ids) != 45 || ids[0] != "IC_0" || ids[44] != "IC_44" {
 		t.Errorf("comments = %v, want every comment once, oldest first", ids)
+	}
+	// database_id is added alongside id, additively, so github.comments.update, github.comments.delete, and
+	// the reaction tools can address the comment id already reports by its REST identifier.
+	if len(databaseIDs) != 45 || databaseIDs[0] != 1000 || databaseIDs[44] != 1044 {
+		t.Errorf("database ids = %v, want the numeric REST identifier of every comment", databaseIDs)
 	}
 	refused := len(f.recorded())
 	if _, err := c.ListComments(context.Background(), CommentListOptions{Number: 43, Cursor: options.Cursor}); !isInvalidRequest(err) {
@@ -574,7 +758,7 @@ func TestCommentsAreListedAndWrittenOnlyOnRequest(t *testing.T) {
 
 	before := len(f.recorded())
 	comment, err := c.CreateComment(context.Background(), 42, "Fixed "+bodyCanary)
-	if err != nil || comment.ID != "IC_new" || comment.Body != "Fixed "+bodyCanary || comment.Author != "octocat" {
+	if err != nil || comment.ID != "IC_new" || comment.DatabaseID != 9 || comment.Body != "Fixed "+bodyCanary || comment.Author != "octocat" {
 		t.Fatalf("CreateComment() = %+v, %v", comment, err)
 	}
 	requests := f.recorded()[before:]

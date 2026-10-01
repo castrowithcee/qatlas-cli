@@ -28,13 +28,12 @@ var projectWorkflowsList = capability.Descriptor{
 	ID:      Provider + ".projectworkflows.list",
 	Version: 1,
 	Title:   "List the automations of a GitHub project",
-	Description: "Read the built-in workflows of one GitHub project an explicit connection allows: number, " +
+	Description: "Read the built-in workflows of one GitHub project a connection allows: number, " +
 		"name, and whether it is enabled",
-	Tags:                       []string{"github", "projects", "workflows", "automations", "list", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	Tags:        []string{"github", "projects", "workflows", "automations", "list", "planning"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"workflows":{"type":"array","items":` +
 		workflowOutput + `}},"required":["workflows"],"additionalProperties":false}`),
 	Fields: []capability.Field{{Name: "workflows", Description: "Every workflow in number order: number, name " +
@@ -49,13 +48,12 @@ var projectWorkflowsDelete = capability.Descriptor{
 	ID:      Provider + ".projectworkflows.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project automation",
-	Description: "Delete one built-in workflow of a GitHub project an explicit connection allows; GitHub's API " +
+	Description: "Delete one built-in workflow of a GitHub project a connection allows; GitHub's API " +
 		"cannot create it again. Offered only by a connection whose tools list names it",
-	Tags:                       []string{"github", "projects", "workflows", "automations", "delete"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "projects", "workflows", "automations", "delete"},
+	Risk:                  changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"workflow":` + numberSchema + `},` +
 		`"required":["workflow"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +

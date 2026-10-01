@@ -100,7 +100,7 @@ func TestAdminSessionAsksOnceThenStaysActive(t *testing.T) {
 	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-primary")
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -158,7 +158,7 @@ func TestAdminSessionCancelPreservesFormInput(t *testing.T) {
 	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-primary")
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -206,7 +206,7 @@ func TestAdminTimeoutZeroAsksEveryChange(t *testing.T) {
 
 	// A second, otherwise independent managing action asks again right away.
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-primary")
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -246,7 +246,7 @@ func TestAdminSessionIdlesOutAndKeysRenewIt(t *testing.T) {
 	}
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-primary")
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -275,7 +275,7 @@ func TestAdminSessionNoneForUnencryptedVault(t *testing.T) {
 	}
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-primary")
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -313,7 +313,7 @@ func TestAdminSessionNoneWithoutAVault(t *testing.T) {
 func addKeyringCredentialGated(t *testing.T, m *Model, name, passphrase string) {
 	t.Helper()
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -376,7 +376,7 @@ func TestAdminSessionSecondEnterWhileCheckingIsIgnored(t *testing.T) {
 	m, _ := newEncryptedVaultModel(t, dir, "hunter2", true)
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-primary")
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -425,7 +425,7 @@ func TestAdminSessionFailsClosedWhenVaultStateCannotBeRead(t *testing.T) {
 	t.Cleanup(func() { os.Chmod(vaultDir, 0o700) })
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-primary")
 	press(t, m, "tab")
 	press(t, m, "tab")

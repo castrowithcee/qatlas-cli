@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
 	"strconv"
@@ -119,6 +120,9 @@ const (
 	screenLogs
 	// screenLogDetail shows every field of one log entry.
 	screenLogDetail
+	// screenTemplate asks whether a new entry or the guided setup starts empty or from an existing entry, and
+	// lists the entries to start from in a searchable picker; see template.go.
+	screenTemplate
 )
 
 type fieldKind int
@@ -234,6 +238,9 @@ const (
 	// pathsHint says what the path list of a connection does.
 	pathsHint = "the connection is offered only in projects inside these directories, absolute or starting " +
 		"with ~/; none means every project"
+	// filesHint says what the two directory lists of a connection release.
+	filesHint = "local directories the tools of this connection may %s, absolute or starting with ~/; a " +
+		"directory gives access to it and everything below; none releases no local files"
 	toolListHint = "enter opens this provider's tools to tick; a tool is offered only when the permissions " +
 		"above allow its effect as well"
 	toolListOffHint = "not used while every tool the permissions allow is offered; choose only selected " +
@@ -361,11 +368,18 @@ type Model struct {
 	list    filterList
 
 	editing string
-	fields  []field
-	focus   int
+	// copyFrom names the entry a new form was filled from. The form is still a new entry (editing stays
+	// empty); this only says where its values came from. See template.go.
+	copyFrom string
+	// template is the question or picker of screenTemplate while it is open.
+	template *templateChoice
+	fields   []field
+	focus    int
 	// picker holds the values of the focused choice row while it is searched. The row itself changes only
 	// when a value is taken.
 	picker filterList
+	// templateList holds the entries of screenTemplate's picker.
+	templateList filterList
 	// pickerMarks holds the ticks of a tool list or the permissions while their picker is open, and is nil
 	// for a single choice. The row takes them over only when they are kept.
 	pickerMarks map[string]bool
@@ -493,6 +507,8 @@ type Model struct {
 	updating   bool
 	updated    string
 	updateFrom screen
+	// updateText is what the update question says an installation does, set when it opens.
+	updateText string
 
 	// Vault header and 'ctrl+l' state (see vaultheader.go). vaultProcessUnlocked caches whether a vault
 	// process holds a locked vault open, refreshed by a tick and right after this window's own lock and
@@ -544,6 +560,8 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
 	m.picker = newFilterList(choiceText)
+	m.templateList = newFilterList(m.templateText)
+	m.templateList.input.Placeholder = "Type to search"
 	m.picker.input.Placeholder = "Type to search"
 	m.targetList = newFilterList(func(target string) string { return target })
 	m.targetInput = textField("", "", false).input
@@ -695,6 +713,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateLogs(msg)
 		case screenLogDetail:
 			cmd = m.updateLogDetail(msg)
+		case screenTemplate:
+			cmd = m.updateTemplate(msg)
 		}
 		// Whatever a key changed, the profile row shows what the ticks now are.
 		if m.screen == screenForm {
@@ -705,10 +725,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// updateNav handles the sidebar or, in a narrow terminal, the navigation line in focus. Below the sidebar
-// width, left/right (also h/l) step through the sections with wraparound, the way up/down do in the
-// sidebar; up/down (k/j) still work there too. Moving through the sections changes the active one at once,
-// so the workspace beside or below it always shows the section the marker stands on.
+// updateNav handles the sidebar or, in a narrow terminal, the navigation line in focus. In the sidebar,
+// up/down (k/j, and shift+tab for up) step through the sections with wraparound, and right, enter, or tab
+// move the focus into the workspace. Below the sidebar width the navigation line follows its own layout
+// instead: left/right (h/l) step through the sections with the same wraparound, down, enter, or tab move
+// the focus into the workspace, and up does nothing there, since it has no section above it to go to.
+// Moving through the sections changes the active one at once, so the workspace beside or below it always
+// shows the section the marker stands on.
 func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
@@ -716,10 +739,17 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "q", "ctrl+c":
 		return m.quit()
-	case "up", "k", "shift+tab":
+	case "shift+tab":
 		return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
+	case "up", "k":
+		if m.sidebarLayout() {
+			return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
+		}
 	case "down", "j":
-		return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
+		if m.sidebarLayout() {
+			return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
+		}
+		return m.focusList()
 	case "left", "h":
 		if !m.sidebarLayout() {
 			return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
@@ -732,7 +762,7 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	case "enter", "tab":
 		return m.focusList()
 	case "c":
-		m.startSetup()
+		m.askSetupTemplate()
 	case "?":
 		m.openHelp()
 	case "u":
@@ -751,6 +781,15 @@ func (m *Model) newEntry() tea.Cmd {
 		m.fail = reason
 		return nil
 	}
+	if m.templateOffered() {
+		m.askTemplate(false)
+		return nil
+	}
+	return m.newEmptyEntry()
+}
+
+// newEmptyEntry opens the form of a new entry that starts empty.
+func (m *Model) newEmptyEntry() tea.Cmd {
 	if m.section == sectionTokens {
 		return m.newToken()
 	}
@@ -804,10 +843,16 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.focusNav()
-	case "left", "h", "tab", "shift+tab":
+	case "tab", "shift+tab":
 		m.focusNav()
+	case "left", "h":
+		if m.sidebarLayout() {
+			m.focusNav()
+		}
+		// Below the sidebar width, left/right stay in the list: the navigation line above it, not beside it,
+		// is where those keys belong instead (see updateNav).
 	case "c":
-		m.startSetup()
+		m.askSetupTemplate()
 	case "?":
 		m.openHelp()
 	case "u":
@@ -817,13 +862,29 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 	case "/":
 		m.list.startFilter()
 	case "up", "k":
+		if !m.sidebarLayout() {
+			// No wraparound below the sidebar width: the first entry is where the list ends and the
+			// navigation line begins, in an empty list just as much as a full one.
+			if m.list.cursor <= 0 {
+				m.focusNav()
+			} else {
+				m.list.jump(-1)
+			}
+			return nil
+		}
 		m.list.move(-1)
 	case "down", "j":
+		if !m.sidebarLayout() {
+			m.list.jump(1)
+			return nil
+		}
 		m.list.move(1)
 	case "pgup", "pgdown", "home", "end":
 		m.jumpList(key.String())
 	case "n":
 		return m.newEntry()
+	case "p":
+		return m.duplicateSelected()
 	case "enter":
 		if (m.section == sectionApprovals || m.section == sectionTokens) && m.vaultLocked() {
 			// Nothing is listed while the vault is locked (see approvalsReport); enter is a managing action
@@ -977,6 +1038,10 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return nil
 	case screenLogDetail:
 		m.screen = screenLogs
+		return nil
+	case screenTemplate:
+		m.template = nil
+		m.screen = m.templateFromScreen()
 		return nil
 	case screenLeave:
 		// Staying is the answer that loses nothing.
@@ -1510,6 +1575,7 @@ func (m *Model) connectionProviderChosen() {
 		target.hint = m.targetHint(m.fieldValue("service"))
 	}
 	m.replacePermissionChoices(provider)
+	m.syncFilesRows()
 	if list := m.field(toolListLabel); list != nil {
 		// Tool IDs carry their provider, so no tick survives a change of provider.
 		list.choices, list.selected = m.toolChoices(provider, nil), map[string]bool{}
@@ -2092,7 +2158,7 @@ func (m *Model) returnToList(name string) tea.Cmd {
 func (m *Model) showList() tea.Cmd {
 	m.stopTest()
 	m.testName = ""
-	m.editing = ""
+	m.editing, m.copyFrom = "", ""
 	m.confirmRole = ""
 	m.clearMessages()
 	if m.section == sectionVault {
@@ -2162,18 +2228,24 @@ func (m *Model) entryNames(s section) []string {
 }
 
 // openForm builds the form for a new entry, or for the named existing one.
-func (m *Model) openForm(name string) tea.Cmd {
-	m.editing = name
+func (m *Model) openForm(name string) tea.Cmd { return m.openEntry(name, "") }
+
+// openEntry builds the form for a new entry (name and source empty), for the named existing one, or, with
+// a source and no name, for a new entry filled from that source.
+func (m *Model) openEntry(name, source string) tea.Cmd {
+	m.editing, m.copyFrom = name, source
 	m.screen = screenForm
 	m.clearMessages()
-	m.fields = m.buildFields(name)
+	m.fields = m.buildFieldsFrom(name, source)
 	if m.section == sectionConnections {
 		// A new connection starts on the recommended profile, ticked and visible; a saved one opens as it
-		// is saved, with the profile row only saying which profile its ticks match.
-		if name == "" {
+		// is saved, with the profile row only saying which profile its ticks match. A copy keeps the ticks
+		// it was copied with.
+		if name == "" && source == "" {
 			m.applyRecommendedProfile()
 		}
 		m.syncProfile()
+		m.syncFilesRows()
 	}
 	m.focus = m.firstEditable()
 	m.applyFocus()
@@ -2306,11 +2378,20 @@ func (m *Model) credentialTypeChosen() tea.Cmd {
 	return nil
 }
 
-func (m *Model) buildFields(name string) []field {
+func (m *Model) buildFields(name string) []field { return m.buildFieldsFrom(name, "") }
+
+// buildFieldsFrom builds the rows of an entry form. The values come from the entry name, or, for a new
+// entry filled from another (name empty, source set), from source; the name row is then the suggested copy
+// name and stays editable, because the entry is still new.
+func (m *Model) buildFieldsFrom(edit, source string) []field {
 	if m.section == sectionTokens {
-		return m.tokenFields()
+		return m.tokenFields(source)
 	}
-	key := textField("name", name, name != "").withHint(nameHint)
+	name, shown := edit, edit
+	if source != "" {
+		name, shown = source, m.copyName(source)
+	}
+	key := textField("name", shown, edit != "").withHint(nameHint)
 	if m.section == sectionDefaults {
 		key.label, key.hint = "domain", domainHint
 	}
@@ -2328,7 +2409,7 @@ func (m *Model) buildFields(name string) []field {
 			providerField(m.cfg.Providers(), s.Provider),
 			textField("base url", s.BaseURL, false).withHint(baseURLHint),
 		)
-		if name == "" {
+		if name == "" && source == "" {
 			metadata, _ := m.cfg.ProviderMetadata(fields[1].value())
 			fields[2].input.SetValue(metadata.DefaultBaseURL)
 		}
@@ -2370,6 +2451,8 @@ func (m *Model) buildFields(name string) []field {
 				withHint(connectionCredentialHint),
 			targetsField(conn.TargetValues()),
 			pathsField(conn.Paths).withHint(pathsHint),
+			filesField(filesReadLabel, conn.Files.Read),
+			filesField(filesWriteLabel, conn.Files.Write),
 			// Description and permissions explain the route the fields above define. Only the description
 			// is published during discovery.
 			textField("description", conn.Description, false).withHint(descriptionHint),
@@ -2472,7 +2555,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if err := cfg.SetService(name, config.Service{
 			Provider: provider,
 			BaseURL:  m.fieldValue("base url"),
-			Options:  cfg.Services[name].Options,
+			Options:  maps.Clone(cfg.Services[m.sourceEntry(name)].Options),
 		}); err != nil {
 			return err
 		}
@@ -2508,6 +2591,14 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if entries := pathEntries(m.fields); len(entries) > 0 {
 			paths = append(paths, entries...)
 		}
+		// Like paths, a direction without entries is written as none at all.
+		var files config.Files
+		if entries := filesEntries(m.fields, filesReadLabel); len(entries) > 0 {
+			files.Read = append(files.Read, entries...)
+		}
+		if entries := filesEntries(m.fields, filesWriteLabel); len(entries) > 0 {
+			files.Write = append(files.Write, entries...)
+		}
 		return cfg.SetConnection(name, config.Connection{
 			Service:     m.fieldValue("service"),
 			Credential:  m.fieldValue("credential"),
@@ -2517,6 +2608,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 			Permissions: permissions,
 			Tools:       tools,
 			Paths:       paths,
+			Files:       files,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))
@@ -2759,6 +2851,46 @@ const (
 	pathsLabel   = "paths"
 )
 
+// The rows of the two directory lists of a connection: the directories its tools may read files from
+// (uploads) and write files to (downloads).
+const (
+	filesReadLabel  = "uploads"
+	filesWriteLabel = "downloads"
+)
+
+// filesField is a directory list row of the local file release, a list like the path list.
+func filesField(label string, values []string) field {
+	verb := "read files from"
+	if label == filesWriteLabel {
+		verb = "write files to"
+	}
+	return field{label: label, kind: fieldPaths, entries: values}.withHint(fmt.Sprintf(filesHint, verb))
+}
+
+// isFilesLabel reports whether label is one of the two local file rows.
+func isFilesLabel(label string) bool { return label == filesReadLabel || label == filesWriteLabel }
+
+// filesEntries are the entries of the local file row with label among fields, or none.
+func filesEntries(fields []field, label string) []string {
+	for _, f := range fields {
+		if f.kind == fieldPaths && f.label == label {
+			return f.entries
+		}
+	}
+	return nil
+}
+
+// syncFilesRows shows a local file row only for a direction the form's provider has a tool for, or while it
+// still holds entries: such a row stays editable, so the refusal of the core has something to act on.
+func (m *Model) syncFilesRows() {
+	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+	for label, offered := range map[string]bool{filesReadLabel: metadata.LocalFiles.Read, filesWriteLabel: metadata.LocalFiles.Write} {
+		if f := m.field(label); f != nil {
+			f.hidden = !offered && len(f.entries) == 0
+		}
+	}
+}
+
 // targetsField is the target list row over the targets a connection holds now.
 func targetsField(values []string) field {
 	return field{label: targetsLabel, kind: fieldTargets, entries: values}
@@ -2924,6 +3056,8 @@ func (m *Model) editorView() string {
 		return m.logsView()
 	case screenLogDetail:
 		return m.logDetailView() + m.notes()
+	case screenTemplate:
+		return m.templateView()
 	}
 	var b strings.Builder
 	switch m.screen {
@@ -2931,6 +3065,11 @@ func (m *Model) editorView() string {
 		what := "New " + m.section.entry()
 		if m.editing != "" {
 			what = "Edit " + m.editing
+		} else if m.copyFrom != "" {
+			what += ", from " + m.copyFrom
+			if !m.sidebarLayout() {
+				what = "New " + m.section.entry() + "\nfrom " + m.copyFrom
+			}
 		} else if m.section == sectionVault {
 			what = "Vault"
 		}
@@ -2956,6 +3095,9 @@ func (m *Model) editorView() string {
 			if warning := m.fieldWarning(f); warning != "" {
 				b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 			}
+		}
+		if m.copyFrom != "" && m.editing == "" && m.wizard == nil {
+			b.WriteString("\n" + m.wrapped(hintStyle, m.copyNote()) + "\n")
 		}
 		if m.section == sectionTokens && m.wizard == nil {
 			b.WriteString(m.tokenFormNotes())
@@ -3108,6 +3250,9 @@ func (m *Model) leaveView() string {
 		warning = "warning: the target list changed"
 		if m.leaveFrom == screenPaths {
 			warning = "warning: the path list changed"
+			if isFilesLabel(m.fields[m.focus].label) {
+				warning = "warning: the " + m.fields[m.focus].label + " list changed"
+			}
 		}
 		keys = "k keep the list · d discard changes · esc keep editing"
 		why = "Closing the list without keeping it would lose the changes. Nothing was written yet."
@@ -3183,6 +3328,7 @@ func (m *Model) listFrame() (string, string) {
 			fmt.Sprintf("No entry matches %q. Press esc to clear the filter.", m.list.query())) + "\n")
 	}
 
+	back := m.backToSectionsHint()
 	var keys string
 	switch {
 	case m.screen == screenNav:
@@ -3190,20 +3336,23 @@ func (m *Model) listFrame() (string, string) {
 	case m.list.editing:
 		keys = "type to filter · up/down move · enter keep filter · esc clear filter"
 	case m.section == sectionApprovals && m.vaultLocked():
-		keys = "enter unlock · 1-8 or left sections · ? help · q quit"
+		keys = "enter unlock · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionApprovals:
-		keys = "enter details · a approve all · 1-8 or left sections · ? help · q quit"
+		keys = "enter details · a approve all · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionTokens && m.vaultLocked():
-		keys = "enter unlock · n new · 1-8 or left sections · ? help · q quit"
+		keys = "enter unlock · n new · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
-		keys = "1-8 or left sections · ? help · q quit"
+		keys = "1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionTokens:
-		keys = "/ filter · n new · enter show · x revoke · 1-8 or left sections · ? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter show · x revoke · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionConnections:
-		keys = "/ filter · n new · enter edit · d delete · t test · c guided setup · 1-8 or left sections · " +
-			"? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter edit · d delete · t test · c guided setup · 1-8 or " + back +
+			" · ? help · q quit"
+	case m.templateSection(m.section):
+		keys = "/ filter · n new · p duplicate · enter edit · d delete · c guided setup · 1-8 or " + back +
+			" · ? help · q quit"
 	default:
-		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-8 or left sections · ? help · q quit"
+		keys = "/ filter · n new · enter edit · d delete · c guided setup · 1-8 or " + back + " · ? help · q quit"
 	}
 	if m.screen == screenList && !m.list.editing && m.list.query() != "" {
 		keys += " · esc clear filter"
@@ -3234,9 +3383,21 @@ func (m *Model) navKeys() string {
 	if m.sidebarLayout() {
 		return "up/down section · enter open · 1-8 open · n new · c setup · ? help · q quit"
 	}
-	// Below the sidebar width every arrow does the same thing, left/right or the kept up/down, so the hint
-	// names them together rather than repeating "up/down section" from the sidebar layout above.
-	return "arrows section · enter open · 1-8 open · n new · c setup · ? help · q quit"
+	// Below the sidebar width the navigation line follows its own keys: left/right step through the
+	// sections, and down (like enter and tab) moves the focus into the workspace below it; up does nothing
+	// here, so it is left out of the hint, the same way the sidebar hint above leaves out right. Kept short
+	// enough to still wrap into two lines at the minimum terminal width.
+	return "left/right move · down open · 1-8 open · n new · c setup · ? help · q quit"
+}
+
+// backToSectionsHint names the key that takes the focus from the list back to the sections: left, in the
+// sidebar layout, where it also steps the sidebar's own selection; tab, below the sidebar width, where
+// left/right instead stay inside the list (see updateList).
+func (m *Model) backToSectionsHint() string {
+	if m.sidebarLayout() {
+		return "left sections"
+	}
+	return "tab sections"
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.
@@ -3370,6 +3531,10 @@ func (m *Model) keepScrollPosition() {
 		m.list.offset, _ = m.listWindow()
 	case screenPicker:
 		m.picker.offset, _ = m.pickerWindow()
+	case screenTemplate:
+		if m.template != nil && m.template.picking {
+			m.templateList.offset, _ = m.templateWindow()
+		}
 	case screenProviders:
 		m.providers.list.offset, _ = m.providerTableWindow()
 	case screenTargets:
@@ -4077,6 +4242,12 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = listLines(f.entries, "target", "targets")
 	case f.kind == fieldTargets:
 		value = targetSummary(f.entries)
+	case f.kind == fieldPaths && isFilesLabel(f.label) && len(f.entries) == 0:
+		value = hintStyle.Render("(none: no local files released)")
+	case f.kind == fieldPaths && isFilesLabel(f.label) && f.expanded:
+		value = listLines(f.entries, "directory", "directories")
+	case f.kind == fieldPaths && isFilesLabel(f.label):
+		value = listSummary(f.entries, "directories")
 	case f.kind == fieldPaths && len(f.entries) == 0:
 		value = hintStyle.Render("(none: every project)")
 	case f.kind == fieldPaths && f.expanded:

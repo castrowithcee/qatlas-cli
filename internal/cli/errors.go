@@ -140,7 +140,7 @@ func withNextStep(err error, r route) error {
 }
 
 // errorDetail is the machine-readable form of a diagnostic whose code alone does not say how to go on. For
-// connection-ambiguous and connection-selection it names every route an explicit connection may choose,
+// connection-ambiguous and connection-selection it names every route a connection may choose,
 // each with the description its owner maintains and an empty one where there is none, so a caller picks a
 // route without parsing the message. connection-selection names none when no connection offers the tool.
 // Names and descriptions are all it publishes of a route: never a service, credential, target, or
@@ -189,7 +189,7 @@ func errorDetailFor(err error, redactor *redact.Redactor) any {
 	case errors.As(err, &ambiguous):
 		code, operation, refs = output.CodeConnectionAmbiguous, ambiguous.Operation, ambiguous.Connections
 	case errors.As(err, &selection):
-		code, operation, refs = output.CodeConnectionSelection, selection.Operation, selection.Connections
+		code, operation, refs = output.CodeConnectionSelection, selection.Operation, nil
 	default:
 		return nil
 	}

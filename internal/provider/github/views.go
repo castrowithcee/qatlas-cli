@@ -57,13 +57,12 @@ var viewsList = capability.Descriptor{
 	ID:      Provider + ".projectviews.list",
 	Version: 1,
 	Title:   "List the views of a GitHub project",
-	Description: "Read the views of one GitHub project an explicit connection allows: number, name, layout, " +
+	Description: "Read the views of one GitHub project a connection allows: number, name, layout, " +
 		"filter, the visible fields, and the grouping, board columns, and sorting, which only GitHub itself sets",
-	Tags:                       []string{"github", "projects", "views", "list", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	Tags:        []string{"github", "projects", "views", "list", "planning"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"views":{"type":"array","items":` +
 		viewOutput + `}},"required":["views"],"additionalProperties":false}`),
 	Fields: []capability.Field{{Name: "views", Description: "Every view in project order, at most 100: number, " +
@@ -81,11 +80,10 @@ var viewsCreate = capability.Descriptor{
 	Version: 1,
 	Title:   "Create a GitHub project view",
 	Description: "Create one table, board, or roadmap view with its visible fields and filter in a GitHub " +
-		"project an explicit connection allows; a repeated call creates a second view",
-	Tags:                       []string{"github", "projects", "views", "create", "planning"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"project a connection allows; a repeated call creates a second view",
+	Tags:     []string{"github", "projects", "views", "create", "planning"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"name":` + fieldNameSchema + `,` +
 		`"layout":` + layoutSchema + `,"fields":` + visibleFieldsSchema + `,"filter":` + viewFilterSchema + `},` +
 		`"required":["name","layout"],"additionalProperties":false}`),
@@ -115,12 +113,11 @@ var viewsUpdate = capability.Descriptor{
 	ID:      Provider + ".projectviews.update",
 	Version: 1,
 	Title:   "Update a GitHub project view",
-	Description: "Rename one view of a GitHub project an explicit connection allows, or change its layout, " +
+	Description: "Rename one view of a GitHub project a connection allows, or change its layout, " +
 		"filter, or visible fields; settings left out stay unchanged",
-	Tags:                       []string{"github", "projects", "views", "update", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "views", "update", "planning"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"view":` + numberSchema + `,` +
 		`"name":` + fieldNameSchema + `,"layout":` + layoutSchema + `,"fields":` + visibleFieldsSchema + `,` +
 		`"filter":` + viewFilterSchema + `},"required":["view"],"additionalProperties":false}`),
@@ -147,13 +144,12 @@ var viewsDelete = capability.Descriptor{
 	ID:      Provider + ".projectviews.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project view",
-	Description: "Delete one view of a GitHub project an explicit connection allows; the items and fields " +
+	Description: "Delete one view of a GitHub project a connection allows; the items and fields " +
 		"of the project stay. Offered only by a connection whose tools list names it",
-	Tags:                       []string{"github", "projects", "views", "delete"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "projects", "views", "delete"},
+	Risk:                  changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"view":` + numberSchema + `},` +
 		`"required":["view"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +

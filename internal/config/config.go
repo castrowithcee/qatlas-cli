@@ -89,6 +89,10 @@ type Credential struct {
 // "~", and the connection is discovered and run only for a project that equals one of them or lies below
 // it (see ConnectionApplies). Missing, the connection applies everywhere. Discovery never publishes the
 // paths. Managing commands still see every connection.
+//
+// Files, when present, releases local directories to tools that read (Files.Read) or write (Files.Write)
+// local files. Missing, the connection gives no local file access at all. Unlike Paths it is a permission
+// and never a selector; see validateFiles.
 type Connection struct {
 	Service     string       `yaml:"service"`
 	Credential  string       `yaml:"credential"`
@@ -98,6 +102,7 @@ type Connection struct {
 	Permissions []Permission `yaml:"permissions,omitempty"`
 	Tools       []string     `yaml:"tools,omitempty"`
 	Paths       []string     `yaml:"paths,omitempty"`
+	Files       Files        `yaml:"files,omitempty"`
 }
 
 // MarshalYAML preserves the semantic difference between a missing permissions or tools field (provider
@@ -113,6 +118,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		Permissions *[]Permission `yaml:"permissions,omitempty"`
 		Tools       *[]string     `yaml:"tools,omitempty"`
 		Paths       []string      `yaml:"paths,omitempty"`
+		Files       Files         `yaml:"files,omitempty"`
 	}
 	var permissions *[]Permission
 	if c.Permissions != nil {
@@ -125,7 +131,7 @@ func (c Connection) MarshalYAML() (any, error) {
 		tools = &copy
 	}
 	return wire{Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
-		Description: c.Description, Permissions: permissions, Tools: tools, Paths: c.Paths}, nil
+		Description: c.Description, Permissions: permissions, Tools: tools, Paths: c.Paths, Files: c.Files}, nil
 }
 
 // Defaults holds the connection chosen for a domain when no connection is given explicitly, and the
@@ -590,6 +596,7 @@ func (c *Config) Validate() error {
 				c.validateTools(name, service.Provider, metadata, report)
 			}
 		}
+		validateFiles(name, conn.Files, c.localFilesOf(conn, providers), report)
 	}
 
 	for _, provider := range sortedKeys(c.ProviderNotes) {
@@ -814,6 +821,9 @@ const (
 	RefusalToolAllowList Refusal = "requires-tool-allow-list"
 	// RefusalToolsList: the connection has a tools list, and it does not name the tool.
 	RefusalToolsList Refusal = "not-in-tools-list"
+	// RefusalNoLocalFiles: the tool reads or writes local files, and the connection releases no directory
+	// for that direction.
+	RefusalNoLocalFiles Refusal = "no-local-files"
 	// RefusalNoConnection: no configured connection of the tool's provider exists.
 	RefusalNoConnection Refusal = "no-connection"
 	// RefusalOtherProvider: the connection belongs to another provider than the tool.
@@ -844,6 +854,9 @@ func (c *Config) ConnectionRefusal(name string, tool ToolMetadata) Refusal {
 		return RefusalToolAllowList
 	case conn.Tools != nil && !contains(conn.Tools, tool.ID):
 		return RefusalToolsList
+	case tool.LocalFiles == LocalFilesRead && len(conn.Files.Read) == 0,
+		tool.LocalFiles == LocalFilesWrite && len(conn.Files.Write) == 0:
+		return RefusalNoLocalFiles
 	}
 	return ""
 }

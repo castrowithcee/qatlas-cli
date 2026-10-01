@@ -116,33 +116,30 @@ var (
 		ID: Provider + ".pages.create", Version: 1, Title: "Create a BookStack page",
 		Description: "Create one Markdown page in a specified book or chapter",
 		Tags:        []string{"knowledge", "pages", "bookstack", "create"}, Provider: Provider,
-		RequiresExplicitConnection: true,
-		Risk:                       capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
-		InputSchema:                json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"book_id":{"type":"integer","minimum":1},"chapter_id":{"type":"integer","minimum":1},"markdown":{"type":"string","minLength":1,"maxLength":1048576}},"required":["name","markdown"],"additionalProperties":false}`),
-		OutputSchema:               pagesGet.OutputSchema,
-		Arguments:                  []capability.Argument{{Name: "name", Description: "Page title", Required: true}, {Name: "book_id", Description: "Containing book; required when chapter_id is omitted"}, {Name: "chapter_id", Description: "Containing chapter; mutually exclusive with book_id"}, {Name: "markdown", Description: "Markdown page content", Required: true}},
+		Risk:         capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"book_id":{"type":"integer","minimum":1},"chapter_id":{"type":"integer","minimum":1},"markdown":{"type":"string","minLength":1,"maxLength":1048576}},"required":["name","markdown"],"additionalProperties":false}`),
+		OutputSchema: pagesGet.OutputSchema,
+		Arguments:    []capability.Argument{{Name: "name", Description: "Page title", Required: true}, {Name: "book_id", Description: "Containing book; required when chapter_id is omitted"}, {Name: "chapter_id", Description: "Containing chapter; mutually exclusive with book_id"}, {Name: "markdown", Description: "Markdown page content", Required: true}},
 	}
 
 	pagesUpdate = capability.Descriptor{
 		ID: Provider + ".pages.update", Version: 1, Title: "Update a BookStack page",
 		Description: "Replace the title and/or Markdown of one page by identifier",
 		Tags:        []string{"knowledge", "pages", "bookstack", "update"}, Provider: Provider,
-		RequiresExplicitConnection: true,
-		Risk:                       capability.Risk{Effect: capability.EffectUpdate, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
-		InputSchema:                json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},"markdown":{"type":"string","minLength":1,"maxLength":1048576}},"required":["id"],"additionalProperties":false}`),
-		OutputSchema:               pagesGet.OutputSchema,
-		Arguments:                  []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}, {Name: "name", Description: "New page title"}, {Name: "markdown", Description: "New Markdown content"}},
+		Risk:         capability.Risk{Effect: capability.EffectUpdate, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},"markdown":{"type":"string","minLength":1,"maxLength":1048576}},"required":["id"],"additionalProperties":false}`),
+		OutputSchema: pagesGet.OutputSchema,
+		Arguments:    []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}, {Name: "name", Description: "New page title"}, {Name: "markdown", Description: "New Markdown content"}},
 	}
 
 	pagesDelete = capability.Descriptor{
 		ID: Provider + ".pages.delete", Version: 1, Title: "Delete a BookStack page",
 		Description: "Permanently delete one page by identifier",
 		Tags:        []string{"knowledge", "pages", "bookstack", "delete"}, Provider: Provider,
-		RequiresExplicitConnection: true,
-		Risk:                       capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
-		InputSchema:                json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
-		OutputSchema:               json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
-		Arguments:                  []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}},
+		Risk:         capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
+		Arguments:    []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}},
 	}
 )
 

@@ -120,7 +120,7 @@ func checkProcess(pid uint32) error {
 	if ownProgramErr != nil {
 		return fmt.Errorf("%w: this program %w", ErrRefused, ownProgramErr)
 	}
-	if now, err := idOf(ownProgram.path); err != nil || now != ownProgram.id {
+	if replaced, err := ownProgramReplaced(); err != nil || replaced {
 		return fmt.Errorf("%w: this program was removed or replaced since it started", ErrRefused)
 	}
 	peer, err := programOf(process)
@@ -132,6 +132,39 @@ func checkProcess(pid uint32) error {
 	}
 	return nil
 }
+
+// ownProgramReplaced reports whether the file this process started from was removed or replaced since:
+// the path it had at its start no longer names that file. An error means it cannot be told. It is the one
+// place that decides what a replaced program is, for VerifyProgram and ReplacedProgram alike.
+func ownProgramReplaced() (bool, error) {
+	if ownProgramErr != nil {
+		return false, ownProgramErr
+	}
+	now, err := idOf(ownProgram.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return now != ownProgram.id, nil
+}
+
+// ReplacedProgram returns the path this process was started from and whether its file was removed or
+// replaced since, as an update does. The path is the full one the system reported at the start. It uses
+// the same check VerifyProgram refuses a replaced program by, and tells nothing about the vault. Where the
+// state cannot be read, the program counts as not replaced.
+func ReplacedProgram() (string, bool) {
+	replaced, err := ownProgramReplaced()
+	if err != nil || !replaced {
+		return "", false
+	}
+	return ownProgram.path, true
+}
+
+// userRuntimeDir finds no per-user runtime directory without XDG_RUNTIME_DIR on Windows, which listens
+// on a named pipe and leaves nothing on disk.
+func userRuntimeDir() string { return "" }
 
 // openPeer opens the process pid with no more than the right to ask who runs it and from which file.
 func openPeer(pid uint32) (windows.Handle, error) {

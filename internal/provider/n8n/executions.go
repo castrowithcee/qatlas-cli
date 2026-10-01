@@ -53,10 +53,9 @@ var executionsList = capability.Descriptor{
 		"when it has one; page by page with an opaque cursor. When this connection also holds a project " +
 		"allow-list, workflow_id is required, so this connection's project membership can be verified once " +
 		"for the whole page instead of guessed: an execution carries no project of its own",
-	Tags:                       []string{"n8n", "executions", "list", "automation"},
-	Risk:                       n8nReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"n8n", "executions", "list", "automation"},
+	Risk:     n8nReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
@@ -100,10 +99,9 @@ var executionsGet = capability.Descriptor{
 	Title:   "Get an n8n execution",
 	Description: "Read the status, timestamps, and, for a failed execution, a bounded error (message and " +
 		"the node it occurred on) of one execution; never its full run data",
-	Tags:                       []string{"n8n", "executions", "get", "automation"},
-	Risk:                       n8nReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"n8n", "executions", "get", "automation"},
+	Risk:     n8nReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"execution_id":` + executionIDSchema + `},` +
 		`"required":["execution_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(executionDetailSchema),
@@ -386,10 +384,9 @@ var executionsRetry = capability.Descriptor{
 	Description: "Retry one execution of the bound n8n instance, starting a new execution from it; a " +
 		"repeated call starts another retry every time. Runs with the workflow as it was saved when the " +
 		"original execution ran, not any later change",
-	Tags:                       []string{"n8n", "executions", "retry", "automation"},
-	Risk:                       n8nChangeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"n8n", "executions", "retry", "automation"},
+	Risk:     n8nChangeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"execution_id":` + executionIDSchema + `},` +
 		`"required":["execution_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(executionSummarySchema),
@@ -405,10 +402,9 @@ var executionsStop = capability.Descriptor{
 	Title:   "Stop an n8n execution",
 	Description: "Stop one running or waiting execution of the bound n8n instance; repeating it on an " +
 		"execution that has already stopped leaves it stopped",
-	Tags:                       []string{"n8n", "executions", "stop", "automation"},
-	Risk:                       n8nChangeRisk(capability.EffectExecute, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"n8n", "executions", "stop", "automation"},
+	Risk:     n8nChangeRisk(capability.EffectExecute, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"execution_id":` + executionIDSchema + `},` +
 		`"required":["execution_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(executionSummarySchema),

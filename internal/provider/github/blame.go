@@ -41,12 +41,11 @@ var blameGet = capability.Descriptor{
 	Version: 1,
 	Title:   "Get the GitHub blame of a file",
 	Description: "Read, over a bounded line range, the commit that last changed each line of one file of a " +
-		"repository an explicit connection allows at a ref, with the commit's SHA, author, and date; carries " +
+		"repository a connection allows at a ref, with the commit's SHA, author, and date; carries " +
 		"no file content beyond, or even within, the range, since GitHub's blame never returns one",
-	Tags:                       []string{"github", "blame", "contents", "repository", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "blame", "contents", "repository", "get"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"path":`+contentsPathSchema+`,"ref":`+refSchema+`,"start_line":`+lineSchema+
 		`,"end_line":`+lineSchema, "path"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"ranges":{"type":"array","items":{` +

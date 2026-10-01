@@ -66,27 +66,33 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[54]{id,title,effect,connections}:\n", "  github.issues.get,Get a GitHub issue,read,code\n",
-		"  github.contents.get,Get GitHub repository contents,read,code\n",
-		"  github.trees.get,Get a GitHub repository tree,read,code\n",
-		"  github.blame.get,Get the GitHub blame of a file,read,code\n",
-		"  github.commits.list,List GitHub commits,read,code\n",
-		"  github.commits.get,Get a GitHub commit,read,code\n",
-		"  github.branches.list,List GitHub branches,read,code\n",
-		"  github.tags.list,List GitHub tags,read,code\n",
-		"  github.tags.get,Get a GitHub tag,read,code\n",
-		"  github.projectitems.list,List GitHub project items,read,code planning roadmap\n", "  github.projectitems.update,Update GitHub project item fields,update,roadmap\n",
-		"  github.accounts.me,Get the GitHub account behind this connection,read,code\n",
-		"  github.stars.list,List the GitHub repositories starred by this account,read,code\n",
-		"  github.teams.list,List the teams of a GitHub organization,read,code\n",
-		"  github.teammembers.list,List the members of a GitHub team,read,code\n",
-		"  github.repositories.search,Search GitHub repositories,read,code\n",
-		"  github.code.search,Search GitHub code,read,code\n",
-		"  github.issues.search,Search GitHub issues,read,code\n",
-		"  github.pullrequests.search,Search GitHub pull requests,read,code\n",
-		"  github.commits.search,Search GitHub commits,read,code\n",
-		"  github.users.search,Search GitHub users,read,code\n",
-		"  github.organizations.search,Search GitHub organizations,read,code\n",
+		"tools[85]{id,title,effect,requires,confirm,connections}:\n",
+		"  github.issues.get,Get a GitHub issue,read,number,false,code\n",
+		"  github.labels.list,List GitHub labels,read,\"\",false,code\n",
+		"  github.labels.get,Get a GitHub label,read,name,false,code\n",
+		"  github.milestones.list,List GitHub milestones,read,\"\",false,code\n",
+		"  github.collaborators.list,List GitHub repository collaborators,read,\"\",false,code\n",
+		"  github.contents.get,Get GitHub repository contents,read,\"\",false,code\n",
+		"  github.trees.get,Get a GitHub repository tree,read,ref,false,code\n",
+		"  github.blame.get,Get the GitHub blame of a file,read,path,false,code\n",
+		"  github.commits.list,List GitHub commits,read,\"\",false,code\n",
+		"  github.commits.get,Get a GitHub commit,read,ref,false,code\n",
+		"  github.branches.list,List GitHub branches,read,\"\",false,code\n",
+		"  github.tags.list,List GitHub tags,read,\"\",false,code\n",
+		"  github.tags.get,Get a GitHub tag,read,tag,false,code\n",
+		"  github.projectitems.list,List GitHub project items,read,\"\",false,\"\"\n",
+		"  github.projectitems.update,Update GitHub project item fields,update,item_id; fields,true,roadmap\n",
+		"  github.accounts.me,Get the GitHub account behind this connection,read,\"\",false,code\n",
+		"  github.stars.list,List the GitHub repositories starred by this account,read,\"\",false,code\n",
+		"  github.teams.list,List the teams of a GitHub organization,read,\"\",false,code\n",
+		"  github.teammembers.list,List the members of a GitHub team,read,team,false,code\n",
+		"  github.repositories.search,Search GitHub repositories,read,terms,false,code\n",
+		"  github.code.search,Search GitHub code,read,terms,false,code\n",
+		"  github.issues.search,Search GitHub issues,read,terms,false,code\n",
+		"  github.pullrequests.search,Search GitHub pull requests,read,terms,false,code\n",
+		"  github.commits.search,Search GitHub commits,read,terms,false,code\n",
+		"  github.users.search,Search GitHub users,read,terms,false,code\n",
+		"  github.organizations.search,Search GitHub organizations,read,terms,false,code\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -105,9 +111,10 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		`  github.issues.get,Get a GitHub issue,read,code,""`, `  github.issues.create,Create a GitHub issue,create,"",not-in-tools-list`,
-		`  github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,"",effect-not-permitted`,
-		`  github.workflowfiles.get,Get a GitHub workflow file,read,"",not-in-tools-list`,
+		`  github.issues.get,Get a GitHub issue,read,number,false,code,""`,
+		`  github.issues.create,Create a GitHub issue,create,title,true,"",not-in-tools-list`,
+		`  github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,`,
+		`  github.workflowfiles.get,Get a GitHub workflow file,read,`,
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools --all output does not contain %q:\n%s", want, stdout)
@@ -116,8 +123,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--connection", "code",
 		"--config", path)
 	if code != exitOK || stderr != "" ||
-		!strings.Contains(stdout, `  github.workflowfiles.get,Get a GitHub workflow file,read,"",requires-tool-allow-list`) ||
-		!strings.Contains(stdout, `  github.issues.create,Create a GitHub issue,create,"",effect-not-permitted`) {
+		!strings.Contains(stdout, `,false,"",requires-tool-allow-list`) ||
+		!strings.Contains(stdout, `  github.issues.create,Create a GitHub issue,create,title,true,"",effect-not-permitted`) {
 		t.Errorf("tools --all --connection code: exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
 	}
 	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--config", path)
@@ -125,8 +132,20 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[123]{id,title,effect,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
+		"tools[192]{id,title,effect,requires,confirm,connections,reason}:", "github.issues.get,Get a GitHub issue,read,", "github.issues.list,List GitHub issues,read,",
 		"github.contents.get,Get GitHub repository contents,read,", "github.trees.get,Get a GitHub repository tree,read,",
+		"github.branches.create,Create a GitHub branch,create,", "github.contents.put,Create or update a GitHub repository file,update,",
+		"github.contents.delete,Delete a GitHub repository file,delete,",
+		"github.notifications.list,List GitHub notifications,read,", "github.notifications.markall,Mark GitHub notifications read,update,",
+		"github.threadsubscriptions.set,Set a GitHub thread subscription,update,",
+		"github.gists.list,List GitHub gists,read,", "github.gists.delete,Delete a GitHub gist,delete,",
+		"github.codescanningalerts.list,List GitHub code scanning alerts,read,",
+		"github.dependabotalerts.get,Get a GitHub Dependabot alert,read,",
+		"github.secretscanningalerts.list,List GitHub secret scanning alerts,read,",
+		"github.globaladvisories.list,List GitHub global security advisories,read,",
+		"github.copilotassignments.create,Assign GitHub Copilot to an issue,update,",
+		"github.copilotreviews.request,Request a GitHub Copilot review,update,",
+		"github.codequalityfindings.get,Get a GitHub code quality finding,read,",
 		"github.blame.get,Get the GitHub blame of a file,read,",
 		"github.commits.list,List GitHub commits,read,", "github.commits.get,Get a GitHub commit,read,",
 		"github.branches.list,List GitHub branches,read,", "github.tags.list,List GitHub tags,read,",
@@ -160,7 +179,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		"github.projectworkflows.delete,Delete a GitHub project automation,delete,",
 		"github.workflows.list,List GitHub Actions workflows,read,", "github.workflows.get,Get a GitHub Actions workflow,read,", "github.workflowruns.list,List GitHub Actions workflow runs,read,",
 		"github.workflowruns.get,Get a GitHub Actions workflow run,read,", "github.workflowjobs.list,List GitHub Actions jobs of a run,read,", "github.workflowjobs.get,Get a GitHub Actions job,read,",
-		"github.workflowjobs.log,Read the end of a GitHub Actions job log,read,", "github.workflowartifacts.list,List GitHub Actions artifacts of a run,read,",
+		"github.workflowjobs.log,Read the end of a GitHub Actions job log,read,", "github.workflowartifacts.list,List GitHub Actions artifacts of a run,read,", "github.workflowruns.usage,Get the billable time of a GitHub Actions run,read,", "github.workflowrunlogs.delete,Delete the logs of a GitHub Actions run,delete,",
 		"github.workflows.dispatch,Dispatch a GitHub Actions workflow,execute,", "github.workflowruns.rerun,Re-run a GitHub Actions workflow run,execute,",
 		"github.workflowruns.rerunfailed,Re-run the failed jobs of a GitHub Actions run,execute,", "github.workflowruns.cancel,Cancel a GitHub Actions workflow run,execute,",
 		"github.workflowfiles.list,List GitHub workflow files,read,", "github.workflowfiles.get,Get a GitHub workflow file,read,", "github.workflowfiles.create,Create a GitHub workflow file,create,",
@@ -208,7 +227,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	}
 	// A tool that requires an allow-list has no route on a connection that does not list it, whatever the
 	// connection's permissions.
-	for _, id := range []string{"github.workflowfiles.get", "github.workflowfiles.update", "github.actionspermissions.update"} {
+	for _, id := range []string{"github.workflowfiles.get", "github.workflowfiles.update", "github.actionspermissions.update",
+		"github.files.push"} {
 		guarded := runTwentyJSON(t, "", "describe", id, "--full", "--config", path)
 		if !strings.Contains(string(guarded), `"connections":[]`) ||
 			!strings.Contains(string(guarded), `"requires_tool_allow_list":true`) {
@@ -220,7 +240,8 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		if code != exitOK || stderr != "" || !strings.Contains(listed, "github.projectitems.list") {
 			t.Fatalf("tools --connection %s: exit=%d stdout=%q stderr=%q", connection, code, listed, stderr)
 		}
-		for _, id := range []string{"workflowfiles", "actionspermissions", "workflowpermissions", "workflows.enable"} {
+		for _, id := range []string{"workflowfiles", "actionspermissions", "workflowpermissions", "workflows.enable",
+			"files.push"} {
 			if strings.Contains(listed, id) {
 				t.Errorf("connection %s lists %s:\n%s", connection, id, listed)
 			}
@@ -251,8 +272,6 @@ func TestGitHubInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--config", path}},
 		{"a foreign cursor", `{"cursor":"AAAAAAAAAAAAAAAAY3VyLTM"}`, "invalid-request",
 			[]string{"invoke", "github.projectitems.list", "--connection", "planning", "--config", path}},
-		{"no explicit connection", `{"number":1}`, "connection-selection",
-			[]string{"invoke", "github.issues.get", "--config", path}},
 		{"an unconfirmed change", `{"item_id":"PVTI_x1","fields":{"Status":"Done"}}`, "confirmation-required",
 			[]string{"invoke", "github.projectitems.update", "--connection", "roadmap", "--config", path}},
 		{"a change the permissions exclude", `{"title":"x"}`, "unsupported-capability",

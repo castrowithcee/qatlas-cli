@@ -142,8 +142,10 @@ func TestResolveRefusesAVaultProcessWithAnotherKey(t *testing.T) {
 	if !strings.Contains(err.Error(), "kill ") || strings.Contains(err.Error(), canaryVault) {
 		t.Errorf("Resolve() error = %q, want how to end the process and no secret", err)
 	}
-	if err := r.Usable(context.Background(), wikiConnection()); !errors.As(err, new(*VaultLockedError)) {
-		t.Errorf("Usable() with a process that fails the check = %v, want *VaultLockedError", err)
+	// Listed as locked, the connection would send the user to unlock a vault that is unlocked already.
+	if err := r.Usable(context.Background(), wikiConnection()); !errors.As(err, new(*VaultProcessError)) ||
+		!errors.Is(err, vaultproc.ErrRefused) {
+		t.Errorf("Usable() with a process that fails the check = %v, want *VaultProcessError for ErrRefused", err)
 	}
 }
 

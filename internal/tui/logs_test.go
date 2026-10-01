@@ -2,6 +2,9 @@ package tui
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,6 +69,16 @@ func (f *logFixture) today() string {
 	return latest
 }
 
+// localToday is the local day of the latest fixture entry, which can differ from its UTC file name.
+func (f *logFixture) localToday() string {
+	f.t.Helper()
+	raw, err := os.ReadFile(filepath.Join(f.logsDir(), f.today()+".jsonl"))
+	mustNoError(f.t, err)
+	var entry invokelog.Entry
+	mustNoError(f.t, json.Unmarshal(bytes.SplitN(raw, []byte("\n"), 2)[0], &entry))
+	return entry.Time.In(time.Local).Format(logDateLayout)
+}
+
 // edit rewrites the day file of day through change, which gets its lines.
 func (f *logFixture) edit(day string, change func([][]byte) [][]byte) {
 	f.t.Helper()
@@ -127,10 +140,10 @@ func TestLogsSectionShowsTheDayVerified(t *testing.T) {
 	f := newLogFixture(t)
 	f.append("mcp", "codex", "wiki.pages.get", "wiki", "success")
 	f.append("cli", "", "wiki.pages.list", "wiki", "success")
-	m := f.model(true, f.today())
+	m := f.model(true, f.localToday())
 
 	view := m.View()
-	for _, want := range []string{"8 Logs", "7 Tokens", "Mode: [Day] Range All", "Date: [" + f.today() + "]",
+	for _, want := range []string{"8 Logs", "7 Tokens", "Mode: [Day] Range All", "Date: [" + f.localToday() + "]",
 		"status", "time", "way", "client", "tool", "connection", "result", "dur.", "codex", "MCP", "CLI",
 		"12ms", "filter: way=all client=all tool=all conn=all effect=all result=all"} {
 		if !strings.Contains(view, want) {
@@ -156,7 +169,7 @@ func TestLogsSectionShowsTheDayVerified(t *testing.T) {
 func TestLogsWithALockedVaultAreUnverified(t *testing.T) {
 	f := newLogFixture(t)
 	f.append("mcp", "codex", "wiki.pages.get", "wiki", "success")
-	m := f.model(false, f.today())
+	m := f.model(false, f.localToday())
 
 	view := m.View()
 	if strings.Contains(view, "✓ verified") {
@@ -185,7 +198,7 @@ func TestLogsMarkChangedMissingAndUnreadableLines(t *testing.T) {
 		lines[1] = bytes.Replace(lines[1], []byte(`"op.two"`), []byte(`"op.hid"`), 1)
 		return append(append(lines[:3], lines[4]), []byte(`{"seq": not json`))
 	})
-	m := f.model(true, day)
+	m := f.model(true, f.localToday())
 
 	view := m.View()
 	if !strings.Contains(barLine(view), "✗ altered") {
@@ -205,7 +218,7 @@ func TestLogsMarkChangedMissingAndUnreadableLines(t *testing.T) {
 		t.Fatalf("enter = screen %v, want the detail", m.screen)
 	}
 	detail := m.View()
-	for _, want := range []string{"Log entry " + day, "✗ altered", "hash chain mismatch after this entry",
+	for _, want := range []string{"Log entry " + f.localToday(), "✗ altered", "hash chain mismatch after this entry",
 		"does not match its check", "op.hid", "sequence", "2", "wiki", "read", "12ms"} {
 		if !strings.Contains(detail, want) {
 			t.Errorf("detail does not show %q:\n%s", want, detail)
@@ -225,9 +238,10 @@ func TestLogsMarkChangedMissingAndUnreadableLines(t *testing.T) {
 func TestLogsModeRangeAllAndAnEmptyDay(t *testing.T) {
 	f := newLogFixture(t)
 	f.append("cli", "", "op.old", "wiki", "success")
-	today := f.today()
-	mustNoError(t, os.Rename(filepath.Join(f.logsDir(), today+".jsonl"), filepath.Join(f.logsDir(), "2020-01-02.jsonl")))
+	fileDay := f.today()
+	mustNoError(t, os.Rename(filepath.Join(f.logsDir(), fileDay+".jsonl"), filepath.Join(f.logsDir(), "2020-01-02.jsonl")))
 	f.append("cli", "", "op.new", "wiki", "success")
+	today := f.localToday()
 	m := f.model(true, today)
 
 	if view := m.View(); !strings.Contains(view, "op.new") || strings.Contains(view, "op.old") {
@@ -298,7 +312,7 @@ func TestLogsFilterAndSearch(t *testing.T) {
 	f.append("mcp", "codex", "wiki.pages.get", "wiki", "success")
 	f.append("mcp", "claude-code", "wiki.pages.create", "wiki", "policy-denied")
 	f.append("cli", "", "chat.send", "alerts", "success")
-	m := f.model(true, f.today())
+	m := f.model(true, f.localToday())
 
 	press(t, m, "f")
 	if m.logs.pick == nil || !strings.Contains(m.View(), "Choose a filter") {
@@ -328,7 +342,9 @@ func TestLogsFilterAndSearch(t *testing.T) {
 	typeText(t, m, "denied")
 	press(t, m, "enter")
 	view = m.View()
-	if !strings.Contains(view, "search: denied") || !strings.Contains(view, "wiki.pages.create") ||
+	if !strings.Contains(view, "search: denied") || len(m.logs.list.matches) != 1 ||
+		m.logs.row(m.logs.list.matches[0]).values[logFilterTool] != "wiki.pages.create" ||
+		!strings.Contains(view, "wiki.pages.cre") ||
 		strings.Contains(view, "wiki.pages.get") {
 		t.Fatalf("the search does not keep the denied entry alone:\n%s", view)
 	}
@@ -346,7 +362,7 @@ func TestLogsFilterAndSearch(t *testing.T) {
 func TestLogsKeys(t *testing.T) {
 	f := newLogFixture(t)
 	f.append("cli", "", "op.one", "wiki", "success")
-	m := f.model(true, f.today())
+	m := f.model(true, f.localToday())
 
 	press(t, m, "v", "g")
 	if m.screen != screenLogs || m.logs.mode != logModeDay || m.logs.pick != nil || m.logs.dialog != nil {
@@ -399,7 +415,7 @@ func TestLogsNeverPrintControlCharactersOrSecrets(t *testing.T) {
 	mustNoError(t, err)
 	m.redactor.Add("canary-secret-value-77")
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	m.logs.day = day
+	m.logs.day = f.localToday()
 	pump(t, m, "8")
 	press(t, m, "enter")
 	for _, view := range []string{m.logDetailView(), func() string { m.screen = screenLogs; return m.View() }()} {
@@ -419,12 +435,12 @@ func TestLogsNeverPrintControlCharactersOrSecrets(t *testing.T) {
 func TestLogsNarrowLayout(t *testing.T) {
 	f := newLogFixture(t)
 	f.append("mcp", "claude-code", "github.issues.create", "github-ops", "success")
-	m := f.model(true, f.today())
+	m := f.model(true, f.localToday())
 	m.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 
 	view := m.View()
 	assertViewFits(t, view, 60, 20)
-	for _, want := range []string{"Mode: [Day] Range All", "Date: [" + f.today() + "]", "✓ verified", "github.issues"} {
+	for _, want := range []string{"Mode: [Day] Range All", "Date: [" + f.localToday() + "]", "✓ verified", "github.issues"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("narrow view does not show %q:\n%s", want, view)
 		}
@@ -435,6 +451,183 @@ func TestLogsNarrowLayout(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
 	if view := m.View(); strings.Contains(view, "Resize terminal") {
 		t.Errorf("the smallest terminal cannot show the Logs screen:\n%s", view)
+	}
+}
+
+// A local day can span two UTC files. The missing timestamp rows remain visible with their source file.
+func TestLogsLocalDayAcrossUTCMidnight(t *testing.T) {
+	zone, err := time.LoadLocation("America/New_York")
+	mustNoError(t, err)
+	old := time.Local
+	time.Local = zone
+	t.Cleanup(func() { time.Local = old })
+	f := newLogFixture(t)
+	writeLogTimes(t, f, []struct {
+		when time.Time
+		op   string
+	}{
+		{time.Date(2026, 3, 8, 4, 30, 0, 0, time.UTC), "previous.local.day"},
+		{time.Date(2026, 3, 8, 5, 30, 0, 0, time.UTC), "local.day.start"},
+		{time.Date(2026, 3, 9, 3, 30, 0, 0, time.UTC), "local.day.end"},
+		{time.Date(2026, 3, 9, 4, 30, 0, 0, time.UTC), "next.local.day"},
+	})
+	f.edit("2026-03-09", func(lines [][]byte) [][]byte {
+		return append(lines, []byte(`{"seq": not json`),
+			[]byte(`{"seq":5,"kind":"retention-cut","cut":{"through_seq":0},"prev_hash":"bad","mac":""}`))
+	})
+	f.edit("2026-03-08", func(lines [][]byte) [][]byte {
+		lines[0] = bytes.Replace(lines[0], []byte("04:30:00"), []byte("04:31:00"), 1)
+		return lines
+	})
+	m := f.model(false, "2026-03-08")
+	view := m.View()
+	for _, op := range []string{"local.day.start", "local.day.end", "(unreadable line)", "retention cut"} {
+		if !strings.Contains(view, op) {
+			t.Errorf("local day misses %s:\n%s", op, view)
+		}
+	}
+	for _, op := range []string{"previous.local.day", "next.local.day"} {
+		if strings.Contains(view, op) {
+			t.Errorf("local day includes %s:\n%s", op, view)
+		}
+	}
+	for _, want := range []string{"00:30-05", "23:30-04", "UTC file 2026-03-09", "✗ altered"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("local day misses %q:\n%s", want, view)
+		}
+	}
+	if from, to := logUTCFileBounds("2026-03-08", "2026-03-08"); from != "2026-03-08" || to != "2026-03-09" {
+		t.Errorf("spring UTC files = %s..%s", from, to)
+	}
+	// The detail repeats the local timestamp and identifies the UTC source file.
+	for i, row := range m.logs.rows {
+		if row.line.Parsed && row.line.Entry.Operation == "local.day.end" {
+			m.logs.detail = i
+			m.screen = screenLogDetail
+			detail := m.View()
+			if !strings.Contains(detail, "2026-03-08 23:30:00 -0400") || !strings.Contains(detail, "UTC file") ||
+				!strings.Contains(detail, "2026-03-09") {
+				t.Errorf("detail has wrong date or source:\n%s", detail)
+			}
+			break
+		}
+	}
+}
+
+func TestLogsLocalRangeAcrossDSTFallback(t *testing.T) {
+	zone, err := time.LoadLocation("America/New_York")
+	mustNoError(t, err)
+	old := time.Local
+	time.Local = zone
+	t.Cleanup(func() { time.Local = old })
+	f := newLogFixture(t)
+	writeLogTimes(t, f, []struct {
+		when time.Time
+		op   string
+	}{
+		{time.Date(2026, 11, 1, 5, 30, 0, 0, time.UTC), "first.one.thirty"},
+		{time.Date(2026, 11, 1, 6, 30, 0, 0, time.UTC), "second.one.thirty"},
+		{time.Date(2026, 11, 2, 5, 30, 0, 0, time.UTC), "next.local.day"},
+	})
+	m := f.model(false, "2026-11-01")
+	view := m.View()
+	for _, want := range []string{"first.one.thirty", "second.one.thirty", "01:30-04", "01:30-05"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("fall day misses %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "next.local.day") {
+		t.Errorf("fall day includes next day:\n%s", view)
+	}
+	if from, to := logUTCFileBounds("2026-11-01", "2026-11-01"); from != "2026-11-01" || to != "2026-11-02" {
+		t.Errorf("fall UTC files = %s..%s", from, to)
+	}
+	m.logs.mode, m.logs.from, m.logs.to = logModeRange, "2026-11-01", "2026-11-02"
+	msg := m.loadLogs()().(logsLoadedMsg)
+	m.handleLogsLoaded(msg)
+	if view := m.View(); !strings.Contains(view, "next.local.day") || !strings.Contains(view, "2026-11-02 00:30-05") {
+		t.Errorf("local range misses next day:\n%s", view)
+	}
+	m.logs.mode = logModeAll
+	msg = m.loadLogs()().(logsLoadedMsg)
+	m.handleLogsLoaded(msg)
+	if view := m.View(); !strings.Contains(view, "first.one.thir") || !strings.Contains(view, "next.local.day") {
+		t.Errorf("All misses recorded days:\n%s", view)
+	}
+}
+
+func TestLogsLocalDayUsesPreviousUTCFile(t *testing.T) {
+	zone, err := time.LoadLocation("Asia/Kolkata")
+	mustNoError(t, err)
+	old := time.Local
+	time.Local = zone
+	t.Cleanup(func() { time.Local = old })
+	f := newLogFixture(t)
+	writeLogTimes(t, f, []struct {
+		when time.Time
+		op   string
+	}{
+		{time.Date(2026, 3, 7, 18, 15, 0, 0, time.UTC), "previous.local.day"},
+		{time.Date(2026, 3, 7, 18, 45, 0, 0, time.UTC), "local.day.start"},
+		{time.Date(2026, 3, 8, 18, 15, 0, 0, time.UTC), "local.day.end"},
+		{time.Date(2026, 3, 8, 18, 45, 0, 0, time.UTC), "next.local.day"},
+	})
+	m := f.model(false, "2026-03-08")
+	view := m.View()
+	for _, want := range []string{"local.day.start", "local.day.end", "00:15+0530", "23:45+0530"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("east-of-UTC day misses %q:\n%s", want, view)
+		}
+	}
+	for _, op := range []string{"previous.local.day", "next.local.day"} {
+		if strings.Contains(view, op) {
+			t.Errorf("east-of-UTC day includes %q:\n%s", op, view)
+		}
+	}
+	if from, to := logUTCFileBounds("2026-03-08", "2026-03-08"); from != "2026-03-07" || to != "2026-03-08" {
+		t.Errorf("east-of-UTC files = %s..%s", from, to)
+	}
+}
+
+func TestLogTableTimeKeepsFractionalUTCOffsets(t *testing.T) {
+	old := time.Local
+	t.Cleanup(func() { time.Local = old })
+	for _, tc := range []struct {
+		zone string
+		want string
+	}{
+		{"Asia/Kolkata", "+0530"},
+		{"Pacific/Chatham", "+1345"},
+	} {
+		zone, err := time.LoadLocation(tc.zone)
+		mustNoError(t, err)
+		time.Local = zone
+		if got := logTableTime(time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), false); !strings.HasSuffix(got, tc.want) {
+			t.Errorf("%s table time = %q, want suffix %s", tc.zone, got, tc.want)
+		}
+	}
+}
+
+// Write synthetic unsigned entries with an intact hash chain and fixed UTC timestamps.
+func writeLogTimes(t *testing.T, f *logFixture, entries []struct {
+	when time.Time
+	op   string
+}) {
+	t.Helper()
+	mustNoError(t, os.MkdirAll(f.logsDir(), 0o700))
+	previous := sha256.Sum256(nil)
+	for i, item := range entries {
+		e := invokelog.Entry{Seq: uint64(i + 1), Time: item.when, Path: "cli", Operation: item.op,
+			Effect: "read", Result: "success", PrevHash: hex.EncodeToString(previous[:])}
+		raw, err := json.Marshal(e)
+		mustNoError(t, err)
+		name := filepath.Join(f.logsDir(), item.when.UTC().Format(logDateLayout)+".jsonl")
+		file, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+		mustNoError(t, err)
+		_, err = file.Write(append(raw, '\n'))
+		mustNoError(t, err)
+		mustNoError(t, file.Close())
+		previous = sha256.Sum256(raw)
 	}
 }
 

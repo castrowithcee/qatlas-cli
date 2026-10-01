@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,8 +10,8 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/secretcommit"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // The guided setup leads from a provider to a saved and optionally tested connection. It is a sequence of
@@ -76,6 +75,8 @@ const (
 type setup struct {
 	step     int
 	provider string
+	// template names the connection the setup started from, "" for one that started empty; see template.go.
+	template string
 	pages    [][]field
 	// candidate and plan are what the permissions step left behind: the configuration to save, and what
 	// has to be written besides it.
@@ -135,10 +136,13 @@ func (m *Model) setupShow(step int) {
 	fresh := step == len(w.pages)
 	if fresh {
 		w.pages = append(w.pages, m.setupPage(step))
+		if w.template != "" {
+			m.setupPrefill(step, w.pages[step])
+		}
 	}
 	m.fields = w.pages[step]
 	m.screen = screenForm
-	if fresh && step == stepPermissions {
+	if fresh && step == stepPermissions && w.template == "" {
 		// The permissions of a new connection start on the provider's recommended profile, ticked and
 		// visible; going back and forth keeps whatever was changed since.
 		m.applyRecommendedProfile()
@@ -272,7 +276,7 @@ func (m *Model) setupNext() {
 	if w.step == stepProvider {
 		if provider := m.fieldValue(providerLabel); provider != w.provider {
 			// Every later step offers what this provider defines, so none of them survives a change.
-			w.provider, w.pages = provider, w.pages[:1]
+			w.provider, w.pages, w.template = provider, w.pages[:1], ""
 		}
 	} else {
 		candidate, plan, err := m.setupCandidate(w.step)
@@ -417,6 +421,9 @@ func (m *Model) setupCandidate(upto int) (*config.Config, setupPlan, error) {
 				}
 			}
 		}
+		if w.template != "" {
+			m.setupTemplateExtras(&conn)
+		}
 		if err := cfg.SetConnection(plan.connection, conn); err != nil {
 			return nil, plan, err
 		}
@@ -518,74 +525,12 @@ func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 	}
 }
 
-// commitSetup stores the secrets of a new credential and then saves the configuration.
-//
-// The secrets go first because the configuration is the commit point: a keyring or vault that is locked or
-// missing is the common failure, and it then leaves the file untouched instead of a saved connection whose
-// credential has nothing behind it. The configuration was checked before anything was written, so what can
-// still fail after the secrets is writing the file; the secrets written for it are removed again then, so
-// no store entry is left without a credential that names it.
-//
-// Once the configuration is saved, a new vault credential's secrets are handed on to a vault process that
-// holds the vault unlocked outside this run, the same way 'qatlas credential set' already does for each one
-// it writes (see syncVaultProcess in vaultsettings.go); the warning that returns, if any, is not a reason to
-// roll anything back, since the vault and the configuration already agree by then.
+// commitSetup stores the secrets of a new credential and then saves the configuration, through
+// secretcommit.Commit: the shared commit boundary the browser's own new-credential form in internal/web
+// uses too, so the two never leave a different thing behind on a failure (see internal/secretcommit).
 func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, plan setupPlan, offer vault.PassphraseFunc) (string, error) {
 	toVault := storageType(plan.storage) == config.CredentialTypeVault
-	var written []string
-	for _, role := range plan.roles {
-		value, ok := plan.secrets[role]
-		if !ok {
-			continue
-		}
-		var err error
-		if toVault {
-			err = secrets.SetVault(plan.credential, role, value, offer)
-		} else {
-			err = secrets.Set(plan.credential, role, value)
-		}
-		if err != nil {
-			return "", rollbackSecrets(secrets, plan.credential, toVault, written,
-				fmt.Errorf("storing the secret for %s.%s: %w", plan.credential, role, err))
-		}
-		written = append(written, role)
-	}
-	if err := store.Save(cfg); err != nil {
-		return "", rollbackSecrets(secrets, plan.credential, toVault, written, err)
-	}
-	if !toVault || len(written) == 0 {
-		return "", nil
-	}
-	warning := syncVaultProcess(secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
-		for _, role := range written {
-			if err := client.Set(ctx, plan.credential, role, plan.secrets[role]); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	return warning, nil
-}
-
-// rollbackSecrets removes the secrets a failed setup wrote and says which ones stayed behind.
-func rollbackSecrets(secrets Secrets, credential string, toVault bool, roles []string, cause error) error {
-	var left []string
-	for _, role := range roles {
-		var err error
-		if toVault {
-			err = secrets.DeleteVault(credential, role)
-		} else {
-			_, err = secrets.Delete(credential, role)
-		}
-		if err != nil && !errors.Is(err, secret.ErrNoEntry) {
-			left = append(left, role)
-		}
-	}
-	if len(left) > 0 {
-		return fmt.Errorf("%w; the secrets already stored for %s (%s) could not be removed again, remove "+
-			"them with 'qatlas credential delete %s <role>'", cause, credential, strings.Join(left, ", "), credential)
-	}
-	return cause
+	return secretcommit.Commit(store, secrets, cfg, plan.credential, toVault, plan.roles, plan.secrets, offer)
 }
 
 // setupSaved applies the outcome of the final save.

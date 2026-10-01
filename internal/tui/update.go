@@ -18,6 +18,10 @@ type Updater interface {
 	Update(ctx context.Context) (selfupdate.Result, error)
 }
 
+// updateNoter is implemented by an Updater that has more to say after an installation, such as what became
+// of the vault process it locked.
+type updateNoter interface{ Note() string }
+
 // updateCheckTimeout bounds the check at start. It runs in the background, and a slow network must not
 // leave a request open for the whole session.
 const updateCheckTimeout = 5 * time.Second
@@ -69,6 +73,8 @@ func (m *Model) askUpdate() {
 	}
 	m.updateFrom = m.screen
 	m.screen = screenUpdate
+	// Counted once here: the view is drawn on every key.
+	m.updateText = selfupdate.Consequences()
 	m.clearMessages()
 }
 
@@ -116,6 +122,9 @@ func (m *Model) updateDone(msg updateDoneMsg) {
 		m.updated = msg.result.Latest
 		m.fail = ""
 		m.status = "Updated to " + m.updated + ". Restart qatlas tui to use it."
+		if noter, ok := m.updater.(updateNoter); ok && noter.Note() != "" {
+			m.status += " " + noter.Note()
+		}
 	default:
 		// Nothing newer was there by the time of the installation.
 		m.release = selfupdate.Result{}
@@ -159,6 +168,7 @@ func (m *Model) updateBanner(room int) string {
 func (m *Model) updateView() string {
 	question := "Update qatlas to " + m.release.Latest + "?"
 	return m.wrapped(titleStyle, question) + "\n" + m.wrapped(hintStyle, "y update · n/esc cancel") + "\n\n" +
+		m.wrapped(lipgloss.NewStyle(), m.updateText) + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), "Installs the release like 'qatlas update' and verifies its checksum. "+
 			"Restart qatlas tui afterwards to use it.")
 }

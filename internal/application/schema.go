@@ -219,24 +219,27 @@ func isType(kind string, value any) bool {
 // are those of its entries. The members of the risk stand beside the others rather than in an object of
 // their own, and all are ordered by meaning: the identifier, its descriptions, the risk, then the tables.
 //
+// SelectableFields names the members of the result list entries that invoke can select with fields; it is
+// left out for a tool without a result list.
+//
 // The provider is the prefix of the ID, the tags serve the search that found the tool, and whether a tool
 // needs a tools list that names it only decides which connections offer it, which the connections beside
 // the contract answer; these, the types of the result fields, and both schemas stay in the complete
 // descriptor. Arguments are always validated against the complete input schema, not against this view.
 type CompactDescriptor struct {
-	ID                         string                  `json:"id"`
-	Version                    int                     `json:"version"`
-	Title                      string                  `json:"title"`
-	Description                string                  `json:"description"`
-	Effect                     capability.Effect       `json:"effect"`
-	Idempotency                capability.Idempotency  `json:"idempotency"`
-	Confirmation               capability.Confirmation `json:"confirmation"`
-	OpenWorld                  bool                    `json:"open_world"`
-	DataSensitivity            string                  `json:"data_sensitivity"`
-	RequiresExplicitConnection bool                    `json:"requires_explicit_connection"`
-	Arguments                  []ArgumentRow           `json:"arguments"`
-	Fields                     []capability.Field      `json:"fields"`
-	Examples                   []capability.Example    `json:"examples"`
+	ID               string                  `json:"id"`
+	Version          int                     `json:"version"`
+	Title            string                  `json:"title"`
+	Description      string                  `json:"description"`
+	Effect           capability.Effect       `json:"effect"`
+	Idempotency      capability.Idempotency  `json:"idempotency"`
+	Confirmation     capability.Confirmation `json:"confirmation"`
+	OpenWorld        bool                    `json:"open_world"`
+	DataSensitivity  string                  `json:"data_sensitivity"`
+	Arguments        []ArgumentRow           `json:"arguments"`
+	Fields           []capability.Field      `json:"fields"`
+	SelectableFields []string                `json:"selectable_fields,omitempty"`
+	Examples         []capability.Example    `json:"examples"`
 }
 
 // ArgumentRow is one argument of a compact contract, derived from the input schema. A member of an object
@@ -292,9 +295,28 @@ func Compact(d capability.Descriptor) CompactDescriptor {
 		ID: d.ID, Version: d.Version, Title: d.Title, Description: d.Description,
 		Effect: d.Risk.Effect, Idempotency: d.Risk.Idempotency, Confirmation: d.Risk.Confirmation,
 		OpenWorld: d.Risk.OpenWorld, DataSensitivity: d.Risk.DataSensitivity,
-		RequiresExplicitConnection: d.RequiresExplicitConnection, Arguments: arguments, Fields: fields,
-		Examples: append([]capability.Example{}, d.Examples...),
+		Arguments: arguments, Fields: fields,
+		SelectableFields: SelectableFields(d),
+		Examples:         append([]capability.Example{}, d.Examples...),
 	}
+}
+
+// requiredArguments names the required top-level arguments of d as the compact contract lists them, each
+// followed by :form where it has one. Members of an object argument are not listed: they are
+// required only within that object.
+func requiredArguments(d capability.Descriptor) []string {
+	var required []string
+	for _, row := range Compact(d).Arguments {
+		if !row.Required || strings.ContainsAny(row.Name, ".[") {
+			continue
+		}
+		if row.Form != "" {
+			required = append(required, row.Name+":"+row.Form)
+		} else {
+			required = append(required, row.Name)
+		}
+	}
+	return required
 }
 
 // schemaNode is the part of a JSON schema the compact contract reads. A bound that is absent stays empty.

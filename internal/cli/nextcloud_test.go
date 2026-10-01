@@ -106,7 +106,7 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[6]{id,title,effect,connections,reason}:", "nextcloud.files.create,Create a Nextcloud file,create,", "nextcloud.files.delete,Delete a Nextcloud file,delete,", "nextcloud.files.get,Read Nextcloud file content,read,", "nextcloud.files.list,List Nextcloud files,read,", "nextcloud.files.stat,Get Nextcloud file metadata,read,", "nextcloud.files.update,Update a Nextcloud file,update,",
+		"tools[6]{id,title,effect,requires,confirm,reason}:", "nextcloud.files.create,Create a Nextcloud file,create,", "nextcloud.files.delete,Delete a Nextcloud file,delete,", "nextcloud.files.get,Read Nextcloud file content,read,", "nextcloud.files.list,List Nextcloud files,read,", "nextcloud.files.stat,Get Nextcloud file metadata,read,", "nextcloud.files.update,Update a Nextcloud file,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
@@ -131,7 +131,7 @@ func TestNextcloudToolContractKeepsInstanceIdentityAndRootOutOfTheArguments(t *t
 	}
 	for _, want := range []string{
 		"id: nextcloud.files.list", "version: 1", "effect: read", "idempotency: safe",
-		"confirmation: none", "requires_explicit_connection: true", "path",
+		"confirmation: none", "path",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tool contract does not contain %q:\n%s", want, stdout)
@@ -175,9 +175,9 @@ func TestNextcloudInvokeRefusalsHappenBeforeSecretsAndProviderIO(t *testing.T) {
 		code  string
 	}{
 		{
-			name: "four connections without an explicit one", input: `{}`,
+			name: "four connections without a default", input: `{}`,
 			args: []string{"invoke", "nextcloud.files.list", "--config", path},
-			code: "connection-selection",
+			code: "connection-ambiguous",
 		},
 		{
 			name: "an instance as an argument", input: `{"base_url":"https://evil.example.invalid"}`,
@@ -298,8 +298,8 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 
 	// The broker does not pick one of the four roots either.
 	ambiguous := toolResultFrom(t, responses[`"ambiguous"`])
-	if !ambiguous.IsError || !strings.HasPrefix(ambiguous.Content[0].Text, "connection-selection:") {
-		t.Fatalf("ambiguous invoke = %+v, want an explicit connection to be required", ambiguous)
+	if !ambiguous.IsError || !strings.HasPrefix(ambiguous.Content[0].Text, "connection-ambiguous:") {
+		t.Fatalf("ambiguous invoke = %+v, want several matching connections", ambiguous)
 	}
 }
 

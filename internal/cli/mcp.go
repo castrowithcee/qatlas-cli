@@ -25,6 +25,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
 const (
@@ -67,8 +68,14 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 		RunE: func(c *cobra.Command, _ []string) error {
 			// Nobody watches the requests of a server, so the keyring must not wait for an unlock prompt.
 			opts.unattended = true
+			secret.SetLongRunning("mcp")
 			server := newMCPServer(opts, registry, c.OutOrStdout(), c.ErrOrStderr())
-			return server.serve(c.Context(), c.InOrStdin())
+			input := c.InOrStdin()
+			if handoff := takeMCPHandoff(); handoff != nil {
+				server.adopt(handoff)
+				input = io.MultiReader(bytes.NewReader(handoff.Input), input)
+			}
+			return server.serve(c.Context(), input)
 		},
 	}
 }
@@ -93,11 +100,16 @@ func mcpCommandLong() string {
 		"secret is read. Like 'qatlas tools' it returns only the tools a configured connection offers,\n" +
 		"or with connection the tools that connection offers; all set to true adds the others, each\n" +
 		"with the reason 'qatlas tools --all' names. It filters by query, provider, connection, and\n" +
-		"effect and returns at most limit tools in stable ID order; an omitted, non-positive, or larger\n" +
-		"limit becomes 50. The response carries the tools as operations, has_more, which is true\n" +
-		"exactly when another match follows, and next_cursor, which is present only then. Each tool is\n" +
-		"the entry 'qatlas tools' prints: id, title, effect, and connections, here a list of the\n" +
-		"connection names that offer it, plus reason with all; qatlas.describe returns the rest.\n" +
+		"effect and returns at most limit tools, the best matches of a query first and otherwise in ID\n" +
+		"order; an omitted, non-positive, or larger limit becomes 50. The response carries connections,\n" +
+		"the names of the connections that offer the listed tools, once; the tools as operations,\n" +
+		"has_more, which is true exactly when another match follows, and next_cursor, which is present\n" +
+		"only then. Each tool is the entry 'qatlas tools' prints: id, title, effect, requires, the\n" +
+		"required arguments as name:form separated by semicolons, confirm, true when the tool needs\n" +
+		"confirmation, and connections, names separated by spaces, only when fewer of the listed\n" +
+		"connections offer it, plus reason with all; a column no entry uses is left out, and the\n" +
+		"entries otherwise share one field set. That is enough for an ordinary call;\n" +
+		"qatlas.describe returns the optional arguments and the rest of the contract.\n" +
 		"Passing next_cursor back as cursor with the same filters returns the following page; a\n" +
 		"request without cursor returns the first. A cursor that is malformed or belongs to other\n" +
 		"filters fails with invalid-request.\n\n" +
@@ -124,6 +136,8 @@ func mcpCommandLong() string {
 		"seconds for the answer. Where the client offers no roots, names none, answers with an error, or not\n" +
 		"in time, and for every request that declares MCP 2026-07-28, the project is the directory the\n" +
 		"server was started in; an answer that arrives late applies to the calls that follow.\n\n" +
+		"On Linux the server restarts itself after an update replaces the program: it runs the new one in\n" +
+		"place, keeping the session, and only the vault needs a new 'qatlas vault unlock'.\n\n" +
 		"The guide below is exactly what server/discover and initialize hand the client as instructions;\n" +
 		"'qatlas agents' covers the same ground, and more, at CLI length.\n\n" +
 		helptopics.MCP().Text
@@ -149,6 +163,14 @@ type mcpServer struct {
 	rootsMu   sync.Mutex
 	roots     mcpRoots
 	rootsWait time.Duration
+
+	// restart restarts the server after an update replaced its program. restartFrom is the version that
+	// handed its session over, or empty; resumeRoots asks for roots again once the loop starts. Only the
+	// reading loop touches them.
+	restart     mcpRestart
+	version     string
+	restartFrom string
+	resumeRoots bool
 
 	coreMu   sync.Mutex
 	outMu    sync.Mutex
@@ -192,15 +214,18 @@ func newMCPServer(opts *Options, registry *capability.Registry, stdout, stderr i
 	return &mcpServer{
 		opts: opts, registry: registry, stdout: stdout, stderr: stderr,
 		timeout: invokeTimeout, rootsWait: mcpRootsWait, pending: make(map[string]*mcpPending),
+		restart: platformMCPRestart(), version: version,
 	}
 }
 
 func (s *mcpServer) serve(ctx context.Context, input io.Reader) error {
 	reader := bufio.NewReader(input)
+	s.resume()
 	for {
 		line, err := readMCPLine(reader)
 		switch {
 		case err == nil:
+			s.restartIfReplaced(reader, line)
 			s.handle(ctx, line)
 		case errors.Is(err, io.EOF):
 			s.wg.Wait()
@@ -759,18 +784,16 @@ func mcpTools() []mcpTool {
 	return []mcpTool{
 		{
 			Name: "qatlas.search",
-			Description: "Search the configured tool catalog. Returns the tools a configured connection offers " +
-				"as operations, at most limit of them in stable ID order, each with id, title, effect, and the " +
-				"connections that offer it; all adds the others with the reason no connection offers them. " +
-				"qatlas.describe returns the rest of a contract. has_more is true exactly when another match " +
-				"follows, and next_cursor, passed back as cursor with the same filters, returns the following page. " +
-				"list returns an overview instead: providers lists every provider with its description, note, " +
-				"and counts of tools, connections that can run them, and configured connections; connections " +
-				"lists the configured connections, of provider when given, each with its description, " +
-				"permitted effects, and tools list, and, while one of them cannot read its secret from the vault, " +
-				"unusable: vault-locked for a connection that cannot be used until a person unlocks the vault, " +
-				"approval-required for one a person has to approve as it is configured now, empty for the others. list takes no " +
-				"other argument than provider with connections.",
+			Description: "Search the configured tool catalog, best matches first. Each operation has id, title, " +
+				"effect, requires (required arguments with their form), confirm, and connections only where " +
+				"fewer than the connections named once at the top offer it; that suffices for a call, and " +
+				"qatlas.describe adds the optional arguments. all adds the tools no connection offers, each " +
+				"with its reason. has_more and next_cursor, passed back as cursor with the same filters, page " +
+				"the result. list returns an overview instead: providers lists every provider with its " +
+				"description, note, and counts; connections lists the configured connections, of provider " +
+				"when given, with description, permitted effects, tools list, and unusable: vault-locked or " +
+				"approval-required where a person must act. list takes no other argument than provider with " +
+				"connections.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"list":{"type":"string","enum":["providers","connections"],"description":"Return the providers or the configured connections instead of tools; only provider may accompany connections"},"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},
 		{
@@ -783,7 +806,7 @@ func mcpTools() []mcpTool {
 		{
 			Name:        "qatlas.invoke",
 			Description: "Invoke one tool through a configured connection; operation is the tool ID",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"operation":{"type":"string"},"version":{"type":"integer"},"connection":{"type":"string"},"arguments":{"type":"object"},"confirm":{"type":"boolean"}},"required":["operation"],"additionalProperties":false}`),
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"operation":{"type":"string"},"version":{"type":"integer"},"connection":{"type":"string"},"arguments":{"type":"object"},"confirm":{"type":"boolean"},"fields":{"type":"array","items":{"type":"string"},"description":"Keep only these members in each entry of the tool's result list; see selectable_fields of describe"}},"required":["operation"],"additionalProperties":false}`),
 		},
 	}
 }
@@ -823,7 +846,6 @@ func toolResult(data any, err error, redactor *redact.Redactor) map[string]any {
 		return result
 	}
 	result["content"] = []map[string]string{{"type": "text", "text": string(encoded)}}
-	result["structuredContent"] = data
 	result["isError"] = false
 	return result
 }

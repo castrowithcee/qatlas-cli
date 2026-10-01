@@ -352,6 +352,9 @@ func TestSocketPath(t *testing.T) {
 	home := shortTempDir(t)
 	vaultDir := filepath.Join(home, ".qatlas", "cli", "vault")
 
+	root := userRuntimeRoot
+	t.Cleanup(func() { userRuntimeRoot = root })
+	userRuntimeRoot = filepath.Join(t.TempDir(), "missing")
 	t.Setenv("XDG_RUNTIME_DIR", "")
 	path, err := SocketPath(vaultDir)
 	if err != nil {

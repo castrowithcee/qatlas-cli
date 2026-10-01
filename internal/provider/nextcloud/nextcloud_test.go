@@ -241,9 +241,6 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		if !descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
 			t.Errorf("descriptor %s risk = %+v", descriptor.ID, descriptor.Risk)
 		}
-		if !descriptor.RequiresExplicitConnection {
-			t.Errorf("descriptor %s does not require an explicit connection", descriptor.ID)
-		}
 		// Neither instance, nor identity, nor root folder is an argument: all three are configuration.
 		for _, forbidden := range []string{
 			"base_url", "instance", "user", "password", "root", "href", "depth", "method", "url",

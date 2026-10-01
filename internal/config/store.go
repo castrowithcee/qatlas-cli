@@ -65,6 +65,7 @@ func (c *Config) Clone() *Config {
 			copied.Tools = []string{}
 		}
 		copied.Paths = append([]string(nil), conn.Paths...)
+		copied.Files = conn.Files.Clone()
 		out.Connections[name] = copied
 	}
 	out.ProviderNotes = cloneStrings(c.ProviderNotes)

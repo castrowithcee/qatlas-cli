@@ -68,10 +68,9 @@ var pullsList = capability.Descriptor{
 	Title:   "List GitHub pull requests",
 	Description: "List one bounded, filtered batch of compact pull requests of a repository an explicit " +
 		"connection allows, in GitHub's own order",
-	Tags:                       []string{"github", "pulls", "pullrequests", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "pulls", "pullrequests", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"state":{"type":"string","enum":["open","closed","all"]},"base":` + refSchema +
 		`,"head":` + headSchema + `,` + pagingKeys),
 	OutputSchema: listOutput("pull_requests", pullSummaryProperties, pullSummaryRequired),
@@ -94,13 +93,12 @@ var pullsGet = capability.Descriptor{
 	ID:      Provider + ".pullrequests.get",
 	Version: 1,
 	Title:   "Get a GitHub pull request",
-	Description: "Read one pull request of a repository an explicit connection allows with its full body, " +
+	Description: "Read one pull request of a repository a connection allows with its full body, " +
 		"merge state, requested reviewers, and the counts of its commits and changed files",
-	Tags:                       []string{"github", "pulls", "pullrequests", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema, "number"),
+	Tags:        []string{"github", "pulls", "pullrequests", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"number":`+numberSchema, "number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + pullSummaryProperties + `,` +
 		`"body":{"type":"string"},"base_sha":{"type":"string"},"mergeable":{"type":"boolean"},` +
 		`"mergeable_state":{"type":"string"},"merge_commit_sha":{"type":"string"},` +
@@ -130,12 +128,11 @@ var pullFilesList = capability.Descriptor{
 	Title:   "List the files of a GitHub pull request",
 	Description: "List one bounded batch of the changed files of a pull request of a repository an explicit " +
 		"connection allows, with a bounded excerpt of each file's patch",
-	Tags:                       []string{"github", "pulls", "pullrequests", "files", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
-	OutputSchema:               listOutput("files", pullFileProperties, pullFileRequired),
+	Tags:         []string{"github", "pulls", "pullrequests", "files", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
+	OutputSchema: listOutput("files", pullFileProperties, pullFileRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	}, pagingArguments...),
@@ -153,12 +150,11 @@ var pullCommitsList = capability.Descriptor{
 	Title:   "List the commits of a GitHub pull request",
 	Description: "List one bounded batch of the commits of a pull request of a repository an explicit " +
 		"connection allows",
-	Tags:                       []string{"github", "pulls", "pullrequests", "commits", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
-	OutputSchema:               listOutput("commits", pullCommitProperties, pullCommitRequired),
+	Tags:         []string{"github", "pulls", "pullrequests", "commits", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
+	OutputSchema: listOutput("commits", pullCommitProperties, pullCommitRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	}, pagingArguments...),
@@ -173,13 +169,12 @@ var pullDiffsGet = capability.Descriptor{
 	ID:      Provider + ".pullrequestdiffs.get",
 	Version: 1,
 	Title:   "Get the diff of a GitHub pull request",
-	Description: "Read the unified diff of a pull request of a repository an explicit connection allows, " +
+	Description: "Read the unified diff of a pull request of a repository a connection allows, " +
 		"cut to at most 65536 bytes from its start",
-	Tags:                       []string{"github", "pulls", "pullrequests", "diff", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema, "number"),
+	Tags:        []string{"github", "pulls", "pullrequests", "diff", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"number":`+numberSchema, "number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +
 		`"diff":{"type":"string"},"truncated":{"type":"boolean"}},` +
 		`"required":["number","diff","truncated"],"additionalProperties":false}`),
@@ -198,12 +193,11 @@ var pullChecksList = capability.Descriptor{
 	Version: 1,
 	Title:   "List the checks of a GitHub pull request",
 	Description: "List the check runs and the combined commit status at the head commit of a pull request of " +
-		"a repository an explicit connection allows, with one overall evaluation",
-	Tags:                       []string{"github", "pulls", "pullrequests", "checks", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema, "number"),
+		"a repository a connection allows, with one overall evaluation",
+	Tags:        []string{"github", "pulls", "pullrequests", "checks", "list"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"number":`+numberSchema, "number"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"number":{"type":"integer"},` +
 		`"head_sha":{"type":"string"},"checks":{"type":"array","items":{"type":"object","properties":{` +
 		checkEntryProperties + `},"required":["name","status"],"additionalProperties":false}},` +
@@ -226,12 +220,11 @@ var pullsCreate = capability.Descriptor{
 	ID:      Provider + ".pullrequests.create",
 	Version: 1,
 	Title:   "Create a GitHub pull request",
-	Description: "Open one pull request in a repository an explicit connection allows; a repeated call opens " +
+	Description: "Open one pull request in a repository a connection allows; a repeated call opens " +
 		"a second pull request",
-	Tags:                       []string{"github", "pulls", "pullrequests", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "pulls", "pullrequests", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"title":`+titleSchema+`,"head":`+headSchema+`,"base":`+refSchema+`,"body":`+
 		bodySchema+`,"draft":{"type":"boolean"},"maintainer_can_modify":{"type":"boolean"}`, "title", "head", "base"),
 	OutputSchema: pullsGet.OutputSchema,
@@ -258,10 +251,9 @@ var pullsUpdate = capability.Descriptor{
 	Description: "Replace the title, body, or base branch of one pull request of a repository an explicit " +
 		"connection allows, mark it ready for review or convert it to a draft, or change whether maintainers " +
 		"of the base repository may push to its head branch; fields left out stay unchanged",
-	Tags:                       []string{"github", "pulls", "pullrequests", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "pulls", "pullrequests", "update"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"title":`+titleSchema+`,"body":`+bodySchema+`,"base":`+
 		refSchema+`,"draft":{"type":"boolean"},"maintainer_can_modify":{"type":"boolean"}`, "number"),
 	OutputSchema: pullsGet.OutputSchema,
@@ -285,14 +277,13 @@ var pullsClose = capability.Descriptor{
 	ID:      Provider + ".pullrequests.close",
 	Version: 1,
 	Title:   "Close a GitHub pull request",
-	Description: "Close one pull request of a repository an explicit connection allows without merging it; a " +
+	Description: "Close one pull request of a repository a connection allows without merging it; a " +
 		"pull request already closed, merged or not, is left as it is and reported with its current state",
-	Tags:                       []string{"github", "pulls", "pullrequests", "close", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema, "number"),
-	OutputSchema:               pullsGet.OutputSchema,
+	Tags:         []string{"github", "pulls", "pullrequests", "close", "update"},
+	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"number":`+numberSchema, "number"),
+	OutputSchema: pullsGet.OutputSchema,
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	},
@@ -304,14 +295,13 @@ var pullsReopen = capability.Descriptor{
 	ID:      Provider + ".pullrequests.reopen",
 	Version: 1,
 	Title:   "Reopen a GitHub pull request",
-	Description: "Open one closed pull request of a repository an explicit connection allows again; a pull " +
+	Description: "Open one closed pull request of a repository a connection allows again; a pull " +
 		"request already open is left as it is, and a merged pull request is refused with a clear message",
-	Tags:                       []string{"github", "pulls", "pullrequests", "reopen", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema, "number"),
-	OutputSchema:               pullsGet.OutputSchema,
+	Tags:         []string{"github", "pulls", "pullrequests", "reopen", "update"},
+	Risk:         changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"number":`+numberSchema, "number"),
+	OutputSchema: pullsGet.OutputSchema,
 	Arguments: []capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	},
@@ -329,10 +319,9 @@ var pullBranchesUpdate = capability.Descriptor{
 	Description: "Merge the base branch into the head branch of one pull request of a repository an explicit " +
 		"connection allows, only while its head is still the given commit, so a head that changed since is " +
 		"never merged into blindly; GitHub queues the merge and answers before it finishes",
-	Tags:                       []string{"github", "pulls", "pullrequests", "branches", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "pulls", "pullrequests", "branches", "update"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"expected_head_sha":`+blobSHASchema, "number",
 		"expected_head_sha"),
 	OutputSchema: json.RawMessage(pullBranchUpdateOutput),
@@ -358,17 +347,16 @@ var pullsMerge = capability.Descriptor{
 	ID:      Provider + ".pullrequests.merge",
 	Version: 1,
 	Title:   "Merge a GitHub pull request",
-	Description: "Merge one pull request of a repository an explicit connection allows, only while its head " +
+	Description: "Merge one pull request of a repository a connection allows, only while its head " +
 		"is still the given commit; offered only where a connection's tools list names it, because a merge " +
 		"into the wrong repository's default branch is the costliest mistake there. Already merged with " +
 		"exactly this head commit is success; a head that changed since ends as an invalid request naming " +
 		"both commits; a pull request GitHub cannot merge, for example one blocked by branch protection, " +
 		"missing reviews, or failing checks, ends with the reason",
-	Tags:                       []string{"github", "pulls", "pullrequests", "merge"},
-	Risk:                       guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, dataSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "pulls", "pullrequests", "merge"},
+	Risk:                  guardedRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, dataSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"sha":`+blobSHASchema+`,"method":{"type":"string",`+
 		`"enum":["merge","squash","rebase"]},"commit_title":`+titleSchema+`,"commit_message":`+bodySchema,
 		"number", "sha"),

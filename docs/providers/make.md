@@ -1,14 +1,14 @@
 ---
 description: >
   Describes the Make provider: zone and API token setup, the required team target plus the optional
-  organization and scenario allow-lists and their live team-membership check, the scenario and blueprint
+  organization and scenario allow-lists and the live scenario-team check, the scenario and blueprint
   reads, the run (Make's own "logs") reads and their offset pagination, the bounded best-effort run error,
   the confirmed scenario create/update/start/stop/run tools and their contracts, and the scope and plan
   boundaries of a Make API token.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-29
 ---
 
 # Make
@@ -35,8 +35,12 @@ token. The read profile needs `scenarios:read`; the manage profile's create, upd
 additionally need `scenarios:write`, and its run tool additionally needs `scenarios:run`. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
 access to, so a token created for a different zone than this connection's own is rejected here the same way
-as any other invalid token. Within its zone, a token reaches every team its owner belongs to, which is why
-this connection's own team target, not the token, decides what is exposed.
+as any other invalid token. The token carries API scopes, while Make also limits resources by the user's
+team membership. This connection's required team target adds a Qatlas boundary within that access. Make
+also documents optional locked connections with their own access lists; this feature must be enabled for
+the organization, and this provider neither inspects nor enforces those lists. See Make's [Connections API
+reference](https://developers.make.com/api-documentation/api-reference/connections.md) and [connection
+access-list reference](https://developers.make.com/api-documentation/api-reference/connections/access-list.md).
 
 ```yaml
 services:
@@ -68,9 +72,9 @@ connections:
     targets: [team/123456, organization/7890]
 ```
 
-Team is **required**, unlike the optional allow-lists the n8n and Infomaniak providers offer: a Make API
-token carries no narrower scope of its own than "every team its owner belongs to", so the connection's own
-team target is the only boundary that exists at all, not an extra layer on top of one Make already gives it.
+Team is **required**, unlike the optional allow-lists the n8n and Infomaniak providers offer. The target
+limits this provider to one team; it does not replace Make's own API scopes, user team membership, or any
+locked-connection access list that the organization has enabled and configured.
 
 A `scenario_id` argument outside a configured scenario allow-list is refused locally, as an invalid request,
 before any request is sent. A scenario's team membership is checked live, against Make's own answer, never
@@ -82,9 +86,9 @@ sent. A scenario of another team is refused the same way as one outside the allo
 never names the scenario's real team.
 
 A scenario object itself reports no `organizationId`, only `teamId`, so a configured organization target
-cannot be checked against a scenario directly. `make.runs.list` and `make.runs.get` can check it: a run's
-own answer carries both `teamId` and `organizationId`, and both are defensively re-applied to every run this
-provider returns, even though the up-front scenario check already covers the team on its own.
+cannot be checked against a scenario directly. The live scenario check confirms only the bound team.
+`make.runs.list` and `make.runs.get` can also check organization: a run's own answer carries both `teamId`
+and `organizationId`, and both are defensively re-applied to every run this provider returns.
 
 `make.scenarios.create` cannot name a scenario_id at all: it always creates in the connection's own bound
 team, never a caller-supplied one, and it is refused outright on a connection restricted by a scenario
@@ -104,7 +108,7 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.scenarios.blueprint` | read | none | reads one scenario's blueprint (modules, wiring, configuration) |
 | `make.scenarios.create` | create | required | creates one scenario in the bound team from a blueprint and scheduling |
 | `make.scenarios.update` | update | required | replaces a scenario's name, blueprint, scheduling, or folder; partial, only the fields given |
-| `make.scenarios.start` | update | required | turns a scenario's scheduling on |
+| `make.scenarios.start` | update | required | turns a scenario's scheduling on; Make says it also runs the scenario when it is scheduled at regular intervals |
 | `make.scenarios.stop` | update | required | turns a scenario's scheduling off |
 | `make.scenarios.run` | execute | required | starts exactly one new execution of a scenario on demand |
 | `make.runs.list` | read | none | lists one scenario's run history, page by page |
@@ -162,9 +166,10 @@ does not accept a `teamId` field at all.
 ## Starting, stopping, and folders
 
 `make.scenarios.start` and `make.scenarios.stop` each send Make's own `POST /scenarios/{id}/start` or
-`/stop`, then re-read the scenario to confirm the active state actually changed. Repeating either on a
-scenario already in that state leaves it unchanged; both are idempotent. Starting a scenario turns its own
-scheduling on; it does not itself run the scenario, which `make.scenarios.run` does independently.
+`/stop`, then re-read the scenario to confirm the active state actually changed. Repeating either keeps the
+requested active state: start leaves an already active scenario active, and stop leaves an inactive scenario
+inactive. This describes the state result, not every side effect. Make documents that activating a scenario
+also runs it if it is scheduled at regular intervals ([scenario API reference](https://developers.make.com/api-documentation/api-reference/scenarios.md)). The reference does not say whether calling `/start` on an already active, regularly scheduled scenario triggers another run. Treat that effect as unverified and do not infer that repeating start is safe to retry. `make.scenarios.run` independently requests an on-demand run.
 
 `make.scenarios.update`'s `folder_id` moves a scenario into a folder; `clear_folder` removes its folder
 assignment instead (Make's own PATCH accepts `folderId: null` for that). The two are mutually exclusive, and
@@ -229,9 +234,10 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | `invalid-provider-response` | the answer was unreadable, too large, named a different resource than the one requested, or, for a change, did not confirm the change actually took effect |
 | `provider-error` | every other rejection, including a redirect on an endpoint that must not answer with one, and a create, update, start, or stop whose re-read result fell outside this connection's own team or scenario allow-list after the one changing request already reached Make |
 
-A `scenario_id` outside the connection's allow-list, and a scenario the live team or organization check finds
-outside the bound scope, are invalid requests, never provider errors, so a scope refusal is never mistaken
-for a missing scenario or run; the same is true of an unconfirmed call to any change tool, and of a
+A `scenario_id` outside the connection's allow-list, and a scenario whose live team check reports a team
+outside the bound team, are invalid requests, never provider errors. A configured organization target is
+checked against run entries, not scenario details. A scope refusal is never mistaken for a missing scenario
+or run; the same is true of an unconfirmed call to any change tool, and of a
 `make.scenarios.update` call that gives nothing to change or gives both `folder_id` and `clear_folder`.
 
 ## Untrusted data

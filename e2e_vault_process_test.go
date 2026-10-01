@@ -382,6 +382,7 @@ func (b *broker) call(t *testing.T, arguments, tool string) mcpResponse {
 		if err := json.Unmarshal([]byte(line), &response); err != nil {
 			t.Fatalf("decoding the broker's answer %q: %v", line, err)
 		}
+		singleMCPSuccess(t, &response)
 		return response
 	case <-time.After(30 * time.Second):
 		t.Fatalf("the broker did not answer %s", tool)

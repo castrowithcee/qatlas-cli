@@ -47,10 +47,9 @@ var messagesList = capability.Descriptor{
 	Title:   "List Infomaniak kChat channel messages",
 	Description: "List the messages of one channel this connection may reach, newest first, one page at a " +
 		"time; never reads a whole channel at once",
-	Tags:                       []string{"infomaniak", "kchat", "messages", "list", "posts"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"infomaniak", "kchat", "messages", "list", "posts"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"channel_id":` + idSchema + `,"page":{"type":"integer","minimum":1},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},` +
@@ -79,10 +78,9 @@ var messagesThread = capability.Descriptor{
 	Title:   "Read an Infomaniak kChat thread",
 	Description: "Read one message and every reply in its thread, one page at a time, for a channel this " +
 		"connection may reach",
-	Tags:                       []string{"infomaniak", "kchat", "messages", "thread"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"infomaniak", "kchat", "messages", "thread"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"post_id":` + idSchema + `,"cursor":` + idSchema + `,` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + itoa(maxListLimit) + `}},` +
@@ -117,8 +115,7 @@ var messagesSend = capability.Descriptor{
 		Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
 	},
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"channel_id":` + idSchema + `,"text":` + messageTextSchema + `,"root_id":` + idSchema + `},` +
 		`"required":["channel_id","text"],"additionalProperties":false}`),

@@ -10,6 +10,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -218,11 +219,38 @@ func (m *Model) tokensBlocked() string {
 
 // tokenFields are the rows of the form that creates an agent token: its name, its vorbilder ticked in a
 // picker, and its optional expiry. A token is never edited; it is revoked and created anew.
-func (m *Model) tokenFields() []field {
-	name := textField("name", "", false).withHint(tokenNameHint)
+//
+// A token filled from source (see template.go) starts with that token's copy name, its vorbilder that still
+// read a vault credential, and its expiry only while it still lies ahead; its value is always a new one.
+func (m *Model) tokenFields(source string) []field {
+	var name, expires string
 	vorbilder := field{label: vorbilderLabel, kind: fieldToolList, choices: m.vorbildChoices(),
 		selected: map[string]bool{}, hint: vorbilderHint}
-	return []field{name, vorbilder, textField(expiresLabel, "", false).withHint(expiresHint)}
+	if source != "" {
+		name = m.copyName(source)
+		if entry, ok, _ := m.tokenByName(source); ok {
+			for _, model := range entry.token.Models {
+				if slices.Contains(vorbilder.choices, model) {
+					vorbilder.selected[model] = true
+				}
+			}
+			expires = futureExpiryText(entry.token.Expires, time.Now())
+		}
+	}
+	return []field{textField("name", name, false).withHint(tokenNameHint), vorbilder,
+		textField(expiresLabel, expires, false).withHint(expiresHint)}
+}
+
+// futureExpiryText writes an expiry the way the expires row reads it, or "" for none or one that has passed.
+func futureExpiryText(at *time.Time, now time.Time) string {
+	if at == nil || !at.After(now) {
+		return ""
+	}
+	local := at.Local()
+	if local.Hour() == 0 && local.Minute() == 0 && local.Second() == 0 {
+		return local.Format("2006-01-02")
+	}
+	return local.Format(time.RFC3339)
 }
 
 // newToken is n on the Tokens list: it opens the form of a new agent token in an admin session only, like

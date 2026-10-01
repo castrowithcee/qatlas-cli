@@ -28,14 +28,13 @@ var pullRequestReviewCommentsList = capability.Descriptor{
 	ID:      Provider + ".pullrequestreviewcomments.list",
 	Version: 1,
 	Title:   "List GitHub pull request line comments",
-	Description: "List one bounded batch of the line comments of one pull request of a repository an " +
-		"explicit connection allows, across every review",
-	Tags:                       []string{"github", "pulls", "pullrequests", "reviews", "comments", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
-	OutputSchema:               listOutput("line_comments", reviewCommentProperties, reviewCommentRequired),
+	Description: "List one bounded batch of the line comments of one pull request of a repository a " +
+		"connection allows, across every review",
+	Tags:         []string{"github", "pulls", "pullrequests", "reviews", "comments", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"number":`+numberSchema+`,`+pagingKeys, "number"),
+	OutputSchema: listOutput("line_comments", reviewCommentProperties, reviewCommentRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "number", Description: "Pull request number in the repository", Required: true},
 	}, pagingArguments...),
@@ -54,11 +53,10 @@ var pullRequestReviewCommentsReply = capability.Descriptor{
 	Version: 1,
 	Title:   "Reply to a GitHub pull request line comment",
 	Description: "Write exactly one reply in the thread of one line comment of a pull request of a " +
-		"repository an explicit connection allows; a repeated call writes a second reply",
-	Tags:                       []string{"github", "pulls", "pullrequests", "reviews", "comments", "reply"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"repository a connection allows; a repeated call writes a second reply",
+	Tags:     []string{"github", "pulls", "pullrequests", "reviews", "comments", "reply"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"number":`+numberSchema+`,"comment_id":`+actionsIDSchema+`,`+
 		`"body":{"type":"string","minLength":1,"maxLength":65536}`, "number", "comment_id", "body"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + reviewCommentProperties + `},` +

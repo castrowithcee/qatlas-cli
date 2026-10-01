@@ -183,7 +183,7 @@ func TestProjectItemChangesSendOneMutationEach(t *testing.T) {
 				`"title":"Idea"}`},
 		{"remove every assignee of a draft", draftsUpdate.ID, `{"item_id":"PVTI_item02","assignees":[]}`, nil,
 			[]string{"updateProjectV2DraftIssue(input:{draftIssueId:$draft,assigneeIds:$assignees})"},
-			map[string]string{"assignees": "[]"}, `"assignees":[]`},
+			map[string]string{"assignees": "[]"}, `"item_id":"PVTI_item02"`},
 		{"convert a draft", draftsConvert.ID, `{"item_id":"PVTI_item02","repository":"octo-org/example"}`,
 			[]string{"repository(owner:$repoOwner,name:$repoName){id}", "content{... on DraftIssue{id}}"},
 			[]string{"convertProjectV2DraftIssueItemToIssue(input:{itemId:$item,repositoryId:$repository})"},

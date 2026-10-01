@@ -50,10 +50,22 @@ var projectField = capability.Field{Name: "project", Description: "Project the t
 func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	// The account tool, the star list, and the search tools name no repository, project, or owner: they read
 	// or, for the star list and the search tools, narrow by the connection's targets as a whole, not by a
-	// target argument of their own.
+	// target argument of their own. github.repositories.create names no existing repository either, since it
+	// makes one; its own optional owner argument is defined on its descriptor directly. The ruleset tools, the
+	// custom properties tools, and github.issuefields.list take an exclusive repository or organization
+	// argument of their own, since exactly one of the two, never a default, addresses a call. The notification
+	// tools take an optional repository of their own, or a thread id whose repository is read and checked. The
+	// gist tools belong to a user account and take a gist id or none, checked against the user targets. The
+	// global advisory tools are GitHub-wide and name no target; the organization advisory list takes the owner
+	// of an organization like the team lists.
 	switch d.ID {
 	case accountsMe.ID, starsList.ID, repositoriesSearch.ID, codeSearch.ID, issuesSearch.ID,
-		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID:
+		pullRequestsSearch.ID, commitsSearch.ID, usersSearch.ID, organizationsSearch.ID, repositoriesCreate.ID,
+		rulesetsList.ID, rulesetsGet.ID, rulesetsCreate.ID, rulesetsUpdate.ID, rulesetsDelete.ID,
+		customPropertiesGet.ID, customPropertiesSet.ID, issueFieldsList.ID,
+		notificationsList.ID, notificationsGet.ID, notificationsDismiss.ID, notificationsMarkAll.ID,
+		threadSubscriptionsSet.ID, gistsList.ID, gistsGet.ID, gistsCreate.ID, gistsUpdate.ID, gistsDelete.ID,
+		globalAdvisoriesList.ID, globalAdvisoriesGet.ID:
 		return d
 	}
 	name, schema, argument := "repository", repoSchema, repositoryArgument
@@ -62,9 +74,12 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 	case d.ID == projectsList.ID || d.ID == repositoriesList.ID:
 		name, schema, argument = "owner", ownerSchema, ownerArgument
 		fields = []capability.Field{ownerField}
-	case d.ID == organizationTeamsList.ID || d.ID == teamMembersList.ID:
+	case d.ID == organizationTeamsList.ID || d.ID == teamMembersList.ID || d.ID == organizationAdvisoriesList.ID:
 		name, schema, argument = "owner", ownerSchema, organizationArgument
 		fields = []capability.Field{organizationField}
+	case d.ID == issueTypesList.ID:
+		name, schema, argument = "owner", ownerSchema, issueTypesOwnerArgument
+		fields = []capability.Field{issueTypesOwnerField}
 	case d.ID == projectsCreate.ID:
 		name, schema, argument = "owner", ownerSchema, newOwnerArgument
 		fields = []capability.Field{newOwnerField}
@@ -362,6 +377,26 @@ func selectOrganization(resolved *config.Resolved, raw json.RawMessage) (target,
 			"organization, not a user")
 	}
 	return owner, nil
+}
+
+// selectSecondaryRepository resolves an optional repository argument that names a second repository beside
+// the one withTargetArgument already bound to the tool's own "repository" argument, such as the repository of
+// a sub-issue or an issue dependency that lives outside the primary issue's own repository. An empty value
+// stays the bound repository. Resolution runs against the connection's targets exactly as choose does for the
+// primary target, before a credential is resolved, so a repository outside them is refused before any secret
+// access, and a repository the targets name exactly keeps its configured spelling.
+func selectSecondaryRepository(resolved *config.Resolved, bound target, value string) (target, error) {
+	if value == "" {
+		return bound, nil
+	}
+	if resolved == nil {
+		return target{}, providerError("open", "no connection was selected")
+	}
+	allowed, err := allowlistOf(resolved)
+	if err != nil {
+		return target{}, providerError("open", err.Error())
+	}
+	return allowed.choose(kindRepository, value)
 }
 
 // selectTarget reads the repository or project argument of a tool and resolves the target it acts on

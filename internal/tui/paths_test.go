@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
 )
@@ -56,9 +58,10 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
 	m, path := toolsModel(t, reg, nil)
 	root := t.TempDir()
+	wideEnoughFor(m, root)
 	first, second, third := filepath.Join(root, "a"), filepath.Join(root, "b"), filepath.Join(root, "c")
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "gh")
 	if view := screenOf(m); !strings.Contains(view, "(none: every project)") {
 		t.Fatalf("the empty row does not say what it means:\n%s", view)
@@ -205,6 +208,7 @@ func TestTabCompletesDirectoriesOnly(t *testing.T) {
 	}
 	sep := string(filepath.Separator)
 	m.startDir = root
+	wideEnoughFor(m, root)
 	openConnection(t, m, "wiki")
 	openPathList(t, m)
 	press(t, m, "a")
@@ -236,4 +240,10 @@ func TestTabCompletesDirectoriesOnly(t *testing.T) {
 	if got := savedConnection(t, path, reg, "wiki").Paths; !reflect.DeepEqual(got, want) {
 		t.Fatalf("saved %v, want the completed directory without its trailing separator", got)
 	}
+}
+
+// wideEnoughFor widens the terminal so a path under dir fits on one line: temporary directories are long on
+// some systems, and the views wrap or cut what does not fit, which is not what these tests look at.
+func wideEnoughFor(m *Model, dir string) {
+	m.Update(tea.WindowSizeMsg{Width: max(100, 2*len(dir)+80), Height: 60})
 }

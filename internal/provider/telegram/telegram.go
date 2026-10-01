@@ -46,8 +46,7 @@ var messagesSend = capability.Descriptor{
 		OpenWorld:       true,
 		DataSensitivity: dataSensitivity,
 	},
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Provider: Provider,
 	InputSchema: json.RawMessage(
 		`{"type":"object","properties":{"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["text"],"additionalProperties":false}`,
 	),
@@ -77,7 +76,7 @@ var messagesEdit = capability.Descriptor{
 		Effect: capability.EffectUpdate, Idempotency: capability.IdempotencyUnknown,
 		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
 	},
-	Provider: Provider, RequiresExplicitConnection: true,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"message_id":{"type":"integer","minimum":1},` +
 		`"text":{"type":"string","minLength":1,"maxLength":4096}},` +
@@ -105,7 +104,7 @@ var messagesDelete = capability.Descriptor{
 		Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,
 		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
 	},
-	Provider: Provider, RequiresExplicitConnection: true,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer","minimum":1}},` +
 		`"required":["message_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +

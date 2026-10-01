@@ -81,10 +81,9 @@ var invoicesList = capability.Descriptor{
 	Title:   "List open Lexware invoices",
 	Description: "List one page of open outgoing invoices of an explicit Lexware Office connection; " +
 		"Lexware also reports an invoice whose due date has passed with the transient status overdue",
-	Tags:                       []string{"lexware", "invoices", "list", "open", "overdue", "accounting"},
-	Risk:                       lexwareReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"lexware", "invoices", "list", "open", "overdue", "accounting"},
+	Risk:     lexwareReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"voucher_number":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9 ._/-]+$"},` +
 		`"voucher_date_from":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},` +
@@ -129,14 +128,13 @@ var invoicesList = capability.Descriptor{
 }
 
 var invoicesGet = capability.Descriptor{
-	ID:                         Provider + ".invoices.get",
-	Version:                    1,
-	Title:                      "Get a Lexware invoice",
-	Description:                "Read one outgoing invoice of an explicit Lexware Office connection by its identifier",
-	Tags:                       []string{"lexware", "invoices", "get", "accounting"},
-	Risk:                       lexwareReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	ID:          Provider + ".invoices.get",
+	Version:     1,
+	Title:       "Get a Lexware invoice",
+	Description: "Read one outgoing invoice of an explicit Lexware Office connection by its identifier",
+	Tags:        []string{"lexware", "invoices", "get", "accounting"},
+	Risk:        lexwareReadRisk,
+	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","minLength":36,` +
 		`"maxLength":36,"pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}},` +
 		`"required":["id"],"additionalProperties":false}`),
@@ -193,7 +191,7 @@ var invoicesGet = capability.Descriptor{
 var invoicesCreate = capability.Descriptor{
 	ID: Provider + ".invoices.create", Version: 1, Title: "Create a Lexware invoice",
 	Description: "Create one outgoing invoice as a draft or finalize it immediately; Lexware does not expose invoice update or delete endpoints",
-	Tags:        []string{"lexware", "invoices", "create", "accounting"}, Provider: Provider, RequiresExplicitConnection: true,
+	Tags:        []string{"lexware", "invoices", "create", "accounting"}, Provider: Provider,
 	Risk: capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"finalize":{"type":"boolean"},"voucher_date":{"type":"string","minLength":1,"maxLength":40},` +

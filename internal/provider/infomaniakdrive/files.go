@@ -67,10 +67,9 @@ var filesList = capability.Descriptor{
 	Title:   "List Infomaniak kDrive folder contents",
 	Description: "List the immediate children of one folder of a drive this connection may reach, one page " +
 		"at a time with an opaque cursor; never reads file content",
-	Tags:                       []string{"infomaniak", "kdrive", "files", "list", "folder"},
-	Risk:                       filesReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"infomaniak", "kdrive", "files", "list", "folder"},
+	Risk:     filesReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"drive_id":` + idSchema + `,"folder_id":` + idSchema + `,` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
@@ -104,10 +103,9 @@ var filesStat = capability.Descriptor{
 	Title:   "Get Infomaniak kDrive file or folder metadata",
 	Description: "Read the metadata of exactly one file or folder of a drive this connection may reach; file " +
 		"content is never read",
-	Tags:                       []string{"infomaniak", "kdrive", "files", "stat", "metadata"},
-	Risk:                       filesReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"infomaniak", "kdrive", "files", "stat", "metadata"},
+	Risk:     filesReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` + idSchema + `},` +
 		`"required":["drive_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(entrySchema),
@@ -126,10 +124,9 @@ var filesGet = capability.Descriptor{
 	Title:   "Read Infomaniak kDrive file content",
 	Description: "Read one bounded file of a drive this connection may reach, as base64; a folder identifier " +
 		"reads Infomaniak's own zip archive of it, still bounded by the same size limit",
-	Tags:                       []string{"infomaniak", "kdrive", "files", "get", "content"},
-	Risk:                       filesReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"infomaniak", "kdrive", "files", "get", "content"},
+	Risk:     filesReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` + idSchema + `},` +
 		`"required":["drive_id","file_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -368,7 +365,7 @@ func (c *Client) GetFileContent(ctx context.Context, driveID, fileID int64) (*Co
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return nil, c.statusError(op, response)
+		return nil, c.statusError(op, response, false)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxFileBytes+1))
 	if err != nil || len(body) > maxFileBytes {

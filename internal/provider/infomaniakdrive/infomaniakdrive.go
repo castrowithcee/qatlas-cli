@@ -1,7 +1,9 @@
-// Package infomaniakdrive implements controlled, read-only access to the Infomaniak kDrive REST API: it
-// lists the drives of one bound Infomaniak account, lists the children of one folder page by page, reads
-// the metadata of one file or folder, and reads bounded file content. No write, upload, share, rename,
-// move, or trash operation is exposed.
+// Package infomaniakdrive implements controlled access to the Infomaniak kDrive REST API: it lists the
+// drives of one bound Infomaniak account, lists the children of one folder page by page, reads the
+// metadata of one file or folder, reads bounded file content, and, only on a connection that holds the
+// create or update permission, creates a folder and renames, moves, or copies one file or folder inside one
+// drive. Each of these four changes needs an explicit confirmation, sends exactly one request, and is never
+// repeated after an unclear outcome. No upload, share, link, or trash operation is exposed.
 //
 // Infomaniak groups many products behind one account model where a single API token can reach every
 // account and every kDrive its owner administers, which matters for a person who holds tokens of several
@@ -16,8 +18,11 @@
 // shared 60-per-minute budget instead of one; drives.list needs no such check, because Infomaniak already
 // answers it scoped to one account_id, and the entries are still matched against it again defensively.
 // Every drive and file identifier an agent argument names is a plain positive integer used only as a path
-// segment of the fixed Infomaniak REST paths below: no argument ever becomes a URL, an HTTP method, or a
-// provider request body.
+// segment of the fixed Infomaniak REST paths below: no argument ever becomes a URL or an HTTP method, and the
+// only provider request body is the one name a folder creation or a rename carries. A connection binds an
+// account and drives, never single files, so a file, folder, or destination identifier is bound by the drive
+// it is used in: a change is refused locally against the allow-list and then, before the change request, against
+// the live account of the drive; Infomaniak resolves every identifier of a change inside that one drive only.
 //
 // Mail, CalDAV/CardDAV, and kChat are deliberately out of this provider's scope even though they are also
 // Infomaniak products: kDrive is read here through a Bearer API token against api.infomaniak.com, while
@@ -33,6 +38,7 @@
 package infomaniakdrive
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -191,12 +197,17 @@ type redirectRefusedError struct{ message string }
 func (e *redirectRefusedError) Error() string { return e.message }
 
 // envelope is the generic Infomaniak response shape: result is "success", "error", or "asynchronous", and
-// data carries the payload only when it is "success". This provider never sends anything but a read, so
-// "asynchronous" is treated the same as "error": there is no payload this provider can use either way.
+// data carries the payload. A read accepts only "success". A change also accepts "asynchronous", which
+// means Infomaniak accepted the request and has not finished it, as the Infomaniak OpenAPI specification
+// defines the result enum; see mutations.go.
 type envelope struct {
 	Result string          `json:"result"`
 	Data   json.RawMessage `json:"data"`
 }
+
+// uncertain is appended to a failure of a change whose request may have reached Infomaniak: the change may
+// have been applied although no confirmation ever arrived. Qatlas never repeats such a request by itself.
+const uncertain = "; the change may have been applied, read the drive before trying again"
 
 // do sends one bounded GET below the API root and decodes its data into out. meta, when not nil, receives
 // the same top-level JSON besides data, for a response that also carries pagination fields as siblings of
@@ -206,37 +217,9 @@ func (c *Client) do(ctx context.Context, op, path string, query url.Values, out 
 }
 
 func (c *Client) doInto(ctx context.Context, op, path string, query url.Values, out any, meta any) error {
-	if err := c.limiter.Wait(ctx); err != nil {
-		return provider.Waited(op, "Infomaniak", err)
-	}
-	endpoint := apiRoot + path
-	if len(query) > 0 {
-		endpoint += "?" + query.Encode()
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	env, data, err := c.request(ctx, op, http.MethodGet, path, query, nil, false)
 	if err != nil {
-		return providerError(op, "the request could not be built")
-	}
-	req.Header.Set("Authorization", c.auth)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "qatlas-cli")
-
-	response, err := c.http.Do(req)
-	if err != nil {
-		return transportError(op, err)
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return c.statusError(op, response)
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil || len(data) > maxResponseBytes {
-		return invalidResponse(op, "the Infomaniak response could not be read within the size limit")
-	}
-	var env envelope
-	if err := json.Unmarshal(data, &env); err != nil {
-		return invalidResponse(op, "Infomaniak returned an invalid response")
+		return err
 	}
 	if env.Result != "success" {
 		return invalidResponse(op, "Infomaniak reported an error for a response with an HTTP success status")
@@ -252,6 +235,72 @@ func (c *Client) doInto(ctx context.Context, op, path string, query url.Values, 
 		}
 	}
 	return nil
+}
+
+// request sends exactly one bounded request below the API root, with a JSON body when body is not nil, and
+// returns the decoded envelope and the raw answer. change marks a request that may change kDrive: every
+// failure of it that could mean the request nonetheless arrived says so, so this provider never repeats it
+// by itself. The caller decides which envelope results it accepts.
+func (c *Client) request(ctx context.Context, op, method, path string, query url.Values, body any,
+	change bool) (*envelope, []byte, error) {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return nil, nil, provider.Waited(op, "Infomaniak", err)
+	}
+	var reader io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return nil, nil, providerError(op, "the request could not be built")
+		}
+		reader = bytes.NewReader(encoded)
+	}
+	endpoint := apiRoot + path
+	if len(query) > 0 {
+		endpoint += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
+	if err != nil {
+		return nil, nil, providerError(op, "the request could not be built")
+	}
+	req.Header.Set("Authorization", c.auth)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "qatlas-cli")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	response, err := c.http.Do(req)
+	if err != nil {
+		failure := transportError(op, err)
+		var providerErr *provider.Error
+		if change && errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
+			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
+			providerErr.Message += uncertain
+		}
+		return nil, nil, failure
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		failure := c.statusError(op, response, change)
+		if change && response.StatusCode >= 500 {
+			failure.Message += uncertain
+		}
+		return nil, nil, failure
+	}
+	suffix := ""
+	if change {
+		suffix = uncertain
+	}
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil || len(data) > maxResponseBytes {
+		return nil, nil, invalidResponse(op, "the Infomaniak response could not be read within the size limit"+suffix)
+	}
+	var env envelope
+	if err := json.Unmarshal(data, &env); err != nil {
+		return nil, nil, invalidResponse(op, "Infomaniak returned an invalid response"+suffix)
+	}
+	return &env, data, nil
 }
 
 // verifyDriveAccount confirms, with Infomaniak's own drive detail endpoint (GET /2/drive/{drive_id}, which
@@ -275,15 +324,23 @@ func (c *Client) verifyDriveAccount(ctx context.Context, op string, driveID int6
 }
 
 // statusError maps an HTTP status to a stable class. The provider body is never read into the message.
-func (c *Client) statusError(op string, response *http.Response) error {
+func (c *Client) statusError(op string, response *http.Response, change bool) *provider.Error {
 	status := response.StatusCode
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 	switch {
 	case status == http.StatusUnauthorized:
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Infomaniak rejected the API token"}
+	case status == http.StatusForbidden && change:
+		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: "this Infomaniak token, the " +
+			"account's rights, or the drive's plan do not allow this change; check the token scope, the rights on " +
+			"the drive, and whether the plan includes it"}
 	case status == http.StatusForbidden:
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: "this Infomaniak token may not " +
 			"perform this operation; check its scope and the account's rights in the Infomaniak Manager"}
+	case status == http.StatusConflict && change:
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "conflict: Infomaniak " +
+			"refused the change because the name already exists at the destination or the target is in a " +
+			"state that does not allow it; nothing was changed"}
 	case status == http.StatusNotFound:
 		return &provider.Error{Class: provider.ClassNotFound, Op: op,
 			Message: "Infomaniak does not hold this resource or does not show it to this token"}
@@ -397,11 +454,12 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds Infomaniak kDrive metadata, its read-only connection test, and its read operations.
+// Register adds Infomaniak kDrive metadata, its read-only connection test, its read operations, and its
+// four confirmed changes.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kDrive", DefaultBaseURL: apiRoot,
-		Description:        "Infomaniak kDrive file storage, read through the Infomaniak REST API",
+		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, and copy through the Infomaniak REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
@@ -439,6 +497,12 @@ func Register(reg *capability.Registry) error {
 			Description: "lists the reachable drives, lists folder contents page by page, and reads file and " +
 				"folder metadata and bounded content; changes nothing",
 			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID},
+		}, {
+			ID: "write", Title: "Read and organise files",
+			Description: "also creates a confirmed folder and renames, moves, or copies one confirmed file or " +
+				"folder inside one drive; never uploads, shares, or deletes",
+			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, foldersCreate.ID,
+				filesRename.ID, filesMove.ID, filesCopy.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -448,5 +512,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: filesList, Handler: capability.Handler(invokeFilesList)},
 		capability.Operation{Descriptor: filesStat, Handler: capability.Handler(invokeFilesStat)},
 		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
+		capability.Operation{Descriptor: foldersCreate, Handler: capability.Handler(invokeFoldersCreate)},
+		capability.Operation{Descriptor: filesRename, Handler: capability.Handler(invokeFilesRename)},
+		capability.Operation{Descriptor: filesMove, Handler: capability.Handler(invokeFilesMove)},
+		capability.Operation{Descriptor: filesCopy, Handler: capability.Handler(invokeFilesCopy)},
 	)
 }
