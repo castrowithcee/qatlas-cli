@@ -64,6 +64,7 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"them.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
+			secret.SetLongRunning("web")
 			path, err := config.Path(opts.Config)
 			if err != nil {
 				return err

@@ -178,11 +178,15 @@ func readMessage(r io.Reader, v any) error {
 // errUnproven reports a server that did not prove that it holds the vault's key.
 var errUnproven = fmt.Errorf("%w: it cannot prove that it holds this vault's key", ErrRefused)
 
+// ErrProgramRefused reports that the vault process refused this program, as it does one that was
+// removed or replaced since it started. It wraps ErrRefused.
+var ErrProgramRefused = fmt.Errorf("%w: the vault process refused this program", ErrRefused)
+
 // answerError turns a response's error code into the error the client returns.
 func answerError(code string) error {
 	switch code {
 	case codeRefused:
-		return fmt.Errorf("%w: the vault process refused this program", ErrRefused)
+		return ErrProgramRefused
 	case codeVersion:
 		return ErrVersion
 	case codeLocked:

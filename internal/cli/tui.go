@@ -240,6 +240,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"the check off.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			secret.SetLongRunning("tui")
 			if opts.Agent {
 				return &UsageError{errors.New("the terminal editor cannot run in agent mode")}
 			}

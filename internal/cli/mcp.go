@@ -25,6 +25,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
 const (
@@ -67,6 +68,7 @@ func newMCPCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 		RunE: func(c *cobra.Command, _ []string) error {
 			// Nobody watches the requests of a server, so the keyring must not wait for an unlock prompt.
 			opts.unattended = true
+			secret.SetLongRunning("mcp")
 			server := newMCPServer(opts, registry, c.OutOrStdout(), c.ErrOrStderr())
 			input := c.InOrStdin()
 			if handoff := takeMCPHandoff(); handoff != nil {

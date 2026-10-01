@@ -33,6 +33,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -236,10 +237,14 @@ func (e *VaultProcessError) Error() string {
 
 func (e *VaultProcessError) Unwrap() error { return e.Err }
 
-// VaultProcessRemedy names the way out of err, a failure of a running vault process. A process that fails a
-// check or speaks another version cannot be asked to lock either, so it has to be ended by its process id;
-// any other failure is fixed by locking the vault and unlocking it again.
+// VaultProcessRemedy names the way out of err, a failure of a running vault process. A long-running
+// command whose program an update replaced is told to restart (see updatedStep); a process that fails
+// another check or speaks another version cannot be asked to lock either, so it has to be ended by its
+// process id; any other failure is fixed by locking the vault and unlocking it again.
 func VaultProcessRemedy(err error) string {
+	if step, ok := updatedStep(err); ok {
+		return "qatlas was updated since this process started; " + step
+	}
 	if errors.Is(err, vaultproc.ErrRefused) || errors.Is(err, vaultproc.ErrVersion) {
 		return EndVaultProcess(err) + ", then run 'qatlas vault unlock'"
 	}
@@ -247,13 +252,46 @@ func VaultProcessRemedy(err error) string {
 }
 
 // EndVaultProcess says how to end the vault process err came from: by its id where the error carries one,
-// otherwise by finding it first.
+// otherwise by finding it first. Where the vault process only refused this process because an update
+// replaced its program, the step is the restart instead; no kill helps there.
 func EndVaultProcess(err error) string {
+	if step, ok := updatedStep(err); ok {
+		return step
+	}
 	var peer *vaultproc.PeerError
 	if errors.As(err, &peer) {
 		return fmt.Sprintf("end it with 'kill %d'", peer.PID)
 	}
 	return "find it with 'pgrep -af \"vault serve\"' and end it with 'kill <pid>'"
+}
+
+// longRunning is the command ("tui", "web", or "mcp") whose process outlives an update, "" for any other.
+var longRunning atomic.Value
+
+// SetLongRunning tells this package which long-running command this process is, so a vault process that
+// refuses it because an update replaced its program is answered with the restart of that command
+// instead of a kill. Any other command keeps the plain messages.
+func SetLongRunning(command string) { longRunning.Store(command) }
+
+// replacedProgram reports whether this process's own program was replaced since it started; a test
+// replaces it.
+var replacedProgram = func() bool {
+	_, replaced := vaultproc.ReplacedProgram()
+	return replaced
+}
+
+// updatedStep returns the next step for a long-running process that the vault process refused as a
+// program, while this process's own program is replaced. Every other failure, and every other command,
+// reports false and keeps its message.
+func updatedStep(err error) (string, bool) {
+	command, _ := longRunning.Load().(string)
+	if command == "" || !errors.Is(err, vaultproc.ErrProgramRefused) || !replacedProgram() {
+		return "", false
+	}
+	if command == "mcp" {
+		return "reconnect the qatlas MCP server in the client", true
+	}
+	return "restart 'qatlas " + command + "'", true
 }
 
 // Errors a Store reports. Anything else from a store is treated like ErrUnavailable, because a store that
