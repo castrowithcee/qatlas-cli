@@ -30,16 +30,27 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"shows the sections in one navigation line above the workspace. Below 40x12 the editor asks for a\n" +
 			"larger terminal and keeps everything as it was until it gets one.\n\n" +
 			"The editor opens with the focus on the sidebar or, below 80 columns, the navigation line above\n" +
-			"the workspace. From 80 columns up/down (or j/k) choose a section and show its list at once, and\n" +
-			"enter, right, or tab move the focus into the list; below 80 columns left/right (or h/l) choose a\n" +
-			"section instead, wrapping from the last to the first and back, up/down still work too, and enter\n" +
-			"or tab move the focus into the list. left, tab, or esc move the focus back to the navigation.\n" +
+			"the workspace. From 80 columns up/down (or j/k, and shift+tab for up) choose a section, and\n" +
+			"enter, right, or tab move the focus into the list; left, tab, or esc move the focus back to the\n" +
+			"navigation. Below 80 columns left/right (or h/l) choose a section instead, wrapping from the last\n" +
+			"to the first and back; down or enter or tab move the focus into the list, and up does nothing\n" +
+			"there. In that list, up/down (or k/j) move the selection without wrapping, up at the first entry\n" +
+			"or in an empty list moves the focus back to the navigation, down stays at the last entry, and\n" +
+			"left/right (or h/l) leave the focus where it is; tab or esc still move it back.\n" +
 			"1-8 open a section directly from the sidebar, a list, or the Logs screen; in a form, digits are\n" +
 			"text instead.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
 			"the guided setup, and q quits; ctrl+c quits anywhere without saving. esc only ever steps back one\n" +
 			"level: it clears a filter, cancels a running test, closes a picker, a table, or a question, or\n" +
 			"leaves a form.\n\n" +
+			"Services, credentials, connections, and agent tokens can be copied. p duplicates the selected\n" +
+			"entry into a filled form of a new entry named <name>-copy (or <name>-copy-2, and so on), and n\n" +
+			"first asks whether the new entry starts empty or from an existing one, which is chosen in a\n" +
+			"searchable list; c asks the same for the guided setup, which then starts from a connection. A\n" +
+			"copy is saved like any new entry, in an admin session. Secret values are never copied: a copied\n" +
+			"credential keeps only where its secrets are kept and you store its secrets afterwards, and a\n" +
+			"copied agent token keeps its vorbilder and an expiry that still lies ahead, but gets its own\n" +
+			"value.\n\n" +
 			"A form with unsaved changes is never left silently. esc first asks: s saves through the same\n" +
 			"checks as F2 and goes on only when the save succeeds, d discards the changes\n" +
 			"and goes on, and esc keeps editing with every input intact. An unchanged form closes at once. An\n" +
@@ -237,6 +248,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"the check off.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			secret.SetLongRunning("tui")
 			if opts.Agent {
 				return &UsageError{errors.New("the terminal editor cannot run in agent mode")}
 			}
@@ -278,7 +290,9 @@ func tuiSecrets(opts *Options) (*secret.Resolver, error) {
 	return secrets, nil
 }
 
-// connectionTester binds the editor to the shared core function. The editor itself knows no provider.
+// connectionTester binds the editor, or the browser's own result page (see internal/cli/web.go, which
+// converts this same func value to web.Tester), to the shared core function. Neither the editor nor
+// internal/web knows any provider; only this func value, built in this package, does.
 func connectionTester(store *config.Store, opts *Options, reg *capability.Registry) tui.Tester {
 	return func(ctx context.Context, connection string) (provider.Class, error) {
 		cfg, err := store.Load()
@@ -298,13 +312,42 @@ func connectionTester(store *config.Store, opts *Options, reg *capability.Regist
 }
 
 // tuiUpdater returns what the editor checks for a newer release with, or nil where it must not check: in a
-// dev build, which has no release to compare with, and when QATLAS_NO_UPDATE_CHECK is set.
+// dev build, which has no release to compare with, and when QATLAS_NO_UPDATE_CHECK is set. Its installation
+// locks a running vault process right before the program is replaced, the way 'qatlas update' does.
 func tuiUpdater(opts *Options, buildVersion string) tui.Updater {
 	if buildVersion == "" || buildVersion == "dev" || os.Getenv(noUpdateCheck) != "" {
 		return nil
 	}
-	if opts.Updater != nil {
-		return opts.Updater
+	client := opts.Updater
+	if client == nil {
+		client = selfupdate.New(buildVersion)
 	}
-	return selfupdate.New(buildVersion)
+	return &lockingUpdater{opts: opts, client: client}
 }
+
+// lockingUpdater is the editor's updater: the client with the vault lock of 'qatlas update' before the
+// replacement. Note keeps what that lock had to say, for the editor's status line.
+type lockingUpdater struct {
+	opts   *Options
+	client *selfupdate.Client
+	note   string
+}
+
+func (u *lockingUpdater) Check(ctx context.Context) (selfupdate.Result, error) {
+	return u.client.Check(ctx)
+}
+
+func (u *lockingUpdater) Update(ctx context.Context) (selfupdate.Result, error) {
+	replacing := *u.client
+	replacing.BeforeReplace = func(ctx context.Context) {
+		u.note = lockVaultProcessOf(ctx, u.opts, "before qatlas was replaced",
+			"run 'qatlas vault unlock' to unlock the vault again")
+		if u.client.BeforeReplace != nil {
+			u.client.BeforeReplace(ctx)
+		}
+	}
+	return replacing.Update(ctx)
+}
+
+// Note is what locking the vault process said during the last installation.
+func (u *lockingUpdater) Note() string { return u.note }

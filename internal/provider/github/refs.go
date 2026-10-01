@@ -32,15 +32,14 @@ var branchesList = capability.Descriptor{
 	ID:      Provider + ".branches.list",
 	Version: 1,
 	Title:   "List GitHub branches",
-	Description: "List one bounded batch of the branches of a repository an explicit connection allows, " +
+	Description: "List one bounded batch of the branches of a repository a connection allows, " +
 		"each with its protection status and its latest commit SHA",
-	Tags:                       []string{"github", "branches", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(pagingKeys),
-	OutputSchema:               listOutput("branches", branchProperties, branchRequired),
-	Arguments:                  pagingArguments,
+	Tags:         []string{"github", "branches", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(pagingKeys),
+	OutputSchema: listOutput("branches", branchProperties, branchRequired),
+	Arguments:    pagingArguments,
 	Fields: append([]capability.Field{
 		{Name: "branches", Description: "Branches with name, whether they are protected, and their latest " +
 			"commit sha"},
@@ -56,15 +55,14 @@ var tagsList = capability.Descriptor{
 	ID:      Provider + ".tags.list",
 	Version: 1,
 	Title:   "List GitHub tags",
-	Description: "List one bounded batch of the tags of a repository an explicit connection allows, each " +
+	Description: "List one bounded batch of the tags of a repository a connection allows, each " +
 		"with the commit SHA it points at",
-	Tags:                       []string{"github", "tags", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(pagingKeys),
-	OutputSchema:               listOutput("tags", tagEntryProperties, tagEntryRequired),
-	Arguments:                  pagingArguments,
+	Tags:         []string{"github", "tags", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(pagingKeys),
+	OutputSchema: listOutput("tags", tagEntryProperties, tagEntryRequired),
+	Arguments:    pagingArguments,
 	Fields: append([]capability.Field{
 		{Name: "tags", Description: "Tags with name and the commit SHA it points at; an annotated tag's own " +
 			"object SHA is not this commit SHA and is read only by github.tags.get"},
@@ -80,13 +78,12 @@ var tagsGet = capability.Descriptor{
 	ID:      Provider + ".tags.get",
 	Version: 1,
 	Title:   "Get a GitHub tag",
-	Description: "Read one tag of a repository an explicit connection allows, lightweight or annotated, " +
+	Description: "Read one tag of a repository a connection allows, lightweight or annotated, " +
 		"resolved through the Git refs and Git tags APIs: an annotated tag's tagger, message, and target object",
-	Tags:                       []string{"github", "tags", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"tag":`+refSchema, "tag"),
+	Tags:        []string{"github", "tags", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"tag":`+refSchema, "tag"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + tagDetailProperties + `},` +
 		`"required":["name","type","sha"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -362,13 +359,20 @@ func validObjectSHA(value string) bool {
 	return true
 }
 
-// refsSubject names the tag or the tag object a Git refs or Git tags path below a repository addresses:
-// git/refs/tags/TAG or git/tags/SHA. It names only a tag of the characters the input schema allows, or a hex
-// object SHA, and is empty otherwise.
+// refsSubject names the tag, the tag object, or the branch a Git refs or Git tags path below a repository
+// addresses: git/refs/tags/TAG, git/tags/SHA, or git/refs/heads/BRANCH, the route github.files.push reads
+// and moves. It names only a tag or a branch of the characters the input schema allows, or a hex object SHA,
+// and is empty otherwise.
 func refsSubject(path string) string {
 	if rest, ok := strings.CutPrefix(path, "git/refs/tags/"); ok {
 		if tag, err := url.PathUnescape(rest); err == nil && validRef(tag) {
 			return "tag " + tag
+		}
+		return ""
+	}
+	if rest, ok := strings.CutPrefix(path, "git/refs/heads/"); ok {
+		if branch, err := url.PathUnescape(rest); err == nil && validRef(branch) {
+			return "branch " + branch
 		}
 		return ""
 	}

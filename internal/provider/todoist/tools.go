@@ -99,7 +99,7 @@ func descriptor(object, action, title, description string, tags []string, input 
 	return capability.Descriptor{
 		ID: Provider + "." + object + "." + action, Version: 1, Title: title, Description: description,
 		Tags: append([]string{"todoist"}, tags...), Risk: readRisk, Provider: Provider,
-		RequiresExplicitConnection: true, InputSchema: json.RawMessage(input), OutputSchema: output,
+		InputSchema: json.RawMessage(input), OutputSchema: output,
 		Arguments: arguments, Fields: fields, Examples: examples,
 	}
 }

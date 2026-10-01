@@ -75,7 +75,7 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 	if !ok {
 		t.Fatal("send descriptor is missing")
 	}
-	if descriptor.ID != "telegram.messages.send" || !descriptor.RequiresExplicitConnection ||
+	if descriptor.ID != "telegram.messages.send" ||
 		descriptor.Risk.Effect != capability.EffectCreate ||
 		descriptor.Risk.Idempotency != capability.IdempotencyNonIdempotent ||
 		descriptor.Risk.Confirmation != capability.ConfirmationRequired || !descriptor.Risk.OpenWorld ||

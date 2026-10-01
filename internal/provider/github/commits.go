@@ -41,12 +41,11 @@ var commitsList = capability.Descriptor{
 	ID:      Provider + ".commits.list",
 	Version: 1,
 	Title:   "List GitHub commits",
-	Description: "List one bounded, filtered batch of compact commits of a repository an explicit connection " +
+	Description: "List one bounded, filtered batch of compact commits of a repository a connection " +
 		"allows, newest first, without a patch",
-	Tags:                       []string{"github", "commits", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "commits", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: inputSchema(`"ref":` + refSchema + `,"path":` + contentsPathSchema +
 		`,"author":{"type":"string","maxLength":105,"pattern":"` + actorPattern + `"},"since":` + timeSchema +
 		`,"until":` + timeSchema + `,` + pagingKeys),
@@ -88,14 +87,13 @@ var commitsGet = capability.Descriptor{
 	ID:      Provider + ".commits.get",
 	Version: 1,
 	Title:   "Get a GitHub commit",
-	Description: "Read one commit of a repository an explicit connection allows by branch, tag, or commit " +
+	Description: "Read one commit of a repository a connection allows by branch, tag, or commit " +
 		"SHA, with its stats and its changed files, each with a patch excerpt hard bounded and the file count " +
 		"hard bounded, both with the cut visible",
-	Tags:                       []string{"github", "commits", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"ref":`+refSchema, "ref"),
+	Tags:        []string{"github", "commits", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"ref":`+refSchema, "ref"),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + commitDetailProperties + `},` +
 		`"required":["sha","message","additions","deletions","total","files","files_truncated"],` +
 		`"additionalProperties":false}`),

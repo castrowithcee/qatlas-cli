@@ -92,17 +92,25 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 	// every tool with the same reason on both surfaces.
 	noConnection := config.RefusalNoConnection
 	for _, metadata := range reg.ProviderMetadataAll() {
-		want := []application.ToolSummary{}
-		for _, descriptor := range reg.Provider(metadata.ID) {
-			want = append(want, application.ToolSummary{
-				ID: descriptor.ID, Title: descriptor.Title, Effect: descriptor.Risk.Effect, Reason: &noConnection,
-			})
+		want := []application.SearchHit{}
+		indexed := toolSummaries(t, string(cliJSON("tools", metadata.ID, "--all")))
+		for i, descriptor := range reg.Provider(metadata.ID) {
+			hit := application.SearchHit{
+				ID: descriptor.ID, Title: descriptor.Title, Effect: descriptor.Risk.Effect, Reason: noConnection,
+				Confirm: descriptor.Risk.Confirmation == capability.ConfirmationRequired,
+			}
+			// The required arguments are derived from the compact contract, which the application tests
+			// check; here both surfaces must publish the same ones.
+			if i < len(indexed) {
+				hit.Requires = indexed[i].Requires
+			}
+			want = append(want, hit)
 		}
-		if indexed := toolSummaries(t, string(cliJSON("tools", metadata.ID, "--all"))); !reflect.DeepEqual(indexed, want) {
+		if !reflect.DeepEqual(indexed, want) {
 			t.Errorf("CLI tools %s = %+v, want %+v", metadata.ID, indexed, want)
 		}
 
-		searched := []application.ToolSummary{}
+		searched := []application.SearchHit{}
 		arguments := `{"provider":"` + metadata.ID + `","all":true}`
 		for {
 			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
@@ -114,13 +122,7 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 			}
 			var page application.SearchResponse
 			decodeRaw(t, result.Structured, &page)
-			for _, hit := range page.Operations {
-				reason := hit.Reason
-				searched = append(searched, application.ToolSummary{
-					ID: hit.ID, Title: hit.Title, Effect: hit.Effect, Connections: strings.Join(hit.Connections, " "),
-					Reason: &reason,
-				})
-			}
+			searched = append(searched, page.Operations...)
 			if !page.HasMore {
 				break
 			}
@@ -131,10 +133,11 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 		}
 	}
 
-	// describe publishes the compact contract by default and the registered descriptor on request, and the
+	// describe publishes the compact contract by default and the registered descriptor, with its output schema as published, on request, and the
 	// CLI and the MCP broker publish the same one either way.
 	for _, descriptor := range reg.All() {
-		registered, err := json.Marshal(descriptor)
+		published := application.PublishedDescriptor(descriptor)
+		registered, err := json.Marshal(published)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -478,9 +481,11 @@ func permissionViolations(metadata config.ProviderMetadata, descriptors []capabi
 			unsupported = append(unsupported, permission)
 		}
 	}
+	// A tool with local file access needs a released directory of its direction to be offered at all.
+	files := config.Files{Read: []string{"/srv/qatlas-conformance"}, Write: []string{"/srv/qatlas-conformance"}}
 	harness, err := newConformanceHarness(metadata, descriptors, map[string]config.Connection{
-		"supported":   {Permissions: append([]config.Permission{}, metadata.SupportedPermissions...), Tools: ids},
-		"unsupported": {Permissions: append([]config.Permission{}, unsupported...), Tools: ids},
+		"supported":   {Permissions: append([]config.Permission{}, metadata.SupportedPermissions...), Tools: ids, Files: files},
+		"unsupported": {Permissions: append([]config.Permission{}, unsupported...), Tools: ids, Files: files},
 	})
 	if err != nil {
 		return []string{err.Error()}
@@ -532,11 +537,20 @@ func routingViolations(metadata config.ProviderMetadata, d capability.Descriptor
 		}
 	}
 	offers := map[string]bool{"listed": true, "unlisted": false, "denied": false, "open": !d.RequiresToolAllowList}
+	// A tool with local file access is offered only to a connection that releases a directory for its
+	// direction, so every connection of the harness releases one.
+	var files config.Files
+	switch d.LocalFiles {
+	case config.LocalFilesRead:
+		files.Read = []string{"/srv/qatlas-conformance"}
+	case config.LocalFilesWrite:
+		files.Write = []string{"/srv/qatlas-conformance"}
+	}
 	harness, err := newConformanceHarness(metadata, []capability.Descriptor{d}, map[string]config.Connection{
-		"listed":   {Permissions: []config.Permission{effect}, Tools: []string{d.ID}},
-		"unlisted": {Permissions: []config.Permission{effect}, Tools: []string{}},
-		"denied":   {Permissions: others, Tools: []string{d.ID}},
-		"open":     {Permissions: []config.Permission{effect}},
+		"listed":   {Permissions: []config.Permission{effect}, Tools: []string{d.ID}, Files: files},
+		"unlisted": {Permissions: []config.Permission{effect}, Tools: []string{}, Files: files},
+		"denied":   {Permissions: others, Tools: []string{d.ID}, Files: files},
+		"open":     {Permissions: []config.Permission{effect}, Files: files},
 	})
 	if err != nil {
 		return []string{err.Error()}
@@ -792,7 +806,6 @@ func conformantDescriptor() capability.Descriptor {
 			Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: "sample-items",
 		},
-		RequiresExplicitConnection: true,
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,` +
 			`"pattern":"^[a-z]+$"}},"required":["name"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"object"}`),
@@ -827,9 +840,42 @@ func conformantAllowListed() capability.Descriptor {
 			Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 			Confirmation: capability.ConfirmationNone, OpenWorld: true, DataSensitivity: "sample-settings",
 		},
-		RequiresExplicitConnection: true,
-		RequiresToolAllowList:      true,
-		InputSchema:                json.RawMessage(`{"type":"object","additionalProperties":false}`),
-		OutputSchema:               json.RawMessage(`{"type":"object"}`),
+		RequiresToolAllowList: true,
+		InputSchema:           json.RawMessage(`{"type":"object","additionalProperties":false}`),
+		OutputSchema:          json.RawMessage(`{"type":"object"}`),
+	}
+}
+
+// The output schema every shipped tool publishes stays a valid schema, and only ever requires less than
+// the schema its answer is validated against, since empty members are left out of results.
+func TestPublishedOutputSchemasStayValid(t *testing.T) {
+	reg := defaultRegistry()
+	cfg := config.New()
+	core := application.New(reg, cfg, nil, nil)
+	for _, descriptor := range reg.All() {
+		described, err := core.Describe(application.DescribeRequest{Operation: descriptor.ID})
+		if err != nil {
+			t.Errorf("%s: %v", descriptor.ID, err)
+			continue
+		}
+		published := described.Operation
+		if !json.Valid(published.OutputSchema) {
+			t.Errorf("%s publishes an invalid output schema", descriptor.ID)
+			continue
+		}
+		var before, after struct {
+			Type     string   `json:"type"`
+			Required []string `json:"required"`
+		}
+		_ = json.Unmarshal(descriptor.OutputSchema, &before)
+		_ = json.Unmarshal(published.OutputSchema, &after)
+		if after.Type != before.Type {
+			t.Errorf("%s: type changed to %q", descriptor.ID, after.Type)
+		}
+		for _, name := range after.Required {
+			if !slices.Contains(before.Required, name) {
+				t.Errorf("%s: published requires %q, which the validated schema does not", descriptor.ID, name)
+			}
+		}
 	}
 }

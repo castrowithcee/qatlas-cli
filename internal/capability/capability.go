@@ -68,6 +68,16 @@ type Field struct {
 	Description string `json:"description"`
 }
 
+// ImpliedField declares that a filter argument fixes one member of every entry of a result list. When the
+// request sets Argument explicitly to one of Values, the member Field is left out of each entry of List:
+// the request already says its value. Any other value (such as "all") or an unset argument keeps the member.
+type ImpliedField struct {
+	List     string   `json:"list"`
+	Argument string   `json:"argument"`
+	Values   []string `json:"values"`
+	Field    string   `json:"field"`
+}
+
 // Example is a secret-free example invocation of an operation.
 type Example struct {
 	Description string          `json:"description,omitempty"`
@@ -80,20 +90,24 @@ type Example struct {
 // RequiresToolAllowList marks a high-risk operation that no connection offers because of its permissions
 // alone: only a connection whose tools list names it does, see config.ToolMetadata.
 type Descriptor struct {
-	ID                         string          `json:"id"`
-	Version                    int             `json:"version"`
-	Title                      string          `json:"title"`
-	Description                string          `json:"description"`
-	Tags                       []string        `json:"tags"`
-	Risk                       Risk            `json:"risk"`
-	Provider                   string          `json:"provider"`
-	RequiresExplicitConnection bool            `json:"requires_explicit_connection"`
-	RequiresToolAllowList      bool            `json:"requires_tool_allow_list"`
-	InputSchema                json.RawMessage `json:"input_schema"`
-	OutputSchema               json.RawMessage `json:"output_schema"`
-	Arguments                  []Argument      `json:"arguments"`
-	Fields                     []Field         `json:"fields"`
-	Examples                   []Example       `json:"examples"`
+	ID                    string   `json:"id"`
+	Version               int      `json:"version"`
+	Title                 string   `json:"title"`
+	Description           string   `json:"description"`
+	Tags                  []string `json:"tags"`
+	Risk                  Risk     `json:"risk"`
+	Provider              string   `json:"provider"`
+	RequiresToolAllowList bool     `json:"requires_tool_allow_list"`
+	// LocalFiles is empty for an operation without local file access, otherwise the direction it reads
+	// or writes local files in. Only a connection whose files list releases a directory of that direction
+	// offers it.
+	LocalFiles    config.LocalFiles `json:"local_files,omitempty"`
+	InputSchema   json.RawMessage   `json:"input_schema"`
+	OutputSchema  json.RawMessage   `json:"output_schema"`
+	Arguments     []Argument        `json:"arguments"`
+	Fields        []Field           `json:"fields"`
+	ImpliedFields []ImpliedField    `json:"implied_fields,omitempty"`
+	Examples      []Example         `json:"examples"`
 }
 
 // Handler is the provider-independent dispatch seam used by the application core. Implementations open
@@ -382,8 +396,15 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 	// The tool list is what configuration validates a connection's tools against and what an editor
 	// offers, so both follow the registered operations instead of a list of their own.
 	metadata.Tools = metadata.Tools[:0]
+	metadata.LocalFiles = config.LocalFilesSupport{}
 	for _, descriptor := range sorted(r.byProvider[provider]) {
 		metadata.Tools = append(metadata.Tools, descriptor.Tool())
+		switch descriptor.LocalFiles {
+		case config.LocalFilesRead:
+			metadata.LocalFiles.Read = true
+		case config.LocalFilesWrite:
+			metadata.LocalFiles.Write = true
+		}
 	}
 	r.metadata[provider] = metadata
 	return nil
@@ -393,7 +414,7 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 // checked against.
 func (d Descriptor) Tool() config.ToolMetadata {
 	return config.ToolMetadata{ID: d.ID, Title: d.Title, Effect: config.Permission(d.Risk.Effect),
-		RequiresToolAllowList: d.RequiresToolAllowList}
+		RequiresToolAllowList: d.RequiresToolAllowList, LocalFiles: d.LocalFiles}
 }
 
 // Provider returns the descriptors of one provider type, sorted by ID. The result is a copy, so a
@@ -425,7 +446,14 @@ func (d Descriptor) clone() Descriptor {
 	out := d
 	out.InputSchema = append(json.RawMessage(nil), d.InputSchema...)
 	out.OutputSchema = append(json.RawMessage(nil), d.OutputSchema...)
-	out.Tags, out.Arguments, out.Fields, out.Examples = nil, nil, nil, nil
+	out.Tags, out.Arguments, out.Fields, out.Examples, out.ImpliedFields = nil, nil, nil, nil, nil
+	if len(d.ImpliedFields) > 0 {
+		out.ImpliedFields = make([]ImpliedField, len(d.ImpliedFields))
+		for i, implied := range d.ImpliedFields {
+			out.ImpliedFields[i] = implied
+			out.ImpliedFields[i].Values = append([]string(nil), implied.Values...)
+		}
+	}
 	if len(d.Tags) > 0 {
 		out.Tags = append([]string(nil), d.Tags...)
 	}
@@ -472,6 +500,12 @@ func (d Descriptor) validate(provider string) error {
 	if d.Description == "" {
 		return fmt.Errorf("operation %q: description must not be empty", d.ID)
 	}
+	switch d.LocalFiles {
+	case "", config.LocalFilesRead, config.LocalFilesWrite:
+	default:
+		return fmt.Errorf("operation %q: local files must be empty, %q or %q", d.ID, config.LocalFilesRead,
+			config.LocalFilesWrite)
+	}
 	if err := d.Risk.validate(d.ID); err != nil {
 		return err
 	}
@@ -487,9 +521,46 @@ func (d Descriptor) validate(provider string) error {
 	if err := uniqueNames("field", len(d.Fields), func(i int) string { return d.Fields[i].Name }); err != nil {
 		return fmt.Errorf("operation %q: %w", d.ID, err)
 	}
+	if err := d.validateImplied(); err != nil {
+		return err
+	}
 	for i, example := range d.Examples {
 		if err := validateSchemaValue(example.Arguments); err != nil {
 			return fmt.Errorf("operation %q: example %d arguments %w", d.ID, i+1, err)
+		}
+	}
+	return nil
+}
+
+// validateImplied checks that every implied field names an argument of the input schema, a list of the
+// output schema, and a member of that list's entries, with at least one fixing value.
+func (d Descriptor) validateImplied() error {
+	for _, implied := range d.ImpliedFields {
+		if len(implied.Values) == 0 {
+			return fmt.Errorf("operation %q: implied field %q declares no value", d.ID, implied.Field)
+		}
+		var input, output struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+		}
+		if json.Unmarshal(d.InputSchema, &input) != nil {
+			return fmt.Errorf("operation %q: input schema cannot be read", d.ID)
+		}
+		if _, ok := input.Properties[implied.Argument]; !ok {
+			return fmt.Errorf("operation %q: implied field %q names unknown argument %q", d.ID, implied.Field, implied.Argument)
+		}
+		if json.Unmarshal(d.OutputSchema, &output) != nil {
+			return fmt.Errorf("operation %q: output schema cannot be read", d.ID)
+		}
+		var list struct {
+			Items struct {
+				Properties map[string]json.RawMessage `json:"properties"`
+			} `json:"items"`
+		}
+		if json.Unmarshal(output.Properties[implied.List], &list) != nil || list.Items.Properties == nil {
+			return fmt.Errorf("operation %q: implied field %q names unknown list %q", d.ID, implied.Field, implied.List)
+		}
+		if _, ok := list.Items.Properties[implied.Field]; !ok {
+			return fmt.Errorf("operation %q: implied field %q is not a member of the entries of %q", d.ID, implied.Field, implied.List)
 		}
 	}
 	return nil

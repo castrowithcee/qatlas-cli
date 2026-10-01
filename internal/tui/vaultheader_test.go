@@ -206,7 +206,7 @@ func TestCtrlLUnlocksInListAndForm(t *testing.T) {
 		}},
 		{"form", func(t *testing.T, m *Model) screen {
 			openSectionByName(t, m, sectionServices)
-			press(t, m, "n")
+			pressNew(t, m)
 			if m.screen != screenForm {
 				t.Fatalf("'n' did not open the form: screen %v", m.screen)
 			}
@@ -395,7 +395,7 @@ func TestCtrlLOnAnUnencryptedVault(t *testing.T) {
 func TestCtrlLIsHarmlessDuringOtherDialogs(t *testing.T) {
 	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki")
 	press(t, m, "tab")
 	press(t, m, "tab")

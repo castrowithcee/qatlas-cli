@@ -19,7 +19,8 @@
 // of its collaborators and link it to teams of its organization; the automation tools read its built-in workflows and, listed only, delete one;
 // the issue tools read, create, and change issues of a repository and read or write the comments of one issue on explicit
 // request. The Actions tools observe the GitHub Actions of a repository and, only with the execute permission,
-// dispatch, re-run, or cancel one named workflow or run. Only a connection whose tools list names them
+// dispatch, re-run, or cancel one named workflow or run; they read the billable time of a run and, listed
+// only, delete the logs of one. Only a connection whose tools list names them
 // maintains workflow files below .github/workflows/ and Actions settings. The pull request tools, offered only
 // by the not-recommended setup profile pull-requests, read the pull requests of a repository: their list, one
 // pull request, its changed files, its commits, its diff, and the checks at its head commit; the project
@@ -36,12 +37,91 @@
 // type, and plan of the account behind the connection's token; it and the star list, which reads the
 // account's starred repositories, name no repository, project, or owner and are offered only by a connection
 // whose targets name neither a repository nor a project. The star tools also star and unstar one repository
-// an explicit connection allows. The organization tools read the teams of an organization and the members of
+// a connection allows. The organization tools read the teams of an organization and the members of
 // one of its teams, an organization the connection's targets must allow as an owner. The repository tools
 // read the contents of a file or a directory, the Git tree of a ref, through GraphQL the blame of a file
 // over a bounded line range, the commits of a repository or one commit with its stats and changed files, and
-// the branches and the tags of a repository or one tag resolved through the Git refs and Git tags APIs;
-// none of them writes, diffs two refs, or downloads an archive. The search
+// the branches and the tags of a repository or one tag resolved through the Git refs and Git tags APIs; none
+// of them writes, diffs two refs, or downloads an archive. github.branches.create makes one new branch from a
+// branch, a tag, or a commit SHA; github.contents.put creates or updates one file, and, only on a connection
+// whose tools list names it, github.contents.delete deletes one; only on a connection whose tools list names
+// it, github.files.push writes several files as one commit through the Git Data API, fast-forward only, so a
+// branch that moved since it was read is refused with nothing written; none of the four ever touches a path
+// below .github/workflows/, which the listed-only workflow maintainer covers instead. github.repositories.
+// create makes one new repository, under the token's own account or an organization the connection names as
+// an owner target; github.repositories.fork forks a repository a connection allows the same way,
+// answered asynchronously; only on a connection whose tools list names it, github.repositories.delete deletes
+// one repository permanently, once confirm_name repeats its owner/name exactly. github.collaborators.list
+// reads the collaborators of a repository with their login, account type, role, and permissions, never an
+// email address or another personal detail. github.rulesets.list and github.rulesets.get read the rulesets
+// of a repository or, with organization instead of repository, an organization the connection allows;
+// exactly one of the two is required. Only on a connection whose tools list names them, github.rulesets.
+// create, github.rulesets.update, and github.rulesets.delete change them; an update replaces a ruleset as a
+// whole. github.customproperties.get reads the custom property values of a repository or, with organization
+// instead, the custom property definitions (schema) an organization declares, the same exclusive selection;
+// only on a connection whose tools list names it, github.customproperties.set changes them: for a repository
+// it sets or removes property values, and for an organization it creates or updates property definitions.
+// github.labels.list and github.labels.get read the labels of a repository; github.labels.create and
+// github.labels.update change them; only on a connection whose tools list names it, github.labels.delete
+// removes one permanently, which also strips it from every issue and pull request that carries it.
+// github.subissues.list reads the sub-issues of one issue in their priority order; github.subissues.add and
+// github.subissues.reprioritize add one and reorder it, and github.subissues.remove detaches one; a
+// sub-issue may live in another repository the connection's targets allow as well.
+// github.issuedependencies.list reads the issues that block one issue and the issues it blocks;
+// github.issuedependencies.add records a blocked-by relationship and github.issuedependencies.remove detaches
+// one, the same way a sub-issue may cross repositories; neither the sub-issue nor the dependency removal is
+// listed-only, because each detaches only the one relationship between the two named issues.
+// github.issuetypes.list reads the issue types an organization declares; github.issues.update also takes an
+// optional type name, "" removing the issue's current one. github.issuefields.list reads the organization
+// issue fields of a repository, inherited from its organization, or, with organization instead, directly of
+// an organization; github.issuefields.set writes one or more of their values on one issue, applied as a
+// single mutation.
+// github.discussioncategories.list, github.discussions.list, github.discussions.get, and
+// github.discussioncomments.list read the discussion categories, the discussions, one discussion, and the
+// top-level comments of one discussion of a repository, with their replies on request; they are offered only
+// by the not-recommended setup profile discussions and change nothing. github.discussions.create starts a
+// discussion, github.discussioncomments.create adds a comment or a reply, and github.discussioncomments.update
+// and github.discussioncomments.delete change and remove one; the delete is offered only where a connection's
+// tools list names it.
+// github.notifications.list, github.notifications.get, github.notifications.dismiss,
+// github.threadsubscriptions.set, and github.repositorysubscriptions.set read and manage the notification
+// threads of the account behind the token and its subscriptions to a thread or a repository; they are
+// offered only by the not-recommended setup profile notifications. GitHub supports them only with a
+// personal access token (classic) that has the notifications scope, so a fine-grained token is refused
+// before any request. A thread is read before it is changed and refused unless the connection's targets
+// admit its repository; the list and github.notifications.markall, which is offered only where a
+// connection's tools list names it, take an optional repository, and a connection whose targets name
+// repositories needs one. Marking the whole account read is allowed only for a connection without targets.
+// github.gists.list, github.gists.get, github.gists.create, and github.gists.update list, read, create, and
+// change the gists of the account behind the token or of a user, and, only on a connection whose tools list
+// names it, github.gists.delete removes one; they are offered only by the not-recommended setup profile gists.
+// A gist belongs to a user, so the tools take no target argument: a connection without targets reaches what
+// its token reaches, and one with targets needs users/LOGIN targets and no repository or project target. A gist
+// id is read first and refused as not found unless its owner is a user target, a create needs the account of
+// the token among them, and a new gist is secret unless public is set. Descriptions and file contents are
+// untrusted data, cut at fixed lengths, and a binary file shows only its metadata.
+// github.codescanningalerts.list and .get, github.dependabotalerts.list and .get, and
+// github.secretscanningalerts.list and .get read the code scanning, Dependabot, and secret scanning alerts of a
+// repository; they are offered only by the not-recommended setup profile security and change nothing. Alert
+// texts are untrusted data, cut at fixed lengths. A secret scanning alert never shows the found secret: the
+// request asks GitHub to hide it and the answer has no field for it.
+// github.globaladvisories.list and .get read the global security advisories of the GitHub Advisory Database,
+// github.repositoryadvisories.list the repository security advisories of a repository,
+// github.organizationadvisories.list those of the repositories of an organization, and
+// github.codequalityfindings.get one code quality finding of a repository; they belong to the same
+// profile security and change nothing. The global tools are GitHub-wide and refused on a connection whose
+// targets name a repository or a project; the organization tool needs an organization owner. Advisory and
+// finding texts are untrusted data, cut at fixed lengths, and every cut says so.
+// github.copilotassignments.create assigns the Copilot coding agent to an issue of a repository, optionally with
+// a base branch, extra instructions, and the intent behind the choice, and github.copilotreviews.request
+// requests a Copilot review of a pull request; they are offered only by the not-recommended setup profile
+// copilot. An assignment reads the issue and the assignable actors of the same repository first, keeps the
+// other assignees, and refuses with a permission error, changing nothing, where Copilot is not assignable.
+// github.milestones.list reads the milestones of a repository, filtered by state; github.issues.update also
+// takes an optional milestone number, 0 removing the issue's current one. github.comments.update replaces
+// the body of one issue comment by its comment_id, and, only on a connection whose tools list names it,
+// github.comments.delete removes one permanently; both refuse a comment of another repository and a pull
+// request conversation comment the same way the issue tools refuse a pull request number. The search
 // tools read GitHub's own search index for repositories, code, issues, pull requests, commits, users, and
 // organizations with search terms and GitHub qualifiers; they take no repository, project, or owner
 // argument of their own, and a connection whose targets name any is instead narrowed by qualifiers Qatlas
@@ -172,11 +252,10 @@ var itemsList = capability.Descriptor{
 	Version: 2,
 	Title:   "List GitHub project items",
 	Description: "List one bounded, server-side filtered batch of compact items of " +
-		"a GitHub project an explicit connection allows; without a status filter only items whose status is not Done are listed",
-	Tags:                       []string{"github", "projects", "items", "list", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"a GitHub project a connection allows, its issues, pull requests, and draft issues; without a status filter only items whose status is not Done are listed",
+	Tags:     []string{"github", "projects", "items", "list", "planning"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"status":` + filterListSchema + `,"status_not":` + filterListSchema + `,` +
 		`"type":{"type":"string","enum":["issue","pull_request","draft_issue"]},` +
@@ -221,12 +300,11 @@ var itemsGet = capability.Descriptor{
 	ID:      Provider + ".projectitems.get",
 	Version: 1,
 	Title:   "Get a GitHub project item",
-	Description: "Read one item of a GitHub project an explicit connection allows with its project fields " +
+	Description: "Read one item of a GitHub project a connection allows with its project fields " +
 		"and, for an issue or a draft issue, its full body, without comments",
-	Tags:                       []string{"github", "projects", "items", "get", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "items", "get", "planning"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"item_id":{"type":"string","minLength":4,"maxLength":200,"pattern":"` + nodeIDPattern + `"}},` +
 		`"required":["item_id"],"additionalProperties":false}`),
@@ -262,12 +340,11 @@ var issuesList = capability.Descriptor{
 	ID:      Provider + ".issues.list",
 	Version: 2,
 	Title:   "List GitHub issues",
-	Description: "List one bounded batch of compact issues of a repository an explicit connection allows, " +
+	Description: "List one bounded batch of compact issues of a repository a connection allows, " +
 		"newest first, without bodies, comments, or pull requests",
-	Tags:                       []string{"github", "issues", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "issues", "list"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"state":{"type":"string","enum":["open","closed","all"]},` +
 		`"labels":` + filterListSchema + `,` +
@@ -292,6 +369,9 @@ var issuesList = capability.Descriptor{
 		{Name: "next_cursor", Description: "Cursor of the following batch, absent when has_more is false"},
 		{Name: "has_more", Description: "True when the repository holds further matching issues"},
 	},
+	ImpliedFields: []capability.ImpliedField{
+		{List: "issues", Argument: "state", Values: []string{"open", "closed"}, Field: "state"},
+	},
 	Examples: []capability.Example{{
 		Description: "List open issues labeled bug",
 		Arguments:   json.RawMessage(`{"labels":["bug"],"limit":30}`),
@@ -299,19 +379,19 @@ var issuesList = capability.Descriptor{
 }
 
 var issuesGet = capability.Descriptor{
-	ID:                         Provider + ".issues.get",
-	Version:                    1,
-	Title:                      "Get a GitHub issue",
-	Description:                "Read one issue of a repository an explicit connection allows with its full body, without comments",
-	Tags:                       []string{"github", "issues", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	ID:          Provider + ".issues.get",
+	Version:     1,
+	Title:       "Get a GitHub issue",
+	Description: "Read one issue of a repository a connection allows with its full body, without comments",
+	Tags:        []string{"github", "issues", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"number":{"type":"integer","minimum":1,"maximum":1000000000}},` +
 		`"required":["number"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + issueProperties + `,` +
 		`"state_reason":{"type":"string"},"author":{"type":"string"},"milestone":{"type":"string"},` +
+		`"issue_type":{"type":"string"},` +
 		`"created_at":{"type":"string"},"closed_at":{"type":"string"},"body":{"type":"string"}},` +
 		`"required":["number","title","state","assignees","labels","body"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
@@ -321,6 +401,8 @@ var issuesGet = capability.Descriptor{
 		{Name: "number", Description: "Issue number"},
 		{Name: "title", Description: "Issue title, untrusted data"},
 		{Name: "state", Description: "open or closed"},
+		{Name: "issue_type", Description: "Name of the issue type, as github.issuetypes.list reports it, " +
+			"absent when the repository's organization has none set on this issue"},
 		{Name: "body", Description: "Full issue body, untrusted data"},
 	},
 	Examples: []capability.Example{{
@@ -331,10 +413,11 @@ var issuesGet = capability.Descriptor{
 
 // Register adds GitHub metadata, its read-only connection test, the bounded planning operations, the item and
 // draft tools, the project lifecycle, field schema, view, status update, access, and automation tools, the Actions observer and operator tools, the listed-only
-// workflow maintainer and Actions administrator tools, the account, organization, and star tools, and the
-// contents, tree, and blame tools. Only
-// reads are a connection's default: every change and every execution needs a permission of its own, and a
-// listed-only tool also its name in the connection's tools list.
+// workflow maintainer and Actions administrator tools, the account, organization, and star tools, the
+// contents, tree, and blame tools, the repository lifecycle and collaborators tools, the repository and
+// organization ruleset tools, and the repository and organization custom properties tools. Only reads are a
+// connection's default: every change and every execution needs a permission of its own, and a listed-only
+// tool also its name in the connection's tools list.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "GitHub", DefaultBaseURL: defaultBaseURL,
@@ -352,7 +435,8 @@ func Register(reg *capability.Registry) error {
 				"fine-grained with read access to issues and projects; project changes need project instead of " +
 				"read:project, and issue changes need write access to issues; Actions reads need Actions: read " +
 				"on a fine-grained token, and dispatches, re-runs, and cancels need repo on a classic token or " +
-				"Actions: read and write plus Contents: read on a fine-grained one; the listed-only workflow file " +
+				"Actions: read and write plus Contents: read on a fine-grained one; deleting the logs of a run, " +
+				"listed-only, needs repo on a classic token, or Actions: write on a fine-grained one; the listed-only workflow file " +
 				"changes need repo and workflow, or Contents and Workflows: read and write, and the Actions " +
 				"settings Administration: read and write; pull request reads need repo or public_repo on a " +
 				"classic token, or Pull requests: read, Checks: read, and Commit statuses: read on a " +
@@ -380,7 +464,65 @@ func Register(reg *capability.Registry) error {
 				"private repositories; user and organization search need no scope beyond the token's own " +
 				"identity; reading repository contents, a Git tree, a file's blame, commits, branches, or tags " +
 				"needs no scope for a public repository, or repo on a classic token, or Contents: read on a " +
-				"fine-grained token, for a private one",
+				"fine-grained token, for a private one; creating a branch, creating, updating, or deleting a " +
+				"file below the repository root, and pushing several files as one commit, listed-only, need " +
+				"repo on a classic token, or Contents: read and write on a fine-grained token; creating or " +
+				"forking a repository need repo on a classic token, or Administration: read and write on a " +
+				"fine-grained token; deleting a repository, listed-only, needs delete_repo as well on a classic " +
+				"token; listing collaborators needs repo on a classic token, or Metadata: read on a fine-grained " +
+				"token; reading the rulesets of a repository needs repo on a classic token, or Administration: " +
+				"read on a fine-grained token; changing them, listed-only, needs Administration: read and write " +
+				"on a fine-grained token instead; reading or changing the rulesets of an organization needs " +
+				"admin:org on a classic token, or, as far as GitHub documents it, Administration read, or read " +
+				"and write, access of the organization on a fine-grained token; reading the custom property " +
+				"values of a repository needs Custom properties: read on a fine-grained token, or repo on a " +
+				"classic token, and changing them, listed-only, needs Custom properties: write instead; reading " +
+				"or changing the custom property schema of an organization needs the organization permission " +
+				"Custom properties, read or read and write, on a fine-grained token, or, as far as GitHub " +
+				"documents it, admin:org on a classic token; reading the labels of a repository needs no scope " +
+				"for a public repository, or repo on a classic token, or Issues: read on a fine-grained token, " +
+				"for a private one; changing them, including delete which is listed-only, needs Issues: read " +
+				"and write instead, since GitHub keeps a label under a repository's issues and pull requests " +
+				"rather than a scope of its own; reading the milestones of a repository needs the same scope " +
+				"as reading its labels; setting an issue's milestone through github.issues.update, and " +
+				"updating or deleting an issue comment, need the same scope as writing an issue or a comment: " +
+				"repo on a classic token, or Issues: read and write on a fine-grained token; reacting to an " +
+				"issue or an issue or pull request conversation comment needs the same scope as writing one, " +
+				"Issues: read and write on a fine-grained token; reacting to a pull request line comment needs " +
+				"repo on a classic token, or Pull requests: read and write on a fine-grained token; removing a " +
+				"reaction additionally reads the account behind the token, which needs no scope beyond its own " +
+				"identity; reading the sub-issues or the dependencies of an issue needs the same scope as reading " +
+				"its labels, and changing them, including remove, needs the same scope as writing an issue: repo " +
+				"on a classic token, or Issues: read and write on a fine-grained token, of every repository a " +
+				"sub-issue or a dependency names; reading the issue types of an organization, and the issue " +
+				"fields of a repository or an organization, needs read:org on a classic token, or, as far as " +
+				"GitHub documents it, the organization permission Issue types: read, or Administration: read, " +
+				"on a fine-grained token; setting an issue's type through github.issues.update, and setting its " +
+				"issue field values through github.issuefields.set, need the same scope as writing an issue: " +
+				"repo on a classic token, or Issues: read and write on a fine-grained token; reading the " +
+				"discussion categories, discussions, and discussion comments of a repository needs public_repo " +
+				"or repo on a classic token, or Discussions: read on a fine-grained token; creating and changing " +
+				"discussions and discussion comments, including delete, needs public_repo or repo on a classic " +
+				"token, or Discussions: read and write on a fine-grained token; the notification tools, " +
+				"including the thread subscriptions and the listed-only mark-all, need a classic token with " +
+				"notifications (or repo), since GitHub does not support fine-grained tokens for them and " +
+				"Qatlas refuses one before any request; a repository subscription is decided by GitHub per request; " +
+				"the gist tools need the gist scope on a classic token for secret gists and for every change, " +
+				"and creating, updating, or deleting a gist needs the user permission Gists: read and write " +
+				"on a fine-grained token, while GitHub lists no permission for the gist reads; the security alert " +
+				"tools need security_events or repo on a classic token (public_repo for a public repository), " +
+				"or Code scanning alerts: read, Dependabot alerts: read, and Secret scanning alerts: read on a " +
+				"fine-grained token; the global advisory tools need no scope; the repository advisory list needs repo or " +
+				"repository_advisories:read on a classic token, or Repository security advisories: read on a " +
+				"fine-grained token, and the organization advisory list, although it only reads, needs repo or " +
+				"repository_advisories:write on a classic token, or Repository security advisories: write on a " +
+				"fine-grained token, and an organization owner or security manager; the code quality finding " +
+				"read needs repo on a classic token (public_repo for a public repository), or Code quality: " +
+				"read on a fine-grained token; the Copilot tools need a user token, never an app installation " +
+				"token: assigning Copilot to an issue needs repo on a classic token, or Metadata: read plus " +
+				"Actions, Contents, Issues, and Pull requests: read and write on a fine-grained token, and " +
+				"requesting a Copilot review needs repo on a classic token, or Pull requests: read and write on a " +
+				"fine-grained token, plus write access to the repository",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "project, repository, or owner",
@@ -439,7 +581,7 @@ func Register(reg *capability.Registry) error {
 				statusList.ID, statusCreate.ID, statusUpdate.ID, teamsList.ID, projectWorkflowsList.ID},
 		}, {
 			ID: "actions-observer", Title: "Actions observer",
-			Description: "reads the workflows, runs, jobs, artifact metadata, and the end of job logs of a " +
+			Description: "reads the workflows, runs, their billable time, jobs, artifact metadata, and the end of job logs of a " +
 				"repository and starts nothing",
 			Tools: observerTools,
 		}, {
@@ -514,6 +656,63 @@ func Register(reg *capability.Registry) error {
 				"and the tags of a repository or one tag; changes nothing",
 			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID, commitsList.ID, commitsGet.ID,
 				branchesList.ID, tagsList.ID, tagsGet.ID},
+		}, {
+			ID: "repository-writer", Title: "Repository writer",
+			Description: "not recommended: reads the contents, tree, blame, commits, branches, and tags of a " +
+				"repository, creates a branch from a branch, a tag, or a commit SHA, and creates or updates a " +
+				"file; every change needs its own confirmation, and deleting a file stays unticked, since it " +
+				"is offered only where a connection's tools list names github.contents.delete",
+			Tools: []string{contentsGet.ID, treesGet.ID, blameGet.ID, commitsList.ID, commitsGet.ID,
+				branchesList.ID, tagsList.ID, tagsGet.ID, branchesCreate.ID, contentsPut.ID},
+		}, {
+			ID: "repository-admin-reader", Title: "Repository administration reader",
+			Description: "not recommended: reads the collaborators of a repository, the rulesets of a " +
+				"repository or an organization, and the custom property values of a repository or the custom " +
+				"property schema of an organization; changes nothing",
+			Tools: []string{collaboratorsList.ID, rulesetsList.ID, rulesetsGet.ID, customPropertiesGet.ID},
+		}, {
+			ID: "issue-maintainer", Title: "Issue maintainer",
+			Description: "not recommended: lists and reads the labels of a repository, lists its " +
+				"milestones, creates and updates labels and issue comments, and reacts to issues, comments, " +
+				"and pull request line comments; every change needs its own confirmation, and deleting a " +
+				"label or a comment stays unticked, since each is offered only where a connection's tools " +
+				"list names it",
+			Tools: []string{labelsList.ID, labelsGet.ID, labelsCreate.ID, labelsUpdate.ID, milestonesList.ID,
+				commentsUpdate.ID, reactionsAdd.ID, reactionsRemove.ID, subIssuesList.ID, subIssuesAdd.ID,
+				subIssuesRemove.ID, subIssuesReprioritize.ID, issueDependenciesList.ID, issueDependenciesAdd.ID,
+				issueDependenciesRemove.ID, issueTypesList.ID, issueFieldsList.ID, issueFieldsSet.ID},
+		}, {
+			ID: "discussions", Title: "Discussions",
+			Description: "not recommended: reads the discussion categories of a repository, its discussions " +
+				"filtered by category, state, and answered status, one discussion, and the comments of a " +
+				"discussion with their replies, starts discussions, and comments, replies, and edits comments; " +
+				"every change needs its own confirmation, and deleting a discussion comment stays unticked, " +
+				"since it is offered only where a connection's tools list names " +
+				"github.discussioncomments.delete",
+			Tools: []string{discussionCategoriesList.ID, discussionsList.ID, discussionsGet.ID,
+				discussionCommentsList.ID, discussionsCreate.ID, discussionCommentsCreate.ID,
+				discussionCommentsUpdate.ID},
+		}, {
+			ID: "notifications", Title: "Notifications",
+			Description: "not recommended: lists the notification threads of the account behind a classic " +
+				"token, reads one, marks one read or done, sets a thread or repository subscription to watch, " +
+				"ignore, or none; every change needs its own confirmation, and marking everything read stays " +
+				"unticked, since it is offered only where a connection's tools list names " +
+				"github.notifications.markall",
+			Tools: []string{notificationsList.ID, notificationsGet.ID, notificationsDismiss.ID,
+				threadSubscriptionsSet.ID, repositorySubscriptionsSet.ID},
+		}, {
+			ID: "security", Title: "Security alerts",
+			Description: "not recommended: lists and reads the code scanning, Dependabot, and secret scanning " +
+				"alerts of a repository, the global and repository security advisories, and code quality " +
+				"findings; the found secret of a secret scanning alert is never shown; changes nothing",
+			Tools: securityAlertTools,
+		}, {
+			ID: "copilot", Title: "Copilot",
+			Description: "not recommended: assigns the Copilot coding agent to an issue, optionally with a base " +
+				"branch, instructions, and intent, and requests a Copilot review of a pull request; every " +
+				"change needs its own confirmation",
+			Tools: copilotTools,
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -541,7 +740,12 @@ func Register(reg *capability.Registry) error {
 		maintenanceOperations(), pullRequestOperations(), releaseOperations(), pullRequestCommentOperations(),
 		pullRequestReviewOperations(), pullRequestReviewCommentOperations(), pullRequestReviewThreadOperations(),
 		pullRequestReviewerOperations(), accountOperations(), organizationOperations(), starOperations(),
-		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations())...)
+		searchOperations(), contentsOperations(), blameOperations(), commitsOperations(), refsOperations(),
+		contentsWriteOperations(), repositoriesOperations(), rulesetsOperations(), customPropertiesOperations(),
+		labelsOperations(), milestonesOperations(), commentMaintenanceOperations(), reactionsOperations(),
+		subIssuesOperations(), issueDependenciesOperations(), issueTypesOperations(), issueFieldsOperations(),
+		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations(), advisoryOperations(),
+		copilotOperations())...)
 	for i := range operations {
 		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
 	}
@@ -1068,7 +1272,7 @@ func (c *Client) post(ctx context.Context, op, document string, variables map[st
 	if err != nil {
 		return envelope, providerError(op, "the request could not be built")
 	}
-	err = c.do(ctx, op, http.MethodPost, c.endpoints.graphql, payload, &envelope, change, nil)
+	err = c.do(ctx, op, http.MethodPost, c.endpoints.graphql, payload, &envelope, change, nil, nil)
 	return envelope, err
 }
 
@@ -1186,6 +1390,11 @@ func (c *Client) graphQLSubject(path []any, variables map[string]any) subject {
 			s.in, number = target{kind: kindRepository, owner: owner, repo: name}, variables["issue"]
 		}
 		switch {
+		case pathSegment(path, 1) == "discussion":
+			s.what = "this discussion"
+			if n, ok := number.(int); ok {
+				s.what = "discussion #" + strconv.Itoa(n)
+			}
 		case pathSegment(path, 1) == "issue" || pathSegment(path, 1) == "issueOrPullRequest":
 			s.what = "this issue"
 			if n, ok := number.(int); ok {
@@ -1228,11 +1437,25 @@ func (c *Client) restSubject(request *http.Request) subject {
 	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/search/"); ok {
 		return searchSubject(tail)
 	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/advisories"); ok {
+		return globalAdvisoriesSubject(tail)
+	}
 	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/orgs/"); ok {
 		return organizationSubject(tail)
 	}
 	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/user"); ok {
 		return accountSubject(tail)
+	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/notifications"); ok {
+		return notificationsSubject(tail)
+	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/gists"); ok {
+		return gistsSubject(tail)
+	}
+	if tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/users/"); ok {
+		if login, rest, _ := strings.Cut(tail, "/"); strings.HasPrefix(rest, "gists") && validLogin(login) {
+			return subject{what: "the gists of users/" + login}
+		}
 	}
 	tail, ok := strings.CutPrefix(full, c.endpoints.rest+"/repos/")
 	if !ok {
@@ -1281,6 +1504,42 @@ func (c *Client) restSubject(request *http.Request) subject {
 		if what := refsSubject(parts[2]); what != "" {
 			s.what = what
 		}
+		if what := repositoryAdminSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := rulesetsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := customPropertiesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := alertsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := advisoriesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := labelsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := milestonesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := commentMaintenanceSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := reactionsSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := subIssuesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := issueDependenciesSubject(parts[2]); what != "" {
+			s.what = what
+		}
+		if what := notificationRepositorySubject(parts[2]); what != "" {
+			s.what = what
+		}
 	}
 	return s
 }
@@ -1299,6 +1558,27 @@ func organizationSubject(tail string) subject {
 		if slug, err := url.PathUnescape(parts[2]); err == nil && validLogin(slug) {
 			return subject{what: "team " + slug + " of orgs/" + owner}
 		}
+	}
+	if len(parts) >= 2 && parts[1] == "repos" {
+		return subject{what: "the repositories of orgs/" + owner}
+	}
+	if len(parts) >= 2 && parts[1] == "rulesets" {
+		what := "the rulesets of orgs/" + owner
+		if len(parts) >= 3 {
+			if id, err := strconv.ParseInt(parts[2], 10, 64); err == nil && id > 0 {
+				what = "ruleset " + parts[2] + " of orgs/" + owner
+			}
+		}
+		return subject{what: what}
+	}
+	if len(parts) >= 2 && parts[1] == "properties" {
+		return subject{what: "the custom property schema of orgs/" + owner}
+	}
+	if len(parts) >= 2 && parts[1] == "security-advisories" {
+		return subject{what: "the repository security advisories of orgs/" + owner}
+	}
+	if len(parts) >= 2 && parts[1] == "issue-types" {
+		return subject{what: "the issue types of orgs/" + owner}
 	}
 	return subject{in: target{kind: kindOwner, scope: "orgs", owner: owner}}
 }
@@ -1324,6 +1604,8 @@ func accountSubject(tail string) subject {
 		return subject{what: "the account behind this token"}
 	case tail == "/starred":
 		return subject{what: "the account's starred repositories"}
+	case tail == "/repos":
+		return subject{what: "the account's own repositories"}
 	}
 	rest, ok := strings.CutPrefix(tail, "/starred/")
 	if !ok {
@@ -1452,7 +1734,7 @@ func invalidResponse(op string, change bool) *provider.Error {
 
 // rest performs one bounded REST read below the configured REST root.
 func (c *Client) rest(ctx context.Context, op, path string, out any) error {
-	return c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, nil)
+	return c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, nil, nil)
 }
 
 // restPage performs one bounded REST list read below the configured REST root and reports whether GitHub
@@ -1463,7 +1745,7 @@ func (c *Client) restPage(ctx context.Context, op, path string, query url.Values
 		path += "?" + query.Encode()
 	}
 	var header http.Header
-	if err := c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, &header); err != nil {
+	if err := c.do(ctx, op, http.MethodGet, c.endpoints.rest+path, nil, out, false, &header, nil); err != nil {
 		return false, err
 	}
 	return hasNextPage(header), nil
@@ -1482,19 +1764,32 @@ func hasNextPage(header http.Header) bool {
 
 // restChange sends one REST change below the configured REST root, once, and decodes the answer.
 func (c *Client) restChange(ctx context.Context, op, method, path string, body any, out any) error {
+	_, err := c.restChangeStatus(ctx, op, method, path, body, out)
+	return err
+}
+
+// restChangeStatus sends one REST change below the configured REST root, once, decodes the answer, and
+// reports the response's status code alongside any error, for the rare route where GitHub tells two
+// successes apart by status, such as the reaction routes' 200 for an existing reaction and 201 for a new one.
+func (c *Client) restChangeStatus(ctx context.Context, op, method, path string, body any, out any) (int, error) {
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return providerError(op, "the request could not be built")
+		return 0, providerError(op, "the request could not be built")
 	}
-	return c.do(ctx, op, method, c.endpoints.rest+path, payload, out, true, nil)
+	var status int
+	err = c.do(ctx, op, method, c.endpoints.rest+path, payload, out, true, nil, &status)
+	return status, err
 }
 
 // do sends one request with the shared authentication, version, and size rules and decodes the answer. A
 // change is never repeated: every failure after its request may have reached GitHub says so, and the next
 // request of this token waits mutationInterval. header, when not nil, receives the response header of a
-// successful request, so a caller may read a pagination header without changing what is decoded.
+// successful request, so a caller may read a pagination header without changing what is decoded. status,
+// when not nil, receives the successful response's status code, so a caller may tell apart the two success
+// codes GitHub answers the same route with, such as the reaction routes' 200 for an existing reaction and
+// 201 for a new one.
 func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []byte, out any, change bool,
-	header *http.Header) error {
+	header *http.Header, status *int) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "GitHub", err)
 	}
@@ -1529,6 +1824,9 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return c.statusError(op, response, change)
 	}
+	if status != nil {
+		*status = response.StatusCode
+	}
 	if header != nil {
 		*header = response.Header
 	}
@@ -1556,7 +1854,13 @@ func (c *Client) authorize(req *http.Request) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", apiVersion)
 	req.Header.Set("User-Agent", "qatlas-cli")
+	if features, ok := req.Context().Value(graphQLFeaturesKey{}).(string); ok {
+		req.Header.Set("GraphQL-Features", features)
+	}
 }
+
+// graphQLFeaturesKey carries the GraphQL feature flag a request needs for a preview field.
+type graphQLFeaturesKey struct{}
 
 // observeRateLimit reads the primary budget headers. When the budget of this token is spent, the next
 // request of this process waits for the reported reset instead of running into a refusal.

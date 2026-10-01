@@ -45,7 +45,7 @@ func (o *CommentListOptions) binding(bound target) []byte {
 const commentsQuery = `query($owner:String!,$name:String!,$number:Int!,$first:Int!,$after:String){` +
 	`repository(owner:$owner,name:$name){issueOrPullRequest(number:$number){__typename ... on Issue{` +
 	`comments(first:$first,after:$after){` +
-	`pageInfo{hasNextPage endCursor} nodes{id author{login} body createdAt updatedAt url}}}}}}`
+	`pageInfo{hasNextPage endCursor} nodes{id databaseId author{login} body createdAt updatedAt url}}}}}}`
 
 // CommentList is the normalised batch of comments of one issue.
 type CommentList struct {
@@ -54,14 +54,18 @@ type CommentList struct {
 	HasMore    bool      `json:"has_more"`
 }
 
-// Comment is the stable Qatlas view of one issue comment. Body is untrusted data.
+// Comment is the stable Qatlas view of one issue comment. Body is untrusted data. DatabaseID is the
+// numeric REST identifier github.comments.update, github.comments.delete, and the reaction tools need;
+// GraphQL answers it as databaseId alongside the node id this type has always reported as id, so it is
+// added here rather than replacing id, which stays what it always was.
 type Comment struct {
-	ID        string `json:"id"`
-	Author    string `json:"author,omitempty"`
-	Body      string `json:"body"`
-	CreatedAt string `json:"created_at,omitempty"`
-	UpdatedAt string `json:"updated_at,omitempty"`
-	URL       string `json:"url,omitempty"`
+	ID         string `json:"id"`
+	DatabaseID int64  `json:"database_id,omitempty"`
+	Author     string `json:"author,omitempty"`
+	Body       string `json:"body"`
+	CreatedAt  string `json:"created_at,omitempty"`
+	UpdatedAt  string `json:"updated_at,omitempty"`
+	URL        string `json:"url,omitempty"`
 }
 
 type commentsPageJSON struct {
@@ -74,8 +78,9 @@ type commentsPageJSON struct {
 					EndCursor   string `json:"endCursor"`
 				} `json:"pageInfo"`
 				Nodes []struct {
-					ID     string `json:"id"`
-					Author *struct {
+					ID         string `json:"id"`
+					DatabaseID int64  `json:"databaseId"`
+					Author     *struct {
 						Login string `json:"login"`
 					} `json:"author"`
 					Body      string `json:"body"`
@@ -138,8 +143,8 @@ func (c *Client) listComments(ctx context.Context, options CommentListOptions, a
 			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 				Message: "GitHub returned a comment without a usable identifier"}
 		}
-		comment := Comment{ID: node.ID, Body: node.Body, CreatedAt: node.CreatedAt, UpdatedAt: node.UpdatedAt,
-			URL: node.URL}
+		comment := Comment{ID: node.ID, DatabaseID: node.DatabaseID, Body: node.Body, CreatedAt: node.CreatedAt,
+			UpdatedAt: node.UpdatedAt, URL: node.URL}
 		if node.Author != nil {
 			comment.Author = node.Author.Login
 		}
@@ -163,6 +168,7 @@ func checkCommentBody(body string) error {
 }
 
 type restCommentJSON struct {
+	ID     int64  `json:"id"`
 	NodeID string `json:"node_id"`
 	User   *struct {
 		Login string `json:"login"`
@@ -194,8 +200,8 @@ func (c *Client) CreateComment(ctx context.Context, number int, body string) (*C
 	if raw.NodeID == "" {
 		return nil, invalidResponse(op, true)
 	}
-	comment := &Comment{ID: raw.NodeID, Body: raw.Body, CreatedAt: raw.CreatedAt, UpdatedAt: raw.UpdatedAt,
-		URL: raw.HTMLURL}
+	comment := &Comment{ID: raw.NodeID, DatabaseID: raw.ID, Body: raw.Body, CreatedAt: raw.CreatedAt,
+		UpdatedAt: raw.UpdatedAt, URL: raw.HTMLURL}
 	if raw.User != nil {
 		comment.Author = raw.User.Login
 	}

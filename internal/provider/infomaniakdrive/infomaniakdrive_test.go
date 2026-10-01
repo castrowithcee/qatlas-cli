@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -48,6 +50,7 @@ func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) 
 type call struct {
 	method, host, path, auth string
 	query                    url.Values
+	body, contentType        string
 }
 
 // serve replaces the package transport for one test and records every request. handler answers requests to
@@ -58,9 +61,15 @@ func serve(t *testing.T, calls *[]call, handler func(*http.Request) (*http.Respo
 	t.Helper()
 	previous := transport
 	transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		body := ""
+		if request.Body != nil {
+			raw, _ := io.ReadAll(request.Body)
+			body = string(raw)
+		}
 		*calls = append(*calls, call{
 			method: request.Method, host: request.URL.Host, path: request.URL.Path,
 			auth: request.Header.Get("Authorization"), query: request.URL.Query(),
+			body: body, contentType: request.Header.Get("Content-Type"),
 		})
 		if request.URL.Host == storageHost {
 			if foreign == nil {
@@ -152,16 +161,20 @@ func coreConfig() *config.Config {
 		Services:    map[string]config.Service{"im": {Provider: Provider, BaseURL: apiRoot}},
 		Credentials: map[string]config.Credential{"im-reader": credential},
 		Connections: map[string]config.Connection{
-			"account": {Service: "im", Credential: "im-reader", Target: accountTarget},
-			"drive": {Service: "im", Credential: "im-reader",
+			"account": {Service: "im", Credential: "im-reader", Target: accountTarget, Permissions: changePermissions},
+			"drive": {Service: "im", Credential: "im-reader", Permissions: changePermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
+			"readonly": {Service: "im", Credential: "im-reader", Targets: []string{accountTarget}},
 			// The allow-list itself is local configuration and can name a drive that, in fact, belongs to
 			// another account; only the live ownership check catches that.
-			"driveforeign": {Service: "im", Credential: "im-reader",
+			"driveforeign": {Service: "im", Credential: "im-reader", Permissions: changePermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(foreignDrive, 10)}},
 		},
 	}
 }
+
+// changePermissions lets a connection use the folder and file changes; "readonly" keeps the default.
+var changePermissions = []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
 
 type environment struct {
 	core  *application.Core
@@ -181,6 +194,14 @@ func newEnvironment(t *testing.T, calls *[]call, handler func(*http.Request) (*h
 func (e *environment) invoke(operation, connection, arguments string) (string, error) {
 	response, err := e.core.Invoke(context.Background(), application.InvokeRequest{
 		Operation: operation, Connection: connection, Arguments: json.RawMessage(arguments),
+	})
+	return string(response.Result), err
+}
+
+// invokeConfirmed is invoke with the confirmation a change needs.
+func (e *environment) invokeConfirmed(operation, connection, arguments string) (string, error) {
+	response, err := e.core.Invoke(context.Background(), application.InvokeRequest{
+		Operation: operation, Connection: connection, Arguments: json.RawMessage(arguments), Confirmed: true,
 	})
 	return string(response.Result), err
 }
@@ -206,8 +227,15 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 4 {
-		t.Fatalf("tools = %+v, want 4", metadata.Tools)
+	if len(metadata.Tools) != 8 {
+		t.Fatalf("tools = %+v, want 8", metadata.Tools)
+	}
+	if want := []config.Permission{config.PermissionRead}; !reflect.DeepEqual(metadata.DefaultPermissions, want) {
+		t.Fatalf("default permissions = %v, want read only", metadata.DefaultPermissions)
+	}
+	if len(metadata.Profiles) != 2 || metadata.Profiles[0].ID != "read" || len(metadata.Profiles[0].Tools) != 4 ||
+		metadata.Profiles[1].ID != "write" || len(metadata.Profiles[1].Tools) != 8 {
+		t.Fatalf("profiles = %+v", metadata.Profiles)
 	}
 }
 
@@ -338,7 +366,7 @@ func TestRateLimitIsClassifiedAndHeld(t *testing.T) {
 		t.Fatalf("invoke() after the rate limit = %v, want it to succeed once Infomaniak answers again", err)
 	}
 	var page FolderPage
-	if err := json.Unmarshal([]byte(result), &page); err != nil || page.Entries == nil {
+	if err := json.Unmarshal([]byte(result), &page); err != nil || page.DriveID != ownDrive {
 		t.Fatalf("result = %s, %v", result, err)
 	}
 }

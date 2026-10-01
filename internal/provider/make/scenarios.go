@@ -79,10 +79,9 @@ var scenariosList = capability.Descriptor{
 	Title:   "List Make scenarios",
 	Description: "List the scenarios of the connection's bound team, restricted to its scenario allow-list " +
 		"when it has one; page by page with a numeric offset",
-	Tags:                       []string{"make", "scenarios", "list", "automation"},
-	Risk:                       makeReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"make", "scenarios", "list", "automation"},
+	Risk:     makeReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"offset":{"type":"integer","minimum":0},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
@@ -110,14 +109,13 @@ var scenariosList = capability.Descriptor{
 }
 
 var scenariosGet = capability.Descriptor{
-	ID:                         Provider + ".scenarios.get",
-	Version:                    1,
-	Title:                      "Get a Make scenario",
-	Description:                "Read one scenario of the bound team's own report",
-	Tags:                       []string{"make", "scenarios", "get", "automation"},
-	Risk:                       makeReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	ID:          Provider + ".scenarios.get",
+	Version:     1,
+	Title:       "Get a Make scenario",
+	Description: "Read one scenario of the bound team's own report",
+	Tags:        []string{"make", "scenarios", "get", "automation"},
+	Risk:        makeReadRisk,
+	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `},` +
 		`"required":["scenario_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(scenarioSummarySchema),
@@ -362,10 +360,9 @@ var scenariosBlueprint = capability.Descriptor{
 	Description: "Read one scenario's blueprint (its modules, their wiring, and their configuration); a " +
 		"connection or key a module references is passed through only as the numeric id Make itself reports, " +
 		"never a stored authorization value, which Make's own blueprint format never carries in the first place",
-	Tags:                       []string{"make", "scenarios", "blueprint", "automation"},
-	Risk:                       makeReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"make", "scenarios", "blueprint", "automation"},
+	Risk:     makeReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `,` +
 		`"draft":{"type":"boolean"},"blueprint_id":` + idSchema + `},` +
 		`"required":["scenario_id"],"additionalProperties":false}`),
@@ -466,10 +463,9 @@ var scenariosCreate = capability.Descriptor{
 		"connection's own bound team, never a caller-named one, and is refused outright on a connection " +
 		"restricted by a scenario allow-list, since a scenario that does not exist yet can never already be " +
 		"on that list",
-	Tags:                       []string{"make", "scenarios", "create", "automation"},
-	Risk:                       makeChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"make", "scenarios", "create", "automation"},
+	Risk:     makeChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"blueprint":{"type":"object"},"scheduling":` + schedulingWriteSchema + `,` +
 		`"folder_id":` + idSchema + `,"description":{"type":"string","maxLength":` +
@@ -576,10 +572,9 @@ var scenariosUpdate = capability.Descriptor{
 	Description: "Replace one scenario's name, blueprint, scheduling, or folder in the bound team; only the " +
 		"fields given are changed, exactly as Make's own partial PATCH is. Never changes the active state; " +
 		"scenarios.start and scenarios.stop own that",
-	Tags:                       []string{"make", "scenarios", "update", "automation"},
-	Risk:                       makeChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"make", "scenarios", "update", "automation"},
+	Risk:     makeChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `,` +
 		`"name":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxScenarioNameLength) + `},` +
 		`"blueprint":{"type":"object"},"scheduling":` + schedulingWriteSchema + `,` +
@@ -702,14 +697,13 @@ func (c *Client) UpdateScenario(ctx context.Context, scenarioID int64, name stri
 // scenario_id and answer the same re-read ScenarioSummary scenarios.get would.
 func scenarioActivationDescriptor(action, title, description string) capability.Descriptor {
 	return capability.Descriptor{
-		ID:                         Provider + ".scenarios." + action,
-		Version:                    1,
-		Title:                      title,
-		Description:                description,
-		Tags:                       []string{"make", "scenarios", action, "automation"},
-		Risk:                       makeChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		Provider:                   Provider,
-		RequiresExplicitConnection: true,
+		ID:          Provider + ".scenarios." + action,
+		Version:     1,
+		Title:       title,
+		Description: description,
+		Tags:        []string{"make", "scenarios", action, "automation"},
+		Risk:        makeChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+		Provider:    Provider,
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `},` +
 			`"required":["scenario_id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(scenarioSummarySchema),

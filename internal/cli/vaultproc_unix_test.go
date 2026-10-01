@@ -148,7 +148,9 @@ func TestVaultUnlockStartsAVaultProcess(t *testing.T) {
 	withInteractive(t, false)
 	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "status", "--config", configIn(dir), "--output", "json")
 	if code != exitOK || !strings.Contains(stdout, `"process":"running"`) || !strings.Contains(stdout, `"pid":`+strconv.Itoa(status.PID)) ||
-		!strings.Contains(stdout, `"locks_at":`) || !strings.Contains(stdout, `"state":"locked"`) {
+		!strings.Contains(stdout, `"locks_at":`) || !strings.Contains(stdout, `"state":"unlocked"`) ||
+		!strings.Contains(stdout, `"entries":"unknown"`) {
+		// This run never unlocked the vault itself, yet the process holds it open: the effective state.
 		t.Fatalf("status: exit code = %d, stdout = %q, stderr = %q", code, stdout, stderr)
 	}
 

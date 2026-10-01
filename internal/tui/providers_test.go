@@ -65,7 +65,7 @@ func providerModel(t *testing.T, reg *capability.Registry) (*Model, string) {
 func openProviderRow(t *testing.T, m *Model, s section) {
 	t.Helper()
 	openSectionByName(t, m, s)
-	press(t, m, "n")
+	pressNew(t, m)
 	focusField(t, m, providerLabel)
 }
 

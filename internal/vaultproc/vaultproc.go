@@ -100,9 +100,16 @@ func checkPathLength(path string) error {
 	return nil
 }
 
+// userRuntimeRoot holds the per-user runtime directories systemd-logind creates on Linux; a variable so
+// tests can point it at a directory of their own.
+var userRuntimeRoot = "/run/user"
+
 // SocketPath returns the socket of the vault process that serves the vault in vaultDir, as vault.Vault.Dir
 // reports it. The socket lives in $XDG_RUNTIME_DIR/qatlas when the session has a runtime directory, which
-// the system empties at logout or restart, and otherwise in run beside the vault, ~/.qatlas/cli/run by
+// the system empties at logout or restart. Without the variable, as under agent hosts that start qatlas
+// with a filtered environment, the user's runtime directory is found by its conventional place on
+// platforms that have one, so such a process still reaches the vault process an unlock in a terminal
+// started. Only when there is none the socket lives in run beside the vault, ~/.qatlas/cli/run by
 // default. Its name is derived from the vault's absolute path, so a vault under another configuration
 // directory, a test's included, never reaches the process of another vault through the shared runtime
 // directory.
@@ -121,6 +128,8 @@ func SocketPath(vaultDir string) (string, error) {
 	dir := filepath.Join(filepath.Dir(abs), "run")
 	// A relative XDG_RUNTIME_DIR is invalid by the specification and ignored like an unset one.
 	if runtime := os.Getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(runtime) {
+		dir = filepath.Join(runtime, "qatlas")
+	} else if runtime := userRuntimeDir(); runtime != "" {
 		dir = filepath.Join(runtime, "qatlas")
 	}
 	path := filepath.Join(dir, name)

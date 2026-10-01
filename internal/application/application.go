@@ -20,6 +20,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/localfile"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/projectpath"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -135,24 +136,86 @@ type SearchRequest struct {
 	Cursor     string            `json:"cursor,omitempty"`
 }
 
-// SearchHit is the bounded discovery view of one descriptor: the same entry as ToolSummary, so a search
-// costs what the index costs, with the offering connections as a list. Description, version, and tags are
-// one describe away. Connections names every connection that offers it; Reason is set only on a tool none
-// of them offers, which only a request with All returns.
+// SearchHit is the bounded discovery view of one descriptor, and the entry of both discovery answers: it
+// carries what an ordinary call needs, so describe is only one step away when the contract is unclear.
+//
+// Every value is a scalar, so the entries of an answer share one field set and TOON prints them as a table
+// with one row per tool. Requires names the required arguments separated by "; ", each as name:form where
+// the compact contract of describe gives a written form or the allowed values, and as the bare name
+// otherwise; optional arguments and members of object arguments stay with describe. Confirm is true for a
+// tool that needs confirmation. Connections names, separated by spaces, the connections that offer the tool
+// only where they differ from those the answer names once at its top. Reason is set only by a request with
+// All, on a tool the request's connections do not offer; a tool with a reason and no connections is offered
+// by none. Hits marshals only the columns some entry uses.
 type SearchHit struct {
 	ID          string            `json:"id"`
 	Title       string            `json:"title"`
 	Effect      capability.Effect `json:"effect"`
-	Connections []string          `json:"connections"`
-	Reason      config.Refusal    `json:"reason,omitempty"`
+	Requires    string            `json:"requires"`
+	Confirm     bool              `json:"confirm"`
+	Connections string            `json:"connections"`
+	Reason      config.Refusal    `json:"reason"`
 }
 
-// SearchResponse is the payload inside the CLI envelope. HasMore is true exactly when another match
-// follows this page; NextCursor is then the cursor of the following page and absent otherwise.
+// Hits is the list of entries of a discovery answer. It marshals every entry with the same fields: id, title,
+// and effect always, and requires, confirm, connections, and reason only when at least one entry has a
+// value there, so an unused column costs nothing and the entries still form one table.
+type Hits []SearchHit
+
+// MarshalJSON writes the entries with a common field set, in the order of the fields of SearchHit.
+func (h Hits) MarshalJSON() ([]byte, error) {
+	var requires, confirm, connections, reason bool
+	for _, hit := range h {
+		requires = requires || hit.Requires != ""
+		confirm = confirm || hit.Confirm
+		connections = connections || hit.Connections != ""
+		reason = reason || hit.Reason != ""
+	}
+	out := []byte{'['}
+	for i, hit := range h {
+		if i > 0 {
+			out = append(out, ',')
+		}
+		fields := []struct {
+			name  string
+			use   bool
+			value any
+		}{
+			{"id", true, hit.ID}, {"title", true, hit.Title}, {"effect", true, hit.Effect},
+			{"requires", requires, hit.Requires}, {"confirm", confirm, hit.Confirm},
+			{"connections", connections, hit.Connections}, {"reason", reason, hit.Reason},
+		}
+		out = append(out, '{')
+		first := true
+		for _, field := range fields {
+			if !field.use {
+				continue
+			}
+			value, err := json.Marshal(field.value)
+			if err != nil {
+				return nil, err
+			}
+			if !first {
+				out = append(out, ',')
+			}
+			first = false
+			out = append(out, fmt.Sprintf("%q:", field.name)...)
+			out = append(out, value...)
+		}
+		out = append(out, '}')
+	}
+	return append(out, ']'), nil
+}
+
+// SearchResponse is the payload inside the CLI envelope. Connections names once every connection that
+// offers one of the listed tools; a hit refers to connections only when it is offered by fewer of them.
+// HasMore is true exactly when another match follows this page; NextCursor is then the cursor of the
+// following page and absent otherwise.
 type SearchResponse struct {
-	Operations []SearchHit `json:"operations"`
-	HasMore    bool        `json:"has_more"`
-	NextCursor string      `json:"next_cursor,omitempty"`
+	Connections []string `json:"connections,omitempty"`
+	Operations  Hits     `json:"operations"`
+	HasMore     bool     `json:"has_more"`
+	NextCursor  string   `json:"next_cursor,omitempty"`
 }
 
 // Search performs deterministic local discovery and never resolves credentials or calls a provider. Its
@@ -179,19 +242,47 @@ func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
 		descriptors = descriptors[:limit]
 		response.NextCursor = searchCursor(request, descriptors[limit-1].ID)
 	}
-	hits := make([]SearchHit, 0, len(descriptors))
+	response.Connections, response.Operations = c.hits(request, descriptors)
+	return response, nil
+}
+
+// hits projects descriptors onto the entries of a discovery answer, and names the connections they share
+// once: every connection that offers one of them, sorted by name. An entry keeps its own list only when a
+// connection of that set does not offer it, or when it carries a reason: with a reason and without a list a
+// tool is offered by none.
+func (c *Core) hits(request SearchRequest, descriptors []capability.Descriptor) ([]string, Hits) {
+	hits := make(Hits, 0, len(descriptors))
+	offered := make([][]string, 0, len(descriptors))
+	var connections []string
+	seen := map[string]bool{}
 	for _, descriptor := range descriptors {
 		title := descriptor.Title
 		if title == "" {
 			title = descriptor.Description
 		}
+		names := c.connectionNamesFor(descriptor)
+		for _, name := range names {
+			if !seen[name] {
+				seen[name] = true
+				connections = append(connections, name)
+			}
+		}
+		offered = append(offered, names)
 		hits = append(hits, SearchHit{
 			ID: descriptor.ID, Title: title, Effect: descriptor.Risk.Effect,
-			Connections: c.connectionNamesFor(descriptor), Reason: c.refusal(request, descriptor),
+			Requires: strings.Join(requiredArguments(descriptor), "; "),
+			Confirm:  descriptor.Risk.Confirmation == capability.ConfirmationRequired,
+			Reason:   c.refusal(request, descriptor),
 		})
 	}
-	response.Operations = hits
-	return response, nil
+	sort.Strings(connections)
+	for i := range hits {
+		if hits[i].Reason == "" && len(offered[i]) == len(connections) {
+			continue
+		}
+		hits[i].Connections = strings.Join(offered[i], " ")
+	}
+	return connections, hits
 }
 
 // searchCursor encodes the continuation after the operation ID last. It binds the cursor to the filters of
@@ -304,9 +395,9 @@ const (
 // target, or a secret source.
 //
 // Unusable is present exactly while a listed connection cannot read its secrets from the vault: the error
-// code an invoke through such a connection ends with, vault-locked while the vault is locked, or
-// approval-required while the vault has not approved the connection as it is configured now, and empty for
-// every other connection of the list.
+// code an invoke through such a connection ends with, vault-locked while the vault is locked,
+// approval-required while the vault has not approved the connection as it is configured now, or the code of
+// a vault process that runs but cannot be asked, and empty for every other connection of the list.
 type ConnectionSummary struct {
 	Name        string  `json:"name"`
 	Provider    string  `json:"provider"`
@@ -314,6 +405,8 @@ type ConnectionSummary struct {
 	Permissions string  `json:"permissions"`
 	Tools       string  `json:"tools"`
 	Unusable    *string `json:"unusable,omitempty"`
+	// Files names the local directories the connection releases, per direction; absent when none.
+	Files *FilesRef `json:"files,omitempty"`
 }
 
 // ConnectionsResponse is the payload inside the CLI envelope.
@@ -372,7 +465,7 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 		}
 		summary := ConnectionSummary{
 			Name: name, Provider: owner, Description: connection.Description,
-			Permissions: strings.Join(effects, " "), Tools: tools,
+			Permissions: strings.Join(effects, " "), Tools: tools, Files: filesRef(connection.Files),
 		}
 		if len(reasons) > 0 {
 			reason := reasons[name]
@@ -389,29 +482,15 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 	return ConnectionsResponse{Connections: connections}
 }
 
-// ToolSummary is the index entry of one tool: the ID an invoke request carries, what the tool does,
-// whether it reads or changes the remote system, and the connections that offer it. That is what choosing
-// between the tools of one namespace needs; schemas, tags, examples and descriptions of the routes are one
-// describe away.
-//
-// Connections holds the offering connection names separated by single spaces, so the index stays one
-// table row per tool. Reason is present exactly in a listing of all tools: empty for an offered tool, and
-// otherwise the refusal that says why no connection offers it.
-type ToolSummary struct {
-	ID          string            `json:"id"`
-	Title       string            `json:"title"`
-	Effect      capability.Effect `json:"effect"`
-	Connections string            `json:"connections"`
-	Reason      *config.Refusal   `json:"reason,omitempty"`
-}
-
-// ToolsResponse is the payload inside the CLI envelope.
+// ToolsResponse is the payload inside the CLI envelope: the entries and the connections of the search
+// answer, without paging.
 type ToolsResponse struct {
-	Tools []ToolSummary `json:"tools"`
+	Connections []string `json:"connections,omitempty"`
+	Tools       Hits     `json:"tools"`
 }
 
 // Tools is the second step of discovery: the tools of one namespace, or of one targeted query. It applies
-// the same filters as Search to the same descriptors but publishes only what picking a tool needs.
+// the same filters as Search to the same descriptors in the same order and publishes the same entries.
 //
 // The catalog view answers what this installation offers, so a truncated answer would read as a complete
 // one; the bounded Search response stays the contract of the request-bound agent surface.
@@ -421,29 +500,15 @@ func (c *Core) Tools(request SearchRequest) (ToolsResponse, error) {
 	if err != nil {
 		return ToolsResponse{}, err
 	}
-	tools := make([]ToolSummary, 0, len(descriptors))
-	for _, descriptor := range descriptors {
-		title := descriptor.Title
-		if title == "" {
-			title = descriptor.Description
-		}
-		summary := ToolSummary{
-			ID: descriptor.ID, Title: title, Effect: descriptor.Risk.Effect,
-			Connections: strings.Join(c.connectionNamesFor(descriptor), " "),
-		}
-		if request.All {
-			reason := c.refusal(request, descriptor)
-			summary.Reason = &reason
-		}
-		tools = append(tools, summary)
-	}
-	return ToolsResponse{Tools: tools}, nil
+	connections, tools := c.hits(request, descriptors)
+	return ToolsResponse{Connections: connections, Tools: tools}, nil
 }
 
-// catalog filters the registry deterministically and returns the matching descriptors in registry order,
-// which is sorted by ID. Both discovery views project this one result, so the compact index and the
-// bounded search answer cannot disagree about which tools exist. A non-empty after skips every descriptor
-// up to and including that ID. A limit of zero or less returns every match.
+// catalog filters the registry deterministically and returns the matching descriptors, which both discovery
+// views project, so the compact index and the bounded search answer cannot disagree about which tools exist
+// or in which order. Without a query the order is the registry's, sorted by ID. With one, the most relevant
+// tool comes first and equal relevance keeps the ID order; see relevance. A non-empty after skips every
+// descriptor up to and including that ID in this order. A limit of zero or less returns every match.
 func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capability.Descriptor, error) {
 	if request.Effect != "" && !validEffect(request.Effect) {
 		return nil, &InvalidRequestError{Message: fmt.Sprintf("unknown effect %q", request.Effect)}
@@ -467,11 +532,12 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 	}
 
 	terms := strings.Fields(strings.ToLower(request.Query))
-	matches := make([]capability.Descriptor, 0)
+	type match struct {
+		descriptor capability.Descriptor
+		score      int
+	}
+	var matches []match
 	for _, descriptor := range c.registry.All() {
-		if after != "" && descriptor.ID <= after {
-			continue
-		}
 		if request.Provider != "" && descriptor.Provider != request.Provider {
 			continue
 		}
@@ -484,39 +550,79 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 		if request.Effect != "" && descriptor.Risk.Effect != request.Effect {
 			continue
 		}
-		haystack := strings.ToLower(strings.Join(c.searchText(request, descriptor), " "))
-		matched := true
-		for _, term := range terms {
-			if !strings.Contains(haystack, term) {
-				matched = false
+		score, ok := c.relevance(request, descriptor, terms)
+		if !ok {
+			continue
+		}
+		matches = append(matches, match{descriptor, score})
+	}
+	if len(terms) > 0 {
+		sort.SliceStable(matches, func(i, j int) bool { return matches[i].score > matches[j].score })
+	}
+	start := 0
+	if after != "" {
+		start = -1
+		for i, m := range matches {
+			if m.descriptor.ID == after {
+				start = i + 1
 				break
 			}
 		}
-		if !matched {
-			continue
+		if start < 0 {
+			return nil, &InvalidRequestError{Message: "cursor is not a next_cursor of this search; " +
+				"start the search again without cursor"}
 		}
-		matches = append(matches, descriptor)
-		if len(matches) == limit {
+	}
+	descriptors := make([]capability.Descriptor, 0, len(matches)-start)
+	for _, m := range matches[start:] {
+		if limit > 0 && len(descriptors) == limit {
 			break
 		}
+		descriptors = append(descriptors, m.descriptor)
 	}
-	return matches, nil
+	return descriptors, nil
 }
 
-// searchText is everything a query term may match for one tool: its ID, title, description, and tags, the
-// description of its provider and the note the user keeps on that provider, and the descriptions of the
-// connections that offer it, or with a connection filter of that connection alone. A word of a task such
-// as "wiki" or "CRM" thus finds the tools of the provider or route it names, without a list of synonyms.
-func (c *Core) searchText(request SearchRequest, descriptor capability.Descriptor) []string {
+// Relevance weights of where a query term is found, the best place of each term counting once. The ID and
+// the title name what a tool is; its description and tags say what it is for; the provider, its note, and
+// the connections only say where it runs.
+const (
+	weightName    = 4
+	weightPurpose = 2
+	weightContext = 1
+)
+
+// relevance scores one tool for the terms of a query and reports whether every term occurs somewhere. The
+// places are: the ID and title, the description and tags, and the description of the provider, the note
+// the user keeps on that provider, and the descriptions of the connections that offer the tool, or with a
+// connection filter of that connection alone. A word of a task such as "wiki" or "CRM" thus finds the
+// tools of the provider or route it names, without a list of synonyms, and a tool whose title lacks the
+// word but whose description has it still matches, below the tools that carry it in the title or ID.
+func (c *Core) relevance(request SearchRequest, descriptor capability.Descriptor, terms []string) (int, bool) {
 	metadata, _ := c.registry.ProviderMetadata(descriptor.Provider)
-	text := append([]string{descriptor.ID, descriptor.Title, descriptor.Description}, descriptor.Tags...)
-	text = append(text, metadata.Description, c.config.ProviderNotes[descriptor.Provider])
-	for _, name := range c.connectionNamesFor(descriptor) {
-		if request.Connection == "" || name == request.Connection {
-			text = append(text, c.config.Connections[name].Description)
+	name := strings.ToLower(descriptor.ID + " " + descriptor.Title)
+	purpose := strings.ToLower(strings.Join(append([]string{descriptor.Description}, descriptor.Tags...), " "))
+	place := []string{metadata.Description, c.config.ProviderNotes[descriptor.Provider]}
+	for _, connection := range c.connectionNamesFor(descriptor) {
+		if request.Connection == "" || connection == request.Connection {
+			place = append(place, c.config.Connections[connection].Description)
 		}
 	}
-	return text
+	context := strings.ToLower(strings.Join(place, " "))
+	score := 0
+	for _, term := range terms {
+		switch {
+		case strings.Contains(name, term):
+			score += weightName
+		case strings.Contains(purpose, term):
+			score += weightPurpose
+		case strings.Contains(context, term):
+			score += weightContext
+		default:
+			return 0, false
+		}
+	}
+	return score, true
 }
 
 // DescribeRequest selects exactly one versioned descriptor. Connection only restricts its possible routes.
@@ -533,9 +639,35 @@ type DescribeRequest struct {
 // carries; Description is the optional line its owner maintains and is empty when there is none. The
 // description informs a person or an agent that already asked for this contract, and never selects a
 // route by itself.
+//
+// Files is present only when the connection releases local directories, and names them per direction: Read
+// for the directories tools may read files from, Write for those they may write files to. It is the one
+// place discovery names a path, so a caller knows where a tool may work.
 type ConnectionRef struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Files       *FilesRef `json:"files,omitempty"`
+}
+
+// FilesRef is the local directories a connection releases, as configured, per direction.
+type FilesRef struct {
+	Read  []string `json:"read,omitempty"`
+	Write []string `json:"write,omitempty"`
+}
+
+// filesRef returns the discovery view of files, or nil when no directory is released.
+func filesRef(files config.Files) *FilesRef {
+	if files.Empty() {
+		return nil
+	}
+	copied := files.Clone()
+	if len(copied.Read) == 0 {
+		copied.Read = nil
+	}
+	if len(copied.Write) == 0 {
+		copied.Write = nil
+	}
+	return &FilesRef{Read: copied.Read, Write: copied.Write}
 }
 
 // DescribeResponse is the complete operation contract and its possible configured routes.
@@ -576,7 +708,7 @@ func (c *Core) Describe(request DescribeRequest) (DescribeResponse, error) {
 		}
 		connections = []ConnectionRef{c.connectionRef(request.Connection)}
 	}
-	return DescribeResponse{Operation: descriptor, Connections: connections}, nil
+	return DescribeResponse{Operation: PublishedDescriptor(descriptor), Connections: connections}, nil
 }
 
 // InvokeRequest is one direct, request-bound invocation. Confirmed is consumed only by this value and is
@@ -587,6 +719,8 @@ type InvokeRequest struct {
 	Connection string          `json:"connection,omitempty"`
 	Arguments  json.RawMessage `json:"arguments"`
 	Confirmed  bool            `json:"confirm,omitempty"`
+	// Fields selects the members of the entries of the tool's result list; the provider never sees it.
+	Fields []string `json:"fields,omitempty"`
 }
 
 // InvokeResponse records the exact operation contract and route that produced Result.
@@ -621,6 +755,10 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 		return InvokeResponse{}, &InvalidRequestError{Message: err.Error()}
 	}
 
+	if err := validateFields(descriptor, request.Fields); err != nil {
+		return InvokeResponse{}, err
+	}
+
 	resolved, err = c.selectConnection(request.Connection, descriptor)
 	if err != nil {
 		return InvokeResponse{}, unknownConnectionOf(err, descriptor.Provider, descriptor.ID)
@@ -638,11 +776,14 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	if handler == nil {
 		return InvokeResponse{}, fmt.Errorf("operation %q has an invalid handler", descriptor.ID)
 	}
-	if descriptor.Risk.Confirmation == capability.ConfirmationRequired {
-		requestID, requestErr := newRequestID()
-		if requestErr != nil {
+	requestID := ""
+	if descriptor.Risk.Confirmation == capability.ConfirmationRequired || descriptor.LocalFiles != "" {
+		var requestErr error
+		if requestID, requestErr = newRequestID(); requestErr != nil {
 			return InvokeResponse{}, fmt.Errorf("create audit request ID: %w", requestErr)
 		}
+	}
+	if descriptor.Risk.Confirmation == capability.ConfirmationRequired {
 		defer func() {
 			c.writeAudit(auditEvent{
 				RequestID: requestID, Operation: descriptor.ID, Connection: resolved.Name,
@@ -652,9 +793,20 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	}
 	// The secrets of the handler are resolved for the selected connection alone: an encrypted vault hands
 	// them out only when it approved that connection as it is configured now.
-	value, err := handler(secret.ForConnection(ctx, resolved), resolved, c.secrets, c.redactor, request.Arguments)
+	handlerCtx := secret.ForConnection(ctx, resolved)
+	// The confirmation reaches the handler only from the request itself, also where the tool needs none of
+	// its own: a tool with local file access asks for it before it replaces a file.
+	if request.Confirmed {
+		handlerCtx = capability.WithConfirmed(handlerCtx)
+	}
+	if descriptor.LocalFiles != "" {
+		handlerCtx = capability.WithReplacedReporter(handlerCtx, func() {
+			c.writeReplacedAudit(requestID, descriptor.ID, resolved.Name)
+		})
+	}
+	value, err := handler(handlerCtx, resolved, c.secrets, c.redactor, request.Arguments)
 	if err != nil {
-		return InvokeResponse{}, err
+		return InvokeResponse{}, mapLocalFileError(descriptor, err)
 	}
 	normalized, err := normalize(value)
 	if err != nil {
@@ -664,7 +816,10 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 	if err := validateValue(descriptor.OutputSchema, normalized); err != nil {
 		return InvokeResponse{}, &InvalidProviderResponseError{Operation: descriptor.ID}
 	}
-	result, err := json.Marshal(normalized)
+	// Only what passed the output schema is compacted: empty values are dropped afterwards, for every
+	// provider alike, so CLI and MCP publish the same result.
+	result, err := json.Marshal(dropEmpty(selectFields(descriptor, request.Fields,
+		dropImplied(descriptor, request.Arguments, normalized))))
 	if err != nil {
 		return InvokeResponse{}, &InvalidProviderResponseError{Operation: descriptor.ID}
 	}
@@ -728,6 +883,47 @@ type auditEvent struct {
 	Time       time.Time `json:"time"`
 }
 
+// replacedAuditEvent records that a confirmed request replaced an existing local file. It names neither the
+// file nor its directory.
+type replacedAuditEvent struct {
+	Event      string    `json:"event"`
+	RequestID  string    `json:"request_id"`
+	Operation  string    `json:"operation"`
+	Connection string    `json:"connection"`
+	Time       time.Time `json:"time"`
+}
+
+// auditEventLocalFileReplaced is the kind of a replacedAuditEvent.
+const auditEventLocalFileReplaced = "local-file-replaced"
+
+func (c *Core) writeReplacedAudit(requestID, operation, connection string) {
+	if c.audit == nil {
+		return
+	}
+	_ = json.NewEncoder(c.audit).Encode(replacedAuditEvent{
+		Event: auditEventLocalFileReplaced, RequestID: requestID, Operation: operation,
+		Connection: connection, Time: time.Now().UTC(),
+	})
+}
+
+// mapLocalFileError turns the failures of the local file access into the errors of the core, so they carry
+// the provider-independent codes. Any other error passes unchanged. None of the messages names a path.
+func mapLocalFileError(descriptor capability.Descriptor, err error) error {
+	var (
+		pathErr      *localfile.PathError
+		integrityErr *localfile.IntegrityError
+	)
+	switch {
+	case errors.Is(err, localfile.ErrOverwriteNeedsConfirmation):
+		return &ConfirmationRequiredError{Operation: descriptor.ID, Overwrite: true}
+	case errors.As(err, &pathErr):
+		return &InvalidRequestError{Message: pathErr.Error()}
+	case errors.As(err, &integrityErr):
+		return &InvalidProviderResponseError{Operation: descriptor.ID, Reason: integrityErr.Reason}
+	}
+	return err
+}
+
 func newRequestID() (string, error) {
 	var value [16]byte
 	if _, err := rand.Read(value[:]); err != nil {
@@ -783,30 +979,14 @@ func (c *Core) selectConnection(explicit string, descriptor capability.Descripto
 		}
 		return resolved, nil
 	}
-	if descriptor.RequiresExplicitConnection {
-		return nil, &ConnectionSelectionError{
-			Operation: descriptor.ID, ExplicitRequired: true, Connections: c.connectionRefs(descriptor),
-		}
-	}
-
-	defaults := map[string]bool{}
+	// The tool default wins over the provider default; a default that names a connection the tool cannot use
+	// is refused, never skipped for the next stage. The view of the current project already leaves out a
+	// default that names a connection bound to another project.
 	for _, key := range []string{descriptor.ID, descriptor.Provider} {
-		if name := c.config.Defaults.Connections[key]; name != "" {
-			defaults[name] = true
+		name := c.config.Defaults.Connections[key]
+		if name == "" {
+			continue
 		}
-	}
-	if len(defaults) > 1 {
-		// Conflicting defaults name the candidates, but only those that can actually take the operation.
-		candidates := make([]ConnectionRef, 0, len(defaults))
-		for _, name := range sortedSet(defaults) {
-			if resolved, err := c.connection(name); err == nil && resolved.Provider == descriptor.Provider &&
-				c.connectionAllows(name, descriptor) {
-				candidates = append(candidates, c.connectionRef(name))
-			}
-		}
-		return nil, &ConnectionAmbiguousError{Operation: descriptor.ID, Connections: candidates}
-	}
-	for name := range defaults {
 		resolved, err := c.connection(name)
 		if err != nil {
 			return nil, err
@@ -859,6 +1039,7 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		Permissions: c.config.ConnectionPermissions(name),
 		Tools:       connection.ToolsList(),
 		Paths:       append([]string(nil), connection.Paths...),
+		Files:       connection.Files.Clone(),
 	}, nil
 }
 
@@ -935,6 +1116,10 @@ func (c *Core) refusal(request SearchRequest, descriptor capability.Descriptor) 
 		switch c.config.ConnectionRefusal(name, descriptor.Tool()) {
 		case "":
 			return ""
+		case config.RefusalNoLocalFiles:
+			if closest == config.RefusalEffect {
+				closest = config.RefusalNoLocalFiles
+			}
 		case config.RefusalToolsList:
 			closest = config.RefusalToolsList
 		case config.RefusalToolAllowList:
@@ -953,7 +1138,15 @@ func (c *Core) connectionRef(name string) ConnectionRef {
 	if c.redactor != nil {
 		description = c.redactor.Apply(description)
 	}
-	return ConnectionRef{Name: name, Description: description}
+	files := filesRef(c.config.Connections[name].Files)
+	if files != nil && c.redactor != nil {
+		for _, list := range [][]string{files.Read, files.Write} {
+			for i := range list {
+				list[i] = c.redactor.Apply(list[i])
+			}
+		}
+	}
+	return ConnectionRef{Name: name, Description: description, Files: files}
 }
 
 func (c *Core) connectionNames(provider string) []string {

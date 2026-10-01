@@ -41,13 +41,12 @@ var starsList = capability.Descriptor{
 		"starred, in the order GitHub returns them; offered only by a connection whose targets name no " +
 		"repository and no project; a connection whose targets name an owner lists only the starred " +
 		"repositories of that owner",
-	Tags:                       []string{"github", "stars", "discovery", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(pagingKeys),
-	OutputSchema:               listOutput("starred", starredRepositoryProperties, starredRepositoryRequired),
-	Arguments:                  pagingArguments,
+	Tags:         []string{"github", "stars", "discovery", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(pagingKeys),
+	OutputSchema: listOutput("starred", starredRepositoryProperties, starredRepositoryRequired),
+	Arguments:    pagingArguments,
 	Fields: append([]capability.Field{
 		{Name: "starred", Description: "Starred repositories: repository as OWNER/REPO, visibility, and archived"},
 	}, pagingFields...),
@@ -62,14 +61,13 @@ var starsAdd = capability.Descriptor{
 	ID:      Provider + ".stars.add",
 	Version: 1,
 	Title:   "Star a GitHub repository",
-	Description: "Star one repository an explicit connection allows for the account behind its token; a " +
+	Description: "Star one repository a connection allows for the account behind its token; a " +
 		"repository already starred is left as it is and reported without a further request",
-	Tags:                       []string{"github", "stars", "add"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(""),
-	OutputSchema:               json.RawMessage(`{"type":"object","properties":{` + starChangeOutputProperties + `},` + starChangeRequired + `}`),
+	Tags:         []string{"github", "stars", "add"},
+	Risk:         changeRisk(capability.EffectCreate, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  inputSchema(""),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + starChangeOutputProperties + `},` + starChangeRequired + `}`),
 	Fields: []capability.Field{
 		{Name: "starred", Description: "True once the repository is starred"},
 		{Name: "changed", Description: "True when this call starred it; false when it was already starred"},
@@ -84,14 +82,13 @@ var starsRemove = capability.Descriptor{
 	ID:      Provider + ".stars.remove",
 	Version: 1,
 	Title:   "Unstar a GitHub repository",
-	Description: "Remove the star from one repository an explicit connection allows for the account behind " +
+	Description: "Remove the star from one repository a connection allows for the account behind " +
 		"its token; a repository that is not starred is left as it is and reported without a further request",
-	Tags:                       []string{"github", "stars", "remove"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(""),
-	OutputSchema:               json.RawMessage(`{"type":"object","properties":{` + starChangeOutputProperties + `},` + starChangeRequired + `}`),
+	Tags:         []string{"github", "stars", "remove"},
+	Risk:         changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+	Provider:     Provider,
+	InputSchema:  inputSchema(""),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + starChangeOutputProperties + `},` + starChangeRequired + `}`),
 	Fields: []capability.Field{
 		{Name: "starred", Description: "False once the star is removed"},
 		{Name: "changed", Description: "True when this call removed the star; false when it was not starred"},

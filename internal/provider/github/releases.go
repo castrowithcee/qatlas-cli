@@ -53,15 +53,14 @@ var releasesList = capability.Descriptor{
 	ID:      Provider + ".releases.list",
 	Version: 1,
 	Title:   "List GitHub releases",
-	Description: "List one bounded batch of compact releases of a repository an explicit connection allows, " +
+	Description: "List one bounded batch of compact releases of a repository a connection allows, " +
 		"in GitHub's own order; a draft appears only while the token can see it",
-	Tags:                       []string{"github", "releases", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(pagingKeys),
-	OutputSchema:               listOutput("releases", releaseSummaryProperties, releaseSummaryRequired),
-	Arguments:                  pagingArguments,
+	Tags:         []string{"github", "releases", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(pagingKeys),
+	OutputSchema: listOutput("releases", releaseSummaryProperties, releaseSummaryRequired),
+	Arguments:    pagingArguments,
 	Fields: append([]capability.Field{
 		{Name: "releases", Description: "Compact releases with tag, name, draft, prerelease, author, and " +
 			"times; name is untrusted data"},
@@ -73,14 +72,13 @@ var releasesGet = capability.Descriptor{
 	ID:      Provider + ".releases.get",
 	Version: 1,
 	Title:   "Get a GitHub release",
-	Description: "Read one release of a repository an explicit connection allows, by its identifier, its " +
+	Description: "Read one release of a repository a connection allows, by its identifier, its " +
 		"tag, or the latest published one; exactly one of id, tag, or latest must be given, and a lookup by " +
 		"tag never finds a draft, because GitHub does not index a draft's tag",
-	Tags:                       []string{"github", "releases", "get"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"id":` + releaseIDSchema + `,"tag":` + refSchema + `,"latest":{"type":"boolean"}`),
+	Tags:        []string{"github", "releases", "get"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: inputSchema(`"id":` + releaseIDSchema + `,"tag":` + refSchema + `,"latest":{"type":"boolean"}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` + releaseSummaryProperties + `,` +
 		`"body":{"type":"string"},"target_commitish":{"type":"string"},"assets_count":{"type":"integer"}},` +
 		`"required":["id","tag","draft","prerelease","body","assets_count"],"additionalProperties":false}`),
@@ -103,12 +101,11 @@ var releaseAssetsList = capability.Descriptor{
 	Title:   "List the assets of a GitHub release",
 	Description: "List one bounded batch of asset metadata of one release of a repository an explicit " +
 		"connection allows; asset contents are never read",
-	Tags:                       []string{"github", "releases", "assets", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"id":`+releaseIDSchema+`,`+pagingKeys, "id"),
-	OutputSchema:               listOutput("assets", releaseAssetProperties, releaseAssetRequired),
+	Tags:         []string{"github", "releases", "assets", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"id":`+releaseIDSchema+`,`+pagingKeys, "id"),
+	OutputSchema: listOutput("assets", releaseAssetProperties, releaseAssetRequired),
 	Arguments: append([]capability.Argument{
 		{Name: "id", Description: "Release identifier, as returned by github.releases.list", Required: true},
 	}, pagingArguments...),
@@ -123,14 +120,13 @@ var releasesCreate = capability.Descriptor{
 	ID:      Provider + ".releases.create",
 	Version: 1,
 	Title:   "Create a GitHub release",
-	Description: "Cut one release from a tag of a repository an explicit connection allows; a repeated call " +
+	Description: "Cut one release from a tag of a repository a connection allows; a repeated call " +
 		"with the same tag is refused with a clear message instead of making a second attempt, because GitHub " +
 		"already holds one release per tag. When the tag does not exist yet, GitHub creates it at target when " +
 		"the release is published",
-	Tags:                       []string{"github", "releases", "create"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "releases", "create"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"tag":`+refSchema+`,"target":`+refSchema+`,"name":`+releaseNameSchema+`,`+
 		`"body":`+bodySchema+`,"draft":{"type":"boolean"},"prerelease":{"type":"boolean"},`+
 		`"generate_notes":{"type":"boolean"},"make_latest":`+makeLatestSchema, "tag"),
@@ -160,12 +156,11 @@ var releasesUpdate = capability.Descriptor{
 	Version: 1,
 	Title:   "Update a GitHub release",
 	Description: "Replace the name, body, tag, target, draft, prerelease, or make_latest state of one " +
-		"release of a repository an explicit connection allows; fields left out stay unchanged, and draft: " +
+		"release of a repository a connection allows; fields left out stay unchanged, and draft: " +
 		"false publishes a draft",
-	Tags:                       []string{"github", "releases", "update"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "releases", "update"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: inputSchema(`"id":`+releaseIDSchema+`,"name":`+releaseNameSchema+`,"body":`+bodySchema+`,`+
 		`"tag":`+refSchema+`,"target":`+refSchema+`,"draft":{"type":"boolean"},"prerelease":{"type":"boolean"},`+
 		`"make_latest":`+makeLatestSchema, "id"),
@@ -195,16 +190,15 @@ var releasesDelete = capability.Descriptor{
 	ID:      Provider + ".releases.delete",
 	Version: 1,
 	Title:   "Delete a GitHub release",
-	Description: "Delete one release of a repository an explicit connection allows, with its release notes " +
+	Description: "Delete one release of a repository a connection allows, with its release notes " +
 		"and asset attachments; the tag it was cut from stays. Offered only by a connection whose tools list " +
 		"names it; a release already deleted answers not found, like the other delete tools",
-	Tags:                       []string{"github", "releases", "delete"},
-	Risk:                       guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, dataSensitivity),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
-	InputSchema:                inputSchema(`"id":`+releaseIDSchema, "id"),
-	OutputSchema:               json.RawMessage(releaseDeletedOutput),
+	Tags:                  []string{"github", "releases", "delete"},
+	Risk:                  guardedRisk(capability.EffectDelete, capability.IdempotencyUnknown, dataSensitivity),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema:           inputSchema(`"id":`+releaseIDSchema, "id"),
+	OutputSchema:          json.RawMessage(releaseDeletedOutput),
 	Arguments: []capability.Argument{
 		{Name: "id", Description: "Release identifier, as returned by github.releases.list", Required: true},
 	},
@@ -729,7 +723,7 @@ type DeletedRelease struct {
 func (c *Client) deleteRelease(ctx context.Context, id int64) (*DeletedRelease, error) {
 	const op = "delete release"
 	path := c.endpoints.rest + c.repoPath("releases/"+strconv.FormatInt(id, 10))
-	if err := c.do(ctx, op, http.MethodDelete, path, nil, nil, true, nil); err != nil {
+	if err := c.do(ctx, op, http.MethodDelete, path, nil, nil, true, nil, nil); err != nil {
 		return nil, actionsFailure(err, releasesChangePermission)
 	}
 	return &DeletedRelease{ID: id, Deleted: true}, nil

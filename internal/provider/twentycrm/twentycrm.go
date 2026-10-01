@@ -98,12 +98,11 @@ var companiesList = capability.Descriptor{
 	ID:      Provider + ".companies.list",
 	Version: 1,
 	Title:   "List Twenty CRM companies",
-	Description: "Search one bounded page of companies in the Twenty workspace of an explicit connection, " +
+	Description: "Search one bounded page of companies in the Twenty workspace of a connection, " +
 		"by name or by primary domain",
-	Tags:                       []string{"twentycrm", "crm", "companies", "list", "search"},
-	Risk:                       twentyReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"twentycrm", "crm", "companies", "list", "search"},
+	Risk:     twentyReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"name_contains":{"type":"string","minLength":1,"maxLength":64,"pattern":"` + searchPattern + `"},` +
 		`"domain_contains":{"type":"string","minLength":1,"maxLength":253,"pattern":"^[A-Za-z0-9.-]+$"},` +
@@ -138,14 +137,13 @@ var companiesList = capability.Descriptor{
 }
 
 var companiesGet = capability.Descriptor{
-	ID:                         Provider + ".companies.get",
-	Version:                    1,
-	Title:                      "Get a Twenty CRM company",
-	Description:                "Read one company of the Twenty workspace of an explicit connection by its record identifier",
-	Tags:                       []string{"twentycrm", "crm", "companies", "get"},
-	Risk:                       twentyReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	ID:          Provider + ".companies.get",
+	Version:     1,
+	Title:       "Get a Twenty CRM company",
+	Description: "Read one company of the Twenty workspace of a connection by its record identifier",
+	Tags:        []string{"twentycrm", "crm", "companies", "get"},
+	Risk:        twentyReadRisk,
+	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string","minLength":36,` +
 		`"maxLength":36,"pattern":"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}},` +
 		`"required":["id"],"additionalProperties":false}`),
@@ -182,8 +180,8 @@ var companiesDelete = companyMutationDescriptor("delete", capability.EffectDelet
 func companyMutationDescriptor(action string, effect capability.Effect, idempotency capability.Idempotency, input string, output json.RawMessage) capability.Descriptor {
 	return capability.Descriptor{ID: Provider + ".companies." + action, Version: 1,
 		Title:       strings.ToUpper(action[:1]) + action[1:] + " a Twenty CRM company",
-		Description: strings.ToUpper(action[:1]) + action[1:] + " one company in the workspace of an explicit connection",
-		Tags:        []string{"twentycrm", "crm", "companies", action}, Provider: Provider, RequiresExplicitConnection: true,
+		Description: strings.ToUpper(action[:1]) + action[1:] + " one company in the workspace of a connection",
+		Tags:        []string{"twentycrm", "crm", "companies", action}, Provider: Provider,
 		Risk:        capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
 		InputSchema: json.RawMessage(input), OutputSchema: output}
 }

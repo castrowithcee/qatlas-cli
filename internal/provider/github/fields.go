@@ -88,14 +88,13 @@ var fieldsList = capability.Descriptor{
 	ID:      Provider + ".projectfields.list",
 	Version: 1,
 	Title:   "List the fields of a GitHub project",
-	Description: "Read every field of one GitHub project an explicit connection allows: name, type, whether " +
+	Description: "Read every field of one GitHub project a connection allows: name, type, whether " +
 		"it is built in, the options of a single- or multi-select field, and the settings and iterations of an " +
 		"iteration field",
-	Tags:                       []string{"github", "projects", "fields", "options", "iterations", "list", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
+	Tags:        []string{"github", "projects", "fields", "options", "iterations", "list", "planning"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"fields":{"type":"array","items":` +
 		fieldOutput + `}},"required":["fields"],"additionalProperties":false}`),
 	Fields: []capability.Field{{Name: "fields", Description: "Every field in project order: name, type (text, " +
@@ -114,12 +113,11 @@ var fieldsCreate = capability.Descriptor{
 	Version: 1,
 	Title:   "Create a GitHub project field",
 	Description: "Create one text, number, date, single-select, multi-select, or iteration field with its " +
-		"options or iterations in a GitHub project an explicit connection allows; a name the project already " +
+		"options or iterations in a GitHub project a connection allows; a name the project already " +
 		"holds is refused",
-	Tags:                       []string{"github", "projects", "fields", "options", "iterations", "create", "planning"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "fields", "options", "iterations", "create", "planning"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"name":` + fieldNameSchema + `,` +
 		`"type":{"type":"string","enum":["text","number","date","single_select","multi_select","iteration"]},` +
 		`"options":` + newOptionsSchema + `,"iteration":{"type":"object","properties":{"start_date":` +
@@ -155,14 +153,13 @@ var fieldsUpdate = capability.Descriptor{
 	ID:      Provider + ".projectfields.update",
 	Version: 1,
 	Title:   "Update a GitHub project field",
-	Description: "Rename one field of a GitHub project an explicit connection allows, or add, rename, " +
+	Description: "Rename one field of a GitHub project a connection allows, or add, rename, " +
 		"recolor, describe, or reorder the options of a single- or multi-select field, the built-in Status " +
 		"included; options left out stay, and so do the values items hold. Iterations change through " +
 		"github.projectiterations.replace",
-	Tags:                       []string{"github", "projects", "fields", "options", "update", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "fields", "options", "update", "planning"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"field":` + fieldNameSchema + `,` +
 		`"name":` + fieldNameSchema + `,"options":` + optionChangesSchema + `,"order":` + namesSchema + `},` +
 		`"required":["field"],"additionalProperties":false}`),
@@ -194,11 +191,10 @@ var fieldOptionsDelete = capability.Descriptor{
 	Description: "Remove named options of a single- or multi-select field of a GitHub project an explicit " +
 		"connection allows; every item loses a removed option, and at least one option stays. Offered only by a " +
 		"connection whose tools list names it",
-	Tags:                       []string{"github", "projects", "fields", "options", "delete"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "projects", "fields", "options", "delete"},
+	Risk:                  changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"field":` + fieldNameSchema + `,` +
 		`"options":` + namesSchema + `},"required":["field","options"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(removedOutput),
@@ -221,11 +217,10 @@ var iterationsReplace = capability.Descriptor{
 	Description: "Change the start date or duration of one iteration field of a GitHub project an explicit " +
 		"connection allows, and add, change, or remove its iterations; GitHub recreates every iteration, so " +
 		"every item loses its value of this field. Offered only by a connection whose tools list names it",
-	Tags:                       []string{"github", "projects", "fields", "iterations", "update", "delete"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "projects", "fields", "iterations", "update", "delete"},
+	Risk:                  changeRisk(capability.EffectDelete, capability.IdempotencyNonIdempotent),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"field":` + fieldNameSchema + `,` +
 		`"start_date":` + dateSchema + `,"duration":` + durationSchema + `,"iterations":` +
 		iterationChangesSchema + `,"remove":` + namesSchema + `},"required":["field"],` +
@@ -255,12 +250,11 @@ var fieldsDelete = capability.Descriptor{
 	Version: 1,
 	Title:   "Delete a GitHub project field",
 	Description: "Delete one field that is not built in, with its values on every item, from a GitHub " +
-		"project an explicit connection allows. Offered only by a connection whose tools list names it",
-	Tags:                       []string{"github", "projects", "fields", "delete"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+		"project a connection allows. Offered only by a connection whose tools list names it",
+	Tags:                  []string{"github", "projects", "fields", "delete"},
+	Risk:                  changeRisk(capability.EffectDelete, capability.IdempotencyUnknown),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"field":` + fieldNameSchema + `},` +
 		`"required":["field"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"name":{"type":"string"},` +

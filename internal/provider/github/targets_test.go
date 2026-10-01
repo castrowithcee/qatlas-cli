@@ -190,11 +190,24 @@ func TestDiscoveryDescribesTheTargetArguments(t *testing.T) {
 			descriptor.ID == repositoriesSearch.ID || descriptor.ID == codeSearch.ID ||
 			descriptor.ID == issuesSearch.ID || descriptor.ID == pullRequestsSearch.ID ||
 			descriptor.ID == commitsSearch.ID || descriptor.ID == usersSearch.ID ||
-			descriptor.ID == organizationsSearch.ID:
+			descriptor.ID == organizationsSearch.ID || descriptor.ID == repositoriesCreate.ID ||
+			descriptor.ID == rulesetsList.ID || descriptor.ID == rulesetsGet.ID ||
+			descriptor.ID == rulesetsCreate.ID || descriptor.ID == rulesetsUpdate.ID ||
+			descriptor.ID == rulesetsDelete.ID || descriptor.ID == customPropertiesGet.ID ||
+			descriptor.ID == customPropertiesSet.ID || descriptor.ID == issueFieldsList.ID ||
+			descriptor.ID == notificationsList.ID || descriptor.ID == notificationsGet.ID ||
+			descriptor.ID == notificationsDismiss.ID || descriptor.ID == notificationsMarkAll.ID ||
+			descriptor.ID == threadSubscriptionsSet.ID ||
+			descriptor.ID == gistsList.ID || descriptor.ID == gistsGet.ID || descriptor.ID == gistsCreate.ID ||
+			descriptor.ID == gistsUpdate.ID || descriptor.ID == gistsDelete.ID ||
+			descriptor.ID == globalAdvisoriesList.ID || descriptor.ID == globalAdvisoriesGet.ID:
+			// The notification tools take an optional repository of their own or a thread id; the gist tools take a
+			// gist id or none; the global advisory tools name no target.
 			names = []string{}
 		case descriptor.ID == projectsList.ID || descriptor.ID == repositoriesList.ID ||
-			descriptor.ID == projectsCreate.ID || descriptor.ID == organizationTeamsList.ID ||
-			descriptor.ID == teamMembersList.ID:
+			descriptor.ID == projectsCreate.ID || descriptor.ID == issueTypesList.ID ||
+			descriptor.ID == organizationTeamsList.ID ||
+			descriptor.ID == teamMembersList.ID || descriptor.ID == organizationAdvisoriesList.ID:
 			names = []string{"owner"}
 		case descriptor.ID == projectsCopy.ID:
 			names = []string{"project", "owner"}
@@ -385,5 +398,27 @@ func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 	if class, err := TestConnection(context.Background(), resolvedConnection("gh", base, "repos/octo-org/absent"),
 		resolver(red, nil), red); err != nil || class != provider.ClassNotFound {
 		t.Errorf("test of an absent repository = %q, %v; want not-found", class, err)
+	}
+}
+
+// A state the request fixes is left out of every listed issue; without it, or with all, it stays.
+func TestIssueListDropsTheStateAFilterFixes(t *testing.T) {
+	f := &fakeGitHub{issues: []fakeIssue{{number: 1, state: "open"}}}
+	base := serve(t, f)
+	reads := 0
+	red := &redact.Redactor{}
+	core := application.New(registry(t), targetsConfig(base), resolver(red, &reads), red)
+	for arguments, want := range map[string]bool{
+		`{"repository":"octo-org/example","state":"open"}`: false,
+		`{"repository":"octo-org/example","state":"all"}`:  true,
+		`{"repository":"octo-org/example"}`:                true,
+	} {
+		out, err := invoke(t, core, "github.issues.list", "owner", arguments, false)
+		if err != nil {
+			t.Fatalf("%s: %v", arguments, err)
+		}
+		if got := strings.Contains(string(out), `"state"`); got != want {
+			t.Errorf("%s: state present = %v in %s, want %v", arguments, got, out, want)
+		}
 	}
 }

@@ -31,6 +31,7 @@ const (
 	FieldTargets     = "targets"
 	FieldTools       = "tools"
 	FieldPaths       = "paths"
+	FieldFiles       = "files"
 )
 
 // FieldChange is one field of a connection's scope that differs from what was approved, each side written as
@@ -161,6 +162,7 @@ func diff(approved vault.Approval, now vault.Scope, id string) []FieldChange {
 	add(FieldTargets, list(before.Targets), list(after.Targets))
 	add(FieldTools, tools(before.Tools), tools(after.Tools))
 	add(FieldPaths, PathsText(before.Paths), PathsText(after.Paths))
+	add(FieldFiles, FilesText(before.FilesRead, before.FilesWrite), FilesText(after.FilesRead, after.FilesWrite))
 	return fields
 }
 
@@ -179,11 +181,56 @@ func PathsText(values []string) string {
 	return list(values)
 }
 
+// FilesText is the local directories a connection releases as a person reads them, per direction.
+func FilesText(read, write []string) string {
+	if len(read) == 0 && len(write) == 0 {
+		return "(no local files)"
+	}
+	var parts []string
+	if len(read) > 0 {
+		parts = append(parts, "read: "+list(read))
+	}
+	if len(write) > 0 {
+		parts = append(parts, "write: "+list(write))
+	}
+	return strings.Join(parts, "; ")
+}
+
 func tools(values []string) string {
 	if values == nil {
 		return "(every tool the permissions allow)"
 	}
 	return list(values)
+}
+
+// DirectApprovable reports whether change - a connection's own open change, found right after some action
+// that saved it directly by name (internal/tui's own Connections section, or a guided setup, terminal or
+// browser, that just created it) - is made entirely of fields that action's own form shows: permissions,
+// targets, tools, or a plain rename of its credential, never one "stored anew" (the vault holds a different
+// entry under the same credential name), which a form cannot tell apart from an ordinary rename. A
+// connection that was never approved at all (change.New) counts the same way: nothing in the form hid that
+// either. Anything else - a changed provider, a changed origin (a service's base_url), or a credential
+// replaced under the same name - left it open outside the fields the form shows, so saving unrelated fields
+// must never approve it in passing.
+//
+// This is the one rule every caller that saves a connection directly by name uses to decide whether that
+// save may approve it on its own; nothing else decides that on its own.
+func DirectApprovable(change Change) bool {
+	if change.New {
+		return true
+	}
+	for _, f := range change.Fields {
+		switch f.Field {
+		case FieldPermissions, FieldTargets, FieldTools:
+		case FieldCredential:
+			if strings.HasSuffix(f.After, " (stored anew)") {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // ErrUnknownConnection reports a connection Approve was asked for that does not read a vault credential the

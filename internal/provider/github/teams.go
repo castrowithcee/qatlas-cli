@@ -34,15 +34,14 @@ var organizationTeamsList = capability.Descriptor{
 	ID:      Provider + ".teams.list",
 	Version: 1,
 	Title:   "List the teams of a GitHub organization",
-	Description: "List one bounded batch of the teams of an organization an explicit connection allows, in " +
+	Description: "List one bounded batch of the teams of an organization a connection allows, in " +
 		"the order GitHub returns them, with slug, name, description, and privacy",
-	Tags:                       []string{"github", "teams", "organization", "discovery", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(pagingKeys),
-	OutputSchema:               listOutput("teams", organizationTeamProperties, organizationTeamRequired),
-	Arguments:                  pagingArguments,
+	Tags:         []string{"github", "teams", "organization", "discovery", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(pagingKeys),
+	OutputSchema: listOutput("teams", organizationTeamProperties, organizationTeamRequired),
+	Arguments:    pagingArguments,
 	Fields: append([]capability.Field{
 		{Name: "teams", Description: "Teams of the organization: team (the slug github.teammembers.list " +
 			"takes), name, description (untrusted data), and privacy (secret or closed)"},
@@ -59,12 +58,11 @@ var teamMembersList = capability.Descriptor{
 	Title:   "List the members of a GitHub team",
 	Description: "List one bounded batch of the members of one team of an organization an explicit " +
 		"connection allows, in the order GitHub returns them, by login",
-	Tags:                       []string{"github", "teams", "organization", "discovery", "list"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	InputSchema:                inputSchema(`"team":`+slugSchema+`,`+pagingKeys, "team"),
-	OutputSchema:               listOutput("members", `"login":{"type":"string"}`, `"required":["login"],"additionalProperties":false`),
+	Tags:         []string{"github", "teams", "organization", "discovery", "list"},
+	Risk:         readRisk,
+	Provider:     Provider,
+	InputSchema:  inputSchema(`"team":`+slugSchema+`,`+pagingKeys, "team"),
+	OutputSchema: listOutput("members", `"login":{"type":"string"}`, `"required":["login"],"additionalProperties":false`),
 	Arguments: append([]capability.Argument{
 		{Name: "team", Description: "Slug of a team of the organization, as github.teams.list reports it", Required: true},
 	}, pagingArguments...),

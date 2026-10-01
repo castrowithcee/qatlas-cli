@@ -100,6 +100,9 @@ type ToolMetadata struct {
 	Title                 string
 	Effect                Permission
 	RequiresToolAllowList bool
+	// LocalFiles is empty for a tool without local file access, otherwise the direction it reads or writes
+	// local files in; the connection's files list of that direction bounds it.
+	LocalFiles LocalFiles
 }
 
 // ToolProfile is a named starting selection of a provider's tools for setting up a new connection. It is
@@ -141,6 +144,9 @@ type ProviderMetadata struct {
 	Profiles             []ToolProfile
 	SecretRoles          []SecretRole
 	Target               TargetMetadata
+	// LocalFiles states which directions of local file access at least one tool of the provider has. It is
+	// derived from the registered operations and never declared by hand.
+	LocalFiles LocalFilesSupport
 }
 
 // RecommendedProfile returns the profile a new connection of this provider starts with.

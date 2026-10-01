@@ -759,6 +759,7 @@ func TestPullRequestReviewersRequestAndRemove(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pull.RequestedReviewers = nil
 	if err := json.Unmarshal(removed, &pull); err != nil || len(pull.RequestedReviewers) != 0 {
 		t.Fatalf("removed reviewers = %s, %v", removed, err)
 	}

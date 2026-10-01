@@ -528,3 +528,49 @@ func TestToolsRequiringAnAllowListStayOutOfTheRecommendedProfile(t *testing.T) {
 		}
 	}
 }
+
+// The local file directions of a provider's tools are derived from its registered operations, and an
+// operation with an unknown direction is refused.
+func TestProviderMetadataDerivesLocalFiles(t *testing.T) {
+	reg := NewRegistry()
+	if err := reg.RegisterProvider(config.ProviderMetadata{ID: "fakewiki", Name: "Fake wiki"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Register("fakewiki", operation(pagesList)); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := reg.ProviderMetadata("fakewiki"); m.LocalFiles != (config.LocalFilesSupport{}) {
+		t.Fatalf("LocalFiles = %+v, want none", m.LocalFiles)
+	}
+	upload := pagesGet
+	upload.ID, upload.LocalFiles = "fakewiki.files.upload", config.LocalFilesRead
+	if err := reg.Register("fakewiki", operation(upload)); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := reg.ProviderMetadata("fakewiki")
+	if m.LocalFiles != (config.LocalFilesSupport{Read: true}) {
+		t.Fatalf("LocalFiles = %+v, want read only", m.LocalFiles)
+	}
+	var tool config.ToolMetadata
+	for _, candidate := range m.Tools {
+		if candidate.ID == upload.ID {
+			tool = candidate
+		}
+	}
+	if tool.LocalFiles != config.LocalFilesRead {
+		t.Errorf("tool LocalFiles = %q, want read", tool.LocalFiles)
+	}
+	download := pagesGet
+	download.ID, download.LocalFiles = "fakewiki.files.download", config.LocalFilesWrite
+	if err := reg.Register("fakewiki", operation(download)); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := reg.ProviderMetadata("fakewiki"); m.LocalFiles != (config.LocalFilesSupport{Read: true, Write: true}) {
+		t.Errorf("LocalFiles = %+v, want both", m.LocalFiles)
+	}
+	bad := pagesGet
+	bad.ID, bad.LocalFiles = "fakewiki.files.other", "both"
+	if err := reg.Register("fakewiki", operation(bad)); err == nil {
+		t.Error("Register() accepted an unknown local files direction")
+	}
+}

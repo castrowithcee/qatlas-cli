@@ -129,10 +129,9 @@ var tablesList = capability.Descriptor{
 	Title:   "List SeaTable tables",
 	Description: "List one bounded page of tables visible through an explicit SeaTable connection, " +
 		"including the reference accepted by row and column operations",
-	Tags:                       []string{"seatable", "base", "tables", "schema", "list"},
-	Risk:                       seatableSchemaRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"seatable", "base", "tables", "schema", "list"},
+	Risk:     seatableSchemaRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100}},` +
@@ -163,10 +162,9 @@ var columnsList = capability.Descriptor{
 	Title:   "List SeaTable columns",
 	Description: "List one bounded page of columns of an allowed table through an explicit SeaTable " +
 		"connection; table is optional only when the connection resolves to one table",
-	Tags:                       []string{"seatable", "base", "table", "columns", "schema", "list"},
-	Risk:                       seatableSchemaRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"seatable", "base", "table", "columns", "schema", "list"},
+	Risk:     seatableSchemaRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"table":` + tableSelectionSchema + `,` +
 		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
@@ -195,14 +193,13 @@ var columnsList = capability.Descriptor{
 }
 
 var rowsList = capability.Descriptor{
-	ID:                         Provider + ".rows.list",
-	Version:                    1,
-	Title:                      "List SeaTable rows",
-	Description:                "List one bounded page of rows from a table allowed by an explicit SeaTable connection",
-	Tags:                       []string{"seatable", "base", "rows", "list", "table"},
-	Risk:                       seatableReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	ID:          Provider + ".rows.list",
+	Version:     1,
+	Title:       "List SeaTable rows",
+	Description: "List one bounded page of rows from a table allowed by an explicit SeaTable connection",
+	Tags:        []string{"seatable", "base", "rows", "list", "table"},
+	Risk:        seatableReadRisk,
+	Provider:    Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"table":` + tableSelectionSchema + `,` +
 		`"start":{"type":"integer","minimum":0,"maximum":10000},` +
@@ -237,10 +234,9 @@ var rowsGet = capability.Descriptor{
 	Title:   "Get a SeaTable row",
 	Description: "Read one row of a table allowed by an explicit SeaTable connection by its row " +
 		"identifier",
-	Tags:                       []string{"seatable", "base", "rows", "get", "table"},
-	Risk:                       seatableReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"seatable", "base", "rows", "get", "table"},
+	Risk:     seatableReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"table":` + tableSelectionSchema + `,"row_id":{"type":"string",` +
 		`"minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"}},` +
 		`"required":["row_id"],"additionalProperties":false}`),
@@ -275,7 +271,7 @@ func rowMutationDescriptor(action string, effect capability.Effect, idempotency 
 	return capability.Descriptor{ID: Provider + ".rows." + action, Version: 1,
 		Title:       strings.ToUpper(action[:1]) + action[1:] + " a SeaTable row",
 		Description: strings.ToUpper(action[:1]) + action[1:] + " one row in a table allowed by an explicit SeaTable connection",
-		Tags:        []string{"seatable", "base", "rows", action, "table"}, Provider: Provider, RequiresExplicitConnection: true,
+		Tags:        []string{"seatable", "base", "rows", action, "table"}, Provider: Provider,
 		Risk:        capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
 		InputSchema: json.RawMessage(input), OutputSchema: json.RawMessage(output)}
 }
@@ -304,8 +300,8 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read tables and rows", Recommended: true,
-			Description: "lists tables and columns and reads rows; changes nothing in the base",
-			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsGet.ID},
+			Description: "lists tables and columns, reads and searches rows, lists row links, reads views; changes nothing in the base",
+			Tools:       []string{tablesList.ID, columnsList.ID, rowsList.ID, rowsSearch.ID, rowsGet.ID, linksList.ID, viewsList.ID, viewsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -314,10 +310,43 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: columnsList, Handler: capability.Handler(invokeColumnsList)},
 		capability.Operation{Descriptor: rowsList, Handler: capability.Handler(invokeRowsList)},
 		capability.Operation{Descriptor: rowsGet, Handler: capability.Handler(invokeRowsGet)},
+		capability.Operation{Descriptor: rowsActivities, Handler: capability.Handler(invokeRowsActivities)},
+		capability.Operation{Descriptor: baseOperations, Handler: capability.Handler(invokeBaseOperations)},
+		capability.Operation{Descriptor: commentsList, Handler: capability.Handler(invokeCommentsList)},
+		capability.Operation{Descriptor: commentsCreate, Handler: invokeCommentsChange("create comment", "create", (*Client).CreateComment, "created")},
+		capability.Operation{Descriptor: commentsDelete, Handler: invokeCommentsChange("delete comment", "delete", (*Client).DeleteComment, "deleted")},
+		capability.Operation{Descriptor: collaboratorsList, Handler: capability.Handler(invokeCollaboratorsList)},
+		capability.Operation{Descriptor: rowsSearch, Handler: capability.Handler(invokeRowsSearch)},
 		capability.Operation{Descriptor: rowsCreate, Handler: capability.Handler(invokeRowsCreate)},
 		capability.Operation{Descriptor: rowsUpdate, Handler: capability.Handler(invokeRowsUpdate)},
 		capability.Operation{Descriptor: rowsDelete, Handler: capability.Handler(invokeRowsDelete)},
+		capability.Operation{Descriptor: rowsBatchCreate, Handler: capability.Handler(invokeRowsBatchCreate)},
+		capability.Operation{Descriptor: rowsBatchUpdate, Handler: capability.Handler(invokeRowsBatchUpdate)},
+		capability.Operation{Descriptor: rowsBatchDelete, Handler: capability.Handler(invokeRowsBatchDelete)},
+		capability.Operation{Descriptor: snapshotsCreate, Handler: capability.Handler(invokeSnapshotsCreate)},
 		capability.Operation{Descriptor: tablesList, Handler: capability.Handler(invokeTablesList)},
+		capability.Operation{Descriptor: tablesCreate, Handler: invokeTablesChange("create table", "create", (*Client).CreateTable, "created")},
+		capability.Operation{Descriptor: tablesRename, Handler: invokeTablesChange("rename table", "rename", (*Client).RenameTable, "renamed")},
+		capability.Operation{Descriptor: tablesDuplicate, Handler: invokeTablesChange("duplicate table", "duplicate", (*Client).DuplicateTable, "duplicated")},
+		capability.Operation{Descriptor: tablesDelete, Handler: invokeTablesChange("delete table", "delete", (*Client).DeleteTable, "deleted")},
+		capability.Operation{Descriptor: linksList, Handler: capability.Handler(invokeLinksList)},
+		capability.Operation{Descriptor: linksCreate, Handler: invokeLinksChange("create links", http.MethodPost, "created")},
+		capability.Operation{Descriptor: linksUpdate, Handler: invokeLinksChange("update links", http.MethodPut, "updated")},
+		capability.Operation{Descriptor: linksDelete, Handler: invokeLinksChange("delete links", http.MethodDelete, "deleted")},
+		capability.Operation{Descriptor: viewsList, Handler: capability.Handler(invokeViewsList)},
+		capability.Operation{Descriptor: viewsGet, Handler: capability.Handler(invokeViewsGet)},
+		capability.Operation{Descriptor: viewsCreate, Handler: invokeViewsChange("create view", "create", (*Client).CreateView, "created")},
+		capability.Operation{Descriptor: viewsUpdate, Handler: invokeViewsChange("update view", "update", (*Client).UpdateView, "updated")},
+		capability.Operation{Descriptor: optionsAdd, Handler: invokeOptionsChange("add column options", "add", (*Client).AddOptions, "added")},
+		capability.Operation{Descriptor: optionsUpdate, Handler: invokeOptionsChange("update column options", "update", (*Client).UpdateOptions, "updated")},
+		capability.Operation{Descriptor: optionsDelete, Handler: invokeOptionsChange("delete column options", "delete", (*Client).DeleteOptions, "deleted")},
+		capability.Operation{Descriptor: viewsDelete, Handler: invokeViewsChange("delete view", "delete", (*Client).DeleteView, "deleted")},
+		capability.Operation{Descriptor: columnCreate, Handler: invokeColumnsChange("create column", "create", (*Client).CreateColumn, "created")},
+		capability.Operation{Descriptor: columnUpdate, Handler: invokeColumnsChange("update column", "update", (*Client).UpdateColumn, "updated")},
+		capability.Operation{Descriptor: filesUpload, Handler: capability.Handler(invokeFilesUpload)},
+		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
+		capability.Operation{Descriptor: filesDelete, Handler: capability.Handler(invokeFilesDelete)},
+		capability.Operation{Descriptor: columnDelete, Handler: invokeColumnsChange("delete column", "delete", (*Client).DeleteColumn, "deleted")},
 	)
 }
 
@@ -446,8 +475,9 @@ type scope struct {
 // limit that token shares.
 //
 // A client is opened per request by the application core and is never shared between goroutines, so the
-// exchanged base token is kept in a plain field.
+// exchanged base token and the base metadata read through it are kept in plain fields.
 type Client struct {
+	meta     *metadataJSON
 	origin   string
 	apiToken string
 	scope    scope
@@ -460,8 +490,10 @@ type Client struct {
 // baseAccess is the result of one token exchange: the base the API token belongs to, and the short-lived
 // token that authenticates the base routes. Neither value is ever written outside this process.
 type baseAccess struct {
-	uuid  string
-	token string
+	uuid        string
+	token       string
+	name        string
+	workspaceID int64
 }
 
 // Open resolves the API token of one selected connection and returns a client for its configured origin.
@@ -721,14 +753,8 @@ func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
 // checkTarget reads the metadata of the base the API token belongs to and verifies every allow-listed
 // target. The metadata itself is never reported.
 func (c *Client) checkTarget(ctx context.Context, op string) error {
-	access, err := c.access(ctx, op)
+	document, err := c.metadata(ctx, op)
 	if err != nil {
-		return err
-	}
-
-	var document metadataJSON
-	if err := c.get(ctx, op, gatewayPath+url.PathEscape(access.uuid)+metadataPath, nil,
-		access.token, maxMetadataBytes, &document); err != nil {
 		return err
 	}
 
@@ -804,7 +830,8 @@ func (c *Client) access(ctx context.Context, op string) (*baseAccess, error) {
 	if c.redactor != nil {
 		c.redactor.Add(exchanged.AccessToken, "Bearer "+exchanged.AccessToken)
 	}
-	c.base = &baseAccess{uuid: exchanged.DTableUUID, token: exchanged.AccessToken}
+	c.base = &baseAccess{uuid: exchanged.DTableUUID, token: exchanged.AccessToken, name: exchanged.DTableName,
+		workspaceID: exchanged.WorkspaceID}
 	return c.base, nil
 }
 
@@ -1014,7 +1041,12 @@ func (c *Client) ListColumns(ctx context.Context, options ColumnsOptions) (*Colu
 	return nil, providerError(op, "the selected SeaTable table no longer exists")
 }
 
+// metadata returns the base metadata, reading it once per client. Schema checks, link masking and row
+// search share that one read; a failed read is not cached.
 func (c *Client) metadata(ctx context.Context, op string) (metadataJSON, error) {
+	if c.meta != nil {
+		return *c.meta, nil
+	}
 	access, err := c.access(ctx, op)
 	if err != nil {
 		return metadataJSON{}, err
@@ -1024,6 +1056,7 @@ func (c *Client) metadata(ctx context.Context, op string) (metadataJSON, error) 
 		access.token, maxMetadataBytes, &document); err != nil {
 		return metadataJSON{}, err
 	}
+	c.meta = &document
 	return document, nil
 }
 
@@ -1086,6 +1119,9 @@ func (c *Client) ListRows(ctx context.Context, options ListOptions) (*ListResult
 		}
 		rows = append(rows, *row)
 	}
+	if err := c.maskLinks(ctx, op, selected, rows); err != nil {
+		return nil, err
+	}
 
 	result := &ListResult{
 		Rows: rows, Start: options.Start, Limit: options.Limit,
@@ -1137,7 +1173,125 @@ func (c *Client) GetRowFrom(ctx context.Context, table, rowID string) (*Row, err
 			Message: "SeaTable answered with a different row than the requested one",
 		}
 	}
+	if err := c.maskLinks(ctx, op, selected, []Row{*row}); err != nil {
+		return nil, err
+	}
 	return row, nil
+}
+
+// maskLinks reduces every link entry that points into a table outside the connection's allow-list to its
+// row identifier, so a display value never leaves through a table the connection may not read. A wildcard
+// connection reads every table and keeps the display values. The metadata is requested only when a row
+// carries link entries at all. A counter table that cannot be determined counts as not allowed.
+func (c *Client) maskLinks(ctx context.Context, op string, selected target, rows []Row) error {
+	if c.scope.wildcard {
+		return nil
+	}
+	found := false
+	for _, row := range rows {
+		for _, value := range row.Values {
+			if _, ok := linkEntries(value); ok {
+				found = true
+			}
+		}
+	}
+	if !found {
+		return nil
+	}
+	document, err := c.metadata(ctx, op)
+	if err != nil {
+		return err
+	}
+	var current *tableJSON
+	for i := range document.Metadata.Tables {
+		if matchesTable(selected, document.Metadata.Tables[i]) {
+			current = &document.Metadata.Tables[i]
+			break
+		}
+	}
+	for _, row := range rows {
+		for name, value := range row.Values {
+			entries, ok := linkEntries(value)
+			if !ok || c.linkAllowed(document, current, name) {
+				continue
+			}
+			masked := make([]map[string]string, 0, len(entries))
+			for _, id := range entries {
+				masked = append(masked, map[string]string{"row_id": id})
+			}
+			encoded, err := json.Marshal(masked)
+			if err != nil {
+				return providerError(op, "a link value could not be masked")
+			}
+			row.Values[name] = encoded
+		}
+	}
+	return nil
+}
+
+// linkEntries reports the row identifiers of a cell that holds link entries: an array with at least one
+// object that carries a row_id. Entries without a usable row_id are not reported.
+func linkEntries(value json.RawMessage) ([]string, bool) {
+	var items []json.RawMessage
+	if json.Unmarshal(value, &items) != nil {
+		return nil, false
+	}
+	ids := []string{}
+	found := false
+	for _, item := range items {
+		var entry map[string]json.RawMessage
+		if json.Unmarshal(item, &entry) != nil {
+			continue
+		}
+		raw, ok := entry["row_id"]
+		if !ok {
+			continue
+		}
+		found = true
+		if id := decodeString(raw); id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return ids, found
+}
+
+// linkAllowed reports whether the table a link column points to is inside the allow-list. Only a column of
+// type link whose two table identifiers name the current table and one other table is resolved; every
+// other case is not allowed.
+func (c *Client) linkAllowed(document metadataJSON, current *tableJSON, column string) bool {
+	if current == nil {
+		return false
+	}
+	for _, candidate := range current.Columns {
+		if candidate.Name != column {
+			continue
+		}
+		if candidate.Type != "link" {
+			return false
+		}
+		first, second := candidate.Data.TableID, candidate.Data.OtherTableID
+		var other string
+		switch {
+		case first == current.ID && second != "":
+			other = second
+		case second == current.ID && first != "":
+			other = first
+		default:
+			return false
+		}
+		for _, table := range document.Metadata.Tables {
+			if table.ID != other {
+				continue
+			}
+			for _, allowed := range c.scope.targets {
+				if matchesTable(allowed, table) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	return false
 }
 
 func (c *Client) CreateRow(ctx context.Context, values map[string]json.RawMessage) error {
@@ -1175,55 +1329,77 @@ func (c *Client) DeleteRowFrom(ctx context.Context, table, rowID string) error {
 
 func (c *Client) changeRows(ctx context.Context, op, method, table string, payload map[string]any,
 	values map[string]json.RawMessage, rowID string) error {
+	var sets []map[string]json.RawMessage
 	if values != nil {
+		sets = []map[string]json.RawMessage{values}
+	}
+	path, token, encoded, err := c.prepareRows(ctx, op, table, payload, sets, false)
+	if err != nil {
+		return err
+	}
+	return c.change(ctx, op, method, path, token, encoded)
+}
+
+// prepareRows validates the column sets of a row mutation against the base metadata, binds the payload to
+// the selected table, and returns the route, the base token, and the encoded body. It performs no change.
+// A single-row and a batch mutation share it; noLinks additionally refuses link columns, which only the
+// link tools may write.
+func (c *Client) prepareRows(ctx context.Context, op, table string, payload map[string]any,
+	sets []map[string]json.RawMessage, noLinks bool) (string, string, []byte, error) {
+	for _, values := range sets {
 		if len(values) == 0 {
-			return providerError(op, "at least one column value is required")
+			return "", "", nil, providerError(op, "at least one column value is required")
 		}
 		for name := range values {
 			if name == "" || strings.HasPrefix(name, systemPrefix) {
-				return providerError(op, "system and empty column names cannot be written")
+				return "", "", nil, providerError(op, "system and empty column names cannot be written")
 			}
 		}
 	}
 	selected, err := c.scope.selectTarget(table)
 	if err != nil {
-		return providerError(op, err.Error())
+		return "", "", nil, providerError(op, err.Error())
 	}
 	access, err := c.access(ctx, op)
 	if err != nil {
-		return err
+		return "", "", nil, err
 	}
-	if values != nil {
-		if err := c.checkColumns(ctx, op, access, selected, values); err != nil {
-			return err
+	if len(sets) > 0 {
+		if err := c.checkColumns(ctx, op, selected, sets, noLinks); err != nil {
+			return "", "", nil, err
 		}
 	}
 	payload[selected.tableParam] = selected.table
 	encoded, err := json.Marshal(payload)
 	if err != nil || len(encoded) > maxRequestBytes {
-		return providerError(op, "the request exceeds the size limit")
+		return "", "", nil, providerError(op, "the request exceeds the size limit")
 	}
-	return c.change(ctx, op, method, gatewayPath+url.PathEscape(access.uuid)+rowsPath, access.token, encoded)
+	return gatewayPath + url.PathEscape(access.uuid) + rowsPath, access.token, encoded, nil
 }
 
-func (c *Client) checkColumns(ctx context.Context, op string, access *baseAccess, selected target,
-	values map[string]json.RawMessage) error {
-	var document metadataJSON
-	if err := c.get(ctx, op, gatewayPath+url.PathEscape(access.uuid)+metadataPath, nil,
-		access.token, maxMetadataBytes, &document); err != nil {
+func (c *Client) checkColumns(ctx context.Context, op string, selected target,
+	sets []map[string]json.RawMessage, noLinks bool) error {
+	document, err := c.metadata(ctx, op)
+	if err != nil {
 		return err
 	}
 	for _, table := range document.Metadata.Tables {
 		if !matchesTable(selected, table) {
 			continue
 		}
-		columns := make(map[string]bool, len(table.Columns))
+		columns := make(map[string]columnJSON, len(table.Columns))
 		for _, column := range table.Columns {
-			columns[column.Name] = true
+			columns[column.Name] = column
 		}
-		for name := range values {
-			if !columns[name] {
-				return providerError(op, "the selected SeaTable table does not define every requested column")
+		for _, values := range sets {
+			for name := range values {
+				column, ok := columns[name]
+				if !ok {
+					return providerError(op, "the selected SeaTable table does not define every requested column")
+				}
+				if noLinks && column.Type == "link" {
+					return providerError(op, "link columns cannot be written here, use the link tools")
+				}
 			}
 		}
 		return nil
@@ -1287,6 +1463,8 @@ type baseTokenJSON struct {
 	AccessToken  string `json:"access_token"`
 	DTableUUID   string `json:"dtable_uuid"`
 	DTableServer string `json:"dtable_server"`
+	DTableName   string `json:"dtable_name"`
+	WorkspaceID  int64  `json:"workspace_id"`
 }
 
 // metadataJSON mirrors the part of the base metadata the connection test inspects.
@@ -1296,15 +1474,27 @@ type metadataJSON struct {
 	} `json:"metadata"`
 }
 
+// columnJSON mirrors the column properties this provider reads. Data carries the two table identifiers of
+// a link column, which name the tables the link joins.
+type columnJSON struct {
+	Key  string `json:"key"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+	Data struct {
+		TableID      string `json:"table_id"`
+		OtherTableID string `json:"other_table_id"`
+		LinkID       string `json:"link_id"`
+		Options      []struct {
+			Name string `json:"name"`
+		} `json:"options"`
+	} `json:"data"`
+}
+
 type tableJSON struct {
-	ID      string `json:"_id"`
-	Name    string `json:"name"`
-	Columns []struct {
-		Key  string `json:"key"`
-		Name string `json:"name"`
-		Type string `json:"type"`
-	} `json:"columns"`
-	Views []struct {
+	ID      string       `json:"_id"`
+	Name    string       `json:"name"`
+	Columns []columnJSON `json:"columns"`
+	Views   []struct {
 		ID   string `json:"_id"`
 		Name string `json:"name"`
 	} `json:"views"`

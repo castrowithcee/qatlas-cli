@@ -123,26 +123,18 @@ func TestMCPToolsUseApplicationCoreContracts(t *testing.T) {
 	if search.IsError {
 		t.Fatalf("search returned an error: %s", search.Content[0].Text)
 	}
-	var searchResult struct {
-		Operations []application.SearchHit `json:"operations"`
-	}
+	var searchResult application.SearchResponse
 	decodeRaw(t, search.Structured, &searchResult)
 	if len(searchResult.Operations) != 2 {
 		t.Fatalf("search operations = %d, want 2", len(searchResult.Operations))
 	}
-	// qatlas.search pages the entries of the CLI index and lists their connections instead of joining them.
-	// What must agree is which tools they name, in which order, and what each entry says.
-	indexed := toolSummaries(t, string(runFakeCLIJSON(t, "", "tools", "--query", "page", "--config", path,
+	// qatlas.search pages the entries of the CLI index; the entries and the connections named once are the
+	// same, entry by entry, in the same order.
+	indexed := toolIndex(t, string(runFakeCLIJSON(t, "", "tools", "--query", "page", "--config", path,
 		"--output", "json")))
-	if len(indexed) != len(searchResult.Operations) {
-		t.Fatalf("index = %+v, want the %d searched operations", indexed, len(searchResult.Operations))
-	}
-	for i, tool := range indexed {
-		hit := searchResult.Operations[i]
-		if tool.ID != hit.ID || tool.Title != hit.Title || tool.Effect != hit.Effect ||
-			tool.Connections != strings.Join(hit.Connections, " ") {
-			t.Errorf("index[%d] = %+v, want %+v", i, tool, hit)
-		}
+	if !reflect.DeepEqual(indexed.Connections, searchResult.Connections) ||
+		!reflect.DeepEqual(indexed.Tools, searchResult.Operations) {
+		t.Fatalf("index = %+v, want the searched operations %+v", indexed, searchResult)
 	}
 
 	describe := toolResultFrom(t, responses[`"describe"`])
@@ -301,8 +293,8 @@ func TestMCPBrokerArgumentErrorsNameTheField(t *testing.T) {
 	}
 }
 
-// A tool that requires an explicit connection is refused without one over the tool CLI and the MCP broker
-// alike, and both name the routes that offer it as the same detail.
+// Several connections without a default are refused over the tool CLI and the MCP broker alike, and both
+// name the routes that offer the tool as the same detail.
 func TestConnectionSelectionNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
@@ -314,7 +306,6 @@ func TestConnectionSelectionNamesCandidatesOverCLIAndMCP(t *testing.T) {
 	if err := registry.Register("fake", capability.Operation{
 		Descriptor: capability.Descriptor{
 			ID: "fake.pages.get", Version: 1, Description: "Read a fake page", Provider: "fake",
-			RequiresExplicitConnection: true,
 			Risk: capability.Risk{
 				Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
 				Confirmation: capability.ConfirmationNone, DataSensitivity: "test",
@@ -353,7 +344,7 @@ defaults: {}
 	code := run(newRootCommand(options, registry), options,
 		[]string{"invoke", "fake.pages.get", "--config", path}, &stdout, &stderr)
 	lines := strings.Split(stderr.String(), "\n")
-	if code != exitUsage || len(lines) < 2 || !strings.HasPrefix(lines[0], "qatlas: connection-selection: ") {
+	if code != exitUsage || len(lines) < 2 || !strings.HasPrefix(lines[0], "qatlas: connection-ambiguous: ") {
 		t.Fatalf("exit=%d stderr=%q", code, stderr.String())
 	}
 
@@ -361,15 +352,15 @@ defaults: {}
 		`,"name":"qatlas.invoke","arguments":{"operation":"fake.pages.get","arguments":{}}}}` + "\n"
 	responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: path, Redactor: &redact.Redactor{}})
 	invoke := toolResultFrom(t, responses["1"])
-	if !invoke.IsError || !strings.HasPrefix(invoke.Content[0].Text, "connection-selection: ") {
+	if !invoke.IsError || !strings.HasPrefix(invoke.Content[0].Text, "connection-ambiguous: ") {
 		t.Fatalf("invoke = %+v", invoke)
 	}
 	if !jsonEqual([]byte(lines[1]), invoke.Structured) {
 		t.Fatalf("CLI detail = %s, MCP detail = %s", lines[1], invoke.Structured)
 	}
 	// A client that shows only the text still learns the candidates, and both routes say the same.
-	wantText := `connection-selection: tool "fake.pages.get" requires an explicit connection in this invoke ` +
-		`request; the connections that offer it: primary (team pages), secondary`
+	wantText := `connection-ambiguous: tool "fake.pages.get" has multiple matching connections: ` +
+		`primary (team pages), secondary`
 	if invoke.Content[0].Text != wantText || lines[0] != "qatlas: "+wantText {
 		t.Fatalf("CLI text = %q, MCP text = %q, want %q", lines[0], invoke.Content[0].Text, wantText)
 	}
@@ -380,7 +371,7 @@ defaults: {}
 	}
 	decodeRaw(t, invoke.Structured, &detail)
 	want := []application.ConnectionRef{{Name: "primary", Description: "team pages"}, {Name: "secondary"}}
-	if detail.Code != string(output.CodeConnectionSelection) || detail.Operation != "fake.pages.get" ||
+	if detail.Code != string(output.CodeConnectionAmbiguous) || detail.Operation != "fake.pages.get" ||
 		!reflect.DeepEqual(detail.Connections, want) {
 		t.Fatalf("detail = %+v, want the candidates %+v", detail, want)
 	}
@@ -639,9 +630,9 @@ func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
 	}
 }
 
-// A qatlas.search hit carries what picking a tool needs, in the order of the CLI index: id, title, effect,
-// and the offering connections as a list, plus the reason only in a search with all. Description, version,
-// tags, and provider stay one describe away.
+// A qatlas.search hit carries what a call needs, in the order of the CLI index: id, title, effect, and the
+// columns some hit uses (requires, confirm, connections, reason); the connections are named once beside the
+// hits. Description, version, tags, and provider stay one describe away.
 func TestMCPSearchHitsAreCompact(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
 	t.Setenv("QATLAS_CLI_HOME", "")
@@ -661,11 +652,11 @@ func TestMCPSearchHitsAreCompact(t *testing.T) {
 	}
 
 	for id, want := range map[string]string{
-		`"offered"`: `{"operations":[{"id":"bookstack.pages.get","title":"Read one page","effect":"read",` +
-			`"connections":["wiki"]}],"has_more":false}`,
-		`"all"`: `{"operations":[{"id":"bookstack.pages.get","title":"Read one page","effect":"read",` +
-			`"connections":["wiki"]},{"id":"bookstack.pages.list","title":"List pages","effect":"read",` +
-			`"connections":[],"reason":"not-in-tools-list"}],"has_more":false}`,
+		`"offered"`: `{"connections":["wiki"],"operations":[{"id":"bookstack.pages.get","title":"Read one page",` +
+			`"effect":"read"}],"has_more":false}`,
+		`"all"`: `{"connections":["wiki"],"operations":[{"id":"bookstack.pages.get","title":"Read one page",` +
+			`"effect":"read","reason":""},{"id":"bookstack.pages.list","title":"List pages","effect":"read",` +
+			`"reason":"not-in-tools-list"}],"has_more":false}`,
 	} {
 		result := toolResultFrom(t, responses[id])
 		if result.IsError || string(result.Structured) != want || result.Content[0].Text != want {
@@ -828,7 +819,6 @@ func mcpSendRegistry(t *testing.T) (*capability.Registry, string) {
 	}
 	descriptor := capability.Descriptor{
 		ID: "fake.messages.send", Version: 1, Description: "Send a fake message", Provider: "fake",
-		RequiresExplicitConnection: true,
 		Risk: capability.Risk{
 			Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: "message",
@@ -1098,6 +1088,18 @@ func toolResultFrom(t *testing.T, response decodedMCPResponse) mcpToolResult {
 	decodeRaw(t, response.Result, &result)
 	if len(result.Content) != 1 || result.Content[0].Type != "text" {
 		t.Fatalf("tool content = %+v", result.Content)
+	}
+	if !result.IsError {
+		// A success is transferred once: no structuredContent, and the single text block is the JSON result.
+		if result.Structured != nil {
+			t.Fatalf("success carries structuredContent %s", result.Structured)
+		}
+		if !json.Valid([]byte(result.Content[0].Text)) {
+			t.Fatalf("success text is not JSON: %q", result.Content[0].Text)
+		}
+		result.Structured = json.RawMessage(result.Content[0].Text)
+	} else if len(result.Structured) == 0 {
+		t.Fatalf("error lacks structuredContent: %+v", result)
 	}
 	return result
 }

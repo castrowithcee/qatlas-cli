@@ -168,7 +168,6 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 	for _, descriptor := range operations {
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
-			!descriptor.RequiresExplicitConnection ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
 			t.Errorf("descriptor %s = %+v, want a bounded operation requiring an explicit connection",
 				descriptor.ID, descriptor)

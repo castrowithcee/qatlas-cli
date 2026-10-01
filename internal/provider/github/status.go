@@ -55,12 +55,11 @@ var statusList = capability.Descriptor{
 	ID:      Provider + ".projectstatus.list",
 	Version: 1,
 	Title:   "List the status updates of a GitHub project",
-	Description: "Read one bounded batch of the status updates of a GitHub project an explicit connection " +
+	Description: "Read one bounded batch of the status updates of a GitHub project a connection " +
 		"allows, newest first: status, start and target date, body, and author",
-	Tags:                       []string{"github", "projects", "status", "updates", "list", "planning"},
-	Risk:                       readRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"github", "projects", "status", "updates", "list", "planning"},
+	Risk:     readRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":1,` +
 		`"maximum":100},"cursor":` + cursorSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"status_updates":{"type":"array","items":` +
@@ -87,12 +86,11 @@ var statusCreate = capability.Descriptor{
 	ID:      Provider + ".projectstatus.create",
 	Version: 1,
 	Title:   "Post a GitHub project status update",
-	Description: "Post one status update with status, start and target date, and body to a GitHub project an " +
-		"explicit connection allows; a repeated call posts a second status update",
-	Tags:                       []string{"github", "projects", "status", "updates", "create", "planning"},
-	Risk:                       changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Description: "Post one status update with status, start and target date, and body to a GitHub project a " +
+		"connection allows; a repeated call posts a second status update",
+	Tags:     []string{"github", "projects", "status", "updates", "create", "planning"},
+	Risk:     changeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + statusUpdateKeys + `},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(changedStatusOutput),
@@ -110,11 +108,10 @@ var statusUpdate = capability.Descriptor{
 	Version: 1,
 	Title:   "Update a GitHub project status update",
 	Description: "Change the status, start or target date, or body of one status update of a GitHub project " +
-		"an explicit connection allows; settings left out stay unchanged",
-	Tags:                       []string{"github", "projects", "status", "updates", "update", "planning"},
-	Risk:                       changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+		"a connection allows; settings left out stay unchanged",
+	Tags:     []string{"github", "projects", "status", "updates", "update", "planning"},
+	Risk:     changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"status_update_id":` + statusUpdateIDSchema +
 		`,` + statusUpdateKeys + `},"required":["status_update_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(changedStatusOutput),
@@ -134,13 +131,12 @@ var statusDelete = capability.Descriptor{
 	ID:      Provider + ".projectstatus.delete",
 	Version: 1,
 	Title:   "Delete a GitHub project status update",
-	Description: "Delete one status update of a GitHub project an explicit connection allows. Offered only by " +
+	Description: "Delete one status update of a GitHub project a connection allows. Offered only by " +
 		"a connection whose tools list names it",
-	Tags:                       []string{"github", "projects", "status", "updates", "delete"},
-	Risk:                       changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
-	RequiresToolAllowList:      true,
+	Tags:                  []string{"github", "projects", "status", "updates", "delete"},
+	Risk:                  changeRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"status_update_id":` + statusUpdateIDSchema +
 		`},"required":["status_update_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"status_update_id":{"type":"string"},` +

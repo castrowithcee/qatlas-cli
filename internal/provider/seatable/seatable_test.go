@@ -198,7 +198,7 @@ func rowRoute(base, id string) string {
 }
 
 // Register publishes the configuration metadata the TUI needs, schema discovery, and the row operations.
-func TestRegisterPublishesMetadataAndSevenOperations(t *testing.T) {
+func TestRegisterPublishesMetadataAndThirtyOperations(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
 		t.Fatalf("Register() = %v", err)
@@ -221,18 +221,23 @@ func TestRegisterPublishesMetadataAndSevenOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 7 {
-		t.Fatalf("operations = %d, want two schema and five row operations", len(operations))
+	if len(operations) != 40 {
+		t.Fatalf("operations = %d, want two schema, six row, three batch row, one snapshot, four link, five view, four table change, three column option, three column, two history, three comment, one collaborator, and three file operation", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantSensitivity := dataSensitivity
 		if descriptor.ID == "seatable.columns.list" || descriptor.ID == "seatable.tables.list" {
 			wantSensitivity = schemaSensitivity
 		}
+		if descriptor.ID == "seatable.rows.activities" || descriptor.ID == "seatable.base.operations" {
+			wantSensitivity = historySensitivity
+		}
+		if descriptor.ID == "seatable.comments.list" || descriptor.ID == "seatable.collaborators.list" {
+			wantSensitivity = peopleSensitivity
+		}
 		if descriptor.Version != 1 || descriptor.Provider != Provider ||
-			!descriptor.RequiresExplicitConnection ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != wantSensitivity {
-			t.Errorf("descriptor %s = %+v, want a bounded operation requiring an explicit connection",
+			t.Errorf("descriptor %s = %+v, want a bounded operation",
 				descriptor.ID, descriptor)
 		}
 		if descriptor.Risk.Effect == capability.EffectRead && descriptor.Risk.Confirmation != capability.ConfirmationNone {
@@ -248,7 +253,7 @@ func TestRegisterPublishesMetadataAndSevenOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "seatable.columns.list" || operations[6].ID != "seatable.tables.list" {
+	if operations[0].ID != "seatable.base.operations" || operations[39].ID != "seatable.views.update" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1262,4 +1267,106 @@ func classOf(err error) provider.Class {
 		return providerErr.Class
 	}
 	return ""
+}
+
+const linkCanary = "linked-display-canary-seatable-5d2f"
+
+// linkMetadata holds two tables joined by a link column. Kunden points to Tickets; from the other side the
+// two table identifiers of the same link are swapped.
+const linkMetadata = `{"metadata":{"tables":[
+ {"_id":"0000","name":"Kunden","columns":[
+   {"key":"0000","name":"Name","type":"text"},
+   {"key":"aaaa","name":"Vorgang","type":"link","data":{"table_id":"0000","other_table_id":"0001","link_id":"l1"}},
+   {"key":"bbbb","name":"Rueck","type":"link","data":{"table_id":"0001","other_table_id":"0000","link_id":"l2"}},
+   {"key":"cccc","name":"Unklar","type":"link","data":{"table_id":"0002","other_table_id":"0003"}}],
+  "views":[{"_id":"0000","name":"Standard"}]},
+ {"_id":"0001","name":"Tickets","columns":[{"key":"0000","name":"Titel","type":"text"}],
+  "views":[{"_id":"0000","name":"Standard"}]}
+]}}`
+
+const linkRow = `{"_id":"` + rowID + `","Name":"Bike","Vorgang":[{"row_id":"` + otherRowID +
+	`","display_value":"` + linkCanary + `"}],"Rueck":[{"row_id":"` + otherRowID +
+	`","display_value":"` + linkCanary + `"}],"Unklar":[{"row_id":"` + otherRowID +
+	`","display_value":"` + linkCanary + `"}]}`
+
+func serveLinks(t *testing.T, metadataCalls *int) {
+	t.Helper()
+	serveBase(t, func(request *http.Request) (*http.Response, error) {
+		switch {
+		case request.URL.Path == metaRoute(salesBase):
+			*metadataCalls++
+			return jsonResponse(http.StatusOK, linkMetadata), nil
+		case strings.HasSuffix(request.URL.Path, rowID+"/"):
+			return jsonResponse(http.StatusOK, linkRow), nil
+		}
+		return jsonResponse(http.StatusOK, `{"rows":[`+linkRow+`]}`), nil
+	})
+}
+
+func linkOutputs(t *testing.T, c *Client, table string) []string {
+	t.Helper()
+	page, err := c.ListRows(context.Background(), ListOptions{Table: table, Limit: 10})
+	if err != nil {
+		t.Fatalf("ListRows() = %v", err)
+	}
+	row, err := c.GetRowFrom(context.Background(), table, rowID)
+	if err != nil {
+		t.Fatalf("GetRow() = %v", err)
+	}
+	listed, _ := json.Marshal(page)
+	got, _ := json.Marshal(row)
+	return []string{string(listed), string(got)}
+}
+
+func TestLinksToTablesOutsideTheAllowListKeepOnlyRowIdentifiers(t *testing.T) {
+	for _, target := range []string{"Kunden", "id:0000", "Kunden/Standard", "id:0000/id:0000"} {
+		calls := 0
+		serveLinks(t, &calls)
+		c, _ := client(t, target)
+		for _, output := range linkOutputs(t, c, "") {
+			if strings.Contains(output, linkCanary) || strings.Contains(output, "display_value") {
+				t.Errorf("target %q leaked a display value: %s", target, output)
+			}
+			if strings.Count(output, `"row_id":"`+otherRowID+`"`) != 3 {
+				t.Errorf("target %q lost a row identifier: %s", target, output)
+			}
+		}
+		if calls != 1 {
+			t.Errorf("target %q metadata calls = %d, want one for the client (list and get share it)", target, calls)
+		}
+	}
+}
+
+func TestLinksToAnAllowListedTableKeepDisplayValues(t *testing.T) {
+	calls := 0
+	serveLinks(t, &calls)
+	red := &redact.Redactor{}
+	c, err := open(context.Background(), &config.Resolved{
+		Name: "sales", Provider: Provider, BaseURL: cloudOrigin, Service: "seatable", Credential: "sales-reader",
+		Targets: []string{"Kunden", "id:0001"},
+		Secrets: config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{roleAPIToken: salesEnv}},
+	}, resolver(red), red, freeLimiter())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, output := range linkOutputs(t, c, "Kunden") {
+		// Both directions of the joined link resolve to the allowed table; the unresolvable one is masked.
+		if strings.Count(output, linkCanary) != 2 {
+			t.Errorf("display values = %s, want exactly the two resolvable links", output)
+		}
+	}
+}
+
+func TestWildcardConnectionKeepsDisplayValuesWithoutMetadata(t *testing.T) {
+	calls := 0
+	serveLinks(t, &calls)
+	c, _ := client(t, "*")
+	for _, output := range linkOutputs(t, c, "Kunden") {
+		if strings.Count(output, linkCanary) != 3 {
+			t.Errorf("wildcard output = %s, want all display values", output)
+		}
+	}
+	if calls != 0 {
+		t.Errorf("metadata calls = %d, want none for a wildcard", calls)
+	}
 }

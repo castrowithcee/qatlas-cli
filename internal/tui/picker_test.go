@@ -192,7 +192,7 @@ func TestASmallChoiceKeepsLeftAndRight(t *testing.T) {
 	m, _, _ := newModel(t)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	focusField(t, m, storageLabel)
 	before := m.credentialType()
 	press(t, m, "right")
@@ -287,7 +287,7 @@ func TestEveryChoiceRowOpensOnEnterSpaceAndSlash(t *testing.T) {
 		for _, key := range []string{"enter", " ", "/"} {
 			m, path := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
 			openSectionByName(t, m, row.section)
-			press(t, m, "n")
+			pressNew(t, m)
 			typeText(t, m, "fresh")
 			focusField(t, m, row.label)
 			before, err := os.ReadFile(path)
@@ -319,7 +319,7 @@ func TestF2SavesFromAChoiceRow(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, nil)
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "fresh")
 	focusField(t, m, "permissions")
 	if view := screenOf(m); !strings.Contains(view, "enter tick · tab move · F2 save") {
@@ -340,7 +340,7 @@ func TestThePermissionsAreTickedInThePicker(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, _ := toolsModel(t, reg, nil)
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	focusField(t, m, "permissions")
 	if got := m.fieldValue("permissions"); got != "read" {
 		t.Fatalf("permissions = %q, want the recommended read", got)

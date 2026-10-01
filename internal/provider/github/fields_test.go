@@ -317,7 +317,7 @@ func TestFieldChangesSendOneMutationEach(t *testing.T) {
 		{"move the iterations", iterationsReplace.ID, `{"field":"Sprint","start_date":"2026-09-01","duration":7}`,
 			nil, nil, map[string]string{"iterationConfiguration": "map[duration:7 iterations:[" +
 				"map[duration:14 startDate:2026-09-07 title:Sprint 4] map[duration:14 startDate:2026-09-21 title:Sprint 5] " +
-				"map[duration:14 startDate:2026-10-05 title:Sprint 6]] startDate:2026-09-01]"}, `"removed":[]`},
+				"map[duration:14 startDate:2026-10-05 title:Sprint 6]] startDate:2026-09-01]"}, `"name":"Sprint"`},
 		{"delete a field", fieldsDelete.ID, `{"field":"NOTE"}`,
 			[]string{"deleteProjectV2Field(input:{fieldId:$field})"}, nil, map[string]string{"field": "F_note"},
 			`{"deleted":true,"name":"Note","project":"orgs/octo-org/projects/7"}`},

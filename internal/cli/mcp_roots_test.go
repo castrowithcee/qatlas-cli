@@ -172,8 +172,14 @@ defaults: {}
 	return project, outside, cfg
 }
 
+// fileURI is dir as a client names it: file:///C:/... for a Windows drive path, whose slashed form does not
+// start with a slash of its own.
 func fileURI(dir string) string {
-	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(dir)}).String()
+	slashed := filepath.ToSlash(dir)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	return (&url.URL{Scheme: "file", Path: slashed}).String()
 }
 
 // A session whose client offers roots runs in the projects they name, follows every change the client

@@ -20,6 +20,10 @@ type fakeUpdater struct {
 	updateErr error
 	checks    int
 	updates   int
+	// beforeReplace, when set, stands for the hook of the real updater: it runs inside Update, before
+	// the program is replaced, and order records what happened in which sequence.
+	beforeReplace func()
+	order         []string
 }
 
 func (f *fakeUpdater) Check(ctx context.Context) (selfupdate.Result, error) {
@@ -32,6 +36,10 @@ func (f *fakeUpdater) Check(ctx context.Context) (selfupdate.Result, error) {
 
 func (f *fakeUpdater) Update(context.Context) (selfupdate.Result, error) {
 	f.updates++
+	if f.beforeReplace != nil {
+		f.beforeReplace()
+	}
+	f.order = append(f.order, "replaced")
 	return f.update, f.updateErr
 }
 
@@ -285,5 +293,29 @@ func TestTheBannerReadsWithoutColour(t *testing.T) {
 	}
 	if !strings.Contains(strings.Split(view, "\n")[0], fullBanner) {
 		t.Errorf("the banner does not read without colour:\n%s", view)
+	}
+}
+
+// The question names the consequences, n changes nothing, and y installs: the updater's own hook (the vault
+// lock) then runs before the replacement.
+func TestTheUpdateQuestionNamesTheConsequencesAndLocksBeforeReplacing(t *testing.T) {
+	fake := newerRelease()
+	fake.beforeReplace = func() { fake.order = append(fake.order, "locked") }
+	m := startedWith(t, fake)
+	press(t, m, "u")
+	view := strings.Join(strings.Fields(screenOf(m)), " ")
+	for _, want := range []string{"Update qatlas to v0.5.0?", "A running vault process is locked first.",
+		"'qatlas tui' and 'qatlas web'"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the question does not say %q:\n%s", want, screenOf(m))
+		}
+	}
+	pump(t, m, "n")
+	if len(fake.order) != 0 || fake.updates != 0 {
+		t.Errorf("n did something: %v", fake.order)
+	}
+	pump(t, m, "u", "y")
+	if got := strings.Join(fake.order, ","); got != "locked,replaced" {
+		t.Errorf("order = %q, want locked,replaced", got)
 	}
 }

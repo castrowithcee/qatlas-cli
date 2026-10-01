@@ -249,7 +249,7 @@ defaults:
 		// is, the note the configuration keeps on it, how many tools it offers, how many configured
 		// connections can run them, and how many are configured. A provider without a route is visible
 		// as exactly that.
-		if !strings.HasPrefix(stdout, "providers[12]{provider,description,note,tools,connections,configured}:\n") {
+		if !strings.HasPrefix(stdout, "providers[16]{provider,description,note,tools,connections,configured}:\n") {
 			t.Errorf("stdout = %q, want a TOON index of the compiled namespaces", stdout)
 		}
 		rows := map[string][3]string{}
@@ -260,9 +260,9 @@ defaults:
 		}
 		for provider, want := range map[string][3]string{
 			"bookstack": {"5", "2", "2"}, "telegram": {"3", "0", "0"}, "lexware": {"3", "0", "0"},
-			"twentycrm": {"5", "0", "0"}, "seatable": {"7", "0", "0"}, "nextcloud": {"6", "0", "0"},
-			"github": {"123", "0", "0"}, "todoist": {"39", "0", "0"}, "n8n": {"10", "0", "0"},
-			"make": {"10", "0", "0"},
+			"twentycrm": {"5", "0", "0"}, "seatable": {"40", "0", "0"}, "nextcloud": {"6", "0", "0"},
+			"github": {"192", "0", "0"}, "todoist": {"39", "0", "0"}, "n8n": {"10", "0", "0"},
+			"make": {"10", "0", "0"}, "infomaniakmail": {"2", "0", "0"}, "seatableaccount": {"2", "0", "0"}, "baserow": {"14", "0", "0"}, "penpot": {"23", "0", "0"},
 		} {
 			if rows[provider] != want {
 				t.Errorf("%s = %v tools and connections, want %v:\n%s", provider, rows[provider], want, stdout)
@@ -287,16 +287,17 @@ defaults:
 			t.Errorf("stdout = %q, want the two BookStack connections without their endpoints", stdout)
 		}
 
-		// The tools of one namespace follow, with what each one is and does and which routes offer it.
+		// The tools of one namespace follow, one table row each with what it is, does, and requires; the
+		// connections that offer them are named once above the table.
 		code, stdout, stderr = c.run(t, "tools", "bookstack")
 		if code != 0 {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		if !strings.HasPrefix(stdout, "tools[2]{id,title,effect,connections}:\n") {
+		if !strings.HasPrefix(stdout, "connections[2]: archive,primary\ntools[2]{id,title,effect,requires}:\n") {
 			t.Errorf("stdout = %q, want a TOON listing of the offered BookStack tools", stdout)
 		}
-		for _, want := range []string{"  bookstack.pages.get,Get a BookStack page,read,archive primary\n",
-			"  bookstack.pages.list,List BookStack pages,read,archive primary\n"} {
+		for _, want := range []string{"  bookstack.pages.get,Get a BookStack page,read,id\n",
+			"  bookstack.pages.list,List BookStack pages,read,\"\"\n"} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout = %q, want it to contain %q", stdout, want)
 			}
@@ -646,6 +647,20 @@ type mcpResponse struct {
 	Error json.RawMessage `json:"error"`
 }
 
+// singleMCPSuccess checks that a success is transferred once, as one JSON text block without
+// structuredContent, and exposes that JSON as Structured for the assertions.
+func singleMCPSuccess(t *testing.T, response *mcpResponse) {
+	t.Helper()
+	if len(response.Error) != 0 || response.Result.IsError {
+		return
+	}
+	if len(response.Result.Structured) != 0 || len(response.Result.Content) != 1 ||
+		!json.Valid([]byte(response.Result.Content[0].Text)) {
+		t.Fatalf("MCP success is not a single JSON text block: %+v", response.Result)
+	}
+	response.Result.Structured = json.RawMessage(response.Result.Content[0].Text)
+}
+
 func decodeMCP(t *testing.T, stdout string) map[string]mcpResponse {
 	t.Helper()
 	responses := map[string]mcpResponse{}
@@ -657,6 +672,7 @@ func decodeMCP(t *testing.T, stdout string) map[string]mcpResponse {
 		} else if err != nil {
 			t.Fatalf("decoding MCP output %q: %v", stdout, err)
 		}
+		singleMCPSuccess(t, &response)
 		responses[strings.Trim(string(response.ID), `"`)] = response
 	}
 	return responses
@@ -857,27 +873,23 @@ defaults: {}
 			}
 		}
 
-		// qatlas.search pages the entries of the public listing and lists their connections instead of
-		// joining them. Both publish only what choosing a tool needs, for the same tools in the same order.
-		index, searched := member(t, jsonCLIDocument(t, c, "", "tools", "bookstack", "--query", "pages",
-			"--output", "json"), "tools"), member(t, mcpData(t, responses["search"]), "operations")
+		// qatlas.search pages the entries of the public listing. Both publish the same entries for the same
+		// tools in the same order, and name the connections that offer them once.
+		listing := jsonCLIDocument(t, c, "", "tools", "bookstack", "--query", "pages", "--output", "json")
+		index, searched := member(t, listing, "tools"), member(t, mcpData(t, responses["search"]), "operations")
 		indexed, indexOK := index.([]any)
 		operations, searchOK := searched.([]any)
 		if !indexOK || !searchOK || len(indexed) == 0 || len(indexed) != len(operations) {
 			t.Fatalf("index=%#v search=%#v", index, searched)
 		}
 		for i := range indexed {
-			entry, _ := indexed[i].(map[string]any)
-			hit, _ := operations[i].(map[string]any)
-			routes, _ := hit["connections"].([]any)
-			names := make([]string, len(routes))
-			for j, route := range routes {
-				names[j], _ = route.(string)
+			if !reflect.DeepEqual(indexed[i], operations[i]) {
+				t.Errorf("index[%d] = %#v, want the entry %#v", i, indexed[i], operations[i])
 			}
-			if len(entry) != 4 || len(hit) != 4 || entry["id"] != hit["id"] || entry["title"] != hit["title"] ||
-				entry["effect"] != hit["effect"] || entry["connections"] != strings.Join(names, " ") {
-				t.Errorf("index[%d] = %#v, want the id, title, effect and connections of %v", i, entry, hit["id"])
-			}
+		}
+		if got, want := member(t, listing, "connections"),
+			member(t, mcpData(t, responses["search"]), "connections"); !reflect.DeepEqual(got, want) {
+			t.Errorf("index connections = %#v, want %#v", got, want)
 		}
 		// A search that fits one page says so: nothing follows and there is no continuation.
 		if page, _ := mcpData(t, responses["search"]).(map[string]any); page["has_more"] != false ||

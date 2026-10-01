@@ -357,7 +357,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		if !change {
 			wantRisk = readRisk
 		}
-		if descriptor.Risk != wantRisk || !descriptor.RequiresExplicitConnection ||
+		if descriptor.Risk != wantRisk ||
 			descriptor.RequiresToolAllowList != listedOnly[descriptor.ID] {
 			t.Errorf("%s risk = %+v, listed only = %t, want %+v on an explicit connection", descriptor.ID,
 				descriptor.Risk, descriptor.RequiresToolAllowList, wantRisk)
@@ -513,7 +513,7 @@ func TestRefusalsHappenBeforeAnyIO(t *testing.T) {
 			`{"since":"2026-09-02T00:00:00Z","until":"2026-09-01T00:00:00Z"}`, "invalid"},
 		{"a control character", "todoist.tasks.filter", "account", `{"query":"today\n"}`, "invalid"},
 		{"a foreign cursor", "todoist.tasks.list", "one", `{"cursor":"AAAAAAAAAAAAAAAAMmFiYy5kZWY"}`, "invalid"},
-		{"no explicit connection", "todoist.tasks.list", "", `{}`, "selection"},
+		{"no connection among several", "todoist.tasks.list", "", `{}`, "ambiguous"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			*env.reads = 0
@@ -521,7 +521,7 @@ func TestRefusalsHappenBeforeAnyIO(t *testing.T) {
 			_, err := env.invoke(tt.operation, tt.connection, tt.arguments)
 			var (
 				unsupported *capability.UnsupportedError
-				selection   *application.ConnectionSelectionError
+				ambiguous   *application.ConnectionAmbiguousError
 			)
 			switch tt.code {
 			case "invalid":
@@ -532,9 +532,9 @@ func TestRefusalsHappenBeforeAnyIO(t *testing.T) {
 				if !errors.As(err, &unsupported) {
 					t.Errorf("err = %v, want an unsupported capability", err)
 				}
-			case "selection":
-				if !errors.As(err, &selection) {
-					t.Errorf("err = %v, want an explicit connection to be required", err)
+			case "ambiguous":
+				if !errors.As(err, &ambiguous) {
+					t.Errorf("err = %v, want several matching connections", err)
 				}
 			}
 			if *env.reads != 0 || len(env.fake.recorded()) != before {
@@ -603,7 +603,7 @@ func TestListsReadOnePageAndCursorsStayOpaque(t *testing.T) {
 
 	// A page the scope emptied still announces the next one.
 	result, err = env.invoke("todoist.tasks.list", "one", `{"due_from":"2030-01-01"}`)
-	if err != nil || !strings.Contains(result, `"tasks":[]`) || !strings.Contains(result, `"has_more":true`) {
+	if err != nil || strings.Contains(result, `"tasks"`) || !strings.Contains(result, `"has_more":true`) {
 		t.Errorf("filtered page = %s, %v; want an empty page that continues", result, err)
 	}
 

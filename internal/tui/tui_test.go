@@ -103,7 +103,7 @@ func newVaultResolver(t *testing.T, dir string) (*secret.Resolver, *secret.Memor
 func addVaultCredential(t *testing.T, m *Model, name string) {
 	t.Helper()
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -191,7 +191,7 @@ func openSectionByName(t *testing.T, m *Model, s section) {
 func addService(t *testing.T, m *Model, name, baseURL string) {
 	t.Helper()
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	press(t, m, "tab") // provider, the only choice is preselected
 	press(t, m, "tab")
@@ -204,7 +204,7 @@ func addService(t *testing.T, m *Model, name, baseURL string) {
 func addCredential(t *testing.T, m *Model, name string, envNames ...string) {
 	t.Helper()
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	// A credential may name its provider; these helpers leave that choice empty, which is what an entry
 	// written before the field looks like, and then every compiled role is offered.
@@ -223,7 +223,7 @@ func addCredential(t *testing.T, m *Model, name string, envNames ...string) {
 func addKeyringCredential(t *testing.T, m *Model, name string) {
 	t.Helper()
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -237,7 +237,7 @@ func addKeyringCredential(t *testing.T, m *Model, name string) {
 func addConnection(t *testing.T, m *Model, name, service, credential string) {
 	t.Helper()
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, name)
 	// The provider row stands between the name and the service; it narrows both rows below it, and the
 	// service the caller asks for names the provider it belongs to.
@@ -388,7 +388,7 @@ func TestNavigation(t *testing.T) {
 
 	t.Run("form focus wraps in both directions", func(t *testing.T) {
 		openSectionByName(t, m, sectionServices)
-		press(t, m, "n")
+		pressNew(t, m)
 		last := len(m.fields) - 1
 		press(t, m, "shift+tab")
 		if m.focus != last {
@@ -402,9 +402,10 @@ func TestNavigation(t *testing.T) {
 }
 
 // TestNarrowNavigation checks the width edge at which the navigation line replaces the sidebar: at 80
-// columns and above up/down still choose the section and right/l focus the list; below 80 columns
-// left/right (and h/l) choose the section instead, wrapping in both directions, while enter/tab still
-// focus the list. The footer names whichever keys apply to the layout shown.
+// columns and above the sidebar keeps its keys unchanged (up/down choose the section, right/enter/tab focus
+// the list); below 80 columns the navigation line follows its own, purely spatial keys: left/right (and
+// h/l) choose the section with wraparound, down (and enter/tab) focuses the content below it, and up does
+// nothing there. The footer names whichever keys apply to the layout shown.
 func TestNarrowNavigation(t *testing.T) {
 	m, _, _ := newModel(t)
 
@@ -422,13 +423,19 @@ func TestNarrowNavigation(t *testing.T) {
 		if m.screen != screenList || m.section != sectionCredentials {
 			t.Fatalf("right = screen %v section %v, want the Credentials list", m.screen, m.section)
 		}
+		m.screen, m.section = screenNav, sectionServices
+		press(t, m, "up")
+		if m.section != sectionLogs || m.screen != screenNav {
+			t.Errorf("up at Services = section %v screen %v, want Logs (sidebar keeps wraparound)",
+				m.section, m.screen)
+		}
 	})
 
 	t.Run("below 80 columns left/right choose the section with wraparound", func(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: 79, Height: 24})
 		m.screen, m.section = screenNav, sectionServices
-		if !strings.Contains(m.View(), "arrows section") {
-			t.Errorf("footer does not name the arrow keys below 80 columns:\n%s", m.View())
+		if !strings.Contains(m.View(), "left/right move") {
+			t.Errorf("footer does not name left/right below 80 columns:\n%s", m.View())
 		}
 		press(t, m, "left")
 		if m.section != sectionLogs || m.screen != screenNav {
@@ -447,20 +454,88 @@ func TestNarrowNavigation(t *testing.T) {
 		if m.section != sectionLogs || m.screen != screenNav {
 			t.Errorf("h at Services = section %v screen %v, want Logs (wrapped back)", m.section, m.screen)
 		}
-		// up/down (and j/k) still work as additional shortcuts in the narrow line.
-		m.screen, m.section = screenNav, sectionServices
-		press(t, m, "down")
-		if m.section != sectionCredentials || m.screen != screenNav {
-			t.Errorf("down = section %v screen %v, want Credentials", m.section, m.screen)
+	})
+
+	t.Run("below 80 columns up does nothing and down/enter/tab focus the content", func(t *testing.T) {
+		m.Update(tea.WindowSizeMsg{Width: 79, Height: 24})
+		for _, key := range []string{"up", "k"} {
+			m.screen, m.section = screenNav, sectionServices
+			press(t, m, key)
+			if m.section != sectionServices || m.screen != screenNav {
+				t.Errorf("%q at Services = section %v screen %v, want no change", key, m.section, m.screen)
+			}
 		}
-		for _, key := range []string{"enter", "tab"} {
+		for _, key := range []string{"down", "j", "enter", "tab"} {
 			m.screen, m.section = screenNav, sectionCredentials
 			press(t, m, key)
 			if m.screen != screenList || m.section != sectionCredentials {
 				t.Errorf("%q = screen %v section %v, want the Credentials list", key, m.screen, m.section)
 			}
 		}
+		// Vault and Logs have no list of their own; down/enter/tab open their own content area the same
+		// way right does in the sidebar.
+		m.screen, m.section = screenNav, sectionVault
+		press(t, m, "down")
+		if m.screen != screenForm {
+			t.Errorf("down at Vault = screen %v, want the Vault form", m.screen)
+		}
+		m.screen, m.section = screenNav, sectionLogs
+		press(t, m, "enter")
+		if m.screen != screenLogs {
+			t.Errorf("enter at Logs = screen %v, want the Logs screen", m.screen)
+		}
 	})
+}
+
+// TestNarrowListFocus checks the list's own keys below 80 columns: up/down move the selection without
+// wraparound, up at the first entry or in an empty list returns the focus to the navigation line, down
+// stays at the last entry, and left/right leave the focus in the list, unlike the sidebar layout where they
+// (like tab) return it to the navigation.
+func TestNarrowListFocus(t *testing.T) {
+	m, _, _ := newModel(t)
+	m.Update(tea.WindowSizeMsg{Width: 79, Height: 24})
+	m.section = sectionServices
+	m.list.reset([]string{"a", "b", "c"})
+	m.screen = screenList
+
+	if !strings.Contains(m.View(), "tab sections") {
+		t.Errorf("footer does not name tab below 80 columns:\n%s", m.View())
+	}
+
+	press(t, m, "up")
+	if m.screen != screenNav {
+		t.Fatalf("up at the first entry = screen %v, want the navigation line", m.screen)
+	}
+
+	m.screen = screenList
+	press(t, m, "down", "down")
+	if m.list.cursor != 2 {
+		t.Fatalf("cursor after two downs = %d, want 2 (last entry)", m.list.cursor)
+	}
+	press(t, m, "down")
+	if m.list.cursor != 2 || m.screen != screenList {
+		t.Errorf("down at the last entry = cursor %d screen %v, want to stay put", m.list.cursor, m.screen)
+	}
+
+	for _, key := range []string{"left", "h", "right", "l"} {
+		m.screen = screenList
+		press(t, m, key)
+		if m.screen != screenList {
+			t.Errorf("%q in the list = screen %v, want to stay in the list", key, m.screen)
+		}
+	}
+
+	press(t, m, "k", "k", "k")
+	if m.screen != screenNav {
+		t.Errorf("k to the first entry and past it = screen %v, want the navigation line", m.screen)
+	}
+
+	m.screen = screenList
+	m.list.reset(nil)
+	press(t, m, "up")
+	if m.screen != screenNav {
+		t.Errorf("up in an empty list = screen %v, want the navigation line", m.screen)
+	}
 }
 
 // sectionLabels are how the sidebar names the eight sections.
@@ -544,7 +619,7 @@ func TestDirectSectionKeys(t *testing.T) {
 	}
 
 	// In a form the digits are text, with no alt+digit section key: the global shortcut was removed.
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "2")
 	if m.section != sectionServices || m.fieldValue("name") != "2" {
 		t.Fatalf("a digit escaped the form: section %v name %q", m.section, m.fieldValue("name"))
@@ -653,7 +728,7 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		m, _, path := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 		openSectionByName(t, m, sectionServices)
-		press(t, m, "n")
+		pressNew(t, m)
 		typeText(t, m, "wiki")
 		press(t, m, "tab", "tab")
 		typeText(t, m, "https://wiki.example.invalid")
@@ -968,7 +1043,7 @@ func TestCancelWritesNothing(t *testing.T) {
 	}
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "discarded")
 	// Leaving a changed form asks; discarding is the explicit answer.
 	press(t, m, "esc", "d")
@@ -998,7 +1073,7 @@ func TestValidationErrorsAreShown(t *testing.T) {
 			name: "an empty name is refused",
 			build: func(t *testing.T, m *Model) {
 				openSectionByName(t, m, sectionServices)
-				press(t, m, "n")
+				pressNew(t, m)
 				press(t, m, "enter")
 			},
 			wantIn: "name must not be empty",
@@ -1007,7 +1082,7 @@ func TestValidationErrorsAreShown(t *testing.T) {
 			name: "a missing base url is refused by the core",
 			build: func(t *testing.T, m *Model) {
 				openSectionByName(t, m, sectionServices)
-				press(t, m, "n")
+				pressNew(t, m)
 				typeText(t, m, "wiki")
 				press(t, m, "enter")
 			},
@@ -1166,7 +1241,7 @@ func TestNoSecretValues(t *testing.T) {
 	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections, sectionDefaults} {
 		openSectionByName(t, m, s)
 		rendered.WriteString(screenOf(m))
-		press(t, m, "n")
+		pressNew(t, m)
 		rendered.WriteString(screenOf(m))
 		press(t, m, "esc")
 	}
@@ -1224,7 +1299,7 @@ func TestPastedSecretIsRefusedWithoutEchoingIt(t *testing.T) {
 	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections, sectionDefaults} {
 		openSectionByName(t, m, s)
 		rendered.WriteString(screenOf(m))
-		press(t, m, "n")
+		pressNew(t, m)
 		rendered.WriteString(screenOf(m))
 		press(t, m, "esc")
 		rendered.WriteString(screenOf(m))
@@ -1269,7 +1344,7 @@ func TestTheFormShowsWhereTheCursorStands(t *testing.T) {
 
 	m, _, _ := newModel(t)
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	press(t, m, "tab", "tab") // name, provider, base url
 	typeText(t, m, url)
 
@@ -1311,7 +1386,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	m, _, _ := newModel(t)
 
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	if view := screenOf(m); !strings.Contains(view, "a key you choose, without spaces") {
 		t.Errorf("the name field has no hint:\n%s", view)
 	}
@@ -1350,7 +1425,7 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	}
 
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	if view := screenOf(m); !strings.Contains(view, nameHint) {
 		t.Errorf("the service form does not show %q:\n%s", nameHint, view)
 	}
@@ -1526,7 +1601,7 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 func TestSpacesAtTheEdgesAreTrimmedVisibly(t *testing.T) {
 	m, store, _ := newModel(t)
 	openSectionByName(t, m, sectionServices)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "  wiki  ")
 	press(t, m, "tab")
 
@@ -1695,7 +1770,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 	m, _, path := newModel(t)
 
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "wiki-reader")
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -1886,7 +1961,7 @@ func TestAHintBelongsToTheFieldAboveIt(t *testing.T) {
 		m, _, _ := newModel(t)
 		m.Update(tea.WindowSizeMsg{Width: width})
 		openSectionByName(t, m, sectionCredentials)
-		press(t, m, "n")
+		pressNew(t, m)
 		press(t, m, "tab")
 		press(t, m, "tab")
 		selectChoice(t, m, storageEnv)
@@ -1942,7 +2017,7 @@ func TestNoHintStandsTwice(t *testing.T) {
 	m, _, _ := newModel(t)
 
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	press(t, m, "tab")
 	press(t, m, "tab")
 	selectChoice(t, m, storageEnv)

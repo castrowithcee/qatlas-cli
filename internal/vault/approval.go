@@ -12,7 +12,7 @@ import (
 
 // ErrApprovalRequired reports a connection whose current scope the encrypted vault has not approved for the
 // credential it reads: it was never approved, or something security relevant about it changed since, its
-// endpoint, its permissions, its targets, its tools list, its paths, or the credential entry itself. The
+// endpoint, its permissions, its targets, its tools list, its paths, its local file directories, or the credential entry itself. The
 // secret is not handed out until a person approves the connection as it is now.
 var ErrApprovalRequired = errors.New("the connection is not approved to read its vault credential")
 
@@ -39,6 +39,12 @@ type Scope struct {
 	// Paths are the directories the connection is bound to, as configured; none means every project. A
 	// connection bound to other projects reaches other data, so a change of its paths needs approval too.
 	Paths []string `json:"paths,omitempty"`
+	// FilesRead and FilesWrite are the local directories the connection releases to tools that read or
+	// write local files, as configured; none means no local file access. A release reaches local data, so
+	// a change of either list needs approval too. A scope without them keeps the fingerprint it had before
+	// they existed.
+	FilesRead  []string `json:"files_read,omitempty"`
+	FilesWrite []string `json:"files_write,omitempty"`
 }
 
 // Normalized returns s with every list whose order carries no meaning sorted, and an absent permissions or
@@ -60,7 +66,19 @@ func (s Scope) Normalized() Scope {
 	} else {
 		s.Paths = nil
 	}
+	s.FilesRead = sortedOrNil(s.FilesRead)
+	s.FilesWrite = sortedOrNil(s.FilesWrite)
 	return s
+}
+
+// sortedOrNil returns a sorted copy of values, or nil for an empty list, since both release nothing.
+func sortedOrNil(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := append([]string(nil), values...)
+	slices.Sort(out)
+	return out
 }
 
 // fingerprintLabel separates a connection fingerprint from any other use of the same hash.
@@ -84,7 +102,10 @@ func Fingerprint(scope Scope, credentialID string) string {
 		Targets      []string `json:"targets"`
 		Tools        []string `json:"tools"`
 		Paths        []string `json:"paths,omitempty"`
-	}{credentialID, n.Credential, n.Provider, n.Origin, n.Permissions, n.Targets, n.Tools, n.Paths}
+		FilesRead    []string `json:"files_read,omitempty"`
+		FilesWrite   []string `json:"files_write,omitempty"`
+	}{credentialID, n.Credential, n.Provider, n.Origin, n.Permissions, n.Targets, n.Tools, n.Paths,
+		n.FilesRead, n.FilesWrite}
 	data, err := json.Marshal(canonical)
 	if err != nil {
 		// Marshalling strings and string slices cannot fail.

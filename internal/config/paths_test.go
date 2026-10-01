@@ -4,11 +4,15 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
 	yaml "go.yaml.in/yaml/v3"
 )
+
+// drive makes the absolute paths of these tests absolute on Windows too, where a path needs a drive.
+var drive = map[bool]string{true: "C:"}[runtime.GOOS == "windows"]
 
 func withPaths(lines string) string {
 	return strings.Replace(minimal, "    credential: reader\n", "    credential: reader\n"+lines, 1)
@@ -34,7 +38,7 @@ func TestPathsAreValidated(t *testing.T) {
 		{"another user's home", "    paths: [\"~" + canary + "/repos\"]\n", "connections.wiki.paths[0]: must name a directory"},
 		{"a glob", "    paths: [\"/repos/" + canary + "-*\"]\n", "connections.wiki.paths[0]: glob patterns are not supported"},
 		{"a character class", "    paths: [\"/repos/" + canary + "[ab]\"]\n", "glob patterns are not supported"},
-		{"a duplicate", "    paths: [/repos/" + canary + ", /repos/" + canary + "/]\n",
+		{"a duplicate", "    paths: [" + drive + "/repos/" + canary + ", " + drive + "/repos/" + canary + "/]\n",
 			"connections.wiki.paths[1]: a directory is listed more than once"},
 		{"blanks at the edges", "    paths: [\" /repos/" + canary + "\"]\n", "must not start or end with blanks"},
 	} {
@@ -71,11 +75,11 @@ func TestPathWarningsNameMissingDirectoriesByPosition(t *testing.T) {
 }
 
 func TestPathsSurviveMarshalCloneAndResolve(t *testing.T) {
-	cfg, err := Decode(strings.NewReader(withPaths("    paths: [/repos/kunde-a, \"~/repos/kunde-b\"]\n")), testProviders)
+	cfg, err := Decode(strings.NewReader(withPaths("    paths: ["+drive+"/repos/kunde-a, \"~/repos/kunde-b\"]\n")), testProviders)
 	if err != nil {
 		t.Fatalf("Decode() = %v", err)
 	}
-	want := []string{"/repos/kunde-a", "~/repos/kunde-b"}
+	want := []string{drive + "/repos/kunde-a", "~/repos/kunde-b"}
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)

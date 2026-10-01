@@ -237,7 +237,7 @@ func TestUpdateLocksTheVaultProcess(t *testing.T) {
 			}
 		})
 
-		code, stdout, stderr := runWithInput(t, &Options{Updater: updater}, "", "update", "--config", configIn(dir),
+		code, stdout, stderr := runWithInput(t, &Options{Updater: updater}, "", "update", "--yes", "--config", configIn(dir),
 			"--output", "json")
 		if code != exitOK || !strings.Contains(stdout, `"updated":true`) {
 			t.Fatalf("refuse=%v: exit code = %d, stdout = %q, stderr = %q", refuse, code, stdout, stderr)
@@ -259,7 +259,7 @@ func TestUpdateLocksTheVaultProcess(t *testing.T) {
 	dir := encryptedVaultFixture(t, "")
 	t.Setenv("XDG_RUNTIME_DIR", shortRuntimeDir(t))
 	updater := releaseUpdater(t, installedProgram(t), func() {})
-	code, _, stderr := runWithInput(t, &Options{Updater: updater}, "", "update", "--config", configIn(dir))
+	code, _, stderr := runWithInput(t, &Options{Updater: updater}, "", "update", "--yes", "--config", configIn(dir))
 	if code != exitOK || stderr != "" {
 		t.Fatalf("update without a vault process: exit code = %d, stderr = %q", code, stderr)
 	}

@@ -17,3 +17,6 @@ func fallbackSocketDir() (string, bool) {
 	}
 	return filepath.Join(tmp, "qatlas"), true
 }
+
+// userRuntimeDir finds no runtime directory without XDG_RUNTIME_DIR: macOS has no conventional place for it.
+func userRuntimeDir() string { return "" }

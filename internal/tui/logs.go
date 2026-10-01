@@ -30,7 +30,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
-// logDateLayout is how a day is typed and shown: the UTC date a day file is named by.
+// logDateLayout is how a local day is typed and shown.
 const logDateLayout = "2006-01-02"
 
 // logMode is what the bar's Mode field selects: one day, a range of days, or every recorded day.
@@ -161,7 +161,7 @@ type logPick struct {
 }
 
 func newLogView() *logView {
-	today := time.Now().UTC()
+	today := time.Now().In(time.Local)
 	lv := &logView{
 		day:   today.Format(logDateLayout),
 		from:  today.AddDate(0, 0, -6).Format(logDateLayout),
@@ -220,26 +220,40 @@ func (m *Model) logVault() *vault.Vault {
 	return vault.New(filepath.Dir(m.store.Path()))
 }
 
-// loadLogs reads and checks the selected days as a command. The walk reads every day file, because the
-// chain runs through all of them, but keeps and checks the lines of the selected days alone.
+// loadLogs reads and checks the UTC files overlapping the selected local days as a command. The walk
+// reads every file for the chain, but keeps and checks only the overlapping files.
 func (m *Model) loadLogs() tea.Cmd {
 	lv := m.logs
 	lv.loadID++
 	lv.loading = true
 	id := lv.loadID
 	from, to := lv.bounds()
+	utcFrom, utcTo := logUTCFileBounds(from, to)
 	v := m.logVault()
 	return func() tea.Msg {
 		checker, note, done := logChecker(context.Background(), v)
 		defer done()
-		days, err := invokelog.VerifyLines(v.Dir(), checker, from, to)
+		days, err := invokelog.VerifyLines(v.Dir(), checker, utcFrom, utcTo)
 		if err != nil && checker != nil {
 			// A check that cannot be made at all never passes a line as verified; the lines go unchecked.
 			note = "the check values could not be checked: " + err.Error()
-			days, err = invokelog.VerifyLines(v.Dir(), nil, from, to)
+			days, err = invokelog.VerifyLines(v.Dir(), nil, utcFrom, utcTo)
 		}
 		return logsLoadedMsg{id: id, from: from, to: to, days: days, note: note, err: err}
 	}
+}
+
+// logUTCFileBounds selects every UTC day file that can overlap the chosen local days.
+func logUTCFileBounds(from, to string) (string, string) {
+	if from != "" {
+		day, _ := time.ParseInLocation(logDateLayout, from, time.Local)
+		from = day.UTC().Format(logDateLayout)
+	}
+	if to != "" {
+		day, _ := time.ParseInLocation(logDateLayout, to, time.Local)
+		to = day.AddDate(0, 0, 1).Add(-time.Nanosecond).UTC().Format(logDateLayout)
+	}
+	return from, to
 }
 
 // logChecker returns what checks the log's check values of v, the same way 'qatlas vault logs verify' does:
@@ -296,6 +310,13 @@ func (m *Model) handleLogsLoaded(msg logsLoadedMsg) tea.Cmd {
 	lv.layoutWidth = -1
 	for _, day := range msg.days {
 		for _, line := range day.Lines {
+			// An undated line cannot be assigned to a local day. Keep it with its overlapping UTC
+			// file so the selected view still shows its verification status.
+			if line.Parsed && !line.Entry.Time.IsZero() &&
+				((msg.from != "" && line.Entry.Time.In(time.Local).Format(logDateLayout) < msg.from) ||
+					(msg.to != "" && line.Entry.Time.In(time.Local).Format(logDateLayout) > msg.to)) {
+				continue
+			}
 			row := m.logRowOf(day.Date, line, msg.from != msg.to || msg.from == "")
 			lv.worst = max(lv.worst, row.status)
 			lv.table.rows[strconv.Itoa(len(lv.rows))] = row.cells
@@ -326,22 +347,26 @@ func statusOf(line invokelog.LineResult) logStatus {
 	return logUnverified
 }
 
-// logRowOf builds the row of one line. withDate puts the day in front of the time, for a range or all days.
+// logRowOf builds the row of one line. withDate puts the local day in front of the time.
 func (m *Model) logRowOf(date string, line invokelog.LineResult, withDate bool) logRow {
 	row := logRow{date: date, line: line, status: statusOf(line)}
 	e := line.Entry
-	when, way, client, tool, conn, effect, result, dur := "-", "-", "-", "-", "-", "-", "-", ""
+	when, way, client, tool, conn, effect, result, dur := "UTC file "+date, "-", "-", "-", "-", "-", "-", ""
 	switch {
 	case !line.Parsed:
 		tool = "(unreadable line)"
 	case e.Kind == invokelog.KindCut:
-		when = logTime(e.Time, withDate)
+		if !e.Time.IsZero() {
+			when = logTableTime(e.Time, withDate)
+		}
 		tool = "retention cut"
 		if e.Cut != nil {
 			tool = fmt.Sprintf("retention cut through #%d", e.Cut.ThroughSeq)
 		}
 	default:
-		when = logTime(e.Time, withDate)
+		if !e.Time.IsZero() {
+			when = logTableTime(e.Time, withDate)
+		}
 		way = orDash(strings.ToUpper(m.logText(e.Path)))
 		if e.Client != nil {
 			client = orDash(m.logText(e.Client.Name))
@@ -360,11 +385,21 @@ func (m *Model) logRowOf(date string, line invokelog.LineResult, withDate bool) 
 	return row
 }
 
-func logTime(t time.Time, withDate bool) string {
-	if withDate {
-		return t.UTC().Format(logDateLayout + " 15:04:05")
+func logTableTime(t time.Time, withDate bool) string {
+	local := t.In(time.Local)
+	_, offset := local.Zone()
+	sign := "+"
+	if offset < 0 {
+		sign, offset = "-", -offset
 	}
-	return t.UTC().Format("15:04:05")
+	zone := fmt.Sprintf("%s%02d", sign, offset/3600)
+	if offset%3600 != 0 {
+		zone += fmt.Sprintf("%02d", offset%3600/60)
+	}
+	if withDate {
+		return local.Format(logDateLayout+" 15:04") + zone
+	}
+	return local.Format("15:04") + zone
 }
 
 func orDash(s string) string {
@@ -616,7 +651,7 @@ func (m *Model) updateLogDateDialog(key tea.KeyMsg) tea.Cmd {
 		for _, in := range d.inputs {
 			value := strings.TrimSpace(in.Value())
 			if _, err := time.Parse(logDateLayout, value); err != nil {
-				d.err = "a date is typed as YYYY-MM-DD, for example " + time.Now().UTC().Format(logDateLayout)
+				d.err = "a date is typed as YYYY-MM-DD, for example " + time.Now().In(time.Local).Format(logDateLayout)
 				return nil
 			}
 			days = append(days, value)
@@ -980,14 +1015,15 @@ func (m *Model) logDetailView() string {
 	}
 	row := lv.rows[lv.detail]
 	e := row.line.Entry
-	title := "Log entry " + row.date
-	if row.line.Parsed {
-		title = "Log entry " + e.Time.UTC().Format(logDateLayout+" 15:04:05") + " UTC"
+	title := "Log entry UTC file " + row.date
+	if row.line.Parsed && !e.Time.IsZero() {
+		title = "Log entry " + e.Time.In(time.Local).Format(logDateLayout+" 15:04:05 -0700")
 	}
 	var b strings.Builder
 	b.WriteString(m.wrapped(titleStyle, title) + "\n\n")
 	field := func(label, value string) { b.WriteString(m.formRow(false, label, value) + "\n") }
 	field("status", row.status.label()+" ("+m.logReason(row.line)+")")
+	field("UTC file", row.date)
 	if row.line.Parsed {
 		field("sequence", strconv.FormatUint(e.Seq, 10))
 	}
@@ -1061,16 +1097,16 @@ func (m *Model) logReason(line invokelog.LineResult) string {
 // logDateDialogView draws the dialog of the bar's date field.
 func (m *Model) logDateDialogView() string {
 	d := m.logs.dialog
-	title, labels := "Choose a day (UTC)", []string{"date"}
+	title, labels := "Choose a local day", []string{"date"}
 	if len(d.inputs) == 2 {
-		title, labels = "Choose a range of days (UTC)", []string{"from", "to"}
+		title, labels = "Choose a range of local days", []string{"from", "to"}
 	}
 	var b strings.Builder
 	b.WriteString(m.wrapped(titleStyle, title) + "\n\n")
 	for i, in := range d.inputs {
 		b.WriteString(m.formRow(i == d.focus, labels[i], in.View()) + "\n")
 	}
-	b.WriteString(m.indented("YYYY-MM-DD, the UTC day a log file is named by") + "\n")
+	b.WriteString(m.indented("YYYY-MM-DD in the system time zone") + "\n")
 	if d.err != "" {
 		b.WriteString(m.indentedWith(failStyle, "error: "+d.err) + "\n")
 	}

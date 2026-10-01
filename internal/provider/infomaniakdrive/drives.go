@@ -44,10 +44,9 @@ var drivesList = capability.Descriptor{
 	Title:   "List Infomaniak kDrives",
 	Description: "List the kDrives of the Infomaniak account this connection is bound to, restricted to its " +
 		"drive allow-list when it has one; page by page, transparently",
-	Tags:                       []string{"infomaniak", "kdrive", "drives", "list"},
-	Risk:                       drivesReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"infomaniak", "kdrive", "drives", "list"},
+	Risk:     drivesReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"page":{"type":"integer","minimum":1}},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +

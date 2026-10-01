@@ -61,7 +61,7 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, path := toolsModel(t, reg, nil)
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	for label, want := range map[string]string{
 		profileLabel: "read", "permissions": "read", toolsLabel: toolsSelected,
 		toolListLabel: "bookstack.pages.get, bookstack.pages.list",
@@ -127,7 +127,7 @@ func TestSwitchingProfilesAsksOnceTheTicksWereChanged(t *testing.T) {
 	m, _ := toolsModel(t, wikiRegistry(t), nil)
 	mustNoError(t, m.cfg.SetService("chat", config.Service{Provider: "telegram", BaseURL: "https://api.telegram.org"}))
 	openSectionByName(t, m, sectionConnections)
-	press(t, m, "n")
+	pressNew(t, m)
 	focusField(t, m, providerLabel)
 	selectChoice(t, m, "telegram")
 	check := func(profile, permissions, tools string) {
@@ -259,7 +259,7 @@ func TestALaterToolJoinsNoSavedConnection(t *testing.T) {
 	if got := savedTools(t, path, reg, "wiki"); !reflect.DeepEqual(got, []string{"bookstack.pages.list"}) {
 		t.Fatalf("saved tools = %#v, want the listed tool only", got)
 	}
-	press(t, m, "n")
+	pressNew(t, m)
 	if got := m.fieldValue(toolListLabel); got != "bookstack.pages.get, bookstack.pages.list" {
 		t.Fatalf("the recommended profile of a new connection ticks %q", got)
 	}

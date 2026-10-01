@@ -95,6 +95,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 	write.Tools = []string{}
 	write.Targets = []string{"shelf-2", "shelf-1"}
 	write.Paths = []string{"~/repos/kunde-a"}
+	write.Files = config.Files{Read: []string{"~/in"}, Write: []string{"~/out"}}
 	cfg.Connections["wiki-write"] = write
 
 	report, err := Pending(cfg, v)
@@ -110,6 +111,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 		{Field: FieldTargets, Before: "(none)", After: "shelf-1 shelf-2"},
 		{Field: FieldTools, Before: "(every tool the permissions allow)", After: "(none)"},
 		{Field: FieldPaths, Before: "(every project)", After: "~/repos/kunde-a"},
+		{Field: FieldFiles, Before: "(no local files)", After: "read: ~/in; write: ~/out"},
 	}
 	if got := report.Open[1].Fields; report.Open[1].New || !reflect.DeepEqual(got, want) {
 		t.Fatalf("Pending() fields of wiki-write = %+v, want %+v", got, want)
@@ -197,5 +199,15 @@ func TestApproveNeedsAnUnlockedEncryptedVault(t *testing.T) {
 	}
 	if _, err := Pending(cfg, plain); !errors.Is(err, vault.ErrNotEncrypted) {
 		t.Errorf("Pending() on an unencrypted vault = %v, want vault.ErrNotEncrypted", err)
+	}
+}
+
+// A changed files release is never approved in passing by a save of unrelated fields.
+func TestDirectApprovableRefusesFilesChange(t *testing.T) {
+	if DirectApprovable(Change{Fields: []FieldChange{{Field: FieldFiles}}}) {
+		t.Error("DirectApprovable() = true for a changed files release")
+	}
+	if !DirectApprovable(Change{Fields: []FieldChange{{Field: FieldTools}}}) {
+		t.Error("DirectApprovable() = false for a changed tools list")
 	}
 }

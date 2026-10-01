@@ -68,10 +68,9 @@ var runsList = capability.Descriptor{
 	Title:   "List Make scenario runs",
 	Description: "List the run history (Make's own \"logs\") of one scenario of the bound team; page by " +
 		"page with a numeric offset. The scenario's team membership is confirmed live before any run is listed",
-	Tags:                       []string{"make", "runs", "list", "automation"},
-	Risk:                       makeReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"make", "runs", "list", "automation"},
+	Risk:     makeReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `,` +
 		`"offset":{"type":"integer","minimum":0},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":` + strconv.Itoa(maxListLimit) + `},` +
@@ -107,10 +106,9 @@ var runsGet = capability.Descriptor{
 	Title:   "Get a Make scenario run",
 	Description: "Read one run's status, timings, operations, and data volume, and, for a failed run, a " +
 		"short best-effort error excerpt; never a bundle's actual input or output data",
-	Tags:                       []string{"make", "runs", "get", "automation"},
-	Risk:                       makeReadRisk,
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"make", "runs", "get", "automation"},
+	Risk:     makeReadRisk,
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `,` +
 		`"execution_id":` + executionIDSchema + `},"required":["scenario_id","execution_id"],` +
 		`"additionalProperties":false}`),
@@ -400,10 +398,9 @@ var scenariosRun = capability.Descriptor{
 		"provider never places a caller-chosen URL into an outbound call it does not control. responsive " +
 		"defaults to false, so this one request returns as soon as the run starts instead of blocking until " +
 		"it finishes; use make.runs.get or make.runs.list afterward to learn the run's outcome",
-	Tags:                       []string{"make", "scenarios", "run", "automation", "execute"},
-	Risk:                       makeChangeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
-	Provider:                   Provider,
-	RequiresExplicitConnection: true,
+	Tags:     []string{"make", "scenarios", "run", "automation", "execute"},
+	Risk:     makeChangeRisk(capability.EffectExecute, capability.IdempotencyNonIdempotent),
+	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"scenario_id":` + idSchema + `,` +
 		`"data":{"type":"object"},"responsive":{"type":"boolean"}},` +
 		`"required":["scenario_id"],"additionalProperties":false}`),

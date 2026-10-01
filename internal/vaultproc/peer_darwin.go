@@ -14,6 +14,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// errProgramGone is what resolveProgram reports for a program whose file is gone from its path.
+var errProgramGone = errors.New("was removed or replaced since it started")
+
 // programFile is a program, both as its absolute path with every symbolic link resolved and as the file.
 type programFile struct {
 	path string
@@ -120,7 +123,7 @@ func checkProcess(pid int, uid uint32) error {
 	if ownProgramErr != nil {
 		return fmt.Errorf("%w: this program %w", ErrRefused, ownProgramErr)
 	}
-	if _, now, err := resolveProgram(ownProgram.path); err != nil || !os.SameFile(now, ownProgram.info) {
+	if replaced, err := ownProgramReplaced(); err != nil || replaced {
 		return fmt.Errorf("%w: this program was removed or replaced since it started", ErrRefused)
 	}
 	peer, err := programOf(pid)
@@ -131,6 +134,35 @@ func checkProcess(pid int, uid uint32) error {
 		return fmt.Errorf("%w: it runs another program", ErrRefused)
 	}
 	return nil
+}
+
+// ownProgramReplaced reports whether the file this process started from was removed or replaced since:
+// the path it had at its start no longer names that file. An error means it cannot be told. It is the one
+// place that decides what a replaced program is, for VerifyProgram and ReplacedProgram alike.
+func ownProgramReplaced() (bool, error) {
+	if ownProgramErr != nil {
+		return false, ownProgramErr
+	}
+	_, now, err := resolveProgram(ownProgram.path)
+	if errors.Is(err, errProgramGone) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return !os.SameFile(now, ownProgram.info), nil
+}
+
+// ReplacedProgram returns the path this process was started from and whether its file was removed or
+// replaced since, as an update does. The path is the real one the program had at its start. It uses the
+// same check VerifyProgram refuses a replaced program by, and tells nothing about the vault. Where the
+// state cannot be read, the program counts as not replaced.
+func ReplacedProgram() (string, bool) {
+	replaced, err := ownProgramReplaced()
+	if err != nil || !replaced {
+		return "", false
+	}
+	return ownProgram.path, true
 }
 
 // selfProgram finds the program this process runs. os.Executable makes a relative start path absolute
@@ -186,7 +218,7 @@ func execPath(args []byte) (string, error) {
 func resolveProgram(path string) (string, fs.FileInfo, error) {
 	resolved, err := filepath.EvalSymlinks(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil, errors.New("was removed or replaced since it started")
+		return "", nil, errProgramGone
 	}
 	if err != nil {
 		return "", nil, errors.New("cannot be read")

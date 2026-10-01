@@ -161,7 +161,7 @@ func TestKeyringSetupHappensEntirelyInTheEditor(t *testing.T) {
 	for _, s := range []section{sectionServices, sectionCredentials, sectionConnections, sectionDefaults} {
 		openSectionByName(t, m, s)
 		rendered.WriteString(screenOf(m))
-		press(t, m, "n")
+		pressNew(t, m)
 		rendered.WriteString(screenOf(m))
 		press(t, m, "esc")
 	}
@@ -622,7 +622,7 @@ func TestKeyringRowsTellEveryStateApart(t *testing.T) {
 func TestSecretsNeedASavedCredential(t *testing.T) {
 	m, _, _, _, _ := newStoreModel(t)
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "reader")
 	focusRole(t, m, "token-id")
 	press(t, m, "s")
@@ -697,7 +697,7 @@ func TestSlowStoreDoesNotBlockTheEditor(t *testing.T) {
 	// press drops the commands, so nothing waits on the store while the configuration is built.
 	addService(t, m, "wiki", "https://wiki.example.invalid")
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "reader")
 	press(t, m, "tab")
 	press(t, m, "tab")
@@ -761,7 +761,7 @@ func TestSlowStatusQueryDoesNotBlockTheEditor(t *testing.T) {
 		t.Fatalf("New() = %v", err)
 	}
 	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "n")
+	pressNew(t, m)
 	typeText(t, m, "reader")
 	press(t, m, "tab")
 	press(t, m, "tab")

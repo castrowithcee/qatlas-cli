@@ -146,8 +146,8 @@ func TestABoundConnectionIsMissingEverywhereOutsideItsProject(t *testing.T) {
 		t.Fatalf("Tools() = %+v, %v", tools, err)
 	}
 	for _, tool := range tools.Tools {
-		if tool.Connections != "kunde-a open" {
-			t.Errorf("Tools() %s offered by %q, want kunde-a open", tool.ID, tool.Connections)
+		if got := strings.Join(offeredBy(tools.Connections, tool), " "); got != "kunde-a open" {
+			t.Errorf("Tools() %s offered by %q, want kunde-a open", tool.ID, got)
 		}
 	}
 	searched, err := core.Search(SearchRequest{Query: "page"})
@@ -155,8 +155,8 @@ func TestABoundConnectionIsMissingEverywhereOutsideItsProject(t *testing.T) {
 		t.Fatalf("Search() = %+v, %v", searched, err)
 	}
 	for _, hit := range searched.Operations {
-		if strings.Join(hit.Connections, " ") != "kunde-a open" {
-			t.Errorf("Search() %s offered by %v, want kunde-a open", hit.ID, hit.Connections)
+		if got := offeredBy(searched.Connections, hit); strings.Join(got, " ") != "kunde-a open" {
+			t.Errorf("Search() %s offered by %v, want kunde-a open", hit.ID, got)
 		}
 	}
 	described, err := core.Describe(DescribeRequest{Operation: "fake.pages.get"})
@@ -227,5 +227,39 @@ func TestUnknownConnectionHintOnlyWhereConnectionsAreBound(t *testing.T) {
 	_, err := core.Search(SearchRequest{Connection: "missing"})
 	if err == nil || strings.Contains(err.Error(), "other projects") {
 		t.Fatalf("Search(missing) = %v, want no hint on project paths without any bound connection", err)
+	}
+}
+
+// Without a connection and without a default, the one connection the project sees is chosen, for a reading
+// and a changing tool alike; a connection bound to another project never is.
+func TestTheOnlyConnectionVisibleInAProjectIsChosen(t *testing.T) {
+	l := newBoundLayout(t)
+	core, _ := testCore(t, []string{"kunde-a", "kunde-b"}, nil, true)
+	for name, dir := range map[string]string{"kunde-a": l.kundeA, "kunde-b": l.kundeB} {
+		connection := core.all.Connections[name]
+		connection.Paths = []string{dir}
+		core.all.Connections[name] = connection
+	}
+	for project, want := range map[string]string{l.kundeA: "kunde-a", l.kundeB: "kunde-b"} {
+		core.SetProjects([]string{project})
+		for _, operation := range []string{"fake.pages.get", "fake.pages.delete"} {
+			response, err := core.Invoke(context.Background(), InvokeRequest{Operation: operation, Confirmed: true,
+				Arguments: json.RawMessage(`{"id":"1"}`)})
+			if err != nil || response.Connection != want {
+				t.Errorf("Invoke(%s) in %s = %+v, %v, want %s", operation, filepath.Base(project), response, err, want)
+			}
+		}
+	}
+	// Both projects at once, as MCP roots may name them, leave a choice.
+	core.SetProjects([]string{l.kundeA, l.kundeB})
+	if _, err := core.Invoke(context.Background(), InvokeRequest{Operation: "fake.pages.get",
+		Arguments: json.RawMessage(`{"id":"1"}`)}); !errorAs(err, new(ConnectionAmbiguousError)) {
+		t.Errorf("Invoke() over two visible connections = %v, want connection-ambiguous", err)
+	}
+	// Outside every bound project nothing is visible.
+	core.SetProjects([]string{l.kundeAB})
+	if _, err := core.Invoke(context.Background(), InvokeRequest{Operation: "fake.pages.get",
+		Arguments: json.RawMessage(`{"id":"1"}`)}); !errorAs(err, new(ConnectionSelectionError)) {
+		t.Errorf("Invoke() with no visible connection = %v, want connection-selection", err)
 	}
 }

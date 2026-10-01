@@ -56,3 +56,12 @@ func TestProgramOfThisProcess(t *testing.T) {
 		t.Fatalf("programOf(this process) = %s, want a resolved path", peer.path)
 	}
 }
+
+func TestReplacedProgramOfThisProcess(t *testing.T) {
+	if ownProgramErr != nil {
+		t.Skipf("this program cannot be read: %v", ownProgramErr)
+	}
+	if path, replaced := ReplacedProgram(); replaced || path != "" {
+		t.Fatalf("ReplacedProgram() = %q, %v, want no replacement for the running program", path, replaced)
+	}
+}
