@@ -365,7 +365,7 @@ func (c *Client) GetFileContent(ctx context.Context, driveID, fileID int64) (*Co
 	defer response.Body.Close()
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return nil, c.statusError(op, response)
+		return nil, c.statusError(op, response, false)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxFileBytes+1))
 	if err != nil || len(body) > maxFileBytes {
