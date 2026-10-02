@@ -412,13 +412,11 @@ type ConnectionSummary struct {
 	ForwardSecrets []ForwardSecretRef `json:"forward_secrets,omitempty"`
 }
 
-// UnusableForwardedVault is the Unusable value of a forward credential that lies in an encrypted vault, which
-// cannot hand out a forwarded secret yet.
-const UnusableForwardedVault = "forwarded-vault-unsupported"
-
 // ForwardSecretRef is the discovery view of one forward credential a connection releases: the reference name
 // an invoke request carries, the names of its fields, and the line its owner maintains. Unusable is present
-// only while it cannot be resolved. It never carries a value, a type, or a secret source.
+// only while it cannot be resolved, and then holds the error code an invoke with it would end with:
+// vault-locked while its vault is locked, approval-required while the vault has not approved the connection
+// as it is configured now. It never carries a value, a type, or a secret source.
 type ForwardSecretRef struct {
 	Name        string   `json:"name"`
 	Fields      []string `json:"fields"`
@@ -427,11 +425,16 @@ type ForwardSecretRef struct {
 }
 
 // forwardRefs returns the discovery view of the forward credentials the connection releases, sorted by name.
-// check is nil where nothing asks whether they are usable.
-func (c *Core) forwardRefs(connection config.Connection, check bool) []ForwardSecretRef {
+// check is false where nothing asks whether they are usable.
+func (c *Core) forwardRefs(name string, check bool) []ForwardSecretRef {
+	connection := c.config.Connections[name]
+	var resolved *config.Resolved
+	if check {
+		resolved, _ = c.connection(name)
+	}
 	var out []ForwardSecretRef
-	for _, name := range connection.ForwardSecrets {
-		cred, ok := c.config.Credentials[name]
+	for _, secretName := range connection.ForwardSecrets {
+		cred, ok := c.config.Credentials[secretName]
 		if !ok || !cred.Forward {
 			continue
 		}
@@ -439,10 +442,13 @@ func (c *Core) forwardRefs(connection config.Connection, check bool) []ForwardSe
 		if c.redactor != nil {
 			description = c.redactor.Apply(description)
 		}
-		ref := ForwardSecretRef{Name: name, Fields: append([]string(nil), cred.Fields...), Description: description}
-		if check && c.secrets != nil {
-			if err := c.secrets.UsableForwarded(secret.ForwardRef{Name: name, Cred: cred}); err != nil {
-				reason := UnusableForwardedVault
+		ref := ForwardSecretRef{Name: secretName, Fields: append([]string(nil), cred.Fields...),
+			Description: description}
+		if resolved != nil && c.secrets != nil {
+			err := c.secrets.UsableForwarded(context.Background(), resolved,
+				secret.ForwardRef{Name: secretName, Cred: cred})
+			if err != nil {
+				reason := string(ErrorCode(err))
 				ref.Unusable = &reason
 			}
 		}
@@ -509,7 +515,7 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 		summary := ConnectionSummary{
 			Name: name, Provider: owner, Description: connection.Description,
 			Permissions: strings.Join(effects, " "), Tools: tools, Files: filesRef(connection.Files),
-			ForwardSecrets: c.forwardRefs(connection, unusable != nil),
+			ForwardSecrets: c.forwardRefs(name, unusable != nil),
 		}
 		if len(reasons) > 0 {
 			reason := reasons[name]
@@ -1117,7 +1123,7 @@ func (c *Core) connectionRefFor(name string, descriptor capability.Descriptor) C
 	ref := c.connectionRef(name)
 	for _, argument := range descriptor.Arguments {
 		if argument.SecretRef {
-			ref.ForwardSecrets = c.forwardRefs(c.config.Connections[name], true)
+			ref.ForwardSecrets = c.forwardRefs(name, true)
 			break
 		}
 	}

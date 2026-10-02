@@ -105,27 +105,8 @@ func TestResolveForwarded(t *testing.T) {
 		if err != nil || got["user"] != canaryUser || got["pass"] != canaryPass {
 			t.Fatalf("ResolveForwarded() = %v, want both fields", err)
 		}
-		if err := r.UsableForwarded(ref); err != nil {
+		if err := r.UsableForwarded(context.Background(), wikiConnection(), ref); err != nil {
 			t.Errorf("UsableForwarded() = %v, want nil", err)
-		}
-	})
-
-	t.Run("an encrypted vault is refused until the vault protocol carries forwarded secrets", func(t *testing.T) {
-		dir := t.TempDir()
-		if err := vault.New(dir).Set("shared", "user", canaryUser, offeringPassphrase("s3cret")); err != nil {
-			t.Fatalf("vault Set() = %v", err)
-		}
-		r := NewWith(nil, nil, nil, nil).WithVault(vault.New(dir), offeringPassphrase("s3cret"))
-		ref := ForwardRef{Name: "shared", Cred: forwardCred(config.CredentialTypeVault)}
-		_, err := r.ResolveForwarded(context.Background(), ref)
-		if !errors.Is(err, ErrForwardedVaultProcess) {
-			t.Fatalf("ResolveForwarded() = %v, want ErrForwardedVaultProcess", err)
-		}
-		if strings.Contains(err.Error(), canaryUser) {
-			t.Errorf("the error carries a value: %v", err)
-		}
-		if err := r.UsableForwarded(ref); !errors.Is(err, ErrForwardedVaultProcess) {
-			t.Errorf("UsableForwarded() = %v, want ErrForwardedVaultProcess", err)
 		}
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -45,6 +46,32 @@ type Scope struct {
 	// they existed.
 	FilesRead  []string `json:"files_read,omitempty"`
 	FilesWrite []string `json:"files_write,omitempty"`
+	// Forward are the forward credentials the connection releases to its tools as references, each with the
+	// field names it releases, as configured; none releases none. A release hands a secret to a third party,
+	// so a change of the list, or of the fields of a listed credential, needs approval too. A scope without
+	// them keeps the fingerprint it had before they existed.
+	Forward []ForwardSecret `json:"forward,omitempty"`
+}
+
+// ForwardSecret is one forward credential a connection releases: its name and the names of the fields whose
+// values a tool may pass on. It never holds a value.
+type ForwardSecret struct {
+	Name   string   `json:"name"`
+	Fields []string `json:"fields"`
+}
+
+// Releases reports whether the connection s describes may read role of credential: any role of its own
+// credential, or a role that is one of the fields of a forward credential it releases.
+func (s Scope) Releases(credential, role string) bool {
+	if credential == s.Credential {
+		return true
+	}
+	for _, forward := range s.Forward {
+		if forward.Name == credential {
+			return slices.Contains(forward.Fields, role)
+		}
+	}
+	return false
 }
 
 // Normalized returns s with every list whose order carries no meaning sorted, and an absent permissions or
@@ -68,7 +95,23 @@ func (s Scope) Normalized() Scope {
 	}
 	s.FilesRead = sortedOrNil(s.FilesRead)
 	s.FilesWrite = sortedOrNil(s.FilesWrite)
+	s.Forward = normalizedForward(s.Forward)
 	return s
+}
+
+// normalizedForward returns a copy of forward sorted by name with every field list sorted, or nil for an
+// empty list, since both release nothing.
+func normalizedForward(forward []ForwardSecret) []ForwardSecret {
+	if len(forward) == 0 {
+		return nil
+	}
+	out := make([]ForwardSecret, len(forward))
+	for i, entry := range forward {
+		out[i] = ForwardSecret{Name: entry.Name, Fields: append(make([]string, 0, len(entry.Fields)), entry.Fields...)}
+		slices.Sort(out[i].Fields)
+	}
+	slices.SortFunc(out, func(a, b ForwardSecret) int { return strings.Compare(a.Name, b.Name) })
+	return out
 }
 
 // sortedOrNil returns a sorted copy of values, or nil for an empty list, since both release nothing.
@@ -104,8 +147,10 @@ func Fingerprint(scope Scope, credentialID string) string {
 		Paths        []string `json:"paths,omitempty"`
 		FilesRead    []string `json:"files_read,omitempty"`
 		FilesWrite   []string `json:"files_write,omitempty"`
+		// Forward holds the forward credentials with their fields: a change of either changes the fingerprint.
+		Forward []ForwardSecret `json:"forward,omitempty"`
 	}{credentialID, n.Credential, n.Provider, n.Origin, n.Permissions, n.Targets, n.Tools, n.Paths,
-		n.FilesRead, n.FilesWrite}
+		n.FilesRead, n.FilesWrite, n.Forward}
 	data, err := json.Marshal(canonical)
 	if err != nil {
 		// Marshalling strings and string slices cannot fail.
@@ -132,13 +177,32 @@ type Bindings struct {
 	Approvals map[string]string `json:"approvals"`
 }
 
-// Allows reports whether scope may read credential: the credential is the one scope names, the vault holds
-// an entry for it, and the connection's approval matches the scope and that entry. It is the one check the
-// vault process and a vault unlocked in this process both make.
+// Allows reports whether scope may read credential: the credential is the one scope names or one of its
+// forward credentials, the vault holds an entry for it, and the connection's approval matches the scope and
+// the entry of the credential the connection itself reads. It is the one check the vault process and a vault
+// unlocked in this process both make. For a forward credential it does not look at a role: AllowsRole does.
 func (b Bindings) Allows(scope Scope, credential string) bool {
-	id := b.IDs[credential]
+	if b.IDs[credential] == "" || credential != scope.Credential && !scope.releasesForward(credential) {
+		return false
+	}
+	own := b.IDs[scope.Credential]
 	approved := b.Approvals[scope.Connection]
-	return scope.Credential == credential && id != "" && approved != "" && approved == Fingerprint(scope, id)
+	return own != "" && approved != "" && approved == Fingerprint(scope, own)
+}
+
+// AllowsRole is Allows for one role: a forward credential hands out only the fields its approval names.
+func (b Bindings) AllowsRole(scope Scope, credential, role string) bool {
+	return scope.Releases(credential, role) && b.Allows(scope, credential)
+}
+
+// releasesForward reports whether credential is one of the forward credentials s lists.
+func (s Scope) releasesForward(credential string) bool {
+	for _, forward := range s.Forward {
+		if forward.Name == credential {
+			return true
+		}
+	}
+	return false
 }
 
 // bindings derives the Bindings of a document.
@@ -208,14 +272,20 @@ func (v *Vault) CredentialID(credential string) (string, bool, error) {
 // ErrApprovalRequired otherwise. It fails with ErrNotUnlocked or ErrNotEncrypted where there are no approvals
 // to check against.
 func (v *Vault) CheckApproval(scope Scope) error {
+	return v.CheckApprovalFor(scope, scope.Credential)
+}
+
+// CheckApprovalFor is CheckApproval for credential, which is the credential scope names or one of the forward
+// credentials it releases.
+func (v *Vault) CheckApprovalFor(scope Scope, credential string) error {
 	doc, err := v.unlockedDocument()
 	if err != nil {
 		return err
 	}
-	if _, ok := doc.byName(scope.Credential); !ok {
+	if _, ok := doc.byName(credential); !ok {
 		return nil
 	}
-	if !doc.bindings().Allows(scope, scope.Credential) {
+	if !doc.bindings().Allows(scope, credential) {
 		return ErrApprovalRequired
 	}
 	return nil

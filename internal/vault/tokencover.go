@@ -26,6 +26,7 @@ const (
 	GapTargets     = "targets"
 	GapPaths       = "paths"
 	GapFiles       = "files"
+	GapForward     = "forward"
 	// GapVorbild marks a change to a connection that is itself the vorbild of an agent token, which no
 	// token may change or delete.
 	GapVorbild = "vorbild"
@@ -74,7 +75,8 @@ type model struct {
 // the same service (provider and endpoint) and the same credential entry, and the change stays inside V:
 // its permissions a subset of V's; its tools a subset of V's tools list, where V has one; its targets among
 // V's, where V has any; its paths inside V's, where V is bound to any; its local file directories, per
-// direction, inside V's of that direction, and none where V has none. A delete is covered when the
+// direction, inside V's of that direction, and none where V has none; its forward credentials a subset of
+// V's, each with the same fields. A delete is covered when the
 // approval it removes was. A vorbild counts only while it is a connection in current and its approval still
 // reads the credential entry it was given for. A change to a connection that is the vorbild of any token is
 // never covered. A change partly outside stays open whole.
@@ -257,7 +259,31 @@ func coverGaps(vorbild Approval, scope Scope, id string) []string {
 	if !filesWithin(change.FilesRead, ceiling.FilesRead) || !filesWithin(change.FilesWrite, ceiling.FilesWrite) {
 		gaps = append(gaps, GapFiles)
 	}
+	// Forward credentials compare by name and exact field list: a vorbild covers a change only when every
+	// credential the change releases is released by the vorbild with the same fields, so a change that
+	// releases more, or other fields, stays open.
+	if !forwardWithin(change.Forward, ceiling.Forward) {
+		gaps = append(gaps, GapForward)
+	}
 	return gaps
+}
+
+// forwardWithin reports whether every forward credential of forward is released, with the same fields, by
+// one entry of of. Both are normalized. No entries are always covered, since they release nothing.
+func forwardWithin(forward, of []ForwardSecret) bool {
+	for _, entry := range forward {
+		covered := false
+		for _, base := range of {
+			if base.Name == entry.Name && slices.Equal(base.Fields, entry.Fields) {
+				covered = true
+				break
+			}
+		}
+		if !covered {
+			return false
+		}
+	}
+	return true
 }
 
 func subset(values, of []string) bool {

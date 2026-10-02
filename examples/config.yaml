@@ -216,6 +216,16 @@ credentials:
     provider: todoist
     type: keyring
 
+  # A forward credential is a payload secret a tool passes on to a third party by reference, never a secret of
+  # a provider. It lists the names of its fields, uses type vault or keyring, and a connection releases it
+  # with forward_secrets below. Store its fields with `qatlas credential set shared-login username`. With an
+  # encrypted vault, listing it in forward_secrets and changing its fields need a new approval.
+  shared-login:
+    forward: true
+    type: vault
+    fields: [username, password]
+    description: the shared login of the partner portal
+
 # A connection is what you select with --connection. It binds one service to one credential.
 #
 # description is optional and yours to maintain: one line of at most 200 characters saying what the route
@@ -263,6 +273,17 @@ connections:
     credential: wiki-reader
     description: the live team wiki, everyone reads this one
     permissions: [read, create, update, delete]
+
+  # A connection releases a forward credential to its tools with forward_secrets: a tool argument marked as a
+  # secret reference may then name shared-login, and the tool sends its fields on without anyone typing
+  # them. Nothing else is released. With an encrypted vault the release goes only through a connection that
+  # reads a vault credential itself, as this one does, and a change of the list needs a new approval.
+  wiki-standby:
+    service: wiki-primary
+    credential: wiki-standby
+    description: the standby wiki account, may pass the partner portal login to tools
+    permissions: [read, create]
+    forward_secrets: [shared-login]
 
   # The same service with a different key, for example a more restricted account. Its tools list offers
   # reading single pages and listing them, but no other read tool the provider adds later.

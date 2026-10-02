@@ -309,10 +309,16 @@ func (s *Server) answer(req request) response {
 		if req.Scope == nil {
 			return response{V: Version, Error: codeBadRequest}
 		}
-		if _, held := s.secrets[req.Scope.Credential]; !held {
+		// A check names the credential it asks about, a forward credential of the scope, or none for the
+		// scope's own.
+		credential := req.Credential
+		if credential == "" {
+			credential = req.Scope.Credential
+		}
+		if _, held := s.secrets[credential]; !held {
 			return response{V: Version}
 		}
-		if !s.bindings.Allows(*req.Scope, req.Scope.Credential) {
+		if !s.bindings.Allows(*req.Scope, credential) {
 			return response{V: Version, Error: codeApproval}
 		}
 		return response{V: Version, Found: true}
@@ -331,7 +337,7 @@ func (s *Server) answer(req request) response {
 		// A credential the process holds is handed out only to a connection the vault approved as it is
 		// now; a get that names no connection, or another credential than its connection reads, is refused
 		// the same way.
-		if req.Scope == nil || !s.bindings.Allows(*req.Scope, req.Credential) {
+		if req.Scope == nil || !s.bindings.AllowsRole(*req.Scope, req.Credential, req.Role) {
 			return response{V: Version, Error: codeApproval}
 		}
 		value, found := roles[req.Role]

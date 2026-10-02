@@ -103,6 +103,14 @@ func (c *Client) Check(ctx context.Context, scope vault.Scope) error {
 	return err
 }
 
+// CheckCredential is Check for one forward credential of the scope: nil when the connection may read it or the
+// process holds nothing for it, vault.ErrApprovalRequired when the vault has not approved the connection, with
+// that credential released, as it is now.
+func (c *Client) CheckCredential(ctx context.Context, scope vault.Scope, credential string) error {
+	_, err := c.call(ctx, request{Op: opCheck, Credential: credential, Scope: &scope})
+	return err
+}
+
 // Bind replaces the bindings the running process checks every get with, after the vault's approvals
 // changed. It does not write the vault.
 func (c *Client) Bind(ctx context.Context, bindings vault.Bindings) error {

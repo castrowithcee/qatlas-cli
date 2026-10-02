@@ -1,6 +1,7 @@
 // Package approval decides which connections an encrypted vault hands a vault credential's secret to. A
 // connection is approved for its scope as it is configured at that moment (see vault.Scope); any later
-// change of its endpoint, provider, permissions, targets, tools list, paths, or credential entry leaves it
+// change of its endpoint, provider, permissions, targets, tools list, paths, files, forward credentials with
+// their fields, or credential entry leaves it
 // open until a person approves it again. The approvals themselves live inside the encrypted vault.
 //
 // Every function here reads or writes the approvals of a vault unlocked in this process and never asks for
@@ -32,6 +33,7 @@ const (
 	FieldTools       = "tools"
 	FieldPaths       = "paths"
 	FieldFiles       = "files"
+	FieldForward     = "forward"
 )
 
 // FieldChange is one field of a connection's scope that differs from what was approved, each side written as
@@ -163,6 +165,7 @@ func diff(approved vault.Approval, now vault.Scope, id string) []FieldChange {
 	add(FieldTools, tools(before.Tools), tools(after.Tools))
 	add(FieldPaths, PathsText(before.Paths), PathsText(after.Paths))
 	add(FieldFiles, FilesText(before.FilesRead, before.FilesWrite), FilesText(after.FilesRead, after.FilesWrite))
+	add(FieldForward, ForwardText(before.Forward), ForwardText(after.Forward))
 	return fields
 }
 
@@ -192,6 +195,19 @@ func FilesText(read, write []string) string {
 	}
 	if len(write) > 0 {
 		parts = append(parts, "write: "+list(write))
+	}
+	return strings.Join(parts, "; ")
+}
+
+// ForwardText is the forward credentials a connection releases as a person reads them: each name with the
+// field names it releases, never a value.
+func ForwardText(forward []vault.ForwardSecret) string {
+	if len(forward) == 0 {
+		return "(none)"
+	}
+	parts := make([]string, len(forward))
+	for i, entry := range forward {
+		parts[i] = entry.Name + " (fields: " + strings.Join(entry.Fields, " ") + ")"
 	}
 	return strings.Join(parts, "; ")
 }

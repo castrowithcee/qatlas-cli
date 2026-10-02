@@ -15,6 +15,9 @@ import (
 // credential set', 'qatlas credential delete', 'qatlas vault migrate', and the TUI's own role rows, guided
 // setup, and migrate action all reach a running process the very same way.
 //
+// A change that went through is followed by the bindings of v, when it is unlocked in this process, so the
+// process also knows the entries it was just handed secrets for.
+//
 // It reports nil wherever there is nothing to tell: v is nil, its vault has no vault process because it is
 // not encrypted, or none is currently running to take the change at all. Any other failure is returned for
 // the caller to turn into its own warning, together with secret.VaultProcessRemedy(err), since the vault
@@ -31,6 +34,15 @@ func SyncChange(ctx context.Context, v *vault.Vault, change func(context.Context
 	}
 	if err == nil {
 		err = change(ctx, client)
+	}
+	if err == nil {
+		// A secret the process just took may belong to an entry it does not know yet, a forward credential
+		// stored after it started among them. It checks every get against the entry ids and approvals of its
+		// bindings, so it takes the ones of this process's vault, which the change is already part of. A vault
+		// not unlocked in this process has none to hand on.
+		if bindings, bindErr := v.Bindings(); bindErr == nil {
+			err = client.Bind(ctx, bindings)
+		}
 	}
 	if err == nil || errors.Is(err, vaultproc.ErrNotRunning) {
 		return nil

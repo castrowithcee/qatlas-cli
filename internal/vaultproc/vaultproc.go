@@ -36,8 +36,9 @@ import (
 )
 
 // Version is the protocol version a request carries and an answer repeats. A server refuses a request of
-// another version rather than guessing what it meant.
-const Version = 5
+// another version rather than guessing what it meant. Version 6 lets a connection's scope name the forward
+// credentials it releases, so a get or a check may name one of them.
+const Version = 6
 
 // MaxMessage bounds one request or answer, newline included. It leaves room for any token or key a
 // credential holds, and keeps a peer from making the other side buffer without end.

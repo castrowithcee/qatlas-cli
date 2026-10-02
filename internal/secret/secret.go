@@ -193,8 +193,8 @@ func scopeFrom(ctx context.Context) (vault.Scope, bool) {
 }
 
 // ScopeOf returns the scope an approval of the connection resolved describes is given for: its name, its
-// credential, its provider, its effective endpoint, its effective permissions, its targets, and its tools
-// list.
+// credential, its provider, its effective endpoint, its effective permissions, its targets, its tools list,
+// its paths, its local file directories, and the forward credentials it releases with their fields.
 func ScopeOf(resolved *config.Resolved) vault.Scope {
 	permissions := make([]string, len(resolved.Permissions))
 	for i, permission := range resolved.Permissions {
@@ -212,8 +212,20 @@ func ScopeOf(resolved *config.Resolved) vault.Scope {
 		Connection: resolved.Name, Credential: resolved.Credential, Provider: resolved.Provider,
 		Origin: resolved.BaseURL, Permissions: permissions, Targets: targets, Tools: tools,
 		Paths: append([]string(nil), resolved.Paths...), FilesRead: append([]string(nil), resolved.Files.Read...),
-		FilesWrite: append([]string(nil), resolved.Files.Write...),
+		FilesWrite: append([]string(nil), resolved.Files.Write...), Forward: forwardOf(resolved),
 	}
+}
+
+// forwardOf returns the forward credentials resolved releases, each with the names of its fields, sorted by
+// name. It holds no value.
+func forwardOf(resolved *config.Resolved) []vault.ForwardSecret {
+	var forward []vault.ForwardSecret
+	for _, name := range resolved.ForwardSecrets {
+		if entry, ok := resolved.Forward[name]; ok && entry.Forward {
+			forward = append(forward, vault.ForwardSecret{Name: name, Fields: append([]string(nil), entry.Fields...)})
+		}
+	}
+	return vault.Scope{Forward: forward}.Normalized().Forward
 }
 
 // VaultProcessError reports a vault process that listens for the vault but cannot deliver a secret: it did
@@ -569,20 +581,14 @@ type ForwardRef struct {
 	Cred config.Credential
 }
 
-// ErrForwardedVaultProcess reports that a forwarded secret lies in an encrypted vault, which hands a secret
-// only to the connection that owns its credential. The approval of forwarded secrets is not part of that
-// protocol yet, so such a reference is refused rather than read around the approval.
-var ErrForwardedVaultProcess = errors.New("forwarded secrets need vault protocol 6: an encrypted vault " +
-	"cannot hand out a forwarded secret yet")
-
 // ResolveForwarded returns the value of every field of a forward credential, keyed by field name, and
 // registers each value with the redactor. Unlike Resolve it consults no environment variable and no
 // plaintext fallback: the source is the vault or the system keyring, as the credential's type says. A field
 // that yields nothing is an error naming the credential and the field, never a value.
 //
-// A credential in an unencrypted vault is read directly. One in an encrypted vault is refused with
-// ErrForwardedVaultProcess: the approval that releases it to a connection is bound to the connection's own
-// credential and does not yet cover a forwarded one.
+// A credential in an unencrypted vault is read directly. One in an encrypted vault is handed out the way a
+// connection's own secret is, to the connection ctx is bound to (see ForConnection) and only when the vault
+// approved that connection as it is now, with this credential and its fields among those it releases.
 func (r *Resolver) ResolveForwarded(ctx context.Context, ref ForwardRef) (map[string]string, error) {
 	if !ref.Cred.Forward || len(ref.Cred.Fields) == 0 {
 		return nil, fmt.Errorf("credential %s is not a forward credential", ref.Name)
@@ -601,10 +607,13 @@ func (r *Resolver) ResolveForwarded(ctx context.Context, ref ForwardRef) (map[st
 	return values, nil
 }
 
-// UsableForwarded reports, without reading a secret or asking for a passphrase, whether ref can be resolved
-// as far as its source goes: it is ErrForwardedVaultProcess for a credential in an encrypted vault and nil
-// otherwise. A keyring is not asked, so discovery never touches the store.
-func (r *Resolver) UsableForwarded(ref ForwardRef) error {
+// UsableForwarded reports, without reading a secret or asking for a passphrase, why the connection resolved
+// describes cannot read the forward credential ref names now, the way Usable does for its own credential: a
+// *VaultLockedError while the vault is encrypted and locked, a *ApprovalRequiredError while the vault has not
+// approved the connection as it is now with that credential released, or a *VaultProcessError while a running
+// vault process cannot be asked. It is nil for a credential that is not in the vault and for an unencrypted
+// vault. A keyring is not asked, so discovery never touches the store.
+func (r *Resolver) UsableForwarded(ctx context.Context, resolved *config.Resolved, ref ForwardRef) error {
 	if ref.Cred.Type != config.CredentialTypeVault || r.vault == nil {
 		return nil
 	}
@@ -612,8 +621,27 @@ func (r *Resolver) UsableForwarded(ref ForwardRef) error {
 	if err != nil {
 		return nil
 	}
-	if state == vault.StateLocked || state == vault.StateUnlocked {
-		return ErrForwardedVaultProcess
+	scope := ScopeOf(resolved)
+	refused := &ApprovalRequiredError{Connection: resolved.Name, Credential: ref.Name}
+	switch state {
+	case vault.StateUnlocked:
+		if errors.Is(r.vault.CheckApprovalFor(scope, ref.Name), vault.ErrApprovalRequired) {
+			return refused
+		}
+	case vault.StateLocked:
+		client := r.processClient()
+		if client == nil {
+			return &VaultLockedError{}
+		}
+		switch err := client.CheckCredential(ctx, scope, ref.Name); {
+		case err == nil:
+		case errors.Is(err, vault.ErrApprovalRequired):
+			return refused
+		case errors.Is(err, vaultproc.ErrNotRunning):
+			return &VaultLockedError{}
+		default:
+			return &VaultProcessError{Credential: ref.Name, Err: err}
+		}
 	}
 	return nil
 }
@@ -624,15 +652,14 @@ func (r *Resolver) resolveForwardedField(ctx context.Context, ref ForwardRef, fi
 		if r.vault == nil {
 			return "", missing(ref.Name, ref.Cred, field, []string{stage(SourceVault, "unavailable")}, nil)
 		}
-		state, err := r.vault.State()
-		if err != nil {
-			return "", missing(ref.Name, ref.Cred, field, []string{stage(SourceVault, "unavailable")}, nil)
-		}
-		if state == vault.StateLocked || state == vault.StateUnlocked {
-			return "", fmt.Errorf("credential %s, field %s: %w", ref.Name, field, ErrForwardedVaultProcess)
-		}
-		value, found, _, err := r.vault.Get(ref.Name, field, nil)
+		value, found, err := r.fromVault(ctx, ref.Name, field)
+		var process *VaultProcessError
+		var approval *ApprovalRequiredError
 		switch {
+		case err != nil && errors.Is(err, vault.ErrNoTerminal):
+			return "", &VaultLockedError{Credential: ref.Name, Role: field}
+		case errors.As(err, &process), errors.As(err, &approval):
+			return "", err
 		case err != nil:
 			return "", missing(ref.Name, ref.Cred, field, []string{stage(SourceVault, "unavailable")}, nil)
 		case !found || value == "":
@@ -704,7 +731,7 @@ func (r *Resolver) fromVault(ctx context.Context, credential, role string) (stri
 		refused.Connection = scope.Connection
 	}
 	if client := r.processClient(); client != nil {
-		if !bound || scope.Credential != credential {
+		if !bound || !scope.Releases(credential, role) {
 			return "", false, refused
 		}
 		// The client sends nothing, not even the credential name, before the process proved that it holds
@@ -733,10 +760,10 @@ func (r *Resolver) fromVault(ctx context.Context, credential, role string) (stri
 	}
 	if state == vault.StateUnlocked {
 		// Unlocked means encrypted: the value read is dropped unless the connection is approved.
-		if !bound || scope.Credential != credential {
+		if !bound || !scope.Releases(credential, role) {
 			return "", false, refused
 		}
-		switch err := r.vault.CheckApproval(scope); {
+		switch err := r.vault.CheckApprovalFor(scope, credential); {
 		case errors.Is(err, vault.ErrApprovalRequired):
 			return "", false, refused
 		case err != nil:
