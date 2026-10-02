@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 )
 
@@ -103,24 +102,18 @@ func newID() string {
 type PermissionError struct {
 	Path string
 	Mode fs.FileMode
+	// Grantee is set on Windows, where access is governed by the file's ACL instead of its mode: the
+	// account, or the security identifier, the ACL lets reach the file besides its user.
+	Grantee string
 }
 
 func (e *PermissionError) Error() string {
+	if e.Grantee != "" {
+		return fmt.Sprintf("%s holds vault data but its ACL lets %s reach it; it is not read until it is "+
+			"private again: icacls \"%s\" /inheritance:r /grant:r \"%%USERNAME%%:F\"", e.Path, e.Grantee, e.Path)
+	}
 	return fmt.Sprintf("%s holds vault data but its mode is %04o; it is not read until it is private again: "+
 		"chmod 600 %s", e.Path, e.Mode.Perm(), e.Path)
-}
-
-// checkMode refuses a vault file that others can read or write. Windows is exempt for the same reason the
-// plaintext credential fallback exempts it: os.Stat synthesises a mode from the read-only attribute alone,
-// and access there is governed by ACLs instead.
-func checkMode(path string, info fs.FileInfo) error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	if perm := info.Mode().Perm(); perm&0o077 != 0 {
-		return &PermissionError{Path: path, Mode: perm}
-	}
-	return nil
 }
 
 // readFile reads path and checks its permissions first, the same order the plaintext fallback uses.
@@ -143,7 +136,7 @@ func writeFile(path string, data []byte) error {
 		target = resolved
 	}
 	dir := filepath.Dir(target)
-	if err := os.MkdirAll(dir, dirMode); err != nil {
+	if err := mkdirPrivate(dir); err != nil {
 		return fmt.Errorf("cannot create %s: %w", dir, err)
 	}
 
@@ -159,7 +152,7 @@ func writeFile(path string, data []byte) error {
 		}
 	}()
 
-	if err := os.Chmod(name, fileMode); err != nil {
+	if err := restrictFile(name); err != nil {
 		_ = tmp.Close()
 		return fmt.Errorf("cannot set the permissions of %s: %w", name, err)
 	}

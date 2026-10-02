@@ -1,4 +1,4 @@
-//go:build !linux && !darwin
+//go:build !linux && !darwin && !windows
 
 package cli
 
@@ -14,4 +14,4 @@ const vaultProcessPlatform = false
 
 func runVaultServe(*Options, *capability.Registry) error { return vaultproc.ErrUnsupported }
 
-func sessionWarnings(string) []string { return nil }
+func sessionWarnings(string, int) []string { return nil }

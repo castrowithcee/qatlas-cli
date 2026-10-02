@@ -36,7 +36,7 @@ func TestSessionWarnings(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	socket := filepath.Join(runtimeDir, "qatlas", "vault-0.sock")
 
-	if got := sessionWarnings(socket); len(got) != 0 {
+	if got := sessionWarnings(socket, 0); len(got) != 0 {
 		t.Fatalf("sessionWarnings() without systemd = %v, want none", got)
 	}
 	write := func(rel, content string) {
@@ -54,31 +54,31 @@ func TestSessionWarnings(t *testing.T) {
 	}
 
 	write("etc/systemd/logind.conf", "[Login]\n#KillUserProcesses=yes\n")
-	got := sessionWarnings(socket)
+	got := sessionWarnings(socket, 0)
 	if len(got) != 1 || !strings.Contains(got[0], "loginctl enable-linger") {
 		t.Fatalf("sessionWarnings() without linger = %v, want the linger warning", got)
 	}
-	if got := sessionWarnings(filepath.Join(t.TempDir(), "vault-0.sock")); len(got) != 0 {
+	if got := sessionWarnings(filepath.Join(t.TempDir(), "vault-0.sock"), 0); len(got) != 0 {
 		t.Fatalf("sessionWarnings() for a socket outside the runtime directory = %v, want none", got)
 	}
 
 	write("var/lib/systemd/linger/"+me.Username, "")
-	if got := sessionWarnings(socket); len(got) != 0 {
+	if got := sessionWarnings(socket, 0); len(got) != 0 {
 		t.Fatalf("sessionWarnings() with linger = %v, want none", got)
 	}
 
 	write("usr/lib/systemd/logind.conf.d/10-kill.conf", "[Login]\nKillUserProcesses=yes\n")
-	got = sessionWarnings(socket)
+	got = sessionWarnings(socket, 0)
 	if len(got) != 1 || !strings.Contains(got[0], "KillUserProcesses=yes") {
 		t.Fatalf("sessionWarnings() with KillUserProcesses=yes = %v, want the kill warning", got)
 	}
 	write("etc/systemd/logind.conf.d/20-exclude.conf", "[Login]\nKillExcludeUsers=root "+me.Username+"\n")
-	if got := sessionWarnings(socket); len(got) != 0 {
+	if got := sessionWarnings(socket, 0); len(got) != 0 {
 		t.Fatalf("sessionWarnings() for an excluded user = %v, want none", got)
 	}
 	write("etc/systemd/logind.conf.d/20-exclude.conf", "[Other]\nKillExcludeUsers="+me.Username+"\n")
 	write("etc/systemd/logind.conf.d/10-kill.conf", "[Login]\nKillUserProcesses=no\n")
-	if got := sessionWarnings(socket); len(got) != 0 {
+	if got := sessionWarnings(socket, 0); len(got) != 0 {
 		t.Fatalf("sessionWarnings() with a drop-in in /etc switching it off = %v, want none", got)
 	}
 }

@@ -85,27 +85,29 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"press, after which the next one asks again; vault.admin_timeout: 0 asks every time instead of\n" +
 			"keeping a session. A wrong passphrase reopens the same prompt with error: wrong passphrase; esc\n" +
 			"cancels only that one action, leaving the form exactly as typed so it can be tried again. No\n" +
-			"other window, and no vault process a Linux or macOS build may hold unlocked outside this run,\n" +
-			"ever shares the session: the passphrase proves it, not merely an unlocked vault. An unencrypted\n" +
-			"vault, or one that does not exist yet, needs none of this and manages exactly as before.\n\n" +
+			"other window, and no vault process a Linux, macOS, or Windows build may hold unlocked outside\n" +
+			"this run, ever shares the session: the passphrase proves it, not merely an unlocked vault. An\n" +
+			"unencrypted vault, or one that does not exist yet, needs none of this and manages exactly as\n" +
+			"before.\n\n" +
 			"The header above the sections always shows the vault's state, unlocked, locked, or unencrypted,\n" +
 			"symbol and word together so it reads without colour, plus the admin abbreviation while it is\n" +
 			"encrypted: admin off, admin Nm left, or admin: confirm each change for vault.admin_timeout: 0.\n" +
 			"ctrl+l works everywhere, forms included: on a locked vault it opens a masked prompt that unlocks\n" +
-			"it, hands it to a vault process on Linux and macOS the same way 'qatlas vault unlock' does, and\n" +
-			"starts this window's admin session in the same step; on an unlocked, encrypted vault it asks Lock\n" +
-			"the vault now?, and y locks the vault process, forgets the key this window held, and ends the\n" +
-			"admin session. An unencrypted vault has nothing to lock, and ctrl+l says so.\n\n" +
+			"it, hands it to a vault process on Linux, macOS, and Windows the same way 'qatlas vault unlock'\n" +
+			"does, and starts this window's admin session in the same step; on an unlocked, encrypted vault\n" +
+			"it asks Lock the vault now?, and y locks the vault process, forgets the key this window held, and\n" +
+			"ends the admin session. An unencrypted vault has nothing to lock, and ctrl+l says so.\n\n" +
 			"The system keyring is the credential store the operating system already provides: Secret\n" +
 			"Service on Linux (for example GNOME Keyring or KWallet), the macOS Keychain, or the Windows\n" +
 			"Credential Manager. It needs no setup and no exported variable. The vault is a directory beside\n" +
 			"the configuration, unencrypted or encrypted to a passphrase, for a machine without a usable\n" +
 			"keyring; storing its very first secret, here or with 'qatlas credential set', offers one, typed\n" +
 			"masked and twice, and leaving it empty keeps the vault unencrypted. On a role row, s stores the\n" +
-			"secret in the place the secrets row names; x removes it. On Linux and macOS, storing or removing\n" +
-			"a vault secret here, or through the guided setup's own save, is handed on to a vault process that\n" +
-			"holds the vault unlocked outside this run, exactly the way 'qatlas credential set' and 'qatlas\n" +
-			"credential delete' already do; elsewhere, or when no such process runs, there is nothing to tell.\n" +
+			"secret in the place the secrets row names; x removes it. On Linux, macOS, and Windows, storing or\n" +
+			"removing a vault secret here, or through the guided setup's own save, is handed on to a vault\n" +
+			"process that holds the vault unlocked outside this run, exactly the way 'qatlas credential set'\n" +
+			"and 'qatlas credential delete' already do; elsewhere, or when no such process runs, there is\n" +
+			"nothing to tell.\n" +
 			"A keyring role says in system keyring,\n" +
 			"not stored yet, keyring locked, keyring unreachable, or keyring switched off\n" +
 			"(QATLAS_CREDENTIAL_STORE=none), and for each blocked case what to do next on this platform; a\n" +
@@ -119,10 +121,10 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"passphrase, then an explicit confirmation that every secret ends up unencrypted on disk). The\n" +
 			"current passphrase is verified before anything else is asked; a wrong one reopens that very\n" +
 			"prompt with error: wrong passphrase instead of asking for a new passphrase or the confirmation\n" +
-			"for nothing, and nothing is ever asked on this process's own terminal. On Linux and macOS,\n" +
-			"changing the passphrase or turning encryption off also locks a vault process that holds the vault\n" +
-			"unlocked with the old identity, the same way 'qatlas vault passphrase' and 'qatlas vault decrypt'\n" +
-			"already do, and says so once the change is done. While a plaintext\n" +
+			"for nothing, and nothing is ever asked on this process's own terminal. On Linux, macOS, and\n" +
+			"Windows, changing the passphrase or turning encryption off also locks a vault process that holds\n" +
+			"the vault unlocked with the old identity, the same way 'qatlas vault passphrase' and 'qatlas vault\n" +
+			"decrypt' already do, and says so once the change is done. While a plaintext\n" +
 			"credentials.yaml left over from an earlier version still holds an entry, migrate\n" +
 			"credentials.yaml carries every one of them into the vault the way 'qatlas vault migrate' does:\n" +
 			"an overview names every entry by credential and role, never a value, before asking to confirm;\n" +

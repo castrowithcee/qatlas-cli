@@ -17,9 +17,9 @@ import (
 var systemdRoot = "/"
 
 // sessionWarnings says what would end the vault process, or cut it off from its socket, when the session
-// that started it ends. It reads the files systemd-logind reads and asks nothing; a system without systemd
+// that started it ends. The process id is not needed here. It reads the files systemd-logind reads and asks nothing; a system without systemd
 // has no such warning.
-func sessionWarnings(socket string) []string {
+func sessionWarnings(socket string, _ int) []string {
 	if _, err := os.Stat(filepath.Join(systemdRoot, "run", "systemd", "system")); err != nil {
 		return nil
 	}

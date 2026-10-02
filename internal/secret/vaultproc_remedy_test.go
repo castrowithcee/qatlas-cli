@@ -68,7 +68,7 @@ func TestVaultProcessRemedyAfterAnUpdate(t *testing.T) {
 		replacedProgram = func() bool { return true }
 		SetLongRunning("")
 		got := VaultProcessRemedy(refusedProgram)
-		if !strings.Contains(got, "kill 4242") || strings.Contains(got, "updated") {
+		if !strings.Contains(got, "kill") || !strings.Contains(got, "4242") || strings.Contains(got, "updated") {
 			t.Errorf("remedy for a one-shot command = %q, want the kill hint", got)
 		}
 	})

@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build windows
 
 package vaultmigrate
 
@@ -11,22 +11,16 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
+	"golang.org/x/sys/windows"
+
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
-)
-
-// HandoverFD and ReportFD are the descriptors a vault process inherits from whatever started it with
-// StartProcess: the handover it reads the vault's key and secrets from, and the report it answers on once
-// it listens or failed to. Both 'qatlas vault unlock' and the TUI's own 'ctrl+l' start a vault process this
-// same way, so the numbers, and the words on ReportFD (see ReportReady), are exported here instead of kept
-// as a matching pair of unexported constants in two packages that would have to be edited together.
-const (
-	HandoverFD = 3
-	ReportFD   = 4
 )
 
 // StartProcess starts 'qatlas vault serve' for the vault at configPath, detached from this process and its
@@ -37,10 +31,14 @@ const (
 //
 // The program started is this same running binary (see os.Executable), so the process passes the check a
 // vault process makes of every client; its 'vault serve' subcommand is what actually answers the handover
-// and the report, and lives in package cli, the only package that wires up commands. Its standard streams
-// are /dev/null and its working directory is /, so it holds no terminal and no directory of the session
-// that started it. Neither the key nor any secret ever appears in its arguments or its environment: they
-// travel through the pipe alone, which the process closes once it has read them.
+// and the report, and lives in package cli, the only package that wires up commands. On Windows the
+// handover and the report are its standard input and output, two anonymous pipes, and its standard error
+// is NUL. It starts without a console (DETACHED_PROCESS), in a process group of its own
+// (CREATE_NEW_PROCESS_GROUP), in the system directory, so it holds no console and no directory of the
+// session that started it. It also leaves the job object this process runs in (CREATE_BREAKAWAY_FROM_JOB),
+// such as the one an SSH server ends with its session; where the job does not let it leave, it is started
+// inside the job instead, and ends with it. Neither the key nor any secret ever appears in its arguments or
+// its environment: they travel through the pipe alone, which the process closes once it has read them.
 func StartProcess(ctx context.Context, configPath string, snap vault.Snapshot,
 	client *vaultproc.Client) (vaultproc.Status, error) {
 	program, err := os.Executable()
@@ -59,29 +57,50 @@ func StartProcess(ctx context.Context, configPath string, snap vault.Snapshot,
 	}
 	defer reportRead.Close()
 
-	cmd := exec.Command(program, "vault", "serve", "--config", configPath)
-	cmd.Dir = "/"
-	cmd.ExtraFiles = []*os.File{handoverRead, reportWrite} // HandoverFD and ReportFD
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	err = cmd.Start()
+	dir, err := windows.GetSystemDirectory()
+	if err != nil {
+		dir = filepath.VolumeName(program) + `\`
+	}
+	start := func(flags uint32) (*exec.Cmd, error) {
+		cmd := exec.Command(program, "vault", "serve", "--config", configPath)
+		cmd.Dir = dir
+		cmd.Stdin = handoverRead
+		cmd.Stdout = reportWrite
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: flags}
+		return cmd, cmd.Start()
+	}
+	flags := uint32(windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP)
+	cmd, err := start(flags | windows.CREATE_BREAKAWAY_FROM_JOB)
+	if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+		// The job this process runs in lets no process leave it.
+		cmd, err = start(flags)
+	}
 	// The process holds its own ends now; closing them here makes its end, or its report, an end of file.
 	_ = handoverRead.Close()
 	_ = reportWrite.Close()
 	if err != nil {
 		return vaultproc.Status{}, fmt.Errorf("cannot start the vault process: %w", err)
 	}
-	// Reaps the process should it end while this one still runs; it is not waited for otherwise.
+	// Releases the process should it end while this one still runs; it is not waited for otherwise.
 	go func() { _ = cmd.Wait() }()
 
 	deadline := time.Now().Add(StartTimeout)
 	if end, ok := ctx.Deadline(); ok && end.Before(deadline) {
 		deadline = end
 	}
+	// An anonymous pipe takes no deadline here. A process that has neither taken the vault nor reported by
+	// then is ended instead, which ends both pipes with it.
+	var ended atomic.Bool
+	watchdog := time.AfterFunc(time.Until(deadline), func() {
+		ended.Store(true)
+		_ = cmd.Process.Kill()
+	})
+	defer watchdog.Stop()
+
 	data, err := json.Marshal(snap)
 	if err != nil {
 		return vaultproc.Status{}, errors.New("cannot encode the vault for the vault process")
 	}
-	_ = handoverWrite.SetWriteDeadline(deadline)
 	_, err = handoverWrite.Write(data)
 	clear(data)
 	_ = handoverWrite.Close()
@@ -89,14 +108,15 @@ func StartProcess(ctx context.Context, configPath string, snap vault.Snapshot,
 		return vaultproc.Status{}, errors.New("the vault process did not take the vault")
 	}
 
-	_ = reportRead.SetReadDeadline(deadline)
-	report, err := bufio.NewReader(io.LimitReader(reportRead, 4096)).ReadString('\n')
+	report, _ := bufio.NewReader(io.LimitReader(reportRead, 4096)).ReadString('\n')
+	watchdog.Stop()
+	timedOut := ended.Load()
 	report = strings.TrimSpace(report)
 	switch {
 	case report == ReportReady, report == ReportRunning:
 	case report != "":
 		return vaultproc.Status{}, fmt.Errorf("the vault process did not start: %s", report)
-	case errors.Is(err, os.ErrDeadlineExceeded):
+	case timedOut:
 		return vaultproc.Status{}, errors.New("the vault process did not report within " + StartTimeout.String())
 	default:
 		return vaultproc.Status{}, errors.New("the vault process ended before it was ready")

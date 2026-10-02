@@ -99,7 +99,7 @@ credentials:
   # same way, with `qatlas credential set`; storing the vault's very first secret offers a passphrase on
   # the terminal, and leaving it empty keeps the vault unencrypted. `qatlas vault status` shows whether it
   # exists, is encrypted, and is unlocked; `qatlas vault unlock` opens it in a vault process for every later
-  # CLI and MCP call on Linux and macOS, elsewhere only for the current process. `credential
+  # CLI and MCP call on Linux, macOS, and Windows, elsewhere only for the current process. `credential
   # set`, `credential delete`, and `vault encrypt`/`passphrase`/`decrypt`/`migrate` manage a credential or the
   # vault and run only from an interactive terminal; where the vault is encrypted they also ask for its
   # passphrase there, once per command. QATLAS_WIKI_STANDBY_TOKEN_ID and QATLAS_WIKI_STANDBY_TOKEN_SECRET
@@ -550,7 +550,7 @@ defaults:
     bookstack: wiki
   secret_store: keyring
 
-# The vault process that `qatlas vault unlock` starts on Linux and macOS holds an encrypted vault unlocked
+# The vault process that `qatlas vault unlock` starts on Linux, macOS, and Windows holds an encrypted vault unlocked
 # until it goes this long without a read, as a Go duration such as 12h or 30m. Leaving it out means 12h; it
 # must be positive, and `qatlas vault lock` locks the vault at once instead.
 vault:
