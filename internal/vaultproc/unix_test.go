@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -538,7 +539,9 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 	}
 	userRuntimeRoot = short()
 	t.Setenv("XDG_RUNTIME_DIR", "")
-	vaultDir := filepath.Join(t.TempDir(), "vault")
+	// A short vault directory too: beside it, the socket path must stay within the limit of macOS (104
+	// bytes), or the fallback directory takes over.
+	vaultDir := filepath.Join(short(), "vault")
 	runtimeDir := filepath.Join(userRuntimeRoot, strconv.Itoa(os.Getuid()))
 
 	beside := func() string {
@@ -563,8 +566,14 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 	if err := os.Chmod(runtimeDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if dir := beside(); dir != filepath.Join(runtimeDir, "qatlas") {
-		t.Fatalf("SocketPath() without XDG_RUNTIME_DIR = %s, want the user's runtime directory", dir)
+	// Only Linux has a user runtime directory below userRuntimeRoot; macOS has none and keeps the socket
+	// beside the vault.
+	wantDir := filepath.Join(filepath.Dir(vaultDir), "run")
+	if runtime.GOOS == "linux" {
+		wantDir = filepath.Join(runtimeDir, "qatlas")
+	}
+	if dir := beside(); dir != wantDir {
+		t.Fatalf("SocketPath() without XDG_RUNTIME_DIR = %s, want %s", dir, wantDir)
 	}
 
 	explicit := short()
