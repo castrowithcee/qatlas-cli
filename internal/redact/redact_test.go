@@ -1,6 +1,8 @@
 package redact
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -166,5 +168,30 @@ func TestQuotedSecret(t *testing.T) {
 	log.New(r.Writer(&out), "", 0).Printf("header %q", secret)
 	if got, want := out.String(), `header "`+Marker+`"`+"\n"; got != want {
 		t.Errorf("logged = %q, want %q", got, want)
+	}
+}
+
+// A value that JSON would escape is also redacted in its JSON string form, with and without HTML escaping,
+// so a provider that echoes a request body cannot bring it back.
+func TestAddCoversJSONEscapedForms(t *testing.T) {
+	const value = "pa<ss>&\"word\nend"
+	r := &Redactor{}
+	r.Add(value)
+
+	htmlEscaped, _ := json.Marshal(value)
+	var plain bytes.Buffer
+	enc := json.NewEncoder(&plain)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(value); err != nil {
+		t.Fatal(err)
+	}
+	for name, form := range map[string]string{
+		"raw":          value,
+		"html escaped": string(htmlEscaped[1 : len(htmlEscaped)-1]),
+		"json escaped": strings.TrimSuffix(plain.String(), "\n")[1 : plain.Len()-2],
+	} {
+		if got := r.Apply(`{"p":"` + form + `"}`); strings.Contains(got, "word") || !strings.Contains(got, Marker) {
+			t.Errorf("%s form: Apply() = %q, want the value redacted", name, got)
+		}
 	}
 }

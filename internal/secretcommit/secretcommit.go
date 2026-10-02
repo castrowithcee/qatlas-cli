@@ -45,6 +45,16 @@ type Secrets interface {
 // configuration already agree by then.
 func Commit(store *config.Store, secrets Secrets, cfg *config.Config, credential string, toVault bool,
 	roles []string, values map[string]string, offer vault.PassphraseFunc) (warning string, err error) {
+	// A forward credential's fields are checked before anything is written. The message never carries a value.
+	if cred, ok := cfg.Credentials[credential]; ok && cred.Forward {
+		for _, role := range roles {
+			if value, ok := values[role]; ok {
+				if err := cred.CheckForwardValue(role, value); err != nil {
+					return "", fmt.Errorf("credential %s: %v", credential, err)
+				}
+			}
+		}
+	}
 	var written []string
 	for _, role := range roles {
 		value, ok := values[role]

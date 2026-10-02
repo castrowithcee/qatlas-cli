@@ -179,6 +179,7 @@ Exit code 2 is a problem of the request or the configuration:
 - policy-denied: local policy refuses the call.
 - admin-required: 'qatlas credential set', 'qatlas credential delete', and 'qatlas vault encrypt', 'passphrase', 'decrypt', 'migrate', 'approve', and 'token' manage a credential or the vault, and run only when a person is at the terminal, typing the vault passphrase there if it is encrypted; agents never manage a credential or the vault, so stop and ask the user to run the command themselves, in a terminal or in 'qatlas tui'. The one exception is 'qatlas vault approve' with an agent token, described below; there admin-required means no token was found, the token is unknown, revoked, or expired, or it does not cover a change, and the message names each such change and what of it lies outside.
 - approval-required: the connection reads its secret from an encrypted vault, which hands it only to a connection a person approved as it is configured now, and this one was never approved or changed since, its service URL, provider, permissions, targets, tools list, paths, files, or credential; nothing was read or sent. An agent never runs 'qatlas vault approve' either, so stop and ask the user. 'qatlas connections' marks the connections this affects as unusable.
+- secret-ref-not-allowed: an argument names a secret reference that this connection does not release, or that is not a forward credential; nothing was read or sent, and only a person changes the connection's forward_secrets.
 
 Exit code 1 is a runtime or provider failure:
 

@@ -51,6 +51,7 @@ func (c *Config) Clone() *Config {
 	for name, cred := range c.Credentials {
 		copied := cred
 		copied.Values = cloneStrings(cred.Values)
+		copied.Fields = append([]string(nil), cred.Fields...)
 		out.Credentials[name] = copied
 	}
 	for name, conn := range c.Connections {
@@ -66,6 +67,7 @@ func (c *Config) Clone() *Config {
 		}
 		copied.Paths = append([]string(nil), conn.Paths...)
 		copied.Files = conn.Files.Clone()
+		copied.ForwardSecrets = append([]string(nil), conn.ForwardSecrets...)
 		out.Connections[name] = copied
 	}
 	out.ProviderNotes = cloneStrings(c.ProviderNotes)

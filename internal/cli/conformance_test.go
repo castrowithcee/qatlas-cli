@@ -246,6 +246,42 @@ func TestProviderConformanceChecksDetectViolations(t *testing.T) {
 		{"a required argument listed as optional", func(d *capability.Descriptor) { d.Arguments[0].Required = false },
 			"argument"},
 	}
+	secretRefCases := []struct {
+		name   string
+		mutate func(*capability.Descriptor)
+		want   string
+	}{
+		{"a secret reference that is no string", func(d *capability.Descriptor) {
+			d.InputSchema = json.RawMessage(`{"type":"object","properties":{"name":{"type":"integer"}},` +
+				`"required":["name"],"additionalProperties":false}`)
+			d.Arguments[0].SecretRef = true
+		}, "must be a string"},
+		{"a secret reference without a tools list entry", func(d *capability.Descriptor) {
+			d.Arguments[0].SecretRef = true
+		}, "must require a tools list entry"},
+		{"a secret reference without confirmation", func(d *capability.Descriptor) {
+			d.Arguments[0].SecretRef, d.RequiresToolAllowList = true, true
+			d.Risk.Idempotency, d.Risk.Confirmation = capability.IdempotencyIdempotent, capability.ConfirmationNone
+		}, "must require confirmation"},
+	}
+	for _, tt := range secretRefCases {
+		t.Run("descriptor with "+tt.name, func(t *testing.T) {
+			descriptor := conformantDescriptor()
+			tt.mutate(&descriptor)
+			assertViolation(t, descriptorViolations(descriptor), tt.want)
+		})
+	}
+	secretRef := conformantDescriptor()
+	secretRef.Arguments[0].SecretRef, secretRef.RequiresToolAllowList = true, true
+	secretRef.InputSchema = json.RawMessage(`{"type":"object","properties":{"name":{"type":"string",` +
+		`"minLength":1}},"required":["name"],"additionalProperties":false}`)
+	if violations := descriptorViolations(secretRef); len(violations) != 0 {
+		t.Errorf("a conformant secret reference descriptor has violations %q", violations)
+	}
+	if violations := routingViolations(conformantMetadata(), secretRef); len(violations) != 0 {
+		t.Errorf("a conformant secret reference descriptor has routing violations %q", violations)
+	}
+
 	for _, tt := range descriptorCases {
 		t.Run("descriptor with "+tt.name, func(t *testing.T) {
 			descriptor := conformantDescriptor()
@@ -411,6 +447,23 @@ func descriptorViolations(d capability.Descriptor) []string {
 				required[argument.Name])
 		}
 	}
+	for _, argument := range d.Arguments {
+		if !argument.SecretRef {
+			continue
+		}
+		var property struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(input.Properties[argument.Name], &property) != nil || property.Type != "string" {
+			fail("secret reference argument %q must be a string in the input schema", argument.Name)
+		}
+		if !d.RequiresToolAllowList {
+			fail("a tool with the secret reference argument %q must require a tools list entry", argument.Name)
+		}
+		if risk.Confirmation != capability.ConfirmationRequired {
+			fail("a tool with the secret reference argument %q must require confirmation", argument.Name)
+		}
+	}
 	return violations
 }
 
@@ -571,6 +624,8 @@ func routingViolations(metadata config.ProviderMetadata, d capability.Descriptor
 		return violations
 	}
 
+	arguments = conformanceSecretRefs(d, arguments)
+
 	for _, connection := range []string{"listed", "unlisted", "denied", "open"} {
 		if offers[connection] {
 			_, calls, err := harness.invoke(d, connection, arguments, false)
@@ -615,6 +670,32 @@ func routingViolations(metadata config.ProviderMetadata, d capability.Descriptor
 	return violations
 }
 
+// conformanceForward is the forward credential every connection of the harness releases, so a tool with a
+// secret reference argument can be invoked with a reference the core accepts.
+const conformanceForward = "conformance-forward"
+
+// conformanceSecretRefs sets every secret reference argument of arguments to conformanceForward.
+func conformanceSecretRefs(d capability.Descriptor, arguments json.RawMessage) json.RawMessage {
+	var values map[string]any
+	if json.Unmarshal(arguments, &values) != nil {
+		return arguments
+	}
+	changed := false
+	for _, argument := range d.Arguments {
+		if _, ok := values[argument.Name]; ok && argument.SecretRef {
+			values[argument.Name], changed = conformanceForward, true
+		}
+	}
+	if !changed {
+		return arguments
+	}
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return arguments
+	}
+	return encoded
+}
+
 // conformanceHarness is an application core over a registry that holds only the given operations of one
 // provider. Its handlers count their calls instead of contacting the provider, and its credential resolver
 // counts every secret lookup.
@@ -646,13 +727,17 @@ func newConformanceHarness(metadata config.ProviderMetadata, descriptors []capab
 		values[role.Name] = "QATLAS_CONFORMANCE_" + strings.ToUpper(strings.ReplaceAll(role.Name, "-", "_"))
 	}
 	cfg := &config.Config{
-		Version:     1,
-		Services:    map[string]config.Service{"service": {Provider: metadata.ID, BaseURL: "https://provider.example.invalid"}},
-		Credentials: map[string]config.Credential{"credential": {Type: config.CredentialTypeEnv, Values: values}},
+		Version:  1,
+		Services: map[string]config.Service{"service": {Provider: metadata.ID, BaseURL: "https://provider.example.invalid"}},
+		Credentials: map[string]config.Credential{
+			"credential":       {Type: config.CredentialTypeEnv, Values: values},
+			conformanceForward: {Type: config.CredentialTypeVault, Forward: true, Fields: []string{"secret"}},
+		},
 		Connections: map[string]config.Connection{},
 	}
 	for name, connection := range connections {
 		connection.Service, connection.Credential = "service", "credential"
+		connection.ForwardSecrets = []string{conformanceForward}
 		cfg.Connections[name] = connection
 	}
 	redactor := &redact.Redactor{}

@@ -230,6 +230,7 @@ func classifyUserError(err error) error {
 		appSelection *application.ConnectionSelectionError
 		confirmation *application.ConfirmationRequiredError
 		denied       *application.PolicyDeniedError
+		secretRef    *application.SecretRefNotAllowedError
 
 		missingSecret   *secret.MissingSecretError
 		permission      *secret.PermissionError
@@ -242,7 +243,7 @@ func classifyUserError(err error) error {
 		errors.As(err, &missingSecret), errors.As(err, &permission), errors.As(err, &vaultPermission),
 		errors.As(err, &approval),
 		errors.As(err, &invalidReq), errors.As(err, &unknownOp), errors.As(err, &ambiguous),
-		errors.As(err, &confirmation), errors.As(err, &appSelection), errors.As(err, &denied):
+		errors.As(err, &confirmation), errors.As(err, &appSelection), errors.As(err, &denied), errors.As(err, &secretRef):
 		return &UsageError{err}
 	}
 	return err

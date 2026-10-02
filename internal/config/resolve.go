@@ -24,6 +24,10 @@ type Resolved struct {
 	Paths []string
 	// Files is the local directories the connection releases, as configured; empty grants no file access.
 	Files Files
+	// ForwardSecrets is the forward credentials the connection releases as reference arguments.
+	ForwardSecrets []string
+	// Forward holds the entries of those forward credentials, keyed by name. They name fields, never values.
+	Forward map[string]Credential
 }
 
 // ToolsList returns a copy of the connection's tools list that keeps a missing list, nil, apart from an
@@ -50,6 +54,22 @@ func (e *SelectionError) Error() string {
 		e.Domain, e.Domain)
 }
 
+// ForwardCredentials returns the entries of the forward credentials conn releases, keyed by name, or nil when
+// it releases none. The entries name fields, never values.
+func (c *Config) ForwardCredentials(conn Connection) map[string]Credential {
+	var forward map[string]Credential
+	for _, ref := range conn.ForwardSecrets {
+		if entry, ok := c.Credentials[ref]; ok && entry.Forward {
+			if forward == nil {
+				forward = map[string]Credential{}
+			}
+			entry.Fields = append([]string(nil), entry.Fields...)
+			forward[ref] = entry
+		}
+	}
+	return forward
+}
+
 // Resolve returns the connection to use for a domain. An explicitly requested name wins; otherwise the
 // domain default decides. Resolution is purely local and never contacts a provider.
 func (c *Config) Resolve(name, domain string) (*Resolved, error) {
@@ -69,18 +89,20 @@ func (c *Config) Resolve(name, domain string) (*Resolved, error) {
 	cred := c.Credentials[conn.Credential]
 
 	return &Resolved{
-		Name:        name,
-		Provider:    service.Provider,
-		BaseURL:     c.ServiceBaseURL(service),
-		Options:     service.Options,
-		Target:      conn.Target,
-		Targets:     append([]string(nil), conn.Targets...),
-		Service:     conn.Service,
-		Credential:  conn.Credential,
-		Secrets:     cred,
-		Permissions: c.ConnectionPermissions(name),
-		Tools:       conn.ToolsList(),
-		Paths:       append([]string(nil), conn.Paths...),
-		Files:       conn.Files.Clone(),
+		Name:           name,
+		Provider:       service.Provider,
+		BaseURL:        c.ServiceBaseURL(service),
+		Options:        service.Options,
+		Target:         conn.Target,
+		Targets:        append([]string(nil), conn.Targets...),
+		Service:        conn.Service,
+		Credential:     conn.Credential,
+		Secrets:        cred,
+		Permissions:    c.ConnectionPermissions(name),
+		Tools:          conn.ToolsList(),
+		Paths:          append([]string(nil), conn.Paths...),
+		Files:          conn.Files.Clone(),
+		ForwardSecrets: append([]string(nil), conn.ForwardSecrets...),
+		Forward:        c.ForwardCredentials(conn),
 	}, nil
 }

@@ -143,6 +143,25 @@ func (e *ConfirmationRequiredError) Error() string {
 	return fmt.Sprintf("tool %q requires confirmation in this invoke request", e.Operation)
 }
 
+// SecretRefNotAllowedError reports a secret reference argument that names no forward credential this
+// connection releases: the credential does not exist, is not a forward credential, is the connection's own
+// credential, or is not listed in the connection's forward_secrets. It names the argument and the reference
+// name, never a value, and it is raised before anything is read from a credential store.
+type SecretRefNotAllowedError struct {
+	Operation string
+	Argument  string
+	Reference string
+}
+
+func (e *SecretRefNotAllowedError) Error() string {
+	if e.Reference == "" {
+		return fmt.Sprintf("tool %q: argument %q does not name a secret reference this connection releases",
+			e.Operation, e.Argument)
+	}
+	return fmt.Sprintf("tool %q: argument %q names the secret reference %q, which this connection does not release",
+		e.Operation, e.Argument, e.Reference)
+}
+
 // PolicyDeniedError deliberately omits policy internals from the public diagnostic.
 type PolicyDeniedError struct{ Operation string }
 
@@ -200,6 +219,7 @@ func ErrorCode(err error) output.Code {
 		denied        *PolicyDeniedError
 		invalidResult *InvalidProviderResponseError
 		adminReq      *AdminRequiredError
+		secretRef     *SecretRefNotAllowedError
 
 		missingSecret   *secret.MissingSecretError
 		permission      *secret.PermissionError
@@ -233,6 +253,8 @@ func ErrorCode(err error) output.Code {
 		return output.CodeInvalidRequest
 	case errors.As(err, &confirmation):
 		return output.CodeConfirmationRequired
+	case errors.As(err, &secretRef):
+		return output.CodeSecretRefNotAllowed
 	case errors.As(err, &denied):
 		return output.CodePolicyDenied
 	case errors.As(err, &invalidResult):

@@ -563,6 +563,95 @@ func (r *Resolver) Resolve(ctx context.Context, credential string, cred config.C
 	return Value{}, missing(credential, cred, role, checked, cause)
 }
 
+// ForwardRef names one forward credential and its configuration entry: the reference a tool argument carries.
+type ForwardRef struct {
+	Name string
+	Cred config.Credential
+}
+
+// ErrForwardedVaultProcess reports that a forwarded secret lies in an encrypted vault, which hands a secret
+// only to the connection that owns its credential. The approval of forwarded secrets is not part of that
+// protocol yet, so such a reference is refused rather than read around the approval.
+var ErrForwardedVaultProcess = errors.New("forwarded secrets need vault protocol 6: an encrypted vault " +
+	"cannot hand out a forwarded secret yet")
+
+// ResolveForwarded returns the value of every field of a forward credential, keyed by field name, and
+// registers each value with the redactor. Unlike Resolve it consults no environment variable and no
+// plaintext fallback: the source is the vault or the system keyring, as the credential's type says. A field
+// that yields nothing is an error naming the credential and the field, never a value.
+//
+// A credential in an unencrypted vault is read directly. One in an encrypted vault is refused with
+// ErrForwardedVaultProcess: the approval that releases it to a connection is bound to the connection's own
+// credential and does not yet cover a forwarded one.
+func (r *Resolver) ResolveForwarded(ctx context.Context, ref ForwardRef) (map[string]string, error) {
+	if !ref.Cred.Forward || len(ref.Cred.Fields) == 0 {
+		return nil, fmt.Errorf("credential %s is not a forward credential", ref.Name)
+	}
+	values := make(map[string]string, len(ref.Cred.Fields))
+	for _, field := range ref.Cred.Fields {
+		value, err := r.resolveForwardedField(ctx, ref, field)
+		if err != nil {
+			return nil, err
+		}
+		values[field] = value
+	}
+	for _, value := range values {
+		r.register(value)
+	}
+	return values, nil
+}
+
+// UsableForwarded reports, without reading a secret or asking for a passphrase, whether ref can be resolved
+// as far as its source goes: it is ErrForwardedVaultProcess for a credential in an encrypted vault and nil
+// otherwise. A keyring is not asked, so discovery never touches the store.
+func (r *Resolver) UsableForwarded(ref ForwardRef) error {
+	if ref.Cred.Type != config.CredentialTypeVault || r.vault == nil {
+		return nil
+	}
+	state, err := r.vault.State()
+	if err != nil {
+		return nil
+	}
+	if state == vault.StateLocked || state == vault.StateUnlocked {
+		return ErrForwardedVaultProcess
+	}
+	return nil
+}
+
+func (r *Resolver) resolveForwardedField(ctx context.Context, ref ForwardRef, field string) (string, error) {
+	switch ref.Cred.Type {
+	case config.CredentialTypeVault:
+		if r.vault == nil {
+			return "", missing(ref.Name, ref.Cred, field, []string{stage(SourceVault, "unavailable")}, nil)
+		}
+		state, err := r.vault.State()
+		if err != nil {
+			return "", missing(ref.Name, ref.Cred, field, []string{stage(SourceVault, "unavailable")}, nil)
+		}
+		if state == vault.StateLocked || state == vault.StateUnlocked {
+			return "", fmt.Errorf("credential %s, field %s: %w", ref.Name, field, ErrForwardedVaultProcess)
+		}
+		value, found, _, err := r.vault.Get(ref.Name, field, nil)
+		switch {
+		case err != nil:
+			return "", missing(ref.Name, ref.Cred, field, []string{stage(SourceVault, "unavailable")}, nil)
+		case !found || value == "":
+			return "", missing(ref.Name, ref.Cred, field, []string{stage(SourceVault, "no entry")}, nil)
+		}
+		return value, nil
+	case config.CredentialTypeKeyring:
+		value, state := r.fromStore(ctx, StoreKey(ref.Name, field))
+		if state != StoreHolds || value == "" {
+			if state == StoreHolds {
+				state = StoreEmpty
+			}
+			return "", missing(ref.Name, ref.Cred, field, []string{stage(SourceStore, string(state))}, nil)
+		}
+		return value, nil
+	}
+	return "", fmt.Errorf("credential %s: a forward credential must be of type vault or keyring", ref.Name)
+}
+
 // fromStore asks the store for one key, unless it failed less than storeRetry ago; then the earlier answer
 // stands without asking again.
 func (r *Resolver) fromStore(ctx context.Context, key string) (string, StoreState) {

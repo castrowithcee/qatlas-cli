@@ -121,6 +121,9 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 	}
 	// The value is registered before anything can fail, so no later message can carry it.
 	opts.Redactor.Add(value)
+	if err := cred.CheckForwardValue(role, value); err != nil {
+		return &UsageError{fmt.Errorf("credential %s: %v", name, err)}
+	}
 
 	switch {
 	case cred.Type == config.CredentialTypeVault:
@@ -143,8 +146,9 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 		}
 	}
 
-	// Overriding is allowed, so a shadowing variable must be named the moment it starts shadowing.
-	if env := secret.DerivedEnvName(name, role); secrets.Lookup(env) {
+	// Overriding is allowed, so a shadowing variable must be named the moment it starts shadowing. A forward
+	// credential reads no variable, so nothing shadows it.
+	if env := secret.DerivedEnvName(name, role); !cred.Forward && secrets.Lookup(env) {
 		fmt.Fprintf(c.ErrOrStderr(),
 			"qatlas: warning: %s is set and overrides what was just stored for %s.%s\n", env, name, role)
 	}
@@ -253,6 +257,13 @@ func storableCredential(opts *Options, reg *capability.Registry, name, role stri
 		return config.Credential{}, &UsageError{fmt.Errorf(
 			"credential %q has type %q: its secrets come from the environment variables it names, so there "+
 				"is nothing to store", name, cred.Type)}
+	}
+	if cred.Forward {
+		if !contains(cred.Fields, role) {
+			return config.Credential{}, &UsageError{fmt.Errorf("unknown field %q, the fields of %s are %s",
+				role, name, strings.Join(cred.Fields, ", "))}
+		}
+		return cred, nil
 	}
 	if !contains(cfg.SecretRoles(), role) {
 		return config.Credential{}, &UsageError{fmt.Errorf("unknown secret role %q, known roles are %s",

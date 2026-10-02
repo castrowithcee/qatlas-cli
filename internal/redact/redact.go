@@ -3,6 +3,8 @@
 package redact
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"sort"
 	"strconv"
@@ -94,7 +96,8 @@ func (w *writer) Write(p []byte) (int, error) {
 }
 
 // withQuoted adds to values the escaped form strconv.Quote gives each of them, without the surrounding
-// quotes, where it differs from the value.
+// quotes, where it differs from the value, and the JSON string forms (with and without HTML escaping), so a
+// provider response or request body that echoes a value inside JSON is covered too.
 func withQuoted(values []string) []string {
 	// The capped slice makes append copy, so the caller's slice is never written to.
 	all := values[:len(values):len(values)]
@@ -102,6 +105,11 @@ func withQuoted(values []string) []string {
 		quoted := strconv.Quote(v)
 		if escaped := quoted[1 : len(quoted)-1]; escaped != v {
 			all = append(all, escaped)
+		}
+		for _, escapeHTML := range []bool{true, false} {
+			if escaped, ok := jsonEscaped(v, escapeHTML); ok && escaped != v && !contains(all, escaped) {
+				all = append(all, escaped)
+			}
 		}
 	}
 	return all
@@ -114,4 +122,19 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// jsonEscaped returns v as the content of a JSON string, without the surrounding quotes.
+func jsonEscaped(v string, escapeHTML bool) (string, bool) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(escapeHTML)
+	if err := enc.Encode(v); err != nil {
+		return "", false
+	}
+	out := strings.TrimSuffix(buf.String(), "\n")
+	if len(out) < 2 {
+		return "", false
+	}
+	return out[1 : len(out)-1], true
 }

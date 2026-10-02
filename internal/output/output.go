@@ -142,6 +142,7 @@ const (
 	CodeAdminRequired         Code = "admin-required"
 	CodeVaultLocked           Code = "vault-locked"
 	CodeApprovalRequired      Code = "approval-required"
+	CodeSecretRefNotAllowed   Code = "secret-ref-not-allowed"
 	CodeUnreachable           Code = "unreachable"
 	CodeTLS                   Code = "tls"
 	CodeAuth                  Code = "auth"
@@ -160,7 +161,7 @@ func AllCodes() []Code {
 		CodeUsage, CodeInvalidRequest, CodeConfigMissing, CodeConfigInvalid, CodeConnectionSelection,
 		CodeUnknownConnection, CodeConnectionAmbiguous, CodeUnknownOperation, CodeUnsupportedCapability,
 		CodeMissingSecret, CodeConfirmationRequired, CodePolicyDenied, CodeAdminRequired, CodeApprovalRequired,
-		CodeVaultLocked, CodeUnreachable, CodeTLS, CodeAuth, CodePermission, CodeNotFound, CodeTimeout, CodeRateLimited,
+		CodeSecretRefNotAllowed, CodeVaultLocked, CodeUnreachable, CodeTLS, CodeAuth, CodePermission, CodeNotFound, CodeTimeout, CodeRateLimited,
 		CodeInvalidProviderResult, CodeProviderError, CodeRuntime,
 	}
 }

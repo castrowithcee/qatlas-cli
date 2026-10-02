@@ -407,6 +407,49 @@ type ConnectionSummary struct {
 	Unusable    *string `json:"unusable,omitempty"`
 	// Files names the local directories the connection releases, per direction; absent when none.
 	Files *FilesRef `json:"files,omitempty"`
+	// ForwardSecrets lists the forward credentials the connection releases as reference arguments, never
+	// with a value; absent when none.
+	ForwardSecrets []ForwardSecretRef `json:"forward_secrets,omitempty"`
+}
+
+// UnusableForwardedVault is the Unusable value of a forward credential that lies in an encrypted vault, which
+// cannot hand out a forwarded secret yet.
+const UnusableForwardedVault = "forwarded-vault-unsupported"
+
+// ForwardSecretRef is the discovery view of one forward credential a connection releases: the reference name
+// an invoke request carries, the names of its fields, and the line its owner maintains. Unusable is present
+// only while it cannot be resolved. It never carries a value, a type, or a secret source.
+type ForwardSecretRef struct {
+	Name        string   `json:"name"`
+	Fields      []string `json:"fields"`
+	Description string   `json:"description,omitempty"`
+	Unusable    *string  `json:"unusable,omitempty"`
+}
+
+// forwardRefs returns the discovery view of the forward credentials the connection releases, sorted by name.
+// check is nil where nothing asks whether they are usable.
+func (c *Core) forwardRefs(connection config.Connection, check bool) []ForwardSecretRef {
+	var out []ForwardSecretRef
+	for _, name := range connection.ForwardSecrets {
+		cred, ok := c.config.Credentials[name]
+		if !ok || !cred.Forward {
+			continue
+		}
+		description := cred.Description
+		if c.redactor != nil {
+			description = c.redactor.Apply(description)
+		}
+		ref := ForwardSecretRef{Name: name, Fields: append([]string(nil), cred.Fields...), Description: description}
+		if check && c.secrets != nil {
+			if err := c.secrets.UsableForwarded(secret.ForwardRef{Name: name, Cred: cred}); err != nil {
+				reason := UnusableForwardedVault
+				ref.Unusable = &reason
+			}
+		}
+		out = append(out, ref)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
 }
 
 // ConnectionsResponse is the payload inside the CLI envelope.
@@ -466,6 +509,7 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 		summary := ConnectionSummary{
 			Name: name, Provider: owner, Description: connection.Description,
 			Permissions: strings.Join(effects, " "), Tools: tools, Files: filesRef(connection.Files),
+			ForwardSecrets: c.forwardRefs(connection, unusable != nil),
 		}
 		if len(reasons) > 0 {
 			reason := reasons[name]
@@ -647,6 +691,8 @@ type ConnectionRef struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Files       *FilesRef `json:"files,omitempty"`
+	// ForwardSecrets lists the forward credentials the route releases, as ConnectionSummary does.
+	ForwardSecrets []ForwardSecretRef `json:"forward_secrets,omitempty"`
 }
 
 // FilesRef is the local directories a connection releases, as configured, per direction.
@@ -706,7 +752,7 @@ func (c *Core) Describe(request DescribeRequest) (DescribeResponse, error) {
 				Connection: request.Connection, Capability: request.Operation, Reason: reason,
 			}
 		}
-		connections = []ConnectionRef{c.connectionRef(request.Connection)}
+		connections = []ConnectionRef{c.connectionRefFor(request.Connection, descriptor)}
 	}
 	return DescribeResponse{Operation: PublishedDescriptor(descriptor), Connections: connections}, nil
 }
@@ -768,6 +814,12 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 			return InvokeResponse{}, &PolicyDeniedError{Operation: descriptor.ID}
 		}
 	}
+	// Secret references are checked for existence and release only, before the confirmation gate and without
+	// reading any store: the handler resolves them after the confirmation.
+	secretRefs, err := c.checkSecretRefs(descriptor, resolved, request.Arguments)
+	if err != nil {
+		return InvokeResponse{}, err
+	}
 	if descriptor.Risk.Confirmation == capability.ConfirmationRequired && !request.Confirmed {
 		return InvokeResponse{}, &ConfirmationRequiredError{Operation: descriptor.ID}
 	}
@@ -788,6 +840,7 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 			c.writeAudit(auditEvent{
 				RequestID: requestID, Operation: descriptor.ID, Connection: resolved.Name,
 				Confirmed: request.Confirmed, Result: auditResult(err), Time: time.Now().UTC(),
+				SecretRefs: secretRefs,
 			})
 		}()
 	}
@@ -881,6 +934,8 @@ type auditEvent struct {
 	Confirmed  bool      `json:"confirmed"`
 	Result     string    `json:"result"`
 	Time       time.Time `json:"time"`
+	// SecretRefs names the forward credentials the request referenced, never their values.
+	SecretRefs []string `json:"secret_refs,omitempty"`
 }
 
 // replacedAuditEvent records that a confirmed request replaced an existing local file. It names neither the
@@ -1035,11 +1090,13 @@ func (c *Core) connection(name string) (*config.Resolved, error) {
 		Name: name, Provider: service.Provider, BaseURL: c.config.ServiceBaseURL(service), Options: service.Options,
 		Target: connection.Target, Targets: append([]string(nil), connection.Targets...),
 		Service: connection.Service, Credential: connection.Credential,
-		Secrets:     c.config.Credentials[connection.Credential],
-		Permissions: c.config.ConnectionPermissions(name),
-		Tools:       connection.ToolsList(),
-		Paths:       append([]string(nil), connection.Paths...),
-		Files:       connection.Files.Clone(),
+		Secrets:        c.config.Credentials[connection.Credential],
+		Permissions:    c.config.ConnectionPermissions(name),
+		Tools:          connection.ToolsList(),
+		Paths:          append([]string(nil), connection.Paths...),
+		Files:          connection.Files.Clone(),
+		ForwardSecrets: append([]string(nil), connection.ForwardSecrets...),
+		Forward:        c.config.ForwardCredentials(connection),
 	}, nil
 }
 
@@ -1049,9 +1106,22 @@ func (c *Core) connectionRefs(descriptor capability.Descriptor) []ConnectionRef 
 	names := c.connectionNamesFor(descriptor)
 	refs := make([]ConnectionRef, len(names))
 	for i, name := range names {
-		refs[i] = c.connectionRef(name)
+		refs[i] = c.connectionRefFor(name, descriptor)
 	}
 	return refs
+}
+
+// connectionRefFor is connectionRef plus, for a tool with a secret reference argument, the forward
+// credentials the route releases.
+func (c *Core) connectionRefFor(name string, descriptor capability.Descriptor) ConnectionRef {
+	ref := c.connectionRef(name)
+	for _, argument := range descriptor.Arguments {
+		if argument.SecretRef {
+			ref.ForwardSecrets = c.forwardRefs(c.config.Connections[name], true)
+			break
+		}
+	}
+	return ref
 }
 
 func (c *Core) connectionNamesFor(descriptor capability.Descriptor) []string {
@@ -1228,4 +1298,48 @@ func redactValue(redactor *redact.Redactor, value any) any {
 		}
 	}
 	return value
+}
+
+// checkSecretRefs verifies every secret reference argument of the request against the connection and returns
+// the referenced credential names, sorted. A reference must name a forward credential the connection lists in
+// forward_secrets; the connection's own credential, an unknown credential, and a credential that is not a
+// forward credential are refused alike. It reads nothing from a credential store.
+func (c *Core) checkSecretRefs(descriptor capability.Descriptor, resolved *config.Resolved,
+	arguments json.RawMessage) ([]string, error) {
+	var names []string
+	for _, argument := range descriptor.Arguments {
+		if argument.SecretRef {
+			names = append(names, argument.Name)
+		}
+	}
+	if len(names) == 0 {
+		return nil, nil
+	}
+	var values map[string]json.RawMessage
+	if err := json.Unmarshal(arguments, &values); err != nil {
+		return nil, &InvalidRequestError{Message: "arguments must be a JSON object"}
+	}
+	var refs []string
+	for _, name := range names {
+		raw, ok := values[name]
+		if !ok {
+			continue
+		}
+		var ref string
+		if err := json.Unmarshal(raw, &ref); err != nil {
+			return nil, &InvalidRequestError{Message: fmt.Sprintf("argument %q must be a string", name)}
+		}
+		if !capability.SecretRefAllowed(resolved, ref) {
+			// The reference is quoted only where it is the name of a configured credential. A caller that
+			// pasted a value into the argument instead is never echoed back.
+			shown := ""
+			if _, known := c.config.Credentials[ref]; known {
+				shown = ref
+			}
+			return nil, &SecretRefNotAllowedError{Operation: descriptor.ID, Argument: name, Reference: shown}
+		}
+		refs = append(refs, ref)
+	}
+	sort.Strings(refs)
+	return refs, nil
 }

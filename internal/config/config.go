@@ -65,10 +65,19 @@ type Service struct {
 // without it nothing says whether a credential holds a bot token or a wiki token pair, and an editor can
 // only offer the roles of every compiled provider at once. A credential written before this field, or by
 // hand without it, stays valid and keeps that behaviour.
+//
+// Forward marks a payload secret: a credential that belongs to no provider and holds freely named fields
+// (Fields) whose values a tool may pass on to a third party by reference. It uses the vault or keyring type,
+// never env, and is never the credential of a connection. A connection releases it through forward_secrets.
 type Credential struct {
 	Provider string            `yaml:"provider,omitempty"`
 	Type     string            `yaml:"type"`
 	Values   map[string]string `yaml:"values,omitempty"`
+	Forward  bool              `yaml:"forward,omitempty"`
+	Fields   []string          `yaml:"fields,omitempty"`
+	// Description is one line of prose that says what a forward credential is for. Discovery publishes it
+	// verbatim; only a forward credential may have one.
+	Description string `yaml:"description,omitempty"`
 }
 
 // Connection binds exactly one service to exactly one credential. Target is an optional provider-specific
@@ -103,6 +112,9 @@ type Connection struct {
 	Tools       []string     `yaml:"tools,omitempty"`
 	Paths       []string     `yaml:"paths,omitempty"`
 	Files       Files        `yaml:"files,omitempty"`
+	// ForwardSecrets lists the forward credentials a tool of this connection may use as a reference argument.
+	// Missing releases none.
+	ForwardSecrets []string `yaml:"forward_secrets,omitempty"`
 }
 
 // MarshalYAML preserves the semantic difference between a missing permissions or tools field (provider
@@ -110,15 +122,16 @@ type Connection struct {
 // omitempty slice cannot represent both states when a configuration is saved through the TUI.
 func (c Connection) MarshalYAML() (any, error) {
 	type wire struct {
-		Service     string        `yaml:"service"`
-		Credential  string        `yaml:"credential"`
-		Target      string        `yaml:"target,omitempty"`
-		Targets     []string      `yaml:"targets,omitempty"`
-		Description string        `yaml:"description,omitempty"`
-		Permissions *[]Permission `yaml:"permissions,omitempty"`
-		Tools       *[]string     `yaml:"tools,omitempty"`
-		Paths       []string      `yaml:"paths,omitempty"`
-		Files       Files         `yaml:"files,omitempty"`
+		Service        string        `yaml:"service"`
+		Credential     string        `yaml:"credential"`
+		Target         string        `yaml:"target,omitempty"`
+		Targets        []string      `yaml:"targets,omitempty"`
+		Description    string        `yaml:"description,omitempty"`
+		Permissions    *[]Permission `yaml:"permissions,omitempty"`
+		Tools          *[]string     `yaml:"tools,omitempty"`
+		Paths          []string      `yaml:"paths,omitempty"`
+		Files          Files         `yaml:"files,omitempty"`
+		ForwardSecrets []string      `yaml:"forward_secrets,omitempty"`
 	}
 	var permissions *[]Permission
 	if c.Permissions != nil {
@@ -131,7 +144,8 @@ func (c Connection) MarshalYAML() (any, error) {
 		tools = &copy
 	}
 	return wire{Service: c.Service, Credential: c.Credential, Target: c.Target, Targets: c.Targets,
-		Description: c.Description, Permissions: permissions, Tools: tools, Paths: c.Paths, Files: c.Files}, nil
+		Description: c.Description, Permissions: permissions, Tools: tools, Paths: c.Paths, Files: c.Files,
+		ForwardSecrets: c.ForwardSecrets}, nil
 }
 
 // Defaults holds the connection chosen for a domain when no connection is given explicitly, and the
@@ -451,6 +465,7 @@ func (c *Config) Validate() error {
 	for _, name := range sortedKeys(c.Credentials) {
 		cred := c.Credentials[name]
 		checkName("credentials", "credential name", name)
+		validateForward(name, cred, report)
 		if cred.Provider != "" {
 			if _, ok := providers.ProviderMetadata(cred.Provider); !ok {
 				report("credentials.%s: unknown provider %q, known providers are %s",
@@ -506,6 +521,24 @@ func (c *Config) Validate() error {
 		cred, credOK := c.Credentials[conn.Credential]
 		if !credOK {
 			report("connections.%s.credential: unknown credential %q", name, conn.Credential)
+		} else if cred.Forward {
+			report("connections.%s.credential: credential %q is a forward credential and cannot serve a connection",
+				name, conn.Credential)
+		}
+		seenForward := map[string]bool{}
+		for i, ref := range conn.ForwardSecrets {
+			target, exists := c.Credentials[ref]
+			switch {
+			case !exists:
+				// An unknown entry is named by its position: free text here may be a pasted secret.
+				report("connections.%s.forward_secrets[%d]: unknown credential", name, i)
+			case !target.Forward:
+				report("connections.%s.forward_secrets: credential %q is not a forward credential", name, ref)
+			}
+			if seenForward[ref] {
+				report("connections.%s.forward_secrets: credential %q is listed more than once", name, ref)
+			}
+			seenForward[ref] = true
 		}
 		// A credential that names another provider than the service cannot serve this route: its secret
 		// roles are the other provider's. Saying so here keeps the mismatch out of the first call, where
@@ -633,6 +666,62 @@ func (c *Config) Validate() error {
 	}
 
 	return errors.Join(problems...)
+}
+
+// MinForwardValueLength is the shortest value a field of a forward credential may hold. A shorter value would
+// make the redactor replace common text wherever it occurs.
+const MinForwardValueLength = 4
+
+// CheckForwardValue reports whether value may be stored in field of the forward credential. Every other
+// credential accepts any value here. The message names the field and the rule, never the value.
+func (c Credential) CheckForwardValue(field, value string) error {
+	if !c.Forward {
+		return nil
+	}
+	if !contains(c.Fields, field) {
+		return fmt.Errorf("%q is not a field of this forward credential", field)
+	}
+	if len(value) < MinForwardValueLength {
+		return fmt.Errorf("the value of field %q is shorter than %d characters", field, MinForwardValueLength)
+	}
+	return nil
+}
+
+// validateForward checks the rules of a payload secret: it needs fields, has no provider, and its source is the
+// vault or the keyring. A credential without the flag must not carry fields.
+func validateForward(name string, cred Credential, report func(string, ...any)) {
+	if !cred.Forward {
+		if len(cred.Fields) > 0 {
+			report("credentials.%s.fields: only a forward credential has fields", name)
+		}
+		if cred.Description != "" {
+			report("credentials.%s.description: only a forward credential has a description", name)
+		}
+		return
+	}
+	if err := validateLine(cred.Description, descriptionRule); err != nil {
+		report("credentials.%s.description: %v", name, err)
+	}
+	if cred.Provider != "" {
+		report("credentials.%s.provider: a forward credential belongs to no provider", name)
+	}
+	if cred.Type != CredentialTypeVault && cred.Type != CredentialTypeKeyring {
+		report("credentials.%s.type: a forward credential must be %s or %s",
+			name, CredentialTypeKeyring, CredentialTypeVault)
+	}
+	if len(cred.Fields) == 0 {
+		report("credentials.%s.fields: a forward credential needs at least one field", name)
+	}
+	seen := map[string]bool{}
+	for i, field := range cred.Fields {
+		if err := validateName(field); err != nil {
+			report("credentials.%s.fields[%d]: a field name %v", name, i, err)
+		}
+		if seen[field] {
+			report("credentials.%s.fields[%d]: a field is listed more than once", name, i)
+		}
+		seen[field] = true
+	}
 }
 
 // validateTools checks the tools allow-list of one connection against the tools its provider registered.

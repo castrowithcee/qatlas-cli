@@ -60,6 +60,10 @@ type Argument struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Required    bool   `json:"required"`
+	// SecretRef marks an argument that carries the name of a forward credential, never a secret value. The
+	// argument must be a string of the input schema, and its tool requires an allow-list entry and
+	// confirmation; see MergeSecretFields and ResolveSecretRef.
+	SecretRef bool `json:"secret_ref,omitempty"`
 }
 
 // Field is CLI projection metadata for one named result value. OutputSchema is the operation contract.
