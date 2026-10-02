@@ -3,23 +3,25 @@ description: >
   Describes the n8n provider: Public API key setup, the project and workflow allow-lists and their live
   project-membership check, the workflow and execution reads, pagination and cursor contracts, the bounded
   failed-execution error, the confirmed workflow and execution changes and their retry contract, and the
-  version and plan boundaries of n8n's Projects feature and its deprecated activate/deactivate endpoints.
+  project listing, creation, renaming, and deletion with the deletion sequence n8n runs, and the version and
+  plan boundaries of n8n's Projects feature and its deprecated activate/deactivate endpoints.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-10-02
 ---
 
 # n8n
 
 n8n is a provider for the n8n Public API (n8n Cloud or self-hosted, `/api/v1`). It lists and reads workflows
 and executions, including a bounded view of a failed execution's error, creates and replaces workflows,
-activates and deactivates them, and retries and stops executions.
+activates and deactivates them, and retries and stops executions. It also lists, creates, renames, and
+deletes projects, see "Projects" below.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
-test-run action, and no credential, user, tag, variable, project, or data table management; those are a
-later milestone.
+test-run action, and no credential, user, tag, variable, project member, or data table management; those are
+a later milestone.
 
 ## Configuration
 
@@ -110,6 +112,10 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.executions.get` | read | reads one execution's status, timestamps, and, for a failed one, a bounded error |
 | `n8n.executions.retry` | execute | retries one execution, starting a new execution from it |
 | `n8n.executions.stop` | execute | stops one running or waiting execution |
+| `n8n.projects.list` | read | lists the projects of the bound instance, filtered to the project allow-list, page by page |
+| `n8n.projects.create` | create | creates one team project from its name |
+| `n8n.projects.update` | update | renames one project |
+| `n8n.projects.delete` | delete | deletes one team project and everything it owns; only offered by a tools list |
 
 **There is no tool to start a workflow.** n8n's Public API documents no endpoint for it (`POST
 /workflows/{id}/activate` only flips the `active` flag; running a workflow on demand is an editor and
@@ -123,6 +129,18 @@ below. That per-call confirmation is separate from, and required in addition to,
 the terminal editor starts a new connection on the setup profile `read`, which offers only the four read
 tools; `manage` additionally offers the six change tools, each of which still needs its own confirmation on
 every call regardless of the profile a connection was set up with.
+
+The project tools have their own profiles, so they can be released separately from the workflow tools and
+are in neither `read` nor `manage`:
+
+| Profile | Tools |
+| --- | --- |
+| `projects-read` | `n8n.projects.list` |
+| `projects-manage` | `n8n.projects.list`, `n8n.projects.create`, `n8n.projects.update` |
+
+`n8n.projects.delete` is in no profile. It carries `requires_tool_allow_list`: a connection offers it only
+when its `tools` list names it explicitly, in addition to the `delete` permission and the per-call
+confirmation.
 
 ## Changes and their retry contract
 
@@ -169,6 +187,61 @@ because the request has already reached n8n and this milestone offers no delete 
 misplaced workflow; the caller is told to remove it directly in n8n. `workflows.update` cannot move a
 workflow between projects at all (its own schema has no `projectId` field), so no equivalent risk exists
 there; the same re-check still runs defensively after its one `PUT`.
+
+## Projects
+
+The four tools call `GET /projects`, `POST /projects`, `PUT /projects/{id}`, and `DELETE /projects/{id}`, and
+nothing else; project members and roles (`/projects/{id}/users`) and folders are not offered. The routes and
+their scopes (`project:list`, `project:create`, `project:update`, `project:delete`) are those of
+`packages/cli/src/public-api/v1/openapi.decorator-routes.generated.yml` and
+`packages/cli/src/public-api/v1/controllers/projects.public.controller.ts` in n8n-io/n8n at commit
+`191a22e`.
+
+**Allow-list.** The project allow-list (`project/PROJECT_ID`) applies as follows:
+
+- `projects.list` keeps only the projects of the allow-list; n8n itself answers with every project of the
+  instance. With an empty project allow-list it lists all of them, the same reading the workflow and execution
+  tools give an empty list; this is the only project tool for which an empty list admits everything. As
+  with `workflows.list`, a page can be empty after filtering while `has_more` is true. Personal projects are included when no allow-list is set; their names can identify a user.
+- `projects.update` and `projects.delete` accept only a `project_id` of the allow-list, and therefore need a
+  configured project allow-list: without a `project/PROJECT_ID` target no project is on the list, and both
+  are refused locally. A foreign ID is refused the same way. Both refusals are invalid requests, made before a
+  secret is read and before any request is sent, and neither names a project.
+- `projects.create` is refused on a connection with a project allow-list, since the new project cannot
+  already be on it. The request carries only `name`; n8n's `id`, `icon`, `description`, and telemetry tags
+  are not offered, so a caller cannot choose the ID of the new project.
+- A connection with a **workflow** allow-list refuses `create`, `update`, and `delete` of projects: they reach
+  workflows beyond that list. `list` still works.
+
+`projects.update` sends `{"name": ...}`, the one field `updateProject` accepts (HTTP 204). The Public API has
+no endpoint to read a single project, so the change is not re-read.
+
+**What deleting a project does.** `DELETE /projects/{id}` runs `ProjectsPublicController.deleteProject`
+(`packages/cli/src/public-api/v1/controllers/projects.public.controller.ts`), which calls
+`ProjectService.deleteProject(req.user, projectId)` (`packages/cli/src/services/project.service.ee.ts`)
+without a migration target, and its query schema `DeleteProjectQueryPublicDto` is the empty strict object, so
+the Public API accepts no transfer parameter (the editor's internal endpoint has `transferId`; the public one
+has none). Without a target, n8n:
+
+1. refuses anything but a team project (403 for a personal project),
+2. deletes every workflow the project owns (`workflowService.delete(user, id, true)`),
+3. deletes every credential the project owns,
+4. deletes the project's data tables (when the data-table module is active),
+5. removes its external-secrets connections and agent data (when those modules are active),
+6. removes the project; workflows and credentials only shared into it lose that share.
+
+Nothing is moved to another project and the deletion cannot be undone. The steps run one after another, not
+in a transaction: a rejection part-way, for example a 409 because an owned workflow is still published, can
+leave the project partly emptied. Qatlas therefore reports every provider rejection of a delete other than
+403 and 404, as well as every unclear transport result, as "this change may have taken effect, read the
+current state before repeating it". Because the Public API offers no transfer, the contract chosen here is
+the only one it allows: a delete always deletes, and there is no argument to move content first.
+
+**License and role.** All project routes carry `@Licensed(PROJECT_ROLE_ADMIN)`; `create` also needs the
+global `project:create` scope. n8n answers 403 for a missing license (the license middleware), a missing API
+key scope, and a role that may not manage projects, and this provider does not read the response body, so
+every 403 of a project tool is reported as class `permission` with a message that names all three possible
+causes (license, API key scope, role).
 
 ## Version and plan boundaries
 
@@ -224,7 +297,7 @@ Errors keep stable classes and never carry the API key or a raw provider respons
 | Class | Cause |
 | --- | --- |
 | `auth` | n8n rejected the API key |
-| `permission` | this API key may not perform the operation; check its scopes under Settings, n8n API |
+| `permission` | this API key may not perform the operation; check its scopes under Settings, n8n API. For a project tool: the Projects license, the API key's project scope, or the owner's role |
 | `not-found` | n8n does not hold the resource, does not show it to this key, or this instance's Public API version does not have the endpoint |
 | `rate-limited` | n8n rate-limited the request; n8n documents no fixed budget of its own, so Qatlas applies no proactive spacing and instead holds its own limiter for whatever `Retry-After` n8n names |
 | `timeout` | n8n did not answer in time |
@@ -250,7 +323,8 @@ interprets or executes any of it itself.
 ## Boundary
 
 This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
-and their executions. It does not, and has no tool to, start a workflow (no Public API endpoint exists for
-that), delete a workflow or an execution, stop many executions at once, archive, unarchive, publish,
-unpublish, or transfer a workflow, or manage credentials, users, tags, variables, projects, or data tables;
-those are deliberately out of this milestone.
+and their executions, and lists, creates, renames, and deletes projects. It does not, and has no tool to,
+start a workflow (no Public API endpoint exists for that), delete a workflow or an execution, stop many
+executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move a project's content
+elsewhere before deleting it, manage project members or roles, folders, credentials, users, tags, variables,
+or data tables; those are deliberately out of scope.

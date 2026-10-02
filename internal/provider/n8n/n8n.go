@@ -4,9 +4,10 @@
 // and replaces workflows, activates and deactivates them, and retries and stops executions. There is no tool
 // to start a workflow: the Public API documents no endpoint for it. There is also no tool to delete a
 // workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or test-run action, and
-// no credential, user, tag, variable, project, or data table management; those are deliberately left to a
-// later milestone, which this package's Client, error classes, and target model are built to extend without
-// a rewrite.
+// no credential, user, tag, variable, project member, or data table management; those are deliberately left
+// to a later milestone, which this package's Client, error classes, and target model are built to extend
+// without a rewrite. Projects themselves are listed, created, renamed, and deleted (projects.go); see there
+// for the allow-list rules and for what deleting a project does.
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -437,7 +438,7 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "n8n", DefaultPermissions: []config.Permission{config.PermissionRead},
 		Description: "Workflow automation platform, self-hosted or n8n Cloud, read and confirmed changes " +
-			"through its Public API",
+			"of workflows, executions, and projects through its Public API",
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,
 			Description: "n8n Public API key, created under Settings, n8n API, Create an API key; on an " +
@@ -482,6 +483,18 @@ func Register(reg *capability.Registry) error {
 				"two",
 			Tools: append(append([]string{}, readTools...), workflowsCreate.ID, workflowsUpdate.ID,
 				workflowsActivate.ID, workflowsDeactivate.ID, executionsRetry.ID, executionsStop.ID),
+		}, {
+			ID: "projects-read", Title: "Read projects",
+			Description: "lists the projects of the instance, restricted to this connection's project " +
+				"allow-list; needs the Enterprise Projects feature; changes nothing",
+			Tools: []string{projectsList.ID},
+		}, {
+			ID: "projects-manage", Title: "Manage projects",
+			Description: "lists, creates, and renames projects; every change needs its own confirmation. " +
+				"Deleting a project is never part of a profile: n8n then deletes every workflow, credential, " +
+				"and data table the project owns, so n8n.projects.delete is offered only by a connection " +
+				"whose tools list names it",
+			Tools: []string{projectsList.ID, projectsCreate.ID, projectsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -497,6 +510,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: workflowsDeactivate, Handler: capability.Handler(invokeWorkflowsDeactivate)},
 		capability.Operation{Descriptor: executionsRetry, Handler: capability.Handler(invokeExecutionsRetry)},
 		capability.Operation{Descriptor: executionsStop, Handler: capability.Handler(invokeExecutionsStop)},
+		capability.Operation{Descriptor: projectsList, Handler: capability.Handler(invokeProjectsList)},
+		capability.Operation{Descriptor: projectsCreate, Handler: capability.Handler(invokeProjectsCreate)},
+		capability.Operation{Descriptor: projectsUpdate, Handler: capability.Handler(invokeProjectsUpdate)},
+		capability.Operation{Descriptor: projectsDelete, Handler: capability.Handler(invokeProjectsDelete)},
 	)
 }
 

@@ -120,11 +120,20 @@ func coreConfig() *config.Config {
 				Permissions: allPermissions},
 			"project": {Service: "n8n", Credential: "n8n-reader", Target: "project/" + ownProject,
 				Permissions: allPermissions},
+			"pdelete": {Service: "n8n", Credential: "n8n-reader", Target: "project/" + ownProject,
+				Permissions: allPermissions, Tools: allProjectTools},
+			"pdelete-open": {Service: "n8n", Credential: "n8n-reader", Permissions: allPermissions,
+				Tools: allProjectTools},
+			"pdelete-workflow": {Service: "n8n", Credential: "n8n-reader", Target: "workflow/" + ownWorkflow,
+				Permissions: allPermissions, Tools: allProjectTools},
 			"both": {Service: "n8n", Credential: "n8n-reader", Permissions: allPermissions,
 				Targets: []string{"project/" + ownProject, "workflow/" + ownWorkflow}},
 		},
 	}
 }
+
+var allProjectTools = []string{"n8n.projects.list", "n8n.projects.create", "n8n.projects.update",
+	"n8n.projects.delete"}
 
 type environment struct {
 	core  *application.Core
@@ -182,8 +191,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 10 {
-		t.Fatalf("tools = %+v, want 10", metadata.Tools)
+	if len(metadata.Tools) != 14 {
+		t.Fatalf("tools = %+v, want 14", metadata.Tools)
 	}
 }
 
