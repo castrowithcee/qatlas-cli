@@ -15,7 +15,8 @@
 // get-file-snapshots and changes create- and restore-file-snapshot, and delete-file, the read
 // get-team-deleted-files and the changes restore-deleted-team-files and permanently-delete-team-files, the media
 // changes upload-file-media-object and create-file-media-object-from-url, and the file transfers export-binfile
-// (a read that writes a local file) and import-binfile. A change is one request that is never
+// (a read that writes a local file) and import-binfile, and the team webhooks get-webhooks and create-,
+// update-, and delete-webhook. A change is one request that is never
 // repeated; a failure that leaves its result open says so. No agent argument chooses a command, a path, a method,
 // or a body. Penpot documents no pagination for these commands; the answers are bounded on the client side.
 //
@@ -106,6 +107,11 @@ const (
 	cmdRestoreFiles    = "restore-deleted-team-files"
 	cmdPurgeFiles      = "permanently-delete-team-files"
 
+	cmdWebhooks      = "get-webhooks"
+	cmdCreateWebhook = "create-webhook"
+	cmdUpdateWebhook = "update-webhook"
+	cmdDeleteWebhook = "delete-webhook"
+
 	cmdUploadMedia  = "upload-file-media-object"
 	cmdMediaFromURL = "create-file-media-object-from-url"
 	cmdExportFile   = "export-binfile"
@@ -191,7 +197,7 @@ func newHTTPClient() *http.Client {
 func isCommand(name string) bool {
 	switch name {
 	case cmdTeams, cmdProjects, cmdProjectFile, cmdSummary, cmdPage, cmdThreads, cmdComments, cmdFileLibraries,
-		cmdSnapshots, cmdDeletedFiles, cmdExportFile:
+		cmdSnapshots, cmdDeletedFiles, cmdExportFile, cmdWebhooks:
 		return true
 	}
 	return isChange(name)
@@ -202,7 +208,7 @@ func isChange(name string) bool {
 	case cmdCreateThread, cmdCreateComment, cmdUpdateThread, cmdUpdateComment, cmdDeleteThread, cmdDeleteComment,
 		cmdCreateProject, cmdRenameProject, cmdDeleteProject, cmdCreateFile, cmdRenameFile, cmdMoveFiles,
 		cmdSetShared, cmdLinkLibrary, cmdCreateSnapshot, cmdRestoreSnapshot, cmdDeleteFile, cmdRestoreFiles, cmdPurgeFiles,
-		cmdUploadMedia, cmdMediaFromURL, cmdImportFile:
+		cmdUploadMedia, cmdMediaFromURL, cmdImportFile, cmdCreateWebhook, cmdUpdateWebhook, cmdDeleteWebhook:
 		return true
 	}
 	return false
@@ -540,5 +546,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: mediaFromURL, Handler: capability.Handler(invokeMediaFromURL)},
 		capability.Operation{Descriptor: filesExport, Handler: capability.Handler(invokeFilesExport)},
 		capability.Operation{Descriptor: filesImport, Handler: capability.Handler(invokeFilesImport)},
+		capability.Operation{Descriptor: webhooksList, Handler: capability.Handler(invokeWebhooksList)},
+		capability.Operation{Descriptor: webhooksCreate, Handler: capability.Handler(invokeWebhooksCreate)},
+		capability.Operation{Descriptor: webhooksUpdate, Handler: capability.Handler(invokeWebhooksUpdate)},
+		capability.Operation{Descriptor: webhooksDelete, Handler: capability.Handler(invokeWebhooksDelete)},
 	)
 }

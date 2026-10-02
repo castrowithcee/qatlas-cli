@@ -104,10 +104,14 @@ connections:
 | `penpot.comments.create` | create | required | `create-comment-thread` or `create-comment` | starts a thread or adds a comment |
 | `penpot.comments.update` | update | required | `update-comment-thread` or `update-comment` | resolves or reopens a thread, or edits a comment |
 | `penpot.comments.delete` | delete | required, tool allow-list | `delete-comment-thread` or `delete-comment` | deletes a thread or a comment |
+| `penpot.webhooks.list` | read | none | `get-webhooks` | lists the webhooks of one bound team |
+| `penpot.webhooks.create` | create | required | `create-webhook` | creates a webhook in a bound team |
+| `penpot.webhooks.update` | update | required | `update-webhook` | replaces URL, payload type, and active state of a webhook |
+| `penpot.webhooks.delete` | delete | required, tool allow-list | `delete-webhook` | deletes a webhook |
 
 The recommended read profile offers the four tools for teams, projects, and files; the comment tools are enabled
 through the connection's permissions and `tools` list, and so are the project and file tools. `penpot.comments.delete`,
-`penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`, and `penpot.snapshots.restore` are offered only
+`penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`, `penpot.webhooks.delete`, and `penpot.snapshots.restore` are offered only
 when the `tools` list names them. Every tool names its command itself; there is no `command` argument, no free path, method, or body.
 Reads use POST but are idempotent and safe.
 
@@ -259,9 +263,34 @@ Every change asks for `confirm`, sends exactly one request, and is never repeate
 reset, a 5xx answer, or an unreadable answer the error says that the change may have taken effect; read the
 comments of the file before trying again.
 
+## Webhooks
+
+The four webhook tools work on the webhooks of one team and take `team_id`, which must be a bound team (checked before
+the credential is resolved and before any request; the refusal never names the team).
+
+- `webhooks.list` takes `team_id` and answers `webhooks` with `id`, `host`, `mtype`, `is_active`, `error_code`, and
+  `error_count` (at most 100). **The target URL is never returned, only its host name**, since a URL may carry a
+  secret in its path or query. Webhook secrets are not exposed by Penpot's list and are never handled.
+- `webhooks.create` takes `team_id`, `url`, and `mtype` (`application/json` or `application/transit+json`) and answers
+  `webhook_id` and `team_id`. Penpot allows at most 8 webhooks per team.
+- `webhooks.update` takes `team_id`, `webhook_id`, `url`, `mtype`, and `is_active` (Penpot replaces all three) and
+  answers `updated`, `webhook_id`, and `team_id`. Penpot resets the error counters.
+- `webhooks.delete` takes `team_id` and `webhook_id`.
+
+The URL must pass the same check as `media.fromurl` (https, public DNS host name, default port, no user info or
+fragment, at most 2048 characters). It is syntactic only: **Penpot sends a HEAD request to a new or changed URL
+itself**, so the instance's network controls remain the real boundary. A webhook ID is bound before an update or
+delete: it must appear in `get-webhooks` of the given bound team, else it is refused without naming it. **Webhooks
+belong to the whole team, so a connection with a project allow-list refuses create, update, and delete**; listing is
+still allowed.
+
+Every change asks for `confirm`, sends exactly one request, and is never repeated. After a timeout, a connection
+reset, a 5xx answer, or (for a creation) an unreadable answer or one without the new ID, the error says that the
+change may have taken effect; list the webhooks before trying again.
+
 ## Bounds
 
-The commands document no pagination; every list is cut on the client: 100 teams, 1000 projects, 1000 files, 500 threads, 200 comments of a thread. A
+The commands document no pagination; every list is cut on the client: 100 teams, 100 webhooks, 1000 projects, 1000 files, 500 threads, 200 comments of a thread. A
 response is read up to 16 MiB; a larger one is an `invalid-provider-response`. Names are cut at 256 bytes. Targets
 hold at most 20 teams and 200 projects. Requests to one token share a rate limit.
 
@@ -325,6 +354,13 @@ instance:
   multipart field names are the kebab-case parameter names, the part's content type becomes the `mtype`, the URI of the
   export is found by its `/assets/by-id/<uuid>` tail whatever its encoding, the UUIDs in the `end` event of an import
   are the new file IDs, and the temporary object is readable without the token.
+- Webhooks (Penpot 2.18.0, `webhooks.clj`): `get-webhooks` (`team-id`; webhooks with `id`, `uri`, `mtype`, `is-active`,
+  `error-code`, `error-count`, `profile-id`), `create-webhook` (`team-id`, `uri`, `mtype` one of `application/json` and
+  `application/transit+json`; at most 8 per team; Penpot sends a HEAD request to the URI; answers the webhook row),
+  `update-webhook` (`id`, `uri`, `mtype`, `is-active`, all required; resets the error counters), and `delete-webhook`
+  (`id`; answers without a body). Edit permission on the team is checked by Penpot. Assumed: the answer of
+  `create-webhook` carries the new ID as `id`, the answers of the other changes are not read, and a webhook ID is not
+  tied to a team by the command itself, which is why the tool proves it through `get-webhooks` first.
 - Assumed, not documented: a `position` is sent as an object `{"x": ..., "y": ...}` and a thread's position is read
   the same way; a change that answers without a body is read as done; requests send kebab-case keys, responses are JSON when `Accept: application/json` is sent,
   and their keys are read case- and separator-insensitively (camelCase or kebab-case); the summary's categories carry
