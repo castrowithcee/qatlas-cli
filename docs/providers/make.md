@@ -4,18 +4,20 @@ description: >
   organization and scenario allow-lists and the live scenario-team check, the scenario and blueprint
   reads, the run (Make's own "logs") reads and their offset pagination, the bounded best-effort run error,
   the confirmed scenario create/update/start/stop/run tools and their contracts, and the scope and plan
-  boundaries of a Make API token.
+  boundaries of a Make API token, and the argument-free reads of the bound team, its usage and members,
+  and its organization.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-09-29
+updated: 2026-10-02
 ---
 
 # Make
 
 Make is a provider for one Make (make.com) zone's REST API (`/api/v2`). It lists and reads scenarios, reads
 a scenario's blueprint, lists and reads its run history, and, with confirmation, creates a scenario, replaces
-a scenario's blueprint, scheduling, name, or folder, starts and stops it, and runs it on demand.
+a scenario's blueprint, scheduling, name, or folder, starts and stops it, and runs it on demand. Separate
+read-only profiles read the bound team and its organization.
 
 **There is deliberately no tool to delete, clone, or replay a scenario, and no generic webhook call.** A
 Make scenario, once created, cannot be removed again by this provider; deleting one still requires the Make
@@ -32,7 +34,10 @@ URL can be.
 
 The credential provides `api-token`, a Make API token created under the profile avatar, Profile, API, Add
 token. The read profile needs `scenarios:read`; the manage profile's create, update, start, and stop tools
-additionally need `scenarios:write`, and its run tool additionally needs `scenarios:run`. A Make token
+additionally need `scenarios:write`, and its run tool additionally needs `scenarios:run`. The `team` profile
+(`make.team.get`, `make.team.usage`, `make.team.members`) needs `teams:read`; the `organization` profile
+(`make.organization.get`) needs `organizations:read` and `teams:read`, because the organization is found
+through the bound team. A 403 names the missing scope. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
 access to, so a token created for a different zone than this connection's own is rejected here the same way
 as any other invalid token. The token carries API scopes, while Make also limits resources by the user's
@@ -88,7 +93,8 @@ never names the scenario's real team.
 A scenario object itself reports no `organizationId`, only `teamId`, so a configured organization target
 cannot be checked against a scenario directly. The live scenario check confirms only the bound team.
 `make.runs.list` and `make.runs.get` can also check organization: a run's own answer carries both `teamId`
-and `organizationId`, and both are defensively re-applied to every run this provider returns.
+and `organizationId`, and both are defensively re-applied to every run this provider returns. The team and
+organization tools check it against the bound team's own answer as well.
 
 `make.scenarios.create` cannot name a scenario_id at all: it always creates in the connection's own bound
 team, never a caller-supplied one, and it is refused outright on a connection restricted by a scenario
@@ -113,11 +119,22 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.scenarios.run` | execute | required | starts exactly one new execution of a scenario on demand |
 | `make.runs.list` | read | none | lists one scenario's run history, page by page |
 | `make.runs.get` | read | none | reads one run's status, timings, operations, data volume, and a bounded best-effort error |
+| `make.team.get` | read | none | reads the bound team's name, organization, pause state, limits, and consumption; no arguments |
+| `make.team.usage` | read | none | reads the bound team's daily usage records (at most 31); no arguments |
+| `make.team.members` | read | none | lists the bound team's members as user id and role id from `GET /teams/{id}/user-team-roles` (at most 200), without names or email addresses; no arguments |
+| `make.organization.get` | read | none | reads id, zone, and flat scalar license limits of the bound team's organization; no arguments |
 
 Every read is safe and needs no confirmation. Every change of the manage profile needs its own confirmation,
 sends exactly one changing request, and is never retried by this provider itself: a failure that could mean
 the request nonetheless reached Make (a timeout, a connection reset, or a 5xx) is reported as uncertain
 instead, naming what to check before trying again.
+
+The four team and organization tools take no arguments and never accept a team or organization ID. The team
+is the connection's own target; `make.organization.get` takes the `organizationId` from the bound team's own
+answer. A configured `organization/ID` target is checked against that answer, and a mismatch is refused as an
+invalid request that never names the other organization. Organization details are limited to id, zone, and
+the license object's flat scalar values (nested values are dropped, at most 64 entries). Role names are not
+resolved, because that needs the separate `user:read` scope.
 
 ## Pagination
 
@@ -252,5 +269,5 @@ never renders it, follows a link inside it, or executes anything derived from it
 This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
-call, manage labels, data stores, hooks, keys, connections, teams, or organizations, or read team or
-organization variables; those are out of scope.
+call, manage labels, data stores, hooks, keys, connections, teams, or organizations (it only reads the bound team
+and its organization), or read team or organization variables; those are out of scope.

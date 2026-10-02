@@ -118,6 +118,9 @@ const (
 	needRead  = "the scenarios:read scope"
 	needWrite = "the scenarios:write scope"
 	needRun   = "the scenarios:read, scenarios:write, and scenarios:run scopes"
+	// needTeamsRead and needOrgRead belong to the team and organization read tools.
+	needTeamsRead = "the teams:read scope"
+	needOrgRead   = "the organizations:read scope (and teams:read, which finds the organization)"
 )
 
 // roleAPIToken is the single secret role a Make credential must supply. It is sent as the Authorization
@@ -596,7 +599,8 @@ func Register(reg *capability.Registry) error {
 			Name: roleAPIToken,
 			Description: "Make API token, created in Make under the profile avatar, Profile, API, Add token; " +
 				"scenarios:read for the read profile, plus scenarios:write for the manage profile's create, " +
-				"update, start, and stop tools, plus scenarios:run for its run tool. A token belongs to one " +
+				"update, start, and stop tools, plus scenarios:run for its run tool, plus teams:read for the team " +
+				"profile and organizations:read for the organization profile. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -623,8 +627,8 @@ func Register(reg *capability.Registry) error {
 			}, {
 				Name: "organization",
 				Description: "the Make organization the bound team belongs to; optional, at most one. A " +
-					"scenario itself reports no organizationId of its own, only teamId, so this target can only " +
-					"be verified against a run's own report, never against a scenario directly",
+					"scenario itself reports no organizationId of its own, only teamId, so this target is verified " +
+					"against a run's own report and the bound team's own answer, never against a scenario directly",
 				Forms: []string{"organization/ORG_ID"},
 			}, {
 				Name:        "scenario",
@@ -647,6 +651,16 @@ func Register(reg *capability.Registry) error {
 				"scenario, and no generic webhook call: those are deliberately left out of this milestone",
 			Tools: append(append([]string{}, readTools...), scenariosCreate.ID, scenariosUpdate.ID,
 				scenariosStart.ID, scenariosStop.ID, scenariosRun.ID),
+		}, {
+			ID: "team", Title: "Read the bound team",
+			Description: "reads the bound team's details, daily usage, and members as user and role ids; " +
+				"changes nothing and needs the teams:read scope",
+			Tools: []string{teamGet.ID, teamUsage.ID, teamMembers.ID},
+		}, {
+			ID: "organization", Title: "Read the bound team's organization",
+			Description: "reads the zone and license limits of the organization the bound team belongs to; " +
+				"changes nothing and needs the organizations:read and teams:read scopes",
+			Tools: []string{organizationGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -662,6 +676,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: scenariosStart, Handler: capability.Handler(invokeScenariosStart)},
 		capability.Operation{Descriptor: scenariosStop, Handler: capability.Handler(invokeScenariosStop)},
 		capability.Operation{Descriptor: scenariosRun, Handler: capability.Handler(invokeScenariosRun)},
+		capability.Operation{Descriptor: teamGet, Handler: capability.Handler(invokeTeamGet)},
+		capability.Operation{Descriptor: teamUsage, Handler: capability.Handler(invokeTeamUsage)},
+		capability.Operation{Descriptor: teamMembers, Handler: capability.Handler(invokeTeamMembers)},
+		capability.Operation{Descriptor: organizationGet, Handler: capability.Handler(invokeOrganizationGet)},
 	)
 }
 
