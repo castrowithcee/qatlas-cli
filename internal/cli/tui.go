@@ -200,7 +200,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"takes the selected one; left/right also step through the values in place. On a row that holds\n" +
 			"several values, the permissions and the tool list, space ticks the selected value, enter keeps\n" +
 			"the ticks, and esc drops them. default in the permissions stands for the provider's own set, so\n" +
-			"ticking it drops the explicit permissions and ticking one of those drops default.\n\n" +
+			"ticking it drops the explicit permissions and ticking one of those drops default.\n" +
+			"For a provider that sorts its tools into groups, such as GitHub, the tool list opens as a list of\n" +
+			"groups, folded, each with its tool count and how many of its tools are ticked, and the head shows\n" +
+			"the ticks of all tools. left/right fold and unfold the group under the cursor; space on a group\n" +
+			"row ticks all its tools, or unticks them when all are ticked, and the all groups row does so for\n" +
+			"every group; space on a tool ticks that tool. Typing a search shows the matching tools under their\n" +
+			"groups, folded or not, and space on a group row then acts on the matches only. The groups only\n" +
+			"arrange the list: the saved tools are the same IDs as without them.\n\n" +
 			"The targets row of a connection, in its form and in the scope step of the guided setup alike,\n" +
 			"holds a list. enter, space, or / opens it: a adds a target, enter edits the selected one, and x or\n" +
 			"d removes it after asking. F2 keeps the list and saves the connection in one step, taking a\n" +

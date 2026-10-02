@@ -20,7 +20,10 @@ type filterList struct {
 	matches []string
 	// text is what the filter looks at for one name: the line the reader sees, so what can be read can be
 	// found. It is never a secret, because no line of the editor ever holds one.
-	text    func(name string) string
+	text func(name string) string
+	// match, when set, decides which entries a (lower-case) query shows instead of the text lookup; the
+	// grouped tool picker uses it to show group rows and to hide the tools of collapsed groups.
+	match   func(name, query string) bool
 	cursor  int
 	offset  int
 	input   textinput.Model
@@ -57,7 +60,7 @@ func (l *filterList) refilter() {
 	query := strings.ToLower(l.query())
 	l.matches = l.matches[:0]
 	for _, name := range l.all {
-		if query == "" || strings.Contains(strings.ToLower(l.text(name)), query) {
+		if l.shows(name, query) {
 			l.matches = append(l.matches, name)
 		}
 	}
@@ -65,6 +68,13 @@ func (l *filterList) refilter() {
 		return
 	}
 	l.cursor = min(l.cursor, max(len(l.matches)-1, 0))
+}
+
+func (l *filterList) shows(name, query string) bool {
+	if l.match != nil {
+		return l.match(name, query)
+	}
+	return query == "" || strings.Contains(strings.ToLower(l.text(name)), query)
 }
 
 func (l *filterList) selected() (string, bool) {

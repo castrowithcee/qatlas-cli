@@ -388,6 +388,8 @@ type Model struct {
 	// pickerMarks holds the ticks of a tool list or the permissions while their picker is open, and is nil
 	// for a single choice. The row takes them over only when they are kept.
 	pickerMarks map[string]bool
+	// pickerGroups is set while the picker of a tool list of a grouped provider is open; nil otherwise.
+	pickerGroups *toolGroups
 	// providers is the table of the focused provider row while it is open.
 	providers providerTable
 	// targetList holds the entries of the focused target list while its screen is open; the row takes them
@@ -1411,7 +1413,7 @@ func (m *Model) openPicker() {
 	if len(f.choices) == 0 {
 		return
 	}
-	m.picker.text, m.pickerMarks = choiceText, nil
+	m.picker.text, m.pickerMarks, m.picker.match, m.pickerGroups = choiceText, nil, nil, nil
 	if f.kind == fieldToolList || f.kind == fieldMultiChoice {
 		m.pickerMarks = map[string]bool{}
 		for choice, marked := range f.selected {
@@ -1421,7 +1423,15 @@ func (m *Model) openPicker() {
 	if f.kind == fieldToolList && f.label == toolListLabel {
 		m.picker.text = m.toolText
 	}
-	m.picker.reset(f.choices)
+	entries := f.choices
+	if f.kind == fieldToolList && f.label == toolListLabel {
+		metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
+		if g := newToolGroups(metadata, f.choices); g != nil {
+			m.pickerGroups, entries = g, g.entries()
+			m.picker.match = g.matches(m.picker.text)
+		}
+	}
+	m.picker.reset(entries)
 	m.picker.selectName(f.value())
 	m.picker.startFilter()
 	m.screen = screenPicker
@@ -1436,7 +1446,9 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 		// typing a blank, which no tool ID or permission contains, and enter keeps every tick at once.
 		switch key.String() {
 		case " ":
-			if choice, ok := m.picker.selected(); ok {
+			if choice, ok := m.picker.selected(); ok && m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
+				m.pickerGroups.toggle(choice, m.pickerMarks, m.searchVisible())
+			} else if ok {
 				toggleMark(m.pickerMarks, choice, m.fields[m.focus].kind == fieldMultiChoice)
 			}
 			return nil
@@ -1465,6 +1477,18 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 		}
 		m.screen = screenForm
 		return m.choose(choice)
+	case "left", "right":
+		// In the grouped tool list these fold the group under the cursor; while a search is typed they stay
+		// with the search text, whose matches show every group unfolded anyway.
+		if m.pickerGroups == nil || m.picker.query() != "" {
+			return m.picker.updateFilter(key)
+		}
+		if choice, ok := m.picker.selected(); ok {
+			if row := m.pickerGroups.fold(choice, key.String() == "left"); row != "" {
+				m.picker.refilter()
+				m.picker.selectName(row)
+			}
+		}
 	case "up":
 		m.picker.move(-1)
 	case "down":
@@ -3530,8 +3554,12 @@ func (m *Model) pickerFrame() (string, string) {
 	f := m.fields[m.focus]
 	shown, total := len(m.picker.matches), len(m.picker.all)
 	var head strings.Builder
-	head.WriteString(m.wrapped(titleStyle, fmt.Sprintf("Choose %s  %d/%d (%d total)",
-		f.label, min(m.picker.cursor+1, shown), shown, total)) + "\n")
+	title := fmt.Sprintf("Choose %s  %d/%d (%d total)", f.label, min(m.picker.cursor+1, shown), shown, total)
+	if m.pickerGroups != nil {
+		ticked, all := m.pickerGroups.count(m.pickerMarks)
+		title = fmt.Sprintf("Choose %s  %d/%d ticked", f.label, ticked, all)
+	}
+	head.WriteString(m.wrapped(titleStyle, title) + "\n")
 	head.WriteString(m.searchLine(&m.picker, "search: ") + "\n")
 	keys := "type to search · up/down move · enter choose · esc cancel"
 	if m.pickerMarks != nil {
@@ -3541,8 +3569,12 @@ func (m *Model) pickerFrame() (string, string) {
 				ticked++
 			}
 		}
-		head.WriteString(m.wrapped(hintStyle, fmt.Sprintf("ticked: %d of %d", ticked, total)) + "\n")
-		keys = "type to search · up/down move · space tick · enter keep · esc cancel"
+		if m.pickerGroups == nil {
+			head.WriteString(m.wrapped(hintStyle, fmt.Sprintf("ticked: %d of %d", ticked, total)) + "\n")
+			keys = "type to search · up/down move · space tick · enter keep · esc cancel"
+		} else {
+			keys = "type to search · up/down move · space tick row or group · left/right fold group · enter keep · esc cancel"
+		}
 	} else {
 		head.WriteString(m.wrapped(hintStyle, "current: "+choiceText(f.value())) + "\n")
 	}
@@ -3565,7 +3597,9 @@ func (m *Model) pickerRow(i int) string {
 	_, width := m.fit("  ")
 	choice := m.picker.matches[i]
 	var text string
-	if m.pickerMarks != nil {
+	if m.pickerGroups != nil && m.pickerGroups.isRow(choice) {
+		text = m.pickerGroups.rowText(choice, m.pickerMarks, m.picker.query() != "")
+	} else if m.pickerMarks != nil {
 		mark := "[ ] "
 		if m.pickerMarks[choice] {
 			mark = "[x] "
@@ -3578,6 +3612,16 @@ func (m *Model) pickerRow(i int) string {
 		}
 	}
 	return m.listRow(i == m.picker.cursor, i%2 == 1, truncateCells(text, width))
+}
+
+// searchVisible is, while a search is typed in the grouped tool picker, the test for the tools it shows; a
+// group row then acts on those only. Without a search it is nil, which stands for every tool.
+func (m *Model) searchVisible() func(string) bool {
+	query := m.picker.query()
+	if query == "" {
+		return nil
+	}
+	return func(tool string) bool { return m.picker.shows(tool, strings.ToLower(query)) }
 }
 
 func (m *Model) pickerWindow() (int, int) {
