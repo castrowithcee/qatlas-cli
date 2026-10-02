@@ -1,7 +1,8 @@
 ---
 description: >
   Describes the Excalidraw+ provider (beta): the workspace API key and fixed API host, the collection targets,
-  the collection, scene, and scene content reads with their client-side search, the bounds, and the errors.
+  the collection, scene, and scene content reads with their client-side search, creating, renaming, and moving
+  scenes, the bounds, and the errors.
 type: knowledge
 edit: shared
 created: 2026-10-02
@@ -11,8 +12,9 @@ updated: 2026-10-02
 # Excalidraw+
 
 This provider reads the collections, scenes, and scene content of one Excalidraw+ workspace through its public
-REST API (`https://api.excalidraw.com/api/v1`). It changes nothing: there is no tool to create, change, or delete a
-collection or scene, and none for users, invites, or activity logs.
+REST API (`https://api.excalidraw.com/api/v1`). The recommended `read` profile changes nothing. The optional `manage`
+profile can create a scene and rename or move one; there is no tool to change a scene's content, to delete anything, or
+to manage collections, users, invites, or activity logs.
 
 **Beta.** The Excalidraw+ API is a public beta whose names and schemas may change. Every tool descriptor carries a
 `version` that increases with a breaking change.
@@ -73,6 +75,27 @@ A collection identifier is limited to ASCII letters, digits, hyphen, and undersc
 All four are read-only and safe to repeat. `scenes.list` needs a `collection_id` when the connection allows several
 collections; with exactly one allowed collection it is the default, with `*` it is optional.
 
+## Creating, renaming, and moving scenes
+
+The `manage` profile (not recommended) adds two tools that change data. Each needs `confirm`, sends exactly one
+request, and is never repeated.
+
+| Tool | Does |
+| --- | --- |
+| `excalidrawplus.scenes.create` | creates an empty, unpinned scene: `name` and `collection_id` |
+| `excalidrawplus.scenes.update` | renames and/or moves a scene: `scene_id` and `name` and/or `collection_id` |
+
+- The target collection of `create` and of a move must be allowed by the targets; it is checked before any secret is
+  read or request is sent. The `private` collection is never offered.
+- `create` without `collection_id` uses the only allowed collection; with several allowed collections or `*` it is
+  required, so a scene is never created outside the allowed collections.
+- `update` first reads the scene's metadata and continues only when its current collection is allowed; a scene of
+  another collection receives no change request.
+- A name has 1 to 250 characters without control characters. Only these fields are sent; pinning, content, and
+  deletion are not offered.
+- After a timeout, a reset connection, a 5xx answer, or an unreadable answer, the error says the change may have taken
+  effect; read the scene before repeating it. Idempotency is reported as `unknown`.
+
 ## Pagination
 
 Lists take `offset` (0 to 1 000 000) and `limit` (1 to 100, 50 when omitted) and answer `has_next_page` and, when
@@ -114,4 +137,7 @@ or a provider response body.
 The response shapes follow the API reference's pages for collections, scenes, scene content, and rate limiting; error
 bodies, the identifier format, and the element fields beyond the Excalidraw file format are not documented there, and
 the element fields (`text`, `name`, `isDeleted`, `frameId`, `containerId`) are assumed from that format. The behaviour
-of `collectionId=private` for personal keys is not relied on.
+of `collectionId=private` for personal keys is not relied on. The request bodies of `POST /scenes` (`name`,
+`pinned`, `collectionId`) and `PATCH /scenes/{sceneId}` (`name`, `pinned`, `collectionId`, all optional) and their
+answers follow the API reference; the effect of a repeated request and the error bodies are not documented, and no
+live call has been made.

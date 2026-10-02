@@ -130,11 +130,11 @@ func isInvalidRequest(err error) bool {
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	metadata, ok := registry(t).ProviderMetadata(Provider)
 	if !ok || metadata.Name != "Excalidraw+" || metadata.DefaultBaseURL != baseURL || len(metadata.SecretRoles) != 1 ||
-		metadata.SecretRoles[0].Name != roleAPIKey || !metadata.Target.Required || len(metadata.Tools) != 4 {
+		metadata.SecretRoles[0].Name != roleAPIKey || !metadata.Target.Required || len(metadata.Tools) != 6 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	recommended, ok := metadata.RecommendedProfile()
-	if !ok || len(metadata.Profiles) != 1 || len(recommended.Tools) != 4 {
+	if !ok || len(metadata.Profiles) != 2 || len(recommended.Tools) != 4 {
 		t.Fatalf("profiles = %+v", metadata.Profiles)
 	}
 	for _, d := range []capability.Descriptor{collectionsList, scenesList, scenesGet, scenesContent} {

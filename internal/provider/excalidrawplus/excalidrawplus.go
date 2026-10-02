@@ -20,6 +20,7 @@
 package excalidrawplus
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -185,6 +186,58 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	return nil
 }
 
+// changeUncertain is appended when a change may have taken effect although no usable answer arrived.
+const changeUncertain = "; this change may have taken effect, read the current state in Excalidraw+ before repeating it"
+
+// send sends one JSON change (POST or PATCH) below the API root and decodes its answer into out. It is never
+// repeated: after a timeout, a reset connection, a 5xx, or an unreadable answer the message says the change may
+// have taken effect.
+func (c *Client) send(ctx context.Context, op, method, path string, payload, out any) error {
+	if method != http.MethodPost && method != http.MethodPatch {
+		return providerError(op, "the method is not offered")
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return providerError(op, "the request could not be built")
+	}
+	if err := c.limiter.Wait(ctx); err != nil {
+		return provider.Waited(op, "Excalidraw+", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.origin+apiPath+path, bytes.NewReader(body))
+	if err != nil {
+		return providerError(op, "the request could not be built")
+	}
+	req.Header.Set("Authorization", "Bearer "+c.key)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "qatlas-cli")
+	response, err := c.http.Do(req)
+	if err != nil {
+		failure := provider.Transport(op, "Excalidraw+", err)
+		if failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
+			failure.Cause == provider.CauseUnknown {
+			failure.Message += changeUncertain
+		}
+		return failure
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode > 299 {
+		failure := c.statusError(op, response)
+		if response.StatusCode >= 500 {
+			failure.Message += changeUncertain
+		}
+		return failure
+	}
+	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
+	if err != nil || len(data) > maxResponseBytes {
+		return invalidResponse(op, "the Excalidraw+ response could not be read within the size limit"+changeUncertain)
+	}
+	if err := json.Unmarshal(data, out); err != nil {
+		return invalidResponse(op, "Excalidraw+ returned an invalid response"+changeUncertain)
+	}
+	return nil
+}
+
 // statusError maps an HTTP status to a stable class. The provider body is never read into the message.
 func (c *Client) statusError(op string, response *http.Response) *provider.Error {
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
@@ -282,7 +335,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds the provider metadata, its connection test, and its four read operations.
+// Register adds the provider metadata, its connection test, and its read and manage operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Excalidraw+", DefaultBaseURL: defaultOrigin,
@@ -320,7 +373,13 @@ func Register(reg *capability.Registry) error {
 			ID: "read", Title: "Read collections and scenes", Recommended: true,
 			Description: "lists collections and scenes, reads a scene's metadata, and reads and searches a " +
 				"scene's text content; changes nothing",
-			Tools: []string{collectionsList.ID, scenesList.ID, scenesGet.ID, scenesContent.ID},
+			Tools: readTools,
+		}, {
+			ID: "manage", Title: "Create, rename, and move scenes",
+			Description: "reads what the read profile reads, creates a scene in an allowed collection, and " +
+				"renames or moves a scene of an allowed collection into an allowed collection; every change " +
+				"needs its own confirmation. There is no tool to change a scene's content or to delete anything",
+			Tools: append(append([]string{}, readTools...), scenesCreate.ID, scenesUpdate.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -330,8 +389,12 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: scenesList, Handler: capability.Handler(invokeScenesList)},
 		capability.Operation{Descriptor: scenesGet, Handler: capability.Handler(invokeScenesGet)},
 		capability.Operation{Descriptor: scenesContent, Handler: capability.Handler(invokeScenesContent)},
+		capability.Operation{Descriptor: scenesCreate, Handler: capability.Handler(invokeScenesCreate)},
+		capability.Operation{Descriptor: scenesUpdate, Handler: capability.Handler(invokeScenesUpdate)},
 	)
 }
+
+var readTools = []string{collectionsList.ID, scenesList.ID, scenesGet.ID, scenesContent.ID}
 
 var readRisk = capability.Risk{
 	Effect:          capability.EffectRead,
