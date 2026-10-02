@@ -235,9 +235,12 @@ func (c *Client) call(ctx context.Context, req request) (response, error) {
 		return response{}, c.failed(ctx, err)
 	}
 	defer conn.Close()
+	// The peer is named from what the kernel said right after connecting: macOS no longer tells who was at
+	// the other end once a server that refused this client has closed the connection.
+	pid := peerPID(conn)
 	resp, err := c.exchange(ctx, conn, deadline, req)
 	if err != nil && !errors.Is(err, ErrNotRunning) && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
-		if pid := peerPID(conn); pid > 0 {
+		if pid > 0 {
 			err = &PeerError{PID: pid, Err: err}
 		}
 	}
