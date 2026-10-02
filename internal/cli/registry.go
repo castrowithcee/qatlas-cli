@@ -6,6 +6,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider/bookstack"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/infomaniakchat"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/infomaniakdav"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/infomaniakdrive"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/infomaniakmail"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/lexware"
@@ -59,6 +60,9 @@ func defaultRegistry() *capability.Registry {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := makeapi.Register(reg); err != nil {
+		panic("provider registration is static and must not fail: " + err.Error())
+	}
+	if err := infomaniakdav.Register(reg); err != nil {
 		panic("provider registration is static and must not fail: " + err.Error())
 	}
 	if err := infomaniakmail.Register(reg); err != nil {
