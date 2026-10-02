@@ -77,6 +77,21 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"a role. The secrets row of a credential offers the same places as the guided setup, in the same\n" +
 			"order and words: system keyring, vault, and environment variables, whichever is now chosen; none\n" +
 			"is a recommendation.\n\n" +
+			"A payload secret is a credential with freely named fields whose values a tool may pass on to a\n" +
+			"third party by reference. In 2 Credentials, s opens the form of a new one (and enter edits an\n" +
+			"existing one): a name, where its values are kept (system keyring or vault, never environment\n" +
+			"variables), an optional description that discovery publishes, and one masked row per field. Type\n" +
+			"a field name in the new field row and press enter to add its row; ctrl+d removes the focused\n" +
+			"field, and a removed field's stored value is deleted when you save. Each value is typed masked,\n" +
+			"never shown or prefilled, and at least 4 characters; on an existing payload secret an empty row\n" +
+			"keeps the stored value. Saving stores the values and the configuration entry together, in an\n" +
+			"admin session. A connection releases payload secrets with forward_secrets: its form gets a\n" +
+			"forward row, opened with enter to tick any number of existing payload secrets. While the vault\n" +
+			"is encrypted, forward_secrets and the fields of the listed payload secrets are part of the\n" +
+			"connection's approval, and a change is never approved by saving: the connection stays open until\n" +
+			"it is approved in 6 Approvals. Without an encrypted vault, and for a connection whose own\n" +
+			"credential is not in it, no approval binds the release and only the forward_secrets list in the\n" +
+			"configuration limits it; the forms say so.\n\n" +
 			"While the vault is encrypted, the editor opens read-only: saving a form, deleting an entry,\n" +
 			"storing or removing a secret, and every action of 5 Vault (see below) each ask for the vault's\n" +
 			"passphrase the first time, masked in a screen of their own, never on this terminal. Answering it\n" +

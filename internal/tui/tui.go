@@ -159,6 +159,9 @@ const (
 	// changing the passphrase) at once on enter, instead of saving with F2 like every other row. See
 	// vaultsettings.go.
 	fieldVaultAction
+	// fieldPayloadNew is the row of a payload secret that takes the name of a field to add; enter turns the
+	// name into a masked value row (see payload.go). It is typed like a text row.
+	fieldPayloadNew
 )
 
 type field struct {
@@ -187,6 +190,8 @@ type field struct {
 	expanded bool
 	// action identifies which vault action a fieldVaultAction row runs on enter (see vaultsettings.go).
 	action string
+	// stored marks the masked row of a payload field that already has a value: left empty, it keeps it.
+	stored bool
 }
 
 // providerNoteLabel is the row of a service form that edits the note of the service's provider.
@@ -524,6 +529,9 @@ type Model struct {
 	// logs is the state of the Logs section; see logs.go.
 	logs *logView
 
+	// payloadSaving is true while the commit of a payload secret is in flight; its form takes no input then.
+	payloadSaving bool
+
 	quitting bool
 }
 
@@ -613,6 +621,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleVaultMigrateWritten(msg)
 	case setupSavedMsg:
 		return m, m.setupSaved(msg)
+	case payloadSavedMsg:
+		return m, m.handlePayloadSaved(msg)
 	case approvalSweepMsg:
 		return m, m.handleApprovalSweep(msg)
 	case approvalActionMsg:
@@ -885,6 +895,10 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		return m.newEntry()
 	case "p":
 		return m.duplicateSelected()
+	case "s":
+		if m.section == sectionCredentials {
+			return m.openPayloadNew()
+		}
 	case "enter":
 		if (m.section == sectionApprovals || m.section == sectionTokens) && m.vaultLocked() {
 			// Nothing is listed while the vault is locked (see approvalsReport); enter is a managing action
@@ -989,7 +1003,7 @@ func (m *Model) newEntryBlockedFor(s section) string {
 		if len(m.cfg.Services) == 0 {
 			missing = append(missing, "a service")
 		}
-		if len(m.cfg.Credentials) == 0 {
+		if len(m.cfg.Credentials) == len(m.forwardChoices()) {
 			missing = append(missing, "a credential")
 		}
 		if len(missing) > 0 {
@@ -1215,6 +1229,10 @@ func (m *Model) saveAndLeave() tea.Cmd {
 		// A created token opens its own detail screen (see handleTokenAction); a refused one keeps the form.
 		return m.requireAdmin(m.createToken)
 	}
+	if m.isPayloadForm() {
+		// The payload secret returns to the list itself once its commit succeeded.
+		return m.requireAdmin(m.savePayload)
+	}
 	// requireAdmin gates the whole save, guards included: a locked vault must be unlocked before
 	// guardVaultTypeChange can even check what it already holds (see requireAdmin's own comment).
 	return m.requireAdmin(func() tea.Cmd {
@@ -1239,6 +1257,13 @@ func (m *Model) saveAndLeave() tea.Cmd {
 }
 
 func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
+	if m.payloadSaving {
+		// The values are on their way to the store; nothing typed now could still take part.
+		if key.String() == "ctrl+c" {
+			return m.quit()
+		}
+		return nil
+	}
 	if key.String() == "f2" {
 		// F2 saves, or goes on to the next setup step, from any row, since enter on a choice row opens it.
 		if m.wizard != nil {
@@ -1283,6 +1308,9 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		case "enter", " ":
 			return m.runVaultActionField(m.fields[m.focus].action)
 		}
+	}
+	if m.isPayloadForm() && m.payloadKey(key) {
+		return nil
 	}
 	if m.wizard != nil {
 		switch key.String() {
@@ -1530,6 +1558,10 @@ func (m *Model) providerServices(provider string) []string {
 func (m *Model) providerCredentials(provider string) []string {
 	var names []string
 	for _, name := range m.entryNames(sectionCredentials) {
+		if m.cfg.Credentials[name].Forward {
+			// A payload secret never serves a connection; the forward row releases it instead.
+			continue
+		}
 		switch belongs := m.credentialProvider(name, m.cfg.Credentials[name]); belongs {
 		case provider, "":
 			names = append(names, name)
@@ -2250,7 +2282,7 @@ func (m *Model) openEntry(name, source string) tea.Cmd {
 	m.focus = m.firstEditable()
 	m.applyFocus()
 	m.pristine = m.formState()
-	if m.section == sectionCredentials && m.credentialType() == config.CredentialTypeKeyring {
+	if m.section == sectionCredentials && !m.isPayloadForm() && m.credentialType() == config.CredentialTypeKeyring {
 		return m.refreshSources(m.editedQuery())
 	}
 	return nil
@@ -2419,6 +2451,9 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			withHint(providerNoteHint))
 	case sectionCredentials:
 		cred := m.cfg.Credentials[name]
+		if cred.Forward {
+			return m.payloadFields(edit, source)
+		}
 		// A new credential starts on defaults.secret_store; an existing one keeps showing where it is now.
 		choice := storageKeyring
 		if m.cfg.SecretStore() == config.CredentialTypeVault {
@@ -2460,6 +2495,9 @@ func (m *Model) buildFieldsFrom(edit, source string) []field {
 			permissions,
 		)
 		fields = append(fields, m.toolFields(provider, conn.Tools)...)
+		if m.wantsForwardRow(conn) {
+			fields = append(fields, m.forwardField(conn.ForwardSecrets))
+		}
 		fields[4].hint = m.targetHint(fields[2].value())
 	case sectionDefaults:
 		fields = append(fields,
@@ -2481,6 +2519,9 @@ func (m *Model) submit() tea.Cmd {
 	if m.section == sectionTokens {
 		// A token is written to the vault, not to the configuration.
 		return m.requireAdmin(m.createToken)
+	}
+	if m.isPayloadForm() {
+		return m.requireAdmin(m.savePayload)
 	}
 	return m.requireAdmin(func() tea.Cmd {
 		if reason := m.guardVaultTypeChange(); reason != "" {
@@ -2599,16 +2640,23 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if entries := filesEntries(m.fields, filesWriteLabel); len(entries) > 0 {
 			files.Write = append(files.Write, entries...)
 		}
+		// A connection form without the forward row has none to keep: the row is there whenever a payload
+		// secret exists or the connection lists one.
+		var forward []string
+		if row := m.field(forwardLabel); row != nil {
+			forward = append(forward, row.marked()...)
+		}
 		return cfg.SetConnection(name, config.Connection{
-			Service:     m.fieldValue("service"),
-			Credential:  m.fieldValue("credential"),
-			Target:      target,
-			Targets:     targets,
-			Description: m.fieldValue("description"),
-			Permissions: permissions,
-			Tools:       tools,
-			Paths:       paths,
-			Files:       files,
+			Service:        m.fieldValue("service"),
+			Credential:     m.fieldValue("credential"),
+			Target:         target,
+			Targets:        targets,
+			Description:    m.fieldValue("description"),
+			Permissions:    permissions,
+			Tools:          tools,
+			Paths:          paths,
+			Files:          files,
+			ForwardSecrets: forward,
 		})
 	case sectionDefaults:
 		return cfg.SetDefault(name, m.fieldValue("connection"))
@@ -3062,13 +3110,17 @@ func (m *Model) editorView() string {
 	var b strings.Builder
 	switch m.screen {
 	case screenForm:
-		what := "New " + m.section.entry()
+		noun := m.section.entry()
+		if m.isPayloadForm() {
+			noun = "payload secret"
+		}
+		what := "New " + noun
 		if m.editing != "" {
 			what = "Edit " + m.editing
 		} else if m.copyFrom != "" {
 			what += ", from " + m.copyFrom
 			if !m.sidebarLayout() {
-				what = "New " + m.section.entry() + "\nfrom " + m.copyFrom
+				what = "New " + noun + "\nfrom " + m.copyFrom
 			}
 		} else if m.section == sectionVault {
 			what = "Vault"
@@ -3114,6 +3166,11 @@ func (m *Model) editorView() string {
 			keys = "enter edit list · right/left expand/collapse · tab move · " + choiceFormKeys
 		case fieldVaultAction:
 			keys = "enter run · tab move · " + choiceFormKeys
+		}
+		if m.isPayloadForm() {
+			if payloadKeys := m.payloadKeys(); payloadKeys != "" {
+				keys = payloadKeys
+			}
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
@@ -3202,7 +3259,11 @@ func (m *Model) editorView() string {
 			name, _ := m.selected()
 			b.WriteString(fmt.Sprintf("Delete %q?\n", name))
 			credType := m.cfg.Credentials[name].Type
-			if m.section == sectionCredentials &&
+			if m.section == sectionCredentials && m.cfg.Credentials[name].Forward {
+				b.WriteString(m.indented(
+					"its stored values are not removed with it; remove each with 'qatlas credential delete "+
+						name+" <field>'") + "\n")
+			} else if m.section == sectionCredentials &&
 				(credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault) {
 				b.WriteString(m.indented(
 					"its stored secrets are not removed with it; remove them first with x on the role, "+
@@ -3348,6 +3409,9 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionConnections:
 		keys = "/ filter · n new · p duplicate · enter edit · d delete · t test · c guided setup · 1-8 or " + back +
 			" · ? help · q quit"
+	case m.section == sectionCredentials:
+		keys = "/ filter · n new · s new payload secret · p duplicate · enter edit · d delete · c guided setup · " +
+			"1-8 or " + back + " · ? help · q quit"
 	case m.templateSection(m.section):
 		keys = "/ filter · n new · p duplicate · enter edit · d delete · c guided setup · 1-8 or " + back +
 			" · ? help · q quit"
@@ -3485,6 +3549,11 @@ func (m *Model) pickerFrame() (string, string) {
 	if shown == 0 {
 		head.WriteString(m.wrapped(hintStyle,
 			fmt.Sprintf("No value matches %q. esc keeps the current one.", m.picker.query())) + "\n")
+	}
+	if f.label == forwardLabel {
+		if note := m.forwardBindingNote(m.fieldValue("credential")); note != "" {
+			head.WriteString(m.wrapped(warningStyle, "warning: "+note) + "\n")
+		}
 	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }
@@ -4034,7 +4103,7 @@ func (m *Model) fieldHint(f field) string {
 	if f.kind == fieldProvider {
 		return providerHint(f)
 	}
-	if f.kind == fieldToolList && !f.readOnly && len(f.marked()) > 0 {
+	if f.kind == fieldToolList && f.label != forwardLabel && !f.readOnly && len(f.marked()) > 0 {
 		// The ticks are what is saved, so they stand in full under the row that holds them.
 		return f.hint + "; ticked: " + strings.Join(f.marked(), ", ")
 	}
@@ -4044,6 +4113,12 @@ func (m *Model) fieldHint(f field) string {
 func (m *Model) fieldWarning(f field) string {
 	if f.kind == fieldVaultState {
 		return m.vaultStateWarning()
+	}
+	if f.kind == fieldToolList && f.label == forwardLabel && len(f.marked()) > 0 {
+		return m.forwardBindingNote(m.fieldValue("credential"))
+	}
+	if f.kind == fieldPayloadNew {
+		return m.forwardBindingNote("")
 	}
 	if f.kind != fieldTargets {
 		return ""
@@ -4139,6 +4214,9 @@ func (m *Model) cells(name string) []string {
 		// Where the secrets are kept decides what the credential is, so it is a column rather than
 		// something the reader has to open the form to find out.
 		cred := m.cfg.Credentials[name]
+		if cred.Forward {
+			return m.payloadCells(name, cred)
+		}
 		provider := m.credentialProvider(name, cred)
 		credentialRoles := m.credentialRoles(provider)
 		roles := make([]string, 0, len(credentialRoles))
@@ -4213,6 +4291,8 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = f.input.View()
 	case f.kind == fieldMasked && f.input.Value() != "":
 		value = "(entered, masked)"
+	case f.kind == fieldMasked && f.stored:
+		value = hintStyle.Render("(stored, unchanged)")
 	case f.kind == fieldMasked:
 		value = hintStyle.Render("(empty)")
 	case f.kind == fieldProvider:
@@ -4225,6 +4305,10 @@ func (m *Model) renderField(f field, focused bool) string {
 		// A read-only text field never takes focus, so its hint would never be the one shown; it explains
 		// itself on its own row instead, the way a read-only tool list already does below.
 		value += " (" + f.hint + ")"
+	case f.kind == fieldToolList && f.label == forwardLabel && len(f.marked()) == 0:
+		value = hintStyle.Render("(none: no payload secret is released)")
+	case f.kind == fieldToolList && f.label == forwardLabel:
+		value = strings.Join(f.marked(), ", ")
 	case f.kind == fieldToolList && f.label == vorbilderLabel && len(f.marked()) == 0:
 		value = hintStyle.Render(fmt.Sprintf("(none of %d ticked)", len(f.choices)))
 	case f.kind == fieldToolList && f.label == vorbilderLabel:

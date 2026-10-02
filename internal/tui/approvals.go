@@ -384,20 +384,27 @@ func (m *Model) autoApprove(before approvalBefore, direct string) tea.Cmd {
 		}
 		var names []string
 		var stayedOpen string
+		forwardOpen := false
 		for _, c := range report.Open {
 			switch {
-			case c.Connection == direct && (!directWasOpen || approval.DirectApprovable(directChange)):
+			case c.Connection == direct && !releaseChanged(c) &&
+				(!directWasOpen || approval.DirectApprovable(directChange)):
 				names = append(names, c.Connection)
 			case c.Connection == direct:
 				// Open for a reason the connection's own form never showed: only Approvals (6), or the form
 				// itself once the hidden field is reviewed there, may release it.
 				stayedOpen = c.Connection
+				forwardOpen = releaseChanged(c)
 			case !beforeOpen[c.Connection]:
 				names = append(names, c.Connection)
 			}
 		}
 		note := ""
-		if stayedOpen != "" {
+		if stayedOpen != "" && forwardOpen {
+			// A release of payload secrets is a decision of its own, never approved in passing.
+			note = fmt.Sprintf("; %s stays open: its forward_secrets changed, which only an approval in "+
+				"Approvals (%d) releases", stayedOpen, int(sectionApprovals)+1)
+		} else if stayedOpen != "" {
 			note = fmt.Sprintf("; %s stays open: its service or credential changed outside this form; "+
 				"review it in Approvals (%d)", stayedOpen, int(sectionApprovals)+1)
 		}
@@ -417,6 +424,22 @@ func (m *Model) autoApprove(before approvalBefore, direct string) tea.Cmd {
 		}
 		return approvalSweepMsg{note: note}
 	}
+}
+
+// releaseChanged reports whether an approved connection's release of payload secrets differs from what was
+// approved. Such a change is a decision of its own: no save approves it in passing, not even the connection's
+// own form, which shows the list but not what each listed credential's fields mean for an approval. A
+// connection that was never approved is new, and a person creating it has chosen its release.
+func releaseChanged(c approval.Change) bool {
+	if c.New {
+		return false
+	}
+	for _, f := range c.Fields {
+		if f.Field == approval.FieldForward {
+			return true
+		}
+	}
+	return false
 }
 
 // revokeApproval removes the approval of a connection just deleted, in an encrypted vault only; an

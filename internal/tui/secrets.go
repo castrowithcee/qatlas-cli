@@ -255,7 +255,7 @@ func (m *Model) refreshSources(queries []credQuery) tea.Cmd {
 func (m *Model) keyringQueries() []credQuery {
 	var queries []credQuery
 	for _, name := range m.entryNames(sectionCredentials) {
-		if cred := m.cfg.Credentials[name]; cred.Type == config.CredentialTypeKeyring {
+		if cred := m.cfg.Credentials[name]; cred.Type == config.CredentialTypeKeyring && !cred.Forward {
 			queries = append(queries, credQuery{name: name, cred: cred})
 		}
 	}
