@@ -173,7 +173,7 @@ func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, store *c
 		_ = listener.Close()
 		return nil, err
 	}
-	credTmpl, err := template.New("credentials").Parse(credentialTemplates)
+	credTmpl, err := template.New("credentials").Parse(credentialTemplates + payloadTemplates)
 	if err != nil {
 		_ = listener.Close()
 		return nil, err
@@ -292,12 +292,16 @@ func (s *Server) mux() http.Handler {
 	mux.HandleFunc("POST /admin", s.withSessionGuard(s.handleAdminAuth))
 	mux.HandleFunc("GET /credentials/new", s.withSession(s.handleNewCredentialForm))
 	mux.HandleFunc("POST /credentials/new", s.withAdminGuard(s.handleCreateCredential))
+	mux.HandleFunc("GET /credentials/new/payload", s.withSession(s.handleNewPayloadForm))
+	mux.HandleFunc("POST /credentials/new/payload", s.withAdminGuard(s.handleCreatePayload))
 	mux.HandleFunc("GET /credentials/{name}", s.withSession(s.handleCredentialForm))
+	mux.HandleFunc("POST /credentials/{name}/payload", s.withAdminGuard(s.handleSavePayload))
 	mux.HandleFunc("POST /credentials/{name}/role", s.withAdminGuard(s.handleReplaceRole))
 	mux.HandleFunc("GET /connections/new", s.withSession(s.handleConnectionsNew))
 	mux.HandleFunc("GET /connections/new/review", s.withSession(s.handleConnectionReview))
 	mux.HandleFunc("POST /connections/new/review", s.withAdminGuard(s.handleCreateConnection))
 	mux.HandleFunc("GET /connections/{name}", s.withSession(s.handleConnectionResult))
+	mux.HandleFunc("POST /connections/{name}/forward", s.withAdminGuard(s.handleSetForward))
 	mux.HandleFunc("POST /connections/{name}/test", s.withSessionGuard(s.handleTestConnection))
 	return s.withSecurityHeaders(s.withLocalBoundary(mux))
 }
@@ -567,7 +571,7 @@ var overviewTemplate = strings.TrimSpace(`
 </table>
 
 <h2>Credentials</h2>
-{{if .CredentialsUsable}}<p><a href="/credentials/new">Add a credential</a></p>{{end}}
+{{if .CredentialsUsable}}<p><a href="/credentials/new">Add a credential</a> · <a href="/credentials/new/payload">Add a payload credential</a></p>{{end}}
 <table border="1" cellpadding="4">
 <tr><th>Name</th><th>Provider</th><th>Type</th></tr>
 {{range .Credentials}}<tr><td>{{if $.CredentialsUsable}}<a href="/credentials/{{.Name}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td><td>{{.Provider}}</td><td>{{.Type}}</td></tr>

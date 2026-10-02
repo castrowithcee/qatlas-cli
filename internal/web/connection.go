@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 
@@ -50,6 +51,7 @@ type connectionForm struct {
 	Perms                             []string
 	ToolsMode                         string
 	Tools                             []string
+	Forward                           []string
 }
 
 // parseConnectionForm reads a connectionForm back out of a request's query values (the build and review
@@ -79,6 +81,7 @@ func parseConnectionForm(v url.Values) connectionForm {
 		Perms:       v["perm"],
 		ToolsMode:   v.Get("toolsmode"),
 		Tools:       v["tool"],
+		Forward:     v["forward"],
 	}
 }
 
@@ -171,6 +174,9 @@ func buildConnectionCandidate(cfg *config.Config, f connectionForm) (cand *confi
 			}
 			newConn.Permissions = permissions
 		}
+	}
+	if len(f.Forward) > 0 {
+		newConn.ForwardSecrets = append([]string(nil), f.Forward...)
 	}
 	if f.ToolsMode == "selected" {
 		newConn.Tools = append([]string(nil), f.Tools...)
@@ -273,7 +279,9 @@ func providerServices(cfg *config.Config, provider string) []string {
 func providerCredentials(cfg *config.Config, provider string) []string {
 	var names []string
 	for _, name := range sortedNames(cfg.Credentials) {
-		if p := cfg.Credentials[name].Provider; p == provider || p == "" {
+		cred := cfg.Credentials[name]
+		// A payload credential serves no connection; a connection releases it with forward_secrets instead.
+		if p := cred.Provider; !cred.Forward && (p == provider || p == "") {
 			names = append(names, name)
 		}
 	}
@@ -330,6 +338,9 @@ type connectionBuildData struct {
 	Permissions           []optionRow
 	Tools                 []toolOption
 	StorageHint           string
+	ForwardChoices        []optionRow
+	ForwardText           string
+	BindingNote           string
 	Error                 string
 }
 
@@ -354,6 +365,7 @@ type connectionReviewData struct {
 	CSRF           string
 	Form           connectionForm
 	FormValues     url.Values
+	BindingNote    string
 	Error          string
 }
 
@@ -407,6 +419,11 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		Tools:       tools,
 		StorageHint: storageHintText,
 		Error:       errText,
+	}
+	if choices := forwardChoices(cfg); len(choices) > 0 {
+		data.ForwardChoices = checkedOptions(choices, f.Forward)
+		data.ForwardText = forwardText
+		data.BindingNote = s.forwardBindingNote(cfg, "")
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.credTmpl.ExecuteTemplate(w, "connection-build", data); err != nil {
@@ -483,6 +500,11 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 		{"permissions", permissions},
 		{"tools", tools},
 	}
+	bindingNote := ""
+	if len(conn.ForwardSecrets) > 0 {
+		summary = append(summary, summaryRow{"forward_secrets", strings.Join(conn.ForwardSecrets, ", ")})
+		bindingNote = s.forwardBindingNote(cand, conn.Credential)
+	}
 
 	var roles []roleField
 	if newCredential && storage != config.CredentialTypeEnv {
@@ -498,7 +520,7 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 
 	data := connectionReviewData{
 		Summary: summary, NewCredential: newCredential, CredentialName: conn.Credential, Storage: storage,
-		Roles: roles, CfgVer: cfgver, CSRF: s.csrfValue(), Form: f, Error: errText,
+		Roles: roles, CfgVer: cfgver, CSRF: s.csrfValue(), Form: f, BindingNote: bindingNote, Error: errText,
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.credTmpl.ExecuteTemplate(w, "connection-review", data); err != nil {
@@ -719,6 +741,13 @@ type connectionResultData struct {
 	CSRF                                                                          string
 	TesterAvailable                                                               bool
 	TestResult                                                                    string
+	// Forward is the row of payload credentials this connection releases; shown only while one exists or is
+	// listed.
+	ShowForward    bool
+	ForwardChoices []optionRow
+	ForwardText    string
+	BindingNote    string
+	CfgVer         string
 }
 
 // handleConnectionResult shows one connection: what the guided setup redirects to once it saved, and a
@@ -745,6 +774,9 @@ func (s *Server) handleConnectionResult(w http.ResponseWriter, r *http.Request) 
 	notice := ""
 	if r.URL.Query().Get("created") == "1" {
 		notice = "Connection created."
+	}
+	if r.URL.Query().Get("forward") == "1" {
+		notice = "Released payload credentials saved."
 	}
 	if extra := s.takeNotice(); extra != "" {
 		if notice != "" {
@@ -776,6 +808,21 @@ func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Confi
 		Files:       approval.FilesText(conn.Files.Read, conn.Files.Write),
 		Permissions: config.FormatPermissions(cfg.ConnectionPermissions(name)), Tools: tools,
 		Notice: notice, CSRF: s.csrfValue(), TesterAvailable: s.tester != nil, TestResult: testResult,
+	}
+	choices := forwardChoices(cfg)
+	for _, listed := range conn.ForwardSecrets {
+		if !slices.Contains(choices, listed) {
+			choices = append(choices, listed)
+		}
+	}
+	if len(choices) > 0 {
+		data.ShowForward = true
+		data.ForwardChoices = checkedOptions(choices, conn.ForwardSecrets)
+		data.ForwardText = forwardText
+		data.BindingNote = s.forwardBindingNote(cfg, conn.Credential)
+		if fp, err := s.configFingerprint(); err == nil {
+			data.CfgVer = fp
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.credTmpl.ExecuteTemplate(w, "connection-result", data); err != nil {

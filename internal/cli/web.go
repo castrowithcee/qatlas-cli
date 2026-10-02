@@ -52,6 +52,12 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 			"configuration fresh, so a change made in this run is visible right away, and a save carries proof\n" +
 			"of the exact file it was shown, so a change from elsewhere in the meantime is refused as a\n" +
 			"conflict instead of being overwritten.\n\n" +
+			"The same pages manage payload credentials (forward: true): freely named fields, each value typed\n" +
+			"masked, at least 4 characters, never shown or filled in again. The credential's page edits its\n" +
+			"description, replaces or removes fields and adds new ones; a connection's page and the guided\n" +
+			"setup tick which payload credentials it releases (forward_secrets). Saving a changed list never\n" +
+			"approves it: an approved connection stays open until 'qatlas vault approve' or the TUI's Approvals\n" +
+			"section approves it, and without an encrypted vault only that list limits the release.\n\n" +
 			"Saving a connection over an encrypted, unlocked vault approves that connection alone, by the same\n" +
 			"rule the TUI's own guided setup uses: it stays open instead, with a reason, only when it was\n" +
 			"already open for something its own form never showed. Unlike the TUI, this never sweeps and\n" +

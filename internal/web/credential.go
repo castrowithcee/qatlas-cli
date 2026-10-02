@@ -279,6 +279,11 @@ func (s *Server) handleCredentialForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if cred.Forward {
+		s.renderPayloadDetail(w, r, cfg, name, cred)
+		return
+	}
+
 	notice := ""
 	switch {
 	case r.URL.Query().Get("created") == "1":
@@ -683,6 +688,14 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{range .Permissions}}<br><label><input type="checkbox" name="perm" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label>
 {{end}}
 
+{{if .ForwardChoices}}
+<h2>Payload credentials</h2>
+<p>{{.ForwardText}}</p>
+{{if .BindingNote}}<p>{{.BindingNote}}</p>{{end}}
+{{range .ForwardChoices}}<label><input type="checkbox" name="forward" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label><br>
+{{end}}
+{{end}}
+
 <h2>Tools</h2>
 <label><input type="radio" name="toolsmode" value="all"{{if eq .Form.ToolsMode "all"}} checked{{end}}> offer every tool the permissions allow</label><br>
 <label><input type="radio" name="toolsmode" value="selected"{{if eq .Form.ToolsMode "selected"}} checked{{end}}> offer only the tools ticked below</label>
@@ -704,6 +717,7 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <h1>Set up a connection · step 3 of 3 · Review</h1>
 {{if .Error}}<p>{{.Error}}</p>{{end}}
 <p>Nothing is written yet. This summary carries no secret.</p>
+{{if .BindingNote}}<p>{{.BindingNote}}</p>{{end}}
 <table border="1" cellpadding="4">
 {{range .Summary}}<tr><th>{{.Label}}</th><td>{{.Value}}</td></tr>
 {{end}}
@@ -729,6 +743,8 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <input type="hidden" name="fileswrite" value="{{.Form.FilesWrite}}">
 <input type="hidden" name="permmode" value="{{.Form.PermMode}}">
 {{range .Form.Perms}}<input type="hidden" name="perm" value="{{.}}">
+{{end}}
+{{range .Form.Forward}}<input type="hidden" name="forward" value="{{.}}">
 {{end}}
 <input type="hidden" name="toolsmode" value="{{.Form.ToolsMode}}">
 {{range .Form.Tools}}<input type="hidden" name="tool" value="{{.}}">
@@ -781,6 +797,20 @@ Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt 
 <tr><th>Permissions</th><td>{{.Permissions}}</td></tr>
 <tr><th>Tools</th><td>{{.Tools}}</td></tr>
 </table>
+
+{{if .ShowForward}}
+<h2>Payload credentials</h2>
+<p>{{.ForwardText}}</p>
+{{if .BindingNote}}<p>{{.BindingNote}}</p>{{end}}
+<p>Saving a changed list never approves it: a connection that was approved stays open until a person approves it.</p>
+<form method="post" action="/connections/{{.Name}}/forward">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<input type="hidden" name="cfgver" value="{{.CfgVer}}">
+{{range .ForwardChoices}}<label><input type="checkbox" name="forward" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label><br>
+{{end}}
+<button type="submit">Save released payload credentials</button>
+</form>
+{{end}}
 
 {{if .TestResult}}<p>{{.TestResult}}</p>{{end}}
 {{if .TesterAvailable}}
