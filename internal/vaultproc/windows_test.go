@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -60,10 +61,31 @@ func checkSocketPrivate(t *testing.T, path string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := sd.String()
-	if !strings.HasPrefix(text, "D:P") || strings.Count(text, "(") != 2 || !strings.Contains(text, ";;;NU)") ||
-		!strings.Contains(text, ";;;"+sid.String()+")") {
-		t.Fatalf("the pipe's DACL is %s, want this user alone and network logons denied", text)
+	// The entries are compared by security identifier: SDDL text renders the built-in administrator as an
+	// alias, which this user may be.
+	control, _, err := sd.Control()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dacl, _, err := sd.DACL()
+	if err != nil || dacl == nil || dacl.AceCount != 2 || control&windows.SE_DACL_PROTECTED == 0 {
+		t.Fatalf("the pipe's DACL is %s, want a protected one with a denial for network logons and an entry for this user", sd)
+	}
+	network, err := windows.CreateWellKnownSid(windows.WinNetworkSid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []struct {
+		kind byte
+		sid  *windows.SID
+	}{{windows.ACCESS_DENIED_ACE_TYPE, network}, {windows.ACCESS_ALLOWED_ACE_TYPE, sid}} {
+		var ace *windows.ACCESS_ALLOWED_ACE
+		if err := windows.GetAce(dacl, uint32(i), &ace); err != nil {
+			t.Fatal(err)
+		}
+		if ace.Header.AceType != want.kind || !want.sid.Equals((*windows.SID)(unsafe.Pointer(&ace.SidStart))) {
+			t.Fatalf("the pipe's DACL is %s, want this user alone and network logons denied", sd)
+		}
 	}
 }
 

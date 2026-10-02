@@ -8,27 +8,45 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
-// daclOf returns the DACL of path in SDDL, with whether it inherits from the directory above.
-func daclOf(t *testing.T, path string) string {
+// onlyThisUser reports whether the DACL of path is protected, so it inherits nothing from the directory
+// above, and holds one allowing entry for sid and no other. The entry is compared by security identifier,
+// not by its SDDL text, which renders well-known accounts such as the built-in administrator as an alias.
+func onlyThisUser(t *testing.T, path string, sid *windows.SID) (string, bool) {
 	t.Helper()
 	sd, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION)
 	if err != nil {
 		t.Fatalf("GetNamedSecurityInfo(%s) error = %v", path, err)
 	}
-	return sd.String()
+	control, _, err := sd.Control()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dacl, _, err := sd.DACL()
+	if err != nil || dacl == nil {
+		return sd.String(), false
+	}
+	if control&windows.SE_DACL_PROTECTED == 0 || dacl.AceCount != 1 {
+		return sd.String(), false
+	}
+	var ace *windows.ACCESS_ALLOWED_ACE
+	if err := windows.GetAce(dacl, 0, &ace); err != nil {
+		t.Fatal(err)
+	}
+	return sd.String(), ace.Header.AceType == aceAllowed && sid.Equals((*windows.SID)(unsafe.Pointer(&ace.SidStart)))
 }
 
-func currentSID(t *testing.T) string {
+func currentSID(t *testing.T) *windows.SID {
 	t.Helper()
 	user, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {
 		t.Fatal(err)
 	}
-	return user.User.Sid.String()
+	return user.User.Sid
 }
 
 // Every file the vault writes, and the directory it creates for them, lets this user alone reach it and
@@ -43,8 +61,7 @@ func TestVaultFilesArePrivate(t *testing.T) {
 	sid := currentSID(t)
 	for _, path := range []string{v.Dir(), filepath.Join(v.Dir(), keyFile), filepath.Join(v.Dir(), recipientFile),
 		filepath.Join(v.Dir(), secretsFile)} {
-		dacl := daclOf(t, path)
-		if !strings.HasPrefix(dacl, "D:P") || strings.Count(dacl, "(") != 1 || !strings.Contains(dacl, ";;;"+sid+")") {
+		if dacl, ok := onlyThisUser(t, path, sid); !ok {
 			t.Errorf("the DACL of %s is %s, want this user alone", path, dacl)
 		}
 	}
@@ -68,13 +85,13 @@ func TestForeignAccessIsRefused(t *testing.T) {
 		sddl    string
 		refused bool
 	}{
-		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;FA;;;SY)(A;;FA;;;BA)", sid), false},
-		{fmt.Sprintf("D:P(A;;FA;;;%s)(D;;FA;;;WD)", sid), false},
-		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;OICIIO;FA;;;WD)", sid), false},
-		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;0x100080;;;WD)", sid), false},
-		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;FR;;;WD)", sid), true},
-		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;FW;;;BU)", sid), true},
-		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;WD;;;AU)", sid), true},
+		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;FA;;;SY)(A;;FA;;;BA)", sid.String()), false},
+		{fmt.Sprintf("D:P(A;;FA;;;%s)(D;;FA;;;WD)", sid.String()), false},
+		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;OICIIO;FA;;;WD)", sid.String()), false},
+		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;0x100080;;;WD)", sid.String()), false},
+		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;FR;;;WD)", sid.String()), true},
+		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;FW;;;BU)", sid.String()), true},
+		{fmt.Sprintf("D:P(A;;FA;;;%s)(A;;WD;;;AU)", sid.String()), true},
 	} {
 		sd, err := windows.SecurityDescriptorFromString(tc.sddl)
 		if err != nil {
