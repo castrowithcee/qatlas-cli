@@ -429,6 +429,7 @@ func Register(reg *capability.Registry) error {
 		},
 		Description:        "Code hosting and software collaboration platform",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
+		Groups:             toolGroups,
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
 			Description: "GitHub personal access token: classic with read:project plus repo or public_repo, or " +
@@ -747,7 +748,7 @@ func Register(reg *capability.Registry) error {
 		discussionOperations(), notificationOperations(), gistOperations(), securityAlertOperations(), advisoryOperations(),
 		copilotOperations())...)
 	for i := range operations {
-		operations[i].Descriptor = withTargetArgument(operations[i].Descriptor)
+		operations[i].Descriptor = withGroup(withTargetArgument(operations[i].Descriptor))
 	}
 	return reg.Register(Provider, operations...)
 }

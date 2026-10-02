@@ -100,9 +100,19 @@ type ToolMetadata struct {
 	Title                 string
 	Effect                Permission
 	RequiresToolAllowList bool
+	// Group is the ID of the provider's ToolGroup the tool belongs to; empty for a provider without Groups.
+	Group string
 	// LocalFiles is empty for a tool without local file access, otherwise the direction it reads or writes
 	// local files in; the connection's files list of that direction bounds it.
 	LocalFiles LocalFiles
+}
+
+// ToolGroup is one subject area a provider sorts its tools into for display. A group is presentation only:
+// it never changes a tool ID, a permission, or a stored tools list.
+type ToolGroup struct {
+	ID          string
+	Title       string
+	Description string
 }
 
 // ToolProfile is a named starting selection of a provider's tools for setting up a new connection. It is
@@ -142,8 +152,10 @@ type ProviderMetadata struct {
 	SupportedPermissions []Permission
 	Tools                []ToolMetadata
 	Profiles             []ToolProfile
-	SecretRoles          []SecretRole
-	Target               TargetMetadata
+	// Groups, when set, sorts every tool of the provider into exactly one of these groups.
+	Groups      []ToolGroup
+	SecretRoles []SecretRole
+	Target      TargetMetadata
 	// LocalFiles states which directions of local file access at least one tool of the provider has. It is
 	// derived from the registered operations and never declared by hand.
 	LocalFiles LocalFilesSupport

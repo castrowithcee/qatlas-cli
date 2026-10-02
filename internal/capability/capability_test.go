@@ -574,3 +574,54 @@ func TestProviderMetadataDerivesLocalFiles(t *testing.T) {
 		t.Error("Register() accepted an unknown local files direction")
 	}
 }
+
+func withGroup(d Descriptor, group string) Descriptor { d.Group = group; return d }
+
+// A provider with groups sorts every tool into a declared group that holds a tool; a provider without
+// groups leaves its tools ungrouped. Every violation names the provider and the tool or group.
+func TestRegistryChecksToolGroups(t *testing.T) {
+	groups := []config.ToolGroup{{ID: "pages", Title: "Pages"}, {ID: "books", Title: "Books"}}
+	tests := []struct {
+		name   string
+		groups []config.ToolGroup
+		tools  []Descriptor
+		want   string
+	}{
+		{"valid", groups, []Descriptor{withGroup(pagesList, "pages"), withGroup(withID(pagesGet, "fakewiki.books.get"), "books")}, ""},
+		{"flat", nil, []Descriptor{pagesList}, ""},
+		{"missing group", groups, []Descriptor{withGroup(pagesList, "pages"), withID(pagesGet, "fakewiki.books.get")}, `tool "fakewiki.books.get" has no group`},
+		{"unknown group", groups, []Descriptor{withGroup(pagesList, "other")}, `unknown group "other"`},
+		{"empty group", groups, []Descriptor{withGroup(pagesList, "pages")}, `group "books" has no tool`},
+		{"group in flat provider", nil, []Descriptor{withGroup(pagesList, "pages")}, "declares no groups"},
+		{"bad slug", []config.ToolGroup{{ID: "Pages"}}, nil, `group "Pages" must match`},
+		{"duplicate", []config.ToolGroup{{ID: "pages"}, {ID: "pages"}}, nil, `group "pages" twice`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			reg := NewRegistry()
+			err := reg.RegisterProvider(config.ProviderMetadata{ID: "fakewiki", Name: "Fake wiki", Groups: test.groups}, nil)
+			if err == nil && len(test.tools) > 0 {
+				ops := make([]Operation, len(test.tools))
+				for i, d := range test.tools {
+					ops[i] = operation(d)
+				}
+				err = reg.Register("fakewiki", ops...)
+			}
+			if err == nil {
+				err = reg.ValidateProfiles()
+				if err != nil && strings.Contains(err.Error(), "profile") {
+					err = nil
+				}
+			}
+			if test.want == "" {
+				if err != nil {
+					t.Fatalf("error = %v, want none", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.want) || !strings.Contains(err.Error(), "fakewiki") {
+				t.Fatalf("error = %v, want one containing %q", err, test.want)
+			}
+		})
+	}
+}

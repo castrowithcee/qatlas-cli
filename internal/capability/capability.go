@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -102,6 +103,9 @@ type Descriptor struct {
 	Risk                  Risk     `json:"risk"`
 	Provider              string   `json:"provider"`
 	RequiresToolAllowList bool     `json:"requires_tool_allow_list"`
+	// Group is the ID of the provider's config.ToolGroup this operation belongs to; empty for a provider
+	// without groups.
+	Group string `json:"-"`
 	// LocalFiles is empty for an operation without local file access, otherwise the direction it reads
 	// or writes local files in. Only a connection whose files list releases a directory of that direction
 	// offers it.
@@ -206,6 +210,16 @@ func (r *Registry) RegisterProvider(metadata config.ProviderMetadata, tester Con
 	if metadata.Target.Required && strings.TrimSpace(metadata.Target.Label) == "" {
 		return fmt.Errorf("provider %q requires a target label", metadata.ID)
 	}
+	groups := map[string]bool{}
+	for _, group := range metadata.Groups {
+		if !groupIDPattern.MatchString(group.ID) {
+			return fmt.Errorf("provider %q group %q must match %s", metadata.ID, group.ID, groupIDPattern)
+		}
+		if groups[group.ID] {
+			return fmt.Errorf("provider %q declares group %q twice", metadata.ID, group.ID)
+		}
+		groups[group.ID] = true
+	}
 	r.metadata[metadata.ID] = cloneMetadata(metadata)
 	if tester != nil {
 		r.testers[metadata.ID] = tester
@@ -246,6 +260,7 @@ func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 	metadata.SupportedPermissions = append([]config.Permission(nil), metadata.SupportedPermissions...)
 	metadata.Tools = append([]config.ToolMetadata(nil), metadata.Tools...)
 	metadata.Profiles = append([]config.ToolProfile(nil), metadata.Profiles...)
+	metadata.Groups = append([]config.ToolGroup(nil), metadata.Groups...)
 	for i := range metadata.Profiles {
 		metadata.Profiles[i].Tools = append([]string(nil), metadata.Profiles[i].Tools...)
 	}
@@ -269,6 +284,15 @@ func (r *Registry) ValidateProfiles() error {
 		}
 	}
 	for _, metadata := range r.ProviderMetadataAll() {
+		used := map[string]bool{}
+		for _, tool := range metadata.Tools {
+			used[tool.Group] = true
+		}
+		for _, group := range metadata.Groups {
+			if len(metadata.Tools) > 0 && !used[group.ID] {
+				return fmt.Errorf("provider %q group %q has no tool", metadata.ID, group.ID)
+			}
+		}
 		if len(metadata.Tools) > 0 && len(metadata.Profiles) == 0 {
 			return fmt.Errorf("provider %q declares no tool profile", metadata.ID)
 		}
@@ -386,6 +410,13 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 		}
 		r.byProvider[provider][d.ID] = d
 	}
+	if err := r.checkGroups(provider); err != nil {
+		for _, operation := range staged {
+			delete(r.byID, operation.Descriptor.ID)
+			delete(r.byProvider[provider], operation.Descriptor.ID)
+		}
+		return err
+	}
 	metadata := r.metadata[provider]
 	seenEffects := map[config.Permission]bool{}
 	for _, descriptor := range r.byProvider[provider] {
@@ -414,11 +445,37 @@ func (r *Registry) Register(provider string, operations ...Operation) error {
 	return nil
 }
 
+var groupIDPattern = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+
+// checkGroups verifies that a provider with groups sorts every tool into a declared group and that a provider without groups leaves every tool ungrouped.
+func (r *Registry) checkGroups(provider string) error {
+	metadata := r.metadata[provider]
+	known := map[string]bool{}
+	for _, group := range metadata.Groups {
+		known[group.ID] = true
+	}
+	for _, descriptor := range sorted(r.byProvider[provider]) {
+		switch {
+		case len(metadata.Groups) == 0 && descriptor.Group != "":
+			return fmt.Errorf("provider %q tool %q has group %q but the provider declares no groups",
+				provider, descriptor.ID, descriptor.Group)
+		case len(metadata.Groups) == 0:
+		case descriptor.Group == "":
+			return fmt.Errorf("provider %q tool %q has no group", provider, descriptor.ID)
+		default:
+			if !known[descriptor.Group] {
+				return fmt.Errorf("provider %q tool %q has unknown group %q", provider, descriptor.ID, descriptor.Group)
+			}
+		}
+	}
+	return nil
+}
+
 // Tool is the configuration view of the operation: what a connection's permissions and tools list are
 // checked against.
 func (d Descriptor) Tool() config.ToolMetadata {
 	return config.ToolMetadata{ID: d.ID, Title: d.Title, Effect: config.Permission(d.Risk.Effect),
-		RequiresToolAllowList: d.RequiresToolAllowList, LocalFiles: d.LocalFiles}
+		RequiresToolAllowList: d.RequiresToolAllowList, Group: d.Group, LocalFiles: d.LocalFiles}
 }
 
 // Provider returns the descriptors of one provider type, sorted by ID. The result is a copy, so a
