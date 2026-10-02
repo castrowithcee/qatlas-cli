@@ -13,7 +13,9 @@
 // comment changes create-, update-, and delete-comment-thread or -comment, the management changes
 // create-, rename-, and delete-project, create-file, rename-file, and move-files, the snapshot read
 // get-file-snapshots and changes create- and restore-file-snapshot, and delete-file, the read
-// get-team-deleted-files and the changes restore-deleted-team-files and permanently-delete-team-files. A change is one request that is never
+// get-team-deleted-files and the changes restore-deleted-team-files and permanently-delete-team-files, the media
+// changes upload-file-media-object and create-file-media-object-from-url, and the file transfers export-binfile
+// (a read that writes a local file) and import-binfile. A change is one request that is never
 // repeated; a failure that leaves its result open says so. No agent argument chooses a command, a path, a method,
 // or a body. Penpot documents no pagination for these commands; the answers are bounded on the client side.
 //
@@ -60,6 +62,10 @@ const (
 	cloudOrigin     = "https://design.penpot.app"
 	maxResponseSize = 16 << 20
 	defaultTimeout  = 30 * time.Second
+	// transferTimeout replaces the 30 s of the client for the requests that carry or produce file content.
+	transferTimeout = 30 * time.Minute
+	// fetchTimeout is the time Penpot gets to fetch an image from a URL itself.
+	fetchTimeout    = 2 * time.Minute
 	maxStringLength = 256
 	commandPrefix   = "/api/rpc/command/"
 )
@@ -99,6 +105,11 @@ const (
 	cmdDeleteFile      = "delete-file"
 	cmdRestoreFiles    = "restore-deleted-team-files"
 	cmdPurgeFiles      = "permanently-delete-team-files"
+
+	cmdUploadMedia  = "upload-file-media-object"
+	cmdMediaFromURL = "create-file-media-object-from-url"
+	cmdExportFile   = "export-binfile"
+	cmdImportFile   = "import-binfile"
 )
 
 // changeUncertain is appended to a failure of a change whose request may have reached Penpot. Qatlas never
@@ -180,7 +191,7 @@ func newHTTPClient() *http.Client {
 func isCommand(name string) bool {
 	switch name {
 	case cmdTeams, cmdProjects, cmdProjectFile, cmdSummary, cmdPage, cmdThreads, cmdComments, cmdFileLibraries,
-		cmdSnapshots, cmdDeletedFiles:
+		cmdSnapshots, cmdDeletedFiles, cmdExportFile:
 		return true
 	}
 	return isChange(name)
@@ -190,7 +201,8 @@ func isChange(name string) bool {
 	switch name {
 	case cmdCreateThread, cmdCreateComment, cmdUpdateThread, cmdUpdateComment, cmdDeleteThread, cmdDeleteComment,
 		cmdCreateProject, cmdRenameProject, cmdDeleteProject, cmdCreateFile, cmdRenameFile, cmdMoveFiles,
-		cmdSetShared, cmdLinkLibrary, cmdCreateSnapshot, cmdRestoreSnapshot, cmdDeleteFile, cmdRestoreFiles, cmdPurgeFiles:
+		cmdSetShared, cmdLinkLibrary, cmdCreateSnapshot, cmdRestoreSnapshot, cmdDeleteFile, cmdRestoreFiles, cmdPurgeFiles,
+		cmdUploadMedia, cmdMediaFromURL, cmdImportFile:
 		return true
 	}
 	return false
@@ -222,6 +234,24 @@ func (c *Client) change(ctx context.Context, op, command string, params map[stri
 }
 
 func (c *Client) exchange(ctx context.Context, op, command string, params map[string]any, change bool) ([]byte, error) {
+	body, err := json.Marshal(params)
+	if err != nil || params == nil {
+		body = []byte("{}")
+	}
+	return c.send(ctx, op, command, bytes.NewReader(body), int64(len(body)), "application/json", c.http, change)
+}
+
+// withTimeout is the client of a request that needs more time than the default; it shares the transport and
+// the refusal to follow redirects.
+func (c *Client) withTimeout(limit time.Duration) *http.Client {
+	copied := *c.http
+	copied.Timeout = limit
+	return &copied
+}
+
+// send is the one place that sends a command: one POST with the given body, never repeated.
+func (c *Client) send(ctx context.Context, op, command string, body io.Reader, length int64, contentType string,
+	httpClient *http.Client, change bool) ([]byte, error) {
 	if !isCommand(command) {
 		return nil, providerError(op, "the command is not offered")
 	}
@@ -232,19 +262,16 @@ func (c *Client) exchange(ctx context.Context, op, command string, params map[st
 	if err := c.limiter.Wait(ctx); err != nil {
 		return nil, provider.Waited(op, "Penpot", err)
 	}
-	body, err := json.Marshal(params)
-	if err != nil || params == nil {
-		body = []byte("{}")
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.origin+commandPrefix+command, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.origin+commandPrefix+command, body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
 	}
+	req.ContentLength = length
 	req.Header.Set("Authorization", "Token "+c.token)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("User-Agent", "qatlas-cli")
-	response, err := c.http.Do(req)
+	response, err := httpClient.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "Penpot", err)
 		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
@@ -509,5 +536,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: filesDelete, Handler: capability.Handler(invokeFilesDelete)},
 		capability.Operation{Descriptor: filesRestore, Handler: capability.Handler(invokeFilesRestore)},
 		capability.Operation{Descriptor: filesPurge, Handler: capability.Handler(invokeFilesPurge)},
+		capability.Operation{Descriptor: mediaUpload, Handler: capability.Handler(invokeMediaUpload)},
+		capability.Operation{Descriptor: mediaFromURL, Handler: capability.Handler(invokeMediaFromURL)},
+		capability.Operation{Descriptor: filesExport, Handler: capability.Handler(invokeFilesExport)},
+		capability.Operation{Descriptor: filesImport, Handler: capability.Handler(invokeFilesImport)},
 	)
 }

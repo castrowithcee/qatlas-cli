@@ -45,6 +45,7 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { retu
 type call struct {
 	method, host, path, auth, contentType string
 	body                                  map[string]any
+	raw                                   []byte
 }
 
 func (c call) command() string { return strings.TrimPrefix(c.path, commandPrefix) }
@@ -57,6 +58,7 @@ func serve(t *testing.T, calls *[]call, handler func(call) (*http.Response, erro
 			contentType: r.Header.Get("Content-Type")}
 		if r.Body != nil {
 			data, _ := io.ReadAll(r.Body)
+			entry.raw = data
 			_ = json.Unmarshal(data, &entry.body)
 		}
 		*calls = append(*calls, entry)
@@ -115,12 +117,12 @@ func testConfig() *config.Config {
 			"two":    connection("team/"+teamA, "team/"+teamB),
 			"narrow": connection("team/"+teamA, "project/"+projectA1),
 			"write": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
-				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, recoveryTools...)...)...)},
+				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(recoveryTools, transferTools...)...)...)...)},
 			"writetwo": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA, "team/" + teamB},
-				Tools: append(manageTools, append(libraryTools, recoveryTools...)...)},
+				Tools: append(manageTools, append(libraryTools, append(recoveryTools, transferTools...)...)...)},
 			"writenarrow": {Service: "penpot", Credential: "token", Permissions: all,
 				Targets: []string{"team/" + teamA, "project/" + projectA1},
-				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, recoveryTools...)...)...)},
+				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(recoveryTools, transferTools...)...)...)...)},
 			"nodelete": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
 				Tools: []string{commentsCreate.ID, commentsUpdate.ID, projectsCreate.ID, projectsRename.ID, filesCreate.ID,
 					filesRename.ID, filesMove.ID}},
@@ -132,6 +134,17 @@ type environment struct {
 	core  *application.Core
 	red   *redact.Redactor
 	reads *int
+	// read and write are the directories every connection releases for local files.
+	read, write string
+}
+
+// withFiles gives every connection of the configuration the released directories.
+func withFiles(cfg *config.Config, read, write string) *config.Config {
+	for name, connection := range cfg.Connections {
+		connection.Files = config.Files{Read: []string{read}, Write: []string{write}}
+		cfg.Connections[name] = connection
+	}
+	return cfg
 }
 
 func newEnvironment(t *testing.T, calls *[]call, handler func(call) (*http.Response, error)) *environment {
@@ -139,7 +152,9 @@ func newEnvironment(t *testing.T, calls *[]call, handler func(call) (*http.Respo
 	serve(t, calls, handler)
 	reads := 0
 	red := &redact.Redactor{}
-	return &environment{core: application.New(registry(t), testConfig(), resolver(red, &reads), red), red: red, reads: &reads}
+	read, write := t.TempDir(), t.TempDir()
+	return &environment{core: application.New(registry(t), withFiles(testConfig(), read, write), resolver(red, &reads), red),
+		red: red, reads: &reads, read: read, write: write}
 }
 
 func (e *environment) invoke(operation, connection, arguments string) (string, error) {
@@ -190,7 +205,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		librariesLink.ID:   config.PermissionUpdate,
 		snapshotsCreate.ID: config.PermissionCreate, snapshotsRestore.ID: config.PermissionUpdate,
 		filesDelete.ID: config.PermissionDelete, filesRestore.ID: config.PermissionUpdate,
-		filesPurge.ID: config.PermissionDelete}
+		filesPurge.ID:  config.PermissionDelete,
+		mediaUpload.ID: config.PermissionCreate, mediaFromURL.ID: config.PermissionCreate,
+		filesExport.ID: config.PermissionRead, filesImport.ID: config.PermissionCreate}
 	explicit := map[string]bool{commentsDelete.ID: true, projectsDelete.ID: true, snapshotsRestore.ID: true,
 		filesDelete.ID: true, filesPurge.ID: true}
 	if len(metadata.Tools) != len(want) {
