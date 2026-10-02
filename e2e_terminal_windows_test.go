@@ -93,6 +93,12 @@ func runAtTerminal(t *testing.T, c *runner, input string, args ...string) (strin
 
 	// A pseudo console may render the space after the colon only once something follows it.
 	for deadline := time.Now().Add(10 * time.Second); !strings.Contains(text(), "passphrase:"); {
+		// A binary that took itself for one without a terminal ends at once, its refusal on standard error.
+		if event, err := windows.WaitForSingleObject(process, 0); err == nil && event == windows.WAIT_OBJECT_0 {
+			var code uint32
+			_ = windows.GetExitCodeProcess(process, &code)
+			t.Fatalf("running %v ended with exit %d before a passphrase prompt appeared: %q", args, code, text())
+		}
 		if time.Now().After(deadline) {
 			_ = windows.TerminateProcess(process, 1)
 			t.Fatalf("no passphrase prompt appeared: %q", text())
@@ -136,6 +142,10 @@ func startInConsole(t *testing.T, console windows.Handle, c *runner, args []stri
 	}
 	si := &windows.StartupInfoEx{ProcThreadAttributeList: attrs.List()}
 	si.Cb = uint32(unsafe.Sizeof(*si))
+	// Standard handles that are named but left empty, as Windows Terminal starts its shells: without them,
+	// the binary gets this process's own standard handles, which go test redirects, instead of those of
+	// the pseudo console, and rightly takes itself for a process no person is at.
+	si.Flags = windows.STARTF_USESTDHANDLES
 
 	commandLine, err := windows.UTF16PtrFromString(windows.ComposeCommandLine(append([]string{c.bin}, args...)))
 	if err != nil {
