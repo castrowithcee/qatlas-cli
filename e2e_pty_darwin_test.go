@@ -48,3 +48,9 @@ func openPTY(t *testing.T) (master, slave *os.File) {
 	}
 	return master, slave
 }
+
+// echoOff reports whether the terminal of master no longer echoes input, read through the master side.
+func echoOff(master *os.File) bool {
+	termios, err := unix.IoctlGetTermios(int(master.Fd()), unix.TIOCGETA)
+	return err == nil && termios.Lflag&unix.ECHO == 0
+}

@@ -36,3 +36,13 @@ func openPTY(t *testing.T) (master, slave *os.File) {
 	}
 	return master, slave
 }
+
+// echoOff reports whether the terminal of master no longer echoes input, read through the master side.
+func echoOff(master *os.File) bool {
+	var termios syscall.Termios
+	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TCGETS,
+		uintptr(unsafe.Pointer(&termios))); errno != 0 {
+		return false
+	}
+	return termios.Lflag&syscall.ECHO == 0
+}

@@ -436,10 +436,12 @@ func runAtTerminal(t *testing.T, c *runner, input string, args ...string) (strin
 	}()
 	text := func() string { mu.Lock(); defer mu.Unlock(); return out.String() }
 
-	for deadline := time.Now().Add(10 * time.Second); !strings.Contains(text(), "passphrase: "); {
+	// The prompt is written before the echo is switched off, so typing waits for both: input typed in
+	// between would be echoed back and look like a leaked passphrase.
+	for deadline := time.Now().Add(10 * time.Second); !strings.Contains(text(), "passphrase: ") || !echoOff(master); {
 		if time.Now().After(deadline) {
 			_ = cmd.Process.Kill()
-			t.Fatalf("no passphrase prompt appeared: %q", text())
+			t.Fatalf("no passphrase prompt with echo off appeared: %q", text())
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
