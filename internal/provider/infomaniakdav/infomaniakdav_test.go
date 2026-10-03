@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -38,6 +39,7 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { retu
 
 type call struct {
 	method, path, depth, auth, body string
+	header                          http.Header
 }
 
 // serve replaces the package transport for one test and records every request.
@@ -48,7 +50,7 @@ func serve(t *testing.T, handler func(*http.Request) (*http.Response, error)) *[
 	transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		raw, _ := io.ReadAll(r.Body)
 		*calls = append(*calls, call{r.Method, r.URL.Host + r.URL.EscapedPath(), r.Header.Get("Depth"),
-			r.Header.Get("Authorization"), string(raw)})
+			r.Header.Get("Authorization"), string(raw), r.Header.Clone()})
 		return handler(r)
 	})
 	t.Cleanup(func() { transport = previous })
@@ -374,18 +376,27 @@ func TestRegisterPublishesFixedToolIDs(t *testing.T) {
 	var got []string
 	for _, d := range reg.Provider(Provider) {
 		got = append(got, d.ID)
-		if d.Risk.Effect != capability.EffectRead || d.Risk.Confirmation != capability.ConfirmationNone {
+		writes := d.ID == eventsCreate.ID || d.ID == eventsUpdate.ID || d.ID == eventsDelete.ID
+		if writes {
+			if d.Risk.Confirmation != capability.ConfirmationRequired || !d.Risk.OpenWorld ||
+				d.Risk.Idempotency == "" || d.Risk.Idempotency == capability.IdempotencyUnknown ||
+				d.Risk.DataSensitivity != eventsSensitivity || d.RequiresToolAllowList != (d.ID == eventsDelete.ID) {
+				t.Errorf("%s = %+v", d.ID, d.Risk)
+			}
+		} else if d.Risk.Effect != capability.EffectRead || d.Risk.Confirmation != capability.ConfirmationNone {
 			t.Errorf("%s = %+v", d.ID, d.Risk)
 		}
 	}
 	sort.Strings(got)
 	if want := []string{"infomaniakdav.addressbooks.list", "infomaniakdav.calendars.list",
-		"infomaniakdav.events.get", "infomaniakdav.events.list"}; !reflect.DeepEqual(got, want) {
+		"infomaniakdav.events.create", "infomaniakdav.events.delete", "infomaniakdav.events.get",
+		"infomaniakdav.events.list", "infomaniakdav.events.update"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("tool IDs = %v, want %v", got, want)
 	}
 	metadata, ok := reg.ProviderMetadata(Provider)
-	if !ok || !metadata.Target.Required || len(metadata.Target.Kinds) != 2 || len(metadata.Profiles) != 1 ||
-		!metadata.Profiles[0].Recommended || len(metadata.SecretRoles) != 2 ||
+	if !ok || !metadata.Target.Required || len(metadata.Target.Kinds) != 2 || len(metadata.Profiles) != 2 ||
+		!metadata.Profiles[0].Recommended || metadata.Profiles[1].Recommended || len(metadata.Profiles[0].Tools) != 4 ||
+		slices.Contains(metadata.Profiles[1].Tools, eventsDelete.ID) || len(metadata.SecretRoles) != 2 ||
 		metadata.SecretRoles[0].Name != "user-id" || metadata.SecretRoles[1].Name != "app-password" {
 		t.Errorf("metadata = %+v", metadata)
 	}

@@ -1,6 +1,7 @@
-// Package infomaniakdav implements controlled, read-only access to the CalDAV and CardDAV service of
+// Package infomaniakdav implements controlled access to the CalDAV and CardDAV service of
 // Infomaniak Sync (https://www.infomaniak.com/en/support/faq/2432/sync-your-contacts-and-calendars-across-
-// all-your-devices). It lists the calendars and address books of one Infomaniak identity.
+// all-your-devices). It lists the calendars and address books of one Infomaniak identity and reads, creates,
+// replaces, and deletes events of the allow-listed calendars; it reads no contact.
 //
 // The origin is fixed to https://sync.infomaniak.com and cannot be configured, and no redirect is ever
 // followed, so the basic-auth credential never leaves that origin. Discovery follows the DAV chain: the
@@ -53,6 +54,8 @@ const (
 	methodPropfind    = "PROPFIND"
 	methodReport      = "REPORT"
 	methodGet         = http.MethodGet
+	methodPut         = http.MethodPut
+	methodDelete      = http.MethodDelete
 	defaultTimeout    = 30 * time.Second
 	maxUserIDLen      = 64
 	maxSecretLen      = 1024
@@ -143,8 +146,8 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// request is the single request path of this provider. The method is one of the three internal constants and
-// never comes from an argument. The path comes from the fixed root or from segments that segmentsOf or
+// request is the single read path of this provider; writes go through mutate. The method is one of the three
+// read constants and never comes from an argument. The path comes from the fixed root or from segments that segmentsOf or
 // validCollectionID already validated; a collection path ends in a slash, an object path does not. A response
 // other than wantStatus is mapped to a class without reading its body, and a body beyond limit is refused.
 func (c *Client) request(ctx context.Context, op, method string, segments []string, collection bool,
@@ -152,18 +155,7 @@ func (c *Client) request(ctx context.Context, op, method string, segments []stri
 	if err := c.limiter.Wait(ctx); err != nil {
 		return nil, nil, provider.Waited(op, "Infomaniak", err)
 	}
-	escaped := make([]string, len(segments))
-	for i, segment := range segments {
-		escaped[i] = url.PathEscape(segment)
-	}
-	path := "/"
-	if len(escaped) > 0 {
-		path = "/" + strings.Join(escaped, "/")
-		if collection {
-			path += "/"
-		}
-	}
-	req, err := http.NewRequestWithContext(ctx, method, origin+path, strings.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, origin+pathOf(segments, collection), strings.NewReader(body))
 	if err != nil {
 		return nil, nil, providerError(op, "the request could not be built")
 	}
@@ -192,6 +184,22 @@ func (c *Client) request(ctx context.Context, op, method string, segments []stri
 		return nil, nil, invalidResponse(op, "the Infomaniak response could not be read within the size limit")
 	}
 	return data, response.Header, nil
+}
+
+// pathOf escapes validated segments into a request path; a collection path ends in a slash.
+func pathOf(segments []string, collection bool) string {
+	if len(segments) == 0 {
+		return "/"
+	}
+	escaped := make([]string, len(segments))
+	for i, segment := range segments {
+		escaped[i] = url.PathEscape(segment)
+	}
+	path := "/" + strings.Join(escaped, "/")
+	if collection {
+		path += "/"
+	}
+	return path
 }
 
 // propfind sends a fixed PROPFIND body to a collection path and reads the multi-status answer.
@@ -245,7 +253,7 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak Calendar and Contacts", DefaultBaseURL: origin, ValidateBaseURL: validBaseURL,
 		DefaultPermissions: []config.Permission{config.PermissionRead},
-		Description:        "Infomaniak Sync over CalDAV and CardDAV, calendars and address books of one identity listed, calendar events read",
+		Description:        "Infomaniak Sync over CalDAV and CardDAV, calendars and address books of one identity listed, calendar events read, created, changed, and deleted",
 		SecretRoles: []config.SecretRole{{
 			Name: roleUserID,
 			Description: "Personal user name of the Infomaniak sync identity, shown in the Infomaniak " +
@@ -278,6 +286,13 @@ func Register(reg *capability.Registry) error {
 			ID: "read", Title: "Read calendars, address books, and events", Recommended: true,
 			Description: "lists the allow-listed calendars and address books and reads events of allow-listed calendars; reads no contact and changes nothing",
 			Tools:       []string{calendarsList.ID, addressbooksList.ID, eventsList.ID, eventsGet.ID},
+		}, {
+			ID: "events", Title: "Read and write calendar events",
+			Description: "also creates an event and replaces one event given its etag in an allow-listed calendar, " +
+				"with confirmation; an attendee may receive an invitation; never deletes, which only a tools list " +
+				"naming events.delete allows",
+			Tools: []string{calendarsList.ID, addressbooksList.ID, eventsList.ID, eventsGet.ID, eventsCreate.ID,
+				eventsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -287,6 +302,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: addressbooksList, Handler: capability.Handler(invokeAddressbooksList)},
 		capability.Operation{Descriptor: eventsList, Handler: capability.Handler(invokeEventsList)},
 		capability.Operation{Descriptor: eventsGet, Handler: capability.Handler(invokeEventsGet)},
+		capability.Operation{Descriptor: eventsCreate, Handler: capability.Handler(invokeEventsCreate)},
+		capability.Operation{Descriptor: eventsUpdate, Handler: capability.Handler(invokeEventsUpdate)},
+		capability.Operation{Descriptor: eventsDelete, Handler: capability.Handler(invokeEventsDelete)},
 	)
 }
 
