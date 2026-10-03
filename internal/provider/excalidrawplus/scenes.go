@@ -91,7 +91,7 @@ var scenesGet = capability.Descriptor{
 
 const elementSchema = `{"type":"object","properties":{"id":{"type":"string"},"type":{"type":"string"},` +
 	`"text":{"type":"string"},"name":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"},` +
-	`"width":{"type":"number"},"height":{"type":"number"},"frame_id":{"type":"string"},` +
+	`"width":{"type":"number"},"height":{"type":"number"},"version":{"type":"integer"},"frame_id":{"type":"string"},` +
 	`"container_id":{"type":"string"}},"required":["id","type"],"additionalProperties":false}`
 
 var scenesContent = capability.Descriptor{
@@ -99,7 +99,7 @@ var scenesContent = capability.Descriptor{
 	Version: 1,
 	Title:   "Read Excalidraw+ scene content",
 	Description: "Read the elements of one scene of an allowed collection as a compact, capped view (type, " +
-		"text, name, position, size); with query, only elements whose text or name contains it are returned. " +
+		"text, name, position, size, version); with query, only elements whose text or name contains it are returned. " +
 		"Embedded images are counted, never returned; deleted elements are skipped",
 	Tags:     []string{"excalidrawplus", "scenes", "content", "search", "whiteboard"},
 	Risk:     readRisk,
@@ -325,6 +325,7 @@ type elementJSON struct {
 	Y           float64 `json:"y"`
 	Width       float64 `json:"width"`
 	Height      float64 `json:"height"`
+	Version     int64   `json:"version"`
 	FrameID     string  `json:"frameId"`
 	ContainerID string  `json:"containerId"`
 }
@@ -348,6 +349,7 @@ type Element struct {
 	Y           float64 `json:"y"`
 	Width       float64 `json:"width"`
 	Height      float64 `json:"height"`
+	Version     int64   `json:"version,omitempty"`
 	FrameID     string  `json:"frame_id,omitempty"`
 	ContainerID string  `json:"container_id,omitempty"`
 }
@@ -429,7 +431,7 @@ func (c *Client) SceneContent(ctx context.Context, input contentArguments) (*Sce
 		view := Element{ID: boundedValue(element.ID), Type: boundedValue(element.Type),
 			Text: bounded(element.Text, maxElementText), Name: bounded(element.Name, maxElementText),
 			X: element.X, Y: element.Y, Width: element.Width, Height: element.Height,
-			FrameID: boundedValue(element.FrameID), ContainerID: boundedValue(element.ContainerID)}
+			Version: element.Version, FrameID: boundedValue(element.FrameID), ContainerID: boundedValue(element.ContainerID)}
 		budget += len(view.Text) + len(view.Name)
 		if len(result.Elements) >= input.Limit || budget > maxContentTextBytes {
 			result.Truncated = true

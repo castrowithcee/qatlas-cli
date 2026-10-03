@@ -80,8 +80,10 @@ func coreConfig() *config.Config {
 		Services:    map[string]config.Service{"excalidraw": {Provider: Provider, BaseURL: baseURL}},
 		Credentials: map[string]config.Credential{"excalidraw-reader": credential},
 		Connections: map[string]config.Connection{
-			"one":   {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "collection/" + ownCollection},
-			"two":   {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Targets: []string{"collection/" + ownCollection, "collection/" + otherAllowed}},
+			"one": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "collection/" + ownCollection},
+			"two": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Targets: []string{"collection/" + ownCollection, "collection/" + otherAllowed}},
+			"listed": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "collection/" + ownCollection,
+				Tools: []string{scenesGet.ID, contentPatch.ID, contentReplace.ID}},
 			"every": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "*"},
 		},
 	}
@@ -130,7 +132,7 @@ func isInvalidRequest(err error) bool {
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	metadata, ok := registry(t).ProviderMetadata(Provider)
 	if !ok || metadata.Name != "Excalidraw+" || metadata.DefaultBaseURL != baseURL || len(metadata.SecretRoles) != 1 ||
-		metadata.SecretRoles[0].Name != roleAPIKey || !metadata.Target.Required || len(metadata.Tools) != 6 {
+		metadata.SecretRoles[0].Name != roleAPIKey || !metadata.Target.Required || len(metadata.Tools) != 8 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	recommended, ok := metadata.RecommendedProfile()

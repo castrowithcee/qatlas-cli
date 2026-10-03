@@ -2,19 +2,19 @@
 description: >
   Describes the Excalidraw+ provider (beta): the workspace API key and fixed API host, the collection targets,
   the collection, scene, and scene content reads with their client-side search, creating, renaming, and moving
-  scenes, the bounds, and the errors.
+  scenes, patching and replacing scene content, the bounds, and the errors.
 type: knowledge
 edit: shared
 created: 2026-10-02
-updated: 2026-10-02
+updated: 2026-10-03
 ---
 
 # Excalidraw+
 
 This provider reads the collections, scenes, and scene content of one Excalidraw+ workspace through its public
 REST API (`https://api.excalidraw.com/api/v1`). The recommended `read` profile changes nothing. The optional `manage`
-profile can create a scene and rename or move one; there is no tool to change a scene's content, to delete anything, or
-to manage collections, users, invites, or activity logs.
+profile can create a scene, rename or move one, patch its elements, and replace its whole content; there is no tool to
+delete a scene or a collection, or to manage users, invites, or activity logs.
 
 **Beta.** The Excalidraw+ API is a public beta whose names and schemas may change. Every tool descriptor carries a
 `version` that increases with a breaking change.
@@ -70,7 +70,7 @@ A collection identifier is limited to ASCII letters, digits, hyphen, and undersc
 | `excalidrawplus.collections.list` | the allowed collections: `id`, `name`, `is_default`, `created`, `updated` |
 | `excalidrawplus.scenes.list` | scenes of the allowed collections; optional `collection_id` and `name` |
 | `excalidrawplus.scenes.get` | one scene's metadata, without creator, preview, or share links |
-| `excalidrawplus.scenes.content` | one scene's elements, capped; optional `query`, `offset`, `limit` |
+| `excalidrawplus.scenes.content` | one scene's elements, capped, with their `version`; optional `query`, `offset`, `limit` |
 
 All four are read-only and safe to repeat. `scenes.list` needs a `collection_id` when the connection allows several
 collections; with exactly one allowed collection it is the default, with `*` it is optional.
@@ -91,10 +91,54 @@ request, and is never repeated.
   required, so a scene is never created outside the allowed collections.
 - `update` first reads the scene's metadata and continues only when its current collection is allowed; a scene of
   another collection receives no change request.
-- A name has 1 to 250 characters without control characters. Only these fields are sent; pinning, content, and
-  deletion are not offered.
+- A name has 1 to 250 characters without control characters. Only these fields are sent; pinning and deletion are
+  not offered.
 - After a timeout, a reset connection, a 5xx answer, or an unreadable answer, the error says the change may have taken
   effect; read the scene before repeating it. Idempotency is reported as `unknown`.
+
+## Editing scene content
+
+The `manage` profile also offers two content tools. Both are in the Excalidraw+ scene content API, which is a public
+beta, need `confirm`, send exactly one request, and are never repeated. Both first read the scene's metadata and
+continue only when its collection is allowed; a scene of another collection receives no `PATCH` or `PUT`.
+
+| Tool | Request | Does |
+| --- | --- | --- |
+| `excalidrawplus.content.patch` | `PATCH /scenes/{id}/content` | merges 1 to 100 elements into the scene |
+| `excalidrawplus.content.replace` | `PUT /scenes/{id}/content` | replaces the whole content with 1 to 500 elements |
+
+**Patch.** Excalidraw+ merges the elements by id and the higher element version wins. Every element therefore
+states `expected_version`, the version it has now (the `version` that `scenes.content` returns, `0` for a new
+element), and Qatlas sends it as the next version. Other elements, the app state, and the files stay as they are, and
+connected editors are not forced to reload. An element with `is_deleted: true` is deleted (a soft deletion). If the
+scene already holds a newer version of an element, the answer does not show the sent version; the element is then
+listed in `not_applied` and nothing of it changed, so read the scene and patch again. An empty `not_applied` means
+the answer shows every sent element at the sent version. A patch element is a complete element, not a partial one.
+
+**Replace.** This is an authoritative, final replacement: every element not sent is removed, embedded images and
+files are removed (`files` is sent empty), and connected editors are forced to reload instead of merging. The tool
+requires `confirm` and is offered only to a connection whose `tools` list names it (it has the effect `delete`, so
+the connection also needs the `delete` permission); the `manage` profile does not make it available on its own. An
+empty element list is refused. `view_background_color` defaults to `#ffffff`.
+
+**Elements.** An element is a closed, structured subset of the Excalidraw element format, never a free body:
+
+| Field | Rule |
+| --- | --- |
+| `id`, `type` | id: letters, digits, `-`, `_`, at most 64, unique per request; type: `rectangle`, `diamond`, `ellipse`, `frame`, `text`, `line`, `arrow` |
+| `x`, `y`, `width`, `height` | required numbers within +/- 10 000 000 (size from 0) |
+| `angle`, `stroke_color`, `background_color`, `fill_style`, `stroke_width`, `stroke_style`, `roughness`, `opacity`, `locked` | optional style; colors are `transparent`, `#RGB`, `#RRGGBB`, or `#RRGGBBAA` |
+| `group_ids`, `frame_id`, `bound_elements` | optional references: at most 8 group ids, at most 16 bound elements (`arrow` or `text`) |
+| `text` | text elements only, required, 1 to 2000 printable characters; with `font_size`, `font_family`, `text_align`, `vertical_align`, `container_id` |
+| `name` | frames only, 1 to 250 printable characters |
+| `points`, `start_arrowhead`, `end_arrowhead` | lines and arrows only; 2 to 200 `[x, y]` pairs |
+| `expected_version`, `is_deleted` | patch only |
+
+Links, images, embedded frames, freehand strokes, custom data, and bindings are not accepted, and no other field
+passes. The request body is at most 1 MiB. After a timeout, a reset connection, a 5xx answer, or an unreadable
+answer, the error says the change may have taken effect; read the scene before repeating it. Idempotency is reported as
+`unknown`. The answer reports `scene_id`, `scene_version`, `sent`, `element_count` (not deleted, as the answer shows),
+and, for a patch, `not_applied`.
 
 ## Pagination
 
@@ -105,7 +149,7 @@ true, `next_offset`. A page is filtered after Excalidraw+ answers, so it can hol
 ## Scene content and search
 
 Scene content is untrusted data. It is reduced to elements with `id`, `type`, `text`, `name`, position, size,
-`frame_id`, and `container_id`; deleted elements, links, images, and embedded files are not returned (files are
+`version`, `frame_id`, and `container_id`; deleted elements, links, images, and embedded files are not returned (files are
 only counted in `files_count`). One answer holds at most 1000 elements (200 when `limit` is omitted), 1 KiB per text
 or name, and 256 KiB of text in total; `truncated` and `next_offset` say where to continue. A content body above
 16 MiB is refused.
@@ -141,3 +185,13 @@ of `collectionId=private` for personal keys is not relied on. The request bodies
 `pinned`, `collectionId`) and `PATCH /scenes/{sceneId}` (`name`, `pinned`, `collectionId`, all optional) and their
 answers follow the API reference; the effect of a repeated request and the error bodies are not documented, and no
 live call has been made.
+
+The content endpoints follow the API reference pages for scene content and its schema: `PATCH` takes a partial scene
+content with `elements`, `appState`, and `files` (at least one), merges elements by id with the higher `version`
+winning (a tie is broken by `versionNonce`), deletes through `isDeleted: true`, answers 200 with the merged content,
+and does not force editors to reload; `PUT` takes `type`, `version`, `source`, `appState`, `elements`, and `files`,
+replaces everything, forces editors to reload, and recomputes `sceneVersion`; both answer 400, 401, 403, or 404 as
+`{statusCode, error, message}`. Not documented, and therefore assumed: that a patch element must be complete, that
+the server rejects or ignores a stale version without an error (Qatlas detects it from the answer), the defaults
+Qatlas fills for omitted element fields, the accepted `source` value, a size limit, and the effect of a repeated
+request. The local limits (100 and 500 elements, 2000 text characters, 200 points, 1 MiB) are Qatlas choices.

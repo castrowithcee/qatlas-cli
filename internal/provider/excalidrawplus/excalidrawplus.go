@@ -1,8 +1,10 @@
-// Package excalidrawplus implements controlled, read-only access to one Excalidraw+ workspace through its
+// Package excalidrawplus implements controlled access to one Excalidraw+ workspace through its
 // public REST API (plus.excalidraw.com/docs/api, base https://api.excalidraw.com/api/v1). The API is a public
 // beta whose names and schemas may still change; the provider is a beta for the same reason and every tool
 // descriptor carries a version that moves with a breaking change. It lists collections and scenes, reads one
-// scene's metadata, and reads one scene's content, bounded and searchable client-side.
+// scene's metadata, and reads one scene's content, bounded and searchable client-side. The optional manage
+// profile also creates, renames, and moves scenes, patches a scene's elements by element version, and replaces a
+// scene's whole content with a bounded element set.
 //
 // A connection binds one workspace key (the key belongs to exactly one workspace) and a collection
 // allow-list (collection/COLLECTION_ID, repeatable) or the explicit * wildcard. The allow-list is the only
@@ -193,7 +195,12 @@ const changeUncertain = "; this change may have taken effect, read the current s
 // repeated: after a timeout, a reset connection, a 5xx, or an unreadable answer the message says the change may
 // have taken effect.
 func (c *Client) send(ctx context.Context, op, method, path string, payload, out any) error {
-	if method != http.MethodPost && method != http.MethodPatch {
+	return c.sendBounded(ctx, op, method, path, payload, out, maxResponseBytes)
+}
+
+// sendBounded is send with its own ceiling for the answer, which a scene content answer needs.
+func (c *Client) sendBounded(ctx context.Context, op, method, path string, payload, out any, maxBytes int) error {
+	if method != http.MethodPost && method != http.MethodPatch && method != http.MethodPut {
 		return providerError(op, "the method is not offered")
 	}
 	body, err := json.Marshal(payload)
@@ -228,8 +235,8 @@ func (c *Client) send(ctx context.Context, op, method, path string, payload, out
 		}
 		return failure
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil || len(data) > maxResponseBytes {
+	data, err := io.ReadAll(io.LimitReader(response.Body, int64(maxBytes)+1))
+	if err != nil || len(data) > maxBytes {
 		return invalidResponse(op, "the Excalidraw+ response could not be read within the size limit"+changeUncertain)
 	}
 	if err := json.Unmarshal(data, out); err != nil {
@@ -375,11 +382,14 @@ func Register(reg *capability.Registry) error {
 				"scene's text content; changes nothing",
 			Tools: readTools,
 		}, {
-			ID: "manage", Title: "Create, rename, and move scenes",
-			Description: "reads what the read profile reads, creates a scene in an allowed collection, and " +
-				"renames or moves a scene of an allowed collection into an allowed collection; every change " +
-				"needs its own confirmation. There is no tool to change a scene's content or to delete anything",
-			Tools: append(append([]string{}, readTools...), scenesCreate.ID, scenesUpdate.ID),
+			ID: "manage", Title: "Create, rename, move scenes and edit their content",
+			Description: "reads what the read profile reads, creates a scene in an allowed collection, " +
+				"renames or moves a scene of an allowed collection into an allowed collection, patches the " +
+				"elements of a scene by element version, and replaces a scene's whole content; every change " +
+				"needs its own confirmation, and the content replacement is offered only to a connection whose " +
+				"tools list names it. There is no tool to delete a scene or a collection",
+			Tools: append(append([]string{}, readTools...), scenesCreate.ID, scenesUpdate.ID, contentPatch.ID,
+				contentReplace.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -391,6 +401,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: scenesContent, Handler: capability.Handler(invokeScenesContent)},
 		capability.Operation{Descriptor: scenesCreate, Handler: capability.Handler(invokeScenesCreate)},
 		capability.Operation{Descriptor: scenesUpdate, Handler: capability.Handler(invokeScenesUpdate)},
+		capability.Operation{Descriptor: contentPatch, Handler: capability.Handler(invokeContentPatch)},
+		capability.Operation{Descriptor: contentReplace, Handler: capability.Handler(invokeContentReplace)},
 	)
 }
 
