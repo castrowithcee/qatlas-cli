@@ -392,6 +392,12 @@ func Register(reg *capability.Registry) error {
 				"scene's text content; changes nothing",
 			Tools: readTools,
 		}, {
+			ID: "activity", Title: "Read the workspace activity log",
+			Description: "reads the workspace-wide activity log with user, action, and time filters; entries " +
+				"are personal data and only a connection with the * target may use it; not part of the " +
+				"recommended read profile",
+			Tools: []string{logsList.ID},
+		}, {
 			ID: "manage", Title: "Create, rename, move, delete scenes and collections and edit scene content",
 			Description: "reads what the read profile reads, creates a scene in an allowed collection, " +
 				"renames or moves a scene of an allowed collection into an allowed collection, patches the " +
@@ -406,6 +412,7 @@ func Register(reg *capability.Registry) error {
 		return err
 	}
 	return reg.Register(Provider,
+		capability.Operation{Descriptor: logsList, Handler: capability.Handler(invokeLogsList)},
 		capability.Operation{Descriptor: collectionsList, Handler: capability.Handler(invokeCollectionsList)},
 		capability.Operation{Descriptor: scenesList, Handler: capability.Handler(invokeScenesList)},
 		capability.Operation{Descriptor: scenesGet, Handler: capability.Handler(invokeScenesGet)},

@@ -76,6 +76,25 @@ A collection identifier is limited to ASCII letters, digits, hyphen, and undersc
 All four are read-only and safe to repeat. `scenes.list` needs a `collection_id` when the connection allows several
 collections; with exactly one allowed collection it is the default, with `*` it is optional.
 
+## Activity log
+
+`excalidrawplus.logs.list` reads the workspace activity log (`GET /logs`). It is read-only, safe to repeat, and
+classified as personal data (`excalidrawplus-workspace-activity`). It belongs to the separate, not recommended
+`activity` profile, never to `read`.
+
+- The log is workspace-wide, so the tool works only on a connection with the `*` target. On a connection with
+  collection targets it is refused locally, before any secret is read or request is sent, without naming a target.
+- Filters, all validated locally: `user_id` (`[A-Za-z0-9_-]`, at most 64), `action` (lowercase identifier of at most
+  64 characters, for example `scene:create`), and the range `from` and `to` (RFC 3339, given together, `from` not
+  after `to`, at most 366 days). They are sent as `user`, `action`, `dateFrom`, and `dateTo`; nothing else is passed on.
+- Paging with `offset` (at most 1 000 000) and `limit` (1 to 100, 50 when omitted); `has_next_page` comes from
+  `hasMore`, `next_offset` is `offset + limit`. Each text field is capped at 256 characters.
+- Returned per entry: `id`, `action`, `operation`, `created_at`, `user_id`, `user_email`, `status`. IP addresses,
+  details, user names, pictures, and source fields are not returned. Entries are untrusted data.
+- Documented: path, the parameters `limit`, `offset`, `user`, `action`, `dateFrom`, `dateTo`, and the response fields.
+  Assumed: that `hasMore` pairs with `offset`/`limit` paging, that the date filters are inclusive, and the action
+  identifier form (the documentation names no closed set of actions).
+
 ## Creating, renaming, and moving scenes
 
 The `manage` profile (not recommended) adds two tools that change data. Each needs `confirm`, sends exactly one
