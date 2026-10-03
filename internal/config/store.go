@@ -128,6 +128,9 @@ func (s *Store) Load() (*Config, error) { return Load(s.path, s.providers) }
 
 // Save validates the configuration, encodes it, checks that the encoded form loads back, and only then
 // replaces the target file. Any failure before the replacement leaves the target byte-identical.
+//
+// Save takes no cross-process lock and checks no revision, so it is not a transaction: a change based on an
+// earlier read can overwrite a concurrent change. Use Update or LoadVersioned with SaveIfUnchanged for that.
 func (s *Store) Save(cfg *Config) error {
 	if err := cfg.Validate(); err != nil {
 		return &InvalidError{Path: s.path, Err: err}
