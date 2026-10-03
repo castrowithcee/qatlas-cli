@@ -47,6 +47,7 @@ func templateModel(t *testing.T, more ...string) (*Model, string) {
 		Provider: "bookstack", BaseURL: "https://wiki.example.invalid", Options: map[string]string{"k": "v"},
 	}))
 	mustNoError(t, m.store.Save(m.cfg))
+	syncRevision(t, m)
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	return m, path
 }
@@ -119,6 +120,7 @@ func TestDuplicateCredentialCopiesNoSecret(t *testing.T) {
 	mustNoError(t, m.cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
 	mustNoError(t, m.cfg.SetCredential("reader", config.Credential{Provider: "bookstack", Type: config.CredentialTypeKeyring}))
 	mustNoError(t, m.store.Save(m.cfg))
+	syncRevision(t, m)
 	mustNoError(t, mem.Set(secret.StoreKey("reader", "token-id"), "canary-original-id"))
 	mustNoError(t, mem.Set(secret.StoreKey("reader", "token-secret"), "canary-original-secret"))
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -211,6 +213,7 @@ func TestDuplicateSavesOnlyInAnAdminSession(t *testing.T) {
 	mustNoError(t, cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
 	mustNoError(t, store.Save(cfg))
 	m.cfg = cfg
+	syncRevision(t, m)
 	openSectionByName(t, m, sectionServices)
 	m.screen = screenList
 	pump(t, m, "p")
@@ -294,6 +297,7 @@ func TestNewWithoutEntriesSkipsTheQuestion(t *testing.T) {
 	m, _, _ := newModel(t)
 	mustNoError(t, m.cfg.SetService("wiki", config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
 	mustNoError(t, m.store.Save(m.cfg))
+	syncRevision(t, m)
 	openSectionByName(t, m, sectionCredentials)
 	m.screen = screenList
 	press(t, m, "n")

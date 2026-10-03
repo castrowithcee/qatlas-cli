@@ -163,12 +163,13 @@ func (m *Model) saveVault() tea.Cmd {
 		IdleTimeout:  m.fieldValue("idle timeout"),
 		AdminTimeout: m.fieldValue("admin timeout"),
 	}
-	if err := m.store.Save(candidate); err != nil {
-		m.fail = m.redactor.Apply(err.Error())
+	if err := m.store.SaveIfUnchanged(candidate, m.rev); err != nil {
+		if !m.conflicted(err) {
+			m.fail = m.redactor.Apply(err.Error())
+		}
 		return nil
 	}
-	m.cfg = candidate
-	m.configExists = true
+	m.adoptSaved(candidate)
 	// openVaultForm never clears status or fail on its own (see its comment), so a fail left over from an
 	// earlier, refused attempt on this same form has to be cleared here before it is replaced with success.
 	m.clearMessages()

@@ -218,7 +218,7 @@ A block for the AGENTS.md or CLAUDE.md of a project:
   - Invoke with 'qatlas invoke <tool-id> --connection <name>' and pass the arguments as --arg name=value, a list or an object as JSON, or as one JSON object on stdin.
   - Never ask for, pass, or print a secret. On an auth or permission error, stop and report the code.`
 
-const configuration = `The configuration file has four sections and optional provider notes. 'qatlas tui' edits them and 'qatlas config validate' checks them.
+const configuration = `The configuration file has four sections and optional provider notes. 'qatlas tui' edits them and 'qatlas config validate' checks them. 'qatlas tui', 'qatlas web', and the commands that write the file may run at the same time: a change based on an older state of the file is refused, nothing is saved, and the editor reloads so the change can be repeated; nothing is merged for you.
 
 Services say where: one provider and the root URL of one of its instances as base_url. A provider with a public API, such as GitHub, Telegram, or Todoist, uses that API when base_url is left out; a self-hosted system such as BookStack or Nextcloud always needs it. Two instances of one provider are two services.
 

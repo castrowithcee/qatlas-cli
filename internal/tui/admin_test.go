@@ -69,6 +69,7 @@ func TestAdminSessionEditorOpensReadOnly(t *testing.T) {
 				Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}))
 			mustNoError(t, store.Save(cfg))
 			m.cfg = cfg
+			syncRevision(t, m)
 
 			for _, s := range []section{sectionServices, sectionCredentials, sectionConnections, sectionDefaults} {
 				openSectionByName(t, m, s)
@@ -198,6 +199,7 @@ func TestAdminTimeoutZeroAsksEveryChange(t *testing.T) {
 	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
 	setAdminTimeout(t, store, "0")
 	m.cfg = mustLoad(t, store)
+	syncRevision(t, m)
 
 	addKeyringCredentialGated(t, m, "reader", "hunter2")
 	if m.AdminSessionActive() {

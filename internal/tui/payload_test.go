@@ -283,6 +283,7 @@ func TestEditingAPayloadSecretKeepsEmptyValuesAndDeletesRemovedFields(t *testing
 	mustNoError(t, h.secrets.Set("billing", "username", "old-username-1"))
 	mustNoError(t, h.secrets.Set("billing", "password", "old-password-1"))
 	h.m.cfg = cfg
+	syncRevision(t, h.m)
 
 	openEntryForm(t, h.m, sectionCredentials, "billing")
 	if !h.m.isPayloadForm() {
@@ -378,6 +379,7 @@ func TestConnectionFormOffersOnlyPayloadSecretsAndSavesTheList(t *testing.T) {
 		Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead}}))
 	mustNoError(t, h.store.Save(cfg))
 	h.m.cfg = cfg
+	syncRevision(t, h.m)
 
 	openEntryForm(t, h.m, sectionConnections, "personal")
 	if got := h.m.field("credential").choices; !slices.Equal(got, []string{"reader"}) {
@@ -446,6 +448,7 @@ func TestOnlyPayloadSecretsBlockANewConnection(t *testing.T) {
 	mustNoError(t, cfg.SetCredential("billing", config.Credential{
 		Type: config.CredentialTypeKeyring, Forward: true, Fields: []string{"username"}}))
 	h.m.cfg = cfg
+	syncRevision(t, h.m)
 	if !strings.Contains(h.m.newEntryBlockedFor(sectionConnections), "a credential") {
 		t.Fatal("a payload secret alone must not satisfy a connection's need for a credential")
 	}
@@ -470,6 +473,7 @@ func TestWeakBindingNoteWithoutAnEncryptedVault(t *testing.T) {
 		Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead}}))
 	mustNoError(t, h.store.Save(cfg))
 	h.m.cfg = cfg
+	syncRevision(t, h.m)
 	h.m.fields = nil
 	openEntryForm(t, h.m, sectionConnections, "personal")
 	for i := range h.m.fields {
@@ -573,6 +577,7 @@ func TestPayloadSecretListAndFormFitNarrowTerminals(t *testing.T) {
 			Fields: []string{"username", "password", "totp-seed-for-recovery"}}))
 		mustNoError(t, h.store.Save(cfg))
 		h.m.cfg = cfg
+		syncRevision(t, h.m)
 		h.m.Update(tea.WindowSizeMsg{Width: width, Height: 30})
 
 		openSectionByName(t, h.m, sectionCredentials)
@@ -601,6 +606,7 @@ func TestPayloadSecretCanBeDeleted(t *testing.T) {
 		Type: config.CredentialTypeKeyring, Forward: true, Fields: []string{"username"}}))
 	mustNoError(t, h.store.Save(cfg))
 	h.m.cfg = cfg
+	syncRevision(t, h.m)
 	openSectionByName(t, h.m, sectionCredentials)
 	press(t, h.m, "enter", "esc") // opening and leaving changes nothing
 	if h.m.screen != screenList {

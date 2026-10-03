@@ -131,6 +131,7 @@ func TestVaultHeaderAdminAbbreviation(t *testing.T) {
 	cfg := m.cfg.Clone()
 	cfg.Vault.AdminTimeout = "0"
 	m.cfg = cfg
+	syncRevision(t, m)
 	if got := m.vaultHeaderText(); !strings.Contains(got, "admin: confirm each change") {
 		t.Fatalf("vaultHeaderText() with admin_timeout 0 = %q, want it to contain %q", got, "admin: confirm each change")
 	}
@@ -151,6 +152,7 @@ func TestVaultHeaderAdminAbbreviationWithOnlyTheVaultProcessUnlocked(t *testing.
 	cfg := m.cfg.Clone()
 	cfg.Vault.AdminTimeout = "0"
 	m.cfg = cfg
+	syncRevision(t, m)
 	if got := m.vaultHeaderText(); !strings.Contains(got, "admin: confirm each change") {
 		t.Fatalf("vaultHeaderText() with admin_timeout 0 = %q, want it to contain %q", got, "admin: confirm each change")
 	}
@@ -369,6 +371,7 @@ func TestVaultUnlockPromptExplainsTheAdminSession(t *testing.T) {
 	cfg := m.cfg.Clone()
 	cfg.Vault.AdminTimeout = "0"
 	m.cfg = cfg
+	syncRevision(t, m)
 	view = screenOf(m)
 	if !strings.Contains(view, "vault.admin_timeout is 0: this asks again on the very next change") {
 		t.Fatalf("unlock dialog with admin_timeout 0 = %q, want the same zero-text admin.go's dialog uses", view)

@@ -448,6 +448,10 @@ type Model struct {
 	// is deliberately created only by the first successful save, and the editor must say so instead of
 	// claiming that a file which does not exist was loaded.
 	configExists bool
+	// rev is the revision of the configuration file cfg was loaded from or last written as (see
+	// revision.go). Every write is committed against it, so a change another writer made meanwhile is
+	// reported as a conflict and never overwritten.
+	rev config.Revision
 
 	// Credential store state. The editor never holds a secret: it holds where each role resolves from and
 	// which stages the resolver checked, both of which name no value.
@@ -541,7 +545,7 @@ type Model struct {
 // tester may be nil, in which case connection testing is unavailable; secrets may be nil, in which case the
 // configuration stays editable and only the operations that would reach a store report why they cannot.
 func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor) (*Model, error) {
-	cfg, err := store.Load()
+	cfg, rev, err := store.LoadVersioned()
 	configExists := true
 	if err != nil {
 		var notFound *config.NotFoundError
@@ -549,6 +553,7 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 			return nil, err
 		}
 		cfg = store.New()
+		rev = config.RevisionAbsent
 		configExists = false
 	}
 	if redactor == nil {
@@ -560,7 +565,7 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	// Without a working directory a new path simply starts without a suggestion.
 	startDir, _ := os.Getwd()
 	m := &Model{
-		store: store, cfg: cfg, tester: tester, redactor: redactor,
+		store: store, cfg: cfg, rev: rev, tester: tester, redactor: redactor,
 		secrets:   secrets,
 		sources:   map[string]secret.Source{},
 		checked:   map[string][]string{},
@@ -2575,12 +2580,13 @@ func (m *Model) save(name string) tea.Cmd {
 		m.fail = m.redactor.Apply(err.Error())
 		return nil
 	}
-	if err := m.store.Save(candidate); err != nil {
-		m.fail = m.redactor.Apply(err.Error())
+	if err := m.store.SaveIfUnchanged(candidate, m.rev); err != nil {
+		if !m.conflicted(err) {
+			m.fail = m.redactor.Apply(err.Error())
+		}
 		return nil
 	}
-	m.cfg = candidate
-	m.configExists = true
+	m.adoptSaved(candidate)
 	// A connection saved directly here is what autoApprove's direct means; every other section saves no
 	// single connection by name.
 	direct := ""
@@ -2720,13 +2726,14 @@ func (m *Model) delete() tea.Cmd {
 		m.screen = screenList
 		return nil
 	}
-	if err := m.store.Save(candidate); err != nil {
-		m.fail = m.redactor.Apply(err.Error())
+	if err := m.store.SaveIfUnchanged(candidate, m.rev); err != nil {
+		if !m.conflicted(err) {
+			m.fail = m.redactor.Apply(err.Error())
+		}
 		m.screen = screenList
 		return nil
 	}
-	m.cfg = candidate
-	m.configExists = true
+	m.adoptSaved(candidate)
 	cmd := m.returnToList("")
 	m.status = "Deleted " + name
 	if section == sectionConnections {

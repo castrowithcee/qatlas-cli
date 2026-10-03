@@ -27,6 +27,7 @@ func seedConnections(t *testing.T, m *Model, names ...string) {
 		mustNoError(t, m.cfg.SetConnection(name, config.Connection{Service: "wiki", Credential: "reader"}))
 	}
 	mustNoError(t, m.store.Save(m.cfg))
+	syncRevision(t, m)
 	m.configExists = true
 }
 

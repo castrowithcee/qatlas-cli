@@ -246,7 +246,7 @@ func TestCommitSetupSyncsNewVaultSecretsToARunningProcess(t *testing.T) {
 		credential: "reader", storage: storageVault, roles: []string{"token-id", "token-secret"},
 		secrets: map[string]string{"token-id": "canary-setup-id-1a2b", "token-secret": "canary-setup-secret-3c4d"},
 	}
-	warning, err := commitSetup(store, secrets, cfg, plan, nil)
+	warning, err := commitSetup(store, secrets, cfg, config.RevisionAbsent, plan, nil)
 	if err != nil {
 		t.Fatalf("commitSetup() = %v", err)
 	}

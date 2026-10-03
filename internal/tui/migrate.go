@@ -234,6 +234,7 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 	p := m.migrate
 	v := m.secrets.Vault()
 	cfg := m.cfg.Clone()
+	base := m.rev
 	store := m.store
 	m.vaultBusy = true
 	m.writes++
@@ -246,7 +247,7 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 			err = vaultmigrate.Verify(v, p.plan)
 		}
 		if err == nil {
-			err = vaultmigrate.SwitchCredentials(store, cfg, currentRevision(store), p.switched)
+			err = vaultmigrate.SwitchCredentials(store, cfg, base, p.switched)
 		}
 		return vaultMigrateWrittenMsg{cfg: cfg, warning: warning, err: err}
 	}
@@ -287,6 +288,13 @@ func (m *Model) handleVaultMigrateWritten(msg vaultMigrateWrittenMsg) tea.Cmd {
 	p := m.migrate
 	m.migrate = nil
 	if msg.err != nil {
+		if m.conflicted(msg.err) {
+			// The entries are in the vault and credentials.yaml is untouched, so repeating the action
+			// against the reloaded configuration only writes them again.
+			form := m.openVaultForm()
+			m.status = ""
+			return form
+		}
 		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
 			m.fail = "wrong passphrase"
 		} else {
@@ -295,7 +303,7 @@ func (m *Model) handleVaultMigrateWritten(msg vaultMigrateWrittenMsg) tea.Cmd {
 		return m.openVaultForm()
 	}
 
-	m.cfg, m.configExists = msg.cfg, true
+	m.adoptSaved(msg.cfg)
 
 	var lines []string
 	lines = append(lines, "migrated "+countNoun(len(p.plan), "entry", "entries")+" into the vault")

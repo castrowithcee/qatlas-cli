@@ -115,6 +115,19 @@ func (s *Store) LoadVersioned() (*Config, Revision, error) {
 	return s.readVersioned()
 }
 
+// RevisionOf returns the revision the file has right after cfg was saved to it: the revision of the bytes
+// Save writes for cfg. A caller that saved cfg through SaveIfUnchanged, Update, or Transact and keeps cfg
+// as its loaded state uses it as the base of its next change, without reading the file again; a re-read
+// could pick up a change another writer made meanwhile and then pair it with a state that lacks it. It is
+// only meaningful for a cfg the store just saved, and it reads nothing from disk.
+func (s *Store) RevisionOf(cfg *Config) (Revision, error) {
+	data, err := s.marshal(cfg)
+	if err != nil {
+		return RevisionAbsent, &InvalidError{Path: s.path, Err: fmt.Errorf("the configuration could not be encoded: %w", err)}
+	}
+	return revisionOf(data), nil
+}
+
 // SaveIfUnchanged writes cfg only if the file still has the revision rev, which LoadVersioned returned for
 // the configuration the change was based on. Check and write happen under the cross-process lock. If the
 // file changed in between, nothing is written and the error is a *ConflictError (errors.Is(err, ErrConflict)).

@@ -370,3 +370,32 @@ func TestTransactChecksRevisionBeforeWorkAndAtSave(t *testing.T) {
 		t.Error("the bypassing writer's file was overwritten")
 	}
 }
+
+func TestRevisionOfMatchesTheFileJustSaved(t *testing.T) {
+	store, _ := newTarget(t)
+	cfg := store.New()
+	if err := cfg.SetService("wiki", Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveIfUnchanged(cfg, RevisionAbsent); err != nil {
+		t.Fatalf("SaveIfUnchanged() error = %v", err)
+	}
+	got, err := store.RevisionOf(cfg)
+	if err != nil {
+		t.Fatalf("RevisionOf() error = %v", err)
+	}
+	_, want, err := store.LoadVersioned()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Errorf("RevisionOf() = %q, want the revision of the saved file %q", got, want)
+	}
+	// The returned revision is a valid base for the next change.
+	if err := cfg.SetService("docs", Service{Provider: "bookstack", BaseURL: "https://docs.example.invalid"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveIfUnchanged(cfg, got); err != nil {
+		t.Errorf("SaveIfUnchanged(next) error = %v", err)
+	}
+}

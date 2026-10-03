@@ -82,8 +82,10 @@ type setup struct {
 	// has to be written besides it.
 	candidate *config.Config
 	plan      setupPlan
-	saving    bool
-	saved     string
+	// base is the revision of the configuration candidate was built from; saving commits against it.
+	base   config.Revision
+	saving bool
+	saved  string
 	// before is what Pending found just before finishSetupSave ran, captured while m.cfg still held what was
 	// loaded, so setupSaved can tell autoApprove which connections this save newly opened, and, for the new
 	// connection itself, whether it was already open for a reason its own form never showed (see
@@ -285,7 +287,7 @@ func (m *Model) setupNext() {
 			m.fail = m.redactor.Apply(err.Error())
 			return
 		}
-		w.candidate, w.plan = candidate, plan
+		w.candidate, w.plan, w.base = candidate, plan, m.rev
 	}
 	m.setupShow(w.step + 1)
 }
@@ -513,14 +515,14 @@ func (m *Model) finishSetupSave() tea.Cmd {
 // offer is asked for a passphrase only when the new credential's secret would be the vault's very first.
 func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 	w := m.wizard
-	candidate, plan := w.candidate, w.plan
+	candidate, plan, base := w.candidate, w.plan, w.base
 	w.saving = true
 	m.screen = screenSummary
 	m.clearMessages()
 	m.busy = "saving " + plan.connection
 	store, secrets := m.store, m.secrets
 	return func() tea.Msg {
-		warning, err := commitSetup(store, secrets, candidate, plan, offer)
+		warning, err := commitSetup(store, secrets, candidate, base, plan, offer)
 		return setupSavedMsg{cfg: candidate, name: plan.connection, err: err, warning: warning}
 	}
 }
@@ -528,9 +530,9 @@ func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 // commitSetup stores the secrets of a new credential and then saves the configuration, through
 // secretcommit.Commit: the shared commit boundary the browser's own new-credential form in internal/web
 // uses too, so the two never leave a different thing behind on a failure (see internal/secretcommit).
-func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, plan setupPlan, offer vault.PassphraseFunc) (string, error) {
+func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, base config.Revision, plan setupPlan, offer vault.PassphraseFunc) (string, error) {
 	toVault := storageType(plan.storage) == config.CredentialTypeVault
-	return secretcommit.Commit(store, secrets, cfg, currentRevision(store), plan.credential, toVault, plan.roles, plan.secrets, offer)
+	return secretcommit.Commit(store, secrets, cfg, base, plan.credential, toVault, plan.roles, plan.secrets, offer)
 }
 
 // setupSaved applies the outcome of the final save.
@@ -543,10 +545,14 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 	w.saving = false
 	if msg.err != nil {
 		// Every input stays, secrets included, so the save can be retried or a step changed.
+		if m.conflicted(msg.err) {
+			m.setupRebase()
+			return nil
+		}
 		m.fail = m.redactor.Apply(m.setupError(msg.err))
 		return nil
 	}
-	m.cfg, m.configExists = msg.cfg, true
+	m.adoptSaved(msg.cfg)
 	w.saved = msg.name
 	// The secrets are where they belong now, and the editor drops its only copy of them.
 	w.plan.secrets, w.pages, m.fields = nil, nil, nil
@@ -562,6 +568,20 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 	}
 	// Where the secrets of a new credential now resolve from is what the lists and the next setup name.
 	return tea.Batch(sweep, m.refreshSources(m.keyringQueries()))
+}
+
+// setupRebase rebuilds the setup's candidate on the configuration reloaded after a conflict, so the next
+// save commits what was decided against what the file holds now. If the steps no longer fit that file, the
+// reason is shown and the steps can be changed; the next save is a conflict again until they are.
+func (m *Model) setupRebase() {
+	w := m.wizard
+	candidate, plan, err := m.setupCandidate(stepPermissions)
+	if err != nil {
+		m.fail += "; the setup no longer fits it: " + m.redactor.Apply(err.Error())
+		return
+	}
+	w.candidate, w.plan, w.base = candidate, plan, m.rev
+	m.fail += ". The summary shows the setup applied to the current file"
 }
 
 // setupError turns a failed save into the way out. The configuration is unchanged in every case.
@@ -676,12 +696,4 @@ func (m *Model) summaryRows() []string {
 		fmt.Sprintf("%-12s %s", "permissions", permissions),
 		fmt.Sprintf("%-12s %s", "tools", tools),
 	}
-}
-
-// currentRevision reads the revision of the configuration file as it is now, for a commit that must pass
-// one. The editor does not track the revision its configuration was loaded at yet, so this commit is
-// guarded against a writer that comes in while it runs, not against one that wrote since the editor loaded.
-func currentRevision(store *config.Store) config.Revision {
-	_, rev, _ := store.LoadVersioned()
-	return rev
 }

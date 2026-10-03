@@ -27,6 +27,7 @@ func seedServices(t *testing.T, m *Model, names ...string) {
 		t.Fatalf("Save() = %v", err)
 	}
 	m.configExists = true
+	syncRevision(t, m)
 }
 
 func numberedServices(n int) []string {

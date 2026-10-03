@@ -228,6 +228,7 @@ func (m *Model) savePayload() tea.Cmd {
 		m.fail = fmt.Sprintf("a credential named %q already exists", name)
 		return nil
 	}
+	base := m.rev
 	candidate := m.cfg.Clone()
 	if err := candidate.SetCredential(name, cred); err != nil {
 		m.fail = m.redactor.Apply(err.Error())
@@ -266,7 +267,7 @@ func (m *Model) savePayload() tea.Cmd {
 		}
 	}
 	commit := func(offer vault.PassphraseFunc) tea.Cmd {
-		return m.commitPayload(candidate, name, toVault, roles, values, removed, offer)
+		return m.commitPayload(candidate, base, name, toVault, roles, values, removed, offer)
 	}
 	if !toVault || len(values) == 0 {
 		return commit(nil)
@@ -297,7 +298,7 @@ func (m *Model) savePayload() tea.Cmd {
 
 // commitPayload runs the commit as a command: the store may take its time, and a vault's first secret does
 // the passphrase work. The values stay in the form until it succeeds, so a failed save can be retried.
-func (m *Model) commitPayload(candidate *config.Config, name string, toVault bool, roles []string,
+func (m *Model) commitPayload(candidate *config.Config, base config.Revision, name string, toVault bool, roles []string,
 	values map[string]string, removed []string, offer vault.PassphraseFunc) tea.Cmd {
 	m.payloadSaving = true
 	m.writes++
@@ -307,7 +308,7 @@ func (m *Model) commitPayload(candidate *config.Config, name string, toVault boo
 	}
 	store, secrets := m.store, m.secrets
 	return func() tea.Msg {
-		warning, err := secretcommit.Commit(store, secrets, candidate, currentRevision(store), name, toVault, roles, values, offer)
+		warning, err := secretcommit.Commit(store, secrets, candidate, base, name, toVault, roles, values, offer)
 		msg := payloadSavedMsg{cfg: candidate, name: name, vault: toVault, err: err, warning: warning}
 		if err != nil {
 			return msg
@@ -349,10 +350,12 @@ func (m *Model) handlePayloadSaved(msg payloadSavedMsg) tea.Cmd {
 		m.vaultBusy = false
 	}
 	if msg.err != nil {
-		m.fail = m.redactor.Apply(msg.err.Error()) + "; the configuration was not changed"
+		if !m.conflicted(msg.err) {
+			m.fail = m.redactor.Apply(msg.err.Error()) + "; the configuration was not changed"
+		}
 		return nil
 	}
-	m.cfg, m.configExists = msg.cfg, true
+	m.adoptSaved(msg.cfg)
 	m.fields = nil
 	cmd := m.returnToList(msg.name)
 	m.status = "Saved payload secret " + msg.name
