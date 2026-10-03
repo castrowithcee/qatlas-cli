@@ -67,8 +67,15 @@ type literal struct{ *bytes.Reader }
 func (l literal) Size() int64 { return int64(l.Len()) }
 
 // newFixture starts the in-memory server and points the package's dialer at it for one test.
-func newFixture(t *testing.T) *fixture {
+func newFixture(t *testing.T) *fixture { return newFixtureWith(t, nil) }
+
+// newFixtureWith is newFixture for a server that offers exactly the capabilities in caps; nil offers what
+// Infomaniak's server does for the changes: MOVE, UIDPLUS, and SPECIAL-USE.
+func newFixtureWith(t *testing.T, caps imap.CapSet) *fixture {
 	t.Helper()
+	if caps == nil {
+		caps = imap.CapSet{imap.CapIMAP4rev1: {}, imap.CapMove: {}, imap.CapUIDPlus: {}, imap.CapSpecialUse: {}}
+	}
 	f := &fixture{user: imapmemserver.NewUser(mailbox, passwordVal), wire: &lockedBuffer{}}
 	f.password.Store(passwordVal)
 	memory := imapmemserver.New()
@@ -78,6 +85,7 @@ func newFixture(t *testing.T) *fixture {
 			return memory.NewSession(), nil, nil
 		},
 		InsecureAuth: true,
+		Caps:         caps,
 		DebugWriter:  f.wire,
 		Logger:       log.New(io.Discard, "", 0),
 	})
@@ -138,6 +146,12 @@ func coreConfig() *config.Config {
 		return config.Connection{Service: "mail", Credential: "mail-reader", Permissions: allPermissions,
 			Targets: append([]string{"mailbox/" + mailbox}, targets...)}
 	}
+	// A change tool is offered only through a tools list, since each one requires it.
+	changing := func(targets ...string) config.Connection {
+		c := connection(targets...)
+		c.Tools = []string{messagesFlag.ID, messagesMove.ID, messagesDelete.ID, messagesExpunge.ID}
+		return c
+	}
 	return &config.Config{
 		Version:     1,
 		Services:    map[string]config.Service{"mail": {Provider: Provider}},
@@ -147,6 +161,12 @@ func coreConfig() *config.Config {
 			"folders": connection("folder/Allowed", "folder/INBOX"),
 			"allowed": connection("folder/Allowed"),
 			"senders": connection("sender/alice@example.net"),
+			// The change connections: everything, a folder list with the trash inside it, a folder list
+			// without the trash, and a sender list.
+			"change":        changing(),
+			"changefolders": changing("folder/INBOX", "folder/Archive", "folder/Trash"),
+			"changenotrash": changing("folder/INBOX", "folder/Archive"),
+			"changesenders": changing("sender/alice@example.net"),
 		},
 	}
 }
@@ -161,8 +181,13 @@ func newEnvironment(t *testing.T) *environment { return newEnvironmentWith(t, ni
 
 // newEnvironmentWith is newEnvironment with a chance to change the configuration first.
 func newEnvironmentWith(t *testing.T, change func(*config.Config)) *environment {
+	return newEnvironmentCaps(t, nil, change)
+}
+
+// newEnvironmentCaps is newEnvironmentWith for a server with exactly the capabilities in caps.
+func newEnvironmentCaps(t *testing.T, caps imap.CapSet, change func(*config.Config)) *environment {
 	t.Helper()
-	f := newFixture(t)
+	f := newFixtureWith(t, caps)
 	red := &redact.Redactor{}
 	resolver := secret.NewWith(func(name string) string {
 		f.reads.Add(1)
@@ -179,8 +204,17 @@ func newEnvironmentWith(t *testing.T, change func(*config.Config)) *environment 
 }
 
 func (e *environment) invoke(operation, connection, arguments string) (string, error) {
+	return e.call(operation, connection, arguments, false)
+}
+
+// confirmed invokes a changing tool with the request's confirmation.
+func (e *environment) confirmed(operation, connection, arguments string) (string, error) {
+	return e.call(operation, connection, arguments, true)
+}
+
+func (e *environment) call(operation, connection, arguments string, confirm bool) (string, error) {
 	response, err := e.core.Invoke(context.Background(), application.InvokeRequest{
-		Operation: operation, Connection: connection, Arguments: json.RawMessage(arguments),
+		Operation: operation, Connection: connection, Arguments: json.RawMessage(arguments), Confirmed: confirm,
 	})
 	return string(response.Result), err
 }
@@ -206,22 +240,45 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 4 || len(metadata.Profiles) != 1 || !metadata.Profiles[0].Recommended ||
-		metadata.Profiles[0].ID != "read" {
+	if len(metadata.Tools) != 8 || len(metadata.Profiles) != 2 || !metadata.Profiles[0].Recommended ||
+		metadata.Profiles[0].ID != "read" || metadata.Profiles[1].Recommended || metadata.Profiles[1].ID != "organise" {
 		t.Fatalf("tools = %+v, profiles = %+v", metadata.Tools, metadata.Profiles)
 	}
+	effects := map[string]capability.Effect{
+		messagesFlag.ID: capability.EffectUpdate, messagesMove.ID: capability.EffectUpdate,
+		messagesDelete.ID: capability.EffectDelete, messagesExpunge.ID: capability.EffectDelete,
+	}
 	for _, descriptor := range reg.Provider(Provider) {
-		if descriptor.Risk.Effect != capability.EffectRead || descriptor.Risk.Confirmation != capability.ConfirmationNone {
-			t.Errorf("%s risk = %+v, want a read without confirmation", descriptor.ID, descriptor.Risk)
+		want, changes := effects[descriptor.ID]
+		if !changes {
+			if descriptor.Risk.Effect != capability.EffectRead || descriptor.Risk.Confirmation != capability.ConfirmationNone ||
+				descriptor.RequiresToolAllowList {
+				t.Errorf("%s risk = %+v, want a read without confirmation", descriptor.ID, descriptor.Risk)
+			}
+			continue
+		}
+		risk := descriptor.Risk
+		if risk.Effect != want || risk.Confirmation != capability.ConfirmationRequired || !risk.OpenWorld ||
+			risk.DataSensitivity != "infomaniak-mail-messages" || risk.Idempotency == "" ||
+			risk.Idempotency == capability.IdempotencyUnknown || !descriptor.RequiresToolAllowList {
+			t.Errorf("%s risk = %+v, allow list = %t", descriptor.ID, risk, descriptor.RequiresToolAllowList)
 		}
 	}
-	for _, descriptor := range []capability.Descriptor{messagesList, messagesGet, attachmentsGet} {
+	for _, descriptor := range []capability.Descriptor{messagesList, messagesGet, attachmentsGet, messagesFlag,
+		messagesMove, messagesDelete, messagesExpunge} {
 		if descriptor.Risk.DataSensitivity != "infomaniak-mail-messages" {
 			t.Errorf("%s sensitivity = %q", descriptor.ID, descriptor.Risk.DataSensitivity)
 		}
 	}
 	if len(metadata.Profiles[0].Tools) != 4 {
-		t.Errorf("profile tools = %v, want all four", metadata.Profiles[0].Tools)
+		t.Errorf("profile tools = %v, want the four reads", metadata.Profiles[0].Tools)
+	}
+	for _, profile := range metadata.Profiles {
+		for _, id := range profile.Tools {
+			if id == messagesExpunge.ID {
+				t.Errorf("profile %s selects %s, which only a tools list may name", profile.ID, id)
+			}
+		}
 	}
 	if messagesGet.LocalFiles != "" || attachmentsGet.LocalFiles != config.LocalFilesWrite {
 		t.Errorf("local files: messages.get %q, attachments.get %q", messagesGet.LocalFiles, attachmentsGet.LocalFiles)

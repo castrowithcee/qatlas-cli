@@ -4,7 +4,9 @@ description: >
   required mailbox target and the optional folder and sender allow-lists, the folder, message-envelope,
   message-text, and attachment reads, the read-only EXAMINE and BODY.PEEK access, UID binding to folder and
   UIDVALIDITY, the fixed search criteria, the text, attachment, and size caps, the local file release for
-  attachments, and the boundaries of what this provider reads.
+  attachments, the four confirmed message changes (flag, move, trash, expunge) with their risk, permissions,
+  tools list requirement, trash folder detection, and unclear-outcome rule, and the boundaries of what this
+  provider does.
 type: knowledge
 edit: shared
 created: 2026-10-01
@@ -15,8 +17,8 @@ updated: 2026-10-03
 
 Infomaniak Mail is a provider for exactly one Infomaniak mailbox over IMAP. It lists the mailbox's folders
 and the envelopes of the messages in a folder, reads one message with a bounded text and its attachment list,
-and reads one attachment. It is read-only: it changes no flag, moves, drafts, or deletes nothing, and sends
-nothing.
+and reads one attachment. Reading changes nothing. Four separate, confirmed tools change one message: set or
+clear a flag, move it, move it to the trash, or remove it for good. It drafts nothing and sends nothing.
 
 ## Configuration
 
@@ -82,8 +84,14 @@ would match).
 | `infomaniakmail.messages.list` | read | none | envelopes of the newest matching messages of one folder |
 | `infomaniakmail.messages.get` | read | none | one message: envelope, bounded text, attachment metadata |
 | `infomaniakmail.attachments.get` | read | none | one attachment, inline as base64 or written to a local file |
+| `infomaniakmail.messages.flag` | update | required | sets or removes `seen` or `flagged` on one message |
+| `infomaniakmail.messages.move` | update | required | moves one message to another folder of the connection |
+| `infomaniakmail.messages.delete` | delete | required | moves one message to the trash folder |
+| `infomaniakmail.messages.expunge` | delete | required | removes one message for good |
 
-The one recommended profile, `read`, offers all four tools. A connection needs the `read` permission.
+The recommended profile, `read`, offers the four reads and needs the `read` permission. The profile `organise`
+is not recommended; it adds `messages.flag`, `messages.move`, and `messages.delete`, so it needs `update` and
+`delete`. No profile contains `messages.expunge`: it is offered only when the connection's tools list names it.
 `attachments.get` declares local file access like every tool that can write a local file, so it is offered
 only to a connection that releases a directory under `files.write`, also for an inline read; `messages.get`
 needs no release.
@@ -167,12 +175,76 @@ cannot be asked for. A part that is no attachment is `not-found`.
 - Both modes read the content with `BODY.PEEK[part]` and decode base64 and quoted-printable; an encoding that is
   not defined, or content that does not decode, is an `invalid-provider-response`.
 
+## Changing a message
+
+The four change tools take `folder`, `uid`, and `uidvalidity` as the reads do, all required, plus:
+
+| Tool | Further arguments | Answer |
+| --- | --- | --- |
+| `messages.flag` | `flag`: `seen` or `flagged`; `set`: `true` sets, `false` removes | `folder`, `uidvalidity`, `uid`, `flag`, `set`, and the `flags` the server reports after the change |
+| `messages.move` | `destination`: the exact name of another folder | `folder`, `uidvalidity`, `uid`, `destination`, and `destination_uid` with `destination_uidvalidity` when the server reports them |
+| `messages.delete` | none | as `messages.move`, with the trash folder as `destination` |
+| `messages.expunge` | none | `folder`, `uidvalidity`, `uid` |
+
+Rules that hold for every change:
+
+- **Risk.** Each carries a complete risk: `flag` is `update` and idempotent; `move` is `update`, `delete` and
+  `expunge` are `delete`, and all three are non-idempotent. All are confirmed (the request needs `confirm`),
+  open-world, and of the class `infomaniak-mail-messages`.
+- **Tools list.** All four require the connection's tools list, whatever the permissions: a connection without
+  a `tools` list offers none of them. `delete` and `expunge` because they remove a message from its folder or
+  from the mailbox; `move` because it changes the UID and folder of a message, which every earlier reference
+  loses; `flag` is held to the same rule because it changes mailbox state the person sees in every client, and
+  the rule is the narrower of the two readings.
+- **Folders.** The source folder and, for `move`, the destination must both be inside the folder targets. A
+  folder outside them, a destination equal to the source, a wildcard, and a missing `uid` or `uidvalidity` are
+  refused as invalid requests **before** a secret is read and before any connection is opened, without naming
+  the foreign or any allowed folder. After the folder is opened, the `uidvalidity` is compared and the sender
+  list applies: a message from a sender outside the list answers `not-found`, exactly like a missing UID,
+  and nothing changes.
+- **SELECT, not EXAMINE.** A change opens its folder with `SELECT`; the message is read with `ENVELOPE`,
+  `FLAGS`, `RFC822.SIZE`, and `BODYSTRUCTURE` only, so preparing the change sets no flag. Reads keep using
+  `EXAMINE`.
+- **Fixed values.** Only `seen` and `flagged` can be changed, mapped by the provider to `\Seen` and
+  `\Flagged`; the IMAP flag never comes from an argument. No IMAP command, folder pattern, or search string
+  comes from an argument.
+- **One change, no retry.** After the reading preparation, a change sends exactly one changing request
+  (`UID STORE`, or `UID MOVE`); `expunge` sends the one `UID STORE +FLAGS.SILENT \Deleted` that `UID EXPUNGE`
+  needs, then `UID EXPUNGE` for the same UID. A tagged `NO` or `BAD` means nothing was changed. A timeout, a
+  dropped connection, a server `BYE`, or an unreadable answer leaves the outcome unknown; the error then says
+  that the change may have been applied and is never repeated by Qatlas. If `expunge` fails after its
+  `STORE`, the error says the message may be marked deleted without being removed.
+- **Server features.** `move` and `delete` need `MOVE`; `expunge` needs `UIDPLUS`. A server that lacks one is
+  refused with a `provider-error` that says nothing was changed. The library's fallback (`COPY`, mark, and a
+  folder-wide `EXPUNGE`) is never used.
+
+**Trash.** `messages.delete` moves the message to the one folder the server marks with the SPECIAL-USE attribute
+`\Trash` in `LIST`. No folder is chosen by name. If the server does not offer `SPECIAL-USE`, marks no folder or
+more than one as `\Trash`, or the trash folder is outside the connection's folder targets, the call is
+refused as an invalid request without naming a folder and nothing is sent that changes the mailbox. A message
+that is already in the trash folder is not deleted again; use `messages.expunge`.
+
+**Expunge.** `messages.expunge` removes one UID for good and cannot be undone. It marks only that message
+`\Deleted` and sends `UID EXPUNGE` for that one UID, never a plain `EXPUNGE`, so other messages that are
+marked `\Deleted` stay.
+
+```yaml
+connections:
+  customer-a-inbox:
+    service: infomaniak-mail
+    credential: customer-a-mail
+    permissions: [read, update, delete]
+    targets: [mailbox/office@example.com, folder/INBOX, folder/Archive, folder/Trash]
+    tools: [infomaniakmail.messages.list, infomaniakmail.messages.get, infomaniakmail.messages.flag,
+            infomaniakmail.messages.move, infomaniakmail.messages.delete]
+```
+
 ## Reading changes nothing
 
 Folders are opened with `EXAMINE`; envelopes, flags, size, and structure are fetched with `ENVELOPE`, `FLAGS`,
-`RFC822.SIZE`, and `BODYSTRUCTURE`; content only with `BODY.PEEK[part]`. None of them sets `\Seen`, and no
-`STORE`, `SELECT`, or non-peeking `BODY[...]` is ever sent; the tests check the commands on the wire and the
-flags of the messages afterwards. No free IMAP command, section, host, or search string comes from an
+`RFC822.SIZE`, and `BODYSTRUCTURE`; content only with `BODY.PEEK[part]`. None of them sets `\Seen`, and the read
+tools never send `STORE`, `SELECT`, or a non-peeking `BODY[...]`; the tests check the commands on the wire and
+the flags of the messages afterwards. No free IMAP command, section, host, or search string comes from an
 argument.
 
 ## Errors
@@ -190,10 +262,12 @@ does the password.
 | `timeout` | the server did not answer in time (30 seconds per operation, 30 minutes for an attachment written to a local file) |
 | `rate-limited` | a rate limit asks to wait longer than the request may take |
 | `invalid-provider-response` | an answer lacked an envelope, structure, or part, or an attachment did not decode |
-| `provider-error` | every other rejection |
+| `provider-error` | every other rejection, and a server without `MOVE` or `UIDPLUS` for a change that needs it |
 
 A folder or sender outside the connection's targets, a malformed argument, an inline attachment above 4 MiB,
-and a `uidvalidity` that no longer matches are invalid requests, never provider errors. Replacing an existing
+a `uidvalidity` that no longer matches, and a trash folder that cannot be identified inside the targets are
+invalid requests, never provider errors. A change whose outcome is unknown reports that it may have been
+applied, with the class of the failure (`timeout` or `unreachable`). Replacing an existing
 local file without confirmation asks for the confirmation.
 
 ## Untrusted data
@@ -207,7 +281,8 @@ derived from them. Each operation opens one connection and closes it; a failed l
 
 ## Boundary
 
-This provider lists folders and message envelopes, reads one message's text and attachment list, and reads one
-attachment. It does not change flags, move, copy, draft, or delete messages, create or rename folders, or send
-mail (SMTP); those are out of scope. It looks into no attached message (`message/rfc822`), renders no HTML, and
+This provider lists folders and message envelopes, reads one message's text and attachment list, reads one
+attachment, and changes one message at a time: `seen` or `flagged`, a move to a folder of the connection, a
+move to the trash, or removal for good. It sets no other flag, never expunges a whole folder, and does not
+copy, append, or draft messages, create, rename, or delete folders, or send mail (SMTP); those are out of scope. It looks into no attached message (`message/rfc822`), renders no HTML, and
 follows no link.

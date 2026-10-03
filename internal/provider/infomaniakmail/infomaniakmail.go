@@ -1,8 +1,10 @@
-// Package infomaniakmail implements read-only access to exactly one Infomaniak mailbox over IMAP. It lists
+// Package infomaniakmail implements access to exactly one Infomaniak mailbox over IMAP. It lists
 // the folders of the mailbox and the envelope data of its messages (UID, date, From, To, Subject, flags, and
 // size), reads one message with a bounded text part and the metadata of its attachments, and reads one
-// attachment, inline up to a fixed size or into a local file the connection releases for writing. It changes
-// no flag, moves nothing, and sends nothing.
+// attachment, inline up to a fixed size or into a local file the connection releases for writing. Four
+// confirmed tools change one message: messages.flag sets or clears \Seen or \Flagged, messages.move moves it
+// to another folder, messages.delete moves it to the trash folder, and messages.expunge removes it for good.
+// It drafts nothing, sends nothing, stores nothing, and never creates, renames, or deletes a folder.
 //
 // The connection always goes to the fixed host mail.infomaniak.com on port 993 with implicit TLS and
 // certificate verification. No host, port, or TLS switch comes from configuration or from an argument; only
@@ -16,12 +18,21 @@
 // refusal never names the folder that is allowed. The sender list is applied locally to the parsed From
 // address of every message; an IMAP SEARCH on its own is never trusted for it.
 //
-// A folder is opened with EXAMINE, never SELECT, so a read cannot change a message's \Seen flag. Envelopes
+// A folder is opened with EXAMINE for every read, so a read cannot change a message's \Seen flag. Envelopes
 // are fetched with ENVELOPE and BODYSTRUCTURE, and content only with BODY.PEEK[part], none of which ever
 // marks a message seen. A part is addressed only by a part number taken from the message's own
 // BODYSTRUCTURE, never by a section that comes from an argument. A UID is meaningful only together
 // with its folder and the folder's UIDVALIDITY: every listing names both, and a later request that refers to
 // a UID must repeat the UIDVALIDITY, which must still match.
+//
+// A change opens its folder with SELECT, compares the UIDVALIDITY, and reads the message through the sender
+// list before it sends exactly one changing request: STORE, UID MOVE, or, for expunge, the \Deleted mark of
+// that one UID followed by UID EXPUNGE for the same UID. The mutation tools are offered only through a
+// connection's tools list. Both the source folder and a destination folder must be inside the folder targets.
+// The trash folder is the one folder the server marks with the SPECIAL-USE attribute \Trash and is never
+// guessed by name. A server without MOVE or UIDPLUS is refused instead of falling back to COPY and a
+// folder-wide EXPUNGE. A change whose outcome is unknown (timeout, dropped connection, unreadable answer) is
+// never repeated; the error says it may have been applied.
 //
 // SEARCH uses fixed, typed criteria only (a since and before date, unread, and one validated sender address).
 // No free search string and no raw IMAP command ever comes from an argument. The UID window and the number
@@ -317,12 +328,14 @@ func validBaseURL(raw string) error {
 	return nil
 }
 
-// Register adds Infomaniak Mail metadata, its connection test, and its read operations.
+// Register adds Infomaniak Mail metadata, its connection test, its read operations, and its four
+// message changes.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak Mail", DefaultBaseURL: defaultURL, ValidateBaseURL: validBaseURL,
 		DefaultPermissions: []config.Permission{config.PermissionRead},
-		Description:        "Infomaniak mailbox over IMAP, folders, message envelopes, bodies, and attachments read for one mailbox",
+		Description: "Infomaniak mailbox over IMAP, folders, message envelopes, bodies, and attachments read for " +
+			"one mailbox, plus confirmed flag, move, trash, and expunge changes of one message",
 		SecretRoles: []config.SecretRole{{
 			Name: roleMailPassword,
 			Description: "Mailbox password created in the Infomaniak Manager for this mailbox; the login name is " +
@@ -361,6 +374,13 @@ func Register(reg *capability.Registry) error {
 				"message with a bounded text and its attachment list, and reads one attachment inline or into a " +
 				"released local file; changes nothing in the mailbox, not even a Seen flag",
 			Tools: []string{foldersList.ID, messagesList.ID, messagesGet.ID, attachmentsGet.ID},
+		}, {
+			ID: "organise", Title: "Read and organise messages",
+			Description: "also sets or clears Seen and Flagged, moves a confirmed message to another folder " +
+				"of the connection, and moves a confirmed message to the trash folder; never removes a " +
+				"message for good, which only a tools list naming messages.expunge allows",
+			Tools: []string{foldersList.ID, messagesList.ID, messagesGet.ID, attachmentsGet.ID, messagesFlag.ID,
+				messagesMove.ID, messagesDelete.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -370,6 +390,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: messagesList, Handler: capability.Handler(invokeMessagesList)},
 		capability.Operation{Descriptor: messagesGet, Handler: capability.Handler(invokeMessagesGet)},
 		capability.Operation{Descriptor: attachmentsGet, Handler: capability.Handler(invokeAttachmentsGet)},
+		capability.Operation{Descriptor: messagesFlag, Handler: capability.Handler(invokeMessagesFlag)},
+		capability.Operation{Descriptor: messagesMove, Handler: capability.Handler(invokeMessagesMove)},
+		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
+		capability.Operation{Descriptor: messagesExpunge, Handler: capability.Handler(invokeMessagesExpunge)},
 	)
 }
 
