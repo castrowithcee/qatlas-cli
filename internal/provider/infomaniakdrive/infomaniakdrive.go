@@ -6,18 +6,18 @@
 // connection lists explicitly, moves one file or folder to the trash, deletes one trash entry for good,
 // empties the trash, creates, changes, or deletes the share link of one file or folder, or grants, changes, or
 // revokes the access of users, teams, and invited e-mail addresses to one file or folder. Each of these
-// changes needs an explicit confirmation and is never repeated after an unclear outcome; every request of
-// it is sent once. The trash is read by its own tool, and the share links are read by two more: one link of
-// a file or folder, and the files of a drive that have one. A share link is an access path to the content
-// for whoever holds its URL, so its URL has its own data sensitivity class and is returned only as an https
-// string, and the password of a protected link is registered with the redactor before any request, is only
-// ever sent to Infomaniak, and is never returned, even when a provider answer carries one. The access of a
-// file or folder is read by one tool and changed by three: the read and every change need an explicit tools
-// list, because who may reach a file is personal data and a change widens or narrows that reach. Before a
-// change names a user or a team, it is proven to belong to the same drive by reading the drive's users, and a
-// foreign or unprovable one is refused without being named; an e-mail address is syntax-checked, is
-// invited by Infomaniak with a mail, and is never quoted in an error. No other share, invitation, or access
-// operation is exposed.
+// changes needs an explicit confirmation and is never repeated after an unclear outcome; every request of it
+// is sent once. The trash is read by its own tool, and the share links are read by two more, which a
+// connection must list explicitly: one link of a file or folder, and the files of a drive that have one. A
+// share link is an access path to the content for whoever holds its URL, so its URL has its own data
+// sensitivity class and is returned only as an https string, and the password of a protected link is
+// registered with the redactor before any request, is only ever sent to Infomaniak, and is never returned,
+// even when a provider answer carries one. The access of a file or folder is read by one tool and changed by
+// three: the read and every change need an explicit tools list, because who may reach a file is personal data
+// and a change widens or narrows that reach. Before a change names a user or a team, it is proven to belong to
+// the same drive by reading the drive's users, and a foreign or unprovable one is refused without being named;
+// an e-mail address is syntax-checked, is invited by Infomaniak with a mail, and is never quoted in an error.
+// No other share, invitation, or access operation is exposed.
 //
 // Infomaniak groups many products behind one account model where a single API token can reach every account
 // and every kDrive its owner administers, which matters for a person who holds tokens of several customers. A

@@ -130,9 +130,10 @@ var linksGet = capability.Descriptor{
 	Title:   "Get the Infomaniak kDrive share link of a file or folder",
 	Description: "Read the share link of exactly one file or folder of a drive this connection may reach; the URL " +
 		"is access to the content and the password is never returned; a file without a link is not found",
-	Tags:     []string{"infomaniak", "kdrive", "links", "share", "get"},
-	Risk:     linkReadRisk,
-	Provider: Provider,
+	Tags:                  []string{"infomaniak", "kdrive", "links", "share", "get"},
+	Risk:                  linkReadRisk,
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` +
 		objectIDSchema + `},"required":["drive_id","file_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(linkResultSchema),
@@ -148,9 +149,10 @@ var linksList = capability.Descriptor{
 	Title:   "List the Infomaniak kDrive files that have a share link",
 	Description: "List the files and folders of one drive this connection may reach that have a share link, one " +
 		"page at a time with an opaque cursor; the URLs are access to the content and no password is returned",
-	Tags:     []string{"infomaniak", "kdrive", "links", "share", "list"},
-	Risk:     linkReadRisk,
-	Provider: Provider,
+	Tags:                  []string{"infomaniak", "kdrive", "links", "share", "list"},
+	Risk:                  linkReadRisk,
+	Provider:              Provider,
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,` +
 		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxCursorLength) + `},` +
 		`"limit":{"type":"integer","minimum":` + strconv.Itoa(minListLimit) + `,"maximum":` + strconv.Itoa(maxListLimit) + `}},` +

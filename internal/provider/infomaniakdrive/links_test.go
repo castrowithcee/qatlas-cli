@@ -62,20 +62,21 @@ func linkCases() []linkCase {
 }
 
 func TestLinkDescriptors(t *testing.T) {
+	// Every link tool needs the tools list, the reading ones too: a link URL is access for whoever holds it.
 	want := map[string]struct {
-		effect capability.Effect
-		list   bool
+		effect  capability.Effect
+		confirm bool
 	}{linksGet.ID: {capability.EffectRead, false}, linksList.ID: {capability.EffectRead, false},
 		linksCreate.ID: {capability.EffectCreate, true}, linksUpdate.ID: {capability.EffectUpdate, true},
 		linksDelete.ID: {capability.EffectDelete, true}}
 	for _, d := range []capability.Descriptor{linksGet, linksList, linksCreate, linksUpdate, linksDelete} {
 		w := want[d.ID]
 		r := d.Risk
-		if r.Effect != w.effect || d.RequiresToolAllowList != w.list || r.OpenWorld != true ||
+		if r.Effect != w.effect || !d.RequiresToolAllowList || r.OpenWorld != true ||
 			r.DataSensitivity != linkSensitivity || r.DataSensitivity == dataSensitivity {
 			t.Errorf("%s = %+v list=%v", d.ID, r, d.RequiresToolAllowList)
 		}
-		if w.list && r.Confirmation != capability.ConfirmationRequired || !w.list && r.Confirmation != capability.ConfirmationNone {
+		if w.confirm && r.Confirmation != capability.ConfirmationRequired || !w.confirm && r.Confirmation != capability.ConfirmationNone {
 			t.Errorf("%s confirmation = %s", d.ID, r.Confirmation)
 		}
 	}

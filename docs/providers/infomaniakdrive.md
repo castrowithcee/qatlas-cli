@@ -24,8 +24,8 @@ copies one file or folder inside one drive, uploads one file or replaces the con
 trash entry, each only after an explicit confirmation. It reads the trash too. Moving a file or folder to the
 trash, deleting a trash entry for good, and emptying the trash are separate tools that need the `delete`
 permission and an explicit tools list. It reads the share link of a file or folder and lists the files that have
-one; creating, changing, and deleting a share link are separate, confirmed tools that also need an explicit tools
-list. It reads the access of a file or folder and grants, changes, or revokes the access of users, teams, and
+one; creating, changing, and deleting a share link are separate, confirmed tools, and all share link tools,
+the reading ones included, need an explicit tools list. It reads the access of a file or folder and grants, changes, or revokes the access of users, teams, and
 invited e-mail addresses to it; these are separate tools that each need an explicit tools list, and a user or
 team is only named after it is proven to belong to the same drive.
 
@@ -123,7 +123,8 @@ are `read`, safe, and need no confirmation. `folders.create` and `files.copy` ha
 `delete`, and each of them requires the tool allow-list: no permission alone offers it, a connection must name
 the tool in its `tools` list. `links.create` has the effect `create`, `links.update` the effect `update`, and
 `links.delete` the effect `delete`; a share link is access for whoever holds its URL, so all three require the
-tool allow-list as well, whichever right the link has. `access.get` is `read` and safe, but it discloses people and
+tool allow-list as well, whichever right the link has. `links.get` and `links.list` are `read` and safe, but
+their URLs are that same access, so they require the tool allow-list too. `access.get` is `read` and safe, but it discloses people and
 their rights, so it requires the tool allow-list too. `access.grant` has the effect `create`, `access.update` the
 effect `update`, and `access.revoke` the effect `delete`; all three widen or narrow who reaches a file, so all
 three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.update`, `links.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` can mail people, so it is not. The provider's default
