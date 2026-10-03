@@ -5,8 +5,9 @@
 // confirmed tools change one message: messages.flag sets or clears \Seen or \Flagged, messages.move moves it
 // to another folder, messages.delete moves it to the trash folder, and messages.expunge removes it for good.
 // Three confirmed tools keep drafts in the drafts folder: drafts.create stores a new draft, drafts.update
-// replaces one, and drafts.delete removes one for good. It sends nothing, stores nothing else, and never
-// creates, renames, or deletes a folder.
+// replaces one, and drafts.delete removes one for good. Two confirmed tools send: messages.send sends a new
+// message or a reply and drafts.send sends a checked draft. Apart from the copy of a sent message in the Sent
+// folder it stores nothing else, and it never creates, renames, or deletes a folder.
 //
 // The connection always goes to the fixed host mail.infomaniak.com on port 993 with implicit TLS and
 // certificate verification. No host, port, or TLS switch comes from configuration or from an argument; only
@@ -44,6 +45,20 @@
 // must be inside the folder targets. drafts.update stores the new draft first and then removes the old UID
 // with UID EXPUNGE (UIDPLUS is checked before anything is written); drafts.update and drafts.delete touch
 // only a message that carries \Draft. Nothing is sent, and an outcome that is unknown is never repeated.
+//
+// A message is sent over SMTP to the fixed host mail.infomaniak.com on port 587, see dialSMTP. STARTTLS is
+// mandatory and the certificate is verified like the IMAP one; the login (the mailbox address and the same
+// mailbox password) is sent only after TLS, and a server without STARTTLS is abandoned before any credential
+// leaves. From and the envelope sender are the connection's mailbox, which must be inside the sender targets
+// when there are any; recipients are the typed To, Cc, and Bcc only, and Bcc appears in no header. A reply
+// carries In-Reply-To and References as validated Message-IDs. messages.send and drafts.send are tools that
+// each need a tools list. The submission has exactly one DATA transfer and is never repeated: a failure
+// before its end means nothing was sent, a refusal by reply code after it means the server declined the
+// message, and any other failure after it is reported as maybe sent. The Sent folder (the one SPECIAL-USE \Sent
+// folder inside the folder targets) is identified before anything is sent; afterwards the sent message,
+// without a Bcc header, is stored there with \Seen, and a failed copy is reported without undoing the send.
+// drafts.send reads the draft with BODY.PEEK, accepts only the structure the draft tools write, rewrites its
+// headers from checked values, drops Bcc, and leaves the draft in place.
 //
 // SEARCH uses fixed, typed criteria only (a since and before date, unread, and one validated sender address).
 // No free search string and no raw IMAP command ever comes from an argument. The UID window and the number
@@ -340,13 +355,13 @@ func validBaseURL(raw string) error {
 }
 
 // Register adds Infomaniak Mail metadata, its connection test, its read operations, its four
-// message changes, and its three draft changes.
+// message changes, its three draft changes, and its two sending tools.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak Mail", DefaultBaseURL: defaultURL, ValidateBaseURL: validBaseURL,
 		DefaultPermissions: []config.Permission{config.PermissionRead},
-		Description: "Infomaniak mailbox over IMAP: folders, envelopes, messages, attachments, plus confirmed " +
-			"message changes and drafts with attachments for one mailbox",
+		Description: "Infomaniak mailbox over IMAP and SMTP: folders, envelopes, messages, attachments, plus " +
+			"confirmed message changes, drafts with attachments, and confirmed sending for one mailbox",
 		SecretRoles: []config.SecretRole{{
 			Name: roleMailPassword,
 			Description: "Mailbox password created in the Infomaniak Manager for this mailbox; the login name is " +
@@ -415,6 +430,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
 		capability.Operation{Descriptor: draftsUpdate, Handler: capability.Handler(invokeDraftsUpdate)},
 		capability.Operation{Descriptor: draftsDelete, Handler: capability.Handler(invokeDraftsDelete)},
+		capability.Operation{Descriptor: messagesSend, Handler: capability.Handler(invokeMessagesSend)},
+		capability.Operation{Descriptor: draftsSend, Handler: capability.Handler(invokeDraftsSend)},
 	)
 }
 

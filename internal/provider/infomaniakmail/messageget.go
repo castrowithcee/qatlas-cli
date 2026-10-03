@@ -47,6 +47,7 @@ var messagesGet = capability.Descriptor{
 		`"date":{"type":"string"},"from":{"type":"array","items":` + addressSchema + `},` +
 		`"to":{"type":"array","items":` + addressSchema + `},` +
 		`"subject":{"type":"string"},"flags":{"type":"array","items":{"type":"string"}},"size":{"type":"integer"},` +
+		`"message_id":{"type":"string"},` +
 		`"body":{"type":"string"},"body_type":{"type":"string"},"body_truncated":{"type":"boolean"},` +
 		`"attachments":{"type":"array","items":{"type":"object","properties":{` +
 		`"part":{"type":"string"},"name":{"type":"string"},"type":{"type":"string"},"size":{"type":"integer"}},` +
@@ -66,6 +67,8 @@ var messagesGet = capability.Descriptor{
 			" characters; untrusted"},
 		{Name: "flags", Description: "IMAP flags of the message, unchanged by this read"},
 		{Name: "size", Description: "Message size in bytes"},
+		{Name: "message_id", Description: "Message-ID header as <id@host>, when it is well formed; usable as " +
+			"in_reply_to of messages.send; untrusted"},
 		{Name: "body", Description: "Decoded text of the message, cleaned of control characters and bounded to " +
 			strconv.Itoa(maxBodyChars) + " characters; untrusted"},
 		{Name: "body_type", Description: "text/plain or text/html; empty when the message has no text part"},
@@ -84,6 +87,7 @@ type MessageContent struct {
 	Folder      string `json:"folder"`
 	UIDValidity uint32 `json:"uidvalidity"`
 	Message
+	MessageID            string       `json:"message_id,omitempty"`
 	Body                 string       `json:"body"`
 	BodyType             string       `json:"body_type,omitempty"`
 	BodyTruncated        bool         `json:"body_truncated"`
@@ -153,6 +157,10 @@ func (c *Client) GetMessage(ctx context.Context, ref messageRef) (*MessageConten
 	result := &MessageContent{
 		Folder: ref.folder, UIDValidity: ref.uidValidity,
 		Message: messageOf(loaded.uid, loaded.envelope, loaded.flags, loaded.size), Attachments: []Attachment{},
+	}
+	// The client library hands the ID over without its angle brackets.
+	if id := "<" + loaded.envelope.MessageID + ">"; validMessageID(id) {
+		result.MessageID = id
 	}
 	parts := partsOf(loaded.structure)
 	body := bodyPartOf(parts)

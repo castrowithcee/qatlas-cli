@@ -55,6 +55,14 @@ type draftSpec struct {
 	subject     string
 	body        string
 	attachments []draftAttachment
+	// id is the Message-ID; empty means a fresh one is generated.
+	id string
+	// inReplyTo and references are validated Message-IDs of a reply.
+	inReplyTo  string
+	references []string
+	// hideBcc leaves the Bcc header out, as a message that is sent must; the Bcc recipients then travel only
+	// in the envelope.
+	hideBcc bool
 }
 
 // mediaTypePattern is a plain type/subtype without parameters.
@@ -130,6 +138,18 @@ func addressHeader(name string, addresses []string) string {
 	return name + ": " + strings.Join(addresses, ",\r\n ") + "\r\n"
 }
 
+// replyHeaders writes In-Reply-To and References for validated Message-IDs, one ID per line in References.
+func replyHeaders(inReplyTo string, references []string) string {
+	out := ""
+	if inReplyTo != "" {
+		out += "In-Reply-To: " + inReplyTo + "\r\n"
+	}
+	if len(references) > 0 {
+		out += "References: " + strings.Join(references, "\r\n ") + "\r\n"
+	}
+	return out
+}
+
 // base64Lines encodes data as base64 in lines of 76 characters.
 func base64Lines(data []byte) []byte {
 	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
@@ -172,9 +192,12 @@ func messageID(from string) (string, error) {
 // the text as quoted-printable UTF-8, and each attachment as a base64 part. The headers Qatlas writes are
 // the only headers; no header ever comes from an argument as such.
 func (d draftSpec) build() ([]byte, []DraftAttachment, error) {
-	id, err := messageID(d.from)
-	if err != nil {
-		return nil, nil, errors.New("no message ID could be generated")
+	id := d.id
+	if id == "" {
+		var err error
+		if id, err = messageID(d.from); err != nil {
+			return nil, nil, errors.New("no message ID could be generated")
+		}
 	}
 	text, err := quotedPrintable(d.body)
 	if err != nil {
@@ -184,10 +207,13 @@ func (d draftSpec) build() ([]byte, []DraftAttachment, error) {
 	out.WriteString("From: " + d.from + "\r\n")
 	out.WriteString(addressHeader("To", d.to))
 	out.WriteString(addressHeader("Cc", d.cc))
-	out.WriteString(addressHeader("Bcc", d.bcc))
+	if !d.hideBcc {
+		out.WriteString(addressHeader("Bcc", d.bcc))
+	}
 	out.WriteString("Subject: " + foldWords(mime.QEncoding.Encode("utf-8", d.subject)) + "\r\n")
 	out.WriteString("Date: " + now().Format(time.RFC1123Z) + "\r\n")
 	out.WriteString("Message-ID: " + id + "\r\n")
+	out.WriteString(replyHeaders(d.inReplyTo, d.references))
 	out.WriteString("MIME-Version: 1.0\r\n")
 
 	if len(d.attachments) == 0 {

@@ -7,7 +7,10 @@ description: >
   attachments, the four confirmed message changes (flag, move, trash, expunge) with their risk, permissions,
   tools list requirement, trash folder detection, and unclear-outcome rule, the three confirmed draft tools
   (create, update, delete) with their typed fields, attachments, header-injection protection, drafts folder
-  detection, replacement sequence, limits, and profile, and the boundaries of what this provider does.
+  detection, replacement sequence, limits, and profile, the two confirmed sending tools (messages.send,
+  drafts.send) with the fixed SMTP endpoint and mandatory STARTTLS, sender binding, Bcc handling, reply headers,
+  draft validation, the Sent folder copy, the once-only rule after the end of DATA, risk, tools list
+  requirement, and profile exclusion, and the boundaries of what this provider does.
 type: knowledge
 edit: shared
 created: 2026-10-01
@@ -20,13 +23,14 @@ Infomaniak Mail is a provider for exactly one Infomaniak mailbox over IMAP. It l
 and the envelopes of the messages in a folder, reads one message with a bounded text and its attachment list,
 and reads one attachment. Reading changes nothing. Four separate, confirmed tools change one message: set or
 clear a flag, move it, move it to the trash, or remove it for good. Three more confirmed tools keep drafts in the drafts folder: create one with
-attachments, replace one, or remove one for good. It sends nothing.
+attachments, replace one, or remove one for good. Two further confirmed tools send mail over SMTP: a new
+message or reply, and a checked draft. See [Sending](#sending).
 
 ## Configuration
 
 The connection always goes to `mail.infomaniak.com` on port 993 with implicit TLS, a verified certificate,
 and TLS 1.2 or newer ([Infomaniak's IMAP settings](https://www.infomaniak.com/en/support/faq/2427/sync-your-emails-across-all-your-devices)).
-No host, port, or TLS switch comes from the configuration or from a tool argument. `base_url` may be left out;
+Sending uses the fixed SMTP endpoint `mail.infomaniak.com:587` with mandatory STARTTLS. No host, port, or TLS switch comes from the configuration or from a tool argument. `base_url` may be left out;
 if it is set, it must be `https://mail.infomaniak.com`, and the IMAP host is never taken from it. The
 Infomaniak REST mail API plays no part here.
 
@@ -93,6 +97,8 @@ would match).
 | `infomaniakmail.drafts.create` | create | required | stores one new draft with attachments in the drafts folder |
 | `infomaniakmail.drafts.update` | update | required | replaces one draft by a new one |
 | `infomaniakmail.drafts.delete` | delete | required | removes one draft for good |
+| `infomaniakmail.messages.send` | create | required | sends one new message or reply over SMTP and stores a copy in the Sent folder |
+| `infomaniakmail.drafts.send` | create | required | sends one checked draft over SMTP and stores a copy in the Sent folder |
 
 The recommended profile, `read`, offers the four reads and needs the `read` permission. The profile `organise`
 is not recommended; it adds `messages.flag`, `messages.move`, and `messages.delete`, so it needs `update` and
@@ -101,7 +107,9 @@ The profile `draft` is not recommended either; it adds `drafts.create` and `draf
 `create` and `update`. No profile contains `drafts.delete` or `messages.expunge`. `drafts.create` and
 `drafts.update` declare local file access for reading and are offered only to a connection that releases a
 directory under `files.read`, also for a draft without attachments or with inline ones; `drafts.delete` needs no
-release. `attachments.get` declares local file access like every tool that can write a local file, so it is offered
+release. `messages.send` and `drafts.send` are in no profile at all: like `messages.expunge` they are offered
+only when the connection's tools list names them, and they need the `create` permission; `messages.send`
+declares local file access for reading like `drafts.create`, `drafts.send` needs no release. `attachments.get` declares local file access like every tool that can write a local file, so it is offered
 only to a connection that releases a directory under `files.write`, also for an inline read; `messages.get`
 needs no release.
 
@@ -145,6 +153,7 @@ request. It answers the envelope fields of `messages.list` plus:
 
 | Field | Meaning |
 | --- | --- |
+| `message_id` | the `Message-ID` header as `<id@host>`, when it is well formed; the value for `in_reply_to` of `messages.send` |
 | `body`, `body_type` | the decoded text, and `text/plain` or `text/html`; empty when the message has no text part |
 | `body_truncated` | true when the text was cut at its limit |
 | `attachments` | `part`, `name`, `type`, `size` of each attachment, at most 50 |
@@ -318,6 +327,89 @@ connections:
             infomaniakmail.drafts.update]
 ```
 
+## Sending
+
+`messages.send` sends a new message or a reply; `drafts.send` sends an existing draft. Both submit the message
+over SMTP and then store a copy in the Sent folder.
+
+| Tool | Arguments | Answer |
+| --- | --- | --- |
+| `messages.send` | the fields of a draft (`to`, `cc`, `bcc`, `subject`, `body`, `attachments`) plus `in_reply_to` and `references` | `message_id`, `recipients`, `size`, `copy_stored`, `sent_folder`, `sent_uidvalidity`, `sent_uid`, `note`, and per attachment `name`, `type`, `size`, `sha256` |
+| `drafts.send` | `folder`, `uid`, `uidvalidity` of the draft | the same, with `draft_kept: true` |
+
+- **Endpoint.** SMTP goes only to `mail.infomaniak.com:587`. The client reads the greeting, says EHLO, and
+  requires `STARTTLS`; the certificate and host name are verified like the IMAP ones (TLS 1.2 or newer). A server
+  that does not offer STARTTLS, or a handshake that fails, ends the call **before** `AUTH`, so no credential
+  and no message leaves in plain text. `AUTH PLAIN` (or `AUTH LOGIN` when PLAIN is not offered) follows only
+  inside TLS, with the mailbox address and the same mailbox password as the IMAP login; the password stays in
+  the redactor and never appears in an error. No server text is copied into an error.
+- **Sender binding.** `From` is the mailbox of the connection and nothing else, and it is also the envelope
+  sender (`MAIL FROM`). There is no `from` argument. A connection with sender targets must list its own
+  mailbox, otherwise nothing is sent (the narrower reading: the mailbox is the only sender, so the list can
+  only allow or forbid sending as a whole). `drafts.send` additionally refuses a draft whose `From` is not that
+  mailbox.
+- **Recipients and Bcc.** The envelope recipients are the typed `to`, `cc`, and `bcc` only, at most 50 together,
+  plain addresses without display names, each once (compared case-insensitively). `Bcc` is never written into
+  the sent message: those addresses are only `RCPT TO`. The stored copy is the sent message and therefore has
+  no `Bcc` header either (the copy does not record the Bcc recipients; this is the narrower reading).
+  No envelope address, host, or header comes from an argument other than these fields.
+- **Replies.** `in_reply_to` is one Message-ID `<id@host>`; `references` is a list of up to 20 such IDs, oldest
+  first, and needs `in_reply_to`; without it `References` is `in_reply_to` alone. A Message-ID is validated
+  strictly (angle brackets, one at sign, letters, digits, and a few punctuation characters, at most 403
+  characters; no space or control character). Replies are given by Message-ID, not by a reference to a stored
+  message: that needs no extra IMAP read and no access to a folder or sender; the ID comes from the
+  `message_id` of `messages.get`. The reply fields exist only on `messages.send`; a draft carries them as
+  headers.
+- **Attachments.** As for drafts: `local_path` under `files.read` or `content_base64` up to 4 MiB, at most 10,
+  15 MiB together. The answer holds metadata only; never the text or an attachment's content. A message above
+  1 MiB may take up to 30 minutes instead of 30 seconds.
+- **Once only.** A call runs exactly one SMTP transaction with one `DATA` transfer and never repeats it, not on
+  another connection either. A failure before the end of DATA (connection, STARTTLS, AUTH, sender, a recipient,
+  the DATA command, or while the text is written) means the message was not sent; the error says so, and one
+  refused recipient refuses the whole message. After the terminating dot, a reply with a 4xx or 5xx code (except
+  421) means the server declined the message and the error says it was not sent. Every other outcome there (a
+  timeout, a dropped connection, an unreadable answer, a 421) is unknown: the `timeout` or `unreachable` error says that the
+  message may have been sent and must be checked in the Sent folder and with the recipients; nothing is
+  repeated and no copy is stored. A message is also not marked or deduplicated afterwards, so a deliberate second
+  call sends again and needs its own confirmation.
+- **Sent folder.** The copy is stored with one `APPEND` and the flag `\Seen` in the one folder the server marks
+  with SPECIAL-USE `\Sent`, found like the trash and drafts folders: never by name, one only, inside the folder
+  targets. The folder is determined **before** anything is sent; if it cannot be identified, the call is refused
+  as an invalid request and nothing is sent (the narrower of the two readings: no message without a copy).
+  If the `APPEND` fails after a successful submission, the message is still sent: the call returns a result,
+  not an error, with `copy_stored: false` and a `note` that says the message was sent, the copy may be missing, and
+  it must not be sent again. Nothing is repeated. Whether Infomaniak stores a copy of mail submitted over SMTP by
+  itself, which would make the `APPEND` redundant, is not settled and is checked in the live test.
+- **drafts.send.** The draft must be in the drafts folder (the one `\Drafts` folder) and carry `\Draft`,
+  otherwise `not-found` and nothing happens. It is read with `BODY.PEEK` and never sent raw. Only a draft in the
+  structure Qatlas writes is accepted: exactly the headers `From`, `To`, `Cc`, `Bcc`, `Subject`, `Date`,
+  `Message-ID`, `In-Reply-To`, `References`, `MIME-Version`, `Content-Type`, and `Content-Transfer-Encoding`, each
+  at most once and without control characters; plain addresses; one `text/plain` part, alone or in a
+  one-level `multipart/mixed` with base64 attachments; a 7-bit body; at most 10 attachments, 15 MiB together;
+  at most 50 recipients; at most 25 MiB. Anything else (a foreign header such as `X-Mailer` or `Reply-To`, HTML,
+  a nested or 8-bit message, a display name) is refused as an invalid request, and a draft from another
+  mail client usually is. The headers are written again from the checked values, `Bcc` is removed, `Date` is set to
+  the time of sending, and the body is kept byte for byte. The draft is **not** deleted or changed after
+  sending and stays in the drafts folder (the narrower reading); remove it with `drafts.delete` if it is no longer needed.
+- **Risk and tools list.** Both are `create`, non-idempotent, confirmed, open-world, class
+  `infomaniak-mail-messages`, and require the connection's tools list; neither is in any profile. A call
+  without `confirm` does nothing. Mail leaves the mailbox for third parties and cannot be recalled.
+- **No test reaches Infomaniak.** The tests replace the single seam `dialSMTP` and talk to an in-test SMTP
+  server on a loopback port; they also check the order STARTTLS, AUTH, MAIL, RCPT, DATA, the credential inside
+  TLS only, the missing Bcc header, one DATA per call, and that no live connection is made.
+
+```yaml
+connections:
+  customer-a-send:
+    service: infomaniak-mail
+    credential: customer-a-mail
+    permissions: [read, create]
+    targets: [mailbox/office@example.com, folder/INBOX, folder/Drafts, folder/Sent]
+    files:
+      read: [~/uploads]
+    tools: [infomaniakmail.messages.get, infomaniakmail.drafts.send, infomaniakmail.messages.send]
+```
+
 ## Reading changes nothing
 
 Folders are opened with `EXAMINE`; envelopes, flags, size, and structure are fetched with `ENVELOPE`, `FLAGS`,
@@ -328,8 +420,8 @@ argument.
 
 ## Errors
 
-Errors keep stable classes. The text an IMAP server answers with never reaches an error message, and neither
-does the password.
+Errors keep stable classes. The text an IMAP or SMTP server answers with never reaches an error message, and
+neither does the password.
 
 | Class | Cause |
 | --- | --- |
@@ -341,13 +433,15 @@ does the password.
 | `timeout` | the server did not answer in time (30 seconds per operation, 30 minutes for an attachment written to a local file or a draft above 1 MiB) |
 | `rate-limited` | a rate limit asks to wait longer than the request may take |
 | `invalid-provider-response` | an answer lacked an envelope, structure, or part, or an attachment did not decode |
-| `provider-error` | every other rejection, and a server without `MOVE` or `UIDPLUS` for a change that needs it |
+| `provider-error` | every other rejection, a server without `MOVE` or `UIDPLUS` for a change that needs it, a server without STARTTLS or a refused SMTP step, and a message the SMTP server declined |
 
 A folder or sender outside the connection's targets, a malformed argument, a header value with a control
 character, a draft above its limits, a folder that is not the drafts folder, an inline attachment above 4 MiB,
-a `uidvalidity` that no longer matches, and a trash folder that cannot be identified inside the targets are
+a `uidvalidity` that no longer matches, a trash, drafts, or Sent folder that cannot be identified inside the targets,
+a reply header that is no valid Message-ID, and a draft that `drafts.send` cannot validate are
 invalid requests, never provider errors. A change whose outcome is unknown reports that it may have been
-applied, with the class of the failure (`timeout` or `unreachable`). Replacing an existing
+applied, with the class of the failure (`timeout` or `unreachable`); a send that is unclear after the end of
+DATA says the message may have been sent. Replacing an existing
 local file without confirmation asks for the confirmation.
 
 ## Untrusted data
@@ -364,7 +458,9 @@ derived from them. Each operation opens one connection and closes it; a failed l
 This provider lists folders and message envelopes, reads one message's text and attachment list, reads one
 attachment, and changes one message at a time: `seen` or `flagged`, a move to a folder of the connection, a
 move to the trash, or removal for good. It also stores, replaces, and removes drafts in the drafts folder,
-built from typed fields only. It sets no other flag, never expunges a whole folder, and does not copy or
-append other messages, create, rename, or delete folders, or send mail (SMTP); those are out of scope. A
-draft carries no `In-Reply-To` or `References`, no display names, and no HTML. It looks into no attached message
+built from typed fields only, and sends one new message, reply, or checked draft over SMTP to the fixed
+Infomaniak host with its copy in the Sent folder. It sets no other flag, never expunges a whole folder, and does
+not copy or append other messages or create, rename, or delete folders. It does not forward mail, send in bulk,
+schedule a send, request read receipts, or accept a free SMTP host, port, envelope address, or header; those are
+out of scope. A draft carries no display names and no HTML. It looks into no attached message
 (`message/rfc822`), renders no HTML, and follows no link.

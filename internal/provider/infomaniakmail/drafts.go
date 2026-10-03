@@ -276,33 +276,42 @@ func (s scope) checkDraft(ctx context.Context, resolved *config.Resolved, input 
 		return nil, invalidRequest("the mailbox of this connection is outside its sender targets, so its drafts " +
 			"could not be read back")
 	}
-	if err := checkRecipients(input.To, input.Cc, input.Bcc); err != nil {
+	spec, err := s.messageSpec(ctx, resolved, input)
+	if err != nil {
 		return nil, err
-	}
-	if !validSubject(input.Subject) {
-		return nil, invalidRequest("subject must be at most 256 characters without control characters")
-	}
-	if len(input.Body) > maxDraftBody || !utf8.ValidString(input.Body) || strings.ContainsRune(input.Body, 0) {
-		return nil, invalidRequest("body must be valid UTF-8 text of at most 256 KiB")
-	}
-	if len(input.Attachments) > maxDraftAttachments {
-		return nil, invalidRequest("a draft may have at most 10 attachments")
-	}
-	spec := draftSpec{from: s.mailbox, to: input.To, cc: input.Cc, bcc: input.Bcc, subject: input.Subject, body: input.Body}
-	remaining := int64(maxDraftTotalBytes)
-	for i, attachment := range input.Attachments {
-		read, err := readAttachment(ctx, resolved, i, attachment, remaining)
-		if err != nil {
-			return nil, err
-		}
-		remaining -= int64(len(read.content))
-		spec.attachments = append(spec.attachments, read)
 	}
 	raw, summary, err := spec.build()
 	if err != nil {
 		return nil, providerError("build draft", err.Error())
 	}
 	return &draftPlan{raw: raw, attachments: summary}, nil
+}
+
+// messageSpec validates the typed fields of a draft or an outgoing message and reads the attachments.
+func (s scope) messageSpec(ctx context.Context, resolved *config.Resolved, input draftFieldsInput) (draftSpec, error) {
+	if err := checkRecipients(input.To, input.Cc, input.Bcc); err != nil {
+		return draftSpec{}, err
+	}
+	if !validSubject(input.Subject) {
+		return draftSpec{}, invalidRequest("subject must be at most 256 characters without control characters")
+	}
+	if len(input.Body) > maxDraftBody || !utf8.ValidString(input.Body) || strings.ContainsRune(input.Body, 0) {
+		return draftSpec{}, invalidRequest("body must be valid UTF-8 text of at most 256 KiB")
+	}
+	if len(input.Attachments) > maxDraftAttachments {
+		return draftSpec{}, invalidRequest("a draft may have at most 10 attachments")
+	}
+	spec := draftSpec{from: s.mailbox, to: input.To, cc: input.Cc, bcc: input.Bcc, subject: input.Subject, body: input.Body}
+	remaining := int64(maxDraftTotalBytes)
+	for i, attachment := range input.Attachments {
+		read, err := readAttachment(ctx, resolved, i, attachment, remaining)
+		if err != nil {
+			return draftSpec{}, err
+		}
+		remaining -= int64(len(read.content))
+		spec.attachments = append(spec.attachments, read)
+	}
+	return spec, nil
 }
 
 func invokeDraftsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -375,7 +384,13 @@ func invokeDraftsDelete(ctx context.Context, resolved *config.Resolved, secrets 
 // appendDraft stores the message in folder with one APPEND and the flag \Draft. Its failure is a change
 // failure: after a timeout or a dropped connection the draft may exist.
 func appendDraft(conn *session, folder string, raw []byte, suffix string, op string) (*imap.AppendData, error) {
-	command := conn.client.Append(folder, int64(len(raw)), &imap.AppendOptions{Flags: []imap.Flag{imap.FlagDraft}})
+	return appendWithFlag(conn, folder, raw, imap.FlagDraft, suffix, op)
+}
+
+// appendWithFlag stores the message in folder with one APPEND and one flag.
+func appendWithFlag(conn *session, folder string, raw []byte, flag imap.Flag, suffix string,
+	op string) (*imap.AppendData, error) {
+	command := conn.client.Append(folder, int64(len(raw)), &imap.AppendOptions{Flags: []imap.Flag{flag}})
 	if _, err := command.Write(raw); err != nil {
 		_ = command.Close()
 		return nil, changeFailure(op, err, suffix)
@@ -402,29 +417,29 @@ func hasDraftFlag(flags []imap.Flag) bool {
 // openDraft finds the drafts folder, requires the reference to name it, opens it with SELECT, compares the
 // UIDVALIDITY, and reads the message through the sender list. A message without the flag \Draft answers
 // not-found exactly like a missing UID, so no other message can be reached through a draft tool.
-func (c *Client) openDraft(conn *session, op string, ref messageRef) error {
+func (c *Client) openDraft(conn *session, op string, ref messageRef) (*loadedMessage, error) {
 	folder, err := c.draftsFolder(conn, op)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if folder != ref.folder {
-		return invalidRequest("folder is not the drafts folder of this mailbox")
+		return nil, invalidRequest("folder is not the drafts folder of this mailbox")
 	}
 	selected, err := conn.client.Select(ref.folder, nil).Wait()
 	if err != nil {
-		return failure(op, err)
+		return nil, failure(op, err)
 	}
 	if selected.UIDValidity != ref.uidValidity {
-		return invalidRequest("uidvalidity no longer matches this folder; list the folder again")
+		return nil, invalidRequest("uidvalidity no longer matches this folder; list the folder again")
 	}
 	loaded, err := c.load(conn, op, ref)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !hasDraftFlag(loaded.flags) {
-		return errNoSuchMessage(op)
+		return nil, errNoSuchMessage(op)
 	}
-	return nil
+	return loaded, nil
 }
 
 func draftResult(folder string, data *imap.AppendData, plan *draftPlan) *DraftResult {
@@ -467,7 +482,7 @@ func (c *Client) UpdateDraft(ctx context.Context, ref messageRef, plan *draftPla
 	if !conn.client.Caps().Has(imap.CapUIDPlus) {
 		return nil, unsupported(op, "UID EXPUNGE (UIDPLUS)")
 	}
-	if err := c.openDraft(conn, op, ref); err != nil {
+	if _, err := c.openDraft(conn, op, ref); err != nil {
 		return nil, err
 	}
 	data, err := appendDraft(conn, ref.folder, plan.raw, draftUncertainUpdate, op)
@@ -497,7 +512,7 @@ func (c *Client) DeleteDraft(ctx context.Context, ref messageRef) (*MessageState
 	if !conn.client.Caps().Has(imap.CapUIDPlus) {
 		return nil, unsupported(op, "UID EXPUNGE (UIDPLUS)")
 	}
-	if err := c.openDraft(conn, op, ref); err != nil {
+	if _, err := c.openDraft(conn, op, ref); err != nil {
 		return nil, err
 	}
 	if err := expungeSelected(conn, op, ref, "", false); err != nil {

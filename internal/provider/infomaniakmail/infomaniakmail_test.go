@@ -240,7 +240,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 11 || len(metadata.Profiles) != 3 || !metadata.Profiles[0].Recommended ||
+	if len(metadata.Tools) != 13 || len(metadata.Profiles) != 3 || !metadata.Profiles[0].Recommended ||
 		metadata.Profiles[0].ID != "read" || metadata.Profiles[1].Recommended || metadata.Profiles[1].ID != "organise" ||
 		metadata.Profiles[2].Recommended || metadata.Profiles[2].ID != "draft" {
 		t.Fatalf("tools = %+v, profiles = %+v", metadata.Tools, metadata.Profiles)
@@ -249,7 +249,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		messagesFlag.ID: capability.EffectUpdate, messagesMove.ID: capability.EffectUpdate,
 		messagesDelete.ID: capability.EffectDelete, messagesExpunge.ID: capability.EffectDelete,
 		draftsCreate.ID: capability.EffectCreate, draftsUpdate.ID: capability.EffectUpdate,
-		draftsDelete.ID: capability.EffectDelete,
+		draftsDelete.ID: capability.EffectDelete, messagesSend.ID: capability.EffectCreate,
+		draftsSend.ID: capability.EffectCreate,
 	}
 	for _, descriptor := range reg.Provider(Provider) {
 		want, changes := effects[descriptor.ID]
@@ -268,7 +269,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 	}
 	for _, descriptor := range []capability.Descriptor{messagesList, messagesGet, attachmentsGet, messagesFlag,
-		messagesMove, messagesDelete, messagesExpunge, draftsCreate, draftsUpdate, draftsDelete} {
+		messagesMove, messagesDelete, messagesExpunge, draftsCreate, draftsUpdate, draftsDelete, messagesSend,
+		draftsSend} {
 		if descriptor.Risk.DataSensitivity != "infomaniak-mail-messages" {
 			t.Errorf("%s sensitivity = %q", descriptor.ID, descriptor.Risk.DataSensitivity)
 		}
@@ -278,17 +280,17 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	}
 	for _, profile := range metadata.Profiles {
 		for _, id := range profile.Tools {
-			if id == messagesExpunge.ID || id == draftsDelete.ID {
+			if id == messagesExpunge.ID || id == draftsDelete.ID || id == messagesSend.ID || id == draftsSend.ID {
 				t.Errorf("profile %s selects %s, which only a tools list may name", profile.ID, id)
 			}
 		}
 	}
-	for _, descriptor := range []capability.Descriptor{draftsCreate, draftsUpdate} {
+	for _, descriptor := range []capability.Descriptor{draftsCreate, draftsUpdate, messagesSend} {
 		if descriptor.LocalFiles != config.LocalFilesRead {
 			t.Errorf("%s local files = %q, want read", descriptor.ID, descriptor.LocalFiles)
 		}
 	}
-	if draftsDelete.LocalFiles != "" {
+	if draftsDelete.LocalFiles != "" || draftsSend.LocalFiles != "" {
 		t.Errorf("drafts.delete local files = %q", draftsDelete.LocalFiles)
 	}
 	if messagesGet.LocalFiles != "" || attachmentsGet.LocalFiles != config.LocalFilesWrite {
