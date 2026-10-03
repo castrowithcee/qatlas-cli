@@ -46,12 +46,16 @@ const (
 const (
 	// origin is the fixed Infomaniak Sync endpoint. It is deliberately not derived from the configuration.
 	origin = "https://sync.infomaniak.com"
-	// dataSensitivity classifies results as calendar and address book metadata of the identity.
-	dataSensitivity = "infomaniak-dav-collections"
-	methodPropfind  = "PROPFIND"
-	defaultTimeout  = 30 * time.Second
-	maxUserIDLen    = 64
-	maxSecretLen    = 1024
+	// dataSensitivity classifies results as calendar and address book metadata of the identity;
+	// eventsSensitivity classifies event contents.
+	dataSensitivity   = "infomaniak-dav-collections"
+	eventsSensitivity = "infomaniak-dav-events"
+	methodPropfind    = "PROPFIND"
+	methodReport      = "REPORT"
+	methodGet         = http.MethodGet
+	defaultTimeout    = 30 * time.Second
+	maxUserIDLen      = 64
+	maxSecretLen      = 1024
 )
 
 // limiters holds the budget of every identity this process has used. Infomaniak documents no request budget
@@ -139,11 +143,14 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// propfind is the single request path of this provider and builds no method other than PROPFIND. The path
-// comes from the fixed root or from segments that segmentsOf already validated.
-func (c *Client) propfind(ctx context.Context, op string, segments []string, depth, body string) ([]resource, error) {
+// request is the single request path of this provider. The method is one of the three internal constants and
+// never comes from an argument. The path comes from the fixed root or from segments that segmentsOf or
+// validCollectionID already validated; a collection path ends in a slash, an object path does not. A response
+// other than wantStatus is mapped to a class without reading its body, and a body beyond limit is refused.
+func (c *Client) request(ctx context.Context, op, method string, segments []string, collection bool,
+	depth, body string, wantStatus, limit int) ([]byte, http.Header, error) {
 	if err := c.limiter.Wait(ctx); err != nil {
-		return nil, provider.Waited(op, "Infomaniak", err)
+		return nil, nil, provider.Waited(op, "Infomaniak", err)
 	}
 	escaped := make([]string, len(segments))
 	for i, segment := range segments {
@@ -151,31 +158,57 @@ func (c *Client) propfind(ctx context.Context, op string, segments []string, dep
 	}
 	path := "/"
 	if len(escaped) > 0 {
-		path = "/" + strings.Join(escaped, "/") + "/"
+		path = "/" + strings.Join(escaped, "/")
+		if collection {
+			path += "/"
+		}
 	}
-	req, err := http.NewRequestWithContext(ctx, methodPropfind, origin+path, strings.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, origin+path, strings.NewReader(body))
 	if err != nil {
-		return nil, providerError(op, "the request could not be built")
+		return nil, nil, providerError(op, "the request could not be built")
 	}
 	req.ContentLength = int64(len(body))
 	req.Header.Set("Authorization", c.auth)
-	req.Header.Set("Content-Type", "application/xml; charset=utf-8")
-	req.Header.Set("Accept", "application/xml")
-	req.Header.Set("Depth", depth)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/xml; charset=utf-8")
+	}
+	if method == methodGet {
+		req.Header.Set("Accept", "text/calendar")
+	} else {
+		req.Header.Set("Accept", "application/xml")
+		req.Header.Set("Depth", depth)
+	}
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return nil, transportError(op, err)
+		return nil, nil, transportError(op, err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusMultiStatus {
-		return nil, statusError(op, response.StatusCode)
+	if response.StatusCode != wantStatus {
+		return nil, nil, statusError(op, response.StatusCode)
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil || len(data) > maxResponseBytes {
-		return nil, invalidResponse(op, "the Infomaniak response could not be read within the size limit")
+	data, err := io.ReadAll(io.LimitReader(response.Body, int64(limit)+1))
+	if err != nil || len(data) > limit {
+		return nil, nil, invalidResponse(op, "the Infomaniak response could not be read within the size limit")
 	}
-	return parseMultiStatus(op, data)
+	return data, response.Header, nil
+}
+
+// propfind sends a fixed PROPFIND body to a collection path and reads the multi-status answer.
+func (c *Client) propfind(ctx context.Context, op string, segments []string, depth, body string) ([]resource, error) {
+	data, _, err := c.request(ctx, op, methodPropfind, segments, true, depth, body, http.StatusMultiStatus,
+		maxResponseBytes)
+	if err != nil {
+		return nil, err
+	}
+	resources, err := parseMultiStatus(op, data)
+	if err != nil {
+		return nil, err
+	}
+	if len(resources) == 0 {
+		return nil, invalidResponse(op, "Infomaniak answered without a single node")
+	}
+	return resources, nil
 }
 
 // TestConnection performs the smallest authenticated read: the principal discovery request.
@@ -212,7 +245,7 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak Calendar and Contacts", DefaultBaseURL: origin, ValidateBaseURL: validBaseURL,
 		DefaultPermissions: []config.Permission{config.PermissionRead},
-		Description:        "Infomaniak Sync over CalDAV and CardDAV, calendars and address books of one identity listed",
+		Description:        "Infomaniak Sync over CalDAV and CardDAV, calendars and address books of one identity listed, calendar events read",
 		SecretRoles: []config.SecretRole{{
 			Name: roleUserID,
 			Description: "Personal user name of the Infomaniak sync identity, shown in the Infomaniak " +
@@ -242,9 +275,9 @@ func Register(reg *capability.Registry) error {
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "List calendars and address books", Recommended: true,
-			Description: "lists the allow-listed calendars and address books; reads no event or contact and changes nothing",
-			Tools:       []string{calendarsList.ID, addressbooksList.ID},
+			ID: "read", Title: "Read calendars, address books, and events", Recommended: true,
+			Description: "lists the allow-listed calendars and address books and reads events of allow-listed calendars; reads no contact and changes nothing",
+			Tools:       []string{calendarsList.ID, addressbooksList.ID, eventsList.ID, eventsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -252,6 +285,8 @@ func Register(reg *capability.Registry) error {
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: calendarsList, Handler: capability.Handler(invokeCalendarsList)},
 		capability.Operation{Descriptor: addressbooksList, Handler: capability.Handler(invokeAddressbooksList)},
+		capability.Operation{Descriptor: eventsList, Handler: capability.Handler(invokeEventsList)},
+		capability.Operation{Descriptor: eventsGet, Handler: capability.Handler(invokeEventsGet)},
 	)
 }
 

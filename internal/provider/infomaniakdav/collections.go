@@ -235,8 +235,17 @@ func colorOf(value string, calendars bool) string {
 }
 
 // clean replaces control characters and caps a provider string at max bytes on a rune boundary.
-func clean(value string, max int) string {
+func clean(value string, max int) string { return cleanText(value, max, false) }
+
+// cleanText is clean; with lines set it keeps line breaks and tabs, so a multi-line text stays readable.
+func cleanText(value string, max int, lines bool) string {
+	if lines {
+		value = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(value)
+	}
 	value = strings.Map(func(r rune) rune {
+		if lines && (r == '\n' || r == '\t') {
+			return r
+		}
 		if unicode.IsControl(r) || r == utf8.RuneError {
 			return ' '
 		}

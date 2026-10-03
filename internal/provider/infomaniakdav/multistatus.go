@@ -29,11 +29,12 @@ var (
 	elemStatus       = xml.Name{Space: davNS, Local: "status"}
 	elemResourceType = xml.Name{Space: davNS, Local: "resourcetype"}
 
-	propPrincipal   = xml.Name{Space: davNS, Local: "current-user-principal"}
-	propCalHome     = xml.Name{Space: caldavNS, Local: "calendar-home-set"}
-	propBookHome    = xml.Name{Space: carddavN, Local: "addressbook-home-set"}
-	typeCalendar    = xml.Name{Space: caldavNS, Local: "calendar"}
-	typeAddressbook = xml.Name{Space: carddavN, Local: "addressbook"}
+	propPrincipal    = xml.Name{Space: davNS, Local: "current-user-principal"}
+	propCalHome      = xml.Name{Space: caldavNS, Local: "calendar-home-set"}
+	propBookHome     = xml.Name{Space: carddavN, Local: "addressbook-home-set"}
+	propCalendarData = xml.Name{Space: caldavNS, Local: "calendar-data"}
+	typeCalendar     = xml.Name{Space: caldavNS, Local: "calendar"}
+	typeAddressbook  = xml.Name{Space: carddavN, Local: "addressbook"}
 )
 
 // Keys of the text properties.
@@ -41,6 +42,8 @@ const (
 	keyName        = "displayname"
 	keyDescription = "description"
 	keyColor       = "color"
+	keyETag        = "etag"
+	keyCalendar    = "calendar-data"
 )
 
 var textProps = map[xml.Name]string{
@@ -48,6 +51,8 @@ var textProps = map[xml.Name]string{
 	{Space: caldavNS, Local: "calendar-description"}:    keyDescription,
 	{Space: carddavN, Local: "addressbook-description"}: keyDescription,
 	{Space: appleNS, Local: "calendar-color"}:           keyColor,
+	{Space: davNS, Local: "getetag"}:                    keyETag,
+	{Space: caldavNS, Local: "calendar-data"}:           keyCalendar,
 }
 
 // Bounds of one parsed answer.
@@ -56,6 +61,7 @@ const (
 	maxEntries       = 500
 	maxXMLDepth      = 16
 	maxTextBytes     = 4 << 10
+	maxEventBytes    = 64 << 10
 	maxLinks         = 8
 	maxSegments      = 16
 	maxSegmentLen    = 255
@@ -119,7 +125,7 @@ func parseMultiStatus(op string, body []byte) ([]resource, error) {
 				return nil, invalidResponse(op, "Infomaniak did not answer with a multi-status document")
 			case len(stack) == 2 && element.Name == elemResponse:
 				if len(resources) >= maxEntries {
-					return nil, invalidResponse(op, "Infomaniak reported more collections than one read may handle")
+					return nil, invalidResponse(op, "Infomaniak reported more nodes than one read may handle")
 				}
 				current = &resource{text: map[string]string{}, links: map[xml.Name][]string{}}
 			case len(stack) == 3 && current != nil && element.Name == elemPropstat:
@@ -134,7 +140,13 @@ func parseMultiStatus(op string, body []byte) ([]resource, error) {
 				}
 			}
 		case xml.CharData:
-			if text.Len()+len(element) <= maxTextBytes {
+			if len(stack) > 0 && stack[len(stack)-1] == propCalendarData {
+				// An event is never cut: one beyond its cap refuses the answer.
+				if text.Len()+len(element) > maxEventBytes {
+					return nil, invalidResponse(op, "Infomaniak returned an event larger than one read may handle")
+				}
+				text.Write(element)
+			} else if text.Len()+len(element) <= maxTextBytes {
 				text.Write(element)
 			}
 		case xml.EndElement:
@@ -177,9 +189,6 @@ func parseMultiStatus(op string, body []byte) ([]resource, error) {
 			text.Reset()
 			stack = stack[:len(stack)-1]
 		}
-	}
-	if len(resources) == 0 {
-		return nil, invalidResponse(op, "Infomaniak answered without a single node")
 	}
 	return resources, nil
 }

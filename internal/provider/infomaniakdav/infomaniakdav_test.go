@@ -374,13 +374,13 @@ func TestRegisterPublishesFixedToolIDs(t *testing.T) {
 	var got []string
 	for _, d := range reg.Provider(Provider) {
 		got = append(got, d.ID)
-		if d.Risk.Effect != capability.EffectRead || d.Risk.Confirmation != capability.ConfirmationNone ||
-			string(d.InputSchema) != `{"type":"object","properties":{},"additionalProperties":false}` {
+		if d.Risk.Effect != capability.EffectRead || d.Risk.Confirmation != capability.ConfirmationNone {
 			t.Errorf("%s = %+v", d.ID, d.Risk)
 		}
 	}
 	sort.Strings(got)
-	if want := []string{"infomaniakdav.addressbooks.list", "infomaniakdav.calendars.list"}; !reflect.DeepEqual(got, want) {
+	if want := []string{"infomaniakdav.addressbooks.list", "infomaniakdav.calendars.list",
+		"infomaniakdav.events.get", "infomaniakdav.events.list"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("tool IDs = %v, want %v", got, want)
 	}
 	metadata, ok := reg.ProviderMetadata(Provider)
