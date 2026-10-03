@@ -4,9 +4,10 @@ description: >
   folder, metadata, and content reads, the download to a local path, the confirmed folder creation, rename,
   move, copy, and file upload or replacement, the trash reads and the confirmed trash, restore, and permanent
   deletion, the share link reads and the confirmed creation, change, and deletion of share links with their
-  password and URL handling, pagination and cursor contracts, the Business kSuite versus
-  personal my kSuite compatibility cases, redirect handling on downloads, and the boundary to Mail, CalDAV/CardDAV,
-  and kChat.
+  password and URL handling, the access read and the confirmed granting, changing, and revoking of user,
+  team, and invitation access with their membership check and personal data handling, pagination and cursor
+  contracts, the Business kSuite versus personal my kSuite compatibility cases, redirect handling on downloads,
+  and the boundary to Mail, CalDAV/CardDAV, and kChat.
 type: knowledge
 edit: shared
 created: 2026-09-27
@@ -24,7 +25,9 @@ trash entry, each only after an explicit confirmation. It reads the trash too. M
 trash, deleting a trash entry for good, and emptying the trash are separate tools that need the `delete`
 permission and an explicit tools list. It reads the share link of a file or folder and lists the files that have
 one; creating, changing, and deleting a share link are separate, confirmed tools that also need an explicit tools
-list. It invites no user or team and changes no access of a user or team.
+list. It reads the access of a file or folder and grants, changes, or revokes the access of users, teams, and
+invited e-mail addresses to it; these are separate tools that each need an explicit tools list, and a user or
+team is only named after it is proven to belong to the same drive.
 
 ## Configuration
 
@@ -70,7 +73,7 @@ those drives are. A `drive_id` argument goes through two checks before any file 
 
 1. A `drive_id` outside a configured drive allow-list is refused locally, as an invalid request, before any
    secret is read or any request is sent.
-2. Every `infomaniakdrive.files.*` (upload and download included), `infomaniakdrive.trash.*`, and `infomaniakdrive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
+2. Every `infomaniakdrive.files.*` (upload and download included), `infomaniakdrive.trash.*`, `infomaniakdrive.links.*`, `infomaniakdrive.access.*`, and `infomaniakdrive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
    `account_id` of its own) that the drive actually belongs to the bound account, in one extra request before
    the file endpoint itself. The allow-list is local configuration a person wrote; it is never trusted on its
    own, because the same token can otherwise reach a drive of another account, and a drive named in an
@@ -109,6 +112,10 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 | `infomaniakdrive.links.create` | creates exactly one share link for a file or folder (`POST /2/drive/{d}/files/{id}/link`) |
 | `infomaniakdrive.links.update` | changes exactly one share link (`PUT /2/drive/{d}/files/{id}/link`) |
 | `infomaniakdrive.links.delete` | deletes exactly one share link (`DELETE /2/drive/{d}/files/{id}/link`) |
+| `infomaniakdrive.access.get` | the users, teams, and invited people with access to exactly one file or folder (`GET /2/drive/{d}/files/{id}/access`) |
+| `infomaniakdrive.access.grant` | gives users, teams, and e-mail addresses access in one request (`POST /2/drive/{d}/files/{id}/access`) |
+| `infomaniakdrive.access.update` | changes the right of exactly one user or team (`PUT /2/drive/{d}/files/{id}/access/users/{uid}` or `.../teams/{tid}`) |
+| `infomaniakdrive.access.revoke` | removes the access of exactly one user or team (`DELETE /2/drive/{d}/files/{id}/access/users/{uid}` or `.../teams/{tid}`) |
 
 `drives.list`, `files.list`, `files.stat`, `files.get`, `files.download`, `trash.list`, `links.get`, and `links.list`
 are `read`, safe, and need no confirmation. `folders.create` and `files.copy` have the effect `create`; `files.rename`, `files.move`, and
@@ -116,7 +123,10 @@ are `read`, safe, and need no confirmation. `folders.create` and `files.copy` ha
 `delete`, and each of them requires the tool allow-list: no permission alone offers it, a connection must name
 the tool in its `tools` list. `links.create` has the effect `create`, `links.update` the effect `update`, and
 `links.delete` the effect `delete`; a share link is access for whoever holds its URL, so all three require the
-tool allow-list as well, whichever right the link has. All changes need `confirm`; they are non-idempotent except `links.update` and `links.delete`, which are idempotent. The provider's default
+tool allow-list as well, whichever right the link has. `access.get` is `read` and safe, but it discloses people and
+their rights, so it requires the tool allow-list too. `access.grant` has the effect `create`, `access.update` the
+effect `update`, and `access.revoke` the effect `delete`; all three widen or narrow who reaches a file, so all
+three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.update`, `links.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` can mail people, so it is not. The provider's default
 permission stays `read`: a connection runs a change only after its permissions name the effect and its tools
 list offers the tool where one is required.
 
@@ -124,9 +134,10 @@ The terminal editor offers three setup profiles. `read` is the recommended one a
 read tools, `trash.list` included. `write` also ticks `[create]`, `[update]`, and the four folder and file organisation tools.
 `upload` also ticks `[update]` and `files.upload`. Neither `write` nor `upload` is ever
 preselected. No profile contains `files.trash`, `trash.restore`, `trash.delete`, `trash.empty`, or any of the share link
-tools, not even `links.get` and `links.list`, since a link URL is access for whoever holds it: a connection adds
-them by naming them in its `tools` list together with the matching permission.
-The profile descriptions of `write` and `upload` stay true: neither shares nor deletes. `files.download` is only offered to a connection that releases a directory for writing, and
+tools, not even `links.get` and `links.list`, since a link URL is access for whoever holds it. No profile contains
+an `access.*` tool either, not even `access.get`, since it discloses people, their rights, and invited e-mail
+addresses: a connection adds them by naming them in its `tools` list together with the matching permission.
+The profile descriptions of `write` and `upload` stay true: neither shares, grants access, nor deletes. `files.download` is only offered to a connection that releases a directory for writing, and
 `files.upload` with a `local_path` only for one that releases a directory for reading, through the `files`
 setting of the connection.
 
@@ -223,6 +234,45 @@ than being refused or silently redirected to a listing.
   `pending` change. A 403, for example because the drive's plan does not allow share links or a right, is
   reported as `permission`.
 
+### Access
+
+- `access.get` reads one file or folder: `users`, `teams`, and `invitations`, each entry with `id`, the access kind,
+  the display `name`, the `right`, and the `status`. Names and every other value are untrusted data; an invitation's
+  name can be an e-mail address. A list holds at most 200 entries and a name at most 256 bytes; `truncated` says a
+  list was cut. The class of all four tools is `infomaniak-kdrive-access`, separate from file metadata and from link
+  URLs, because who may reach a file is personal data.
+- `access.grant` sends one `POST /2/drive/{d}/files/{id}/access` with `right`, and any of `user_ids` (at most 20),
+  `team_ids` (at most 10), and `emails` (at most 10), at least one of them. `lang` (`de`, `en`, `es`, `fr`, `it`,
+  `nl`, `pt`) is required, because Infomaniak sends the invitation mail in it and Qatlas picks no language. No
+  `message` is offered. `access.update` and `access.revoke` take exactly one of `user_id` and `team_id`. `right` is
+  `read`, `write`, or `manage` (can also share); the API's `none` is not offered, because `access.revoke` removes
+  access explicitly. Nothing else of the provider's body exists.
+- `file_id` is a positive integer other than the drive's root `1`, checked before any secret is read or request is
+  sent; the drive goes through the allow-list check and the live ownership check first, and a refusal names no
+  foreign value.
+- Every user and team a change names is proven to belong to the same drive before the change request: after the
+  ownership check, Qatlas reads the drive's users page by page with their team identifiers (`GET
+  /2/drive/{d}/users?with=teams`, 100 per page, at most 10 pages, stopping once everything is found) and counts only
+  users whose status is `active`. A user or team that is not among them is an invalid request that does not name the
+  value, and nothing is changed. When the bound ends the search without finding it, or the page count is missing,
+  the target counts as unproven and is refused the same way instead of being guessed. Infomaniak lists no teams of
+  a drive on their own with the `drive` scope, so a team is provable only through an active user of the drive who
+  belongs to it; a team without such a user is refused. A grant of only e-mail addresses needs no such read. The
+  check costs one request per page; it is a read and sends nothing.
+- An e-mail address in `emails` makes Infomaniak send an invitation mail to a person outside the drive, so the tool is
+  `open_world`, needs `confirm`, and is never repeated. Each address is checked locally: ASCII, 254 bytes at most, one
+  `@`, a plain dotted domain, no space, control or special character, no duplicate. An address is personal data: no
+  error and no log quotes one, and the result echoes only what Infomaniak reports per target, up to 254 bytes each.
+  The invoke log holds no arguments.
+- A grant answers `done`, or `partial` when Infomaniak reached some targets and refused others; `granted`, `failed`,
+  and `results` (kind, target, whether reached) say which, and Infomaniak's per-target message is never read. An
+  update or revoke answers its `status` and the `user_id` or `team_id`. An answer that cannot be read counts as an
+  unclear outcome.
+- A change sends exactly one request after the checks and is never repeated. After a timeout, a dropped connection,
+  a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the access before
+  trying again. `asynchronous` is a `pending` change. A 403, for example because the drive's plan or the rights of
+  the token's user do not allow sharing, is reported as `permission`.
+
 ### Upload
 
 - `files.upload` creates one file in an existing folder (`directory_id`, the drive's root is `1`) or replaces
@@ -295,7 +345,8 @@ Errors keep stable classes and never carry the token or a raw provider response 
 | `invalid-provider-response` | the answer was unreadable, too large, or reported an error despite an HTTP success status; for a change the message adds that the change may have been applied |
 | `provider-error` | every other rejection, including a `conflict` (HTTP 409: the name already exists or the target is not in a state that allows the change), an etag conflict of a replacing upload, a failed `If-Match` precondition and a redirect on an endpoint that must not answer with one |
 
-A `drive_id` outside the connection's allow-list, or one the live ownership check finds belongs to another
+A `user_id`, `team_id`, or `user_ids` or `team_ids` entry that is not proven to belong to the drive is an
+invalid request too, see Access. A `drive_id` outside the connection's allow-list, or one the live ownership check finds belongs to another
 account, is an invalid request, never a provider error, so a scope refusal is never mistaken for a missing
 drive. A failed or unreadable answer to that ownership check itself keeps its own class (`auth`,
 `permission`, `rate-limited`, `timeout`, `unreachable`, or `invalid-provider-response`) and aborts the request
@@ -313,7 +364,7 @@ This provider works the same way against a Business kSuite drive and a personal 
 ordinary kDrives reachable through the same REST API and the same API token, and both are listed, browsed,
 and read identically through the tools above. The changes, uploads, downloads, and share links use the same endpoints on both. Whether a plan
 permits a change, for example a folder or file operation or an upload on a restricted my kSuite drive, is Infomaniak's
-decision: a refusal arrives as `permission` (or `provider-error`) and is never worked around, a share link included: which rights, expiry, and settings a plan allows is its decision, and a refusal is not retried with other settings, and this
+decision: a refusal arrives as `permission` (or `provider-error`) and is never worked around, a share link included: which rights, expiry, and settings a plan allows is its decision, and a refusal is not retried with other settings, and the same holds for sharing access with users, teams, and invited people, which a plan or the rights of the token's user may refuse as `permission`, and this
 provider documents no plan-specific behaviour beyond that. The one documented difference between the two plans is WebDAV
 access, which my kSuite does not guarantee the way a Business kSuite subscription does; this provider does
 not depend on WebDAV at all; it is unaffected either way. A my kSuite account may hold fewer or more
@@ -329,6 +380,8 @@ own API, none of them the Bearer API token this provider uses. Because every sec
 is mandatory for every one of its connections today, a single `infomaniak` provider spanning all of them
 would force a kDrive-only connection to also declare secret roles it never uses. Each of them can be added
 later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
-share of a file or folder with a user or team, no invitation, no `can_request_access` or removal of an expiry on a link, no link statistics, no trashed folder browsing, no restore outside the drive, no copy to another drive, no `version` conflict mode, no
-search, no activity or version history,
-and no account, settings, or quota administration.
+creation or removal of users or teams of the drive, no invitation to the drive itself, no handling of access
+requests, no synchronisation with the rights of the parent, no resending of an invitation, no access `message`,
+no `none` right, no `can_request_access` or removal of an expiry on a link, no link statistics, no trashed
+folder browsing, no restore outside the drive, no copy to another drive, no `version` conflict mode, no search,
+no activity or version history, and no account, settings, or quota administration.
