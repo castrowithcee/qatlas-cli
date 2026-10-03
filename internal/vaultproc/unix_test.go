@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package vaultproc
 
@@ -13,9 +13,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -23,9 +23,10 @@ import (
 )
 
 // These tests run the real peer check. Client and server share the test binary's process, so the program
-// the server finds at /proc/<peer>/exe is the test binary, exactly the file /proc/self/exe names: the test
-// binary checks itself. Another program is a copy of the test binary at another path, which is a different
-// file, started as a helper process through TestHelperProcess.
+// the server finds for its peer, through /proc/<peer>/exe on Linux and kern.procargs2 on macOS, is the test
+// binary, exactly the program this process runs: the test binary checks itself. Another program is a copy
+// of the test binary at another path, which is a different file, started as a helper process through
+// TestHelperProcess.
 
 const helperEnv = "QATLAS_VAULTPROC_HELPER"
 
@@ -41,7 +42,7 @@ func TestHelperProcess(t *testing.T) {
 		time.Sleep(time.Minute)
 	case "listen":
 		// Listens like a server without the vault's key: answers the challenge with a forged proof and
-		// reports how many bytes the client sent after it.
+		// reports how many bytes the client sent after it, or that no challenge came at all.
 		l, err := net.Listen("unix", path)
 		if err != nil {
 			fmt.Println("error", err)
@@ -55,8 +56,8 @@ func TestHelperProcess(t *testing.T) {
 		_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 		var h hello
 		if err := readMessage(conn, &h); err != nil || len(h.Challenge) == 0 {
-			fmt.Println("error no challenge", err)
-			os.Exit(1)
+			fmt.Println("no challenge")
+			os.Exit(0)
 		}
 		_ = writeMessage(conn, response{V: Version, Proof: proofOf(make([]byte, nonceSize))})
 		data, _ := io.ReadAll(conn)
@@ -115,8 +116,7 @@ func TestHelperProcess(t *testing.T) {
 			fmt.Println("error", err)
 			os.Exit(1)
 		}
-		dumpable, _, errno := syscall.RawSyscall(syscall.SYS_PRCTL, syscall.PR_GET_DUMPABLE, 0, 0)
-		fmt.Println("dumpable", dumpable, errno)
+		fmt.Println(hardenedState())
 	}
 	os.Exit(0)
 }
@@ -172,7 +172,7 @@ func line(t *testing.T, r *bufio.Reader) string {
 // socketIn returns a socket path below a fresh test directory, in a run directory that does not exist yet.
 func socketIn(t *testing.T) string {
 	t.Helper()
-	return filepath.Join(t.TempDir(), "run", "v.sock")
+	return filepath.Join(shortTempDir(t), "run", "v.sock")
 }
 
 func serve(t *testing.T, s *Server, l net.Listener) <-chan error {
@@ -346,7 +346,7 @@ func TestListenRefusesAnOpenDirectory(t *testing.T) {
 		t.Fatalf("Listen() used a directory open to others")
 	}
 
-	link := filepath.Join(t.TempDir(), "link")
+	link := filepath.Join(shortTempDir(t), "link")
 	if err := os.Symlink(t.TempDir(), link); err != nil {
 		t.Fatal(err)
 	}
@@ -417,8 +417,14 @@ func TestClientRefusesAnotherProgramAsServer(t *testing.T) {
 		!strings.Contains(err.Error(), fmt.Sprintf("(process %d)", cmd.Process.Pid)) {
 		t.Fatalf("Get() from another program error = %v, want ErrRefused naming its process", err)
 	}
-	if got := line(t, out); got != "received 0" {
-		t.Fatalf("the client sent something after the challenge to another program: %s", got)
+	// Where the client can check the program of the process that listens, it does not even send the
+	// challenge; elsewhere the challenge is all it sends.
+	want := "received 0"
+	if !hardenHidesProgram {
+		want = "no challenge"
+	}
+	if got := line(t, out); got != want {
+		t.Fatalf("the client sent something to another program: %s, want %s", got, want)
 	}
 }
 
@@ -462,13 +468,14 @@ func TestClientNamesAServerThatRefusesIt(t *testing.T) {
 
 func TestHarden(t *testing.T) {
 	_, out := helper(t, os.Args[0], "harden", "")
-	if got := line(t, out); got != "dumpable 0 errno 0" {
+	if got := line(t, out); got != wantHardened {
 		t.Fatalf("the hardened helper process said %q", got)
 	}
 }
 
-// A hardened vault process cannot be checked by its program from outside, but it passes the client's check
-// of its user and its key, and it still checks its own clients by their program.
+// A hardened vault process cannot be checked by its program from outside on Linux, where it passes the
+// client's check of its user and its key; on macOS its program is checked as well. Either way it still
+// checks its own clients by their program.
 func TestClientReachesAHardenedServer(t *testing.T) {
 	path := socketIn(t)
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
@@ -490,8 +497,12 @@ func TestClientReachesAHardenedServer(t *testing.T) {
 		t.Fatalf("the helper process said %q", got)
 	}
 
-	if err := checkProcess(cmd.Process.Pid, uint32(os.Getuid())); !errors.Is(err, ErrRefused) {
+	err = checkProcess(cmd.Process.Pid, uint32(os.Getuid()))
+	if hardenHidesProgram && !errors.Is(err, ErrRefused) {
 		t.Fatalf("checkProcess() of a hardened process error = %v, want ErrRefused", err)
+	}
+	if !hardenHidesProgram && err != nil {
+		t.Fatalf("checkProcess() of a hardened process error = %v, want it to pass", err)
 	}
 	c := NewClient(path, testRecipient)
 	ctx := context.Background()
@@ -528,7 +539,9 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 	}
 	userRuntimeRoot = short()
 	t.Setenv("XDG_RUNTIME_DIR", "")
-	vaultDir := filepath.Join(t.TempDir(), "vault")
+	// A short vault directory too: beside it, the socket path must stay within the limit of macOS (104
+	// bytes), or the fallback directory takes over.
+	vaultDir := filepath.Join(short(), "vault")
 	runtimeDir := filepath.Join(userRuntimeRoot, strconv.Itoa(os.Getuid()))
 
 	beside := func() string {
@@ -553,8 +566,14 @@ func TestSocketPathFindsTheUserRuntimeDirectoryWithoutXDG(t *testing.T) {
 	if err := os.Chmod(runtimeDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if dir := beside(); dir != filepath.Join(runtimeDir, "qatlas") {
-		t.Fatalf("SocketPath() without XDG_RUNTIME_DIR = %s, want the user's runtime directory", dir)
+	// Only Linux has a user runtime directory below userRuntimeRoot; macOS has none and keeps the socket
+	// beside the vault.
+	wantDir := filepath.Join(filepath.Dir(vaultDir), "run")
+	if runtime.GOOS == "linux" {
+		wantDir = filepath.Join(runtimeDir, "qatlas")
+	}
+	if dir := beside(); dir != wantDir {
+		t.Fatalf("SocketPath() without XDG_RUNTIME_DIR = %s, want %s", dir, wantDir)
 	}
 
 	explicit := short()

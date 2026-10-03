@@ -22,8 +22,9 @@ import (
 // process that listens, and only then sends its request.
 //
 // The check has two steps. The process that listens must run as this user, which the kernel reports
-// through SO_PEERCRED; its program cannot be checked the way the server checks its clients, since the
-// vault process is hardened and its /proc entries are closed to this user too. It must then prove that it
+// through SO_PEERCRED on Linux and LOCAL_PEERCRED on macOS. On Linux its program cannot be checked the way
+// the server checks its clients, since the vault process is hardened and its /proc entries are closed to
+// this user too; on macOS it is checked like that, see VerifyProgram. It must then prove that it
 // holds the vault's key: the client sends a fresh random nonce encrypted to the vault's public recipient,
 // and the process answers with a hash of what it decrypted. Nothing else is sent before both steps
 // passed, not even the credential name a get asks for.
@@ -36,8 +37,8 @@ type Client struct {
 	// Timeout bounds one call; the context a call gets bounds it too, and the earlier limit wins. Zero
 	// means DefaultRequestTimeout.
 	Timeout time.Duration
-	// Verify checks the process that listens before the challenge is sent. Nil means VerifyUser; a test
-	// passes its own. The challenge is never skipped.
+	// Verify checks the process that listens before the challenge is sent. Nil means VerifyUser on Linux
+	// and VerifyProgram on macOS; a test passes its own. The challenge is never skipped.
 	Verify Verifier
 }
 
@@ -242,9 +243,12 @@ func (c *Client) call(ctx context.Context, req request) (response, error) {
 		return response{}, c.failed(ctx, err)
 	}
 	defer conn.Close()
+	// The peer is named from what the kernel said right after connecting: macOS no longer tells who was at
+	// the other end once a server that refused this client has closed the connection.
+	pid := peerPID(conn)
 	resp, err := c.exchange(ctx, conn, deadline, req)
 	if err != nil && !errors.Is(err, ErrNotRunning) && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
-		if pid := peerPID(conn); pid > 0 {
+		if pid > 0 {
 			err = &PeerError{PID: pid, Err: err}
 		}
 	}
@@ -289,7 +293,7 @@ func (c *Client) exchange(ctx context.Context, conn net.Conn, deadline time.Time
 
 	verify := c.Verify
 	if verify == nil {
-		verify = VerifyUser
+		verify = verifyServer
 	}
 	if err := verify(conn); err != nil {
 		return response{}, err
@@ -371,7 +375,9 @@ func (c *Client) failed(ctx context.Context, err error) error {
 }
 
 // notRunning reports a dial error that means nobody serves the socket: it does not exist, or it is left
-// over from a process that ended and nobody listens on it any more.
+// over from a process that ended and nobody listens on it any more. Something at the path that is not a
+// socket at all means the same; Linux reports it as a refused connection, macOS as ENOTSOCK.
 func notRunning(err error) bool {
-	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED)
+	return errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ENOTSOCK)
 }

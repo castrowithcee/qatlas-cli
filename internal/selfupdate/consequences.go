@@ -25,7 +25,7 @@ func ConsequencesText(goos string, others int) string {
 		fmt.Fprintf(&b, " %d other qatlas %s of yours %s running.", others, plural(others, "process", "processes"),
 			plural(others, "is", "are"))
 	}
-	if goos == "linux" {
+	if goos == "linux" || goos == "darwin" {
 		b.WriteString(" Running 'qatlas mcp' servers restart themselves and only need 'qatlas vault unlock'.")
 	} else {
 		b.WriteString(" Reconnect running 'qatlas mcp' servers in their client.")

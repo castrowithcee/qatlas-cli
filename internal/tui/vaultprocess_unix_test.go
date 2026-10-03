@@ -1,9 +1,9 @@
-//go:build linux
+//go:build linux || darwin
 
 // This editor hands every vault write, removal, and rekey on to a vault process that holds the vault
 // unlocked outside this run, exactly the way the CLI already does (see syncVaultProcess and
 // lockVaultProcessForRekey in vaultsettings.go); these tests exercise that against a real vaultproc.Server,
-// the way internal/cli/vaultsync_linux_test.go already does for the CLI, so the process seam behind
+// the way internal/cli/vaultsync_unix_test.go already does for the CLI, so the process seam behind
 // vaultmigrate.SyncChange and vaultmigrate.LockProcess is proven, not just its callers' plumbing.
 package tui
 
@@ -26,7 +26,7 @@ import (
 
 // serveVaultProcess starts a vault process serving the already-encrypted vault at dir, unlocked with
 // passphrase, exactly the way a detached 'qatlas vault unlock' would; it mirrors the CLI's own
-// serveVaultInProcess (internal/cli/vaultsync_linux_test.go). The server checks its clients by their
+// serveVaultInProcess (internal/cli/vaultsync_unix_test.go). The server checks its clients by their
 // program, which is this very test binary on both ends.
 func serveVaultProcess(t *testing.T, dir, passphrase string) (*vaultproc.Server, *vaultproc.Client) {
 	t.Helper()
@@ -380,7 +380,7 @@ func withStartableVaultProcess(t *testing.T) {
 	}
 }
 
-// 'ctrl+l' unlocking a locked vault hands it to a real vault process on Linux, exactly the way 'qatlas vault
+// 'ctrl+l' unlocking a locked vault hands it to a real vault process on Linux and macOS, exactly the way 'qatlas vault
 // unlock' does: a fresh model over the very same directory, still locked in its own process, sees it
 // unlocked too once checkVaultProcess asks the process, the way another terminal's window would on its next
 // tick.
@@ -392,7 +392,12 @@ func TestCtrlLStartsARealVaultProcess(t *testing.T) {
 	setup, _ := newVaultResolver(t, dir)
 	mustNoError(t, setup.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
 	locked, _ := newVaultResolver(t, dir)
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	runtimeDir, err := os.MkdirTemp("", "qv")
+	if err != nil {
+		t.Fatalf("MkdirTemp() = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	withStartableVaultProcess(t)
 
 	m, err := New(store, nil, locked, nil)

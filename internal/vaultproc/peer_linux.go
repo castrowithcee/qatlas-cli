@@ -52,6 +52,10 @@ func VerifyUser(conn net.Conn) error {
 	return nil
 }
 
+// verifyServer is the check a client makes of the process that listens before it sends its challenge:
+// VerifyUser, since Harden hides the vault process's program from this user.
+func verifyServer(conn net.Conn) error { return VerifyUser(conn) }
+
 // peerPID returns the process id of the peer of conn, or 0 when it cannot be told.
 func peerPID(conn net.Conn) int {
 	cred, err := peerCred(conn)

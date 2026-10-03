@@ -1,10 +1,11 @@
-//go:build linux
+//go:build linux || darwin
 
 package secret
 
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -23,7 +24,14 @@ const processPassphrase = "synthetic-passphrase-41c7"
 // fails the test when it is consulted at all.
 func processFixture(t *testing.T) (*Resolver, string) {
 	t.Helper()
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	// t.TempDir() nests the full test name, which below the long per-user temporary directory of macOS
+	// overflows a socket path; os.MkdirTemp keeps this one short.
+	runtimeDir, err := os.MkdirTemp("", "qv")
+	if err != nil {
+		t.Fatalf("MkdirTemp() = %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	dir := t.TempDir()
 	offer := func(string) (string, error) { return processPassphrase, nil }
 	v := vault.New(dir)

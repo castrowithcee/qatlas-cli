@@ -1,4 +1,4 @@
-//go:build linux
+//go:build linux || darwin
 
 package main
 
@@ -22,7 +22,6 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -181,6 +180,30 @@ defaults:
 		list := broker.call(t, `{"list":"connections"}`, "qatlas.search")
 		if list.Result.IsError || strings.Contains(string(list.Result.Structured), "unusable") {
 			t.Errorf("MCP list = %s, want no unusable column", list.Result.Structured)
+		}
+	})
+
+	// A copy of the binary at another path is another program: the vault process and the copy refuse each
+	// other, so the copy gets no secret, and it names the vault process to end.
+	t.Run("another program is refused by the vault process", func(t *testing.T) {
+		data, err := os.ReadFile(bin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		other := filepath.Join(dir, "other", binaryName())
+		if err := os.MkdirAll(filepath.Dir(other), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(other, data, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		copied := &runner{bin: other, seen: &seen, env: c.env}
+		code, stdout, stderr := copied.run(t, "invoke", "bookstack.pages.list")
+		if code == 0 || strings.Contains(stdout, "Vault Runbook") ||
+			!strings.Contains(stderr, "is not this qatlas of this user") ||
+			!strings.Contains(stderr, fmt.Sprintf("(process %d)", processID)) {
+			t.Errorf("invoke by another program: exit %d, stdout %q, stderr %q; want a refusal naming process %d",
+				code, stdout, stderr, processID)
 		}
 	})
 
@@ -437,31 +460,4 @@ func runAtTerminal(t *testing.T, c *runner, input string, args ...string) (strin
 	}
 	c.seen.WriteString(text())
 	return text(), code
-}
-
-// openPTY opens a new pseudo-terminal pair with nothing but the system calls the standard library has.
-func openPTY(t *testing.T) (master, slave *os.File) {
-	t.Helper()
-	master, err := os.OpenFile("/dev/ptmx", os.O_RDWR|syscall.O_NOCTTY, 0)
-	if err != nil {
-		t.Skipf("no pseudo-terminal: %v", err)
-	}
-	var unlock int32
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCSPTLCK,
-		uintptr(unsafe.Pointer(&unlock))); errno != 0 {
-		_ = master.Close()
-		t.Skipf("cannot unlock the pseudo-terminal: %v", errno)
-	}
-	var number uint32
-	if _, _, errno := syscall.Syscall(syscall.SYS_IOCTL, master.Fd(), syscall.TIOCGPTN,
-		uintptr(unsafe.Pointer(&number))); errno != 0 {
-		_ = master.Close()
-		t.Skipf("cannot name the pseudo-terminal: %v", errno)
-	}
-	slave, err = os.OpenFile("/dev/pts/"+strconv.FormatUint(uint64(number), 10), os.O_RDWR|syscall.O_NOCTTY, 0)
-	if err != nil {
-		_ = master.Close()
-		t.Skipf("cannot open the pseudo-terminal: %v", err)
-	}
-	return master, slave
 }

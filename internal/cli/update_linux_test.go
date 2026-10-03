@@ -125,12 +125,16 @@ func TestUpdateLocksOnlyAfterYes(t *testing.T) {
 
 func TestConsequencesTextOfThePlatforms(t *testing.T) {
 	linux := selfupdate.ConsequencesText("linux", 2)
-	other := selfupdate.ConsequencesText("darwin", -1)
+	darwin := selfupdate.ConsequencesText("darwin", 1)
+	other := selfupdate.ConsequencesText("windows", -1)
 	if !strings.Contains(linux, "2 other qatlas processes of yours are running") || !strings.Contains(linux, "restart themselves") {
 		t.Errorf("linux: %q", linux)
 	}
+	if !strings.Contains(darwin, "1 other qatlas process of yours is running") || !strings.Contains(darwin, "restart themselves") {
+		t.Errorf("darwin: %q", darwin)
+	}
 	if strings.Contains(other, "other qatlas") || !strings.Contains(other, "Reconnect") || strings.Contains(other, "restart themselves") {
-		t.Errorf("darwin: %q", other)
+		t.Errorf("windows: %q", other)
 	}
 }
 
