@@ -1,22 +1,24 @@
 ---
 description: >
   Describes the Infomaniak kDrive provider: API token setup, the account and drive allow-list, the drive,
-  folder, metadata, and content reads, the confirmed folder creation, rename, move, and copy, pagination and cursor contracts, the Business kSuite versus personal
-  my kSuite compatibility cases, redirect handling on downloads, and the boundary to Mail, CalDAV/CardDAV,
+  folder, metadata, and content reads, the download to a local path, the confirmed folder creation, rename,
+  move, copy, and file upload or replacement, pagination and cursor contracts, the Business kSuite versus
+  personal my kSuite compatibility cases, redirect handling on downloads, and the boundary to Mail, CalDAV/CardDAV,
   and kChat.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-01
+updated: 2026-10-03
 ---
 
 # Infomaniak kDrive
 
 Infomaniak kDrive is a provider for the Infomaniak kDrive REST API. It lists the drives of one Infomaniak
 account, lists the immediate children of one folder page by page, reads the metadata of one file or folder,
-and reads bounded file content, all through `https://api.infomaniak.com`. On a connection that holds the
-`create` or `update` permission it also creates one folder and renames, moves, or copies one file or folder
-inside one drive, each only after an explicit confirmation. It uploads, shares, links, or deletes nothing.
+and reads bounded file content or writes one file to a local path, all through `https://api.infomaniak.com`.
+On a connection that holds the `create` or `update` permission it also creates one folder, renames, moves, or
+copies one file or folder inside one drive, and uploads one file or replaces the content of one, each only
+after an explicit confirmation. It shares, links, or deletes nothing.
 
 ## Configuration
 
@@ -62,7 +64,7 @@ those drives are. A `drive_id` argument goes through two checks before any file 
 
 1. A `drive_id` outside a configured drive allow-list is refused locally, as an invalid request, before any
    secret is read or any request is sent.
-2. Every `infomaniakdrive.files.*` and `infomaniakdrive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
+2. Every `infomaniakdrive.files.*` (upload and download included) and `infomaniakdrive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
    `account_id` of its own) that the drive actually belongs to the bound account, in one extra request before
    the file endpoint itself. The allow-list is local configuration a person wrote; it is never trusted on its
    own, because the same token can otherwise reach a drive of another account, and a drive named in an
@@ -85,18 +87,25 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 | `infomaniakdrive.files.list` | the immediate children of one folder of one drive, cursor-paginated |
 | `infomaniakdrive.files.stat` | the metadata of exactly one file or folder |
 | `infomaniakdrive.files.get` | the bounded content of exactly one file, as base64 |
+| `infomaniakdrive.files.download` | writes exactly one file to a local path, returning only its metadata; needs a directory the connection releases for writing |
+| `infomaniakdrive.files.upload` | uploads one new file into a folder, or replaces the content of one file given its etag, from a local path or inline |
 | `infomaniakdrive.folders.create` | creates exactly one folder below an existing folder (`POST /3/drive/{d}/files/{id}/directory`) |
 | `infomaniakdrive.files.rename` | renames exactly one file or folder (`POST /2/drive/{d}/files/{id}/rename`) |
 | `infomaniakdrive.files.move` | moves exactly one file or folder into another folder of the same drive (`POST /3/drive/{d}/files/{id}/move/{dest}`) |
 | `infomaniakdrive.files.copy` | copies exactly one file or folder into another folder of the same drive (`POST /3/drive/{d}/files/{id}/copy/{dest}`) |
 
-The first four are `read`, safe, and need no confirmation. `folders.create` and `files.copy` have the effect
-`create`, `files.rename` and `files.move` the effect `update`; all four are non-idempotent, need
-`confirm`, and are never a delete. The provider's default permission stays `read`: a connection runs a change
+`drives.list`, `files.list`, `files.stat`, `files.get`, and `files.download` are `read`, safe, and need no
+confirmation. `folders.create` and `files.copy` have the effect `create`; `files.rename`, `files.move`, and
+`files.upload` have the effect `update`. These changes are non-idempotent, need `confirm`, and are never a
+delete. The provider's default permission stays `read`: a connection runs a change
 only after its permissions name `create` or `update` and its tools list offers the tool.
 
-The terminal editor offers two setup profiles. `read` is the recommended one and ticks `[read]` and the four
-read tools. `write` also ticks `[create]`, `[update]`, and the four change tools; it is never preselected.
+The terminal editor offers three setup profiles. `read` is the recommended one and ticks `[read]` and the five
+read tools. `write` also ticks `[create]`, `[update]`, and the four folder and file organisation tools.
+`upload` also ticks `[update]` and `files.upload`. Neither `write` nor `upload` is ever
+preselected. `files.download` is only offered to a connection that releases a directory for writing, and
+`files.upload` with a `local_path` only for one that releases a directory for reading, through the `files`
+setting of the connection.
 
 ### Changes
 
@@ -133,6 +142,39 @@ requires an explicit `file_id`: reading content is never defaulted to the root. 
 `files.get` reads Infomaniak's own zip archive of that folder, still bounded by the same size limit, rather
 than being refused or silently redirected to a listing.
 
+### Upload
+
+- `files.upload` creates one file in an existing folder (`directory_id`, the drive's root is `1`) or replaces
+  the content of one existing file as a new version. Replacing needs `file_id` together with its current
+  `etag`, sent as `If-Match`, and takes no `directory_id`, `name`, or `conflict`. If the file changed or is
+  locked since, the call fails as an etag conflict and nothing is replaced. A missing folder is never created.
+- The content comes from `local_path`, a file inside a directory the connection releases for reading, or inline
+  from `content_base64` up to 4 MiB with a `name`. Only metadata comes back: `file_id`, `name`, `size`,
+  `sha256`, `method`, `status`, and `client_token`.
+- A file up to 100 MB goes in one direct request, larger ones through an upload session of several chunk
+  requests; `method` reports which. `client_token`, 16 to 36 characters, is only available for a direct upload
+  and makes a repeated upload return the file of the first one; Qatlas generates one when it is omitted.
+- A new name that exists is refused as a `conflict` unless `conflict` is `rename`, which keeps both.
+- Qatlas never repeats an upload request itself. After a timeout, a dropped connection, a 5xx answer, or an
+  unreadable answer the error says the file may have been saved and names the `client_token` (or the session)
+  to check or to repeat the same upload; read the folder first.
+- An upload session's `upload_url` comes from Infomaniak and is only used when it is `https` on an
+  `infomaniak.com` host.
+- A 403, for example because the plan does not allow it, is reported as `permission`.
+
+### Download
+
+- `files.download` takes `drive_id`, `file_id`, and `local_path`, an absolute path or one starting with `~/` in
+  an existing directory the connection releases for writing. A path outside it is refused before any secret
+  is read or request is sent, without naming the path.
+- An existing file at the path is kept unless the request is confirmed; with `confirm` it is replaced.
+- The content goes to a temporary file that only becomes the target once the transfer is complete and matches
+  the reported size, so an aborted or too large transfer leaves no partial file. The result carries `file_id`,
+  `name`, `size`, and `sha256`, never the content. It costs three requests: the ownership check, a metadata
+  read, and the content request.
+- A folder identifier writes Infomaniak's zip archive of it, as with `files.get`. The redirect rules under
+  Content and size limits apply unchanged.
+
 ## Pagination and cursors
 
 `infomaniakdrive.files.list` takes `limit` (5 to 1000, default 10) and an opaque `cursor`, and answers
@@ -149,7 +191,8 @@ did not.
 
 ## Content and size limits
 
-`infomaniakdrive.files.get` reads at most 4 MiB and returns it as base64. Content over that limit is refused
+`infomaniakdrive.files.get` reads at most 4 MiB and returns it as base64; for a larger file, or to keep the
+content out of the answer, use `infomaniakdrive.files.download`, which writes up to 10 GiB to a path instead. Content over that limit is refused
 outright, never silently truncated, so a caller never receives a partial, possibly corrupt file. Infomaniak
 documents that its download endpoint may answer with a redirect to the actual storage location of the
 content; Qatlas follows at most one such redirect, only to an `https` location, and removes the
@@ -169,7 +212,7 @@ Errors keep stable classes and never carry the token or a raw provider response 
 | `timeout` | Infomaniak did not answer in time |
 | `unreachable` | Infomaniak kDrive is unavailable, in maintenance, or could not be reached |
 | `invalid-provider-response` | the answer was unreadable, too large, or reported an error despite an HTTP success status; for a change the message adds that the change may have been applied |
-| `provider-error` | every other rejection, including a `conflict` (HTTP 409: the name already exists or the target is not in a state that allows the change) and a redirect on an endpoint that must not answer with one |
+| `provider-error` | every other rejection, including a `conflict` (HTTP 409: the name already exists or the target is not in a state that allows the change), an etag conflict of a replacing upload, a failed `If-Match` precondition and a redirect on an endpoint that must not answer with one |
 
 A `drive_id` outside the connection's allow-list, or one the live ownership check finds belongs to another
 account, is an invalid request, never a provider error, so a scope refusal is never mistaken for a missing
@@ -187,8 +230,8 @@ a link inside them, or executes anything derived from them.
 
 This provider works the same way against a Business kSuite drive and a personal my kSuite drive: both are
 ordinary kDrives reachable through the same REST API and the same API token, and both are listed, browsed,
-and read identically through the tools above. The changes use the same endpoints on both. Whether a plan
-permits a change, for example a folder or file operation on a restricted my kSuite drive, is Infomaniak's
+and read identically through the tools above. The changes, uploads, and downloads use the same endpoints on both. Whether a plan
+permits a change, for example a folder or file operation or an upload on a restricted my kSuite drive, is Infomaniak's
 decision: a refusal arrives as `permission` (or `provider-error`) and is never worked around, and this
 provider documents no plan-specific behaviour beyond that. The one documented difference between the two plans is WebDAV
 access, which my kSuite does not guarantee the way a Business kSuite subscription does; this provider does
@@ -205,6 +248,6 @@ own API, none of them the Bearer API token this provider uses. Because every sec
 is mandatory for every one of its connections today, a single `infomaniak` provider spanning all of them
 would force a kDrive-only connection to also declare secret roles it never uses. Each of them can be added
 later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
-upload, share, link, trash, delete, or restore operation, no copy to another drive, no `version` conflict mode, no
+share, link, trash, delete, or restore operation, no copy to another drive, no `version` conflict mode, no
 search, no activity or version history,
 and no account, settings, or quota administration.

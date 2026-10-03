@@ -1,30 +1,29 @@
-// Package infomaniakdrive implements controlled access to the Infomaniak kDrive REST API: it lists the
-// drives of one bound Infomaniak account, lists the children of one folder page by page, reads the
-// metadata of one file or folder, reads bounded file content, and, only on a connection that holds the
-// create or update permission, creates a folder, renames, moves, or copies one file or folder inside one
-// drive, and uploads or replaces one file. Each of these changes needs an explicit confirmation and is never
-// repeated after an unclear outcome; every request of it is sent once. No share, link, or trash operation is
-// exposed.
+// Package infomaniakdrive implements controlled access to the Infomaniak kDrive REST API: it lists the drives
+// of one bound Infomaniak account, lists the children of one folder page by page, reads the metadata of one
+// file or folder, reads bounded file content or writes a file to a local path the connection releases for
+// writing, and, only on a connection that holds the create or update permission, creates a folder, renames,
+// moves, or copies one file or folder inside one drive, and uploads or replaces one file. Each of these
+// changes needs an explicit confirmation and is never repeated after an unclear outcome; every request of it
+// is sent once. No share, link, or trash operation is exposed.
 //
-// Infomaniak groups many products behind one account model where a single API token can reach every
-// account and every kDrive its owner administers, which matters for a person who holds tokens of several
-// customers. A connection therefore binds exactly one Infomaniak account (account/ACCOUNT_ID) and,
-// optionally, an allow-list of drives of that account (drive/DRIVE_ID, repeatable). A drive_id argument
-// outside a configured allow-list is refused locally, before any request is sent. Whether or not an
-// allow-list is configured, every files.list, files.stat, and files.get call additionally confirms with
-// Infomaniak's own drive detail endpoint that the named drive actually belongs to the bound account, before
-// the file endpoint itself is ever called: an allow-list is local configuration and proves nothing about
-// what a drive_id really resolves to, and the same token can otherwise reach a drive of another account.
-// This ownership check is one extra request per call, so a files.* operation costs two requests against the
-// shared 60-per-minute budget instead of one; drives.list needs no such check, because Infomaniak already
-// answers it scoped to one account_id, and the entries are still matched against it again defensively.
-// Every drive and file identifier an agent argument names is a plain positive integer used only as a path
-// segment of the fixed Infomaniak REST paths below: no argument ever becomes a URL or an HTTP method, and the
-// only provider request bodies are the name or conflict choice of a change and the content of an upload. A
-// connection binds an account and drives, never single files, so a file, folder, or destination identifier is
-// bound by the drive it is used in: a change is refused locally against the allow-list and then, before the
-// change request, against the live account of the drive; Infomaniak resolves every identifier of a change
-// inside that one drive only.
+// Infomaniak groups many products behind one account model where a single API token can reach every account
+// and every kDrive its owner administers, which matters for a person who holds tokens of several customers. A
+// connection therefore binds exactly one Infomaniak account (account/ACCOUNT_ID) and, optionally, an
+// allow-list of drives of that account (drive/DRIVE_ID, repeatable). A drive_id argument outside a configured
+// allow-list is refused locally, before any request is sent. Whether or not an allow-list is configured, every
+// files.list, files.stat, files.get, and files.download call additionally confirms with Infomaniak's own drive
+// detail endpoint that the named drive actually belongs to the bound account, before the file endpoint itself
+// is ever called: an allow-list is local configuration and proves nothing about what a drive_id really
+// resolves to, and the same token can otherwise reach a drive of another account. This ownership check is one
+// extra request per call against the shared 60-per-minute budget; drives.list needs no such check, because
+// Infomaniak already answers it scoped to one account_id, and the entries are still matched against it again
+// defensively. Every drive and file identifier an agent argument names is a plain positive integer used only
+// as a path segment of the fixed Infomaniak REST paths below: no argument ever becomes a URL or an HTTP
+// method, and the only provider request bodies are the name or conflict choice of a change and the content of
+// an upload. A connection binds an account and drives, never single files, so a file, folder, or destination
+// identifier is bound by the drive it is used in: a change is refused locally against the allow-list and then,
+// before the change request, against the live account of the drive; Infomaniak resolves every identifier of a
+// change inside that one drive only.
 //
 // Mail, CalDAV/CardDAV, and kChat are deliberately out of this provider's scope even though they are also
 // Infomaniak products: kDrive is read here through a Bearer API token against api.infomaniak.com, while
@@ -497,19 +496,19 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read files", Recommended: true,
 			Description: "lists the reachable drives, lists folder contents page by page, and reads file and " +
-				"folder metadata and bounded content; changes nothing",
-			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID},
+				"folder metadata and bounded content, or writes a file to a released local path; changes nothing in kDrive",
+			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, filesDownload.ID},
 		}, {
 			ID: "write", Title: "Read and organise files",
 			Description: "also creates a confirmed folder and renames, moves, or copies one confirmed file or " +
 				"folder inside one drive; never uploads, shares, or deletes",
-			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, foldersCreate.ID,
+			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, filesDownload.ID, foldersCreate.ID,
 				filesRename.ID, filesMove.ID, filesCopy.ID},
 		}, {
 			ID: "upload", Title: "Read and upload files",
 			Description: "also uploads one confirmed file into a folder of a drive, or replaces the content of one " +
 				"file given its current etag, from a released local file or inline up to 4 MiB; never shares or deletes",
-			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, filesUpload.ID},
+			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, filesDownload.ID, filesUpload.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -519,6 +518,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: filesList, Handler: capability.Handler(invokeFilesList)},
 		capability.Operation{Descriptor: filesStat, Handler: capability.Handler(invokeFilesStat)},
 		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
+		capability.Operation{Descriptor: filesDownload, Handler: capability.Handler(invokeFilesDownload)},
 		capability.Operation{Descriptor: foldersCreate, Handler: capability.Handler(invokeFoldersCreate)},
 		capability.Operation{Descriptor: filesRename, Handler: capability.Handler(invokeFilesRename)},
 		capability.Operation{Descriptor: filesMove, Handler: capability.Handler(invokeFilesMove)},

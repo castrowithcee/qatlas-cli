@@ -346,6 +346,24 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 // location only, and never forwards the Authorization header past the configured API host.
 func (c *Client) GetFileContent(ctx context.Context, driveID, fileID int64) (*Content, error) {
 	const op = "get file content"
+	response, err := c.openDownload(ctx, op, driveID, fileID)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxFileBytes+1))
+	if err != nil || len(body) > maxFileBytes {
+		return nil, providerError(op, "the Infomaniak file exceeds the size limit")
+	}
+	return &Content{
+		DriveID: driveID, FileID: fileID, ContentBase64: base64.StdEncoding.EncodeToString(body),
+		ContentType: bounded(response.Header.Get("Content-Type")), Size: len(body),
+	}, nil
+}
+
+// openDownload sends the one content request through newDownloadClient and returns its successful
+// response; the caller closes the body.
+func (c *Client) openDownload(ctx context.Context, op string, driveID, fileID int64) (*http.Response, error) {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return nil, provider.Waited(op, "Infomaniak", err)
 	}
@@ -362,17 +380,9 @@ func (c *Client) GetFileContent(ctx context.Context, driveID, fileID int64) (*Co
 	if err != nil {
 		return nil, transportError(op, err)
 	}
-	defer response.Body.Close()
-
 	if response.StatusCode < 200 || response.StatusCode > 299 {
+		defer response.Body.Close()
 		return nil, c.statusError(op, response, false)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxFileBytes+1))
-	if err != nil || len(body) > maxFileBytes {
-		return nil, providerError(op, "the Infomaniak file exceeds the size limit")
-	}
-	return &Content{
-		DriveID: driveID, FileID: fileID, ContentBase64: base64.StdEncoding.EncodeToString(body),
-		ContentType: bounded(response.Header.Get("Content-Type")), Size: len(body),
-	}, nil
+	return response, nil
 }
