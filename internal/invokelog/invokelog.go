@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -377,26 +378,67 @@ func lastLine(dir string) (Entry, []byte, error) {
 	return Entry{}, nil, nil
 }
 
+// lastLineBlockSize is the size of the blocks lastLineOf reads backward from the end of a day file.
+const lastLineBlockSize = 4096
+
 // lastLineOf returns the last line of path and the entry it decodes to, or a nil line when the file does
-// not exist or holds no line.
+// not exist or holds no line. It reads only the tail of the file, so its cost does not grow with the file.
 func lastLineOf(path string) (Entry, []byte, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return Entry{}, nil, nil
 		}
 		return Entry{}, nil, fmt.Errorf("read %s: %w", path, err)
 	}
-	lines := splitLines(data)
-	if len(lines) == 0 {
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return Entry{}, nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	raw, err := lastLineFrom(f, info.Size(), lastLineBlockSize)
+	if err != nil {
+		return Entry{}, nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	if raw == nil {
 		return Entry{}, nil, nil
 	}
-	raw := lines[len(lines)-1]
 	var entry Entry
 	if err := json.Unmarshal(raw, &entry); err != nil {
 		return Entry{}, nil, fmt.Errorf("parse %s: not a valid log entry", path)
 	}
 	return entry, raw, nil
+}
+
+// lastLineFrom returns the last line of the size bytes in r, exactly as the last element of splitLines
+// would, or nil when there is none. It reads blocks of blockSize backward from the end and accumulates
+// them until the line start is found, so a line longer than a block is still returned whole.
+func lastLineFrom(r io.ReaderAt, size int64, blockSize int64) ([]byte, error) {
+	var tail []byte
+	for pos := size; pos > 0; {
+		start := pos - blockSize
+		if start < 0 {
+			start = 0
+		}
+		block := make([]byte, pos-start)
+		if _, err := r.ReadAt(block, start); err != nil {
+			return nil, err
+		}
+		tail = append(block, tail...)
+		pos = start
+		trimmed := bytes.TrimRight(tail, "\n")
+		if len(trimmed) == 0 {
+			continue
+		}
+		if i := bytes.LastIndexByte(trimmed, '\n'); i >= 0 {
+			return trimmed[i+1:], nil
+		}
+	}
+	trimmed := bytes.TrimRight(tail, "\n")
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+	return trimmed, nil
 }
 
 // splitLines returns the non-empty lines of data, without their trailing newline.
