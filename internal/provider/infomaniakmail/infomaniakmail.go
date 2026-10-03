@@ -4,7 +4,9 @@
 // attachment, inline up to a fixed size or into a local file the connection releases for writing. Four
 // confirmed tools change one message: messages.flag sets or clears \Seen or \Flagged, messages.move moves it
 // to another folder, messages.delete moves it to the trash folder, and messages.expunge removes it for good.
-// It drafts nothing, sends nothing, stores nothing, and never creates, renames, or deletes a folder.
+// Three confirmed tools keep drafts in the drafts folder: drafts.create stores a new draft, drafts.update
+// replaces one, and drafts.delete removes one for good. It sends nothing, stores nothing else, and never
+// creates, renames, or deletes a folder.
 //
 // The connection always goes to the fixed host mail.infomaniak.com on port 993 with implicit TLS and
 // certificate verification. No host, port, or TLS switch comes from configuration or from an argument; only
@@ -33,6 +35,15 @@
 // guessed by name. A server without MOVE or UIDPLUS is refused instead of falling back to COPY and a
 // folder-wide EXPUNGE. A change whose outcome is unknown (timeout, dropped connection, unreadable answer) is
 // never repeated; the error says it may have been applied.
+//
+// A draft is built from typed fields only (recipients as plain addresses, subject, text, and attachments from a
+// released local file or inline base64) with the standard library's MIME packages: From is the connection's
+// mailbox, Date and Message-ID are generated, every header value is free of control characters, and no
+// header, flag, or raw message comes from an argument. It is stored with one APPEND and the flag \Draft in
+// the one folder the server marks with the SPECIAL-USE attribute \Drafts, which is never guessed by name and
+// must be inside the folder targets. drafts.update stores the new draft first and then removes the old UID
+// with UID EXPUNGE (UIDPLUS is checked before anything is written); drafts.update and drafts.delete touch
+// only a message that carries \Draft. Nothing is sent, and an outcome that is unknown is never repeated.
 //
 // SEARCH uses fixed, typed criteria only (a since and before date, unread, and one validated sender address).
 // No free search string and no raw IMAP command ever comes from an argument. The UID window and the number
@@ -328,14 +339,14 @@ func validBaseURL(raw string) error {
 	return nil
 }
 
-// Register adds Infomaniak Mail metadata, its connection test, its read operations, and its four
-// message changes.
+// Register adds Infomaniak Mail metadata, its connection test, its read operations, its four
+// message changes, and its three draft changes.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak Mail", DefaultBaseURL: defaultURL, ValidateBaseURL: validBaseURL,
 		DefaultPermissions: []config.Permission{config.PermissionRead},
-		Description: "Infomaniak mailbox over IMAP, folders, message envelopes, bodies, and attachments read for " +
-			"one mailbox, plus confirmed flag, move, trash, and expunge changes of one message",
+		Description: "Infomaniak mailbox over IMAP: folders, envelopes, messages, attachments, plus confirmed " +
+			"message changes and drafts with attachments for one mailbox",
 		SecretRoles: []config.SecretRole{{
 			Name: roleMailPassword,
 			Description: "Mailbox password created in the Infomaniak Manager for this mailbox; the login name is " +
@@ -381,6 +392,13 @@ func Register(reg *capability.Registry) error {
 				"message for good, which only a tools list naming messages.expunge allows",
 			Tools: []string{foldersList.ID, messagesList.ID, messagesGet.ID, attachmentsGet.ID, messagesFlag.ID,
 				messagesMove.ID, messagesDelete.ID},
+		}, {
+			ID: "draft", Title: "Read messages and write drafts",
+			Description: "reads like the read profile and also creates a draft with attachments from a released " +
+				"local directory and replaces a draft by a new one in the drafts folder; sends nothing and cannot " +
+				"remove a draft, which only a tools list naming drafts.delete allows",
+			Tools: []string{foldersList.ID, messagesList.ID, messagesGet.ID, attachmentsGet.ID, draftsCreate.ID,
+				draftsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -394,6 +412,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: messagesMove, Handler: capability.Handler(invokeMessagesMove)},
 		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
 		capability.Operation{Descriptor: messagesExpunge, Handler: capability.Handler(invokeMessagesExpunge)},
+		capability.Operation{Descriptor: draftsCreate, Handler: capability.Handler(invokeDraftsCreate)},
+		capability.Operation{Descriptor: draftsUpdate, Handler: capability.Handler(invokeDraftsUpdate)},
+		capability.Operation{Descriptor: draftsDelete, Handler: capability.Handler(invokeDraftsDelete)},
 	)
 }
 

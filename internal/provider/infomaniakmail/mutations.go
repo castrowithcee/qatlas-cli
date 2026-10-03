@@ -423,7 +423,17 @@ func (c *Client) moveSelected(conn *session, op string, ref messageRef, destinat
 // without SPECIAL-USE, and a trash folder outside the connection's folder targets are all refused alike; a
 // name is never guessed.
 func (c *Client) trashFolder(conn *session, op string) (string, error) {
-	refusal := invalidRequest("the trash folder of this mailbox cannot be identified as one folder inside the " +
+	return c.specialFolder(conn, op, imap.MailboxAttrTrash, "trash")
+}
+
+// draftsFolder finds the one folder the server marks \Drafts, under the same rules as trashFolder.
+func (c *Client) draftsFolder(conn *session, op string) (string, error) {
+	return c.specialFolder(conn, op, imap.MailboxAttrDrafts, "drafts")
+}
+
+// specialFolder finds the one folder the server marks with attr; what names it in the refusal.
+func (c *Client) specialFolder(conn *session, op string, attr imap.MailboxAttr, what string) (string, error) {
+	refusal := invalidRequest("the " + what + " folder of this mailbox cannot be identified as one folder inside the " +
 		"targets of this connection")
 	if !conn.client.Caps().Has(imap.CapSpecialUse) {
 		return "", refusal
@@ -434,8 +444,8 @@ func (c *Client) trashFolder(conn *session, op string) (string, error) {
 	}
 	found := map[string]bool{}
 	for _, data := range listed {
-		for _, attr := range data.Attrs {
-			if attr == imap.MailboxAttrTrash {
+		for _, a := range data.Attrs {
+			if a == attr {
 				found[normalizeFolder(data.Mailbox)] = true
 			}
 		}
@@ -491,14 +501,33 @@ func (c *Client) ExpungeMessage(ctx context.Context, ref messageRef) (*MessageSt
 	if err := c.openForChange(conn, op, ref); err != nil {
 		return nil, err
 	}
-	set := imap.UIDSetNum(imap.UID(ref.uid))
-	if err := conn.client.Store(set, &imap.StoreFlags{Op: imap.StoreFlagsAdd, Silent: true,
-		Flags: []imap.Flag{imap.FlagDeleted}}, nil).Close(); err != nil {
-		return nil, changeFailure(op, err, uncertain)
-	}
-	if _, err := conn.client.UIDExpunge(set).Collect(); err != nil {
-		return nil, withSuffix(op, err, markedDeleted)
+	if err := expungeSelected(conn, op, ref, "", false); err != nil {
+		return nil, err
 	}
 	state := stateOf(ref)
 	return &state, nil
+}
+
+// expungeSelected removes the one UID of ref from the selected folder: it marks it \Deleted and expunges
+// that UID alone. By default an unclear failure of the mark says the change may have been applied and a
+// failure of the expunge says the message may be marked deleted. A caller that has already changed something
+// passes its own suffix, which then ends every failure of either step.
+func expungeSelected(conn *session, op string, ref messageRef, after string, afterChange bool) error {
+	set := imap.UIDSetNum(imap.UID(ref.uid))
+	storeSuffix, expungeSuffix := uncertain, markedDeleted
+	if afterChange {
+		storeSuffix, expungeSuffix = after, after
+	}
+	err := conn.client.Store(set, &imap.StoreFlags{Op: imap.StoreFlagsAdd, Silent: true,
+		Flags: []imap.Flag{imap.FlagDeleted}}, nil).Close()
+	if err != nil {
+		if afterChange {
+			return withSuffix(op, err, storeSuffix)
+		}
+		return changeFailure(op, err, storeSuffix)
+	}
+	if _, err := conn.client.UIDExpunge(set).Collect(); err != nil {
+		return withSuffix(op, err, expungeSuffix)
+	}
+	return nil
 }
