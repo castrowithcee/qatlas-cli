@@ -17,7 +17,9 @@
 // and a change widens or narrows that reach. Before a change names a user or a team, it is proven to belong to
 // the same drive by reading the drive's users, and a foreign or unprovable one is refused without being named;
 // an e-mail address is syntax-checked, is invited by Infomaniak with a mail, and is never quoted in an error.
-// No other share, invitation, or access operation is exposed.
+// A dropbox, the public upload link of one folder, is read, created, changed, and deleted by four tools in the
+// same way: all of them need an explicit tools list, the changes need a confirmation, and its URL has its own
+// data sensitivity class. No other share, invitation, or access operation is exposed.
 //
 // Infomaniak groups many products behind one account model where a single API token can reach every account
 // and every kDrive its owner administers, which matters for a person who holds tokens of several customers. A
@@ -474,7 +476,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kDrive", DefaultBaseURL: apiRoot,
-		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, and user, team, and invitation access through the Infomaniak REST API",
+		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
@@ -549,6 +551,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: linksCreate, Handler: capability.Handler(invokeLinksCreate)},
 		capability.Operation{Descriptor: linksUpdate, Handler: capability.Handler(invokeLinksUpdate)},
 		capability.Operation{Descriptor: linksDelete, Handler: capability.Handler(invokeLinksDelete)},
+		capability.Operation{Descriptor: dropboxGet, Handler: capability.Handler(invokeDropboxGet)},
+		capability.Operation{Descriptor: dropboxCreate, Handler: capability.Handler(invokeDropboxCreate)},
+		capability.Operation{Descriptor: dropboxUpdate, Handler: capability.Handler(invokeDropboxUpdate)},
+		capability.Operation{Descriptor: dropboxDelete, Handler: capability.Handler(invokeDropboxDelete)},
 		capability.Operation{Descriptor: accessGet, Handler: capability.Handler(invokeAccessGet)},
 		capability.Operation{Descriptor: accessGrant, Handler: capability.Handler(invokeAccessGrant)},
 		capability.Operation{Descriptor: accessUpdate, Handler: capability.Handler(invokeAccessUpdate)},

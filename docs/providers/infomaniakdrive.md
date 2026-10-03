@@ -4,7 +4,8 @@ description: >
   folder, metadata, and content reads, the download to a local path, the confirmed folder creation, rename,
   move, copy, and file upload or replacement, the trash reads and the confirmed trash, restore, and permanent
   deletion, the share link reads and the confirmed creation, change, and deletion of share links with their
-  password and URL handling, the access read and the confirmed granting, changing, and revoking of user,
+  password and URL handling, the dropbox (upload link) read and the confirmed creation, change, and deletion
+  of dropboxes, the access read and the confirmed granting, changing, and revoking of user,
   team, and invitation access with their membership check and personal data handling, pagination and cursor
   contracts, the Business kSuite versus personal my kSuite compatibility cases, redirect handling on downloads,
   and the boundary to Mail, CalDAV/CardDAV, and kChat.
@@ -25,7 +26,8 @@ trash entry, each only after an explicit confirmation. It reads the trash too. M
 trash, deleting a trash entry for good, and emptying the trash are separate tools that need the `delete`
 permission and an explicit tools list. It reads the share link of a file or folder and lists the files that have
 one; creating, changing, and deleting a share link are separate, confirmed tools, and all share link tools,
-the reading ones included, need an explicit tools list. It reads the access of a file or folder and grants, changes, or revokes the access of users, teams, and
+the reading ones included, need an explicit tools list. It reads the dropbox (upload link) of a folder and
+creates, changes, or deletes it with separate, confirmed tools that likewise all need an explicit tools list. It reads the access of a file or folder and grants, changes, or revokes the access of users, teams, and
 invited e-mail addresses to it; these are separate tools that each need an explicit tools list, and a user or
 team is only named after it is proven to belong to the same drive.
 
@@ -73,7 +75,7 @@ those drives are. A `drive_id` argument goes through two checks before any file 
 
 1. A `drive_id` outside a configured drive allow-list is refused locally, as an invalid request, before any
    secret is read or any request is sent.
-2. Every `infomaniakdrive.files.*` (upload and download included), `infomaniakdrive.trash.*`, `infomaniakdrive.links.*`, `infomaniakdrive.access.*`, and `infomaniakdrive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
+2. Every `infomaniakdrive.files.*` (upload and download included), `infomaniakdrive.trash.*`, `infomaniakdrive.links.*`, `infomaniakdrive.dropbox.*`, `infomaniakdrive.access.*`, and `infomaniakdrive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
    `account_id` of its own) that the drive actually belongs to the bound account, in one extra request before
    the file endpoint itself. The allow-list is local configuration a person wrote; it is never trusted on its
    own, because the same token can otherwise reach a drive of another account, and a drive named in an
@@ -112,6 +114,10 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 | `infomaniakdrive.links.create` | creates exactly one share link for a file or folder (`POST /2/drive/{d}/files/{id}/link`) |
 | `infomaniakdrive.links.update` | changes exactly one share link (`PUT /2/drive/{d}/files/{id}/link`) |
 | `infomaniakdrive.links.delete` | deletes exactly one share link (`DELETE /2/drive/{d}/files/{id}/link`) |
+| `infomaniakdrive.dropbox.get` | the dropbox of exactly one folder (`GET /2/drive/{d}/files/{id}/dropbox`) |
+| `infomaniakdrive.dropbox.create` | creates exactly one dropbox for a folder (`POST /2/drive/{d}/files/{id}/dropbox`) |
+| `infomaniakdrive.dropbox.update` | changes exactly one dropbox (`PUT /2/drive/{d}/files/{id}/dropbox`) |
+| `infomaniakdrive.dropbox.delete` | deletes exactly one dropbox (`DELETE /2/drive/{d}/files/{id}/dropbox`) |
 | `infomaniakdrive.access.get` | the users, teams, and invited people with access to exactly one file or folder (`GET /2/drive/{d}/files/{id}/access`) |
 | `infomaniakdrive.access.grant` | gives users, teams, and e-mail addresses access in one request (`POST /2/drive/{d}/files/{id}/access`) |
 | `infomaniakdrive.access.update` | changes the right of exactly one user or team (`PUT /2/drive/{d}/files/{id}/access/users/{uid}` or `.../teams/{tid}`) |
@@ -124,7 +130,10 @@ are `read`, safe, and need no confirmation. `folders.create` and `files.copy` ha
 the tool in its `tools` list. `links.create` has the effect `create`, `links.update` the effect `update`, and
 `links.delete` the effect `delete`; a share link is access for whoever holds its URL, so all three require the
 tool allow-list as well, whichever right the link has. `links.get` and `links.list` are `read` and safe, but
-their URLs are that same access, so they require the tool allow-list too. `access.get` is `read` and safe, but it discloses people and
+their URLs are that same access, so they require the tool allow-list too. `dropbox.get` is `read` and safe, `dropbox.create` has the
+effect `create`, `dropbox.update` the effect `update`, and `dropbox.delete` the effect `delete`; a dropbox URL lets
+anyone without an account upload into the folder, so all four require the tool allow-list and the three changes
+need `confirm`; all four are `open_world`. `dropbox.create` is non-idempotent, the others are idempotent. `access.get` is `read` and safe, but it discloses people and
 their rights, so it requires the tool allow-list too. `access.grant` has the effect `create`, `access.update` the
 effect `update`, and `access.revoke` the effect `delete`; all three widen or narrow who reaches a file, so all
 three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.update`, `links.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` can mail people, so it is not. The provider's default
@@ -135,7 +144,8 @@ The terminal editor offers three setup profiles. `read` is the recommended one a
 read tools, `trash.list` included. `write` also ticks `[create]`, `[update]`, and the four folder and file organisation tools.
 `upload` also ticks `[update]` and `files.upload`. Neither `write` nor `upload` is ever
 preselected. No profile contains `files.trash`, `trash.restore`, `trash.delete`, `trash.empty`, or any of the share link
-tools, not even `links.get` and `links.list`, since a link URL is access for whoever holds it. No profile contains
+tools, not even `links.get` and `links.list`, since a link URL is access for whoever holds it. No profile contains a
+`dropbox.*` tool either, for the same reason. No profile contains
 an `access.*` tool either, not even `access.get`, since it discloses people, their rights, and invited e-mail
 addresses: a connection adds them by naming them in its `tools` list together with the matching permission.
 The profile descriptions of `write` and `upload` stay true: neither shares, grants access, nor deletes. `files.download` is only offered to a connection that releases a directory for writing, and
@@ -234,6 +244,36 @@ than being refused or silently redirected to a listing.
   the error says the change may have been applied; read the link before trying again. `asynchronous` is a
   `pending` change. A 403, for example because the drive's plan does not allow share links or a right, is
   reported as `permission`.
+
+### Dropbox
+
+- A dropbox is a public upload link for one folder: anyone holding its URL can upload files into the folder
+  without an account. The four tools `dropbox.get`, `dropbox.create`, `dropbox.update`, and `dropbox.delete` act
+  on exactly one folder (`file_id`, a positive integer other than the drive's root `1`) of one drive, which goes
+  through the allow-list check and the live ownership check first; a foreign `drive_id` is refused locally,
+  without naming it, before any secret is read or request is sent. Every one of them, `dropbox.get` included,
+  needs an explicit tools list; the three changes need `confirm`.
+- `dropbox.create` and `dropbox.update` accept only these settings, sent only when given: `alias` (1 to 100
+  bytes, no control character), `password` (8 to 128 characters, no control character), `valid_until` (RFC 3339,
+  in the future, at most ten years ahead, sent as a timestamp), `limit_file_size` (1 to 1099511627776 bytes), and
+  `email_when_finished` (boolean). Infomaniak also accepts `null` for `alias`, `limit_file_size`, `password`, and
+  `valid_until` to clear them; Qatlas does not offer that, so a setting cannot be removed again, and the
+  documented bounds of `alias` and `limit_file_size` are Qatlas's own, since Infomaniak documents none.
+  `dropbox.update` needs at least one setting; `dropbox.create` takes none or any.
+- The password is registered with the redactor before any request, is only ever the request body to Infomaniak,
+  and never appears in a result, an error, or the invocation log; the dropbox reports only `has_password`.
+- The dropbox has its own sensitivity class, `infomaniak-kdrive-dropboxes`. A dropbox is reported as `id`, `uuid`,
+  `name`, `url`, `users_count`, `created_at`, `updated_at`, `last_uploaded_at`, `has_password`, `has_notification`,
+  `has_validity`, and `has_size_limit`, all untrusted data and bounded; the `url` is returned only when it is an
+  absolute `https` URL without credentials of at most 1024 characters. Other fields Infomaniak documents (the
+  creator, the containing directory and user via `with`, and the remaining time, size, and usage figures) are not
+  read. `dropbox.get` answers `not-found` for a folder without a dropbox; `dropbox.update` and `dropbox.delete`
+  answer only their `status`; `dropbox.create` answers the created dropbox.
+- A change sends exactly one request after the ownership check and is never repeated. After a timeout, a dropped
+  connection, a 5xx answer, or an unreadable answer, and also when a created dropbox comes back unreadable, the
+  error says the change may have been applied; read the dropbox before trying again. `asynchronous` is a
+  `pending` change. A 403, for example because the drive's plan does not include dropboxes, is reported as
+  `permission`, and a provider failure as `provider-error`; neither is retried with other settings.
 
 ### Access
 
@@ -365,7 +405,7 @@ This provider works the same way against a Business kSuite drive and a personal 
 ordinary kDrives reachable through the same REST API and the same API token, and both are listed, browsed,
 and read identically through the tools above. The changes, uploads, downloads, and share links use the same endpoints on both. Whether a plan
 permits a change, for example a folder or file operation or an upload on a restricted my kSuite drive, is Infomaniak's
-decision: a refusal arrives as `permission` (or `provider-error`) and is never worked around, a share link included: which rights, expiry, and settings a plan allows is its decision, and a refusal is not retried with other settings, and the same holds for sharing access with users, teams, and invited people, which a plan or the rights of the token's user may refuse as `permission`, and this
+decision: a refusal arrives as `permission` (or `provider-error`) and is never worked around, a share link or dropbox included: which rights, expiry, and settings a plan allows is its decision, and a refusal is not retried with other settings, and the same holds for sharing access with users, teams, and invited people, which a plan or the rights of the token's user may refuse as `permission`, and this
 provider documents no plan-specific behaviour beyond that. The one documented difference between the two plans is WebDAV
 access, which my kSuite does not guarantee the way a Business kSuite subscription does; this provider does
 not depend on WebDAV at all; it is unaffected either way. A my kSuite account may hold fewer or more
@@ -383,6 +423,6 @@ would force a kDrive-only connection to also declare secret roles it never uses.
 later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
 creation or removal of users or teams of the drive, no invitation to the drive itself, no handling of access
 requests, no synchronisation with the rights of the parent, no resending of an invitation, no access `message`,
-no `none` right, no `can_request_access` or removal of an expiry on a link, no link statistics, no trashed
+no `none` right, no `can_request_access` or removal of an expiry on a link, no removal of a dropbox setting, no dropbox invitation (`/dropbox/invite`) and no listing or search of dropboxes, no link statistics, no trashed
 folder browsing, no restore outside the drive, no copy to another drive, no `version` conflict mode, no search,
 no activity or version history, and no account, settings, or quota administration.

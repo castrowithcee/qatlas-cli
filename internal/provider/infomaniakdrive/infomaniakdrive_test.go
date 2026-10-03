@@ -182,6 +182,13 @@ func coreConfig() *config.Config {
 			// Without a tools list, no link change is offered, whatever permissions the connection holds.
 			"linksunlisted": {Service: "im", Credential: "im-reader", Permissions: linkPermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
+			"dropbox": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: dropboxTools,
+				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
+			"dropboxforeign": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: dropboxTools,
+				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(foreignDrive, 10)}},
+			// Without a tools list, no dropbox tool is offered, whatever permissions the connection holds.
+			"dropboxunlisted": {Service: "im", Credential: "im-reader", Permissions: linkPermissions,
+				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
 			"access": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: accessTools,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
 			"accessforeign": {Service: "im", Credential: "im-reader", Permissions: linkPermissions, Tools: accessTools,
@@ -201,6 +208,8 @@ var linkPermissions = []config.Permission{config.PermissionRead, config.Permissi
 	config.PermissionDelete}
 
 var linkTools = []string{linksGet.ID, linksList.ID, linksCreate.ID, linksUpdate.ID, linksDelete.ID}
+
+var dropboxTools = []string{dropboxGet.ID, dropboxCreate.ID, dropboxUpdate.ID, dropboxDelete.ID}
 
 var accessTools = []string{accessGet.ID, accessGrant.ID, accessUpdate.ID, accessRevoke.ID}
 
@@ -260,8 +269,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 24 {
-		t.Fatalf("tools = %+v, want 24", metadata.Tools)
+	if len(metadata.Tools) != 28 {
+		t.Fatalf("tools = %+v, want 28", metadata.Tools)
 	}
 	if want := []config.Permission{config.PermissionRead}; !reflect.DeepEqual(metadata.DefaultPermissions, want) {
 		t.Fatalf("default permissions = %v, want read only", metadata.DefaultPermissions)
