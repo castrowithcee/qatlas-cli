@@ -40,6 +40,7 @@ const (
 	childFolderID int64 = 42
 	childFileID   int64 = 43
 	storageHost         = "storage.foreign.invalid"
+	uploadHost          = "upload.kdrive.infomaniak.com"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -77,7 +78,7 @@ func serve(t *testing.T, calls *[]call, handler func(*http.Request) (*http.Respo
 			}
 			return foreign(request)
 		}
-		if request.URL.Host != apiHost {
+		if request.URL.Host != apiHost && request.URL.Host != uploadHost {
 			return nil, errors.New("unexpected host")
 		}
 		return handler(request)
@@ -227,14 +228,15 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 8 {
-		t.Fatalf("tools = %+v, want 8", metadata.Tools)
+	if len(metadata.Tools) != 9 {
+		t.Fatalf("tools = %+v, want 9", metadata.Tools)
 	}
 	if want := []config.Permission{config.PermissionRead}; !reflect.DeepEqual(metadata.DefaultPermissions, want) {
 		t.Fatalf("default permissions = %v, want read only", metadata.DefaultPermissions)
 	}
-	if len(metadata.Profiles) != 2 || metadata.Profiles[0].ID != "read" || len(metadata.Profiles[0].Tools) != 4 ||
-		metadata.Profiles[1].ID != "write" || len(metadata.Profiles[1].Tools) != 8 {
+	if len(metadata.Profiles) != 3 || metadata.Profiles[0].ID != "read" || len(metadata.Profiles[0].Tools) != 4 ||
+		metadata.Profiles[1].ID != "write" || len(metadata.Profiles[1].Tools) != 8 ||
+		metadata.Profiles[2].ID != "upload" || len(metadata.Profiles[2].Tools) != 5 {
 		t.Fatalf("profiles = %+v", metadata.Profiles)
 	}
 }

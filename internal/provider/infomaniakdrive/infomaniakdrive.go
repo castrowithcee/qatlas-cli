@@ -1,9 +1,10 @@
 // Package infomaniakdrive implements controlled access to the Infomaniak kDrive REST API: it lists the
 // drives of one bound Infomaniak account, lists the children of one folder page by page, reads the
 // metadata of one file or folder, reads bounded file content, and, only on a connection that holds the
-// create or update permission, creates a folder and renames, moves, or copies one file or folder inside one
-// drive. Each of these four changes needs an explicit confirmation, sends exactly one request, and is never
-// repeated after an unclear outcome. No upload, share, link, or trash operation is exposed.
+// create or update permission, creates a folder, renames, moves, or copies one file or folder inside one
+// drive, and uploads or replaces one file. Each of these changes needs an explicit confirmation and is never
+// repeated after an unclear outcome; every request of it is sent once. No share, link, or trash operation is
+// exposed.
 //
 // Infomaniak groups many products behind one account model where a single API token can reach every
 // account and every kDrive its owner administers, which matters for a person who holds tokens of several
@@ -19,10 +20,11 @@
 // answers it scoped to one account_id, and the entries are still matched against it again defensively.
 // Every drive and file identifier an agent argument names is a plain positive integer used only as a path
 // segment of the fixed Infomaniak REST paths below: no argument ever becomes a URL or an HTTP method, and the
-// only provider request body is the one name a folder creation or a rename carries. A connection binds an
-// account and drives, never single files, so a file, folder, or destination identifier is bound by the drive
-// it is used in: a change is refused locally against the allow-list and then, before the change request, against
-// the live account of the drive; Infomaniak resolves every identifier of a change inside that one drive only.
+// only provider request bodies are the name or conflict choice of a change and the content of an upload. A
+// connection binds an account and drives, never single files, so a file, folder, or destination identifier is
+// bound by the drive it is used in: a change is refused locally against the allow-list and then, before the
+// change request, against the live account of the drive; Infomaniak resolves every identifier of a change
+// inside that one drive only.
 //
 // Mail, CalDAV/CardDAV, and kChat are deliberately out of this provider's scope even though they are also
 // Infomaniak products: kDrive is read here through a Bearer API token against api.infomaniak.com, while
@@ -459,7 +461,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kDrive", DefaultBaseURL: apiRoot,
-		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, and copy through the Infomaniak REST API",
+		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, and upload through the Infomaniak REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
@@ -503,6 +505,11 @@ func Register(reg *capability.Registry) error {
 				"folder inside one drive; never uploads, shares, or deletes",
 			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, foldersCreate.ID,
 				filesRename.ID, filesMove.ID, filesCopy.ID},
+		}, {
+			ID: "upload", Title: "Read and upload files",
+			Description: "also uploads one confirmed file into a folder of a drive, or replaces the content of one " +
+				"file given its current etag, from a released local file or inline up to 4 MiB; never shares or deletes",
+			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, filesUpload.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -516,5 +523,6 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: filesRename, Handler: capability.Handler(invokeFilesRename)},
 		capability.Operation{Descriptor: filesMove, Handler: capability.Handler(invokeFilesMove)},
 		capability.Operation{Descriptor: filesCopy, Handler: capability.Handler(invokeFilesCopy)},
+		capability.Operation{Descriptor: filesUpload, Handler: capability.Handler(invokeFilesUpload)},
 	)
 }
