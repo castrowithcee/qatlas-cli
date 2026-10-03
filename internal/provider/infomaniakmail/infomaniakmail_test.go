@@ -157,7 +157,10 @@ type environment struct {
 	f    *fixture
 }
 
-func newEnvironment(t *testing.T) *environment {
+func newEnvironment(t *testing.T) *environment { return newEnvironmentWith(t, nil) }
+
+// newEnvironmentWith is newEnvironment with a chance to change the configuration first.
+func newEnvironmentWith(t *testing.T, change func(*config.Config)) *environment {
 	t.Helper()
 	f := newFixture(t)
 	red := &redact.Redactor{}
@@ -168,7 +171,11 @@ func newEnvironment(t *testing.T) *environment {
 		}
 		return ""
 	}, nil, nil, red)
-	return &environment{core: application.New(registry(t), coreConfig(), resolver, red), red: red, f: f}
+	cfg := coreConfig()
+	if change != nil {
+		change(cfg)
+	}
+	return &environment{core: application.New(registry(t), cfg, resolver, red), red: red, f: f}
 }
 
 func (e *environment) invoke(operation, connection, arguments string) (string, error) {
@@ -199,7 +206,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 2 || len(metadata.Profiles) != 1 || !metadata.Profiles[0].Recommended ||
+	if len(metadata.Tools) != 4 || len(metadata.Profiles) != 1 || !metadata.Profiles[0].Recommended ||
 		metadata.Profiles[0].ID != "read" {
 		t.Fatalf("tools = %+v, profiles = %+v", metadata.Tools, metadata.Profiles)
 	}
@@ -208,8 +215,16 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			t.Errorf("%s risk = %+v, want a read without confirmation", descriptor.ID, descriptor.Risk)
 		}
 	}
-	if messagesList.Risk.DataSensitivity != "infomaniak-mail-messages" {
-		t.Errorf("messages sensitivity = %q", messagesList.Risk.DataSensitivity)
+	for _, descriptor := range []capability.Descriptor{messagesList, messagesGet, attachmentsGet} {
+		if descriptor.Risk.DataSensitivity != "infomaniak-mail-messages" {
+			t.Errorf("%s sensitivity = %q", descriptor.ID, descriptor.Risk.DataSensitivity)
+		}
+	}
+	if len(metadata.Profiles[0].Tools) != 4 {
+		t.Errorf("profile tools = %v, want all four", metadata.Profiles[0].Tools)
+	}
+	if messagesGet.LocalFiles != "" || attachmentsGet.LocalFiles != config.LocalFilesWrite {
+		t.Errorf("local files: messages.get %q, attachments.get %q", messagesGet.LocalFiles, attachmentsGet.LocalFiles)
 	}
 }
 
