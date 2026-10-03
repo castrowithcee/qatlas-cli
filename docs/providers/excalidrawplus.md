@@ -2,7 +2,8 @@
 description: >
   Describes the Excalidraw+ provider (beta): the workspace API key and fixed API host, the collection targets,
   the collection, scene, and scene content reads with their client-side search, creating, renaming, and moving
-  scenes, patching and replacing scene content, the bounds, and the errors.
+  scenes, patching and replacing scene content, deleting scenes and collections into the trash, the bounds, and the
+  errors.
 type: knowledge
 edit: shared
 created: 2026-10-02
@@ -13,8 +14,8 @@ updated: 2026-10-03
 
 This provider reads the collections, scenes, and scene content of one Excalidraw+ workspace through its public
 REST API (`https://api.excalidraw.com/api/v1`). The recommended `read` profile changes nothing. The optional `manage`
-profile can create a scene, rename or move one, patch its elements, and replace its whole content; there is no tool to
-delete a scene or a collection, or to manage users, invites, or activity logs.
+profile can create a scene, rename or move one, patch its elements, replace its whole content, and move a scene or a
+collection to the trash; there is no tool to manage users, invites, or activity logs, or to restore from the trash.
 
 **Beta.** The Excalidraw+ API is a public beta whose names and schemas may change. Every tool descriptor carries a
 `version` that increases with a breaking change.
@@ -140,6 +141,29 @@ answer, the error says the change may have taken effect; read the scene before r
 `unknown`. The answer reports `scene_id`, `scene_version`, `sent`, `element_count` (not deleted, as the answer shows),
 and, for a patch, `not_applied`.
 
+## Deleting scenes and collections
+
+The `manage` profile also lists two deleting tools. Both have the effect `delete`, need `confirm`, are offered only to
+a connection whose `tools` list names them (and with the `delete` permission), send exactly one request, and are never
+repeated.
+
+| Tool | Request | Does |
+| --- | --- | --- |
+| `excalidrawplus.scenes.delete` | `DELETE /scenes/{id}` | moves a scene to the trash: `scene_id` |
+| `excalidrawplus.collections.delete` | `DELETE /collections/{id}` | moves a collection to the trash: `collection_id` |
+
+- Excalidraw+ soft-deletes: the scene or collection goes to the trash of Excalidraw+. **Shared links and embeds of the
+  scene, or of all scenes in the collection, stop working.** Restoring is only possible inside Excalidraw+ (trash in
+  the app), not through Qatlas.
+- `scenes.delete` first reads the scene's metadata and continues only when its collection is allowed; a scene of
+  another collection receives no `DELETE` and the refusal does not name its collection.
+- `collections.delete` checks the `collection_id` against the targets before any secret is read or request is sent,
+  then reads the collection once. The `private` collection is never deletable, and the default collection is refused
+  (`is_default`); both are narrower than the API requires.
+- The answer is `id` and `deleted: true`; the response body of Excalidraw+ is not read. After a timeout, a reset
+  connection, a 5xx answer, or an unreadable answer, the error says the change may have taken effect; read the state
+  in Excalidraw+ before repeating it. Idempotency is reported as `unknown`.
+
 ## Pagination
 
 Lists take `offset` (0 to 1 000 000) and `limit` (1 to 100, 50 when omitted) and answer `has_next_page` and, when
@@ -195,3 +219,11 @@ replaces everything, forces editors to reload, and recomputes `sceneVersion`; bo
 the server rejects or ignores a stale version without an error (Qatlas detects it from the answer), the defaults
 Qatlas fills for omitted element fields, the accepted `source` value, a size limit, and the effect of a repeated
 request. The local limits (100 and 500 elements, 2000 text characters, 200 points, 1 MiB) are Qatlas choices.
+
+The delete endpoints follow the API reference, which lists `DELETE` for a scene and for a collection as a soft deletion
+into the trash. Not documented, and therefore assumed: the exact paths (`DELETE /scenes/{id}`, `DELETE /collections/{id}`,
+in line with the other endpoints), the success status and body (any 2xx counts, the body is dropped), the error
+bodies, what happens to the scenes of a deleted collection (assumed to leave with it), whether the default
+collection may be deleted (refused locally), the shape of `GET /collections/{id}` (assumed to be the collection object
+as in the list, with `id`, `isDeleted`, and `isDefault`), and the effect of a repeated request. No live call has been
+made.

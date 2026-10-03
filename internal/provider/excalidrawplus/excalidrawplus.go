@@ -4,7 +4,7 @@
 // descriptor carries a version that moves with a breaking change. It lists collections and scenes, reads one
 // scene's metadata, and reads one scene's content, bounded and searchable client-side. The optional manage
 // profile also creates, renames, and moves scenes, patches a scene's elements by element version, and replaces a
-// scene's whole content with a bounded element set.
+// scene's whole content with a bounded element set, and moves a scene or a collection to the trash.
 //
 // A connection binds one workspace key (the key belongs to exactly one workspace) and a collection
 // allow-list (collection/COLLECTION_ID, repeatable) or the explicit * wildcard. The allow-list is the only
@@ -191,7 +191,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 // changeUncertain is appended when a change may have taken effect although no usable answer arrived.
 const changeUncertain = "; this change may have taken effect, read the current state in Excalidraw+ before repeating it"
 
-// send sends one JSON change (POST or PATCH) below the API root and decodes its answer into out. It is never
+// send sends one change (POST, PATCH, PUT, or a bodiless DELETE) below the API root and decodes its answer into out. It is never
 // repeated: after a timeout, a reset connection, a 5xx, or an unreadable answer the message says the change may
 // have taken effect.
 func (c *Client) send(ctx context.Context, op, method, path string, payload, out any) error {
@@ -200,12 +200,15 @@ func (c *Client) send(ctx context.Context, op, method, path string, payload, out
 
 // sendBounded is send with its own ceiling for the answer, which a scene content answer needs.
 func (c *Client) sendBounded(ctx context.Context, op, method, path string, payload, out any, maxBytes int) error {
-	if method != http.MethodPost && method != http.MethodPatch && method != http.MethodPut {
+	if method != http.MethodPost && method != http.MethodPatch && method != http.MethodPut && method != http.MethodDelete {
 		return providerError(op, "the method is not offered")
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return providerError(op, "the request could not be built")
+	var body []byte
+	if method != http.MethodDelete {
+		var err error
+		if body, err = json.Marshal(payload); err != nil {
+			return providerError(op, "the request could not be built")
+		}
 	}
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "Excalidraw+", err)
@@ -216,7 +219,9 @@ func (c *Client) sendBounded(ctx context.Context, op, method, path string, paylo
 	}
 	req.Header.Set("Authorization", "Bearer "+c.key)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
+	if method != http.MethodDelete {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("User-Agent", "qatlas-cli")
 	response, err := c.http.Do(req)
 	if err != nil {
@@ -234,6 +239,11 @@ func (c *Client) sendBounded(ctx context.Context, op, method, path string, paylo
 			failure.Message += changeUncertain
 		}
 		return failure
+	}
+	if method == http.MethodDelete {
+		// The answer of a deletion is not documented; the status alone is the result and the body is dropped.
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
+		return nil
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, int64(maxBytes)+1))
 	if err != nil || len(data) > maxBytes {
@@ -382,14 +392,15 @@ func Register(reg *capability.Registry) error {
 				"scene's text content; changes nothing",
 			Tools: readTools,
 		}, {
-			ID: "manage", Title: "Create, rename, move scenes and edit their content",
+			ID: "manage", Title: "Create, rename, move, delete scenes and collections and edit scene content",
 			Description: "reads what the read profile reads, creates a scene in an allowed collection, " +
 				"renames or moves a scene of an allowed collection into an allowed collection, patches the " +
 				"elements of a scene by element version, and replaces a scene's whole content; every change " +
-				"needs its own confirmation, and the content replacement is offered only to a connection whose " +
-				"tools list names it. There is no tool to delete a scene or a collection",
+				"needs its own confirmation, and the content replacement and both deletions are offered only to a " +
+				"connection whose tools list names them. Deleting a scene or a collection moves it to the trash of " +
+				"Excalidraw+ and breaks its shared links and embeds; Qatlas cannot restore it",
 			Tools: append(append([]string{}, readTools...), scenesCreate.ID, scenesUpdate.ID, contentPatch.ID,
-				contentReplace.ID),
+				contentReplace.ID, scenesDelete.ID, collectionsDelete.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -403,6 +414,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: scenesUpdate, Handler: capability.Handler(invokeScenesUpdate)},
 		capability.Operation{Descriptor: contentPatch, Handler: capability.Handler(invokeContentPatch)},
 		capability.Operation{Descriptor: contentReplace, Handler: capability.Handler(invokeContentReplace)},
+		capability.Operation{Descriptor: scenesDelete, Handler: capability.Handler(invokeScenesDelete)},
+		capability.Operation{Descriptor: collectionsDelete, Handler: capability.Handler(invokeCollectionsDelete)},
 	)
 }
 
