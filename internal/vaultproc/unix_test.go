@@ -466,6 +466,53 @@ func TestClientNamesAServerThatRefusesIt(t *testing.T) {
 	}
 }
 
+// A vault process of another protocol version cannot be asked to lock, so Lock ends it with a signal
+// instead of failing with the advice to lock it.
+func TestLockEndsAProcessOfAnotherProtocolVersion(t *testing.T) {
+	path := socketIn(t)
+	if err := privateDir(filepath.Dir(path)); err != nil {
+		t.Fatalf("privateDir() error = %v", err)
+	}
+	l, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			var h hello
+			_ = readMessage(conn, &h)
+			_ = writeMessage(conn, response{V: Version - 1})
+			_ = conn.Close()
+		}
+	}()
+	previous := terminate
+	t.Cleanup(func() { terminate = previous })
+	var ended []int
+	terminate = func(pid int) error { ended = append(ended, pid); return nil }
+
+	c := NewClient(path, testRecipient)
+	c.Verify = func(net.Conn) error { return nil }
+	if err := c.Lock(context.Background()); err != nil {
+		t.Fatalf("Lock() of a process of another version = %v, want it ended", err)
+	}
+	if len(ended) != 1 || ended[0] != os.Getpid() {
+		t.Fatalf("ended = %v, want the process at the socket, %d", ended, os.Getpid())
+	}
+
+	// A process that cannot be ended keeps the version error, with its process id.
+	terminate = func(int) error { return errors.New("not permitted") }
+	err = c.Lock(context.Background())
+	var peer *PeerError
+	if !errors.Is(err, ErrVersion) || !errors.As(err, &peer) || peer.PID != os.Getpid() {
+		t.Fatalf("Lock() that cannot end the process = %v, want ErrVersion naming it", err)
+	}
+}
+
 func TestHarden(t *testing.T) {
 	_, out := helper(t, os.Args[0], "harden", "")
 	if got := line(t, out); got != wantHardened {

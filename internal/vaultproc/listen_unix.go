@@ -132,3 +132,7 @@ func (l *lockedListener) Close() error {
 	_ = l.lock.Close()
 	return err
 }
+
+// terminate asks the process pid to end, the way a person ends a vault process with 'kill'. It is a variable
+// only so a test can see the call without ending itself.
+var terminate = func(pid int) error { return syscall.Kill(pid, syscall.SIGTERM) }

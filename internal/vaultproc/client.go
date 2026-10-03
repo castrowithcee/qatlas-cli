@@ -134,8 +134,17 @@ func (c *Client) Delete(ctx context.Context, credential, role string) error {
 }
 
 // Lock asks the vault process to overwrite its secrets and end. ErrNotRunning means there was none.
+//
+// A vault process of another protocol version, one left from before an update, cannot be asked; it is ended
+// with SIGTERM instead, on which it closes and overwrites its secrets just as on a lock. That process was
+// checked before its version was read, as this user's own (Linux) or this program (macOS), and its id comes
+// from the kernel's credentials of the socket.
 func (c *Client) Lock(ctx context.Context) error {
 	_, err := c.call(ctx, request{Op: opLock})
+	var peer *PeerError
+	if errors.Is(err, ErrVersion) && errors.As(err, &peer) && terminate(peer.PID) == nil {
+		return nil
+	}
 	return err
 }
 

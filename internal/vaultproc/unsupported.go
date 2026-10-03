@@ -17,6 +17,8 @@ func verifyServer(net.Conn) error { return ErrUnsupported }
 
 func peerPID(net.Conn) int { return 0 }
 
+func terminate(int) error { return ErrUnsupported }
+
 // userRuntimeDir finds no runtime directory without XDG_RUNTIME_DIR on this platform.
 func userRuntimeDir() string { return "" }
 
