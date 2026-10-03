@@ -228,7 +228,7 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 	if !s.credentialsReady(w) {
 		return
 	}
-	cfg, err := s.store.Load()
+	cfg, rev, err := s.store.LoadVersioned()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -289,8 +289,8 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 		}
 	}
 
-	if fp, err := s.configFingerprint(); err != nil || fp != r.PostFormValue("cfgver") {
-		fail("the configuration changed since this form was opened; reload the page and try again")
+	if string(rev) != r.PostFormValue("cfgver") {
+		fail(errConfigChanged)
 		return
 	}
 	if !edit {
@@ -354,9 +354,13 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 	}
 
 	toVault := cred.Type == config.CredentialTypeVault
-	warning, err := secretcommit.Commit(s.store, s.secrets, candidate, name, toVault, roles, values,
+	warning, err := secretcommit.Commit(s.store, s.secrets, candidate, rev, name, toVault, roles, values,
 		vaultOfferFromForm(r))
 	if err != nil {
+		if errors.Is(err, config.ErrConflict) {
+			fail(errConfigChanged)
+			return
+		}
 		fail(s.redact(err.Error()) + "; the configuration was not changed")
 		return
 	}
@@ -407,7 +411,7 @@ func (s *Server) handleSetForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
-	cfg, err := s.store.Load()
+	cfg, rev, err := s.store.LoadVersioned()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -418,8 +422,8 @@ func (s *Server) handleSetForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fail := func(errText string) { s.renderConnectionResult(w, cfg, name, conn, "", errText) }
-	if fp, err := s.configFingerprint(); err != nil || fp != r.PostFormValue("cfgver") {
-		fail("the configuration changed since this form was opened; reload the page and try again")
+	if string(rev) != r.PostFormValue("cfgver") {
+		fail(errConfigChanged)
 		return
 	}
 	changed := conn
@@ -433,8 +437,8 @@ func (s *Server) handleSetForward(w http.ResponseWriter, r *http.Request) {
 		fail(s.redact(err.Error()))
 		return
 	}
-	if err := s.store.Save(cand); err != nil {
-		fail(s.redact(err.Error()))
+	if err := s.store.SaveIfUnchanged(cand, rev); err != nil {
+		fail(s.saveFailure(err))
 		return
 	}
 	s.setNotice(s.forwardChangeNotice(cand, name))

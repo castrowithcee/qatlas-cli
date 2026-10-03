@@ -32,8 +32,13 @@ type Secrets interface {
 
 // Commit stores the secrets of roles named in values for credential, in the vault when toVault, otherwise
 // the system keyring, and then saves cfg with store. cfg must already have the credential entry set (and
-// must already have passed cfg.Validate()), so the only way store.Save can still fail is the file itself; the
+// must already have passed cfg.Validate()), so the only way the save can still fail is the file itself; the
 // secrets written for it are rolled back then, so no store entry is left without a credential that names it.
+//
+// base is the revision of the configuration file cfg was derived from (see config.Store.LoadVersioned). The
+// commit is one config.Store.Transact: if the file no longer has base, nothing is written, no secret and no
+// configuration, and the error is a *config.ConflictError (errors.Is(err, config.ErrConflict)) for the
+// caller to report as "reload and repeat". Only secrets this call wrote are ever rolled back.
 //
 // A role missing from values is skipped: a credential started without every role filled in yet writes only
 // what it was given. offer is asked for a passphrase only when a vault secret here would be the vault's very
@@ -43,7 +48,7 @@ type Secrets interface {
 // holds the vault unlocked outside this run, the same way 'qatlas credential set' already does for each one
 // it writes. The warning that returns, if any, is not a reason to roll anything back: the vault and the
 // configuration already agree by then.
-func Commit(store *config.Store, secrets Secrets, cfg *config.Config, credential string, toVault bool,
+func Commit(store *config.Store, secrets Secrets, cfg *config.Config, base config.Revision, credential string, toVault bool,
 	roles []string, values map[string]string, offer vault.PassphraseFunc) (warning string, err error) {
 	// A forward credential's fields are checked before anything is written. The message never carries a value.
 	if cred, ok := cfg.Credentials[credential]; ok && cred.Forward {
@@ -56,26 +61,34 @@ func Commit(store *config.Store, secrets Secrets, cfg *config.Config, credential
 		}
 	}
 	var written []string
-	for _, role := range roles {
-		value, ok := values[role]
-		if !ok {
-			continue
+	// The revision is checked before the first secret is written and the lock is held until the configuration
+	// is saved, so a conflict is found before any secret of another change could be overwritten, and a
+	// rollback never races a second writer that uses the same credential name.
+	err = store.Transact(base, func(save func(*config.Config) error) error {
+		for _, role := range roles {
+			value, ok := values[role]
+			if !ok {
+				continue
+			}
+			var writeErr error
+			if toVault {
+				writeErr = secrets.SetVault(credential, role, value, offer)
+			} else {
+				writeErr = secrets.Set(credential, role, value)
+			}
+			if writeErr != nil {
+				return rollback(secrets, credential, toVault, written,
+					fmt.Errorf("storing the secret for %s.%s: %w", credential, role, writeErr))
+			}
+			written = append(written, role)
 		}
-		var writeErr error
-		if toVault {
-			writeErr = secrets.SetVault(credential, role, value, offer)
-		} else {
-			writeErr = secrets.Set(credential, role, value)
+		if err := save(cfg); err != nil {
+			return rollback(secrets, credential, toVault, written, err)
 		}
-		if writeErr != nil {
-			return "", rollback(secrets, credential, toVault, written,
-				fmt.Errorf("storing the secret for %s.%s: %w", credential, role, writeErr))
-		}
-		written = append(written, role)
-	}
-
-	if err := store.Save(cfg); err != nil {
-		return "", rollback(secrets, credential, toVault, written, err)
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	if !toVault || len(written) == 0 {
 		return "", nil

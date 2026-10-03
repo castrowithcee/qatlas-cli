@@ -179,24 +179,28 @@ func Verify(v *vault.Vault, plan []Entry) error {
 }
 
 // SwitchCredentials backs up the configuration store's file first, atomically and at mode 0600 (see
-// BackupConfig), and switches every named credential's type to vault in cfg, then saves it through store. A
-// failed backup stops before the configuration file is touched. Called with no names, it does nothing and
-// leaves cfg and the file untouched.
-func SwitchCredentials(store *config.Store, cfg *config.Config, switched []string) error {
+// BackupConfig), and switches every named credential's type to vault in cfg, then saves it through store.
+// base is the revision of the file cfg was loaded from (config.Store.LoadVersioned): if the file changed
+// since, the result is a *config.ConflictError and the file is left as it is and no backup is made. A failed
+// backup stops before the configuration file is touched. Called with no names, it does nothing and leaves
+// cfg and the file untouched.
+func SwitchCredentials(store *config.Store, cfg *config.Config, base config.Revision, switched []string) error {
 	if len(switched) == 0 {
 		return nil
 	}
-	if err := BackupConfig(store.Path()); err != nil {
-		return err
-	}
-	for _, name := range switched {
-		cred := cfg.Credentials[name]
-		cred.Type = config.CredentialTypeVault
-		if err := cfg.SetCredential(name, cred); err != nil {
+	return store.Transact(base, func(save func(*config.Config) error) error {
+		if err := BackupConfig(store.Path()); err != nil {
 			return err
 		}
-	}
-	return store.Save(cfg)
+		for _, name := range switched {
+			cred := cfg.Credentials[name]
+			cred.Type = config.CredentialTypeVault
+			if err := cfg.SetCredential(name, cred); err != nil {
+				return err
+			}
+		}
+		return save(cfg)
+	})
 }
 
 // ProcessClientOf returns the client of the vault process that would hold v unlocked, checked against v's

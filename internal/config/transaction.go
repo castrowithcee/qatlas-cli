@@ -173,3 +173,40 @@ func (s *Store) Update(change func(*Config) error) error {
 	}
 	return s.Save(cfg)
 }
+
+// Transact runs work under the cross-process lock if the file still has the revision rev, which
+// LoadVersioned returned for the configuration the change was based on. It exists for a change that must do
+// something else before it saves, such as writing the secrets a new credential names, and must not do it
+// unless the configuration it is based on is still current.
+//
+// The revision is checked before work runs, so a conflict is reported as a *ConflictError without work
+// having done anything. work gets a save function that checks the revision again, because a writer that
+// bypasses the lock may have replaced the file meanwhile, and then writes like Save; if either step fails,
+// nothing was written and work can undo what it did, still under the lock, before it returns. The lock is
+// held while work runs, so work must be short and must not call back into this store (the lock is not
+// reentrant). Whatever work returns is returned unchanged.
+func (s *Store) Transact(rev Revision, work func(save func(*Config) error) error) error {
+	unlock, err := s.lock()
+	if err != nil {
+		return err
+	}
+	defer unlock()
+
+	current, err := s.currentRevision()
+	if err != nil {
+		return err
+	}
+	if current != rev {
+		return &ConflictError{Path: s.path}
+	}
+	return work(func(cfg *Config) error {
+		current, err := s.currentRevision()
+		if err != nil {
+			return err
+		}
+		if current != rev {
+			return &ConflictError{Path: s.path}
+		}
+		return s.Save(cfg)
+	})
+}

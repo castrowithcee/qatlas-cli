@@ -2,6 +2,7 @@ package vaultmigrate
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -156,7 +157,11 @@ func TestSwitchCredentialsBacksUpAndSwitches(t *testing.T) {
 		t.Fatalf("Save() = %v", err)
 	}
 
-	if err := SwitchCredentials(store, cfg, []string{"reader"}); err != nil {
+	_, rev, err := store.LoadVersioned()
+	if err != nil {
+		t.Fatalf("LoadVersioned() = %v", err)
+	}
+	if err := SwitchCredentials(store, cfg, rev, []string{"reader"}); err != nil {
 		t.Fatalf("SwitchCredentials() = %v", err)
 	}
 	if cfg.Credentials["reader"].Type != config.CredentialTypeVault {
@@ -171,6 +176,47 @@ func TestSwitchCredentialsBacksUpAndSwitches(t *testing.T) {
 	}
 	if reloaded.Credentials["reader"].Type != config.CredentialTypeVault {
 		t.Errorf("saved type = %q, want vault", reloaded.Credentials["reader"].Type)
+	}
+}
+
+// A change to the file since cfg was read makes SwitchCredentials a conflict that leaves the file and its
+// directory as the other writer left them.
+func TestSwitchCredentialsConflictLeavesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yaml")
+	store := config.NewStore(path)
+	cfg := config.New()
+	if err := cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeKeyring}); err != nil {
+		t.Fatalf("SetCredential() = %v", err)
+	}
+	if err := store.Save(cfg); err != nil {
+		t.Fatalf("Save() = %v", err)
+	}
+	_, rev, err := store.LoadVersioned()
+	if err != nil {
+		t.Fatalf("LoadVersioned() = %v", err)
+	}
+	other := config.NewStore(path)
+	if err := other.Update(func(c *config.Config) error {
+		return c.SetCredential("added", config.Credential{Type: config.CredentialTypeKeyring})
+	}); err != nil {
+		t.Fatalf("Update() = %v", err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() = %v", err)
+	}
+
+	err = SwitchCredentials(store, cfg, rev, []string{"reader"})
+	if !errors.Is(err, config.ErrConflict) {
+		t.Fatalf("SwitchCredentials() = %v, want a conflict", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || string(after) != string(before) {
+		t.Errorf("the file changed: %v", err)
+	}
+	if _, err := os.Stat(path + ".bak"); err == nil {
+		t.Errorf("a backup was made for a conflicting change")
 	}
 }
 

@@ -1213,7 +1213,7 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 	if err != nil {
 		return err
 	}
-	cfg, err := config.Load(path, reg)
+	cfg, baseRev, err := config.NewStore(path, reg).LoadVersioned()
 	if err != nil {
 		return classifyUserError(err)
 	}
@@ -1280,7 +1280,7 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 
 	// Every credential whose entries just moved is switched to type vault. The configuration is backed up
 	// first, atomically and at mode 0600; a failed backup stops here, before config.yaml is touched.
-	if err := vaultmigrate.SwitchCredentials(config.NewStore(path, reg), cfg, switched); err != nil {
+	if err := vaultmigrate.SwitchCredentials(config.NewStore(path, reg), cfg, baseRev, switched); err != nil {
 		return classifyUserError(err)
 	}
 

@@ -315,3 +315,58 @@ func TestConflictErrorHasNoContent(t *testing.T) {
 		t.Fatal("empty message")
 	}
 }
+
+// Transact does not run its work on a stale revision, and a bypassing writer during the work is caught at
+// the save.
+func TestTransactChecksRevisionBeforeWorkAndAtSave(t *testing.T) {
+	store, path := newTarget(t)
+	must(t, store.Save(sample(t)))
+	cfg, rev, err := store.LoadVersioned()
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := NewStore(path, testProviders)
+
+	ran := false
+	changed := cfg.Clone()
+	must(t, changed.SetService("added", Service{Provider: "bookstack", BaseURL: "https://added.example.invalid"}))
+	err = store.Transact(rev, func(save func(*Config) error) error {
+		ran = true
+		return save(changed)
+	})
+	if err != nil || !ran {
+		t.Fatalf("Transact() = %v, ran = %v, want success on the current revision", err, ran)
+	}
+
+	// The file changed since rev: the work must not run.
+	ran = false
+	err = store.Transact(rev, func(save func(*Config) error) error {
+		ran = true
+		return save(cfg)
+	})
+	if !errors.Is(err, ErrConflict) || ran {
+		t.Fatalf("Transact() = %v, ran = %v, want a conflict before the work", err, ran)
+	}
+
+	// A writer that bypasses the lock during the work is found at the save.
+	cfg, rev, err = store.LoadVersioned()
+	if err != nil {
+		t.Fatal(err)
+	}
+	intruder := cfg.Clone()
+	must(t, intruder.SetService("intruder", Service{Provider: "bookstack", BaseURL: "https://intruder.example.invalid"}))
+	err = store.Transact(rev, func(save func(*Config) error) error {
+		must(t, other.Save(intruder))
+		return save(cfg)
+	})
+	if !errors.Is(err, ErrConflict) {
+		t.Fatalf("Transact() = %v, want a conflict at the save", err)
+	}
+	got, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.Services["intruder"]; !ok {
+		t.Error("the bypassing writer's file was overwritten")
+	}
+}

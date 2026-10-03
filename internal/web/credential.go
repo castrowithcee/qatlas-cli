@@ -80,6 +80,19 @@ func (s *Server) credentialsReady(w http.ResponseWriter) bool {
 	return true
 }
 
+// errConfigChanged is what every route shows when its form was opened against a configuration that has
+// changed since, whether the stale form was noticed up front or only by the transaction that saves it.
+const errConfigChanged = "the configuration changed since this form was opened; reload the page and try again"
+
+// saveFailure words a failed configuration commit for a form: a conflict (see config.ErrConflict) gets the
+// same reload-and-retry text as a stale form, anything else its own redacted message.
+func (s *Server) saveFailure(err error) string {
+	if errors.Is(err, config.ErrConflict) {
+		return errConfigChanged
+	}
+	return s.redact(err.Error())
+}
+
 // configFingerprint hashes the configuration file's current bytes, so a form can carry, as an ordinary
 // hidden field, proof of the exact file it was shown against: a save whose fingerprint no longer matches the
 // file on disk stops as a conflict instead of overwriting a change nothing on this page ever saw (see
@@ -174,7 +187,7 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 	name := r.PostFormValue("name")
 	storage := r.PostFormValue("storage")
 
-	cfg, err := s.store.Load()
+	cfg, rev, err := s.store.LoadVersioned()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -185,8 +198,8 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 		fail("choose a provider first")
 		return
 	}
-	if fp, err := s.configFingerprint(); err != nil || fp != r.PostFormValue("cfgver") {
-		fail("the configuration changed since this form was opened; reload the page and try again")
+	if string(rev) != r.PostFormValue("cfgver") {
+		fail(errConfigChanged)
 		return
 	}
 	if name == "" {
@@ -239,15 +252,15 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 
 	var warning string
 	if storage == config.CredentialTypeEnv {
-		if err := s.store.Save(cfg); err != nil {
-			fail(s.redact(err.Error()))
+		if err := s.store.SaveIfUnchanged(cfg, rev); err != nil {
+			fail(s.saveFailure(err))
 			return
 		}
 	} else {
 		toVault := storage == config.CredentialTypeVault
-		warning, err = secretcommit.Commit(s.store, s.secrets, cfg, name, toVault, roles, values, vaultOfferFromForm(r))
+		warning, err = secretcommit.Commit(s.store, s.secrets, cfg, rev, name, toVault, roles, values, vaultOfferFromForm(r))
 		if err != nil {
-			fail(s.redact(err.Error()))
+			fail(s.saveFailure(err))
 			return
 		}
 	}

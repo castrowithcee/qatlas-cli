@@ -530,7 +530,7 @@ func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 // uses too, so the two never leave a different thing behind on a failure (see internal/secretcommit).
 func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, plan setupPlan, offer vault.PassphraseFunc) (string, error) {
 	toVault := storageType(plan.storage) == config.CredentialTypeVault
-	return secretcommit.Commit(store, secrets, cfg, plan.credential, toVault, plan.roles, plan.secrets, offer)
+	return secretcommit.Commit(store, secrets, cfg, currentRevision(store), plan.credential, toVault, plan.roles, plan.secrets, offer)
 }
 
 // setupSaved applies the outcome of the final save.
@@ -676,4 +676,12 @@ func (m *Model) summaryRows() []string {
 		fmt.Sprintf("%-12s %s", "permissions", permissions),
 		fmt.Sprintf("%-12s %s", "tools", tools),
 	}
+}
+
+// currentRevision reads the revision of the configuration file as it is now, for a commit that must pass
+// one. The editor does not track the revision its configuration was loaded at yet, so this commit is
+// guarded against a writer that comes in while it runs, not against one that wrote since the editor loaded.
+func currentRevision(store *config.Store) config.Revision {
+	_, rev, _ := store.LoadVersioned()
+	return rev
 }

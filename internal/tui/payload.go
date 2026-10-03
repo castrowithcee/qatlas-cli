@@ -307,7 +307,7 @@ func (m *Model) commitPayload(candidate *config.Config, name string, toVault boo
 	}
 	store, secrets := m.store, m.secrets
 	return func() tea.Msg {
-		warning, err := secretcommit.Commit(store, secrets, candidate, name, toVault, roles, values, offer)
+		warning, err := secretcommit.Commit(store, secrets, candidate, currentRevision(store), name, toVault, roles, values, offer)
 		msg := payloadSavedMsg{cfg: candidate, name: name, vault: toVault, err: err, warning: warning}
 		if err != nil {
 			return msg

@@ -246,7 +246,7 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 			err = vaultmigrate.Verify(v, p.plan)
 		}
 		if err == nil {
-			err = vaultmigrate.SwitchCredentials(store, cfg, p.switched)
+			err = vaultmigrate.SwitchCredentials(store, cfg, currentRevision(store), p.switched)
 		}
 		return vaultMigrateWrittenMsg{cfg: cfg, warning: warning, err: err}
 	}
