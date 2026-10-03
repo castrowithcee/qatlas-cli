@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -511,7 +512,10 @@ func TestGuidedConnectionOffersFilesFieldsByDirection(t *testing.T) {
 func TestGuidedConnectionFilesRoundTrip(t *testing.T) {
 	s, store, _, _ := newConnectionTestServer(t, nil)
 	cookie, csrf := coupleAndApprove(t, s, nil)
-	extra := url.Values{"filesread": {"/srv/in-a\r\n\n /srv/in-b "}}
+	// An absolute path needs a drive on Windows.
+	drive := map[bool]string{true: "C:"}[runtime.GOOS == "windows"]
+	a, b := drive+"/srv/in-a", drive+"/srv/in-b"
+	extra := url.Values{"filesread": {a + "\r\n\n " + b + " "}}
 
 	review := s.request(t, http.MethodGet, "/connections/new/review?"+filesFormValues(extra).Encode(),
 		s.addr, cookie, nil)
@@ -519,7 +523,7 @@ func TestGuidedConnectionFilesRoundTrip(t *testing.T) {
 		t.Fatalf("review status = %d, want 200, body: %s", review.Code, review.Body.String())
 	}
 	body := review.Body.String()
-	if !strings.Contains(body, "read: /srv/in-a /srv/in-b") {
+	if !strings.Contains(body, "read: "+a+" "+b) {
 		t.Errorf("review page does not summarise the files release:\n%s", body)
 	}
 	form := filesFormValues(extra)
@@ -533,11 +537,11 @@ func TestGuidedConnectionFilesRoundTrip(t *testing.T) {
 		t.Fatalf("store.Load: %v", err)
 	}
 	got := cfg.Connections["book-conn"].Files
-	if want := []string{"/srv/in-a", "/srv/in-b"}; len(got.Read) != 2 || got.Read[0] != want[0] || got.Read[1] != want[1] || len(got.Write) != 0 {
+	if want := []string{a, b}; len(got.Read) != 2 || got.Read[0] != want[0] || got.Read[1] != want[1] || len(got.Write) != 0 {
 		t.Fatalf("saved files = %+v, want read %v and no write", got, want)
 	}
 	result := s.request(t, http.MethodGet, rec.Header().Get("Location"), s.addr, cookie, nil).Body.String()
-	if !strings.Contains(result, "read: /srv/in-a /srv/in-b") {
+	if !strings.Contains(result, "read: "+a+" "+b) {
 		t.Errorf("result page does not show the files release:\n%s", result)
 	}
 }

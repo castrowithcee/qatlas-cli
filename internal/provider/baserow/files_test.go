@@ -216,7 +216,7 @@ func TestUploadFromAReleasedLocalFileSendsOneUploadAndOneRowChange(t *testing.T)
 	if err := os.WriteFile(filepath.Join(dir, "offer.txt"), fake.content, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	result, err := uploadWith(t, filesConnection(dir, ""), `"local_path":"`+filepath.Join(dir, "offer.txt")+`"`)
+	result, err := uploadWith(t, filesConnection(dir, ""), `"local_path":`+strconv.Quote(filepath.Join(dir, "offer.txt")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,13 +291,13 @@ func TestUploadRefusesPathsOutsideTheReleaseBeforeAnyProviderIO(t *testing.T) {
 	for name, path := range map[string]string{"outside": filepath.Join(other, "secret.txt"), "dotdot": released + "/../x"} {
 		red := &redact.Redactor{}
 		_, err := invokeFilesUpload(t.Context(), filesConnection(released, ""), resolver(red, env.reads), red,
-			json.RawMessage(`{"table_id":11,"row_id":7,"field":"Anhang","local_path":"`+path+`"}`))
+			json.RawMessage(`{"table_id":11,"row_id":7,"field":"Anhang","local_path":`+strconv.Quote(path)+`}`))
 		var pathErr *localfile.PathError
 		if !errors.As(err, &pathErr) || strings.Contains(err.Error(), other) || strings.Contains(err.Error(), released) {
 			t.Errorf("%s: err = %v", name, err)
 		}
 	}
-	if _, err := uploadWith(t, filesConnection("", ""), `"local_path":"`+filepath.Join(other, "secret.txt")+`"`); err == nil {
+	if _, err := uploadWith(t, filesConnection("", ""), `"local_path":`+strconv.Quote(filepath.Join(other, "secret.txt"))); err == nil {
 		t.Error("an upload without a released directory succeeded")
 	}
 	if len(calls) != 0 || *env.reads != 0 {
@@ -590,7 +590,7 @@ func TestDownloadChecksTheHashOfTheStoredName(t *testing.T) {
 	}
 	dir := t.TempDir()
 	target := filepath.Join(dir, "a.txt")
-	_, err := getWith(t, filesConnection("", dir), `,"local_path":"`+target+`"`)
+	_, err := getWith(t, filesConnection("", dir), `,"local_path":`+strconv.Quote(target))
 	var integrity *localfile.IntegrityError
 	if !errors.As(err, &integrity) {
 		t.Fatalf("path: err = %v, want an integrity error", err)
@@ -619,7 +619,7 @@ func TestDownloadToAReleasedPathWritesOnlyMetadataAndNeedsConfirmationToReplace(
 	serveFiles(t, fake)
 	dir := t.TempDir()
 	target := filepath.Join(dir, "a.txt")
-	extra := `,"local_path":"` + target + `"`
+	extra := `,"local_path":` + strconv.Quote(target)
 
 	result, err := getWith(t, filesConnection("", dir), extra)
 	if err != nil {
@@ -661,7 +661,7 @@ func TestDownloadRefusesPathsOutsideTheReleaseBeforeAnyProviderIO(t *testing.T) 
 	released, other := t.TempDir(), t.TempDir()
 	red := &redact.Redactor{}
 	_, err := invokeFilesGet(t.Context(), filesConnection("", released), resolver(red, env.reads), red,
-		json.RawMessage(`{"table_id":11,"row_id":7,"field":"Anhang","local_path":"`+filepath.Join(other, "a.txt")+`"}`))
+		json.RawMessage(`{"table_id":11,"row_id":7,"field":"Anhang","local_path":`+strconv.Quote(filepath.Join(other, "a.txt"))+`}`))
 	var pathErr *localfile.PathError
 	if !errors.As(err, &pathErr) || strings.Contains(err.Error(), other) || len(calls) != 0 || *env.reads != 0 {
 		t.Fatalf("err = %v, calls = %d, reads = %d", err, len(calls), *env.reads)

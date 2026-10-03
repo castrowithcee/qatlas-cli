@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -578,7 +579,7 @@ func TestUploadFromAReleasedLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	red := &redact.Redactor{}
-	arguments := `{"row_id":"` + rowID + `","column":"Anhang","local_path":"` + filepath.Join(dir, "offer.txt") + `"}`
+	arguments := `{"row_id":"` + rowID + `","column":"Anhang","local_path":` + strconv.Quote(filepath.Join(dir, "offer.txt")) + `}`
 	result, err := invokeFilesUpload(context.Background(), filesConnection(dir, ""), resolver(red), red, json.RawMessage(arguments))
 	if err != nil {
 		t.Fatal(err)
@@ -601,9 +602,9 @@ func TestUploadRefusesPathsOutsideTheReleaseBeforeAnyProviderIO(t *testing.T) {
 	}
 	red := &redact.Redactor{}
 	for name, arguments := range map[string]string{
-		"outside": `"local_path":"` + filepath.Join(other, "secret.txt") + `"`,
-		"dotdot":  `"local_path":"` + released + `/../x"`,
-		"both":    `"local_path":"` + released + `/a","content_base64":"aGk=","name":"a"`,
+		"outside": `"local_path":` + strconv.Quote(filepath.Join(other, "secret.txt")),
+		"dotdot":  `"local_path":` + strconv.Quote(released+"/../x"),
+		"both":    `"local_path":` + strconv.Quote(released+"/a") + `,"content_base64":"aGk=","name":"a"`,
 		"neither": `"name":"a"`,
 	} {
 		_, err := invokeFilesUpload(context.Background(), filesConnection(released, ""), resolver(red), red,
@@ -618,7 +619,7 @@ func TestUploadRefusesPathsOutsideTheReleaseBeforeAnyProviderIO(t *testing.T) {
 	}
 	// Without a released directory no file is read at all.
 	if _, err := invokeFilesUpload(context.Background(), filesConnection("", ""), resolver(red), red,
-		json.RawMessage(`{"row_id":"`+rowID+`","column":"Anhang","local_path":"`+filepath.Join(other, "secret.txt")+`"}`)); err == nil {
+		json.RawMessage(`{"row_id":"`+rowID+`","column":"Anhang","local_path":`+strconv.Quote(filepath.Join(other, "secret.txt"))+`}`)); err == nil {
 		t.Error("an upload without a released directory succeeded")
 	}
 }
@@ -665,7 +666,7 @@ func TestDownloadToAReleasedPathWritesOnlyMetadataAndChecksTheSize(t *testing.T)
 	dir := t.TempDir()
 	target := filepath.Join(dir, "a.txt")
 	red := &redact.Redactor{}
-	arguments := json.RawMessage(`{"row_id":"` + rowID + `","column":"Anhang","local_path":"` + target + `"}`)
+	arguments := json.RawMessage(`{"row_id":"` + rowID + `","column":"Anhang","local_path":` + strconv.Quote(target) + `}`)
 
 	result, err := invokeFilesGet(context.Background(), filesConnection("", dir), resolver(red), red, arguments)
 	if err != nil {
@@ -712,7 +713,7 @@ func TestDownloadRefusesPathsOutsideTheReleaseBeforeAnyProviderIO(t *testing.T) 
 	released, other := t.TempDir(), t.TempDir()
 	red := &redact.Redactor{}
 	_, err := invokeFilesGet(context.Background(), filesConnection("", released), resolver(red), red,
-		json.RawMessage(`{"row_id":"`+rowID+`","column":"Anhang","local_path":"`+filepath.Join(other, "a.txt")+`"}`))
+		json.RawMessage(`{"row_id":"`+rowID+`","column":"Anhang","local_path":`+strconv.Quote(filepath.Join(other, "a.txt"))+`}`))
 	var pathErr *localfile.PathError
 	if !errors.As(err, &pathErr) || strings.Contains(err.Error(), other) {
 		t.Fatalf("err = %v", err)

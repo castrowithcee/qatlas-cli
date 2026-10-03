@@ -172,7 +172,7 @@ func typeText(t *testing.T, m *Model, text string) {
 // clearField sends backspaces to the focused text field.
 func clearField(t *testing.T, m *Model) {
 	t.Helper()
-	for i := 0; i < 64; i++ {
+	for i := 0; i < 256; i++ {
 		m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	}
 }

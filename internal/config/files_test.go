@@ -76,11 +76,11 @@ func TestFilesAreValidated(t *testing.T) {
 	}{
 		{"relative", "read: [" + canary + "/in]", "files.read[0]: must name a directory"},
 		{"glob", "write: [\"/srv/" + canary + "-*\"]", "files.write[0]: glob patterns are not supported"},
-		{"root", "read: [/]", "files.read[0]: must name a directory below the file system root"},
+		{"root", "read: [" + drive + "/]", "files.read[0]: must name a directory below the file system root"},
 		{"bare home", "write: [\"~\"]", "files.write[0]: must name a directory below the file system root"},
 		{"home with slash", "write: [\"~/\"]", "files.write[0]: must name a directory below"},
-		{"parent segment", "read: [\"/srv/" + canary + "/../x\"]", "files.read[0]: must not contain '..'"},
-		{"duplicate by clean", "read: [/srv/" + canary + ", /srv/" + canary + "/]",
+		{"parent segment", "read: [\"" + drive + "/srv/" + canary + "/../x\"]", "files.read[0]: must not contain '..'"},
+		{"duplicate by clean", "read: [" + drive + "/srv/" + canary + ", " + drive + "/srv/" + canary + "/]",
 			"files.read[1]: a directory is listed more than once"},
 		{"empty list", "read: []", "files.read: must name at least one directory"},
 		{"empty entry", "write: [\"\"]", "files.write[0]: must not be empty"},
@@ -97,7 +97,7 @@ func TestFilesAreValidated(t *testing.T) {
 	}
 
 	// The same directory in both directions is no duplicate.
-	if _, err := decodeFiles(t, filesBase+"    files: {read: [/srv/a], write: [/srv/a]}\n"); err != nil {
+	if _, err := decodeFiles(t, filesBase+"    files: {read: ["+drive+"/srv/a], write: ["+drive+"/srv/a]}\n"); err != nil {
 		t.Errorf("same directory in both directions: %v", err)
 	}
 }
@@ -106,10 +106,10 @@ func TestFilesNeedAProviderWithToolsOfTheDirection(t *testing.T) {
 	for _, tt := range []struct {
 		name, service, files, want string
 	}{
-		{"no tools at all, read", "wiki", "read: [/srv/a]", "files.read: the provider of this connection has no tool that reads local files"},
-		{"no tools at all, write", "wiki", "write: [/srv/a]", "files.write: the provider of this connection has no tool that writes local files"},
-		{"only uploads, write refused", "up", "write: [/srv/a]", "files.write: the provider of this connection has no tool that writes local files"},
-		{"only uploads, read fine", "up", "read: [/srv/a]", ""},
+		{"no tools at all, read", "wiki", "read: [" + drive + "/srv/a]", "files.read: the provider of this connection has no tool that reads local files"},
+		{"no tools at all, write", "wiki", "write: [" + drive + "/srv/a]", "files.write: the provider of this connection has no tool that writes local files"},
+		{"only uploads, write refused", "up", "write: [" + drive + "/srv/a]", "files.write: the provider of this connection has no tool that writes local files"},
+		{"only uploads, read fine", "up", "read: [" + drive + "/srv/a]", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			credential := map[string]string{"wiki": "wikikey"}[tt.service]
@@ -154,11 +154,11 @@ func TestFilesWarningsNameMissingDirectoriesByPosition(t *testing.T) {
 }
 
 func TestFilesSurviveMarshalCloneAndResolve(t *testing.T) {
-	cfg, err := decodeFiles(t, filesBase+"    files: {read: [/srv/in], write: [\"~/out\"]}\n")
+	cfg, err := decodeFiles(t, filesBase+"    files: {read: ["+drive+"/srv/in], write: [\"~/out\"]}\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := Files{Read: []string{"/srv/in"}, Write: []string{"~/out"}}
+	want := Files{Read: []string{drive + "/srv/in"}, Write: []string{"~/out"}}
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -186,7 +186,7 @@ func TestFilesSurviveMarshalCloneAndResolve(t *testing.T) {
 }
 
 func TestConnectionRefusalNeedsFilesOfTheToolsDirection(t *testing.T) {
-	cfg, err := decodeFiles(t, filesBase+"    permissions: [read, create]\n    files: {read: [/srv/in]}\n")
+	cfg, err := decodeFiles(t, filesBase+"    permissions: [read, create]\n    files: {read: ["+drive+"/srv/in]}\n")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -73,7 +74,7 @@ func TestLocalFileOverwriteConfirmationOverCLI(t *testing.T) {
 	}
 	invoke := func(args ...string) (int, string, string) {
 		var stdout, stderr strings.Builder
-		options := &Options{Input: strings.NewReader(`{"local_path":"` + target + `"}`), Redactor: &redact.Redactor{}}
+		options := &Options{Input: strings.NewReader(`{"local_path":` + strconv.Quote(target) + `}`), Redactor: &redact.Redactor{}}
 		code := run(newRootCommand(options, registry), options,
 			append([]string{"invoke", "bookstack.files.download", "--connection", "wiki", "--config", cfg}, args...),
 			&stdout, &stderr)
@@ -107,8 +108,7 @@ func TestLocalFileOverwriteConfirmationOverMCP(t *testing.T) {
 		t.Fatal(err)
 	}
 	call := func(id, confirm string) mcpToolResult {
-		request := `{"operation":"bookstack.files.download","connection":"wiki","arguments":{"local_path":"` +
-			target + `"}` + confirm + `}`
+		request := `{"operation":"bookstack.files.download","connection":"wiki","arguments":{"local_path":` + strconv.Quote(target) + `}` + confirm + `}`
 		input := `{"jsonrpc":"2.0","id":"` + id + `","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.invoke","arguments":` + request + `}}` + "\n"
 		responses, _ := runMCPWithOptions(t, registry, input, &Options{Config: cfg, Redactor: &redact.Redactor{}})

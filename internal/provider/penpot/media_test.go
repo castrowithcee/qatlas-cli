@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -101,7 +102,7 @@ func TestMediaUploadFromAReleasedLocalFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	red := &redact.Redactor{}
-	raw := json.RawMessage(`{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `","local_path":"` + filepath.Join(dir, "logo.png") + `"}`)
+	raw := json.RawMessage(`{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `","local_path":` + strconv.Quote(filepath.Join(dir, "logo.png")) + `}`)
 	result, err := invokeMediaUpload(context.Background(), resolvedFor([]string{"team/" + teamA}, dir, ""), resolver(red, nil), red, raw)
 	if err != nil {
 		t.Fatal(err)
@@ -324,7 +325,7 @@ func TestFilesExportWritesToAReleasedPathAndReturnsMetadataOnly(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "out.penpot")
 	red := &redact.Redactor{}
-	raw := json.RawMessage(`{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `","local_path":"` + target + `"}`)
+	raw := json.RawMessage(`{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `","local_path":` + strconv.Quote(target) + `}`)
 	result, err := invokeFilesExport(context.Background(), resolvedFor([]string{"team/" + teamA}, "", dir), resolver(red, nil), red, raw)
 	if err != nil {
 		t.Fatal(err)
@@ -374,7 +375,7 @@ func TestFilesExportRefusesPathsOutsideTheReleaseBeforeAnyIO(t *testing.T) {
 		"readdir": resolvedFor([]string{"team/" + teamA}, other, ""),
 		"none":    resolvedFor([]string{"team/" + teamA}, "", ""),
 	} {
-		raw := json.RawMessage(`{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `","local_path":"` + filepath.Join(other, "a.penpot") + `"}`)
+		raw := json.RawMessage(`{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `","local_path":` + strconv.Quote(filepath.Join(other, "a.penpot")) + `}`)
 		_, err := invokeFilesExport(context.Background(), resolved, resolver(red, &reads), red, raw)
 		if err == nil || strings.Contains(err.Error(), other) {
 			t.Errorf("%s: err = %v", name, err)
@@ -419,7 +420,7 @@ func TestFilesExportRejectsUnusableAnswers(t *testing.T) {
 		dir := t.TempDir()
 		red := &redact.Redactor{}
 		_, err := invokeFilesExport(context.Background(), resolvedFor([]string{"team/" + teamA}, "", dir), resolver(red, nil), red,
-			json.RawMessage(`{"project_id":"`+projectA1+`","file_id":"`+fileA1+`","local_path":"`+filepath.Join(dir, "o.penpot")+`"}`))
+			json.RawMessage(`{"project_id":"`+projectA1+`","file_id":"`+fileA1+`","local_path":`+strconv.Quote(filepath.Join(dir, "o.penpot"))+`}`))
 		if err == nil || strings.Contains(err.Error(), bodyCanary) {
 			t.Errorf("%s: err = %v", name, err)
 		}
@@ -450,7 +451,7 @@ func TestFilesImportSendsOneMultipartRequestFromAReleasedPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	red := &redact.Redactor{}
-	raw := json.RawMessage(`{"project_id":"` + projectA1 + `","name":"Importiert","local_path":"` + filepath.Join(dir, "a.penpot") + `"}`)
+	raw := json.RawMessage(`{"project_id":"` + projectA1 + `","name":"Importiert","local_path":` + strconv.Quote(filepath.Join(dir, "a.penpot")) + `}`)
 	result, err := invokeFilesImport(context.Background(), resolvedFor([]string{"team/" + teamA}, dir, ""), resolver(red, nil), red, raw)
 	if err != nil {
 		t.Fatal(err)
@@ -479,7 +480,7 @@ func TestFilesImportRefusesPathsOutsideTheReleaseBeforeAnyIO(t *testing.T) {
 	reads := 0
 	for name, path := range map[string]string{"outside": filepath.Join(other, "secret.penpot"), "dotdot": released + "/../x"} {
 		_, err := invokeFilesImport(context.Background(), resolvedFor([]string{"team/" + teamA}, released, ""), resolver(red, &reads), red,
-			json.RawMessage(`{"project_id":"`+projectA1+`","name":"x","local_path":"`+path+`"}`))
+			json.RawMessage(`{"project_id":"`+projectA1+`","name":"x","local_path":`+strconv.Quote(path)+`}`))
 		var pathErr *localfile.PathError
 		if !errors.As(err, &pathErr) || strings.Contains(err.Error(), other) {
 			t.Errorf("%s: err = %v", name, err)
@@ -487,14 +488,14 @@ func TestFilesImportRefusesPathsOutsideTheReleaseBeforeAnyIO(t *testing.T) {
 	}
 	// Without a released directory no file is read at all, and an empty archive is refused.
 	if _, err := invokeFilesImport(context.Background(), resolvedFor([]string{"team/" + teamA}, "", ""), resolver(red, &reads), red,
-		json.RawMessage(`{"project_id":"`+projectA1+`","name":"x","local_path":"`+filepath.Join(other, "secret.penpot")+`"}`)); err == nil {
+		json.RawMessage(`{"project_id":"`+projectA1+`","name":"x","local_path":`+strconv.Quote(filepath.Join(other, "secret.penpot"))+`}`)); err == nil {
 		t.Error("an import without a released directory succeeded")
 	}
 	if err := os.WriteFile(filepath.Join(released, "empty.penpot"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := invokeFilesImport(context.Background(), resolvedFor([]string{"team/" + teamA}, released, ""), resolver(red, &reads), red,
-		json.RawMessage(`{"project_id":"`+projectA1+`","name":"x","local_path":"`+filepath.Join(released, "empty.penpot")+`"}`)); err == nil {
+		json.RawMessage(`{"project_id":"`+projectA1+`","name":"x","local_path":`+strconv.Quote(filepath.Join(released, "empty.penpot"))+`}`)); err == nil {
 		t.Error("an empty archive was imported")
 	}
 	if len(calls) != 0 || reads != 0 {
@@ -507,7 +508,7 @@ func TestFilesImportSendsOnceAndReportsUncertainty(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.penpot"), []byte("PK"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	raw := json.RawMessage(`{"project_id":"` + projectA1 + `","name":"x","local_path":"` + filepath.Join(dir, "a.penpot") + `"}`)
+	raw := json.RawMessage(`{"project_id":"` + projectA1 + `","name":"x","local_path":` + strconv.Quote(filepath.Join(dir, "a.penpot")) + `}`)
 	for name, test := range map[string]struct {
 		answer    func() (*http.Response, error)
 		uncertain bool
@@ -566,7 +567,7 @@ func TestTransferToolsThroughTheCoreNeedReleasedDirectories(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, exportHandler([]byte("zip")))
 	target := filepath.Join(env.write, "o.penpot")
-	args := `{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `","local_path":"` + target + `"}`
+	args := `{"project_id":"` + projectA1 + `","file_id":"` + fileA1 + `","local_path":` + strconv.Quote(target) + `}`
 	if _, err := env.invoke(filesExport.ID, "write", args); err != nil {
 		t.Fatalf("export: %v", err)
 	}
