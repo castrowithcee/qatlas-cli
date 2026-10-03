@@ -306,9 +306,17 @@ func (m *Model) commitPayload(candidate *config.Config, base config.Revision, na
 	if toVault {
 		m.vaultBusy = true
 	}
-	store, secrets := m.store, m.secrets
+	store, secrets, previous := m.store, m.secrets, m.cfg
 	return func() tea.Msg {
 		warning, err := secretcommit.Commit(store, secrets, candidate, base, name, toVault, roles, values, offer)
+		if err == nil {
+			if logged := recordConnections(store, secrets, previous, candidate); logged != "" {
+				if warning != "" {
+					warning += "; "
+				}
+				warning += logged
+			}
+		}
 		msg := payloadSavedMsg{cfg: candidate, name: name, vault: toVault, err: err, warning: warning}
 		if err != nil {
 			return msg

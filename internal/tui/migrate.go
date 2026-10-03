@@ -235,7 +235,7 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 	v := m.secrets.Vault()
 	cfg := m.cfg.Clone()
 	base := m.rev
-	store := m.store
+	store, secrets, previous := m.store, m.secrets, m.cfg
 	m.vaultBusy = true
 	m.writes++
 	m.busy = "migrating credentials.yaml into the vault"
@@ -248,6 +248,14 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 		}
 		if err == nil {
 			err = vaultmigrate.SwitchCredentials(store, cfg, base, p.switched)
+			if err == nil {
+				if logged := recordConnections(store, secrets, previous, cfg); logged != "" {
+					if warning != "" {
+						warning += "; "
+					}
+					warning += logged
+				}
+			}
 		}
 		return vaultMigrateWrittenMsg{cfg: cfg, warning: warning, err: err}
 	}

@@ -93,7 +93,8 @@ type Entry struct {
 
 // Fields is what a caller supplies for one completed invoke; Append computes Seq, Time, PrevHash, and MAC.
 type Fields struct {
-	// Path is "cli" or "mcp".
+	// Path is "cli" or "mcp" for an invoke, and "tui", "web" or "cli" for a change qatlas made to a
+	// connection in the configuration file (see the Operation constants).
 	Path       string
 	Client     *ClientInfo
 	Operation  string
@@ -126,13 +127,39 @@ var resultPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 var validEffects = map[string]bool{"": true, "read": true, "create": true, "update": true, "delete": true,
 	"execute": true}
 
+// The operations that log a change qatlas made to a connection in the configuration file, one entry per
+// changed connection, with the connection's name and no value of it. Their Path is the surface that made the
+// change, "tui", "web" or "cli", and their Effect is create, update, or delete respectively.
+const (
+	OperationConnectionCreate = "config.connection.create"
+	OperationConnectionChange = "config.connection.change"
+	OperationConnectionDelete = "config.connection.delete"
+)
+
+// connectionOperations maps each connection operation to the effect it must carry.
+var connectionOperations = map[string]string{
+	OperationConnectionCreate: "create",
+	OperationConnectionChange: "update",
+	OperationConnectionDelete: "delete",
+}
+
 // Validate reports whether f is something an invoke of this program could log: a known path, a result of
 // the form auditResult gives, a known effect, non-negative numbers, and text fields of bounded length that
 // are valid UTF-8 without a control character. A writer that takes fields from another process checks
 // them with it before anything reaches a file. The error names the field, never its value.
 func (f Fields) Validate() error {
-	if f.Path != "cli" && f.Path != "mcp" {
-		return errors.New("path must be cli or mcp")
+	switch f.Path {
+	case "cli", "mcp":
+	case "tui", "web":
+		// A surface of the interactive editors only ever logs a change to a connection.
+		if connectionOperations[f.Operation] == "" {
+			return errors.New("operation is not a connection change")
+		}
+	default:
+		return errors.New("path must be cli, mcp, tui, or web")
+	}
+	if effect, ok := connectionOperations[f.Operation]; ok && (f.Effect != effect || f.Connection == "") {
+		return errors.New("a connection change needs its effect and a connection")
 	}
 	if !resultPattern.MatchString(f.Result) {
 		return errors.New("result must be success or an error code")

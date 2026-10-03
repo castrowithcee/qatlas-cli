@@ -1,13 +1,9 @@
 package cli
 
 import (
-	"context"
-	"errors"
-
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // invokeLogWriter writes the invocation log entries of one run, signed wherever the vault's key is at hand
@@ -30,44 +26,5 @@ type invokeLogWriter struct {
 }
 
 func (w invokeLogWriter) Append(f invokelog.Fields) error {
-	state := vault.StateAbsent
-	if w.vault != nil {
-		if current, err := w.vault.State(); err == nil {
-			state = current
-		}
-	}
-	if state != vault.StateLocked && state != vault.StateUnlocked {
-		return w.logger.Append(f)
-	}
-
-	var processErr error
-	if vaultProcessSupported {
-		// A vault whose process cannot even be addressed has none to ask, the same rule a credential read
-		// follows (see secret.Resolver).
-		if client, err := vaultmigrate.ProcessClientOf(w.vault); err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), vaultproc.DefaultRequestTimeout)
-			err = client.Log(ctx, f)
-			cancel()
-			if err == nil {
-				return nil
-			}
-			if !errors.Is(err, vaultproc.ErrNotRunning) {
-				processErr = err
-			}
-		}
-	}
-
-	if state == vault.StateUnlocked {
-		if key, err := w.vault.LogKey(); err == nil {
-			defer key.Clear()
-			return w.logger.WithKey(key).Append(f)
-		}
-	}
-	if err := w.logger.Append(f); err != nil {
-		return err
-	}
-	if processErr != nil {
-		return &invokelog.UnsignedError{Err: processErr}
-	}
-	return nil
+	return connlog.SigningWriter{Logger: w.logger, Vault: w.vault, ProcessSupported: vaultProcessSupported}.Append(f)
 }

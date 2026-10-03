@@ -16,6 +16,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -1390,8 +1391,14 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 
 	// Every credential whose entries just moved is switched to type vault. The configuration is backed up
 	// first, atomically and at mode 0600; a failed backup stops here, before config.yaml is touched.
+	before := cfg.Clone()
 	if err := vaultmigrate.SwitchCredentials(config.NewStore(path, reg), cfg, baseRev, switched); err != nil {
 		return classifyUserError(err)
+	}
+	// A credential that now lives in the vault can open the approval of the connections that read it.
+	if err := connlog.NewRecorder(connlog.SurfaceCLI, path, cfg.LogRetentionDays(), v, vaultProcessSupported).
+		Record(before, cfg); err != nil {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %v\n", err)
 	}
 
 	noun := plural(len(plan), "entry", "entries")

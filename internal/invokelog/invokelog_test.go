@@ -487,3 +487,54 @@ func TestAppendFailureIsReportedNotPanicked(t *testing.T) {
 		t.Fatal("Append() error = nil, want an error because the logs directory could not be created")
 	}
 }
+
+func TestValidateConnectionChangeEntries(t *testing.T) {
+	good := func(path, operation, effect string) Fields {
+		return Fields{Path: path, Operation: operation, Connection: "wiki", Effect: effect, Result: "success"}
+	}
+	for _, path := range []string{"tui", "web", "cli"} {
+		for operation, effect := range connectionOperations {
+			if err := good(path, operation, effect).Validate(); err != nil {
+				t.Errorf("%s %s: Validate() = %v", path, operation, err)
+			}
+		}
+	}
+	bad := map[string]Fields{
+		"unknown path":              {Path: "ssh", Operation: OperationConnectionChange, Connection: "wiki", Effect: "update", Result: "success"},
+		"tui with an invoke":        {Path: "tui", Operation: "bookstack.read", Effect: "read", Result: "success"},
+		"web without operation":     {Path: "web", Result: "success"},
+		"wrong effect":              good("tui", OperationConnectionDelete, "update"),
+		"no connection":             {Path: "web", Operation: OperationConnectionCreate, Effect: "create", Result: "success"},
+		"control character in name": {Path: "tui", Operation: OperationConnectionCreate, Connection: "a\nb", Effect: "create", Result: "success"},
+		"overlong name":             {Path: "tui", Operation: OperationConnectionCreate, Connection: strings.Repeat("x", 300), Effect: "create", Result: "success"},
+		"invalid utf-8 in name":     {Path: "tui", Operation: OperationConnectionCreate, Connection: "\xff", Effect: "create", Result: "success"},
+		"result is not a code":      {Path: "tui", Operation: OperationConnectionCreate, Connection: "wiki", Effect: "create", Result: "Bad Result"},
+	}
+	for name, f := range bad {
+		if err := f.Validate(); err == nil {
+			t.Errorf("%s: Validate() = nil, want an error", name)
+		}
+	}
+}
+
+func TestSignedConnectionEntriesVerify(t *testing.T) {
+	dir := t.TempDir()
+	key, _ := testKey(t)
+	logger, _ := signedLogger(t, dir, key, time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC))
+	for _, f := range []Fields{
+		{Path: "cli", Operation: "bookstack.read", Effect: "read", Result: "success"},
+		{Path: "tui", Operation: OperationConnectionCreate, Connection: "wiki", Effect: "create", Result: "success"},
+		{Path: "web", Operation: OperationConnectionChange, Connection: "wiki", Effect: "update", Result: "success"},
+	} {
+		if err := f.Validate(); err != nil {
+			t.Fatal(err)
+		}
+		if err := logger.Append(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report := verifyWith(t, dir, key)
+	if report.Broken || !report.Checked {
+		t.Fatalf("report = %+v, want an intact, checked chain", report)
+	}
+}

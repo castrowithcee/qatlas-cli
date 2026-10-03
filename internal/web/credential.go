@@ -241,6 +241,7 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	before := cfg.Clone()
 	if err := cfg.SetCredential(name, cred); err != nil {
 		fail(s.redact(err.Error()))
 		return
@@ -265,6 +266,12 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	if logged := s.recordConnections(before, cfg); logged != "" {
+		if warning != "" {
+			warning += "; "
+		}
+		warning += logged
+	}
 	target := "/credentials/" + url.PathEscape(name) + "?created=1"
 	if warning != "" {
 		target += "&warning=" + url.QueryEscape(warning)

@@ -621,7 +621,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 			failReview(s.saveFailure(err))
 			return
 		}
-		s.setNotice(s.approvalNotice(cand, connName))
+		s.setNotice(withWarning(s.approvalNotice(cand, connName), s.recordConnections(cfg, cand)))
 		http.Redirect(w, r, "/connections/"+url.PathEscape(connName)+"?created=1", http.StatusSeeOther)
 		return
 	}
@@ -645,7 +645,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	notice := s.approvalNotice(cand, connName)
+	notice := withWarning(s.approvalNotice(cand, connName), s.recordConnections(cfg, cand))
 	if warning != "" {
 		warningText := "warning: " + s.redact(warning)
 		if notice != "" {

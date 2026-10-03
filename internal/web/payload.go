@@ -376,6 +376,9 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 				"'qatlas credential delete %s %s'", f, name, f)
 		}
 	}
+	if logged := s.recordConnections(cfg, candidate); logged != "" {
+		warning += "; " + logged
+	}
 	warning = strings.TrimPrefix(warning, "; ")
 	if note := s.forwardOpenNote(candidate, name); note != "" {
 		s.setNotice(note)
@@ -441,7 +444,7 @@ func (s *Server) handleSetForward(w http.ResponseWriter, r *http.Request) {
 		fail(s.saveFailure(err))
 		return
 	}
-	s.setNotice(s.forwardChangeNotice(cand, name))
+	s.setNotice(withWarning(s.forwardChangeNotice(cand, name), s.recordConnections(cfg, cand)))
 	http.Redirect(w, r, "/connections/"+url.PathEscape(name)+"?forward=1", http.StatusSeeOther)
 }
 

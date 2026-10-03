@@ -520,9 +520,17 @@ func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 	m.screen = screenSummary
 	m.clearMessages()
 	m.busy = "saving " + plan.connection
-	store, secrets := m.store, m.secrets
+	store, secrets, previous := m.store, m.secrets, m.cfg
 	return func() tea.Msg {
 		warning, err := commitSetup(store, secrets, candidate, base, plan, offer)
+		if err == nil {
+			if logged := recordConnections(store, secrets, previous, candidate); logged != "" {
+				if warning != "" {
+					warning += "; "
+				}
+				warning += logged
+			}
+		}
 		return setupSavedMsg{cfg: candidate, name: plan.connection, err: err, warning: warning}
 	}
 }

@@ -2594,6 +2594,7 @@ func (m *Model) save(name string) tea.Cmd {
 	// Captured before the change so autoApprove can tell which connections it newly opened, in an encrypted
 	// and unlocked vault only; see approvals.go.
 	before := m.approvalSnapshot(m.secrets.Vault(), m.cfg)
+	previous := m.cfg
 	candidate := m.cfg.Clone()
 	if err := m.apply(candidate, name); err != nil {
 		m.fail = m.redactor.Apply(err.Error())
@@ -2606,6 +2607,7 @@ func (m *Model) save(name string) tea.Cmd {
 		return nil
 	}
 	m.adoptSaved(candidate)
+	logged := recordConnections(m.store, m.secrets, previous, candidate)
 	// A connection saved directly here is what autoApprove's direct means; every other section saves no
 	// single connection by name.
 	direct := ""
@@ -2631,10 +2633,12 @@ func (m *Model) save(name string) tea.Cmd {
 		}
 		m.status = "Credential saved. Add the required provider secrets below: press s on each role to " +
 			"store it in " + where + "."
+		m.addWarning(logged)
 		return tea.Batch(cmd, m.autoApprove(before, direct))
 	}
 	cmd := m.returnToList(name)
 	m.status = "Saved " + name
+	m.addWarning(logged)
 	return tea.Batch(cmd, m.autoApprove(before, direct))
 }
 
@@ -2739,6 +2743,7 @@ func (m *Model) delete() tea.Cmd {
 	// paths in step. See approvals.go.
 	before := m.approvalSnapshot(m.secrets.Vault(), m.cfg)
 
+	previous := m.cfg
 	candidate := m.cfg.Clone()
 	if err := m.remove(candidate, name); err != nil {
 		m.fail = m.redactor.Apply(err.Error())
@@ -2753,8 +2758,10 @@ func (m *Model) delete() tea.Cmd {
 		return nil
 	}
 	m.adoptSaved(candidate)
+	logged := recordConnections(m.store, m.secrets, previous, candidate)
 	cmd := m.returnToList("")
 	m.status = "Deleted " + name
+	m.addWarning(logged)
 	if section == sectionConnections {
 		return tea.Batch(cmd, m.revokeApproval(name))
 	}
