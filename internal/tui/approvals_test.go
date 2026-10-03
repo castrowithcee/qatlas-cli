@@ -3,14 +3,17 @@ package tui
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -666,5 +669,89 @@ func TestApprovalDetailKeepsModeSwitchesReadable(t *testing.T) {
 	rows = approvalDetailRows(approval.Change{New: true, After: vault.Scope{Tools: []string{"a.b", "c.d"}}})
 	if !containsRow(rows, "tools", "a.b c.d") {
 		t.Errorf("new connection rows:\n%s", strings.Join(rows, "\n"))
+	}
+}
+
+// openApprovalDetail opens the Approvals detail of the fixture's connection "personal" on a model whose
+// admin session is already running, delivering the origin lookup the way the event loop does.
+func openApprovalDetail(t *testing.T, dir, passphrase string, store *config.Store) *Model {
+	t.Helper()
+	m := openApprovalModel(t, store, dir)
+	openEntryForm(t, m, sectionServices, "wiki")
+	press(t, m, "f2")
+	unlockWithAdminPassphrase(t, m, passphrase)
+	openSectionByName(t, m, sectionApprovals)
+	m.list.selectName("personal")
+	pump(t, m, "enter")
+	if m.approvalDetail != "personal" {
+		t.Fatalf("detail = %q, want personal", m.approvalDetail)
+	}
+	return m
+}
+
+func TestApprovalDetailNamesTheOrigin(t *testing.T) {
+	const passphrase = "correct horse battery staple"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store, _, _ := newApprovalFixture(t, dir, passphrase)
+
+	// Nothing logged: the configuration file was changed outside qatlas.
+	detail := screenOf(openApprovalDetail(t, dir, passphrase, store))
+	for _, want := range []string{"source", "changed outside qatlas: config.yaml edited directly (last modified ",
+		"an agent or another program may have edited the file", "l logs"} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("detail lacks %q:\n%s", want, detail)
+		}
+	}
+
+	// A change qatlas logged: unsigned here, so shown unverified.
+	err := invokelog.New(vault.New(dir).Dir(), 90).Append(invokelog.Fields{Path: "tui", Operation: invokelog.OperationConnectionCreate,
+		Connection: "personal", Effect: "create", Result: "success"})
+	mustNoError(t, err)
+	detail = screenOf(openApprovalDetail(t, dir, passphrase, store))
+	if !strings.Contains(detail, "changed in qatlas tui, "+time.Now().Format("2006-01-02")) ||
+		!strings.Contains(detail, "(unverified)") || strings.Contains(detail, "outside qatlas") {
+		t.Errorf("detail does not name the logged change:\n%s", detail)
+	}
+}
+
+func TestApprovalDetailLogsKeyOpensTheFilteredLogs(t *testing.T) {
+	const passphrase = "correct horse battery staple"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store, _, _ := newApprovalFixture(t, dir, passphrase)
+	logger := invokelog.New(vault.New(dir).Dir(), 90)
+	for _, connection := range []string{"personal", "elsewhere"} {
+		mustNoError(t, logger.Append(invokelog.Fields{Path: "tui", Operation: invokelog.OperationConnectionChange,
+			Connection: connection, Effect: "update", Result: "success"}))
+	}
+	m := openApprovalDetail(t, dir, passphrase, store)
+	pump(t, m, "l")
+	if m.section != sectionLogs || m.screen != screenLogs || m.approvalDetail != "" {
+		t.Fatalf("after l: section %v screen %v detail %q, want the Logs section", m.section, m.screen, m.approvalDetail)
+	}
+	lv := m.logs
+	today := time.Now().Format(logDateLayout)
+	if lv.mode != logModeRange || lv.to != today || lv.filters[logFilterConnection] != "personal" {
+		t.Fatalf("logs = mode %v to %q filters %v, want a range ending today filtered on personal",
+			lv.mode, lv.to, lv.filters)
+	}
+	view := screenOf(m)
+	if !strings.Contains(view, "config.connectio") || !strings.Contains(view, "1/1") || strings.Contains(view, "elsewhere") ||
+		!strings.Contains(view, "conn=personal") {
+		t.Errorf("the Logs view is not filtered on personal:\n%s", view)
+	}
+}
+
+func TestApprovalDetailUnreadableLogIsUnknownAndStillApproves(t *testing.T) {
+	const passphrase = "correct horse battery staple"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store, _, _ := newApprovalFixture(t, dir, passphrase)
+	mustNoError(t, os.WriteFile(filepath.Join(vault.New(dir).Dir(), "logs"), []byte("not a directory"), 0o600))
+	m := openApprovalDetail(t, dir, passphrase, store)
+	if detail := screenOf(m); !strings.Contains(detail, "origin unknown: the log could not be read") {
+		t.Errorf("detail does not say the origin is unknown:\n%s", detail)
+	}
+	pump(t, m, "y")
+	if m.fail != "" || !isApproved(t, dir, passphrase, m.cfg, "personal") {
+		t.Errorf("approving with an unreadable log: fail %q", m.fail)
 	}
 }

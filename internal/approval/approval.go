@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -69,6 +70,8 @@ type Change struct {
 	After  vault.Scope
 	// Fields lists what differs from Before, in a fixed order; it is empty for a new connection.
 	Fields []FieldChange
+	// Approved is when the connection was last approved; the zero time for a new connection.
+	Approved time.Time
 }
 
 // Report is what Pending finds.
@@ -136,7 +139,7 @@ func Pending(cfg *config.Config, v *vault.Vault) (Report, error) {
 			before := approved.Scope
 			report.Open = append(report.Open, Change{
 				Connection: name, Before: &before, After: c.scope.Normalized(),
-				Fields: diff(approved, c.scope, c.id),
+				Fields: diff(approved, c.scope, c.id), Approved: approved.Approved,
 			})
 		}
 	}

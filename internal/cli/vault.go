@@ -245,9 +245,16 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"among origin, provider, permissions, targets, tools, paths, files, forward, and credential. A single\n" +
 			"value, or a switch between a mode and a list ('every tool the permissions allow', 'every project',\n" +
 			"'no local files'), shows before -> after; a list that stays a list shows what is newly asked for\n" +
-			"(+) and what falls away (-), then only how many entries are unchanged. --output json writes one\n" +
-			"document instead: open (connection, new, and per field before and after, or added, removed, and\n" +
-			"kept), approved, already_approved, and removed_stale. Asks for the\n" +
+			"(+) and what falls away (-), then only how many entries are unchanged. Each entry starts with a\n" +
+			"source line saying where the change came from. 'changed in qatlas tui' (or web, cli) with the time names the\n" +
+			"latest entry of the invocation log, config.connection.create or .change, written after the\n" +
+			"connection was last approved, marked (unverified) when its check value could not be matched; 'changed\n" +
+			"outside qatlas' means no such entry exists, so something that is not qatlas, an agent among others,\n" +
+			"edited config.yaml, last modified at the time shown; 'the vault entry of <credential> was stored\n" +
+			"anew' means only the credential's vault entry was replaced; an unreadable log gives 'origin unknown'.\n" +
+			"The source is information, never an authorization. --output json writes one\n" +
+			"document instead: open (connection, new, origin_of_change, and per field before and after, or\n" +
+			"added, removed, and kept), approved, already_approved, and removed_stale. Asks for the\n" +
 			"vault's passphrase once and then approves every open connection listed, or only the ones named with\n" +
 			"--connection (repeatable), and hands the change to a running vault process the way every other vault\n" +
 			"change does. What is approved is always the whole scope as configured now, however the change reads.\n\n" +
@@ -1020,18 +1027,19 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 		}
 	}
 
+	origins := approvalOrigins(contextOrBackground(c.Context()), v, path, cfg, report.Open)
 	out := c.OutOrStdout()
 	if asJSON {
 		out = io.Discard
 		for _, change := range report.Open {
-			doc.Open = append(doc.Open, approvalChangeJSON(opts.Redactor, change))
+			doc.Open = append(doc.Open, approvalChangeJSON(opts.Redactor, change, origins[change.Connection]))
 		}
 	}
 	if len(report.Open) > 0 {
 		fmt.Fprintf(out, "%d %s open:\n", len(report.Open),
 			plural(len(report.Open), "connection is", "connections are"))
 		for _, change := range report.Open {
-			writeApprovalChange(out, opts.Redactor, change)
+			writeApprovalChange(out, opts.Redactor, change, origins[change.Connection])
 		}
 	}
 
@@ -1078,8 +1086,10 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 // writeApprovalChange writes one open connection as text: 'new connection, not yet approved', or per
 // changed field the before and after of a single value or a switch between a mode and a list, and for a
 // list that stays a list what is new (+) and what falls away (-), then only the count of what is unchanged.
-func writeApprovalChange(out io.Writer, redactor *redact.Redactor, change approval.Change) {
+// A line "source" comes first and says where the change came from (see approval.Origin).
+func writeApprovalChange(out io.Writer, redactor *redact.Redactor, change approval.Change, origin approval.Origin) {
 	fmt.Fprintln(out, redactor.Apply(change.Connection))
+	fmt.Fprintf(out, "  source  %s\n", redactor.Apply(origin.Text()))
 	if change.New {
 		fmt.Fprintln(out, "  new connection, not yet approved")
 		return
@@ -1126,9 +1136,50 @@ func newVaultApproveDocument() vaultApproveDocument {
 }
 
 type approvalChangeDocument struct {
-	Connection string                  `json:"connection"`
-	New        bool                    `json:"new"`
-	Fields     []approvalFieldDocument `json:"fields"`
+	Connection     string                  `json:"connection"`
+	New            bool                    `json:"new"`
+	OriginOfChange approvalOriginDocument  `json:"origin_of_change"`
+	Fields         []approvalFieldDocument `json:"fields"`
+}
+
+// approvalOriginDocument is where a change came from: source is tui, web, or cli for a change qatlas
+// logged, outside for one made to the configuration file by something else, vault for a credential entry
+// stored anew, or unknown when the log could not be read. time is the log entry's, or the configuration
+// file's last modification for outside, as RFC 3339; log_seq and verified are there only when a log entry
+// was found.
+type approvalOriginDocument struct {
+	Source   string `json:"source"`
+	Time     string `json:"time,omitempty"`
+	LogSeq   uint64 `json:"log_seq,omitempty"`
+	Verified *bool  `json:"verified,omitempty"`
+}
+
+func approvalOriginJSON(origin approval.Origin) approvalOriginDocument {
+	doc := approvalOriginDocument{Source: origin.Source, LogSeq: origin.Seq}
+	if !origin.Time.IsZero() {
+		doc.Time = origin.Time.Format(time.RFC3339)
+	}
+	if origin.Seq != 0 {
+		verified := origin.Verified
+		doc.Verified = &verified
+	}
+	return doc
+}
+
+// approvalOrigins finds where each open change came from. A vault key checks the log's check values the way
+// 'vault logs verify' does; whatever cannot be read leaves the origin unknown and never stops an approval.
+func approvalOrigins(ctx context.Context, v *vault.Vault, configPath string, cfg *config.Config,
+	open []approval.Change) map[string]approval.Origin {
+	if len(open) == 0 {
+		return nil
+	}
+	checker, _, done := logChecker(ctx, v, func(string) {})
+	defer done()
+	var modified time.Time
+	if info, err := os.Stat(configPath); err == nil {
+		modified = info.ModTime()
+	}
+	return approval.Origins(v.Dir(), checker, open, modified, time.Now(), cfg.LogRetentionDays())
 }
 
 // approvalFieldDocument is one changed field: before and after for a single value or a switch between a mode
@@ -1142,9 +1193,10 @@ type approvalFieldDocument struct {
 	Kept    []string `json:"kept,omitempty"`
 }
 
-func approvalChangeJSON(redactor *redact.Redactor, change approval.Change) approvalChangeDocument {
+func approvalChangeJSON(redactor *redact.Redactor, change approval.Change,
+	origin approval.Origin) approvalChangeDocument {
 	doc := approvalChangeDocument{Connection: redactor.Apply(change.Connection), New: change.New,
-		Fields: []approvalFieldDocument{}}
+		OriginOfChange: approvalOriginJSON(origin), Fields: []approvalFieldDocument{}}
 	for _, field := range change.Fields {
 		if !field.IsListChange() {
 			before, after := redactor.Apply(field.Before), redactor.Apply(field.After)

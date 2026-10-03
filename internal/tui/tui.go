@@ -23,6 +23,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -425,6 +426,11 @@ type Model struct {
 	approvalExpanded bool
 	approvalOffset   int
 	approvalPage     int
+	// approvalOrigin is where the change of the connection approvalOriginFor came from, once the log was
+	// read; approvalOriginReady is false until then (see approvalOriginMsg).
+	approvalOrigin      approval.Origin
+	approvalOriginFor   string
+	approvalOriginReady bool
 	// tokenDetail names the agent token the Tokens detail screen shows, "" otherwise; tokenReveal says that
 	// s asked to show its value there (see tokenValueShown). tokenRevoke names the token the revoke question
 	// is about, asked from the list or over the detail screen. All stand over the Tokens list; see tokens.go.
@@ -639,6 +645,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.handleApprovalSweep(msg)
 	case approvalActionMsg:
 		return m, m.handleApprovalAction(msg)
+	case approvalOriginMsg:
+		m.handleApprovalOrigin(msg)
+		return m, nil
 	case tokenActionMsg:
 		return m, m.handleTokenAction(msg)
 	case vaultUnlockedMsg:
@@ -927,7 +936,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			m.approvalDetail, m.approvalExpanded, m.approvalOffset = name, false, 0
 			m.screen = screenConfirm
 			m.clearMessages()
-			return nil
+			return m.loadApprovalOrigin(name)
 		}
 		if m.section == sectionTokens {
 			// The detail screen shows the value masked; s there reveals it, in an admin session only.
@@ -2029,6 +2038,8 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			m.status = "Cancelled"
 		case "e":
 			m.approvalExpanded = !m.approvalExpanded
+		case "l":
+			return m.openApprovalLogs(name)
 		case "down", "j":
 			m.scrollApproval(1)
 		case "up", "k":

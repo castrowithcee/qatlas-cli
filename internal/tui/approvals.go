@@ -10,7 +10,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -218,6 +220,9 @@ func (m *Model) approvalDetailView() string {
 // scroll; nothing is cut.
 func (m *Model) approvalChangeView(title string, change approval.Change) string {
 	var lines []string
+	for _, text := range m.approvalOriginLines(change.Connection) {
+		lines = append(lines, strings.Split(m.row(false, text), "\n")...)
+	}
 	for _, row := range approvalBody(change, m.approvalExpanded) {
 		if row.item {
 			lines = append(lines, strings.Split(m.indentedWith(lipgloss.NewStyle(), row.text), "\n")...)
@@ -225,11 +230,11 @@ func (m *Model) approvalChangeView(title string, change approval.Change) string 
 		}
 		lines = append(lines, strings.Split(m.row(false, row.text), "\n")...)
 	}
-	keys := "y approve · n/esc back, stays open"
+	keys := "l logs · y approve · n/esc back, stays open"
 	if len(lines) > 0 && approvalHasKept(change) {
 		keys = "e unchanged · " + keys
 		if m.approvalExpanded {
-			keys = "e fold unchanged · y approve · n/esc back, stays open"
+			keys = "e fold unchanged · l logs · y approve · n/esc back, stays open"
 		}
 	}
 	room := m.approvalRoom(title, keys, len(lines))
@@ -584,4 +589,88 @@ func (m *Model) handleApprovalSweep(msg approvalSweepMsg) tea.Cmd {
 		m.status += msg.note
 	}
 	return nil
+}
+
+// approvalOriginMsg carries the origin of one open change, read from the log as a command, back into the
+// event loop.
+type approvalOriginMsg struct {
+	name   string
+	origin approval.Origin
+}
+
+// approvalChange is the open change of name, if the Approvals section lists it right now.
+func (m *Model) approvalChange(name string) (approval.Change, bool) {
+	report, unavailable := m.approvalsReport()
+	if unavailable != "" {
+		return approval.Change{}, false
+	}
+	return openChange(report, name)
+}
+
+// loadApprovalOrigin reads where the change of name came from, as a command: reading the log never runs on
+// the event loop and never asks for a passphrase. Until it answers the detail screen says it is looking.
+func (m *Model) loadApprovalOrigin(name string) tea.Cmd {
+	m.approvalOriginFor, m.approvalOriginReady = name, false
+	change, ok := m.approvalChange(name)
+	if !ok {
+		return nil
+	}
+	v := m.logVault()
+	configPath := m.store.Path()
+	retention := m.cfg.LogRetentionDays()
+	return func() tea.Msg {
+		checker, _, done := logChecker(context.Background(), v)
+		defer done()
+		var modified time.Time
+		if info, err := os.Stat(configPath); err == nil {
+			modified = info.ModTime()
+		}
+		origins := approval.Origins(v.Dir(), checker, []approval.Change{change}, modified, time.Now(), retention)
+		return approvalOriginMsg{name: name, origin: origins[name]}
+	}
+}
+
+// handleApprovalOrigin takes the origin of the connection whose detail screen is still open; an answer for
+// another one is dropped.
+func (m *Model) handleApprovalOrigin(msg approvalOriginMsg) {
+	if msg.name != m.approvalDetail || msg.name != m.approvalOriginFor {
+		return
+	}
+	m.approvalOrigin, m.approvalOriginReady = msg.origin, true
+}
+
+// approvalOriginLines is the "source" row of the detail screen, made safe to print; a change made outside
+// qatlas adds a second row that says what that can mean.
+func (m *Model) approvalOriginLines(name string) []string {
+	if m.approvalOriginFor != name {
+		return nil
+	}
+	if !m.approvalOriginReady {
+		return []string{fmt.Sprintf("%-11s looking it up in the log...", "source")}
+	}
+	lines := []string{fmt.Sprintf("%-11s %s", "source", m.logText(m.approvalOrigin.Text()))}
+	if m.approvalOrigin.Source == approval.OriginOutside {
+		lines = append(lines, fmt.Sprintf("%-11s an agent or another program may have edited the file", ""))
+	}
+	return lines
+}
+
+// openApprovalLogs opens the Logs section on the connection of the detail screen: every entry about it
+// since it was last approved, or in the retention window for one never approved. Whether the filter finds
+// anything is for the log to show.
+func (m *Model) openApprovalLogs(name string) tea.Cmd {
+	change, ok := m.approvalChange(name)
+	if !ok {
+		return nil
+	}
+	now := time.Now()
+	lv := m.logs
+	lv.mode = logModeRange
+	lv.from = approval.LogWindow(change, now, m.cfg.LogRetentionDays()).Format(logDateLayout)
+	lv.to = now.In(time.Local).Format(logDateLayout)
+	lv.filters = [logFilterCount]string{}
+	lv.filters[logFilterConnection] = m.logText(name)
+	lv.list.clearFilter()
+	m.approvalDetail = ""
+	return m.openSection(sectionLogs)
 }

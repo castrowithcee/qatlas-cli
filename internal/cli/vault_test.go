@@ -11,9 +11,11 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -1127,8 +1129,9 @@ func TestVaultApproveAllOpenConnections(t *testing.T) {
 	if stderr != "" {
 		t.Errorf("stderr = %q, want none", stderr)
 	}
-	for _, want := range []string{"2 connections are open:", "wiki\n  new connection, not yet approved",
-		"wiki2\n  new connection, not yet approved", "approved 2 connections: wiki, wiki2"} {
+	for _, want := range []string{"2 connections are open:", "wiki\n  source  changed outside qatlas: config.yaml edited directly (last modified ",
+		"wiki2\n  source  changed outside qatlas", ")\n  new connection, not yet approved\n",
+		"approved 2 connections: wiki, wiki2"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout = %q, want it to contain %q", stdout, want)
 		}
@@ -1500,5 +1503,71 @@ func TestVaultApproveListsNewAndRemovedEntries(t *testing.T) {
 	_, stdout, _ = approveAll("--output", "json")
 	if !strings.Contains(stdout, `"field":"paths","before":"~/repos/a","after":"(every project)"`) {
 		t.Errorf("mode switch in JSON: %s", stdout)
+	}
+}
+
+// Every open connection names where its change came from: the latest qatlas log entry after the last
+// approval (unsigned here, so unverified), else a change outside qatlas with the file's modification time.
+func TestVaultApproveShowsTheOriginOfAChange(t *testing.T) {
+	dir := twoConnectionVaultFixture(t)
+	if err := vault.New(dir).Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	writeConfig := func(permissions string) {
+		t.Helper()
+		body := fmt.Sprintf(approveListsConfig, permissions, "")
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	approveAll := func(args ...string) (int, string, string) {
+		withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+		return runWithInput(t, &Options{}, "", append([]string{"vault", "approve", "--config", configIn(dir)}, args...)...)
+	}
+	writeConfig("[read, create]")
+	if code, _, stderr := approveAll(); code != exitOK {
+		t.Fatalf("first approve: exit %d, stderr %s", code, stderr)
+	}
+
+	// A change qatlas logged after the approval.
+	writeConfig("[read, update]")
+	logger := invokelog.New(vault.New(dir).Dir(), 90)
+	if err := logger.Append(invokelog.Fields{Path: "tui", Operation: invokelog.OperationConnectionChange,
+		Connection: "wiki2", Effect: "update", Result: "success"}); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := approveAll("--output", "json")
+	if code != exitOK || stderr != "" {
+		t.Fatalf("json run: exit %d, stderr %q", code, stderr)
+	}
+	var got struct {
+		Open []struct {
+			OriginOfChange struct {
+				Source   string `json:"source"`
+				Time     string `json:"time"`
+				LogSeq   uint64 `json:"log_seq"`
+				Verified *bool  `json:"verified"`
+			} `json:"origin_of_change"`
+		} `json:"open"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil || len(got.Open) != 1 {
+		t.Fatalf("stdout: %v\n%s", err, stdout)
+	}
+	origin := got.Open[0].OriginOfChange
+	if _, err := time.Parse(time.RFC3339, origin.Time); err != nil || origin.Source != "tui" || origin.LogSeq != 1 ||
+		origin.Verified == nil || *origin.Verified {
+		t.Errorf("origin_of_change = %+v, want an unverified tui entry #1 with an RFC 3339 time", origin)
+	}
+
+	// A change nothing logged is outside qatlas, and carries no log_seq.
+	writeConfig("[read, delete]")
+	code, stdout, _ = approveAll()
+	if code != exitOK || !strings.Contains(stdout, "wiki2\n  source  changed outside qatlas: config.yaml edited directly") {
+		t.Fatalf("text run: exit %d, stdout %q", code, stdout)
+	}
+	writeConfig("[read, update]")
+	_, stdout, _ = approveAll("--output", "json")
+	if !strings.Contains(stdout, `"origin_of_change":{"source":"outside","time":"`) || strings.Contains(stdout, "log_seq") {
+		t.Errorf("outside in JSON: %s", stdout)
 	}
 }
