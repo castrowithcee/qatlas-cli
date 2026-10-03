@@ -170,9 +170,20 @@ func coreConfig() *config.Config {
 			// another account; only the live ownership check catches that.
 			"driveforeign": {Service: "im", Credential: "im-reader", Permissions: changePermissions,
 				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(foreignDrive, 10)}},
+			// Delete is never offered by permission alone: a trash tool must be listed to be offered.
+			"trash": {Service: "im", Credential: "im-reader", Permissions: deletePermissions, Tools: trashTools,
+				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
+			"trashforeign": {Service: "im", Credential: "im-reader", Permissions: deletePermissions, Tools: trashTools,
+				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(foreignDrive, 10)}},
+			"trashunlisted": {Service: "im", Credential: "im-reader", Permissions: deletePermissions,
+				Targets: []string{accountTarget, "drive/" + strconv.FormatInt(ownDrive, 10)}},
 		},
 	}
 }
+
+var deletePermissions = []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete}
+
+var trashTools = []string{filesTrash.ID, trashListDescriptor.ID, trashRestore.ID, trashDelete.ID, trashEmpty.ID}
 
 // changePermissions lets a connection use the folder and file changes; "readonly" keeps the default.
 var changePermissions = []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate}
@@ -228,13 +239,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 10 {
-		t.Fatalf("tools = %+v, want 10", metadata.Tools)
+	if len(metadata.Tools) != 15 {
+		t.Fatalf("tools = %+v, want 15", metadata.Tools)
 	}
 	if want := []config.Permission{config.PermissionRead}; !reflect.DeepEqual(metadata.DefaultPermissions, want) {
 		t.Fatalf("default permissions = %v, want read only", metadata.DefaultPermissions)
 	}
-	if len(metadata.Profiles) != 3 || metadata.Profiles[0].ID != "read" || len(metadata.Profiles[0].Tools) != 5 ||
+	if len(metadata.Profiles) != 3 || metadata.Profiles[0].ID != "read" || len(metadata.Profiles[0].Tools) != 6 ||
 		metadata.Profiles[1].ID != "write" || len(metadata.Profiles[1].Tools) != 9 ||
 		metadata.Profiles[2].ID != "upload" || len(metadata.Profiles[2].Tools) != 6 {
 		t.Fatalf("profiles = %+v", metadata.Profiles)

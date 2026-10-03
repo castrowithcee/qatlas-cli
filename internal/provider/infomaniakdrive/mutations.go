@@ -375,7 +375,12 @@ type actionJSON struct {
 // change sends exactly one POST and normalises the answer. "asynchronous" is accepted as a pending change
 // with the cancel handle, not as a failure; "success" is a finished one; anything else is an unclear outcome.
 func (c *Client) change(ctx context.Context, op, path string, body any, driveID int64) (*Change, error) {
-	env, _, err := c.request(ctx, op, http.MethodPost, path, nil, body, true)
+	return c.changeWith(ctx, op, http.MethodPost, path, body, driveID)
+}
+
+// changeWith is change for a fixed method of the package, never one an agent supplies.
+func (c *Client) changeWith(ctx context.Context, op, method, path string, body any, driveID int64) (*Change, error) {
+	env, _, err := c.request(ctx, op, method, path, nil, body, true)
 	if err != nil {
 		return nil, err
 	}

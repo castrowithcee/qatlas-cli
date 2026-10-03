@@ -160,6 +160,7 @@ type fileJSON struct {
 	Status         string  `json:"status"`
 	CreatedAt      *int64  `json:"created_at"`
 	LastModifiedAt int64   `json:"last_modified_at"`
+	DeletedAt      *int64  `json:"deleted_at"`
 }
 
 // Entry is the stable Qatlas view of one file or folder. Content is never part of it.

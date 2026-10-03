@@ -2,7 +2,8 @@
 description: >
   Describes the Infomaniak kDrive provider: API token setup, the account and drive allow-list, the drive,
   folder, metadata, and content reads, the download to a local path, the confirmed folder creation, rename,
-  move, copy, and file upload or replacement, pagination and cursor contracts, the Business kSuite versus
+  move, copy, and file upload or replacement, the trash reads and the confirmed trash, restore, and permanent
+  deletion, pagination and cursor contracts, the Business kSuite versus
   personal my kSuite compatibility cases, redirect handling on downloads, and the boundary to Mail, CalDAV/CardDAV,
   and kChat.
 type: knowledge
@@ -17,8 +18,10 @@ Infomaniak kDrive is a provider for the Infomaniak kDrive REST API. It lists the
 account, lists the immediate children of one folder page by page, reads the metadata of one file or folder,
 and reads bounded file content or writes one file to a local path, all through `https://api.infomaniak.com`.
 On a connection that holds the `create` or `update` permission it also creates one folder, renames, moves, or
-copies one file or folder inside one drive, and uploads one file or replaces the content of one, each only
-after an explicit confirmation. It shares, links, or deletes nothing.
+copies one file or folder inside one drive, uploads one file or replaces the content of one, and restores a
+trash entry, each only after an explicit confirmation. It reads the trash too. Moving a file or folder to the
+trash, deleting a trash entry for good, and emptying the trash are separate tools that need the `delete`
+permission and an explicit tools list. It shares and links nothing.
 
 ## Configuration
 
@@ -64,7 +67,7 @@ those drives are. A `drive_id` argument goes through two checks before any file 
 
 1. A `drive_id` outside a configured drive allow-list is refused locally, as an invalid request, before any
    secret is read or any request is sent.
-2. Every `infomaniakdrive.files.*` (upload and download included) and `infomaniakdrive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
+2. Every `infomaniakdrive.files.*` (upload and download included), `infomaniakdrive.trash.*`, and `infomaniakdrive.folders.create` call then confirms with Infomaniak's own drive detail endpoint (`GET /2/drive/{drive_id}`, which needs no
    `account_id` of its own) that the drive actually belongs to the bound account, in one extra request before
    the file endpoint itself. The allow-list is local configuration a person wrote; it is never trusted on its
    own, because the same token can otherwise reach a drive of another account, and a drive named in an
@@ -93,17 +96,25 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 | `infomaniakdrive.files.rename` | renames exactly one file or folder (`POST /2/drive/{d}/files/{id}/rename`) |
 | `infomaniakdrive.files.move` | moves exactly one file or folder into another folder of the same drive (`POST /3/drive/{d}/files/{id}/move/{dest}`) |
 | `infomaniakdrive.files.copy` | copies exactly one file or folder into another folder of the same drive (`POST /3/drive/{d}/files/{id}/copy/{dest}`) |
+| `infomaniakdrive.trash.list` | the top-level entries of the trash of one drive, cursor-paginated (`GET /3/drive/{d}/trash`) |
+| `infomaniakdrive.files.trash` | moves exactly one file or folder to the trash (`DELETE /2/drive/{d}/files/{id}`) |
+| `infomaniakdrive.trash.restore` | restores exactly one trash entry into a folder of the same drive (`POST /2/drive/{d}/trash/{id}/restore`) |
+| `infomaniakdrive.trash.delete` | deletes exactly one trash entry for good (`DELETE /2/drive/{d}/trash/{id}`) |
+| `infomaniakdrive.trash.empty` | deletes every entry of the trash of one drive for good (`DELETE /2/drive/{d}/trash`) |
 
-`drives.list`, `files.list`, `files.stat`, `files.get`, and `files.download` are `read`, safe, and need no
+`drives.list`, `files.list`, `files.stat`, `files.get`, `files.download`, and `trash.list` are `read`, safe, and need no
 confirmation. `folders.create` and `files.copy` have the effect `create`; `files.rename`, `files.move`, and
-`files.upload` have the effect `update`. These changes are non-idempotent, need `confirm`, and are never a
-delete. The provider's default permission stays `read`: a connection runs a change
-only after its permissions name `create` or `update` and its tools list offers the tool.
+`files.upload` have the effect `update`. `trash.restore` has the effect `update`. `files.trash`, `trash.delete`, and `trash.empty` have the effect
+`delete`, and each of them requires the tool allow-list: no permission alone offers it, a connection must name
+the tool in its `tools` list. All changes are non-idempotent and need `confirm`. The provider's default
+permission stays `read`: a connection runs a change only after its permissions name the effect and its tools
+list offers the tool where one is required.
 
-The terminal editor offers three setup profiles. `read` is the recommended one and ticks `[read]` and the five
-read tools. `write` also ticks `[create]`, `[update]`, and the four folder and file organisation tools.
+The terminal editor offers three setup profiles. `read` is the recommended one and ticks `[read]` and the six
+read tools, `trash.list` included. `write` also ticks `[create]`, `[update]`, and the four folder and file organisation tools.
 `upload` also ticks `[update]` and `files.upload`. Neither `write` nor `upload` is ever
-preselected. `files.download` is only offered to a connection that releases a directory for writing, and
+preselected. No profile contains `files.trash`, `trash.restore`, `trash.delete`, or `trash.empty`: a connection
+adds them by naming them in its `tools` list together with the matching permission. `files.download` is only offered to a connection that releases a directory for writing, and
 `files.upload` with a `local_path` only for one that releases a directory for reading, through the `files`
 setting of the connection.
 
@@ -125,7 +136,7 @@ setting of the connection.
   name. `version`, which the specification also lists for `copy`, is not offered, because it replaces the
   content of an existing file; any other value is refused locally. Neither tool takes a `name`, and
   `folders.create` and `files.rename` send nothing but `name`: no `color`, `only_for_me`, or `relative_path`.
-  No tool of this provider requires the tool allow-list.
+  Only the three trash tools that delete require the tool allow-list, see Trash.
 - A change sends exactly one change request after the ownership check, and Qatlas never repeats it. After a
   timeout, a dropped connection, a 5xx answer, or an unreadable answer the error says the change may have
   been applied; read the folder before trying again.
@@ -141,6 +152,25 @@ fixed identifier of a drive's own root directory, as Infomaniak documents it. `i
 requires an explicit `file_id`: reading content is never defaulted to the root. A folder identifier passed to
 `files.get` reads Infomaniak's own zip archive of that folder, still bounded by the same size limit, rather
 than being refused or silently redirected to a listing.
+
+### Trash
+
+- `trash.list` reads one page of the top level of the trash: `limit` (5 to 1000, default 10) and an opaque
+  `cursor`, with `has_more` and `cursor` answered as for `files.list`. Each entry is the usual entry plus
+  `deleted_at`; names and times are untrusted data and names are length-bounded. A trashed folder's own
+  contents are not listed.
+- `files.trash` sends `DELETE /2/drive/{d}/files/{id}`, `trash.delete` sends `DELETE /2/drive/{d}/trash/{id}`,
+  and `trash.empty` sends `DELETE /2/drive/{d}/trash`. Neither sends a body. `file_id` is a positive integer
+  other than the drive's root `1`; `trash.empty` takes only `drive_id`. A trashed entry stays restorable until
+  `trash.delete` or `trash.empty` removes it; that removal and the emptying cannot be undone.
+- `trash.restore` takes `destination_id`, a required folder of the same drive (the root is `1`), because the
+  specification requires `destination_directory_id` in the request body; Qatlas offers no restore to a place
+  outside the drive. Restoring is the only trash change that needs just the `update` permission.
+- The same rules as for the other changes apply: the drive goes through the allow-list check and the live
+  ownership check before the one request, a refusal names no foreign value, an unclear outcome is reported
+  and never repeated, and `asynchronous` is a `pending` change with the cancel handle when Infomaniak reports
+  one. A trash change never reports an entry. A 403, for example because the plan does not allow trash
+  handling, is reported as `permission`.
 
 ### Upload
 
@@ -177,7 +207,7 @@ than being refused or silently redirected to a listing.
 
 ## Pagination and cursors
 
-`infomaniakdrive.files.list` takes `limit` (5 to 1000, default 10) and an opaque `cursor`, and answers
+`infomaniakdrive.files.list` and `infomaniakdrive.trash.list` take `limit` (5 to 1000, default 10) and an opaque `cursor`, and answers
 `has_more` and a `cursor` for the next page whenever Infomaniak announced one. Each call reads exactly one
 Infomaniak page; Qatlas never follows `has_more` on its own, and a complete-looking page can still have
 `has_more` true. The cursor is Infomaniak's own opaque value, passed back unchanged; Qatlas adds no binding
@@ -248,6 +278,6 @@ own API, none of them the Bearer API token this provider uses. Because every sec
 is mandatory for every one of its connections today, a single `infomaniak` provider spanning all of them
 would force a kDrive-only connection to also declare secret roles it never uses. Each of them can be added
 later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
-share, link, trash, delete, or restore operation, no copy to another drive, no `version` conflict mode, no
+share or link operation, no trashed folder browsing, no restore outside the drive, no copy to another drive, no `version` conflict mode, no
 search, no activity or version history,
 and no account, settings, or quota administration.

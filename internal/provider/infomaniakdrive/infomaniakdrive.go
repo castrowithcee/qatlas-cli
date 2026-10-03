@@ -1,10 +1,12 @@
 // Package infomaniakdrive implements controlled access to the Infomaniak kDrive REST API: it lists the drives
 // of one bound Infomaniak account, lists the children of one folder page by page, reads the metadata of one
 // file or folder, reads bounded file content or writes a file to a local path the connection releases for
-// writing, and, only on a connection that holds the create or update permission, creates a folder, renames,
-// moves, or copies one file or folder inside one drive, and uploads or replaces one file. Each of these
-// changes needs an explicit confirmation and is never repeated after an unclear outcome; every request of it
-// is sent once. No share, link, or trash operation is exposed.
+// writing, and, only on a connection that holds the matching permission, creates a folder, renames, moves,
+// copies, or uploads one file or folder inside one drive, restores a trash entry, and, only for a tool the
+// connection lists explicitly, moves one file or folder to the trash, deletes one trash entry for good, or
+// empties the trash. Each of these changes needs an explicit confirmation and is never repeated after an
+// unclear outcome; every request of it is sent once. The trash is read by its own tool. No share or link
+// operation is exposed.
 //
 // Infomaniak groups many products behind one account model where a single API token can reach every account
 // and every kDrive its owner administers, which matters for a person who holds tokens of several customers. A
@@ -456,11 +458,11 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 }
 
 // Register adds Infomaniak kDrive metadata, its read-only connection test, its read operations, and its
-// four confirmed changes.
+// confirmed changes.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kDrive", DefaultBaseURL: apiRoot,
-		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, and upload through the Infomaniak REST API",
+		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, and trash handling through the Infomaniak REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
@@ -496,8 +498,9 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read files", Recommended: true,
 			Description: "lists the reachable drives, lists folder contents page by page, and reads file and " +
-				"folder metadata and bounded content, or writes a file to a released local path; changes nothing in kDrive",
-			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, filesDownload.ID},
+				"folder metadata and bounded content, lists the trash, or writes a file to a released local path; " +
+				"changes nothing in kDrive",
+			Tools: []string{drivesList.ID, filesList.ID, filesStat.ID, filesGet.ID, filesDownload.ID, trashListDescriptor.ID},
 		}, {
 			ID: "write", Title: "Read and organise files",
 			Description: "also creates a confirmed folder and renames, moves, or copies one confirmed file or " +
@@ -524,5 +527,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: filesMove, Handler: capability.Handler(invokeFilesMove)},
 		capability.Operation{Descriptor: filesCopy, Handler: capability.Handler(invokeFilesCopy)},
 		capability.Operation{Descriptor: filesUpload, Handler: capability.Handler(invokeFilesUpload)},
+		capability.Operation{Descriptor: trashListDescriptor, Handler: capability.Handler(invokeTrashList)},
+		capability.Operation{Descriptor: filesTrash, Handler: capability.Handler(invokeFilesTrash)},
+		capability.Operation{Descriptor: trashRestore, Handler: capability.Handler(invokeTrashRestore)},
+		capability.Operation{Descriptor: trashDelete, Handler: capability.Handler(invokeTrashDelete)},
+		capability.Operation{Descriptor: trashEmpty, Handler: capability.Handler(invokeTrashEmpty)},
 	)
 }
