@@ -29,6 +29,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/castrowithcee/qatlas-cli/internal/filelock"
 )
 
 const (
@@ -444,12 +446,12 @@ func lockDir(dir string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := lockExclusive(f); err != nil {
+	if err := filelock.Lock(f); err != nil {
 		_ = f.Close()
 		return nil, err
 	}
 	return func() {
-		_ = unlockExclusive(f)
+		_ = filelock.Unlock(f)
 		_ = f.Close()
 	}, nil
 }
