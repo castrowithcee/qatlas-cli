@@ -2,8 +2,8 @@
 description: >
   Describes the Infomaniak Calendar and Contacts provider: CalDAV and CardDAV access against the fixed
   Infomaniak Sync host with a user name and application password, the required calendar and address book
-  allow-list, the list tools, the event read tools, the confirmed event create, update, and delete tools, the
-  path binding, the response caps, and what the provider does not do.
+  allow-list, the list tools, the event and contact read tools, the confirmed event create, update, and delete
+  tools, the path binding, the response caps, and what the provider does not do.
 type: knowledge
 edit: shared
 created: 2026-10-02
@@ -14,8 +14,8 @@ updated: 2026-10-04
 
 Infomaniak Calendar and Contacts is a provider for the CalDAV and CardDAV service of one Infomaniak identity.
 It lists the calendars and address books the connection allows, reads the events of the allowed calendars,
-and creates, replaces, and deletes such events from structured fields. It reads no contact and changes no
-collection.
+and creates, replaces, and deletes such events from structured fields. It lists and reads the contacts of the
+allowed address books. It changes no contact and no collection.
 
 ## Configuration
 
@@ -75,11 +75,13 @@ quotes a configured value.
 | `infomaniakdav.addressbooks.list` | read | none | the allow-listed address books |
 | `infomaniakdav.events.list` | read | none | the events of one allow-listed calendar in a time range |
 | `infomaniakdav.events.get` | read | none | one event of an allow-listed calendar |
+| `infomaniakdav.contacts.list` | read | none | the contacts of one allow-listed address book |
+| `infomaniakdav.contacts.get` | read | none | one contact of an allow-listed address book |
 | `infomaniakdav.events.create` | create | required | a new event in an allow-listed calendar |
 | `infomaniakdav.events.update` | update | required | replaces one event, bound to its etag |
 | `infomaniakdav.events.delete` | delete | required | deletes one event, bound to its etag |
 
-The two collection lists take no argument. The recommended profile, `read`, offers the four read tools and
+The two collection lists take no argument. The recommended profile, `read`, offers the six read tools and
 needs the `read` permission. The profile `events` adds `events.create` and `events.update`
 (permissions `create` and `update`); it is not recommended. `events.delete` belongs to no profile: a
 connection offers it only when its `tools` list names it, besides the `delete` permission.
@@ -109,6 +111,25 @@ resolved. The `id` is one literal path segment under the calendar, with the same
 and is checked before any request. Every event href of an answer must be a direct child of the allowed
 calendar, otherwise the whole answer is refused as an invalid response. The list leaves out an event whose
 data is not a valid iCalendar object.
+
+## Contacts
+
+Both contact tools take `addressbook`, the ID of an `addressbook/ID` target. An address book outside the
+allow-list is refused as `permission` before any secret is read or any request is sent, and the message does
+not name it. Contacts are personal data and carry the data sensitivity class `infomaniak-dav-contacts`.
+
+`infomaniakdav.contacts.list` sends one CardDAV `addressbook-query` REPORT with a fixed body. `limit` defaults
+to 50 and may be at most 200. Contacts are sorted by name, then id, and cut at `limit`; `truncated` is true
+when more were found. The list is compact: `id`, `uid`, `name`, the first `email`, `organization`, and `etag`.
+A card that is not a valid vCard is left out of the list.
+
+`infomaniakdav.contacts.get` takes the required `id`, the contact as the list reports it, and reads that one
+contact with a GET. It returns `structured_name`, at most 20 `emails` and 20 `phones` with their `type`, at
+most 20 `addresses`, `organization`, `title`, `birthday`, `note`, and at most 20 `urls`. A member cut at its
+cap is named in `truncated`. A photo or other binary property is never returned. The `name` is the formatted
+name, built from the structured name when the card has none. The `id` is one literal path segment under the
+address book, checked before any request. Every contact href of an answer must be a direct child of the
+allowed address book, otherwise the whole answer is refused as an invalid response.
 
 ## Writing events
 
@@ -159,7 +180,8 @@ repeating anything.
 
 Each list runs three PROPFIND requests, all of depth 0 except the last: `current-user-principal` of the root,
 then `calendar-home-set` or `addressbook-home-set` of that principal, then one depth 1 listing of the home
-set. An event tool runs the first two, then one REPORT of the allowed calendar or one GET of one event in it;
+set. An event or contact tool runs the first two, then one REPORT of the allowed collection or one GET of
+one item in it;
 a write adds exactly one PUT or DELETE (and the update one GET before it).
 Only these five methods are ever sent, over one internal read path and one internal write path, and never
 one that an argument names.
@@ -174,12 +196,13 @@ an invalid response.
 ## Limits
 
 A multi-status answer is read up to 1 MiB, at most 500 nodes, nested at most 16 levels, with text capped at 4
-KiB per element, except one event, which is refused beyond 64 KiB instead of cut. A GET answer is read up
-to 64 KiB. A range that matches more than 500 events or more than 1 MiB of answer is refused as an invalid
-response: narrow the range. Event summaries are capped at 256 bytes, descriptions at 4096, locations at 256,
-the `rrule` at 512; control characters are replaced, except line breaks in a description. Collection names
-are capped at 256 bytes and descriptions at 1024 bytes, with control characters replaced. An answer beyond a
-cap is refused instead of truncated.
+KiB per element, except one event or contact, which is refused beyond 64 KiB instead of cut. A GET answer is
+read up to 64 KiB. A range that matches more than 500 events or more than 1 MiB of answer is refused as an
+invalid response: narrow the range. Event summaries are capped at 256 bytes, descriptions at 4096, locations
+at 256, the `rrule` at 512; contact names, e-mail addresses, phone numbers, and other text members at 256
+bytes, notes at 4096; control characters are replaced, except line breaks in a description or note. Collection
+names are capped at 256 bytes and descriptions at 1024 bytes, with control characters replaced. An answer
+beyond a cap is refused instead of truncated.
 
 ## Errors
 
@@ -197,14 +220,15 @@ The text of an Infomaniak answer never reaches an error message, and neither doe
 
 ## Untrusted data
 
-Names, descriptions, and colors come from the provider and are untrusted data. They carry the data
-sensitivity class `infomaniak-dav-collections`. Everything in an event, such as summary, description,
-location, organizer, and attendees, is untrusted data of the class `infomaniak-dav-events`. Qatlas bounds
-them and never renders, follows, or executes anything derived from them.
+Names, descriptions, and colors come from the provider and are untrusted data. They carry the data sensitivity
+class `infomaniak-dav-collections`. Everything in a contact is untrusted personal data of the class
+`infomaniak-dav-contacts`. Everything in an event, such as summary, description, location, organizer, and
+attendees, is untrusted data of the class `infomaniak-dav-events`. Qatlas bounds them and never renders,
+follows, or executes anything derived from them.
 
 ## Boundary
 
-This provider lists calendars and address books, reads events, and creates, replaces, and deletes events of
-allow-listed calendars. It does not read or write contacts, create, rename, share, or delete collections,
+This provider lists calendars and address books, reads events and contacts, and creates, replaces, and deletes
+events of allow-listed calendars. It does not write contacts, create, rename, share, or delete collections,
 expand recurrences, write overrides of single occurrences, or accept a free URL, method, header, or iCalendar
 body from a tool argument.

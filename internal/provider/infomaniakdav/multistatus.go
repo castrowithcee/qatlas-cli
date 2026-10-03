@@ -33,6 +33,7 @@ var (
 	propCalHome      = xml.Name{Space: caldavNS, Local: "calendar-home-set"}
 	propBookHome     = xml.Name{Space: carddavN, Local: "addressbook-home-set"}
 	propCalendarData = xml.Name{Space: caldavNS, Local: "calendar-data"}
+	propAddressData  = xml.Name{Space: carddavN, Local: "address-data"}
 	typeCalendar     = xml.Name{Space: caldavNS, Local: "calendar"}
 	typeAddressbook  = xml.Name{Space: carddavN, Local: "addressbook"}
 )
@@ -44,6 +45,7 @@ const (
 	keyColor       = "color"
 	keyETag        = "etag"
 	keyCalendar    = "calendar-data"
+	keyAddress     = "address-data"
 )
 
 var textProps = map[xml.Name]string{
@@ -53,6 +55,7 @@ var textProps = map[xml.Name]string{
 	{Space: appleNS, Local: "calendar-color"}:           keyColor,
 	{Space: davNS, Local: "getetag"}:                    keyETag,
 	{Space: caldavNS, Local: "calendar-data"}:           keyCalendar,
+	{Space: carddavN, Local: "address-data"}:            keyAddress,
 }
 
 // Bounds of one parsed answer.
@@ -140,10 +143,10 @@ func parseMultiStatus(op string, body []byte) ([]resource, error) {
 				}
 			}
 		case xml.CharData:
-			if len(stack) > 0 && stack[len(stack)-1] == propCalendarData {
-				// An event is never cut: one beyond its cap refuses the answer.
+			if len(stack) > 0 && (stack[len(stack)-1] == propCalendarData || stack[len(stack)-1] == propAddressData) {
+				// An event or contact is never cut: one beyond its cap refuses the answer.
 				if text.Len()+len(element) > maxEventBytes {
-					return nil, invalidResponse(op, "Infomaniak returned an event larger than one read may handle")
+					return nil, invalidResponse(op, "Infomaniak returned an item larger than one read may handle")
 				}
 				text.Write(element)
 			} else if text.Len()+len(element) <= maxTextBytes {

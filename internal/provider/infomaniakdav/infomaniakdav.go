@@ -1,7 +1,8 @@
 // Package infomaniakdav implements controlled access to the CalDAV and CardDAV service of
 // Infomaniak Sync (https://www.infomaniak.com/en/support/faq/2432/sync-your-contacts-and-calendars-across-
 // all-your-devices). It lists the calendars and address books of one Infomaniak identity and reads, creates,
-// replaces, and deletes events of the allow-listed calendars; it reads no contact.
+// replaces, and deletes events of the allow-listed calendars, and reads the contacts of the allow-listed address
+// books.
 //
 // The origin is fixed to https://sync.infomaniak.com and cannot be configured, and no redirect is ever
 // followed, so the basic-auth credential never leaves that origin. Discovery follows the DAV chain: the
@@ -51,14 +52,16 @@ const (
 	// eventsSensitivity classifies event contents.
 	dataSensitivity   = "infomaniak-dav-collections"
 	eventsSensitivity = "infomaniak-dav-events"
-	methodPropfind    = "PROPFIND"
-	methodReport      = "REPORT"
-	methodGet         = http.MethodGet
-	methodPut         = http.MethodPut
-	methodDelete      = http.MethodDelete
-	defaultTimeout    = 30 * time.Second
-	maxUserIDLen      = 64
-	maxSecretLen      = 1024
+	// contactsSensitivity classifies contact contents, which are personal data.
+	contactsSensitivity = "infomaniak-dav-contacts"
+	methodPropfind      = "PROPFIND"
+	methodReport        = "REPORT"
+	methodGet           = http.MethodGet
+	methodPut           = http.MethodPut
+	methodDelete        = http.MethodDelete
+	defaultTimeout      = 30 * time.Second
+	maxUserIDLen        = 64
+	maxSecretLen        = 1024
 )
 
 // limiters holds the budget of every identity this process has used. Infomaniak documents no request budget
@@ -165,7 +168,7 @@ func (c *Client) request(ctx context.Context, op, method string, segments []stri
 		req.Header.Set("Content-Type", "application/xml; charset=utf-8")
 	}
 	if method == methodGet {
-		req.Header.Set("Accept", "text/calendar")
+		req.Header.Set("Accept", "text/calendar, text/vcard")
 	} else {
 		req.Header.Set("Accept", "application/xml")
 		req.Header.Set("Depth", depth)
@@ -253,7 +256,7 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak Calendar and Contacts", DefaultBaseURL: origin, ValidateBaseURL: validBaseURL,
 		DefaultPermissions: []config.Permission{config.PermissionRead},
-		Description:        "Infomaniak Sync over CalDAV and CardDAV, calendars and address books of one identity listed, calendar events read, created, changed, and deleted",
+		Description:        "Infomaniak Sync over CalDAV and CardDAV, calendars and address books of one identity listed, calendar events read, created, changed, and deleted, contacts read",
 		SecretRoles: []config.SecretRole{{
 			Name: roleUserID,
 			Description: "Personal user name of the Infomaniak sync identity, shown in the Infomaniak " +
@@ -283,16 +286,17 @@ func Register(reg *capability.Registry) error {
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "Read calendars, address books, and events", Recommended: true,
-			Description: "lists the allow-listed calendars and address books and reads events of allow-listed calendars; reads no contact and changes nothing",
-			Tools:       []string{calendarsList.ID, addressbooksList.ID, eventsList.ID, eventsGet.ID},
+			ID: "read", Title: "Read calendars, address books, events, and contacts", Recommended: true,
+			Description: "lists the allow-listed calendars and address books and reads events of allow-listed calendars and contacts of allow-listed address books; changes nothing",
+			Tools: []string{calendarsList.ID, addressbooksList.ID, eventsList.ID, eventsGet.ID, contactsList.ID,
+				contactsGet.ID},
 		}, {
 			ID: "events", Title: "Read and write calendar events",
 			Description: "also creates an event and replaces one event given its etag in an allow-listed calendar, " +
 				"with confirmation; an attendee may receive an invitation; never deletes, which only a tools list " +
 				"naming events.delete allows",
-			Tools: []string{calendarsList.ID, addressbooksList.ID, eventsList.ID, eventsGet.ID, eventsCreate.ID,
-				eventsUpdate.ID},
+			Tools: []string{calendarsList.ID, addressbooksList.ID, eventsList.ID, eventsGet.ID, contactsList.ID,
+				contactsGet.ID, eventsCreate.ID, eventsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -302,6 +306,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: addressbooksList, Handler: capability.Handler(invokeAddressbooksList)},
 		capability.Operation{Descriptor: eventsList, Handler: capability.Handler(invokeEventsList)},
 		capability.Operation{Descriptor: eventsGet, Handler: capability.Handler(invokeEventsGet)},
+		capability.Operation{Descriptor: contactsList, Handler: capability.Handler(invokeContactsList)},
+		capability.Operation{Descriptor: contactsGet, Handler: capability.Handler(invokeContactsGet)},
 		capability.Operation{Descriptor: eventsCreate, Handler: capability.Handler(invokeEventsCreate)},
 		capability.Operation{Descriptor: eventsUpdate, Handler: capability.Handler(invokeEventsUpdate)},
 		capability.Operation{Descriptor: eventsDelete, Handler: capability.Handler(invokeEventsDelete)},

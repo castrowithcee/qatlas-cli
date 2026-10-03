@@ -383,19 +383,24 @@ func TestRegisterPublishesFixedToolIDs(t *testing.T) {
 				d.Risk.DataSensitivity != eventsSensitivity || d.RequiresToolAllowList != (d.ID == eventsDelete.ID) {
 				t.Errorf("%s = %+v", d.ID, d.Risk)
 			}
+		} else if strings.HasPrefix(d.ID, Provider+".contacts.") {
+			if d.Risk.DataSensitivity != contactsSensitivity || !d.Risk.OpenWorld || d.Risk.Effect != capability.EffectRead {
+				t.Errorf("%s = %+v", d.ID, d.Risk)
+			}
 		} else if d.Risk.Effect != capability.EffectRead || d.Risk.Confirmation != capability.ConfirmationNone {
 			t.Errorf("%s = %+v", d.ID, d.Risk)
 		}
 	}
 	sort.Strings(got)
 	if want := []string{"infomaniakdav.addressbooks.list", "infomaniakdav.calendars.list",
+		"infomaniakdav.contacts.get", "infomaniakdav.contacts.list",
 		"infomaniakdav.events.create", "infomaniakdav.events.delete", "infomaniakdav.events.get",
 		"infomaniakdav.events.list", "infomaniakdav.events.update"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("tool IDs = %v, want %v", got, want)
 	}
 	metadata, ok := reg.ProviderMetadata(Provider)
 	if !ok || !metadata.Target.Required || len(metadata.Target.Kinds) != 2 || len(metadata.Profiles) != 2 ||
-		!metadata.Profiles[0].Recommended || metadata.Profiles[1].Recommended || len(metadata.Profiles[0].Tools) != 4 ||
+		!metadata.Profiles[0].Recommended || metadata.Profiles[1].Recommended || len(metadata.Profiles[0].Tools) != 6 ||
 		slices.Contains(metadata.Profiles[1].Tools, eventsDelete.ID) || len(metadata.SecretRoles) != 2 ||
 		metadata.SecretRoles[0].Name != "user-id" || metadata.SecretRoles[1].Name != "app-password" {
 		t.Errorf("metadata = %+v", metadata)
