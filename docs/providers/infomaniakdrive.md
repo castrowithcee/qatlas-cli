@@ -3,7 +3,8 @@ description: >
   Describes the Infomaniak kDrive provider: API token setup, the account and drive allow-list, the drive,
   folder, metadata, and content reads, the download to a local path, the confirmed folder creation, rename,
   move, copy, and file upload or replacement, the trash reads and the confirmed trash, restore, and permanent
-  deletion, pagination and cursor contracts, the Business kSuite versus
+  deletion, the share link reads and the confirmed creation, change, and deletion of share links with their
+  password and URL handling, pagination and cursor contracts, the Business kSuite versus
   personal my kSuite compatibility cases, redirect handling on downloads, and the boundary to Mail, CalDAV/CardDAV,
   and kChat.
 type: knowledge
@@ -21,7 +22,9 @@ On a connection that holds the `create` or `update` permission it also creates o
 copies one file or folder inside one drive, uploads one file or replaces the content of one, and restores a
 trash entry, each only after an explicit confirmation. It reads the trash too. Moving a file or folder to the
 trash, deleting a trash entry for good, and emptying the trash are separate tools that need the `delete`
-permission and an explicit tools list. It shares and links nothing.
+permission and an explicit tools list. It reads the share link of a file or folder and lists the files that have
+one; creating, changing, and deleting a share link are separate, confirmed tools that also need an explicit tools
+list. It invites no user or team and changes no access of a user or team.
 
 ## Configuration
 
@@ -101,20 +104,29 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 | `infomaniakdrive.trash.restore` | restores exactly one trash entry into a folder of the same drive (`POST /2/drive/{d}/trash/{id}/restore`) |
 | `infomaniakdrive.trash.delete` | deletes exactly one trash entry for good (`DELETE /2/drive/{d}/trash/{id}`) |
 | `infomaniakdrive.trash.empty` | deletes every entry of the trash of one drive for good (`DELETE /2/drive/{d}/trash`) |
+| `infomaniakdrive.links.get` | the share link of exactly one file or folder (`GET /2/drive/{d}/files/{id}/link`) |
+| `infomaniakdrive.links.list` | the files and folders of one drive that have a share link, cursor-paginated (`GET /3/drive/{d}/files/links`) |
+| `infomaniakdrive.links.create` | creates exactly one share link for a file or folder (`POST /2/drive/{d}/files/{id}/link`) |
+| `infomaniakdrive.links.update` | changes exactly one share link (`PUT /2/drive/{d}/files/{id}/link`) |
+| `infomaniakdrive.links.delete` | deletes exactly one share link (`DELETE /2/drive/{d}/files/{id}/link`) |
 
-`drives.list`, `files.list`, `files.stat`, `files.get`, `files.download`, and `trash.list` are `read`, safe, and need no
-confirmation. `folders.create` and `files.copy` have the effect `create`; `files.rename`, `files.move`, and
+`drives.list`, `files.list`, `files.stat`, `files.get`, `files.download`, `trash.list`, `links.get`, and `links.list`
+are `read`, safe, and need no confirmation. `folders.create` and `files.copy` have the effect `create`; `files.rename`, `files.move`, and
 `files.upload` have the effect `update`. `trash.restore` has the effect `update`. `files.trash`, `trash.delete`, and `trash.empty` have the effect
 `delete`, and each of them requires the tool allow-list: no permission alone offers it, a connection must name
-the tool in its `tools` list. All changes are non-idempotent and need `confirm`. The provider's default
+the tool in its `tools` list. `links.create` has the effect `create`, `links.update` the effect `update`, and
+`links.delete` the effect `delete`; a share link is access for whoever holds its URL, so all three require the
+tool allow-list as well, whichever right the link has. All changes need `confirm`; they are non-idempotent except `links.update` and `links.delete`, which are idempotent. The provider's default
 permission stays `read`: a connection runs a change only after its permissions name the effect and its tools
 list offers the tool where one is required.
 
 The terminal editor offers three setup profiles. `read` is the recommended one and ticks `[read]` and the six
 read tools, `trash.list` included. `write` also ticks `[create]`, `[update]`, and the four folder and file organisation tools.
 `upload` also ticks `[update]` and `files.upload`. Neither `write` nor `upload` is ever
-preselected. No profile contains `files.trash`, `trash.restore`, `trash.delete`, or `trash.empty`: a connection
-adds them by naming them in its `tools` list together with the matching permission. `files.download` is only offered to a connection that releases a directory for writing, and
+preselected. No profile contains `files.trash`, `trash.restore`, `trash.delete`, `trash.empty`, or any of the share link
+tools, not even `links.get` and `links.list`, since a link URL is access for whoever holds it: a connection adds
+them by naming them in its `tools` list together with the matching permission.
+The profile descriptions of `write` and `upload` stay true: neither shares nor deletes. `files.download` is only offered to a connection that releases a directory for writing, and
 `files.upload` with a `local_path` only for one that releases a directory for reading, through the `files`
 setting of the connection.
 
@@ -172,6 +184,45 @@ than being refused or silently redirected to a listing.
   one. A trash change never reports an entry. A 403, for example because the plan does not allow trash
   handling, is reported as `permission`.
 
+### Share links
+
+- A share link makes a file or folder reachable by its URL. `right` decides who may open it: `inherit` only
+  users of the drive (the narrowest, and the one to pick without a reason for more), `password` anyone with the
+  URL and a password, `public` anyone holding the URL with no further check. `links.create` requires an explicit
+  `right` and never defaults it. Creating or changing a link needs `confirm` for every right, `public` included, and a
+  connection must list the tool by name besides holding the permission.
+- `file_id` is a positive integer other than the drive's root `1`, validated, like `drive_id`, before any
+  secret is read or request is sent; the drive goes through the allow-list check and the live ownership check
+  first, and a refusal names no foreign value. Qatlas does not offer a link for the root: whether Infomaniak
+  allows one is not documented, so the narrower reading applies.
+- `links.create` and `links.update` accept only these settings: `right`, `password`, `valid_until`, and the
+  flags `can_download`, `can_edit`, `can_comment`, `can_see_info`, and `can_see_stats`. Only a given setting is
+  sent; no other field, URL, method, or body of the provider exists. `can_request_access` is read but never
+  set. `valid_until` is an RFC 3339 time in the future and at most ten years ahead, sent as a timestamp; an
+  expiry cannot be removed again. When `can_comment` is not set, Infomaniak lets it follow `can_edit`.
+- `links.create` for a file that already has a link is refused by Infomaniak as a `conflict`; use
+  `links.update`. `links.update` needs at least one setting, takes a `password` only together with `right`
+  `password`, and answers only its `status`. `links.delete` removes the link; the file stays.
+- The password has 8 to 128 characters, no control character, and is allowed only with `right` `password`,
+  where it is required. It is registered with Qatlas's redactor before any request is sent, including the
+  ownership check, and is only ever the request body to Infomaniak. It is never part of a result, an error,
+  the invocation log, or any diagnostic, and no password a provider answer might carry is read at all. A
+  refusal of the password argument never quotes it.
+- The link URL is its own sensitivity class, `infomaniak-kdrive-share-links`, which all five link tools carry
+  instead of the file class: the URL is an access capability, not metadata. It is returned only as a string up to
+  1024 characters, only when it is an absolute `https` URL without credentials; any other value from Infomaniak is
+  dropped and the link is returned without `url`. The other link fields (`right`, `valid_until`, the flags,
+  `access_blocked`, and the creation and update times) are untrusted data. A link is only reported for the file
+  it was asked for; an answer that names another file, or an unknown `right`, is an invalid response.
+- `links.list` reads one page of `GET /3/drive/{d}/files/links` with the link included (`with=sharelink`):
+  `limit` (5 to 1000, default 10) and an opaque `cursor`, answered as for `files.list`. Each entry is the usual entry
+  plus its `link`. `links.get` answers `not-found` for a file without a link.
+- A change sends exactly one request after the ownership check and is never repeated. After a timeout, a
+  dropped connection, a 5xx answer, or an unreadable answer, and also when a created link comes back unreadable,
+  the error says the change may have been applied; read the link before trying again. `asynchronous` is a
+  `pending` change. A 403, for example because the drive's plan does not allow share links or a right, is
+  reported as `permission`.
+
 ### Upload
 
 - `files.upload` creates one file in an existing folder (`directory_id`, the drive's root is `1`) or replaces
@@ -207,7 +258,7 @@ than being refused or silently redirected to a listing.
 
 ## Pagination and cursors
 
-`infomaniakdrive.files.list` and `infomaniakdrive.trash.list` take `limit` (5 to 1000, default 10) and an opaque `cursor`, and answers
+`infomaniakdrive.files.list`, `infomaniakdrive.trash.list`, and `infomaniakdrive.links.list` take `limit` (5 to 1000, default 10) and an opaque `cursor`, and answers
 `has_more` and a `cursor` for the next page whenever Infomaniak announced one. Each call reads exactly one
 Infomaniak page; Qatlas never follows `has_more` on its own, and a complete-looking page can still have
 `has_more` true. The cursor is Infomaniak's own opaque value, passed back unchanged; Qatlas adds no binding
@@ -260,9 +311,9 @@ a link inside them, or executes anything derived from them.
 
 This provider works the same way against a Business kSuite drive and a personal my kSuite drive: both are
 ordinary kDrives reachable through the same REST API and the same API token, and both are listed, browsed,
-and read identically through the tools above. The changes, uploads, and downloads use the same endpoints on both. Whether a plan
+and read identically through the tools above. The changes, uploads, downloads, and share links use the same endpoints on both. Whether a plan
 permits a change, for example a folder or file operation or an upload on a restricted my kSuite drive, is Infomaniak's
-decision: a refusal arrives as `permission` (or `provider-error`) and is never worked around, and this
+decision: a refusal arrives as `permission` (or `provider-error`) and is never worked around, a share link included: which rights, expiry, and settings a plan allows is its decision, and a refusal is not retried with other settings, and this
 provider documents no plan-specific behaviour beyond that. The one documented difference between the two plans is WebDAV
 access, which my kSuite does not guarantee the way a Business kSuite subscription does; this provider does
 not depend on WebDAV at all; it is unaffected either way. A my kSuite account may hold fewer or more
@@ -278,6 +329,6 @@ own API, none of them the Bearer API token this provider uses. Because every sec
 is mandatory for every one of its connections today, a single `infomaniak` provider spanning all of them
 would force a kDrive-only connection to also declare secret roles it never uses. Each of them can be added
 later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
-share or link operation, no trashed folder browsing, no restore outside the drive, no copy to another drive, no `version` conflict mode, no
+share of a file or folder with a user or team, no invitation, no `can_request_access` or removal of an expiry on a link, no link statistics, no trashed folder browsing, no restore outside the drive, no copy to another drive, no `version` conflict mode, no
 search, no activity or version history,
 and no account, settings, or quota administration.

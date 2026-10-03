@@ -3,10 +3,15 @@
 // file or folder, reads bounded file content or writes a file to a local path the connection releases for
 // writing, and, only on a connection that holds the matching permission, creates a folder, renames, moves,
 // copies, or uploads one file or folder inside one drive, restores a trash entry, and, only for a tool the
-// connection lists explicitly, moves one file or folder to the trash, deletes one trash entry for good, or
-// empties the trash. Each of these changes needs an explicit confirmation and is never repeated after an
-// unclear outcome; every request of it is sent once. The trash is read by its own tool. No share or link
-// operation is exposed.
+// connection lists explicitly, moves one file or folder to the trash, deletes one trash entry for good,
+// empties the trash, or creates, changes, or deletes the share link of one file or folder. Each of these
+// changes needs an explicit confirmation and is never repeated after an unclear outcome; every request of
+// it is sent once. The trash is read by its own tool, and the share links are read by two more: one link of
+// a file or folder, and the files of a drive that have one. A share link is an access path to the content
+// for whoever holds its URL, so its URL has its own data sensitivity class and is returned only as an https
+// string, and the password of a protected link is registered with the redactor before any request, is only
+// ever sent to Infomaniak, and is never returned, even when a provider answer carries one. No other share,
+// invitation, or access operation is exposed.
 //
 // Infomaniak groups many products behind one account model where a single API token can reach every account
 // and every kDrive its owner administers, which matters for a person who holds tokens of several customers. A
@@ -21,11 +26,11 @@
 // Infomaniak already answers it scoped to one account_id, and the entries are still matched against it again
 // defensively. Every drive and file identifier an agent argument names is a plain positive integer used only
 // as a path segment of the fixed Infomaniak REST paths below: no argument ever becomes a URL or an HTTP
-// method, and the only provider request bodies are the name or conflict choice of a change and the content of
-// an upload. A connection binds an account and drives, never single files, so a file, folder, or destination
-// identifier is bound by the drive it is used in: a change is refused locally against the allow-list and then,
-// before the change request, against the live account of the drive; Infomaniak resolves every identifier of a
-// change inside that one drive only.
+// method, and the only provider request bodies are the name or conflict choice of a change, the validated
+// settings of a share link, and the content of an upload. A connection binds an account and drives, never
+// single files, so a file, folder, or destination identifier is bound by the drive it is used in: a change is
+// refused locally against the allow-list and then, before the change request, against the live account of the
+// drive; Infomaniak resolves every identifier of a change inside that one drive only.
 //
 // Mail, CalDAV/CardDAV, and kChat are deliberately out of this provider's scope even though they are also
 // Infomaniak products: kDrive is read here through a Bearer API token against api.infomaniak.com, while
@@ -458,11 +463,11 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 }
 
 // Register adds Infomaniak kDrive metadata, its read-only connection test, its read operations, and its
-// confirmed changes.
+// confirmed changes, share link changes included.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kDrive", DefaultBaseURL: apiRoot,
-		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, and trash handling through the Infomaniak REST API",
+		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, and share links through the Infomaniak REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
@@ -532,5 +537,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: trashRestore, Handler: capability.Handler(invokeTrashRestore)},
 		capability.Operation{Descriptor: trashDelete, Handler: capability.Handler(invokeTrashDelete)},
 		capability.Operation{Descriptor: trashEmpty, Handler: capability.Handler(invokeTrashEmpty)},
+		capability.Operation{Descriptor: linksGet, Handler: capability.Handler(invokeLinksGet)},
+		capability.Operation{Descriptor: linksList, Handler: capability.Handler(invokeLinksList)},
+		capability.Operation{Descriptor: linksCreate, Handler: capability.Handler(invokeLinksCreate)},
+		capability.Operation{Descriptor: linksUpdate, Handler: capability.Handler(invokeLinksUpdate)},
+		capability.Operation{Descriptor: linksDelete, Handler: capability.Handler(invokeLinksDelete)},
 	)
 }
