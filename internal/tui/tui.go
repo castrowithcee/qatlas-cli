@@ -420,6 +420,11 @@ type Model struct {
 	// open. Both stand over the Approvals list, not a form; see approvals.go.
 	approvalDetail    string
 	approveAllConfirm bool
+	// approvalExpanded spells out the unchanged entries of a list change on the detail screen, which
+	// approvalOffset scrolls; both start over each time the screen opens.
+	approvalExpanded bool
+	approvalOffset   int
+	approvalPage     int
 	// tokenDetail names the agent token the Tokens detail screen shows, "" otherwise; tokenReveal says that
 	// s asked to show its value there (see tokenValueShown). tokenRevoke names the token the revoke question
 	// is about, asked from the list or over the detail screen. All stand over the Tokens list; see tokens.go.
@@ -919,7 +924,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		if m.section == sectionApprovals {
-			m.approvalDetail = name
+			m.approvalDetail, m.approvalExpanded, m.approvalOffset = name, false, 0
 			m.screen = screenConfirm
 			m.clearMessages()
 			return nil
@@ -2022,6 +2027,20 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "n", "esc":
 			m.approvalDetail, m.screen = "", screenList
 			m.status = "Cancelled"
+		case "e":
+			m.approvalExpanded = !m.approvalExpanded
+		case "down", "j":
+			m.scrollApproval(1)
+		case "up", "k":
+			m.scrollApproval(-1)
+		case "pgdown", " ":
+			m.scrollApproval(max(m.approvalPage, 1))
+		case "pgup":
+			m.scrollApproval(-max(m.approvalPage, 1))
+		case "home":
+			m.approvalOffset = 0
+		case "end":
+			m.approvalOffset = 1 << 20
 		case "ctrl+c":
 			return m.quit()
 		}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -1392,5 +1393,112 @@ func TestVaultUnlockNoticesOpenConnections(t *testing.T) {
 	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "unlock", "--config", configIn(dir))
 	if code != exitOK || strings.Contains(stderr, "vault approve") {
 		t.Fatalf("second unlock: exit %d, stdout %q, stderr %q, want nothing said about approvals", code, stdout, stderr)
+	}
+}
+
+const approveListsConfig = `
+version: 1
+services:
+  wiki:
+    provider: bookstack
+    base_url: https://wiki.example.invalid
+credentials:
+  wiki-vault:
+    type: vault
+connections:
+  wiki:
+    service: wiki
+    credential: wiki-vault
+  wiki2:
+    service: wiki
+    credential: wiki-vault
+    permissions: %s
+%s`
+
+// A list that changed is told as what is new and what falls away, with only the count of what stays; a
+// switch from every project to a list stays a before and after line. --output json carries the same as
+// added, removed, and kept.
+func TestVaultApproveListsNewAndRemovedEntries(t *testing.T) {
+	dir := twoConnectionVaultFixture(t)
+	if err := vault.New(dir).Set("wiki-vault", "token-id", canaryVault, offeringPassphrase("s3cret-phrase")); err != nil {
+		t.Fatalf("vault Set() = %v", err)
+	}
+	writeConfig := func(permissions, extra string) {
+		t.Helper()
+		body := fmt.Sprintf(approveListsConfig, permissions, extra)
+		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	approveAll := func(args ...string) (int, string, string) {
+		withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+		return runWithInput(t, &Options{}, "", append([]string{"vault", "approve", "--config", configIn(dir)}, args...)...)
+	}
+
+	writeConfig("[read, create]", "")
+	if code, _, stderr := approveAll(); code != exitOK {
+		t.Fatalf("first approve: exit %d, stderr %s", code, stderr)
+	}
+
+	writeConfig("[read, update]", "    paths: [\"~/repos/a\"]\n")
+	code, stdout, stderr := approveAll()
+	if code != exitOK || stderr != "" {
+		t.Fatalf("text run: exit %d, stderr %q", code, stderr)
+	}
+	for _, want := range []string{
+		"1 connection is open:\n", "wiki2\n", "  permissions  1 new, 1 removed\n", "    + update\n", "    - create\n",
+		"    unchanged: 1\n", "  paths  (every project) -> ~/repos/a\n", "approved 1 connection: wiki2",
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout lacks %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "read create ->") || strings.Contains(stdout, "->  read") {
+		t.Errorf("stdout still shows both full lists:\n%s", stdout)
+	}
+
+	writeConfig("[read, delete]", "    paths: [\"~/repos/a\"]\n")
+	code, stdout, stderr = approveAll("--output", "json")
+	if code != exitOK || stderr != "" {
+		t.Fatalf("json run: exit %d, stderr %q", code, stderr)
+	}
+	var got struct {
+		Open []struct {
+			Connection string `json:"connection"`
+			New        bool   `json:"new"`
+			Fields     []struct {
+				Field   string   `json:"field"`
+				Before  *string  `json:"before"`
+				After   *string  `json:"after"`
+				Added   []string `json:"added"`
+				Removed []string `json:"removed"`
+				Kept    []string `json:"kept"`
+			} `json:"fields"`
+		} `json:"open"`
+		Approved        []string `json:"approved"`
+		AlreadyApproved []string `json:"already_approved"`
+		RemovedStale    []string `json:"removed_stale"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+		t.Fatalf("stdout is not one JSON document: %v\n%s", err, stdout)
+	}
+	if len(got.Open) != 1 || got.Open[0].Connection != "wiki2" || got.Open[0].New || len(got.Open[0].Fields) != 1 {
+		t.Fatalf("open = %+v", got.Open)
+	}
+	f := got.Open[0].Fields[0]
+	if f.Field != "permissions" || !reflect.DeepEqual(f.Added, []string{"delete"}) ||
+		!reflect.DeepEqual(f.Removed, []string{"update"}) || !reflect.DeepEqual(f.Kept, []string{"read"}) ||
+		f.Before != nil || f.After != nil {
+		t.Errorf("field = %+v", f)
+	}
+	if !reflect.DeepEqual(got.Approved, []string{"wiki2"}) || len(got.AlreadyApproved) != 0 || len(got.RemovedStale) != 0 {
+		t.Errorf("approved = %v, already = %v, stale = %v", got.Approved, got.AlreadyApproved, got.RemovedStale)
+	}
+
+	// A mode switch carries before and after in JSON too.
+	writeConfig("[read, delete]", "")
+	_, stdout, _ = approveAll("--output", "json")
+	if !strings.Contains(stdout, `"field":"paths","before":"~/repos/a","after":"(every project)"`) {
+		t.Errorf("mode switch in JSON: %s", stdout)
 	}
 }

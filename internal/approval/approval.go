@@ -38,10 +38,26 @@ const (
 
 // FieldChange is one field of a connection's scope that differs from what was approved, each side written as
 // a person reads it. It never holds a secret.
+//
+// A list field (permissions, targets, tools, paths, files, forward) that stays a list on both sides also
+// carries what the change means: Added is what is newly asked for, Removed what falls away, and Kept what
+// stays, each sorted. A change between a mode and a list - tools "(every tool the permissions allow)" and a
+// list, paths "(every project)" and a list, files "(no local files)" and a list - and every single-value
+// field carries only Before and After; IsListChange tells the two apart. Before and After are set in both
+// cases.
 type FieldChange struct {
-	Field  string
-	Before string
-	After  string
+	Field   string
+	Before  string
+	After   string
+	Added   []string
+	Removed []string
+	Kept    []string
+}
+
+// IsListChange reports whether the change is told by Added, Removed, and Kept rather than by Before and
+// After alone.
+func (f FieldChange) IsListChange() bool {
+	return len(f.Added) > 0 || len(f.Removed) > 0
 }
 
 // Change is one connection that reads a vault credential and is not approved as it is configured now.
@@ -160,13 +176,85 @@ func diff(approved vault.Approval, now vault.Scope, id string) []FieldChange {
 	}
 	add(FieldProvider, before.Provider, after.Provider)
 	add(FieldOrigin, before.Origin, after.Origin)
-	add(FieldPermissions, list(before.Permissions), list(after.Permissions))
-	add(FieldTargets, list(before.Targets), list(after.Targets))
-	add(FieldTools, tools(before.Tools), tools(after.Tools))
-	add(FieldPaths, PathsText(before.Paths), PathsText(after.Paths))
-	add(FieldFiles, FilesText(before.FilesRead, before.FilesWrite), FilesText(after.FilesRead, after.FilesWrite))
-	add(FieldForward, ForwardText(before.Forward), ForwardText(after.Forward))
+	// addList records a change of a list field. mode is true when one side is a mode rather than a list, which
+	// stays readable only as before and after, as does a list whose text changed without a different entry.
+	addList := func(field string, mode bool, b, a []string, bText, aText string) {
+		if bText == aText {
+			return
+		}
+		change := FieldChange{Field: field, Before: bText, After: aText}
+		if !mode {
+			change.Added, change.Removed, change.Kept = setDiff(b, a)
+			if !change.IsListChange() {
+				change.Kept = nil
+			}
+		}
+		fields = append(fields, change)
+	}
+	addList(FieldPermissions, false, before.Permissions, after.Permissions,
+		list(before.Permissions), list(after.Permissions))
+	addList(FieldTargets, false, before.Targets, after.Targets, list(before.Targets), list(after.Targets))
+	addList(FieldTools, (before.Tools == nil) != (after.Tools == nil), before.Tools, after.Tools,
+		tools(before.Tools), tools(after.Tools))
+	addList(FieldPaths, (len(before.Paths) == 0) != (len(after.Paths) == 0), before.Paths, after.Paths,
+		PathsText(before.Paths), PathsText(after.Paths))
+	beforeFiles, afterFiles := FileItems(before.FilesRead, before.FilesWrite), FileItems(after.FilesRead, after.FilesWrite)
+	addList(FieldFiles, (len(beforeFiles) == 0) != (len(afterFiles) == 0), beforeFiles, afterFiles,
+		FilesText(before.FilesRead, before.FilesWrite), FilesText(after.FilesRead, after.FilesWrite))
+	addList(FieldForward, false, ForwardItems(before.Forward), ForwardItems(after.Forward),
+		ForwardText(before.Forward), ForwardText(after.Forward))
 	return fields
+}
+
+// setDiff splits two lists into what only after holds, what only before holds, and what both hold, each
+// sorted and without duplicates.
+func setDiff(before, after []string) (added, removed, kept []string) {
+	inBefore := make(map[string]bool, len(before))
+	for _, value := range before {
+		inBefore[value] = true
+	}
+	inAfter := make(map[string]bool, len(after))
+	for _, value := range after {
+		inAfter[value] = true
+	}
+	for value := range inAfter {
+		if inBefore[value] {
+			kept = append(kept, value)
+		} else {
+			added = append(added, value)
+		}
+	}
+	for value := range inBefore {
+		if !inAfter[value] {
+			removed = append(removed, value)
+		}
+	}
+	sort.Strings(added)
+	sort.Strings(removed)
+	sort.Strings(kept)
+	return added, removed, kept
+}
+
+// FileItems is the local directories a connection releases as one item each, "read: dir" or "write: dir".
+func FileItems(read, write []string) []string {
+	items := make([]string, 0, len(read)+len(write))
+	for _, dir := range read {
+		items = append(items, "read: "+dir)
+	}
+	for _, dir := range write {
+		items = append(items, "write: "+dir)
+	}
+	return items
+}
+
+// ForwardItems is the forward credentials a connection releases as one item each: the name with the field
+// names it releases, never a value.
+func ForwardItems(forward []vault.ForwardSecret) []string {
+	items := make([]string, len(forward))
+	for i, entry := range forward {
+		items[i] = entry.Name + " (fields: " + strings.Join(entry.Fields, " ") + ")"
+	}
+	return items
 }
 
 func list(values []string) string {
@@ -205,11 +293,7 @@ func ForwardText(forward []vault.ForwardSecret) string {
 	if len(forward) == 0 {
 		return "(none)"
 	}
-	parts := make([]string, len(forward))
-	for i, entry := range forward {
-		parts[i] = entry.Name + " (fields: " + strings.Join(entry.Fields, " ") + ")"
-	}
-	return strings.Join(parts, "; ")
+	return strings.Join(ForwardItems(forward), "; ")
 }
 
 func tools(values []string) string {

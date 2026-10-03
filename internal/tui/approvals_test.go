@@ -577,3 +577,94 @@ func TestApprovalsNavigation(t *testing.T) {
 		t.Errorf("the narrow navigation line does not offer digit 6:\n%s", view)
 	}
 }
+
+// toolsChange is an open change of a connection with 60 tools, 2 of them new, 1 gone, 57 unchanged.
+func toolsChange() approval.Change {
+	var kept []string
+	for i := 0; i < 57; i++ {
+		kept = append(kept, "github.issues.operation"+strings.Repeat("x", i%3)+string(rune('a'+i%26))+string(rune('a'+i/26)))
+	}
+	added := []string{"github.pullrequestchecks.list", "github.pullrequests.get"}
+	removed := []string{"github.repositories.archive"}
+	return approval.Change{
+		Connection: "gh",
+		Fields: []approval.FieldChange{{
+			Field: approval.FieldTools, Before: "old", After: "new",
+			Added: added, Removed: removed, Kept: kept,
+		}},
+	}
+}
+
+// A list change shows what is new and what falls away first and the rest as a count, which e spells out; a
+// view too long for the window scrolls instead of cutting anything, at 80 columns too.
+func TestApprovalDetailShowsNewAndRemovedBeforeUnchanged(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store, _, _ := newApprovalFixture(t, dir, "correct horse battery staple")
+	m := openApprovalModel(t, store, dir)
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	change := toolsChange()
+	title := m.wrapped(titleStyle, "Approve gh?") + "\n\n"
+
+	view := m.approvalChangeView(title, change)
+	assertViewFits(t, view, m.width, m.height)
+	for _, want := range []string{
+		"tools       2 new, 1 removed",
+		"+ github.pullrequestchecks.list", "+ github.pullrequests.get", "- github.repositories.archive",
+		"unchanged: 57", "e unchanged",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("collapsed view lacks %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "github.issues.operation") {
+		t.Errorf("collapsed view lists the unchanged tools:\n%s", view)
+	}
+	if strings.Index(view, "+ github.pullrequests.get") > strings.Index(view, "unchanged: 57") ||
+		strings.Index(view, "- github.repositories.archive") > strings.Index(view, "unchanged: 57") {
+		t.Errorf("unchanged comes before new or removed:\n%s", view)
+	}
+	if !strings.Contains(view, "credential  unchanged") {
+		t.Errorf("an unchanged field is not one compact line:\n%s", view)
+	}
+
+	m.approvalDetail, m.screen = "gh", screenConfirm
+	press(t, m, "e")
+	if !m.approvalExpanded {
+		t.Fatal("e did not expand the unchanged entries")
+	}
+	view = m.approvalChangeView(title, change)
+	assertViewFits(t, view, m.width, m.height)
+	if !strings.Contains(view, "lines 1-") || !strings.Contains(view, "e fold unchanged") {
+		t.Errorf("an expanded view that is longer than the window does not scroll:\n%s", view)
+	}
+	seen := map[string]bool{}
+	for step := 0; step < 80 && len(seen) < 57; step++ {
+		for _, line := range strings.Split(m.approvalChangeView(title, change), "\n") {
+			if name := strings.TrimSpace(line); strings.HasPrefix(name, "github.issues.operation") {
+				seen[name] = true
+			}
+		}
+		press(t, m, "pgdown")
+	}
+	if len(seen) != 57 {
+		t.Errorf("scrolling reached %d of 57 unchanged tools", len(seen))
+	}
+	press(t, m, "e")
+	if m.approvalExpanded {
+		t.Error("e did not fold the unchanged entries again")
+	}
+}
+
+// A mode switch stays a before-and-after line, and a new connection shows its whole scope as before.
+func TestApprovalDetailKeepsModeSwitchesReadable(t *testing.T) {
+	rows := approvalDetailRows(approval.Change{Fields: []approval.FieldChange{
+		{Field: approval.FieldTools, Before: "(every tool the permissions allow)", After: "a.b c.d"},
+	}})
+	if !containsRow(rows, "tools", "(every tool the permissions allow) -> a.b c.d") {
+		t.Errorf("mode switch rows:\n%s", strings.Join(rows, "\n"))
+	}
+	rows = approvalDetailRows(approval.Change{New: true, After: vault.Scope{Tools: []string{"a.b", "c.d"}}})
+	if !containsRow(rows, "tools", "a.b c.d") {
+		t.Errorf("new connection rows:\n%s", strings.Join(rows, "\n"))
+	}
+}

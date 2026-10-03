@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -81,10 +82,29 @@ var approvalFields = []string{
 	approval.FieldFiles, approval.FieldForward,
 }
 
-// approvalDetailRows is one row per field of c: "field   before -> after" for a field that changed, or, for
-// one that did not (or, for a new connection, has nothing yet to compare with), its current value under the
-// same label, worded "unchanged" unless the connection is new.
+// approvalRow is one line of the Approvals detail screen. item rows are the entries of a list change,
+// drawn under the field they belong to.
+type approvalRow struct {
+	text string
+	item bool
+}
+
+// approvalDetailRows is the detail screen's text with unchanged entries folded away: see approvalBody.
 func approvalDetailRows(c approval.Change) []string {
+	rows := approvalBody(c, false)
+	out := make([]string, len(rows))
+	for i, row := range rows {
+		out[i] = row.text
+	}
+	return out
+}
+
+// approvalBody is the rows of the detail screen: one per field of c, "field   before -> after" for a field
+// that changed from a single value or between a mode and a list, and for a list that stayed a list what is
+// newly asked for (+) and what falls away (-), then the entries that stay as a count, spelled out only when
+// expanded. A field that did not change is its current value under the same label, worded "unchanged"
+// unless the connection is new, which has nothing yet to compare with and shows its whole scope.
+func approvalBody(c approval.Change, expanded bool) []approvalRow {
 	changed := map[string]approval.FieldChange{}
 	for _, f := range c.Fields {
 		changed[f.Field] = f
@@ -100,19 +120,57 @@ func approvalDetailRows(c approval.Change) []string {
 		approval.FieldFiles:       approval.FilesText(c.After.FilesRead, c.After.FilesWrite),
 		approval.FieldForward:     approval.ForwardText(c.After.Forward),
 	}
-	rows := make([]string, 0, len(approvalFields))
+	rows := make([]approvalRow, 0, len(approvalFields))
 	for _, field := range approvalFields {
-		if f, ok := changed[field]; ok {
-			rows = append(rows, fmt.Sprintf("%-11s %s -> %s", field, f.Before, f.After))
-			continue
+		f, ok := changed[field]
+		switch {
+		case ok && f.IsListChange():
+			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s", field, approvalCounts(f))})
+			for _, v := range f.Added {
+				rows = append(rows, approvalRow{text: "+ " + v, item: true})
+			}
+			for _, v := range f.Removed {
+				rows = append(rows, approvalRow{text: "- " + v, item: true})
+			}
+			if len(f.Kept) > 0 {
+				rows = append(rows, approvalRow{text: fmt.Sprintf("unchanged: %d", len(f.Kept)), item: true})
+				if expanded {
+					for _, v := range f.Kept {
+						rows = append(rows, approvalRow{text: "  " + v, item: true})
+					}
+				}
+			}
+		case ok:
+			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s -> %s", field, f.Before, f.After)})
+		case c.New:
+			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s %s", field, current[field])})
+		default:
+			rows = append(rows, approvalRow{text: fmt.Sprintf("%-11s unchanged", field)})
 		}
-		value := "unchanged"
-		if c.New {
-			value = current[field]
-		}
-		rows = append(rows, fmt.Sprintf("%-11s %s", field, value))
 	}
 	return rows
+}
+
+// approvalCounts is the one-line summary of a list change: "2 new, 1 removed".
+func approvalCounts(f approval.FieldChange) string {
+	var parts []string
+	if len(f.Added) > 0 {
+		parts = append(parts, fmt.Sprintf("%d new", len(f.Added)))
+	}
+	if len(f.Removed) > 0 {
+		parts = append(parts, fmt.Sprintf("%d removed", len(f.Removed)))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// approvalHasKept reports whether any list change of c leaves entries unchanged, which u can then show.
+func approvalHasKept(c approval.Change) bool {
+	for _, f := range c.Fields {
+		if f.IsListChange() && len(f.Kept) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func approvalList(values []string) string {
@@ -152,13 +210,53 @@ func (m *Model) approvalDetailView() string {
 		return title + m.wrapped(hintStyle, "this connection is no longer open; nothing to approve") +
 			m.hint("esc back")
 	}
-	var b strings.Builder
-	b.WriteString(title)
-	for _, row := range approvalDetailRows(*change) {
-		b.WriteString(m.row(false, row) + "\n")
+	return m.approvalChangeView(title, *change)
+}
+
+// approvalChangeView is the title and body of the detail screen for one change. The whole body is laid out
+// first and shown from m.approvalOffset on, so a scope of any length fits the workspace and only the lines
+// scroll; nothing is cut.
+func (m *Model) approvalChangeView(title string, change approval.Change) string {
+	var lines []string
+	for _, row := range approvalBody(change, m.approvalExpanded) {
+		if row.item {
+			lines = append(lines, strings.Split(m.indentedWith(lipgloss.NewStyle(), row.text), "\n")...)
+			continue
+		}
+		lines = append(lines, strings.Split(m.row(false, row.text), "\n")...)
 	}
-	b.WriteString(m.hint("y approve · n/esc back, stays open"))
-	return b.String()
+	keys := "y approve · n/esc back, stays open"
+	if len(lines) > 0 && approvalHasKept(change) {
+		keys = "e unchanged · " + keys
+		if m.approvalExpanded {
+			keys = "e fold unchanged · y approve · n/esc back, stays open"
+		}
+	}
+	room := m.approvalRoom(title, keys, len(lines))
+	offset := max(min(m.approvalOffset, len(lines)-room), 0)
+	m.approvalOffset, m.approvalPage = offset, room
+	foot := m.hint(keys)
+	if len(lines) > room {
+		foot = "\n" + m.wrapped(hintStyle, fmt.Sprintf("lines %d-%d of %d", offset+1,
+			min(offset+room, len(lines)), len(lines))) + m.hint("up/down scroll · "+keys)
+	}
+	return title + strings.Join(lines[offset:min(offset+room, len(lines))], "\n") + "\n" + foot
+}
+
+// approvalRoom is how many body lines of the detail screen fit under its title and above its keys; when the
+// body is longer, one of them goes to the position line and the keys gain the scroll keys.
+func (m *Model) approvalRoom(title, keys string, lines int) int {
+	room := m.height - strings.Count(title, "\n") - strings.Count(m.hint(keys), "\n") - 1
+	if lines > room {
+		longer := m.hint("up/down scroll · " + keys)
+		room = m.height - strings.Count(title, "\n") - strings.Count(longer, "\n") - 2
+	}
+	return max(room, 1)
+}
+
+// scrollApproval moves the detail screen's scroll position by delta lines; the view clamps it.
+func (m *Model) scrollApproval(delta int) {
+	m.approvalOffset = max(m.approvalOffset+delta, 0)
 }
 
 // approveAllConfirmView draws the Approvals bulk-approval confirmation, with the count of what it would

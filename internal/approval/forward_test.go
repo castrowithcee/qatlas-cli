@@ -32,7 +32,8 @@ func TestForwardChangeIsAnOpenChange(t *testing.T) {
 	if got := openNames(report); !reflect.DeepEqual(got, []string{"wiki-read"}) {
 		t.Fatalf("Pending().Open = %v, want the connection that began to release a credential", got)
 	}
-	want := []FieldChange{{Field: FieldForward, Before: "(none)", After: "shared (fields: pass user)"}}
+	want := []FieldChange{{Field: FieldForward, Before: "(none)", After: "shared (fields: pass user)",
+		Added: []string{"shared (fields: pass user)"}}}
 	if got := report.Open[0].Fields; !reflect.DeepEqual(got, want) {
 		t.Errorf("Fields = %+v, want %+v", got, want)
 	}
@@ -40,7 +41,7 @@ func TestForwardChangeIsAnOpenChange(t *testing.T) {
 		t.Errorf("DirectApprovable() approved a change of the forward credentials in passing")
 	}
 	for _, f := range report.Open[0].Fields {
-		if strings.Contains(f.Before+f.After, "synthetic") {
+		if strings.Contains(f.Before+f.After+strings.Join(f.Added, " "), "synthetic") {
 			t.Errorf("the diff carries a value: %+v", f)
 		}
 	}

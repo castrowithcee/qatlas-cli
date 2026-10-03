@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -239,11 +240,16 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Use:   "approve",
 		Short: "Release open connections to read the vault credential they are configured for",
 		Long: "Lists every connection that is not approved to read its vault credential as it is configured now:\n" +
-			"'new connection, not yet approved' for one never approved, or one line per field that changed since,\n" +
-			"among origin, provider, permissions, targets, tools, and credential, before and after. Asks for the\n" +
+			"'new connection, not yet approved' for one never approved, or one entry per field that changed since,\n" +
+			"among origin, provider, permissions, targets, tools, paths, files, forward, and credential. A single\n" +
+			"value, or a switch between a mode and a list ('every tool the permissions allow', 'every project',\n" +
+			"'no local files'), shows before -> after; a list that stays a list shows what is newly asked for\n" +
+			"(+) and what falls away (-), then only how many entries are unchanged. --output json writes one\n" +
+			"document instead: open (connection, new, and per field before and after, or added, removed, and\n" +
+			"kept), approved, already_approved, and removed_stale. Asks for the\n" +
 			"vault's passphrase once and then approves every open connection listed, or only the ones named with\n" +
 			"--connection (repeatable), and hands the change to a running vault process the way every other vault\n" +
-			"change does.\n\n" +
+			"change does. What is approved is always the whole scope as configured now, however the change reads.\n\n" +
 			"An approval a connection no longer belongs to, because it was renamed, removed, or switched away\n" +
 			"from the vault, is stale; approving every open connection also removes it and names it. --connection\n" +
 			"leaves a stale approval untouched. A name given with --connection that does not read a stored vault\n" +
@@ -951,7 +957,12 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 	if err != nil {
 		return classifyUserError(err)
 	}
+	asJSON := c.Flags().Changed("output") && opts.Format == output.FormatJSON
+	doc := newVaultApproveDocument()
 	if state != vault.StateLocked && state != vault.StateUnlocked {
+		if asJSON {
+			return emitDocument(c, output.FormatJSON, doc)
+		}
 		fmt.Fprintln(c.OutOrStdout(),
 			"the vault is not encrypted; connections are not bound to approvals, so there is nothing to approve")
 		return nil
@@ -971,6 +982,9 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 	}
 
 	if len(names) == 0 && len(report.Open) == 0 && len(report.Stale) == 0 {
+		if asJSON {
+			return emitDocument(c, output.FormatJSON, doc)
+		}
 		fmt.Fprintln(c.OutOrStdout(), "nothing is open: every connection is approved as it is configured now")
 		return nil
 	}
@@ -1006,19 +1020,17 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 	}
 
 	out := c.OutOrStdout()
+	if asJSON {
+		out = io.Discard
+		for _, change := range report.Open {
+			doc.Open = append(doc.Open, approvalChangeJSON(opts.Redactor, change))
+		}
+	}
 	if len(report.Open) > 0 {
 		fmt.Fprintf(out, "%d %s open:\n", len(report.Open),
 			plural(len(report.Open), "connection is", "connections are"))
 		for _, change := range report.Open {
-			fmt.Fprintln(out, opts.Redactor.Apply(change.Connection))
-			if change.New {
-				fmt.Fprintln(out, "  new connection, not yet approved")
-				continue
-			}
-			for _, field := range change.Fields {
-				fmt.Fprintf(out, "  %s  %s -> %s\n", field.Field,
-					opts.Redactor.Apply(field.Before), opts.Redactor.Apply(field.After))
-			}
+			writeApprovalChange(out, opts.Redactor, change)
 		}
 	}
 
@@ -1034,10 +1046,12 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 		if len(approved) > 0 {
 			fmt.Fprintf(out, "approved %d %s: %s\n", len(approved),
 				plural(len(approved), "connection", "connections"), redactAll(opts.Redactor, approved))
+			doc.Approved = redactEach(opts.Redactor, approved)
 		}
 	}
 	for _, name := range already {
 		fmt.Fprintf(out, "%s is already approved as it is configured now\n", opts.Redactor.Apply(name))
+		doc.AlreadyApproved = append(doc.AlreadyApproved, opts.Redactor.Apply(name))
 	}
 
 	if len(names) == 0 && len(report.Stale) > 0 {
@@ -1051,9 +1065,105 @@ func runVaultApprove(c *cobra.Command, opts *Options, reg *capability.Registry, 
 		if removed > 0 {
 			fmt.Fprintf(out, "removed %d stale %s no longer read from the vault: %s\n", removed,
 				plural(removed, "approval", "approvals"), redactAll(opts.Redactor, report.Stale))
+			doc.RemovedStale = redactEach(opts.Redactor, report.Stale)
 		}
 	}
+	if asJSON {
+		return emitDocument(c, output.FormatJSON, doc)
+	}
 	return nil
+}
+
+// writeApprovalChange writes one open connection as text: 'new connection, not yet approved', or per
+// changed field the before and after of a single value or a switch between a mode and a list, and for a
+// list that stays a list what is new (+) and what falls away (-), then only the count of what is unchanged.
+func writeApprovalChange(out io.Writer, redactor *redact.Redactor, change approval.Change) {
+	fmt.Fprintln(out, redactor.Apply(change.Connection))
+	if change.New {
+		fmt.Fprintln(out, "  new connection, not yet approved")
+		return
+	}
+	for _, field := range change.Fields {
+		if !field.IsListChange() {
+			fmt.Fprintf(out, "  %s  %s -> %s\n", field.Field, redactor.Apply(field.Before), redactor.Apply(field.After))
+			continue
+		}
+		var counts []string
+		if len(field.Added) > 0 {
+			counts = append(counts, fmt.Sprintf("%d new", len(field.Added)))
+		}
+		if len(field.Removed) > 0 {
+			counts = append(counts, fmt.Sprintf("%d removed", len(field.Removed)))
+		}
+		fmt.Fprintf(out, "  %s  %s\n", field.Field, strings.Join(counts, ", "))
+		for _, value := range field.Added {
+			fmt.Fprintf(out, "    + %s\n", redactor.Apply(value))
+		}
+		for _, value := range field.Removed {
+			fmt.Fprintf(out, "    - %s\n", redactor.Apply(value))
+		}
+		if len(field.Kept) > 0 {
+			fmt.Fprintf(out, "    unchanged: %d\n", len(field.Kept))
+		}
+	}
+}
+
+// vaultApproveDocument is what 'vault approve --output json' writes: the connections that were open, each
+// with its changed fields, then which were approved, which were named but already approved, and which stale
+// approvals were removed.
+type vaultApproveDocument struct {
+	Open            []approvalChangeDocument `json:"open"`
+	Approved        []string                 `json:"approved"`
+	AlreadyApproved []string                 `json:"already_approved"`
+	RemovedStale    []string                 `json:"removed_stale"`
+}
+
+func newVaultApproveDocument() vaultApproveDocument {
+	return vaultApproveDocument{
+		Open: []approvalChangeDocument{}, Approved: []string{}, AlreadyApproved: []string{}, RemovedStale: []string{},
+	}
+}
+
+type approvalChangeDocument struct {
+	Connection string                  `json:"connection"`
+	New        bool                    `json:"new"`
+	Fields     []approvalFieldDocument `json:"fields"`
+}
+
+// approvalFieldDocument is one changed field: before and after for a single value or a switch between a mode
+// and a list; added, removed, and kept, each sorted, for a list that stays a list.
+type approvalFieldDocument struct {
+	Field   string   `json:"field"`
+	Before  *string  `json:"before,omitempty"`
+	After   *string  `json:"after,omitempty"`
+	Added   []string `json:"added,omitempty"`
+	Removed []string `json:"removed,omitempty"`
+	Kept    []string `json:"kept,omitempty"`
+}
+
+func approvalChangeJSON(redactor *redact.Redactor, change approval.Change) approvalChangeDocument {
+	doc := approvalChangeDocument{Connection: redactor.Apply(change.Connection), New: change.New,
+		Fields: []approvalFieldDocument{}}
+	for _, field := range change.Fields {
+		if !field.IsListChange() {
+			before, after := redactor.Apply(field.Before), redactor.Apply(field.After)
+			doc.Fields = append(doc.Fields, approvalFieldDocument{Field: field.Field, Before: &before, After: &after})
+			continue
+		}
+		doc.Fields = append(doc.Fields, approvalFieldDocument{Field: field.Field,
+			Added: redactEach(redactor, field.Added), Removed: redactEach(redactor, field.Removed),
+			Kept: redactEach(redactor, field.Kept)})
+	}
+	return doc
+}
+
+// redactEach applies the redactor to each value.
+func redactEach(redactor *redact.Redactor, values []string) []string {
+	out := make([]string, len(values))
+	for i, value := range values {
+		out[i] = redactor.Apply(value)
+	}
+	return out
 }
 
 // vaultCandidate reports whether name is a connection of cfg whose credential is of type vault and has an

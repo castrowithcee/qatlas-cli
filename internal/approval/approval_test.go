@@ -107,8 +107,9 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 	}
 	want := []FieldChange{
 		{Field: FieldOrigin, Before: "https://wiki.example.test", After: "http://127.0.0.1:9"},
-		{Field: FieldPermissions, Before: "create read", After: "create delete read"},
-		{Field: FieldTargets, Before: "(none)", After: "shelf-1 shelf-2"},
+		{Field: FieldPermissions, Before: "create read", After: "create delete read",
+			Added: []string{"delete"}, Kept: []string{"create", "read"}},
+		{Field: FieldTargets, Before: "(none)", After: "shelf-1 shelf-2", Added: []string{"shelf-1", "shelf-2"}},
 		{Field: FieldTools, Before: "(every tool the permissions allow)", After: "(none)"},
 		{Field: FieldPaths, Before: "(every project)", After: "~/repos/kunde-a"},
 		{Field: FieldFiles, Before: "(no local files)", After: "read: ~/in; write: ~/out"},
@@ -209,5 +210,119 @@ func TestDirectApprovableRefusesFilesChange(t *testing.T) {
 	}
 	if !DirectApprovable(Change{Fields: []FieldChange{{Field: FieldTools}}}) {
 		t.Error("DirectApprovable() = false for a changed tools list")
+	}
+}
+
+// scopeFixture is a scope whose lists are long enough to tell what was added, removed, and kept.
+func scopeFixture() vault.Scope {
+	return vault.Scope{
+		Connection: "gh", Credential: "token", Provider: "github", Origin: "https://api.example.test",
+		Permissions: []string{"read"}, Targets: []string{"org"},
+		Tools: []string{"github.issues.get", "github.issues.list", "github.pullrequests.list"},
+	}
+}
+
+func fieldOf(t *testing.T, fields []FieldChange, name string) FieldChange {
+	t.Helper()
+	for _, f := range fields {
+		if f.Field == name {
+			return f
+		}
+	}
+	t.Fatalf("no change of %s in %+v", name, fields)
+	return FieldChange{}
+}
+
+func TestDiffListsAddedRemovedKept(t *testing.T) {
+	approved := vault.Approval{Scope: scopeFixture()}
+	now := scopeFixture()
+
+	// Only added.
+	now.Tools = append(now.Tools, "github.pullrequests.get", "github.pullrequestchecks.list")
+	fields := diff(approved, now, "")
+	if len(fields) != 1 {
+		t.Fatalf("diff() = %+v, want only the tools", fields)
+	}
+	got := fieldOf(t, fields, FieldTools)
+	if !got.IsListChange() || !reflect.DeepEqual(got.Added, []string{"github.pullrequestchecks.list", "github.pullrequests.get"}) ||
+		len(got.Removed) != 0 || !reflect.DeepEqual(got.Kept, []string{"github.issues.get", "github.issues.list", "github.pullrequests.list"}) {
+		t.Errorf("added only: %+v", got)
+	}
+
+	// Only removed.
+	now = scopeFixture()
+	now.Tools = []string{"github.issues.get", "github.issues.list"}
+	got = fieldOf(t, diff(approved, now, ""), FieldTools)
+	if len(got.Added) != 0 || !reflect.DeepEqual(got.Removed, []string{"github.pullrequests.list"}) || len(got.Kept) != 2 {
+		t.Errorf("removed only: %+v", got)
+	}
+
+	// Both at once, and a forward credential whose fields changed counts as one removed and one added.
+	now = scopeFixture()
+	now.Tools = []string{"github.issues.get", "github.pullrequests.get", "github.pullrequests.list"}
+	approved.Scope.Forward = []vault.ForwardSecret{{Name: "db", Fields: []string{"user", "pass"}}}
+	now.Forward = []vault.ForwardSecret{{Name: "db", Fields: []string{"user"}}}
+	fields = diff(approved, now, "")
+	got = fieldOf(t, fields, FieldTools)
+	if !reflect.DeepEqual(got.Added, []string{"github.pullrequests.get"}) ||
+		!reflect.DeepEqual(got.Removed, []string{"github.issues.list"}) || len(got.Kept) != 2 {
+		t.Errorf("both: %+v", got)
+	}
+	fwd := fieldOf(t, fields, FieldForward)
+	if !reflect.DeepEqual(fwd.Added, []string{"db (fields: user)"}) || !reflect.DeepEqual(fwd.Removed, []string{"db (fields: pass user)"}) {
+		t.Errorf("forward: %+v", fwd)
+	}
+	if got.Before == "" || got.After == "" {
+		t.Errorf("Before and After stay set for a list change: %+v", got)
+	}
+}
+
+func TestDiffModeSwitchesStayBeforeAndAfter(t *testing.T) {
+	approved := vault.Approval{Scope: scopeFixture()}
+	now := scopeFixture()
+	now.Tools = nil
+	now.Paths = []string{"~/a"}
+	now.FilesRead = []string{"~/in"}
+	fields := diff(approved, now, "")
+	for _, name := range []string{FieldTools, FieldPaths, FieldFiles} {
+		f := fieldOf(t, fields, name)
+		if f.IsListChange() || f.Added != nil || f.Removed != nil || f.Kept != nil {
+			t.Errorf("%s is a mode switch, got sets: %+v", name, f)
+		}
+	}
+	if f := fieldOf(t, fields, FieldTools); f.After != "(every tool the permissions allow)" ||
+		f.Before != "github.issues.get github.issues.list github.pullrequests.list" {
+		t.Errorf("tools mode switch: %+v", f)
+	}
+	if f := fieldOf(t, fields, FieldPaths); f.Before != "(every project)" || f.After != "~/a" {
+		t.Errorf("paths mode switch: %+v", f)
+	}
+	if f := fieldOf(t, fields, FieldFiles); f.Before != "(no local files)" || f.After != "read: ~/in" {
+		t.Errorf("files mode switch: %+v", f)
+	}
+
+	// And back: a list that becomes the mode.
+	back := diff(vault.Approval{Scope: now}, scopeFixture(), "")
+	if f := fieldOf(t, back, FieldPaths); f.IsListChange() || f.After != "(every project)" {
+		t.Errorf("paths back to every project: %+v", f)
+	}
+}
+
+func TestDiffFilesPerDirectionAndUnchangedFields(t *testing.T) {
+	base := scopeFixture()
+	base.FilesRead = []string{"~/in"}
+	base.FilesWrite = []string{"~/out"}
+	now := base
+	now.FilesRead = []string{"~/in", "~/more"}
+	now.FilesWrite = nil
+	now.FilesWrite = []string{"~/other"}
+	fields := diff(vault.Approval{Scope: base}, now, "")
+	if len(fields) != 1 {
+		t.Fatalf("diff() = %+v, want only files: the rest is unchanged", fields)
+	}
+	f := fieldOf(t, fields, FieldFiles)
+	if !reflect.DeepEqual(f.Added, []string{"read: ~/more", "write: ~/other"}) ||
+		!reflect.DeepEqual(f.Removed, []string{"write: ~/out"}) || !reflect.DeepEqual(f.Kept, []string{"read: ~/in"}) {
+		t.Errorf("files: %+v", f)
 	}
 }
