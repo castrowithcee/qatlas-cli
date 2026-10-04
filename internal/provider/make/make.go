@@ -123,6 +123,7 @@ const (
 	needOrgRead   = "the organizations:read scope (and teams:read, which finds the organization)"
 	// needHooksRead belongs to the hook read tools.
 	needHooksRead        = "the hooks:read scope"
+	needHooksWrite       = "the hooks:write scope (and hooks:read, which binds the hook)"
 	needConnectionsRead  = "the connections:read scope"
 	needConnectionsWrite = "the connections:write scope (and connections:read, which binds the connection)"
 )
@@ -193,6 +194,8 @@ const (
 	// either, so both are a local, conservative choice.
 	maxScenarioNameLength = 256
 	maxDescriptionLength  = 2048
+	// maxRefusalBytes bounds the part of a refusal body hooks.delete reads for affected scenarios.
+	maxRefusalBytes = 16 << 10
 )
 
 // limiters holds the rate-limit budget of every API token this process has used. Make documents no fixed
@@ -211,6 +214,12 @@ type Client struct {
 	token   string
 	http    *http.Client
 	limiter *ratelimit.Limiter
+
+	// wantRefusal asks the next failing request to keep the status and a bounded excerpt of a generic 4xx
+	// answer in refusalStatus and refusal; only hooks.delete uses it, to recognize Make's own refusal.
+	wantRefusal   bool
+	refusalStatus int
+	refusal       []byte
 }
 
 // Open resolves the API token of one selected connection and returns a client for its bound zone and scope.
@@ -454,6 +463,10 @@ func (c *Client) statusError(op string, response *http.Response, need string) *p
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: "Make answered with a redirect, which Qatlas does not follow for this request"}
 	default:
+		if c.wantRefusal && status >= 400 && status < 500 {
+			c.refusalStatus = status
+			c.refusal, _ = io.ReadAll(io.LimitReader(response.Body, maxRefusalBytes))
+		}
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("Make rejected the operation (HTTP %d)", status)}
@@ -605,7 +618,9 @@ func Register(reg *capability.Registry) error {
 				"scenarios:read for the read profile, plus scenarios:write for the manage profile's create, " +
 				"update, start, and stop tools, plus scenarios:run for its run tool, plus teams:read for the team " +
 				"profile and organizations:read for the organization profile, plus connections:read for the " +
-				"connections-read profile and connections:write for its test tool. A token belongs to one " +
+				"connections-read profile and connections:write for its test tool, plus hooks:read for the " +
+				"hooks-read profile and hooks:write for the hooks-manage profile's create, rename, enable, and " +
+				"disable tools and the separately offered delete tool. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -673,6 +688,13 @@ func Register(reg *capability.Registry) error {
 				"needs the hooks:read scope",
 			Tools: []string{hooksList.ID, hooksGet.ID, hooksPing.ID, hooksLogs.ID},
 		}, {
+			ID: "hooks-manage", Title: "Manage the bound team's hooks",
+			Description: "reads what hooks-read reads, creates a webhook or mailhook, renames, enables, and " +
+				"disables hooks of the bound team; every change needs its own confirmation, never returns a " +
+				"trigger URL, and needs the hooks:read and hooks:write scopes. Deleting a hook is in no profile",
+			Tools: []string{hooksList.ID, hooksGet.ID, hooksPing.ID, hooksLogs.ID, hooksCreate.ID, hooksRename.ID,
+				hooksEnable.ID, hooksDisable.ID},
+		}, {
 			ID: "connections-read", Title: "Read the bound team's connections",
 			Description: "lists and reads the connections of the bound team by allow-listed metadata only and " +
 				"lists the names of their editable parameters; never a token or secret, changes nothing, and " +
@@ -708,6 +730,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: hooksPing, Handler: capability.Handler(invokeHooksPing)},
 		capability.Operation{Descriptor: hooksLogs, Handler: capability.Handler(invokeHooksLogs)},
 		capability.Operation{Descriptor: hooksURL, Handler: capability.Handler(invokeHooksURL)},
+		capability.Operation{Descriptor: hooksCreate, Handler: capability.Handler(invokeHooksCreate)},
+		capability.Operation{Descriptor: hooksRename, Handler: capability.Handler(invokeHooksRename)},
+		capability.Operation{Descriptor: hooksEnable, Handler: capability.Handler(invokeHooksEnable)},
+		capability.Operation{Descriptor: hooksDisable, Handler: capability.Handler(invokeHooksDisable)},
+		capability.Operation{Descriptor: hooksDelete, Handler: capability.Handler(invokeHooksDelete)},
 		capability.Operation{Descriptor: connectionsList, Handler: capability.Handler(invokeConnectionsList)},
 		capability.Operation{Descriptor: connectionsGet, Handler: capability.Handler(invokeConnectionsGet)},
 		capability.Operation{Descriptor: connectionsEditableSchema,

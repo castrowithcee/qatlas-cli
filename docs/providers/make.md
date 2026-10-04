@@ -38,7 +38,9 @@ additionally need `scenarios:write`, and its run tool additionally needs `scenar
 (`make.team.get`, `make.team.usage`, `make.team.members`) needs `teams:read`; the `organization` profile
 (`make.organization.get`) needs `organizations:read` and `teams:read`, because the organization is found
 through the bound team; the `hooks-read` profile (`make.hooks.list`, `get`, `ping`, `logs`) needs
-`hooks:read`, as does `make.hooks.url`; the `connections-read` profile (`make.connections.list`, `get`,
+`hooks:read`, as does `make.hooks.url`; the `hooks-manage` profile (`make.hooks.create`, `rename`, `enable`,
+`disable`, plus the hooks-read tools) additionally needs `hooks:write`, as does the separately offered
+`make.hooks.delete`; the `connections-read` profile (`make.connections.list`, `get`,
 `editableschema`) needs `connections:read`, and its separate `connections-test` profile
 (`make.connections.test`) additionally needs `connections:write`. A 403 names the missing scope. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
@@ -131,6 +133,10 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.hooks.ping` | read | none | reads one hook's status (`GET /hooks/{id}/ping`: attached, learning, gone); sends no data to the hook |
 | `make.hooks.logs` | read | none | lists one hook's log entries as metadata only (id, status, time, sizes) |
 | `make.hooks.url` | read | none | returns one hook's trigger URL or mailhook address, a secret; offered only when a connection's `tools` list names it, in no profile |
+| `make.hooks.create` | create | required | creates a webhook or mailhook in the bound team (`POST /hooks`); refused on a connection with a scenario allow-list; never returns the trigger URL |
+| `make.hooks.rename` | update | required | renames one hook of the bound team (`PATCH /hooks/{id}`, body `name`) |
+| `make.hooks.enable` / `make.hooks.disable` | update | required | enables or disables one hook (`POST /hooks/{id}/enable` or `/disable`), then re-reads it |
+| `make.hooks.delete` | delete | required | deletes one hook (`DELETE /hooks/{id}`); offered only when a connection's `tools` list names it, in no profile |
 | `make.connections.list` | read | none | lists the bound team's Make connections (always `teamId` of the connection) by allow-listed metadata, at most 200 |
 | `make.connections.get` | read | none | reads one Make connection by allow-listed metadata, with its team confirmed live |
 | `make.connections.editableschema` | read | none | lists the names of the parameters Make allows to be edited on one connection; names only |
@@ -255,7 +261,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook tools; `connections:read` for the connection reads and `connections:write` for the connection test |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -271,7 +277,7 @@ or run; the same is true of an unconfirmed call to any change tool, and of a
 
 ## Hooks
 
-The five hook tools need the `hooks:read` scope (a 403 names it). `make.hooks.list` always sends the bound
+The five read tools need the `hooks:read` scope (a 403 names it). `make.hooks.list` always sends the bound
 team as `teamId`. Every tool that names a `hook_id` validates it locally (positive integer), reads the hook
 from Make first, and refuses it as an invalid request, without naming its real team, when its `teamId` is not
 the bound team, before any ping, log, or URL request is sent. On a connection with a scenario allow-list the
@@ -284,6 +290,32 @@ the strings they return. Only `make.hooks.url` returns the URL; it is not part o
 connection whose `tools` list names it. Its value is deliberately not added to the output redactor, since that
 would blank the tool's own answer. Hook logs are reduced to metadata (id, status, time, replayable flag, type,
 and at most eight integer sizes); request headers, bodies, parsers, and udids are never read into a result.
+
+### Changing hooks
+
+`make.hooks.create`, `rename`, `enable`, `disable`, and `delete` need `hooks:write` (a 403 names it) and
+`hooks:read`, which binds the hook. Each needs its own confirmation, sends exactly one changing request, and
+is never repeated: a 5xx, a dropped connection, or an unreadable answer is reported as uncertain, and the
+current state should be read before trying again. Every tool that names a `hook_id` reads the hook first and
+refuses it, before the changing request, unless its `teamId` is the bound team (and, with a scenario
+allow-list, its scenario is listed). Enable and disable re-read the hook and report an unconfirmed state as
+uncertain; a result outside the bound team after the change is a provider error.
+
+`make.hooks.create` always sends the bound team as `teamId` (Make documents it as a string) together with
+`name`, `typeName`, `method`, `headers`, and `stringify`, all required by Make. Narrower than Make: `type` is
+only `webhook` (`gateway-webhook`) or `mailhook` (`gateway-mailhook`); `include_method`, `include_headers`,
+and `stringify` are booleans for webhooks only; there is no connection, free type name, header, or data
+field. Hooks of those two types need no connection (`__IMTCONN__` belongs to connection-bound types, which
+this tool does not create). On a connection with a scenario allow-list the create is refused, since a new
+hook is assigned to no scenario and the hook tools could never reach it. The answer never carries the
+trigger URL, udid, or address; they are added to the output redactor.
+
+`make.hooks.delete` sends `confirmed=true` only when `confirm_scenarios_affected` is true. Without it, Make
+refuses the deletion of a hook a scenario uses; Qatlas then answers `deleted: false`,
+`confirmation_required: true`, and up to 20 scenarios (ids, and names bounded and masked, untrusted) taken
+from the refusal body when it lists any and from the hook read, and does not repeat the request. Make
+documents only that an error is returned; its exact shape is not specified, so a refusal is recognized as a
+4xx answer when scenarios are known, and any other failure stays an error.
 
 ## Connections
 
@@ -323,7 +355,7 @@ never renders it, follows a link inside it, or executes anything derived from it
 This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
-call, create, change, or delete hooks, manage labels, data stores, keys, teams, or organizations (it only reads the bound team
+call, start or stop a hook's learning mode, set a hook's data, manage labels, data stores, keys, teams, or organizations (it only reads the bound team
 and its organization), or read team or organization variables; those are out of scope. For connections it
 only lists and reads allow-listed metadata, lists editable parameter names, and tests a connection; it does
 not create, change, rename, or delete connections, set credentials, manage access lists, or handle credential
