@@ -623,7 +623,10 @@ func Register(reg *capability.Registry) error {
 				"rename, enable, and disable tools and the separately offered hook and queue delete tools, plus " +
 				"credential-requests:read for the credentialrequests-read profile and credential-requests:write " +
 				"for its manage profile's create tool and the separately offered request delete tool, plus " +
-				"connections:write for the separately offered connection create and set-data tools. A token belongs to one " +
+				"connections:write for the separately offered connection create and set-data tools, plus datastores:read " +
+				"for the datastores-read profile, datastores:write and udts:read for the datastores-manage profile " +
+				"and datastores:write for the separately offered data store delete tool, plus udts:read for the " +
+				"datastructures-read profile. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -748,6 +751,25 @@ func Register(reg *capability.Registry) error {
 				"credential-requests:read, credential-requests:write, and user:read scopes. The " +
 				"person must be a member of the bound team; no user is invited. Deleting a request is in no profile",
 			Tools: []string{credentialRequestsList.ID, credentialRequestsGet.ID, credentialRequestsCreate.ID},
+		}, {
+			ID: "datastores-read", Title: "Read the bound team's data stores",
+			Description: "lists and reads the data stores of the bound team, never their records; changes " +
+				"nothing and needs the datastores:read scope (Make's reference lists organizations:read for " +
+				"reading a single store); refused on a connection with a scenario allow-list",
+			Tools: []string{dataStoresList.ID, dataStoresGet.ID},
+		}, {
+			ID: "datastores-manage", Title: "Create and update the bound team's data stores",
+			Description: "reads what datastores-read reads, creates a data store in the bound team, and " +
+				"changes a store's name, data structure, or maximum size; every change needs its own " +
+				"confirmation, is never retried, and needs the datastores:read, datastores:write, and " +
+				"udts:read scopes. Deleting a data store is in no profile",
+			Tools: []string{dataStoresList.ID, dataStoresGet.ID, dataStoresCreate.ID, dataStoresUpdate.ID},
+		}, {
+			ID: "datastructures-read", Title: "Read the bound team's data structures",
+			Description: "lists and reads the data structures of the bound team with their field " +
+				"specification; changes nothing and needs the udts:read scope; refused on a connection " +
+				"with a scenario allow-list",
+			Tools: []string{dataStructuresList.ID, dataStructuresGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -792,6 +814,13 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: connectionsAccessSet, Handler: capability.Handler(invokeConnectionsAccessSet)},
 		capability.Operation{Descriptor: connectionsCreate, Handler: capability.Handler(invokeConnectionsCreate)},
 		capability.Operation{Descriptor: connectionsSetData, Handler: capability.Handler(invokeConnectionsSetData)},
+		capability.Operation{Descriptor: dataStoresList, Handler: capability.Handler(invokeDataStoresList)},
+		capability.Operation{Descriptor: dataStoresGet, Handler: capability.Handler(invokeDataStoresGet)},
+		capability.Operation{Descriptor: dataStoresCreate, Handler: capability.Handler(invokeDataStoresCreate)},
+		capability.Operation{Descriptor: dataStoresUpdate, Handler: capability.Handler(invokeDataStoresUpdate)},
+		capability.Operation{Descriptor: dataStoresDelete, Handler: capability.Handler(invokeDataStoresDelete)},
+		capability.Operation{Descriptor: dataStructuresList, Handler: capability.Handler(invokeDataStructuresList)},
+		capability.Operation{Descriptor: dataStructuresGet, Handler: capability.Handler(invokeDataStructuresGet)},
 		capability.Operation{Descriptor: credentialRequestsList, Handler: capability.Handler(invokeCredentialRequestsList)},
 		capability.Operation{Descriptor: credentialRequestsGet, Handler: capability.Handler(invokeCredentialRequestsGet)},
 		capability.Operation{Descriptor: credentialRequestsCreate, Handler: capability.Handler(invokeCredentialRequestsCreate)},

@@ -122,6 +122,8 @@ func coreConfig() *config.Config {
 				Tools: []string{Provider + ".hooks.delete"}, Target: "team/" + itoa64(ownTeam)},
 			"connectiondelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
 				Tools: []string{Provider + ".connections.delete"}, Target: "team/" + itoa64(ownTeam)},
+			"datastoredelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+				Tools: []string{Provider + ".datastores.delete"}, Target: "team/" + itoa64(ownTeam)},
 			"credentialdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
 				Tools: []string{Provider + ".credentialrequests.delete"}, Target: "team/" + itoa64(ownTeam)},
 			"hookqueuedelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
@@ -195,14 +197,14 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 42 {
-		t.Fatalf("tools = %+v, want 42", metadata.Tools)
+	if len(metadata.Tools) != 49 {
+		t.Fatalf("tools = %+v, want 49", metadata.Tools)
 	}
 	profiles := map[string]int{}
 	for _, profile := range metadata.Profiles {
 		profiles[profile.ID] = len(profile.Tools)
 	}
-	if len(profiles) != 14 || profiles["hookqueue-read"] != 3 || profiles["hooks-read"] != 4 || profiles["hooks-manage"] != 8 || profiles["team"] != 3 || profiles["organization"] != 1 {
+	if len(profiles) != 17 || profiles["hookqueue-read"] != 3 || profiles["hooks-read"] != 4 || profiles["hooks-manage"] != 8 || profiles["team"] != 3 || profiles["organization"] != 1 {
 		t.Fatalf("profiles = %+v, want read, manage, team (3), and organization (1)", profiles)
 	}
 }
