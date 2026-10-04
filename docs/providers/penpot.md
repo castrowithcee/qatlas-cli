@@ -1,18 +1,18 @@
 ---
 description: >
   Describes the Penpot provider (beta): the access token and the Penpot Cloud or self-hosted base URL, the team and
-  project targets, the read tools, the tools that manage projects and files, the comment tools that read and change, the media, export, and import tools, the bounds, errors, and the RPC forms it
+  project targets, the read tools, the tools that manage projects and files, the comment tools that read and change, the media, export, and import tools, the webhook tools, the team, member, and invitation tools, the bounds, errors, and the RPC forms it
   relies on.
 type: knowledge
 edit: shared
 created: 2026-09-30
-updated: 2026-10-02
+updated: 2026-10-04
 ---
 
 # Penpot
 
 This provider reads teams, projects, files, and pages of a Penpot instance, Penpot Cloud or self-hosted, with an
-access token, creates, renames, deletes, and moves projects and files, creates and restores file snapshots, restores and permanently deletes deleted files, reads and manages the comments of a file, adds images to a file, and exports and imports files as `.penpot` archives. It edits no file content beyond restoring a snapshot and adding images.
+access token, creates, renames, deletes, and moves projects and files, creates and restores file snapshots, restores and permanently deletes deleted files, reads and manages the comments of a file, adds images to a file, exports and imports files as `.penpot` archives, and manages the webhooks, members, invitations, and existence of teams. It edits no file content beyond restoring a snapshot and adding images.
 
 **Beta.** Penpot's backend RPC interface (`POST /api/rpc/command/<name>`) is documented only by its sources and
 carries no stability promise. A command or a field can change with a Penpot release; the forms used here are listed
@@ -108,10 +108,16 @@ connections:
 | `penpot.webhooks.create` | create | required | `create-webhook` | creates a webhook in a bound team |
 | `penpot.webhooks.update` | update | required | `update-webhook` | replaces URL, payload type, and active state of a webhook |
 | `penpot.webhooks.delete` | delete | required, tool allow-list | `delete-webhook` | deletes a webhook |
+| `penpot.members.list` | read | none | `get-team-members` | lists the members of one bound team |
+| `penpot.members.setrole` | update | required, tool allow-list | `update-team-member-role` | sets a member's role to admin, editor, or viewer |
+| `penpot.members.remove` | delete | required, tool allow-list | `delete-team-member` | removes a member from a bound team |
+| `penpot.invitations.create` | create | required | `create-team-invitations` | invites people by email as editor or viewer |
+| `penpot.teams.create` | create | required, tool allow-list | `create-team` | creates a new team |
+| `penpot.teams.delete` | delete | required, tool allow-list | `delete-team` | deletes a bound team with its projects and files |
 
 The recommended read profile offers the four tools for teams, projects, and files; the comment tools are enabled
 through the connection's permissions and `tools` list, and so are the project and file tools. `penpot.comments.delete`,
-`penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`, `penpot.webhooks.delete`, and `penpot.snapshots.restore` are offered only
+`penpot.projects.delete`, `penpot.files.delete`, `penpot.files.purge`, `penpot.webhooks.delete`, `penpot.snapshots.restore`, `penpot.members.setrole`, `penpot.members.remove`, `penpot.teams.create`, and `penpot.teams.delete` are offered only
 when the `tools` list names them. Every tool names its command itself; there is no `command` argument, no free path, method, or body.
 Reads use POST but are idempotent and safe.
 
@@ -288,9 +294,38 @@ Every change asks for `confirm`, sends exactly one request, and is never repeate
 reset, a 5xx answer, or (for a creation) an unreadable answer or one without the new ID, the error says that the
 change may have taken effect; list the webhooks before trying again.
 
+## Teams, members, and invitations
+
+The six tools administer teams. `team_id` must be a bound team (checked before the credential is resolved and before
+any request; the refusal never names the team). **There is no wildcard target and Qatlas never adds a target**: the
+team that `teams.create` makes is outside every connection until you add `team/ID` to a connection yourself.
+
+- `members.list` takes `team_id` and answers `members` with `id` (used as `member_id`), `email`, `role` (`owner`,
+  `admin`, `editor`, or `viewer`), and `is_active` (at most 200). Email addresses are personal data: the tool has its own
+  sensitivity class, `penpot-members`; names and photos are not returned.
+- `members.setrole` takes `team_id`, `member_id`, and `role` (`admin`, `editor`, or `viewer`). The role `owner` is not
+  offered, so ownership cannot be transferred. Penpot refuses a change of the owner and a change without admin rights.
+  The answer has `updated`, `team_id`, `member_id`, and `role`.
+- `members.remove` takes `team_id` and `member_id`. Penpot refuses to remove the token's own account, and an admin
+  cannot remove the owner. The member must belong to the given team; Penpot looks the ID up in that team only.
+- `invitations.create` takes `team_id`, `emails` (1 to 25 plain addresses, without display name; lower-cased and
+  de-duplicated), and `role` (`editor` or `viewer`; `admin` is set afterwards with `members.setrole`). **Penpot sends an
+  email to every address.** It skips addresses of existing members. The answer has `team_id`, `requested`, and
+  `invited` (numbers only, never addresses).
+- `teams.create` takes `name` (1 to 250 characters, none of `.`, `:`, `/`, which Penpot refuses) and answers `team_id`.
+  The new team is owned by the token's account. Penpot limits the teams per account.
+- `teams.delete` takes `team_id`. Penpot marks the team and its projects and files as deleted and removes them after
+  the deletion delay; only the owner may delete, and the default team is refused.
+
+Team, member, and invitation changes affect the whole team, so **a connection with a project allow-list refuses all of
+them, and `teams.create`**; `members.list` is still allowed. Every change asks for `confirm`, sends exactly one request,
+and is never repeated. After a timeout, a connection reset, a 5xx answer, or (for `invitations.create` and
+`teams.create`) an unreadable answer, the error says that the change may have taken effect; list the members or teams
+before trying again. Emails are never part of an error message.
+
 ## Bounds
 
-The commands document no pagination; every list is cut on the client: 100 teams, 100 webhooks, 1000 projects, 1000 files, 500 threads, 200 comments of a thread. A
+The commands document no pagination; every list is cut on the client: 100 teams, 100 webhooks, 200 members, 1000 projects, 1000 files, 500 threads, 200 comments of a thread. A
 response is read up to 16 MiB; a larger one is an `invalid-provider-response`. Names are cut at 256 bytes. Targets
 hold at most 20 teams and 200 projects. Requests to one token share a rate limit.
 
@@ -361,6 +396,15 @@ instance:
   (`id`; answers without a body). Edit permission on the team is checked by Penpot. Assumed: the answer of
   `create-webhook` carries the new ID as `id`, the answers of the other changes are not read, and a webhook ID is not
   tied to a team by the command itself, which is why the tool proves it through `get-webhooks` first.
+- Teams (Penpot 2.18.0, `teams.clj`, `teams_invitations.clj`, `common/types/team.cljc`): `get-team-members` (`team-id`;
+  rows with `id` (the profile), `email`, `name`, `is-owner`, `is-admin`, `can-edit`, `is-active`; Qatlas reads `id`,
+  `email`, the flags, and `is-active`), `update-team-member-role` (`team-id`, `member-id`, `role` one of `owner`,
+  `admin`, `editor`, `viewer`; Qatlas sends the last three only), `delete-team-member` (`team-id`, `member-id`),
+  `create-team-invitations` (`team-id`, `emails`, a set, and `role`; at most 25 addresses; needs admin rights; answers
+  `total` and `invitations`), `create-team` (`name`; the optional `id`, `features`, `organization-id`, and `is-default`
+  are never sent; answers the team with `id`), and `delete-team` (`id`; answers without a body). Assumed: the answer of
+  `create-team` carries the new ID as `id`, the answer of `create-team-invitations` carries `total`, the set of emails is
+  accepted as a JSON array, and the answers of the other changes are not read.
 - Assumed, not documented: a `position` is sent as an object `{"x": ..., "y": ...}` and a thread's position is read
   the same way; a change that answers without a body is read as done; requests send kebab-case keys, responses are JSON when `Accept: application/json` is sent,
   and their keys are read case- and separator-insensitively (camelCase or kebab-case); the summary's categories carry

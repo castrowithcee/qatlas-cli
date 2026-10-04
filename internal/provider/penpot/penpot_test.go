@@ -117,12 +117,12 @@ func testConfig() *config.Config {
 			"two":    connection("team/"+teamA, "team/"+teamB),
 			"narrow": connection("team/"+teamA, "project/"+projectA1),
 			"write": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
-				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(webhookTools, append(recoveryTools, transferTools...)...)...)...)...)},
+				Tools: append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(webhookTools, append(teamTools, append(recoveryTools, transferTools...)...)...)...)...)...)},
 			"writetwo": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA, "team/" + teamB},
-				Tools: append(manageTools, append(libraryTools, append(webhookTools, append(recoveryTools, transferTools...)...)...)...)},
+				Tools: append(manageTools, append(libraryTools, append(webhookTools, append(teamTools, append(recoveryTools, transferTools...)...)...)...)...)},
 			"writenarrow": {Service: "penpot", Credential: "token", Permissions: all,
 				Targets: []string{"team/" + teamA, "project/" + projectA1},
-				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(webhookTools, append(recoveryTools, transferTools...)...)...)...)...)},
+				Tools:   append([]string{commentsCreate.ID, commentsUpdate.ID, commentsDelete.ID, commentsThreads.ID, commentsList.ID}, append(manageTools, append(libraryTools, append(webhookTools, append(teamTools, append(recoveryTools, transferTools...)...)...)...)...)...)},
 			"nodelete": {Service: "penpot", Credential: "token", Permissions: all, Targets: []string{"team/" + teamA},
 				Tools: []string{commentsCreate.ID, commentsUpdate.ID, projectsCreate.ID, projectsRename.ID, filesCreate.ID,
 					filesRename.ID, filesMove.ID}},
@@ -209,9 +209,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		mediaUpload.ID: config.PermissionCreate, mediaFromURL.ID: config.PermissionCreate,
 		filesExport.ID: config.PermissionRead, filesImport.ID: config.PermissionCreate,
 		webhooksList.ID: config.PermissionRead, webhooksCreate.ID: config.PermissionCreate,
-		webhooksUpdate.ID: config.PermissionUpdate, webhooksDelete.ID: config.PermissionDelete}
+		webhooksUpdate.ID: config.PermissionUpdate, webhooksDelete.ID: config.PermissionDelete,
+		membersList.ID: config.PermissionRead, membersSetRole.ID: config.PermissionUpdate,
+		membersRemove.ID: config.PermissionDelete, invitationsCreate.ID: config.PermissionCreate,
+		teamsCreate.ID: config.PermissionCreate, teamsDelete.ID: config.PermissionDelete}
 	explicit := map[string]bool{commentsDelete.ID: true, projectsDelete.ID: true, snapshotsRestore.ID: true,
-		filesDelete.ID: true, filesPurge.ID: true, webhooksDelete.ID: true}
+		filesDelete.ID: true, filesPurge.ID: true, webhooksDelete.ID: true, membersSetRole.ID: true,
+		membersRemove.ID: true, teamsCreate.ID: true, teamsDelete.ID: true}
 	if len(metadata.Tools) != len(want) {
 		t.Fatalf("tools = %+v", metadata.Tools)
 	}
