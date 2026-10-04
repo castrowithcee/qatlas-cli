@@ -428,15 +428,30 @@ func TestDeleteNeedsSpecialUse(t *testing.T) {
 // applied it while the client never reads the answer. It counts what the client wrote.
 type dropAfter struct {
 	net.Conn
-	match  *regexp.Regexp
-	writes *atomic.Int32
+	match   *regexp.Regexp
+	writes  *atomic.Int32
+	dropped atomic.Bool
 }
 
-func (d dropAfter) Write(p []byte) (int, error) {
+// Write sends the matched command and then closes the connection. The drop is recorded before the command
+// is sent, so Read never hands its answer to the client, however fast the server replies.
+func (d *dropAfter) Write(p []byte) (int, error) {
+	matched := d.match.Match(p)
+	if matched {
+		d.dropped.Store(true)
+	}
 	n, err := d.Conn.Write(p)
-	if err == nil && d.match.Match(p) {
+	if err == nil && matched {
 		d.writes.Add(1)
 		_ = d.Conn.Close()
+	}
+	return n, err
+}
+
+func (d *dropAfter) Read(p []byte) (int, error) {
+	n, err := d.Conn.Read(p)
+	if d.dropped.Load() {
+		return 0, net.ErrClosed
 	}
 	return n, err
 }
@@ -462,7 +477,7 @@ func TestAnUnclearOutcomeIsReportedAndNeverRepeated(t *testing.T) {
 				if err != nil {
 					return nil, err
 				}
-				return dropAfter{Conn: conn, match: regexp.MustCompile(`T\d+ ` + tc.command + ` `), writes: &writes}, nil
+				return &dropAfter{Conn: conn, match: regexp.MustCompile(`T\d+ ` + tc.command + ` `), writes: &writes}, nil
 			}
 			t.Cleanup(func() { dialIMAP = real })
 			dials := e.f.dials.Load()

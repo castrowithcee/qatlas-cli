@@ -541,7 +541,7 @@ func TestDraftChangesWithAnUnclearOutcomeAreReportedAndNeverRepeated(t *testing.
 				if err != nil {
 					return nil, err
 				}
-				return dropAfter{Conn: conn, match: regexp.MustCompile(`T\d+ ` + tc.command + ` `), writes: &writes}, nil
+				return &dropAfter{Conn: conn, match: regexp.MustCompile(`T\d+ ` + tc.command + ` `), writes: &writes}, nil
 			}
 			t.Cleanup(func() { dialIMAP = real })
 			dials := e.f.dials.Load()
@@ -629,13 +629,13 @@ func TestDraftLimitsAndLocalFileRelease(t *testing.T) {
 		"inline size":      `{"to":["a@example.net"],"attachments":[{"name":"a.bin","content_base64":"` + tooLarge + `"}]}`,
 		"bad base64":       `{"to":["a@example.net"],"attachments":[{"name":"a.bin","content_base64":"!!!"}]}`,
 		"no name":          `{"to":["a@example.net"],"attachments":[{"content_base64":"aGk="}]}`,
-		"both sources":     `{"to":["a@example.net"],"attachments":[{"name":"a","content_base64":"aGk=","local_path":"` + filepath.Join(dir, "big1.bin") + `"}]}`,
+		"both sources":     `{"to":["a@example.net"],"attachments":[{"name":"a","content_base64":"aGk=","local_path":` + jsonString(filepath.Join(dir, "big1.bin")) + `}]}`,
 		"no source":        `{"to":["a@example.net"],"attachments":[{"name":"a"}]}`,
-		"outside release":  `{"to":["a@example.net"],"attachments":[{"local_path":"` + filepath.Join(outside, "secret.txt") + `"}]}`,
-		"missing file":     `{"to":["a@example.net"],"attachments":[{"local_path":"` + filepath.Join(dir, "none.bin") + `"}]}`,
-		"directory":        `{"to":["a@example.net"],"attachments":[{"local_path":"` + dir + `"}]}`,
-		"total size": `{"to":["a@example.net"],"attachments":[{"local_path":"` + filepath.Join(dir, "big1.bin") +
-			`"},{"local_path":"` + filepath.Join(dir, "big2.bin") + `"}]}`,
+		"outside release":  `{"to":["a@example.net"],"attachments":[{"local_path":` + jsonString(filepath.Join(outside, "secret.txt")) + `}]}`,
+		"missing file":     `{"to":["a@example.net"],"attachments":[{"local_path":` + jsonString(filepath.Join(dir, "none.bin")) + `}]}`,
+		"directory":        `{"to":["a@example.net"],"attachments":[{"local_path":` + jsonString(dir) + `}]}`,
+		"total size": `{"to":["a@example.net"],"attachments":[{"local_path":` + jsonString(filepath.Join(dir, "big1.bin")) +
+			`},{"local_path":` + jsonString(filepath.Join(dir, "big2.bin")) + `}]}`,
 		"no recipient": `{"to":[]}`,
 		"body NUL":     `{"to":["a@example.net"],"body":"a\u0000b"}`,
 		"unknown":      `{"to":["a@example.net"],"headers":{"X":"y"}}`,
@@ -654,7 +654,7 @@ func TestDraftLimitsAndLocalFileRelease(t *testing.T) {
 			dials, e.f.dials.Load(), reads, e.f.reads.Load())
 	}
 	// Two files that fit separately fit together up to the limit: one of 9 MiB is accepted.
-	got := createDraft(t, e, "draft", `{"to":["a@example.net"],"attachments":[{"local_path":"`+filepath.Join(dir, "big1.bin")+`"}]}`)
+	got := createDraft(t, e, "draft", `{"to":["a@example.net"],"attachments":[{"local_path":`+jsonString(filepath.Join(dir, "big1.bin"))+`}]}`)
 	if len(got.Attachments) != 1 || got.Attachments[0].Size != int64(len(big)) || got.Attachments[0].Type != "application/octet-stream" ||
 		got.Attachments[0].Name != "big1.bin" || got.Size < int64(len(big)) {
 		t.Errorf("result = %+v", got)
