@@ -4,7 +4,7 @@
 // and replaces workflows, activates and deactivates them, and retries and stops executions. There is no tool
 // to start a workflow: the Public API documents no endpoint for it. There is also no tool to delete a
 // workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or test-run action, and
-// no credential, user, or tag management; those are deliberately left
+// no user management; those are deliberately left
 // to a later milestone, which this package's Client, error classes, and target model are built to extend
 // without a rewrite. Projects themselves are listed, created, renamed, and deleted (projects.go); see there
 // for the allow-list rules and for what deleting a project does. The members of a project are listed, added,
@@ -12,7 +12,9 @@
 // columns, renamed, and deleted (datatables.go); their columns are listed, added, renamed or moved, and
 // deleted (datacolumns.go); their rows are listed, inserted, updated, upserted, and deleted by a
 // structured filter, never cleared (datarows.go). Variables are listed, created, updated, and deleted, project-bound and global
-// ones kept apart (variables.go). Tags are managed instance-wide (tags.go).
+// ones kept apart (variables.go). Tags are managed instance-wide (tags.go). Credentials are listed and read
+// as metadata only, never a stored value, tested, and their type schemas read (credentials.go); there is no
+// tool to create, change, move, or delete one.
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -573,6 +575,17 @@ func Register(reg *capability.Registry) error {
 				"is never part of a profile: n8n.tags.delete is offered only by a connection whose tools list " +
 				"names it",
 			Tools: []string{tagsList.ID, tagsGet.ID, tagsCreate.ID, tagsUpdate.ID},
+		}, {
+			ID: "credentials-read", Title: "Read credential metadata",
+			Description: "lists and reads credentials as metadata (id, name, type, times, never a stored value) " +
+				"within this connection's project allow-list, and reads credential type schemas; changes nothing",
+			Tools: []string{credentialsList.ID, credentialsGet.ID, credentialsSchema.ID},
+		}, {
+			ID: "credentials-test", Title: "Test credentials",
+			Description: "tests a credential's connection: n8n uses the stored secret against the third-party " +
+				"service; every test needs its own confirmation and is sent once. Separate from the read " +
+				"profile so it can be granted on its own",
+			Tools: []string{credentialsTest.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -619,6 +632,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: tagsCreate, Handler: capability.Handler(invokeTagsCreate)},
 		capability.Operation{Descriptor: tagsUpdate, Handler: capability.Handler(invokeTagsUpdate)},
 		capability.Operation{Descriptor: tagsDelete, Handler: capability.Handler(invokeTagsDelete)},
+		capability.Operation{Descriptor: credentialsList, Handler: capability.Handler(invokeCredentialsList)},
+		capability.Operation{Descriptor: credentialsGet, Handler: capability.Handler(invokeCredentialsGet)},
+		capability.Operation{Descriptor: credentialsTest, Handler: capability.Handler(invokeCredentialsTest)},
+		capability.Operation{Descriptor: credentialsSchema, Handler: capability.Handler(invokeCredentialsSchema)},
 	)
 }
 

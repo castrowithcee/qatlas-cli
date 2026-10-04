@@ -19,11 +19,12 @@ and executions, including a bounded view of a failed execution's error, creates 
 activates and deactivates them, and retries and stops executions. It also lists, creates, renames, and
 deletes projects, see "Projects" below, lists, reads, creates, renames, and deletes data tables and manages their columns and rows, see
 "Data tables", "Data table columns", and "Data table rows" below, and lists, creates, updates, and deletes variables,
-see "Variables" below, and manages the instance-wide tags, see "Tags" below.
+see "Variables" below, manages the instance-wide tags, see "Tags" below, and lists, reads, and tests credentials
+as metadata only and reads credential type schemas, see "Credentials" below.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
-test-run action, and no credential or user management, no tags on workflows, and no way to clear all rows of a data table; those are
+test-run action, and no creation, change, move, or deletion of credentials, no user management, no tags on workflows, and no way to clear all rows of a data table; those are
 a later milestone.
 
 ## Configuration
@@ -146,6 +147,10 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.tags.create` | create | creates one tag from a name |
 | `n8n.tags.update` | update | renames one tag |
 | `n8n.tags.delete` | delete | deletes one tag; only offered by a tools list |
+| `n8n.credentials.list` | read | lists credential metadata (id, name, type, times, never values), page by page |
+| `n8n.credentials.get` | read | reads one credential's metadata by ID |
+| `n8n.credentials.test` | execute | asks n8n to test one credential's connection; needs confirmation |
+| `n8n.credentials.schema` | read | reads the field schema of one credential type, in a bounded view |
 
 **There is no tool to start a workflow.** n8n's Public API documents no endpoint for it (`POST
 /workflows/{id}/activate` only flips the `active` flag; running a workflow on demand is an editor and
@@ -189,6 +194,8 @@ The data table, column, row, variable, and tag tools have their own profiles, in
 | `variables-manage` | `n8n.variables.list`, `n8n.variables.create`, `n8n.variables.update` |
 | `tags-read` | `n8n.tags.list`, `n8n.tags.get` |
 | `tags-manage` | `n8n.tags.list`, `n8n.tags.get`, `n8n.tags.create`, `n8n.tags.update` |
+| `credentials-read` | `n8n.credentials.list`, `n8n.credentials.get`, `n8n.credentials.schema` |
+| `credentials-test` | `n8n.credentials.test` |
 
 `n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, `n8n.datacolumns.delete`, `n8n.datarows.update`, `n8n.datarows.upsert`,
 `n8n.datarows.delete`, `n8n.variables.delete`, and `n8n.tags.delete` are in no profile. Each
@@ -434,6 +441,28 @@ The tag tools call `GET /tags` (paged by `limit` and `cursor`), `POST /tags`, `G
 - **Errors.** A 403 is reported as an API key scope or role error, without telling which; a change whose
   outcome is unclear is reported as uncertain and never retried.
 
+## Credentials
+
+The credential tools call `GET /credentials`, `GET /credentials/{id}`, `POST /credentials/{id}/test`, and
+`GET /credentials/schema/{credentialTypeName}`. They expose metadata only: `id`, `name`, `type`, and
+creation and update times. Responses are decoded into structures without a field for a credential's data, so a
+stored value never reaches a result or an error, whatever n8n sends.
+
+- **Binding.** With a project allow-list `list` keeps only credentials shared into those projects. `get` and
+  `test` first find the credential in the paged list (at most 20 pages of 250), because the single read has no
+  project information; a credential that is not found, is outside the allow-list, or whose search cannot
+  finish is refused without any further request and without naming a project. The `shared` entry is read as
+  `projectId` or `project.id`; an entry without a project never matches. A connection with a workflow
+  allow-list refuses every credential tool locally, as for data tables and variables.
+- **Test.** `credentials.test` makes n8n use the stored secret against the third-party service, so it is
+  effect `execute`, idempotent, open-world, and always needs confirmation. It sends exactly one request and is
+  never retried; an unclear outcome is reported as uncertain. The result is `status` and a capped `message`,
+  untrusted data, never part of an error. It has its own profile so it can be granted separately from reading.
+- **Schema.** `credential_type` is letters, digits, `.`, `-`, and `_` (at most 100 characters, starting with a
+  letter or digit) and is sent as one escaped path segment. The result lists at most 200 fields (name, type,
+  required), sorted; defaults and descriptions are not passed on.
+- **Errors.** A 403 is reported as a license, scope, or role error, without telling which.
+
 ## Version and plan boundaries
 
 `workflows.activate` and `workflows.deactivate` use n8n's own `POST /workflows/{id}/activate` and
@@ -516,9 +545,10 @@ interprets or executes any of it itself.
 This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
 and their executions, and lists, creates, renames, and deletes projects, and manages their members, and lists, reads, creates,
 renames, and deletes data tables and manages their columns and rows, and lists, creates, updates, and deletes
-variables, and lists, reads, creates, renames, and deletes tags on connections without targets. It does
+variables, and lists, reads, creates, renames, and deletes tags on connections without targets, and lists, reads, and tests
+credentials as metadata and reads credential type schemas. It does
 not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
 execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move
-a project's content elsewhere before deleting it, create or invite users, or manage folders, credentials,
-users, or tags on workflows, or clear all rows of a data table; those are deliberately out of
+a project's content elsewhere before deleting it, create or invite users, or manage folders, create, change, move, or delete credentials,
+write any credential value, manage users, or manage tags on workflows, or clear all rows of a data table; those are deliberately out of
 scope.
