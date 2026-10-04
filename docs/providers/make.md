@@ -37,7 +37,8 @@ token. The read profile needs `scenarios:read`; the manage profile's create, upd
 additionally need `scenarios:write`, and its run tool additionally needs `scenarios:run`. The `team` profile
 (`make.team.get`, `make.team.usage`, `make.team.members`) needs `teams:read`; the `organization` profile
 (`make.organization.get`) needs `organizations:read` and `teams:read`, because the organization is found
-through the bound team. A 403 names the missing scope. A Make token
+through the bound team; the `hooks-read` profile (`make.hooks.list`, `get`, `ping`, `logs`) needs
+`hooks:read`, as does `make.hooks.url`. A 403 names the missing scope. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
 access to, so a token created for a different zone than this connection's own is rejected here the same way
 as any other invalid token. The token carries API scopes, while Make also limits resources by the user's
@@ -123,6 +124,11 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.team.usage` | read | none | reads the bound team's daily usage records (at most 31); no arguments |
 | `make.team.members` | read | none | lists the bound team's members as user id and role id from `GET /teams/{id}/user-team-roles` (at most 200), without names or email addresses; no arguments |
 | `make.organization.get` | read | none | reads id, zone, and flat scalar license limits of the bound team's organization; no arguments |
+| `make.hooks.list` | read | none | lists the webhooks and mailhooks of the bound team (always `teamId` of the connection), page by page |
+| `make.hooks.get` | read | none | reads one hook's state and queue, with its team confirmed live; never the trigger URL |
+| `make.hooks.ping` | read | none | reads one hook's status (`GET /hooks/{id}/ping`: attached, learning, gone); sends no data to the hook |
+| `make.hooks.logs` | read | none | lists one hook's log entries as metadata only (id, status, time, sizes) |
+| `make.hooks.url` | read | none | returns one hook's trigger URL or mailhook address, a secret; offered only when a connection's `tools` list names it, in no profile |
 
 Every read is safe and needs no confirmation. Every change of the manage profile needs its own confirmation,
 sends exactly one changing request, and is never retried by this provider itself: a failure that could mean
@@ -243,7 +249,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook tools |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -257,6 +263,22 @@ checked against run entries, not scenario details. A scope refusal is never mist
 or run; the same is true of an unconfirmed call to any change tool, and of a
 `make.scenarios.update` call that gives nothing to change or gives both `folder_id` and `clear_folder`.
 
+## Hooks
+
+The five hook tools need the `hooks:read` scope (a 403 names it). `make.hooks.list` always sends the bound
+team as `teamId`. Every tool that names a `hook_id` validates it locally (positive integer), reads the hook
+from Make first, and refuses it as an invalid request, without naming its real team, when its `teamId` is not
+the bound team, before any ping, log, or URL request is sent. On a connection with a scenario allow-list the
+hook tools are narrower than the scenario tools: only hooks assigned to a listed scenario are listed or
+reachable, and an unassigned hook is not.
+
+The trigger URL, a mailhook address, the hook's `udid`, and `ping.address` are trigger secrets: anyone who
+knows them can start the scenario. `list`, `get`, `ping`, and `logs` omit them and mask any part of them inside
+the strings they return. Only `make.hooks.url` returns the URL; it is not part of any profile and needs a
+connection whose `tools` list names it. Its value is deliberately not added to the output redactor, since that
+would blank the tool's own answer. Hook logs are reduced to metadata (id, status, time, replayable flag, type,
+and at most eight integer sizes); request headers, bodies, parsers, and udids are never read into a result.
+
 ## Untrusted data
 
 Scenario names, descriptions, scheduling configuration, blueprint content, run status, and every other value
@@ -269,5 +291,5 @@ never renders it, follows a link inside it, or executes anything derived from it
 This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
-call, manage labels, data stores, hooks, keys, connections, teams, or organizations (it only reads the bound team
+call, create, change, or delete hooks, manage labels, data stores, keys, connections, teams, or organizations (it only reads the bound team
 and its organization), or read team or organization variables; those are out of scope.

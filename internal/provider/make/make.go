@@ -121,6 +121,8 @@ const (
 	// needTeamsRead and needOrgRead belong to the team and organization read tools.
 	needTeamsRead = "the teams:read scope"
 	needOrgRead   = "the organizations:read scope (and teams:read, which finds the organization)"
+	// needHooksRead belongs to the hook read tools.
+	needHooksRead = "the hooks:read scope"
 )
 
 // roleAPIToken is the single secret role a Make credential must supply. It is sent as the Authorization
@@ -661,6 +663,12 @@ func Register(reg *capability.Registry) error {
 			Description: "reads the zone and license limits of the organization the bound team belongs to; " +
 				"changes nothing and needs the organizations:read and teams:read scopes",
 			Tools: []string{organizationGet.ID},
+		}, {
+			ID: "hooks-read", Title: "Read the bound team's hooks",
+			Description: "lists and reads the webhooks and mailhooks of the bound team, pings them for their " +
+				"status, and lists their log metadata; never returns a trigger URL, changes nothing, and " +
+				"needs the hooks:read scope",
+			Tools: []string{hooksList.ID, hooksGet.ID, hooksPing.ID, hooksLogs.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -680,6 +688,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: teamUsage, Handler: capability.Handler(invokeTeamUsage)},
 		capability.Operation{Descriptor: teamMembers, Handler: capability.Handler(invokeTeamMembers)},
 		capability.Operation{Descriptor: organizationGet, Handler: capability.Handler(invokeOrganizationGet)},
+		capability.Operation{Descriptor: hooksList, Handler: capability.Handler(invokeHooksList)},
+		capability.Operation{Descriptor: hooksGet, Handler: capability.Handler(invokeHooksGet)},
+		capability.Operation{Descriptor: hooksPing, Handler: capability.Handler(invokeHooksPing)},
+		capability.Operation{Descriptor: hooksLogs, Handler: capability.Handler(invokeHooksLogs)},
+		capability.Operation{Descriptor: hooksURL, Handler: capability.Handler(invokeHooksURL)},
 	)
 }
 
