@@ -21,7 +21,9 @@ deletes projects, see "Projects" below, lists, reads, creates, renames, and dele
 "Data tables", "Data table columns", and "Data table rows" below, and lists, creates, updates, and deletes variables,
 see "Variables" below, manages the instance-wide tags, see "Tags" below, lists, reads, invites, re-roles, and deletes the instance's users, owner-only, see "Users" below, and lists, reads, and tests credentials
 as metadata only, reads credential type schemas, and creates, updates, moves, and deletes credentials, with
-secret values only by reference to a released forward credential, see "Credentials" below.
+secret values only by reference to a released forward credential, see "Credentials" below. It also generates
+the instance's security audit, see "Security audit" below, and previews, pulls, and pushes source control
+changes, see "Source control" below, all instance-wide.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
@@ -153,6 +155,10 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.users.invite` | create | invites 1 to 10 users by email with one instance role |
 | `n8n.users.setrole` | update | sets one user's instance role |
 | `n8n.users.delete` | delete | deletes one user; only offered by a tools list |
+| `n8n.audit.generate` | read | generates the security audit report, capped |
+| `n8n.sourcecontrol.status` | read | previews pending source control changes, `push` or `pull` |
+| `n8n.sourcecontrol.pull` | execute | imports the connected Git branch; only offered by a tools list |
+| `n8n.sourcecontrol.push` | execute | commits and pushes named objects; only offered by a tools list |
 | `n8n.credentials.list` | read | lists credential metadata (id, name, type, times, never values), page by page |
 | `n8n.credentials.get` | read | reads one credential's metadata by ID |
 | `n8n.credentials.test` | execute | asks n8n to test one credential's connection; needs confirmation |
@@ -206,12 +212,15 @@ The data table, column, row, variable, and tag tools have their own profiles, in
 | `tags-manage` | `n8n.tags.list`, `n8n.tags.get`, `n8n.tags.create`, `n8n.tags.update` |
 | `users-read` | `n8n.users.list`, `n8n.users.get` |
 | `users-manage` | `n8n.users.list`, `n8n.users.get`, `n8n.users.invite`, `n8n.users.setrole` |
+| `audit` | `n8n.audit.generate` |
+| `sourcecontrol-read` | `n8n.sourcecontrol.status` |
 | `credentials-read` | `n8n.credentials.list`, `n8n.credentials.get`, `n8n.credentials.schema` |
 | `credentials-test` | `n8n.credentials.test` |
 
 `n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, `n8n.datacolumns.delete`, `n8n.datarows.update`, `n8n.datarows.upsert`,
 `n8n.datarows.delete`, `n8n.variables.delete`, `n8n.tags.delete`, `n8n.users.delete`, `n8n.credentials.create`,
-`n8n.credentials.update`, `n8n.credentials.transfer`, and `n8n.credentials.delete` are in no profile. Each
+`n8n.credentials.update`, `n8n.credentials.transfer`, `n8n.credentials.delete`, `n8n.sourcecontrol.pull`,
+and `n8n.sourcecontrol.push` are in no profile. Each
 carries `requires_tool_allow_list`: a connection offers it only when its `tools` list names it explicitly,
 in addition to the `delete` permission and the per-call confirmation.
 
@@ -482,6 +491,55 @@ not returned.
   `deleted_with_user`).
 - **Errors.** A change whose outcome is unclear is reported as uncertain and never retried.
 
+## Security audit
+
+`n8n.audit.generate` calls `POST /audit` and nothing else. It is instance-wide (refused locally on a
+connection with any `project/` or `workflow/` target, before a secret is read) and needs the owner or admin
+role; a 403 is reported as a scope, license, or role error without telling which. It only reads and
+computes, so it is effect `read`, safe, and needs no confirmation (the `audit` profile grants it on its own).
+Optional arguments: `days_abandoned_workflow` (1 to 3650) and `categories`, distinct values of
+`credentials`, `database`, `nodes`, `filesystem`, `instance`; no other audit parameter exists. The result
+holds at most 5 reports, each with at most 50 sections (title, description, recommendation, location count)
+and at most 50 locations per section (kind, id, name, workflow, node, node type, package URL, file path);
+`settings` and `nextVersions` are dropped. All of it is untrusted data, capped per value, and `truncated`
+flags what was cut. The audit may be slow on a large instance; an error is never retried.
+
+## Source control
+
+The source control tools call `GET /source-control/status?direction=push|pull`,
+`POST /source-control/pull`, and `POST /source-control/push`, and nothing else. They never set up or change
+the connection to the repository, and do not touch environments or promotions. They are instance-wide
+(refused locally on a connection with any `project/` or `workflow/` target, before a secret is read) and need
+the Enterprise source control feature plus the matching API key scope; a 403 is reported as a license, scope,
+or role error without telling which.
+
+- **Status.** `direction` is required (`push` or `pull`, no default). The result lists at most 200 affected
+  objects with `id`, `name`, `type`, `status`, `location`, and `conflict`; the repository file path is not
+  returned. It changes nothing.
+- **Pull** imports the connected Git branch into the instance and can overwrite workflows, credentials,
+  variables, and other objects. It is effect `execute`, non-idempotent, always needs confirmation, and is in
+  no profile: only a connection whose `tools` list names it offers it. `force` (default `false`) sends
+  `force: true`, which discards local changes that would otherwise block the pull. `auto_publish` is `none`
+  (default, nothing is published by the pull), `all` (publishes every imported workflow), or `published`
+  (publishes those that were published locally before the import); both are always sent explicitly, and any
+  other value is refused locally.
+- **Push** commits and pushes objects to the repository, an external change. It has the same effect, risk,
+  and tool-list rule as pull. `commit_message` is 1 to 1000 characters (UTF-16 units, as n8n counts them) and,
+  narrower than n8n, contains no control character except a line feed. `files` holds 1 to 50 distinct
+  `{id, type}` objects; `id` is a plain n8n identifier and `type` is one of `credential`, `workflow`, `tags`,
+  `variables`, `folders`, `project`, `datatable` (the generic `file` type n8n also lists is not accepted).
+  `force` (default `false`) pushes even objects with unresolved conflicts.
+- **Conflict (HTTP 409).** n8n refuses a pull because of local changes or merge conflicts, and a push because
+  of unresolved conflicts, and changes nothing. This is a result, not an error: `outcome` is `conflict`,
+  `conflict` is `true`, and `files` lists the entries n8n reports. Qatlas does not retry and does not set
+  `force` by itself; the caller decides.
+- **Results.** `outcome` is `pulled` or `pushed` when n8n accepted the request. Each file may also carry n8n's
+  publishing error, its reason, and a capped list of import policy findings; these texts are untrusted data,
+  capped, and never part of an error message.
+- **Errors.** A timeout, connection reset, 5xx, or unreadable answer is reported as uncertain ("this change
+  may have taken effect, read the current state before repeating it") and never retried; the request is sent
+  once.
+
 ## Credentials
 
 The credential tools call `GET /credentials`, `GET /credentials/{id}`, `POST /credentials/{id}/test`, and
@@ -617,9 +675,9 @@ This provider reads, creates, and replaces workflows, and activates, deactivates
 and their executions, and lists, creates, renames, and deletes projects, and manages their members, and lists, reads, creates,
 renames, and deletes data tables and manages their columns and rows, and lists, creates, updates, and deletes
 variables, and lists, reads, creates, renames, and deletes tags and lists, reads, invites, re-roles, and deletes users on connections without targets, and lists, reads, and tests
-credentials as metadata, reads credential type schemas, and creates, updates, moves between projects, and deletes credentials, secret values only by reference. It does
+credentials as metadata, generates the security audit, previews, pulls, and pushes source control changes on connections without targets, reads credential type schemas, and creates, updates, moves between projects, and deletes credentials, secret values only by reference. It does
 not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
 execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move
 a project's content elsewhere before deleting it, manage folders, manage roles or passwords, MFA, or single sign-on of users, accept any credential value as an argument, change a credential's type, update a credential's data in part (an update with data replaces all of it),
-move a credential to a project outside the allow-list, or manage tags on workflows, or clear all rows of a data table; those are deliberately out of
+move a credential to a project outside the allow-list, set up or change the source control connection, manage environments or promotions, request audit parameters beyond the five categories, or manage tags on workflows, or clear all rows of a data table; those are deliberately out of
 scope.

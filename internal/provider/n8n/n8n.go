@@ -62,6 +62,10 @@
 // rather than trusting a locally reachable http origin, and this provider follows that same rule for a self-
 // hosted n8n instance, cloud or not.
 //
+// The security audit is generated, and the source control status read, instance-wide; pulling from and
+// pushing to the connected Git repository are confirmed, listed-only tools whose HTTP 409 is a result,
+// not a failure (audit.go, sourcecontrol.go).
+//
 // Node parameters, tag names, workflow and project names, and every other value a listing or a read answers
 // with arrive from the n8n instance and are treated as untrusted data: normalised into a stable envelope,
 // passed through the output encoders, and never rendered, executed, or stored.
@@ -246,7 +250,7 @@ func newHTTPClient() *http.Client {
 // much of the answer this process reads before giving up; every read of this provider uses maxResponseBytes
 // except the one includeData=true request executions.get may send, which uses maxErrorResponseBytes.
 func (c *Client) get(ctx context.Context, op, path string, query url.Values, out any, maxBytes int) error {
-	return c.do(ctx, op, http.MethodGet, path, query, nil, out, maxBytes, false)
+	return c.do(ctx, op, http.MethodGet, path, query, nil, out, maxBytes, false, nil)
 }
 
 // uncertain is appended to a failure of a change request whose request may have reached n8n: the change may
@@ -259,15 +263,21 @@ const uncertain = "; this change may have taken effect, read the current state b
 // provider; every failure that could mean the request nonetheless reached n8n is marked uncertain instead.
 func (c *Client) change(ctx context.Context, op, method, path string, query url.Values, body, out any,
 	maxBytes int) error {
-	return c.do(ctx, op, method, path, query, body, out, maxBytes, true)
+	return c.do(ctx, op, method, path, query, body, out, maxBytes, true, nil)
 }
 
+// errConflict is returned by do, instead of a provider error, for an HTTP 409 on a request that asked for
+// its conflict body: n8n refused deterministically and changed nothing, so the caller reports it as a
+// result, not as an unclear failure.
+var errConflict = errors.New("n8n reported a conflict")
+
 // do sends one bounded request below the Public API root, with a JSON body when body is not nil, and
-// decodes the answer into out when out is not nil. changing marks a request that may change n8n's state:
+// decodes the answer into out when out is not nil. A non-nil conflict receives the body of an HTTP 409
+// (best effort, never an error) and makes do return errConflict. changing marks a request that may change n8n's state:
 // every failure of it that could mean the request nonetheless arrived is marked uncertain, so this provider
 // never repeats it by itself, the same contract infomaniakchat and todoist give their own change requests.
 func (c *Client) do(ctx context.Context, op, method, path string, query url.Values, body, out any, maxBytes int,
-	changing bool) error {
+	changing bool, conflict any) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "n8n", err)
 	}
@@ -309,6 +319,12 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode == http.StatusConflict && conflict != nil {
+		if data, err := io.ReadAll(io.LimitReader(response.Body, int64(maxBytes)+1)); err == nil && len(data) <= maxBytes {
+			_ = json.Unmarshal(data, conflict)
+		}
+		return errConflict
+	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		failure := c.statusError(op, response)
 		if changing && response.StatusCode >= 500 {
@@ -591,6 +607,20 @@ func Register(reg *capability.Registry) error {
 				"only by a connection whose tools list names it",
 			Tools: []string{usersList.ID, usersGet.ID, usersInvite.ID, usersSetRole.ID},
 		}, {
+			ID: "audit", Title: "Generate a security audit",
+			Description: "generates n8n's security audit report (credentials, database, nodes, filesystem, " +
+				"instance risks) and returns it capped; owner or admin role only, and only on a connection " +
+				"without project and workflow targets; changes nothing",
+			Tools: []string{auditGenerate.ID},
+		}, {
+			ID: "sourcecontrol-read", Title: "Read source control status",
+			Description: "previews the pending changes between the instance and its connected Git branch, in " +
+				"the push or pull direction; needs the Enterprise source control feature and only on a " +
+				"connection without project and workflow targets; changes nothing. Pulling and pushing are " +
+				"never part of a profile: n8n.sourcecontrol.pull and n8n.sourcecontrol.push are offered only by " +
+				"a connection whose tools list names them",
+			Tools: []string{sourceControlStatus.ID},
+		}, {
 			ID: "credentials-read", Title: "Read credential metadata",
 			Description: "lists and reads credentials as metadata (id, name, type, times, never a stored value) " +
 				"within this connection's project allow-list, and reads credential type schemas; changes nothing",
@@ -652,6 +682,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: usersInvite, Handler: capability.Handler(invokeUsersInvite)},
 		capability.Operation{Descriptor: usersSetRole, Handler: capability.Handler(invokeUsersSetRole)},
 		capability.Operation{Descriptor: usersDelete, Handler: capability.Handler(invokeUsersDelete)},
+		capability.Operation{Descriptor: auditGenerate, Handler: capability.Handler(invokeAuditGenerate)},
+		capability.Operation{Descriptor: sourceControlStatus, Handler: capability.Handler(invokeSourceControlStatus)},
+		capability.Operation{Descriptor: sourceControlPull, Handler: capability.Handler(invokeSourceControlPull)},
+		capability.Operation{Descriptor: sourceControlPush, Handler: capability.Handler(invokeSourceControlPush)},
 		capability.Operation{Descriptor: credentialsList, Handler: capability.Handler(invokeCredentialsList)},
 		capability.Operation{Descriptor: credentialsGet, Handler: capability.Handler(invokeCredentialsGet)},
 		capability.Operation{Descriptor: credentialsTest, Handler: capability.Handler(invokeCredentialsTest)},

@@ -149,6 +149,7 @@ var allProjectTools = []string{"n8n.projects.list", "n8n.projects.create", "n8n.
 	"n8n.variables.list", "n8n.variables.create", "n8n.variables.update", "n8n.variables.delete",
 	"n8n.tags.list", "n8n.tags.get", "n8n.tags.create", "n8n.tags.update", "n8n.tags.delete",
 	"n8n.users.list", "n8n.users.get", "n8n.users.invite", "n8n.users.setrole", "n8n.users.delete",
+	"n8n.audit.generate", "n8n.sourcecontrol.status", "n8n.sourcecontrol.pull", "n8n.sourcecontrol.push",
 	"n8n.credentials.list", "n8n.credentials.get", "n8n.credentials.test", "n8n.credentials.schema"}
 
 type environment struct {
@@ -207,8 +208,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 54 {
-		t.Fatalf("tools = %+v, want 54", metadata.Tools)
+	if len(metadata.Tools) != 58 {
+		t.Fatalf("tools = %+v, want 58", metadata.Tools)
 	}
 }
 
