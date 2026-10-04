@@ -297,6 +297,12 @@ func Register(reg *capability.Registry) error {
 				"naming events.delete allows",
 			Tools: []string{calendarsList.ID, addressbooksList.ID, eventsList.ID, eventsGet.ID, contactsList.ID,
 				contactsGet.ID, eventsCreate.ID, eventsUpdate.ID},
+		}, {
+			ID: "contacts", Title: "Read and write contacts",
+			Description: "also creates a contact and replaces one contact given its etag in an allow-listed address " +
+				"book, with confirmation; never deletes, which only a tools list naming contacts.delete allows",
+			Tools: []string{calendarsList.ID, addressbooksList.ID, eventsList.ID, eventsGet.ID, contactsList.ID,
+				contactsGet.ID, contactsCreate.ID, contactsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -311,6 +317,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: eventsCreate, Handler: capability.Handler(invokeEventsCreate)},
 		capability.Operation{Descriptor: eventsUpdate, Handler: capability.Handler(invokeEventsUpdate)},
 		capability.Operation{Descriptor: eventsDelete, Handler: capability.Handler(invokeEventsDelete)},
+		capability.Operation{Descriptor: contactsCreate, Handler: capability.Handler(invokeContactsCreate)},
+		capability.Operation{Descriptor: contactsUpdate, Handler: capability.Handler(invokeContactsUpdate)},
+		capability.Operation{Descriptor: contactsDelete, Handler: capability.Handler(invokeContactsDelete)},
 	)
 }
 

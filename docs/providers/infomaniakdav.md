@@ -2,8 +2,8 @@
 description: >
   Describes the Infomaniak Calendar and Contacts provider: CalDAV and CardDAV access against the fixed
   Infomaniak Sync host with a user name and application password, the required calendar and address book
-  allow-list, the list tools, the event and contact read tools, the confirmed event create, update, and delete
-  tools, the path binding, the response caps, and what the provider does not do.
+  allow-list, the list tools, the event and contact read tools, the confirmed event and contact create,
+  update, and delete tools, the path binding, the response caps, and what the provider does not do.
 type: knowledge
 edit: shared
 created: 2026-10-02
@@ -15,7 +15,8 @@ updated: 2026-10-04
 Infomaniak Calendar and Contacts is a provider for the CalDAV and CardDAV service of one Infomaniak identity.
 It lists the calendars and address books the connection allows, reads the events of the allowed calendars,
 and creates, replaces, and deletes such events from structured fields. It lists and reads the contacts of the
-allowed address books. It changes no contact and no collection.
+allowed address books and creates, replaces, and deletes such contacts from structured fields. It changes no
+collection.
 
 ## Configuration
 
@@ -80,11 +81,16 @@ quotes a configured value.
 | `infomaniakdav.events.create` | create | required | a new event in an allow-listed calendar |
 | `infomaniakdav.events.update` | update | required | replaces one event, bound to its etag |
 | `infomaniakdav.events.delete` | delete | required | deletes one event, bound to its etag |
+| `infomaniakdav.contacts.create` | create | required | a new contact in an allow-listed address book |
+| `infomaniakdav.contacts.update` | update | required | replaces one contact, bound to its etag |
+| `infomaniakdav.contacts.delete` | delete | required | deletes one contact, bound to its etag |
 
 The two collection lists take no argument. The recommended profile, `read`, offers the six read tools and
 needs the `read` permission. The profile `events` adds `events.create` and `events.update`
-(permissions `create` and `update`); it is not recommended. `events.delete` belongs to no profile: a
-connection offers it only when its `tools` list names it, besides the `delete` permission.
+(permissions `create` and `update`); it is not recommended. The profile `contacts` likewise adds
+`contacts.create` and `contacts.update` and is not recommended. `events.delete` and `contacts.delete`
+belong to no profile: a connection offers one only when its `tools` list names it, besides the `delete`
+permission.
 
 Each collection carries `id`, `name`, `description`, and, for a calendar, `color` when the server reports a
 valid hex value.
@@ -176,6 +182,52 @@ again. A write is sent once and never repeated. If its result stays open (timeou
 a 5xx answer, an unexpected status), the error says the change may have taken effect: read the event before
 repeating anything.
 
+## Writing contacts
+
+The three contact write tools take `addressbook` like the read tools and carry the risk `open_world: true`
+(as every tool of this provider; a contact change sends no invitation) with data sensitivity
+`infomaniak-dav-contacts`. Each needs `confirm: true`; without it nothing is sent. Every argument is validated
+before any secret is read or any request is sent, and no error quotes a value.
+
+Qatlas builds a vCard 3.0 from structured fields; no vCard text, header, method, or URL comes from an
+argument.
+Version 3.0 is the form Sabre, the engine behind Infomaniak, stores and serves natively, and the one the read
+tools already meet. The encoder escapes line breaks, backslashes, and commas, so a line break in a value stays
+text and cannot start a property. Fields:
+
+| Field | Rule |
+| --- | --- |
+| `name` | required (FN), at most 256 bytes, one line |
+| `structured_name` | `family`, `given`, `additional`, `prefix`, `suffix`; at most 256 bytes each, no semicolon |
+| `emails` | at most 20 `{value, type}`; a plain e-mail address |
+| `phones` | at most 20 `{value, type}`; digits with `+ ( ) . / -` and spaces, at most 32 bytes, one digit at least |
+| `addresses` | at most 20 postal addresses with `type` and the address parts; no semicolon, one part at least |
+| `organization`, `title` | at most 256 bytes; no semicolon in the organization |
+| `birthday` | a valid date `YYYY-MM-DD` |
+| `note` | at most 4096 bytes; line breaks are kept |
+| `urls` | at most 20 `http` or `https` URLs with a host, no credentials, at most 256 bytes |
+
+A `type` is one of `home`, `work`, `cell`, `voice`, `fax`, or `other`; `other` writes no type. The card may be
+at most 64 KiB. A photo and other binary data are never written.
+
+`contacts.create` generates the UID and the resource id (a random UUID and `.vcf`) itself and takes no `id`.
+One PUT with `If-None-Match: *` stores the contact, so no existing contact can be replaced.
+
+`contacts.update` replaces the contact completely from the fields. The `etag` argument is required, as
+`contacts.get` or `contacts.list` report it (the same rules as for events). Qatlas first reads the contact
+with one GET to keep its UID, refuses without writing if the entity tag no longer matches, and then sends
+exactly one PUT with `If-Match`. A contact that holds a property Qatlas does not model, such as a photo, a
+group kind, or an extension property, is refused before any write instead of losing that data: change it in a
+contacts application. Only `VERSION`, `UID`, `FN`, `N`, `EMAIL`, `TEL`, `ADR`, `ORG`, `TITLE`, `BDAY`, `NOTE`,
+`URL`, `PRODID`, and `REV` count as modeled.
+
+`contacts.delete` sends one DELETE with `If-Match` and the required `etag`.
+
+A changed entity tag (HTTP 412) is reported as a failed precondition with nothing changed. A write is sent
+once and never repeated. If its result stays open (timeout, interrupted connection, a 5xx answer, an
+unexpected status), the error says the change may have taken effect: read the contact before repeating
+anything.
+
 ## Discovery and path binding
 
 Each list runs three PROPFIND requests, all of depth 0 except the last: `current-user-principal` of the root,
@@ -229,6 +281,7 @@ follows, or executes anything derived from them.
 ## Boundary
 
 This provider lists calendars and address books, reads events and contacts, and creates, replaces, and deletes
-events of allow-listed calendars. It does not write contacts, create, rename, share, or delete collections,
+events of allow-listed calendars and contacts of allow-listed address books. It does not write photos or
+group cards, create, rename, share, or delete collections,
 expand recurrences, write overrides of single occurrences, or accept a free URL, method, header, or iCalendar
 body from a tool argument.

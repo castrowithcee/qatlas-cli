@@ -31,7 +31,7 @@ import (
 const (
 	// writeUncertain is appended to a failure of a write whose request may have reached Infomaniak. The write
 	// is never repeated.
-	writeUncertain = "; the change may have taken effect, read the event before repeating it"
+	writeUncertain = "; the change may have taken effect, read it before repeating it"
 	maxTimezoneLen = 64
 	maxAddressLen  = 254
 	maxSequence    = 1000000
@@ -541,7 +541,7 @@ func invokeEventsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 		return nil, err
 	}
 	id := uid + ".ics"
-	header, err := client.mutate(ctx, op, methodPut, append(append([]string{}, home...), input.Calendar, id), "", body)
+	header, err := client.mutate(ctx, op, eventKind, methodPut, append(append([]string{}, home...), input.Calendar, id), "", body)
 	if err != nil {
 		return nil, err
 	}
@@ -581,13 +581,13 @@ func invokeEventsUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 		return nil, err
 	}
 	if served := header.Get("ETag"); served != "" && etagOf(served) != etag {
-		return nil, errPrecondition(op)
+		return nil, errPrecondition(op, "event")
 	}
 	body, err := draft.encode(op, current.uid, current.sequence+1, time.Now())
 	if err != nil {
 		return nil, err
 	}
-	out, err := client.mutate(ctx, op, methodPut, path, etag, body)
+	out, err := client.mutate(ctx, op, eventKind, methodPut, path, etag, body)
 	if err != nil {
 		return nil, err
 	}
@@ -614,7 +614,7 @@ func invokeEventsDelete(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := client.mutate(ctx, op, methodDelete, append(append([]string{}, home...), input.Calendar, input.ID),
+	if _, err := client.mutate(ctx, op, eventKind, methodDelete, append(append([]string{}, home...), input.Calendar, input.ID),
 		etag, ""); err != nil {
 		return nil, err
 	}
@@ -665,15 +665,20 @@ func existingOf(data []byte) (found existing, err error) {
 	return existing{uid: uid, sequence: sequence}, nil
 }
 
-func errPrecondition(op string) error {
+func errPrecondition(op, noun string) error {
 	return &provider.Error{Class: provider.ClassProviderError, Op: op,
-		Message: "the event no longer matches the etag (precondition failed), nothing was changed; read it again"}
+		Message: "the " + noun + " no longer matches the etag (precondition failed), nothing was changed; read it again"}
 }
+
+// writeKind names what a write changes, for its Content-Type and its messages.
+type writeKind struct{ noun, collection, contentType string }
+
+var eventKind = writeKind{"event", "calendar", "text/calendar; charset=utf-8"}
 
 // mutate is the single write path. It sends exactly one PUT or DELETE and never repeats it. With an empty
 // match the request carries If-None-Match: *, otherwise If-Match with the validated entity tag. A failure
 // that leaves the outcome open carries writeUncertain.
-func (c *Client) mutate(ctx context.Context, op, method string, segments []string, match, body string) (http.Header, error) {
+func (c *Client) mutate(ctx context.Context, op string, kind writeKind, method string, segments []string, match, body string) (http.Header, error) {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return nil, provider.Waited(op, "Infomaniak", err)
 	}
@@ -685,7 +690,7 @@ func (c *Client) mutate(ctx context.Context, op, method string, segments []strin
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("Accept", "application/xml")
 	if method == methodPut {
-		req.Header.Set("Content-Type", "text/calendar; charset=utf-8")
+		req.Header.Set("Content-Type", kind.contentType)
 	}
 	if match == "" {
 		req.Header.Set("If-None-Match", "*")
@@ -707,12 +712,12 @@ func (c *Client) mutate(ctx context.Context, op, method string, segments []strin
 	case status == http.StatusPreconditionFailed:
 		if match == "" {
 			return nil, &provider.Error{Class: provider.ClassProviderError, Op: op,
-				Message: "an event with this id already exists, nothing was written"}
+				Message: "a " + kind.noun + " with this id already exists, nothing was written"}
 		}
-		return nil, errPrecondition(op)
+		return nil, errPrecondition(op, kind.noun)
 	case status == http.StatusForbidden:
 		return nil, &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this Infomaniak identity may not change this calendar"}
+			Message: "this Infomaniak identity may not change this " + kind.collection}
 	case status >= 500:
 		failure := statusError(op, status)
 		var providerErr *provider.Error

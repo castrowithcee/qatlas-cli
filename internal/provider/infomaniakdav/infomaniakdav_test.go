@@ -376,11 +376,17 @@ func TestRegisterPublishesFixedToolIDs(t *testing.T) {
 	var got []string
 	for _, d := range reg.Provider(Provider) {
 		got = append(got, d.ID)
-		writes := d.ID == eventsCreate.ID || d.ID == eventsUpdate.ID || d.ID == eventsDelete.ID
-		if writes {
+		eventWrite := d.ID == eventsCreate.ID || d.ID == eventsUpdate.ID || d.ID == eventsDelete.ID
+		contactWrite := d.ID == contactsCreate.ID || d.ID == contactsUpdate.ID || d.ID == contactsDelete.ID
+		if eventWrite || contactWrite {
+			sensitivity := eventsSensitivity
+			if contactWrite {
+				sensitivity = contactsSensitivity
+			}
 			if d.Risk.Confirmation != capability.ConfirmationRequired || !d.Risk.OpenWorld ||
 				d.Risk.Idempotency == "" || d.Risk.Idempotency == capability.IdempotencyUnknown ||
-				d.Risk.DataSensitivity != eventsSensitivity || d.RequiresToolAllowList != (d.ID == eventsDelete.ID) {
+				d.Risk.DataSensitivity != sensitivity ||
+				d.RequiresToolAllowList != (d.ID == eventsDelete.ID || d.ID == contactsDelete.ID) {
 				t.Errorf("%s = %+v", d.ID, d.Risk)
 			}
 		} else if strings.HasPrefix(d.ID, Provider+".contacts.") {
@@ -393,15 +399,17 @@ func TestRegisterPublishesFixedToolIDs(t *testing.T) {
 	}
 	sort.Strings(got)
 	if want := []string{"infomaniakdav.addressbooks.list", "infomaniakdav.calendars.list",
-		"infomaniakdav.contacts.get", "infomaniakdav.contacts.list",
+		"infomaniakdav.contacts.create", "infomaniakdav.contacts.delete", "infomaniakdav.contacts.get",
+		"infomaniakdav.contacts.list", "infomaniakdav.contacts.update",
 		"infomaniakdav.events.create", "infomaniakdav.events.delete", "infomaniakdav.events.get",
 		"infomaniakdav.events.list", "infomaniakdav.events.update"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("tool IDs = %v, want %v", got, want)
 	}
 	metadata, ok := reg.ProviderMetadata(Provider)
-	if !ok || !metadata.Target.Required || len(metadata.Target.Kinds) != 2 || len(metadata.Profiles) != 2 ||
+	if !ok || !metadata.Target.Required || len(metadata.Target.Kinds) != 2 || len(metadata.Profiles) != 3 ||
 		!metadata.Profiles[0].Recommended || metadata.Profiles[1].Recommended || len(metadata.Profiles[0].Tools) != 6 ||
-		slices.Contains(metadata.Profiles[1].Tools, eventsDelete.ID) || len(metadata.SecretRoles) != 2 ||
+		slices.Contains(metadata.Profiles[1].Tools, eventsDelete.ID) ||
+		slices.Contains(metadata.Profiles[2].Tools, contactsDelete.ID) || metadata.Profiles[2].Recommended || len(metadata.SecretRoles) != 2 ||
 		metadata.SecretRoles[0].Name != "user-id" || metadata.SecretRoles[1].Name != "app-password" {
 		t.Errorf("metadata = %+v", metadata)
 	}
