@@ -262,7 +262,7 @@ defaults:
 			"bookstack": {"5", "2", "2"}, "telegram": {"3", "0", "0"}, "lexware": {"3", "0", "0"},
 			"twentycrm": {"5", "0", "0"}, "seatable": {"40", "0", "0"}, "nextcloud": {"6", "0", "0"},
 			"github": {"192", "0", "0"}, "todoist": {"39", "0", "0"}, "n8n": {"58", "0", "0"},
-			"make": {"32", "0", "0"}, "infomaniakdav": {"12", "0", "0"}, "infomaniakmail": {"13", "0", "0"}, "seatableaccount": {"2", "0", "0"}, "baserow": {"14", "0", "0"}, "penpot": {"37", "0", "0"},
+			"make": {"36", "0", "0"}, "infomaniakdav": {"12", "0", "0"}, "infomaniakmail": {"13", "0", "0"}, "seatableaccount": {"2", "0", "0"}, "baserow": {"14", "0", "0"}, "penpot": {"37", "0", "0"},
 			"excalidrawplus": {"11", "0", "0"},
 		} {
 			if rows[provider] != want {

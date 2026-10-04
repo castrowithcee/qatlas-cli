@@ -194,7 +194,7 @@ const (
 	// either, so both are a local, conservative choice.
 	maxScenarioNameLength = 256
 	maxDescriptionLength  = 2048
-	// maxRefusalBytes bounds the part of a refusal body hooks.delete reads for affected scenarios.
+	// maxRefusalBytes bounds the part of a refusal body hooks.delete and connections.delete read for affected scenarios.
 	maxRefusalBytes = 16 << 10
 )
 
@@ -216,7 +216,7 @@ type Client struct {
 	limiter *ratelimit.Limiter
 
 	// wantRefusal asks the next failing request to keep the status and a bounded excerpt of a generic 4xx
-	// answer in refusalStatus and refusal; only hooks.delete uses it, to recognize Make's own refusal.
+	// answer in refusalStatus and refusal; only hooks.delete and connections.delete use it, to recognize Make's own refusal.
 	wantRefusal   bool
 	refusalStatus int
 	refusal       []byte
@@ -713,6 +713,24 @@ func Register(reg *capability.Registry) error {
 				"a separate profile because it reaches a service outside Make, needs its own confirmation, " +
 				"is never retried, and needs the connections:read and connections:write scopes",
 			Tools: []string{connectionsTest.ID},
+		}, {
+			ID: "connections-manage", Title: "Rename the bound team's connections",
+			Description: "renames a connection of the bound team; every change needs its own confirmation and " +
+				"needs the connections:read and connections:write scopes. Deleting a connection is in no profile",
+			Tools: []string{connectionsRename.ID},
+		}, {
+			ID: "connections-access-read", Title: "Read the access lists of the bound team's connections",
+			Description: "lists the users and roles on a locked connection's access list, never a name or " +
+				"email, changes nothing, and needs the connections:read scope; Make must have locked " +
+				"connections enabled for the organization",
+			Tools: []string{connectionsAccessList.ID},
+		}, {
+			ID: "connections-access-manage", Title: "Set roles on the access lists of the bound team's connections",
+			Description: "gives one team user a role on a locked connection's access list; a separate profile " +
+				"because it grants rights, first reads that the user belongs to the team, needs its own " +
+				"confirmation, is never retried, and needs the connections:read, connections:write, and " +
+				"user:read scopes",
+			Tools: []string{connectionsAccessSet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -751,6 +769,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: connectionsEditableSchema,
 			Handler: capability.Handler(invokeConnectionsEditableSchema)},
 		capability.Operation{Descriptor: connectionsTest, Handler: capability.Handler(invokeConnectionsTest)},
+		capability.Operation{Descriptor: connectionsRename, Handler: capability.Handler(invokeConnectionsRename)},
+		capability.Operation{Descriptor: connectionsDelete, Handler: capability.Handler(invokeConnectionsDelete)},
+		capability.Operation{Descriptor: connectionsAccessList, Handler: capability.Handler(invokeConnectionsAccessList)},
+		capability.Operation{Descriptor: connectionsAccessSet, Handler: capability.Handler(invokeConnectionsAccessSet)},
 	)
 }
 
