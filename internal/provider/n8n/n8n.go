@@ -4,11 +4,12 @@
 // and replaces workflows, activates and deactivates them, and retries and stops executions. There is no tool
 // to start a workflow: the Public API documents no endpoint for it. There is also no tool to delete a
 // workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or test-run action, and
-// no credential, user, tag, variable, or data table management; those are deliberately left
+// no credential, user, tag, or variable management; those are deliberately left
 // to a later milestone, which this package's Client, error classes, and target model are built to extend
 // without a rewrite. Projects themselves are listed, created, renamed, and deleted (projects.go); see there
 // for the allow-list rules and for what deleting a project does. The members of a project are listed, added,
-// re-roled, and removed (members.go).
+// re-roled, and removed (members.go). Data tables are listed, read (columns, never rows), created without
+// columns, renamed, and deleted (datatables.go); their rows and columns are not managed.
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -508,6 +509,18 @@ func Register(reg *capability.Registry) error {
 				"never part of a profile: n8n.projectmembers.remove is offered only by a connection whose " +
 				"tools list names it",
 			Tools: []string{membersList.ID, membersAdd.ID, membersSetRole.ID},
+		}, {
+			ID: "datatables-read", Title: "Read data tables",
+			Description: "lists and reads the data tables (name, project, columns, never rows) of this " +
+				"connection's project allow-list; changes nothing",
+			Tools: []string{dataTablesList.ID, dataTablesGet.ID},
+		}, {
+			ID: "datatables-manage", Title: "Manage data tables",
+			Description: "reads, creates, and renames data tables within this connection's project allow-list; " +
+				"every change needs its own confirmation. Deleting a data table is never part of a profile: it " +
+				"deletes all rows, so n8n.datatables.delete is offered only by a connection whose tools list " +
+				"names it",
+			Tools: []string{dataTablesList.ID, dataTablesGet.ID, dataTablesCreate.ID, dataTablesRename.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -531,6 +544,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: membersAdd, Handler: capability.Handler(invokeMembersAdd)},
 		capability.Operation{Descriptor: membersSetRole, Handler: capability.Handler(invokeMembersSetRole)},
 		capability.Operation{Descriptor: membersRemove, Handler: capability.Handler(invokeMembersRemove)},
+		capability.Operation{Descriptor: dataTablesList, Handler: capability.Handler(invokeDataTablesList)},
+		capability.Operation{Descriptor: dataTablesGet, Handler: capability.Handler(invokeDataTablesGet)},
+		capability.Operation{Descriptor: dataTablesCreate, Handler: capability.Handler(invokeDataTablesCreate)},
+		capability.Operation{Descriptor: dataTablesRename, Handler: capability.Handler(invokeDataTablesRename)},
+		capability.Operation{Descriptor: dataTablesDelete, Handler: capability.Handler(invokeDataTablesDelete)},
 	)
 }
 

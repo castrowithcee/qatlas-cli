@@ -3,12 +3,13 @@ description: >
   Describes the n8n provider: Public API key setup, the project and workflow allow-lists and their live
   project-membership check, the workflow and execution reads, pagination and cursor contracts, the bounded
   failed-execution error, the confirmed workflow and execution changes and their retry contract, and the
+  data table listing, reading, creation, renaming, and deletion, the
   project listing, creation, renaming, and deletion with the deletion sequence n8n runs, and the version and
   plan boundaries of n8n's Projects feature and its deprecated activate/deactivate endpoints.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-02
+updated: 2026-10-04
 ---
 
 # n8n
@@ -16,11 +17,12 @@ updated: 2026-10-02
 n8n is a provider for the n8n Public API (n8n Cloud or self-hosted, `/api/v1`). It lists and reads workflows
 and executions, including a bounded view of a failed execution's error, creates and replaces workflows,
 activates and deactivates them, and retries and stops executions. It also lists, creates, renames, and
-deletes projects, see "Projects" below.
+deletes projects, see "Projects" below, and lists, reads, creates, renames, and deletes data tables, see
+"Data tables" below.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
-test-run action, and no credential, user, tag, variable, or data table management; those are
+test-run action, and no credential, user, tag, or variable management, and no management of data table columns or rows; those are
 a later milestone.
 
 ## Configuration
@@ -120,6 +122,11 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.projectmembers.add` | update | gives one existing user a role in one allow-listed project |
 | `n8n.projectmembers.setrole` | update | changes one member's role in one allow-listed project |
 | `n8n.projectmembers.remove` | delete | removes one member from one allow-listed project; only offered by a tools list |
+| `n8n.datatables.list` | read | lists data tables (never rows), filtered to the project allow-list, page by page |
+| `n8n.datatables.get` | read | reads one data table's name, project, and column definitions |
+| `n8n.datatables.create` | create | creates one data table without columns, in one project |
+| `n8n.datatables.rename` | update | renames one data table |
+| `n8n.datatables.delete` | delete | deletes one data table and all its rows; only offered by a tools list |
 
 **There is no tool to start a workflow.** n8n's Public API documents no endpoint for it (`POST
 /workflows/{id}/activate` only flips the `active` flag; running a workflow on demand is an editor and
@@ -149,9 +156,16 @@ The member tools have their own profiles, in none of the others and recommended 
 | `members-read` | `n8n.projectmembers.list` |
 | `members-manage` | `n8n.projectmembers.list`, `n8n.projectmembers.add`, `n8n.projectmembers.setrole` |
 
-`n8n.projectmembers.remove` and `n8n.projects.delete` are in no profile. Both carry
-`requires_tool_allow_list`: a connection offers either only when its `tools` list names it explicitly, in
-addition to the `delete` permission and the per-call confirmation.
+The data table tools have their own profiles, in none of the others:
+
+| Profile | Tools |
+| --- | --- |
+| `datatables-read` | `n8n.datatables.list`, `n8n.datatables.get` |
+| `datatables-manage` | `n8n.datatables.list`, `n8n.datatables.get`, `n8n.datatables.create`, `n8n.datatables.rename` |
+
+`n8n.projectmembers.remove`, `n8n.projects.delete`, and `n8n.datatables.delete` are in no profile. Each
+carries `requires_tool_allow_list`: a connection offers it only when its `tools` list names it explicitly,
+in addition to the `delete` permission and the per-call confirmation.
 
 ## Changes and their retry contract
 
@@ -277,6 +291,27 @@ routes are those of n8n-io/n8n at commit `191a22e` (scopes `user:list` and `proj
 - **Changes.** Each change needs `confirm`, sends exactly one request, and reports an unclear outcome
   (5xx, timeout, reset, unreadable answer) as "may have taken effect" without retrying.
 
+## Data tables
+
+The data table tools call `GET /data-tables` (with n8n's `projectId` filter), `GET`, `POST`, `PATCH`, and
+`DELETE /data-tables/{id}`. They manage the tables only: columns and rows are never read or changed, and
+`get` reports column definitions, not rows.
+
+- **Project binding.** `list` returns only tables of the project allow-list (a `project_id` argument must be
+  on it; foreign tables are dropped from the page without being named, so a page may be empty while
+  `has_more` is true). `get`, `rename`, and `delete` read the table first and refuse one whose project is
+  outside the allow-list, or that reports no project, before any change request; the refusal names neither
+  the table nor its project. `create` needs a `project_id` on the allow-list when the connection has one,
+  checked locally before a secret is read; without an allow-list an omitted `project_id` means the key
+  owner's personal project.
+- **Workflow allow-list.** A connection with a `workflow/` target refuses every data table tool locally: a
+  table cannot be tied to a workflow, so the narrower reading applies.
+- **Create** sends the name, an empty column list, and the project; no CSV import field is offered. Names are
+  1 to 128 characters without control characters.
+- **Delete** removes the table and all its rows and cannot be undone; it is in no profile.
+- **Errors.** A 403 is reported as a license, scope, or role error, without telling which; a change whose
+  outcome is unclear is reported as uncertain and never retried.
+
 ## Version and plan boundaries
 
 `workflows.activate` and `workflows.deactivate` use n8n's own `POST /workflows/{id}/activate` and
@@ -357,8 +392,10 @@ interprets or executes any of it itself.
 ## Boundary
 
 This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
-and their executions, and lists, creates, renames, and deletes projects, and manages their members. It does
+and their executions, and lists, creates, renames, and deletes projects, and manages their members, and lists, reads, creates,
+renames, and deletes data tables. It does
 not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
 execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move
 a project's content elsewhere before deleting it, create or invite users, or manage folders, credentials,
-users, tags, variables, or data tables; those are deliberately out of scope.
+users, tags, or variables, or manage the columns or rows of a data table; those are deliberately out of
+scope.
