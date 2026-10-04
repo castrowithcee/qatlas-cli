@@ -622,7 +622,8 @@ func Register(reg *capability.Registry) error {
 				"hooks-read and hookqueue-read profiles and hooks:write for the hooks-manage profile's create, " +
 				"rename, enable, and disable tools and the separately offered hook and queue delete tools, plus " +
 				"credential-requests:read for the credentialrequests-read profile and credential-requests:write " +
-				"for its manage profile's create tool and the separately offered request delete tool. A token belongs to one " +
+				"for its manage profile's create tool and the separately offered request delete tool, plus " +
+				"connections:write for the separately offered connection create and set-data tools. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -789,6 +790,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: connectionsDelete, Handler: capability.Handler(invokeConnectionsDelete)},
 		capability.Operation{Descriptor: connectionsAccessList, Handler: capability.Handler(invokeConnectionsAccessList)},
 		capability.Operation{Descriptor: connectionsAccessSet, Handler: capability.Handler(invokeConnectionsAccessSet)},
+		capability.Operation{Descriptor: connectionsCreate, Handler: capability.Handler(invokeConnectionsCreate)},
+		capability.Operation{Descriptor: connectionsSetData, Handler: capability.Handler(invokeConnectionsSetData)},
 		capability.Operation{Descriptor: credentialRequestsList, Handler: capability.Handler(invokeCredentialRequestsList)},
 		capability.Operation{Descriptor: credentialRequestsGet, Handler: capability.Handler(invokeCredentialRequestsGet)},
 		capability.Operation{Descriptor: credentialRequestsCreate, Handler: capability.Handler(invokeCredentialRequestsCreate)},
