@@ -46,7 +46,10 @@ the separately offered `make.hookqueue.delete` needs `hooks:write` (with `hooks:
 (`make.connections.test`) additionally needs `connections:write`, as do the `connections-manage` profile
 (`make.connections.rename`), the `connections-access-manage` profile (`make.connectionaccess.set`, which additionally needs `user:read`), and the
 separately offered `make.connections.delete`; the `connections-access-read` profile
-(`make.connectionaccess.list`) needs `connections:read`. A 403 names the missing scope. A Make token
+(`make.connectionaccess.list`) needs `connections:read`; the `credentialrequests-read` profile
+(`make.credentialrequests.list`, `get`) needs `credential-requests:read`, its `credentialrequests-manage`
+profile (plus `create`, which additionally needs `user:read`) and the
+separately offered `make.credentialrequests.delete` need `credential-requests:write`. A 403 names the missing scope. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
 access to, so a token created for a different zone than this connection's own is rejected here the same way
 as any other invalid token. The token carries API scopes, while Make also limits resources by the user's
@@ -154,6 +157,10 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.connections.delete` | delete | required | deletes one connection for good; without `confirm_scenarios_affected` it sends no `confirmed` and returns the scenarios Make names when it refuses; offered only through a tools list |
 | `make.connectionaccess.list` | read | none | lists the users and roles on a locked connection's access list; ids and roles only |
 | `make.connectionaccess.set` | update | required | gives one team user the role `admin` or `member` on a locked connection's access list; adds or changes that one member, removes nobody |
+| `make.credentialrequests.list` | read | none | lists the bound team's credential requests by allow-listed metadata, at most 200; never a link or email |
+| `make.credentialrequests.get` | read | none | reads one credential request, with its team confirmed live; never the link or an email |
+| `make.credentialrequests.create` | create | required | creates one credential request in the bound team (`POST /credential-requests/requests/v2`); the only tool that returns the request link |
+| `make.credentialrequests.delete` | delete | required | deletes one credential request; without `confirm_credentials_deleted` it sends no `confirmed`; offered only through a tools list |
 
 Every read is safe and needs no confirmation. Every change of the manage profile needs its own confirmation,
 sends exactly one changing request, and is never retried by this provider itself: a failure that could mean
@@ -274,7 +281,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, and access-list change; `user:read` for the user's team membership check of the access-list change; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -401,6 +408,37 @@ members visible to the token, a user it does not show can answer 409 on the `POS
 retried. A change is not repeated after a timeout, reset, 5xx, or unreadable answer; the result is then
 reported as uncertain. Both tools are named `connectionaccess` because tool ids have three segments.
 
+## Credential requests
+
+A credential request asks a person to enter the secret of a connection or key themselves, through a link Make
+serves; no secret value is accepted, sent, or returned by these tools. They sit in their own sensitivity class
+(`make-credential-requests`) because the link is a way to enter secrets. Tool ids have three segments, so the
+object is named `credentialrequests`. A Qatlas connection with a scenario allow-list reaches no credential
+requests (they belong to no scenario), refused locally before any secret is read.
+
+`list` always sends the bound team as `teamId` (optional `status` and `name` filters). `get` and `delete` take
+a UUID `request_id`, read the request first, and refuse it as an invalid request, without naming its real team,
+when its `teamId` (or, with an organization target, `organizationId`) is not the bound one, before any change.
+Only an allow-list leaves Qatlas: `id`, `teamId`, `organizationId`, `name`, `description`, `status`,
+`createdAt`, `updatedAt`, `expiresAt`, and the provider's `id` and `name`; never an email address, the link, or
+any other field; strings are capped at 512 characters. Make documents the public link only on the create
+answer, so `list` and `get` never return it.
+
+`create` sends one `POST /credential-requests/requests/v2` (the deprecated endpoint is not used) with
+typed, bounded fields only: `name` (1 to 255), optional `description` (at most 512), 1 to 16 `credentials`
+(`app_name` as a Make app name, 1 to 32 `app_modules` names or `*`, optional integer `app_version`,
+`name_override`, `description`), and the required person `provider_user_id`, whose membership in the bound team
+is proven first with `GET /users/{userId}/user-team-roles/{teamId}` (`user:read`; otherwise refused without
+naming anything). No new user is invited. The team is the
+connection's own, never an argument. The answer is the request and `public_link` (https only, at most 2048
+characters, untrusted, never followed). A repeated call creates a second request. A timeout, reset, 5xx, or
+unreadable answer is reported as uncertain and not repeated.
+
+`delete` sends one `DELETE /credential-requests/requests/{id}`. Without `confirm_credentials_deleted` it sends
+no `confirmed` and the credentials already entered stay; with it true it sends `confirmed=true`, and Make also
+deletes the connections and keys created from the request, so scenarios using them stop working. Because the
+deletion is final, the tool is in no profile and is offered only when a connection's `tools` list names it.
+
 ## Untrusted data
 
 Scenario names, descriptions, scheduling configuration, blueprint content, run status, and every other value
@@ -417,5 +455,7 @@ call, start or stop a hook's learning mode, set a hook's data, delete all queued
 and its organization), or read team or organization variables; those are out of scope. For connections it
 lists and reads allow-listed metadata, lists editable parameter names, tests, renames, and (through a tools
 list) deletes a connection of the bound team, and lists and sets the roles of users on its access list; it
-does not create connections, set credentials, remove access-list members, lock or unlock a connection, or
-handle credential requests.
+does not create connections, set credentials, or remove access-list members, or lock or unlock a connection. For
+credential requests it creates, lists, reads, and (through a tools list) deletes them; it does not decline,
+reauthorize, or reset a request's credentials, list app modules, or read request details with their credential
+states. It invites no new user: only members of the bound team can be the provider.

@@ -620,7 +620,9 @@ func Register(reg *capability.Registry) error {
 				"profile and organizations:read for the organization profile, plus connections:read for the " +
 				"connections-read profile and connections:write for its test tool, plus hooks:read for the " +
 				"hooks-read and hookqueue-read profiles and hooks:write for the hooks-manage profile's create, " +
-				"rename, enable, and disable tools and the separately offered hook and queue delete tools. A token belongs to one " +
+				"rename, enable, and disable tools and the separately offered hook and queue delete tools, plus " +
+				"credential-requests:read for the credentialrequests-read profile and credential-requests:write " +
+				"for its manage profile's create tool and the separately offered request delete tool. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -731,6 +733,20 @@ func Register(reg *capability.Registry) error {
 				"confirmation, is never retried, and needs the connections:read, connections:write, and " +
 				"user:read scopes",
 			Tools: []string{connectionsAccessSet.ID},
+		}, {
+			ID: "credentialrequests-read", Title: "Read the bound team's credential requests",
+			Description: "lists and reads the credential requests of the bound team by allow-listed metadata, " +
+				"never a request link, secret, or email address; changes nothing and needs the " +
+				"credential-requests:read scope; refused on a connection with a scenario allow-list",
+			Tools: []string{credentialRequestsList.ID, credentialRequestsGet.ID},
+		}, {
+			ID: "credentialrequests-manage", Title: "Create credential requests in the bound team",
+			Description: "reads what credentialrequests-read reads and creates a credential request in the " +
+				"bound team, whose link lets the named person enter secrets themselves; no secret passes " +
+				"through Qatlas. Every creation needs its own confirmation, is never retried, and needs the " +
+				"credential-requests:read, credential-requests:write, and user:read scopes. The " +
+				"person must be a member of the bound team; no user is invited. Deleting a request is in no profile",
+			Tools: []string{credentialRequestsList.ID, credentialRequestsGet.ID, credentialRequestsCreate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -773,6 +789,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: connectionsDelete, Handler: capability.Handler(invokeConnectionsDelete)},
 		capability.Operation{Descriptor: connectionsAccessList, Handler: capability.Handler(invokeConnectionsAccessList)},
 		capability.Operation{Descriptor: connectionsAccessSet, Handler: capability.Handler(invokeConnectionsAccessSet)},
+		capability.Operation{Descriptor: credentialRequestsList, Handler: capability.Handler(invokeCredentialRequestsList)},
+		capability.Operation{Descriptor: credentialRequestsGet, Handler: capability.Handler(invokeCredentialRequestsGet)},
+		capability.Operation{Descriptor: credentialRequestsCreate, Handler: capability.Handler(invokeCredentialRequestsCreate)},
+		capability.Operation{Descriptor: credentialRequestsDelete, Handler: capability.Handler(invokeCredentialRequestsDelete)},
 	)
 }
 
