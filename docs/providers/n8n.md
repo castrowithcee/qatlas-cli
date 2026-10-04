@@ -17,12 +17,12 @@ updated: 2026-10-04
 n8n is a provider for the n8n Public API (n8n Cloud or self-hosted, `/api/v1`). It lists and reads workflows
 and executions, including a bounded view of a failed execution's error, creates and replaces workflows,
 activates and deactivates them, and retries and stops executions. It also lists, creates, renames, and
-deletes projects, see "Projects" below, lists, reads, creates, renames, and deletes data tables and manages their columns, see
-"Data tables" and "Data table columns" below.
+deletes projects, see "Projects" below, lists, reads, creates, renames, and deletes data tables and manages their columns and rows, see
+"Data tables", "Data table columns", and "Data table rows" below.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
-test-run action, and no credential, user, tag, or variable management, and no management of data table rows; those are
+test-run action, and no credential, user, tag, or variable management, and no way to clear all rows of a data table; those are
 a later milestone.
 
 ## Configuration
@@ -131,6 +131,11 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.datacolumns.add` | create | adds one column (name, type, optional position) to a data table |
 | `n8n.datacolumns.update` | update | renames and/or moves one column; the type cannot change |
 | `n8n.datacolumns.delete` | delete | deletes one column and its data in every row; only offered by a tools list |
+| `n8n.datarows.list` | read | lists rows of one data table, optionally by a structured filter, page by page |
+| `n8n.datarows.insert` | create | inserts 1 to 50 rows into a data table |
+| `n8n.datarows.update` | update | sets column values on all rows matching a filter; only offered by a tools list |
+| `n8n.datarows.upsert` | update | updates the rows matching a filter or inserts one; only offered by a tools list |
+| `n8n.datarows.delete` | delete | deletes all rows matching a filter; only offered by a tools list |
 
 **There is no tool to start a workflow.** n8n's Public API documents no endpoint for it (`POST
 /workflows/{id}/activate` only flips the `active` flag; running a workflow on demand is an editor and
@@ -160,7 +165,7 @@ The member tools have their own profiles, in none of the others and recommended 
 | `members-read` | `n8n.projectmembers.list` |
 | `members-manage` | `n8n.projectmembers.list`, `n8n.projectmembers.add`, `n8n.projectmembers.setrole` |
 
-The data table and column tools have their own profiles, in none of the others:
+The data table, column, and row tools have their own profiles, in none of the others:
 
 | Profile | Tools |
 | --- | --- |
@@ -168,8 +173,11 @@ The data table and column tools have their own profiles, in none of the others:
 | `datatables-manage` | `n8n.datatables.list`, `n8n.datatables.get`, `n8n.datatables.create`, `n8n.datatables.rename` |
 | `datacolumns-read` | `n8n.datacolumns.list` |
 | `datacolumns-manage` | `n8n.datacolumns.list`, `n8n.datacolumns.add`, `n8n.datacolumns.update` |
+| `datarows-read` | `n8n.datarows.list` |
+| `datarows-manage` | `n8n.datarows.list`, `n8n.datarows.insert` |
 
-`n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, and `n8n.datacolumns.delete` are in no profile. Each
+`n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, `n8n.datacolumns.delete`, `n8n.datarows.update`, `n8n.datarows.upsert`, and
+`n8n.datarows.delete` are in no profile. Each
 carries `requires_tool_allow_list`: a connection offers it only when its `tools` list names it explicitly,
 in addition to the `delete` permission and the per-call confirmation.
 
@@ -300,8 +308,8 @@ routes are those of n8n-io/n8n at commit `191a22e` (scopes `user:list` and `proj
 ## Data tables
 
 The data table tools call `GET /data-tables` (with n8n's `projectId` filter), `GET`, `POST`, `PATCH`, and
-`DELETE /data-tables/{id}`. They manage the tables only; rows are never read or changed, and `get` reports
-column definitions, not rows. Columns have their own tools, see "Data table columns" below.
+`DELETE /data-tables/{id}`. They manage the tables only; `get` reports column definitions, not rows. Columns and rows have their own
+tools, see "Data table columns" and "Data table rows" below.
 
 - **Project binding.** `list` returns only tables of the project allow-list (a `project_id` argument must be
   on it; foreign tables are dropped from the page without being named, so a page may be empty while
@@ -339,6 +347,36 @@ object segment is `datacolumns` because tool IDs have exactly three segments.
 - **Profiles.** The column tools have their own profiles, so that no existing data table profile widens.
 - **Errors.** A 403 is reported as a license, scope, or role error; a change whose outcome is unclear is
   reported as uncertain and never retried.
+
+## Data table rows
+
+The row tools are `n8n.datarows.list`, `insert`, `update`, `upsert`, and `delete`; they call
+`GET` and `POST /data-tables/{id}/rows`, `PATCH /data-tables/{id}/rows/update`,
+`POST /data-tables/{id}/rows/upsert`, and `DELETE /data-tables/{id}/rows/delete`. The object segment is
+`datarows` because tool IDs have exactly three segments. There is no tool for `rows/clear`.
+
+- **Table binding.** Every tool reads the table first and refuses one whose project is outside the
+  allow-list before any request on its rows; column names in filters and data are checked against the columns
+  of that read, and an unknown column or a value of the wrong type (string or date: text, number: number,
+  boolean: boolean) is refused before any change. A `workflow/` target refuses all five locally.
+- **Filter.** Only a structured filter is accepted: `{type: and|or, conditions: [{column, operator, value}]}`
+  with 1 to 10 conditions, operator one of `eq`, `neq`, `like`, `ilike`, `gt`, `gte`, `lt`, `lte`, and a
+  string, number, or boolean value. `like` and `ilike` apply to string columns, the orderings to number and
+  date columns. Qatlas builds the provider filter itself; no filter text or object is passed through. Only the
+  table's own columns can be filtered (narrower than the API, which also knows system columns). `update`,
+  `upsert`, and `delete` require a filter; matching all rows is never possible.
+- **Data.** Rows contain only string (at most 1024 characters), number, and boolean values for known columns;
+  `null`, nested values, and empty rows are refused. `insert` takes 1 to 50 rows and always asks n8n for the
+  count only.
+- **Reading.** `list` returns 50 rows per page by default, at most 100 (the API allows 250), with an opaque
+  cursor. Row values are untrusted data; text is cut at 1024 characters, non-scalar values are dropped, and
+  the answer is limited to 4 MiB. Sorting, text search, and `id` lookups are not offered.
+- **Mass effect.** n8n offers no row limit on `update`, `upsert`, and `delete`; one call can change or remove
+  every row that matches. They are therefore in no profile and offered only by a tools list, and each needs
+  the per-call confirmation. `upsert` updates all matching rows or inserts one row when none matches. The
+  answer reports acceptance, not the number of rows. `dryRun` and `returnData` are not offered.
+- **Errors.** A 403 is reported as a license, scope, or role error; a change whose outcome is unclear is
+  reported as uncertain and never retried. `insert` is not idempotent: a repeated call inserts the rows again.
 
 ## Version and plan boundaries
 
@@ -421,9 +459,9 @@ interprets or executes any of it itself.
 
 This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
 and their executions, and lists, creates, renames, and deletes projects, and manages their members, and lists, reads, creates,
-renames, and deletes data tables and manages their columns. It does
+renames, and deletes data tables and manages their columns and rows. It does
 not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
 execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move
 a project's content elsewhere before deleting it, create or invite users, or manage folders, credentials,
-users, tags, or variables, or manage the rows of a data table; those are deliberately out of
+users, tags, or variables, or clear all rows of a data table; those are deliberately out of
 scope.

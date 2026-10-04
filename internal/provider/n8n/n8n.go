@@ -10,7 +10,8 @@
 // for the allow-list rules and for what deleting a project does. The members of a project are listed, added,
 // re-roled, and removed (members.go). Data tables are listed, read (columns, never rows), created without
 // columns, renamed, and deleted (datatables.go); their columns are listed, added, renamed or moved, and
-// deleted (datacolumns.go); their rows are not managed.
+// deleted (datacolumns.go); their rows are listed, inserted, updated, upserted, and deleted by a
+// structured filter, never cleared (datarows.go).
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -534,6 +535,19 @@ func Register(reg *capability.Registry) error {
 				"of a profile: it deletes the column's data in every row, so n8n.datacolumns.delete is offered " +
 				"only by a connection whose tools list names it",
 			Tools: []string{dataColumnsList.ID, dataColumnsAdd.ID, dataColumnsUpdate.ID},
+		}, {
+			ID: "datarows-read", Title: "Read data table rows",
+			Description: "lists rows of data tables of this connection's project allow-list, optionally " +
+				"narrowed by a structured filter; row values are untrusted data; changes nothing",
+			Tools: []string{dataRowsList.ID},
+		}, {
+			ID: "datarows-manage", Title: "Manage data table rows",
+			Description: "lists rows and inserts new rows into data tables within this connection's project " +
+				"allow-list; every insert needs its own confirmation. Updating, upserting, and deleting rows " +
+				"are never part of a profile: a filter can match any number of rows, so n8n.datarows.update, " +
+				"n8n.datarows.upsert, and n8n.datarows.delete are offered only by a connection whose tools " +
+				"list names them",
+			Tools: []string{dataRowsList.ID, dataRowsInsert.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -566,6 +580,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataColumnsAdd, Handler: capability.Handler(invokeDataColumnsAdd)},
 		capability.Operation{Descriptor: dataColumnsUpdate, Handler: capability.Handler(invokeDataColumnsUpdate)},
 		capability.Operation{Descriptor: dataColumnsDelete, Handler: capability.Handler(invokeDataColumnsDelete)},
+		capability.Operation{Descriptor: dataRowsList, Handler: capability.Handler(invokeDataRowsList)},
+		capability.Operation{Descriptor: dataRowsInsert, Handler: capability.Handler(invokeDataRowsInsert)},
+		capability.Operation{Descriptor: dataRowsUpdate, Handler: capability.Handler(invokeDataRowsUpdate)},
+		capability.Operation{Descriptor: dataRowsUpsert, Handler: capability.Handler(invokeDataRowsUpsert)},
+		capability.Operation{Descriptor: dataRowsDelete, Handler: capability.Handler(invokeDataRowsDelete)},
 	)
 }
 
