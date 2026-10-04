@@ -5,11 +5,11 @@ description: >
   reads, the run (Make's own "logs") reads and their offset pagination, the bounded best-effort run error,
   the confirmed scenario create/update/start/stop/run tools and their contracts, and the scope and plan
   boundaries of a Make API token, and the argument-free reads of the bound team, its usage and members,
-  and its organization.
+  and its organization, and the connection reads and test.
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-02
+updated: 2026-10-04
 ---
 
 # Make
@@ -38,7 +38,9 @@ additionally need `scenarios:write`, and its run tool additionally needs `scenar
 (`make.team.get`, `make.team.usage`, `make.team.members`) needs `teams:read`; the `organization` profile
 (`make.organization.get`) needs `organizations:read` and `teams:read`, because the organization is found
 through the bound team; the `hooks-read` profile (`make.hooks.list`, `get`, `ping`, `logs`) needs
-`hooks:read`, as does `make.hooks.url`. A 403 names the missing scope. A Make token
+`hooks:read`, as does `make.hooks.url`; the `connections-read` profile (`make.connections.list`, `get`,
+`editableschema`) needs `connections:read`, and its separate `connections-test` profile
+(`make.connections.test`) additionally needs `connections:write`. A 403 names the missing scope. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
 access to, so a token created for a different zone than this connection's own is rejected here the same way
 as any other invalid token. The token carries API scopes, while Make also limits resources by the user's
@@ -129,6 +131,10 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.hooks.ping` | read | none | reads one hook's status (`GET /hooks/{id}/ping`: attached, learning, gone); sends no data to the hook |
 | `make.hooks.logs` | read | none | lists one hook's log entries as metadata only (id, status, time, sizes) |
 | `make.hooks.url` | read | none | returns one hook's trigger URL or mailhook address, a secret; offered only when a connection's `tools` list names it, in no profile |
+| `make.connections.list` | read | none | lists the bound team's Make connections (always `teamId` of the connection) by allow-listed metadata, at most 200 |
+| `make.connections.get` | read | none | reads one Make connection by allow-listed metadata, with its team confirmed live |
+| `make.connections.editableschema` | read | none | lists the names of the parameters Make allows to be edited on one connection; names only |
+| `make.connections.test` | execute | required | asks Make to verify one connection's stored credential against its third-party service; one request, never retried |
 
 Every read is safe and needs no confirmation. Every change of the manage profile needs its own confirmation,
 sends exactly one changing request, and is never retried by this provider itself: a failure that could mean
@@ -249,7 +255,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook tools |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook tools; `connections:read` for the connection reads and `connections:write` for the connection test |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -279,6 +285,32 @@ connection whose `tools` list names it. Its value is deliberately not added to t
 would blank the tool's own answer. Hook logs are reduced to metadata (id, status, time, replayable flag, type,
 and at most eight integer sizes); request headers, bodies, parsers, and udids are never read into a result.
 
+## Connections
+
+The connection tools address Make connections (stored third-party credentials), not Qatlas connections.
+`make.connections.list` always sends the bound team as `teamId` (and an optional `type[]` filter). Every tool
+that names a `connection_id` validates it locally (positive integer), reads the connection from Make first,
+and refuses it as an invalid request, without naming its real team, when its `teamId` is not the bound team
+(or, with an organization target, its `organizationId` does not match or is not reported), before any schema or
+test request is sent. A Qatlas connection with a scenario allow-list reaches no Make connections at all:
+connections belong to no scenario, so the narrower reading is refusal, locally and before any secret is read.
+
+Only an allow-list of fields leaves Qatlas: `id`, `name`, `accountName`, `accountType`, `packageName`,
+`expire`, `scoped`, `teamId`, `organizationId`, `editable`. Make is also asked for exactly these through
+`cols[]`, and the answer is decoded into a struct holding only them, so tokens, `metadata`, `data`, scope
+lists, and any other field are dropped; strings are capped at 256 characters. Make's connection answer is not
+documented field by field beyond property names, which is why an allow-list decides, not a deny-list.
+`make.connections.editableschema` reads `GET /connections/{id}/editable-data-schema`, which Make documents as
+`editableParameters`, an array of strings; only those names are returned (at most 64, 128 characters each),
+never a value or default. Updating a connection's data is not offered.
+
+`make.connections.test` is an `execute` with an outside effect: Make uses the stored credential against the
+third-party service (`POST /connections/{id}/test`, `connections:write`, answer `{"verified":boolean}`). It is
+`open_world`, needs its own confirmation, sends exactly one POST after the binding read, and is never retried;
+a timeout, a connection reset, a 5xx, or an unreadable answer is reported as uncertain. The result is only
+`verified`; Make reports no message. It sits in its own `connections-test` profile so a token or connection
+can be granted reads without it. Everything a connection answers with is untrusted data.
+
 ## Untrusted data
 
 Scenario names, descriptions, scheduling configuration, blueprint content, run status, and every other value
@@ -291,5 +323,8 @@ never renders it, follows a link inside it, or executes anything derived from it
 This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
-call, create, change, or delete hooks, manage labels, data stores, keys, connections, teams, or organizations (it only reads the bound team
-and its organization), or read team or organization variables; those are out of scope.
+call, create, change, or delete hooks, manage labels, data stores, keys, teams, or organizations (it only reads the bound team
+and its organization), or read team or organization variables; those are out of scope. For connections it
+only lists and reads allow-listed metadata, lists editable parameter names, and tests a connection; it does
+not create, change, rename, or delete connections, set credentials, manage access lists, or handle credential
+requests.

@@ -122,7 +122,9 @@ const (
 	needTeamsRead = "the teams:read scope"
 	needOrgRead   = "the organizations:read scope (and teams:read, which finds the organization)"
 	// needHooksRead belongs to the hook read tools.
-	needHooksRead = "the hooks:read scope"
+	needHooksRead        = "the hooks:read scope"
+	needConnectionsRead  = "the connections:read scope"
+	needConnectionsWrite = "the connections:write scope (and connections:read, which binds the connection)"
 )
 
 // roleAPIToken is the single secret role a Make credential must supply. It is sent as the Authorization
@@ -602,7 +604,8 @@ func Register(reg *capability.Registry) error {
 			Description: "Make API token, created in Make under the profile avatar, Profile, API, Add token; " +
 				"scenarios:read for the read profile, plus scenarios:write for the manage profile's create, " +
 				"update, start, and stop tools, plus scenarios:run for its run tool, plus teams:read for the team " +
-				"profile and organizations:read for the organization profile. A token belongs to one " +
+				"profile and organizations:read for the organization profile, plus connections:read for the " +
+				"connections-read profile and connections:write for its test tool. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -669,6 +672,18 @@ func Register(reg *capability.Registry) error {
 				"status, and lists their log metadata; never returns a trigger URL, changes nothing, and " +
 				"needs the hooks:read scope",
 			Tools: []string{hooksList.ID, hooksGet.ID, hooksPing.ID, hooksLogs.ID},
+		}, {
+			ID: "connections-read", Title: "Read the bound team's connections",
+			Description: "lists and reads the connections of the bound team by allow-listed metadata only and " +
+				"lists the names of their editable parameters; never a token or secret, changes nothing, and " +
+				"needs the connections:read scope; refused on a connection with a scenario allow-list",
+			Tools: []string{connectionsList.ID, connectionsGet.ID, connectionsEditableSchema.ID},
+		}, {
+			ID: "connections-test", Title: "Test the bound team's connections",
+			Description: "asks Make to verify a connection's stored credential against its third-party service; " +
+				"a separate profile because it reaches a service outside Make, needs its own confirmation, " +
+				"is never retried, and needs the connections:read and connections:write scopes",
+			Tools: []string{connectionsTest.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -693,6 +708,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: hooksPing, Handler: capability.Handler(invokeHooksPing)},
 		capability.Operation{Descriptor: hooksLogs, Handler: capability.Handler(invokeHooksLogs)},
 		capability.Operation{Descriptor: hooksURL, Handler: capability.Handler(invokeHooksURL)},
+		capability.Operation{Descriptor: connectionsList, Handler: capability.Handler(invokeConnectionsList)},
+		capability.Operation{Descriptor: connectionsGet, Handler: capability.Handler(invokeConnectionsGet)},
+		capability.Operation{Descriptor: connectionsEditableSchema,
+			Handler: capability.Handler(invokeConnectionsEditableSchema)},
+		capability.Operation{Descriptor: connectionsTest, Handler: capability.Handler(invokeConnectionsTest)},
 	)
 }
 
