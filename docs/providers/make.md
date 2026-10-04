@@ -160,6 +160,13 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.connections.delete` | delete | required | deletes one connection for good; without `confirm_scenarios_affected` it sends no `confirmed` and returns the scenarios Make names when it refuses; offered only through a tools list |
 | `make.connectionaccess.list` | read | none | lists the users and roles on a locked connection's access list; ids and roles only |
 | `make.connectionaccess.set` | update | required | gives one team user the role `admin` or `member` on a locked connection's access list; adds or changes that one member, removes nobody |
+| `make.datastores.list` | read | none | lists the bound team's data stores (always `teamId` of the connection), sorted by name, page by page; never records |
+| `make.datastores.get` | read | none | reads one data store, with its team confirmed live; never records |
+| `make.datastores.create` | create | required | creates one data store in the bound team (`POST /data-stores`) after reading that its data structure belongs to the team |
+| `make.datastores.update` | update | required | changes a data store's name, data structure, or maximum size (`PATCH /data-stores/{id}`), after reading the store and any named structure |
+| `make.datastores.delete` | delete | required | deletes one data store with its records (`DELETE /data-stores`, body `ids` with exactly one id); without `confirm_scenarios_affected` it sends no `confirmed`; offered only through a tools list |
+| `make.datastructures.list` | read | none | lists the bound team's data structures (id, name, strict), sorted by name, page by page |
+| `make.datastructures.get` | read | none | reads one data structure with its bounded field specification, with its team confirmed live |
 | `make.credentialrequests.list` | read | none | lists the bound team's credential requests by allow-listed metadata, at most 200; never a link or email |
 | `make.credentialrequests.get` | read | none | reads one credential request, with its team confirmed live; never the link or an email |
 | `make.credentialrequests.create` | create | required | creates one credential request in the bound team (`POST /credential-requests/requests/v2`); the only tool that returns the request link |
@@ -284,7 +291,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store tools (the single-store read also names `organizations:read`, see "Data stores and data structures") and `udts:read` for the data structure tools and the structure check of a store create or update; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -448,6 +455,58 @@ permission, and their own confirmation; they are in no profile. The secret role 
   5xx, or unreadable answer the outcome is reported as uncertain (list the connections before creating again,
   test the connection before setting its data again).
 
+## Data stores and data structures
+
+`make.datastores.*` manage the data stores (tables scenarios keep data in) of the bound team; the records inside
+a store are not touched. `make.datastructures.list` and `make.datastructures.get` read the field layouts stores
+follow; creating, changing, or deleting a structure is not offered. A Qatlas connection with a scenario
+allow-list reaches none of them: they belong to no scenario, so the narrower reading is refusal, locally and
+before any secret is read.
+
+| Tool | Request | Make scope |
+| --- | --- | --- |
+| `make.datastores.list` | `GET /data-stores?teamId=` (`cols[]`, `pg[offset]`, `pg[limit]`, sorted by name) | `datastores:read` |
+| `make.datastores.get` | `GET /data-stores/{id}` | `datastores:read` (see below) |
+| `make.datastores.create` | `POST /data-stores` with `name`, `teamId`, `datastructureId`, `maxSizeMB` | `datastores:write`, plus `udts:read` for the structure check |
+| `make.datastores.update` | `PATCH /data-stores/{id}` with the given fields of `name`, `datastructureId`, `maxSizeMB` | `datastores:write`, `datastores:read`, plus `udts:read` when a structure is named |
+| `make.datastores.delete` | `DELETE /data-stores?teamId=[&confirmed=true]` with body `{"ids":[id]}` | `datastores:write`, `datastores:read` |
+| `make.datastructures.list` | `GET /data-structures?teamId=` | `udts:read` |
+| `make.datastructures.get` | `GET /data-structures/{id}` | `udts:read` |
+
+**Scope contradiction in Make's reference.** The reference lists `organizations:read` as the scope of
+`GET /data-stores/{id}` while every other data store endpoint, including the list, lists `datastores:read`. This
+is most likely a documentation error. Every read of a single store (the `get` tool and the binding read before
+an update or delete) therefore names `datastores:read` and, in the same 403 message, `organizations:read` as the
+scope to add when `datastores:read` is present and the read is still refused. Not verified against a live
+account.
+
+Team binding. The teamId of list and create is always the connection's bound team, never an argument. Every
+`datastore_id` and `datastructure_id` is read from Make first and refused as an invalid request, without naming
+its real team, when its `teamId` is not the bound team; this happens before any change, so a `datastructure_id`
+of another team in a create or update sends no changing request. Data stores and structures report no
+organization, so a configured organization target is not checked against them.
+
+Fields are typed and bounded: `name` 1 to 128 characters without control characters (it need not be unique),
+`max_size_mb` an integer from 1 to 1048576 (the upper bound is a local ceiling, Make documents none), and an
+update needs at least one of `name`, `datastructure_id`, `max_size_mb`. Only allow-listed fields are returned
+(`id`, `name`, `team_id`, `records`, `size`, `max_size`, `datastructure_id`; strings capped at 256 characters;
+size values are decoded as text or number). A structure's specification is returned as name, type, label,
+required, multiline, sequence, codepage, and nested spec, at most 200 fields and 4 levels, 128 characters per
+string, without default values; `spec_truncated` marks a cut. All of it is untrusted data. Lists return at most
+200 entries per page.
+
+`make.datastores.delete` reads and binds the store, then sends one `DELETE /data-stores` with the bound `teamId`
+and exactly one id; the delete-all form is never used. Make requires `confirmed=true` when a scenario includes
+the store and otherwise refuses and deletes nothing. Without `confirm_scenarios_affected` the tool never sends
+`confirmed`: when Make refuses and names scenarios, it returns `confirmation_required` with those ids and names
+(at most 20, names capped) and repeats nothing; a refusal naming no scenario is an ordinary error. With
+`confirm_scenarios_affected` true it sends `confirmed=true`, the store is deleted with its records, and the
+scenarios using it stop working. The tool is in no profile and is offered only when a connection's `tools` list
+names it. The profiles are `datastores-read`, `datastores-manage` (reads plus create and update), and
+`datastructures-read`. Create, update, and delete need their own confirmation, send exactly one changing
+request after the reads, and are never retried; a timeout, a connection reset, a 5xx, or an unreadable answer is
+reported as uncertain, and a result outside the bound team after the change as a `provider-error`.
+
 ## Credential requests
 
 A credential request asks a person to enter the secret of a connection or key themselves, through a link Make
@@ -491,7 +550,7 @@ never renders it, follows a link inside it, or executes anything derived from it
 This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
-call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, data stores, keys, teams, or organizations (it only reads the bound team
+call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, data store records, keys, teams, or organizations (it only reads the bound team
 and its organization), or read team or organization variables; those are out of scope. For connections it
 lists and reads allow-listed metadata, lists editable parameter names, tests, renames, and (through a tools
 list) creates, sets the data of, and deletes a connection of the bound team, taking secrets only from a
@@ -500,4 +559,4 @@ an OAuth connection, create a locked connection, accept a secret as an argument,
 members, or lock or unlock a connection. For
 credential requests it creates, lists, reads, and (through a tools list) deletes them; it does not decline,
 reauthorize, or reset a request's credentials, list app modules, or read request details with their credential
-states. It invites no new user: only members of the bound team can be the provider.
+states. It invites no new user: only members of the bound team can be the provider. For data stores it lists, reads, creates, updates, and (through a tools list) deletes a store of the bound team and lists and reads data structures; it never reads or writes a store's records, never deletes several stores at once, and never creates, changes, or deletes a data structure.
