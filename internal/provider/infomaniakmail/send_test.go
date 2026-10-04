@@ -669,7 +669,7 @@ func TestSendReportsAFailedCopyAndDoesNotRepeat(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		return dropAfter{Conn: conn, match: regexp.MustCompile(`T\d+ APPEND `), writes: &writes}, nil
+		return &dropAfter{Conn: conn, match: regexp.MustCompile(`T\d+ APPEND `), writes: &writes}, nil
 	}
 	t.Cleanup(func() { dialIMAP = real })
 	got := sendMessage(t, e, "send", `{"to":["a@example.net"]}`)
