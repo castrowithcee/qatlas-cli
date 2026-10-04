@@ -40,7 +40,8 @@ additionally need `scenarios:write`, and its run tool additionally needs `scenar
 through the bound team; the `hooks-read` profile (`make.hooks.list`, `get`, `ping`, `logs`) needs
 `hooks:read`, as does `make.hooks.url`; the `hooks-manage` profile (`make.hooks.create`, `rename`, `enable`,
 `disable`, plus the hooks-read tools) additionally needs `hooks:write`, as does the separately offered
-`make.hooks.delete`; the `connections-read` profile (`make.connections.list`, `get`,
+`make.hooks.delete`; the `hookqueue-read` profile (`make.hookqueue.list`, `get`, `stats`) needs `hooks:read`, and
+the separately offered `make.hookqueue.delete` needs `hooks:write` (with `hooks:read`, which binds the hook); the `connections-read` profile (`make.connections.list`, `get`,
 `editableschema`) needs `connections:read`, and its separate `connections-test` profile
 (`make.connections.test`) additionally needs `connections:write`. A 403 names the missing scope. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
@@ -137,6 +138,10 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.hooks.rename` | update | required | renames one hook of the bound team (`PATCH /hooks/{id}`, body `name`) |
 | `make.hooks.enable` / `make.hooks.disable` | update | required | enables or disables one hook (`POST /hooks/{id}/enable` or `/disable`), then re-reads it |
 | `make.hooks.delete` | delete | required | deletes one hook (`DELETE /hooks/{id}`); offered only when a connection's `tools` list names it, in no profile |
+| `make.hookqueue.list` | read | none | lists a hook's waiting incoming items as metadata only (`GET /hooks/{id}/incomings`: id, scope, size, time), never payloads |
+| `make.hookqueue.get` | read | none | reads one waiting item (`GET /hooks/{id}/incomings/{incomingId}`) with a capped, untrusted payload and a `truncated` flag |
+| `make.hookqueue.stats` | read | none | reads the queue count, capacity, and enabled state (`GET /hooks/{id}/incomings/stats`) |
+| `make.hookqueue.delete` | delete | required | deletes explicitly named items (`DELETE /hooks/{id}/incomings`, body `ids` only); offered only when a connection's `tools` list names it, in no profile |
 | `make.connections.list` | read | none | lists the bound team's Make connections (always `teamId` of the connection) by allow-listed metadata, at most 200 |
 | `make.connections.get` | read | none | reads one Make connection by allow-listed metadata, with its team confirmed live |
 | `make.connections.editableschema` | read | none | lists the names of the parameters Make allows to be edited on one connection; names only |
@@ -291,6 +296,22 @@ connection whose `tools` list names it. Its value is deliberately not added to t
 would blank the tool's own answer. Hook logs are reduced to metadata (id, status, time, replayable flag, type,
 and at most eight integer sizes); request headers, bodies, parsers, and udids are never read into a result.
 
+### Hook queue
+
+The queue tools are named `make.hookqueue.*` because operation IDs have exactly three segments. Each reads the
+hook first and refuses a hook of another team, or outside a scenario allow-list, before any queue request.
+Queued payloads are untrusted and may hold personal data: they carry the data sensitivity
+`make-webhook-payloads-personal-data`. `list` returns metadata only. `get` returns the payload capped to
+6 levels, 200 values, 256-byte strings, and 8 KiB, with `truncated` set when anything was cut or the whole
+payload had to be dropped; the hook's trigger URL, `udid`, and mailhook address are masked inside it, and the
+values of `authorization`, `cookie`, `set-cookie`, `host`, `referer`, and `origin` keys are replaced. Incoming
+ids must be 1 to 64 letters, digits, underscores, or hyphens, checked before any secret or request.
+
+`make.hookqueue.delete` takes 1 to 50 distinct explicit `ids`, needs its own confirmation, sends exactly one
+`DELETE` with only `ids` (never `all`, `exceptIds`, or Make's `confirmed` flag, which Make requires only for
+deleting everything), and is never repeated. After a 5xx, a dropped connection, an unreadable answer, or an
+error in the answer it reports that items may have been deleted; the queue should be read before trying again.
+
 ### Changing hooks
 
 `make.hooks.create`, `rename`, `enable`, `disable`, and `delete` need `hooks:write` (a 403 names it) and
@@ -355,7 +376,7 @@ never renders it, follows a link inside it, or executes anything derived from it
 This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
-call, start or stop a hook's learning mode, set a hook's data, manage labels, data stores, keys, teams, or organizations (it only reads the bound team
+call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, data stores, keys, teams, or organizations (it only reads the bound team
 and its organization), or read team or organization variables; those are out of scope. For connections it
 only lists and reads allow-listed metadata, lists editable parameter names, and tests a connection; it does
 not create, change, rename, or delete connections, set credentials, manage access lists, or handle credential

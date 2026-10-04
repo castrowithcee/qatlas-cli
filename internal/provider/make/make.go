@@ -619,8 +619,8 @@ func Register(reg *capability.Registry) error {
 				"update, start, and stop tools, plus scenarios:run for its run tool, plus teams:read for the team " +
 				"profile and organizations:read for the organization profile, plus connections:read for the " +
 				"connections-read profile and connections:write for its test tool, plus hooks:read for the " +
-				"hooks-read profile and hooks:write for the hooks-manage profile's create, rename, enable, and " +
-				"disable tools and the separately offered delete tool. A token belongs to one " +
+				"hooks-read and hookqueue-read profiles and hooks:write for the hooks-manage profile's create, " +
+				"rename, enable, and disable tools and the separately offered hook and queue delete tools. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -695,6 +695,13 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{hooksList.ID, hooksGet.ID, hooksPing.ID, hooksLogs.ID, hooksCreate.ID, hooksRename.ID,
 				hooksEnable.ID, hooksDisable.ID},
 		}, {
+			ID: "hookqueue-read", Title: "Read the queue of the bound team's hooks",
+			Description: "lists the waiting incoming items of a hook as metadata, reads one with a capped " +
+				"payload, and reads the queue statistics; payloads are untrusted, likely personal data, never " +
+				"a trigger URL is returned, changes nothing, and needs the hooks:read scope. Deleting queue " +
+				"items is in no profile",
+			Tools: []string{hookQueueList.ID, hookQueueGet.ID, hookQueueStats.ID},
+		}, {
 			ID: "connections-read", Title: "Read the bound team's connections",
 			Description: "lists and reads the connections of the bound team by allow-listed metadata only and " +
 				"lists the names of their editable parameters; never a token or secret, changes nothing, and " +
@@ -735,6 +742,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: hooksEnable, Handler: capability.Handler(invokeHooksEnable)},
 		capability.Operation{Descriptor: hooksDisable, Handler: capability.Handler(invokeHooksDisable)},
 		capability.Operation{Descriptor: hooksDelete, Handler: capability.Handler(invokeHooksDelete)},
+		capability.Operation{Descriptor: hookQueueList, Handler: capability.Handler(invokeHookQueueList)},
+		capability.Operation{Descriptor: hookQueueGet, Handler: capability.Handler(invokeHookQueueGet)},
+		capability.Operation{Descriptor: hookQueueStats, Handler: capability.Handler(invokeHookQueueStats)},
+		capability.Operation{Descriptor: hookQueueDelete, Handler: capability.Handler(invokeHookQueueDelete)},
 		capability.Operation{Descriptor: connectionsList, Handler: capability.Handler(invokeConnectionsList)},
 		capability.Operation{Descriptor: connectionsGet, Handler: capability.Handler(invokeConnectionsGet)},
 		capability.Operation{Descriptor: connectionsEditableSchema,
