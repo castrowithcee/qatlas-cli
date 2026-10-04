@@ -550,8 +550,9 @@ stored value never reaches a result or an error, whatever n8n sends.
 - **Binding.** With a project allow-list `list` keeps only credentials shared into those projects. `get` and
   `test` first find the credential in the paged list (at most 20 pages of 250), because the single read has no
   project information; a credential that is not found, is outside the allow-list, or whose search cannot
-  finish is refused without any further request and without naming a project. The `shared` entry is read as
-  `projectId` or `project.id`; an entry without a project never matches. A connection with a workflow
+  finish is refused without any further request and without naming a project. Each `shared` entry of the list
+  response carries the project as its `id` (with `name` and `role`); the single read has no `shared`. Only
+  that `id` is read; an entry without one never matches. A connection with a workflow
   allow-list refuses every credential tool locally, as for data tables and variables.
 - **Test.** `credentials.test` makes n8n use the stored secret against the third-party service, so it is
   effect `execute`, idempotent, open-world, and always needs confirmation. It sends exactly one request and is
@@ -586,7 +587,9 @@ stored value never reaches a result or an error, whatever n8n sends.
   where that can be decided locally. Workflows in other projects may lose access to the moved credential.
 - **Delete.** `credentials.delete` calls `DELETE /credentials/{id}` after the same binding search. Workflows
   that use the credential fail until another one is assigned, and the stored secret is lost.
-- **Changes.** Update, transfer, and delete find the credential through the binding search before the one
+- **Changes.** Update, transfer, and delete additionally require the owning project (the `shared` entry with
+  role `credential:owner`) to be in the allow-list; a credential only shared into an allowed project, or without
+  a role, is refused before the changing request. Update, transfer, and delete find the credential through the binding search before the one
   changing request; the search only reads. Every change needs its own confirmation, is sent once, and is never
   retried; an unclear outcome is reported as uncertain. Results are the credential metadata, or `deleted` and
   `transferred` flags; never a stored value.

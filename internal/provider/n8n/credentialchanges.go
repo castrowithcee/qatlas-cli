@@ -373,7 +373,7 @@ func invokeCredentialsUpdate(ctx context.Context, resolved *config.Resolved, sec
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID); err != nil {
+	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID, true); err != nil {
 		return nil, credentialError(err)
 	}
 	body := map[string]any{}
@@ -420,7 +420,7 @@ func invokeCredentialsTransfer(ctx context.Context, resolved *config.Resolved, s
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID); err != nil {
+	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID, true); err != nil {
 		return nil, credentialError(err)
 	}
 	if err := client.change(ctx, op, http.MethodPut, "/credentials/"+url.PathEscape(input.CredentialID)+"/transfer",
@@ -448,7 +448,7 @@ func invokeCredentialsDelete(ctx context.Context, resolved *config.Resolved, sec
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID); err != nil {
+	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID, true); err != nil {
 		return nil, credentialError(err)
 	}
 	if err := client.change(ctx, op, http.MethodDelete, "/credentials/"+url.PathEscape(input.CredentialID), nil, nil,

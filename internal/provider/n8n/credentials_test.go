@@ -17,8 +17,8 @@ const (
 
 func credentialJSONOf(id, project string) string {
 	return fmt.Sprintf(`{"id":%q,"name":"n-%s","type":"httpBasicAuth","createdAt":"2026-01-01T00:00:00Z",`+
-		`"updatedAt":"2026-01-02T00:00:00Z","data":{"password":%q},"shared":[{"role":"credential:owner",`+
-		`"projectId":%q,"project":{"id":%q}}]}`, id, id, dataCanary, project, project)
+		`"updatedAt":"2026-01-02T00:00:00Z","data":{"password":%q},"shared":[{"id":%q,"name":"p","role":"credential:owner",`+
+		`"createdAt":"2026-01-01T00:00:00Z","updatedAt":"2026-01-01T00:00:00Z"}]}`, id, id, dataCanary, project)
 }
 
 func credentialsBody() string {
@@ -239,5 +239,35 @@ func TestCredentialRiskAndProfiles(t *testing.T) {
 	if found["credentials-read"] != credentialsList.ID+","+credentialsGet.ID+","+credentialsSchema.ID ||
 		found["credentials-test"] != credentialsTest.ID {
 		t.Fatalf("profiles = %v", found)
+	}
+}
+
+// sharedOnlyBody lists the own credential owned by a foreign project and only shared into the allowed one.
+func sharedOnlyBody() string {
+	return fmt.Sprintf(`{"data":[{"id":%q,"name":"n","type":"httpBasicAuth","shared":[`+
+		`{"id":%q,"name":"f","role":"credential:owner"},{"id":%q,"name":"p","role":"credential:user"}]}],"nextCursor":null}`,
+		ownCredential, foreignProject, ownProject)
+}
+
+func TestCredentialSharedOnlyIsReadableButNotChangeable(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		switch {
+		case r.URL.Path == apiPath+"/credentials":
+			return jsonResponse(200, sharedOnlyBody()), nil
+		case r.Method == http.MethodGet && r.URL.Path == apiPath+"/credentials/"+ownCredential:
+			return jsonResponse(200, credentialJSONOf(ownCredential, ownProject)), nil
+		case r.Method == http.MethodPost && r.URL.Path == apiPath+"/credentials/"+ownCredential+"/test":
+			return jsonResponse(200, `{"status":"OK","message":"ok"}`), nil
+		}
+		t.Errorf("unexpected request to %s %s", r.Method, r.URL.Path)
+		return jsonResponse(500, `{}`), nil
+	})
+	arguments := fmt.Sprintf(`{"credential_id":%q}`, ownCredential)
+	if _, err := env.invoke(credentialsGet.ID, "open", arguments); err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if _, err := env.confirmed(credentialsTest.ID, "open", arguments); err != nil {
+		t.Fatalf("test: %v", err)
 	}
 }

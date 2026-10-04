@@ -154,22 +154,18 @@ var credentialsSchema = capability.Descriptor{
 		Arguments: json.RawMessage(`{"credential_type":"httpBasicAuth"}`)}},
 }
 
-// credentialShareJSON reads the project of one share entry, accepting both a flat projectId and a nested project.
+// credentialShareJSON is one entry of a listed credential's shared array. n8n reports the owning or
+// sharing project as the entry's id (with its name and role); no other field names a project.
 type credentialShareJSON struct {
-	ProjectID string `json:"projectId"`
-	Project   *struct {
-		ID string `json:"id"`
-	} `json:"project"`
+	ID   string `json:"id"`
+	Role string `json:"role"`
 }
 
+// ownerRole marks the owning project's entry of a shared array.
+const ownerRole = "credential:owner"
+
 func (s credentialShareJSON) projectID() string {
-	if s.ProjectID != "" {
-		return s.ProjectID
-	}
-	if s.Project != nil {
-		return s.Project.ID
-	}
-	return ""
+	return s.ID
 }
 
 // credentialJSON deliberately has no data field.
@@ -239,6 +235,20 @@ func selectCredentials(resolved *config.Resolved) (scope, error) {
 		return scope{}, invalidRequest("this connection restricts workflows by an allow-list, so it cannot use credentials")
 	}
 	return bound, nil
+}
+
+// ownsCredential: without a project allow-list every credential; with one only a credential whose owning
+// project (entry with the owner role) is in it. A missing role or owner entry never matches.
+func (s scope) ownsCredential(shared []credentialShareJSON) bool {
+	if len(s.projects) == 0 {
+		return true
+	}
+	for _, entry := range shared {
+		if entry.Role == ownerRole && entry.ID != "" && contains(s.projects, entry.ID) {
+			return true
+		}
+	}
+	return false
 }
 
 // allowsCredential: without a project allow-list every credential; with one only a credential shared into
@@ -351,9 +361,10 @@ func (c *Client) ListCredentials(ctx context.Context, cursor string, limit int) 
 }
 
 // verifyCredentialBinding finds the credential through the bounded paged list and checks it against the
-// project allow-list. Without an allow-list it sends nothing. A credential that is absent, outside the
+// project allow-list; with owned set (changes) the owning project must be in it, otherwise any shared allowed
+// project suffices. Without an allow-list it sends nothing. A credential that is absent, outside the
 // binding, or whose search could not finish is refused alike, without naming any project.
-func (c *Client) verifyCredentialBinding(ctx context.Context, op, id string) error {
+func (c *Client) verifyCredentialBinding(ctx context.Context, op, id string, owned bool) error {
 	if len(c.scope.projects) == 0 {
 		return nil
 	}
@@ -367,7 +378,11 @@ func (c *Client) verifyCredentialBinding(ctx context.Context, op, id string) err
 			if item.ID != id {
 				continue
 			}
-			if !c.scope.allowsCredential(item.Shared) {
+			allowed := c.scope.allowsCredential(item.Shared)
+			if owned {
+				allowed = c.scope.ownsCredential(item.Shared)
+			}
+			if !allowed {
 				return invalidRequest("the credential is outside the targets of this connection")
 			}
 			return nil
@@ -418,7 +433,7 @@ func invokeCredentialsGet(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID); err != nil {
+	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID, false); err != nil {
 		return nil, credentialError(err)
 	}
 	var item credentialJSON
@@ -446,7 +461,7 @@ func invokeCredentialsTest(ctx context.Context, resolved *config.Resolved, secre
 	if err != nil {
 		return nil, err
 	}
-	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID); err != nil {
+	if err := client.verifyCredentialBinding(ctx, op, input.CredentialID, false); err != nil {
 		return nil, credentialError(err)
 	}
 	var answer struct {

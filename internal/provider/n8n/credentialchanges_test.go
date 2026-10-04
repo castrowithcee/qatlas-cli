@@ -327,7 +327,11 @@ func TestCredentialChangesAreBoundToTheProjectAllowList(t *testing.T) {
 
 	// update, transfer, delete: every foreign or unfindable credential stops at the read-only search.
 	searches := map[string]func(*http.Request) (*http.Response, error){
-		"foreign": func(*http.Request) (*http.Response, error) { return jsonResponse(200, credentialsBody()), nil },
+		"foreign":     func(*http.Request) (*http.Response, error) { return jsonResponse(200, credentialsBody()), nil },
+		"shared only": func(*http.Request) (*http.Response, error) { return jsonResponse(200, sharedOnlyBody()), nil },
+		"no role": func(*http.Request) (*http.Response, error) {
+			return jsonResponse(200, `{"data":[{"id":"`+ownCredential+`","shared":[{"id":"`+ownProject+`"}]}]}`), nil
+		},
 		"missing": func(*http.Request) (*http.Response, error) { return jsonResponse(200, `{"data":[]}`), nil },
 		"search fails": func(*http.Request) (*http.Response, error) {
 			return jsonResponse(500, `{}`), nil
