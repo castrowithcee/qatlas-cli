@@ -43,13 +43,17 @@ through the bound team; the `hooks-read` profile (`make.hooks.list`, `get`, `pin
 `make.hooks.delete`; the `hookqueue-read` profile (`make.hookqueue.list`, `get`, `stats`) needs `hooks:read`, and
 the separately offered `make.hookqueue.delete` needs `hooks:write` (with `hooks:read`, which binds the hook); the `connections-read` profile (`make.connections.list`, `get`,
 `editableschema`) needs `connections:read`, and its separate `connections-test` profile
-(`make.connections.test`) additionally needs `connections:write`. A 403 names the missing scope. A Make token
+(`make.connections.test`) additionally needs `connections:write`, as do the `connections-manage` profile
+(`make.connections.rename`), the `connections-access-manage` profile (`make.connectionaccess.set`, which additionally needs `user:read`), and the
+separately offered `make.connections.delete`; the `connections-access-read` profile
+(`make.connectionaccess.list`) needs `connections:read`. A 403 names the missing scope. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
 access to, so a token created for a different zone than this connection's own is rejected here the same way
 as any other invalid token. The token carries API scopes, while Make also limits resources by the user's
 team membership. This connection's required team target adds a Qatlas boundary within that access. Make
 also documents optional locked connections with their own access lists; this feature must be enabled for
-the organization, and this provider neither inspects nor enforces those lists. See Make's [Connections API
+the organization; this provider enforces none of them itself and only reads and sets their members through
+the access-list tools. See Make's [Connections API
 reference](https://developers.make.com/api-documentation/api-reference/connections.md) and [connection
 access-list reference](https://developers.make.com/api-documentation/api-reference/connections/access-list.md).
 
@@ -146,6 +150,10 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.connections.get` | read | none | reads one Make connection by allow-listed metadata, with its team confirmed live |
 | `make.connections.editableschema` | read | none | lists the names of the parameters Make allows to be edited on one connection; names only |
 | `make.connections.test` | execute | required | asks Make to verify one connection's stored credential against its third-party service; one request, never retried |
+| `make.connections.rename` | update | required | renames one connection of the bound team (`PATCH /connections/{id}`, name up to 128 characters), then reads it again |
+| `make.connections.delete` | delete | required | deletes one connection for good; without `confirm_scenarios_affected` it sends no `confirmed` and returns the scenarios Make names when it refuses; offered only through a tools list |
+| `make.connectionaccess.list` | read | none | lists the users and roles on a locked connection's access list; ids and roles only |
+| `make.connectionaccess.set` | update | required | gives one team user the role `admin` or `member` on a locked connection's access list; adds or changes that one member, removes nobody |
 
 Every read is safe and needs no confirmation. Every change of the manage profile needs its own confirmation,
 sends exactly one changing request, and is never retried by this provider itself: a failure that could mean
@@ -266,7 +274,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, and access-list change; `user:read` for the user's team membership check of the access-list change; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -364,6 +372,35 @@ a timeout, a connection reset, a 5xx, or an unreadable answer is reported as unc
 `verified`; Make reports no message. It sits in its own `connections-test` profile so a token or connection
 can be granted reads without it. Everything a connection answers with is untrusted data.
 
+`make.connections.rename` reads and binds the connection, sends one `PATCH /connections/{id}` with only
+`name` (1 to 128 characters, no control characters), and reads the connection again, so the result carries the
+same allow-listed fields and the same team binding as every read. It sits in the `connections-manage` profile.
+
+`make.connections.delete` reads and binds the connection, then sends one `DELETE /connections/{id}`. Make
+requires `confirmed=true` when a scenario includes the connection and otherwise refuses and deletes nothing.
+Without the argument `confirm_scenarios_affected` the tool never sends `confirmed`: when Make refuses and its
+answer names scenarios, the tool returns `confirmation_required` with those scenario ids and names (at most
+20, names capped, untrusted data) and repeats nothing; a refusal that names no scenario is reported as an
+ordinary error. With `confirm_scenarios_affected` true it sends `confirmed=true` and the scenarios using the
+connection stop working. A connection that is not in any scenario is deleted by the first request. Because the
+deletion is final, the tool is in no profile and is offered only when a connection's `tools` list names it.
+
+`make.connectionaccess.list` and `make.connectionaccess.set` use Make's access-list endpoints
+(`GET /teams/{teamId}/connections/{id}/access-list`, `POST .../access-list/users`, and
+`PATCH .../access-list/users/{userId}`; the team is always the bound team and the connection is bound first).
+Make answers them only when its locked connections feature is enabled for the organization (otherwise HTTP
+400), and a change needs the entity manage permission of the token's user on the connection. The list returns
+only user ids and roles, never a name or email, at most 200 members. `set` takes one `user_id` (already a
+member of the bound team) and a `role` of `admin` or `member`: it first proves the team membership with `GET /users/{userId}/user-team-roles/{teamId}` (`user:read`; a
+missing or other-team role is refused as an invalid request without naming anything, before any change), reads
+the list, sends nothing when the user
+already holds the role, and otherwise sends exactly one `POST` (user not on the list) or `PATCH` (user on the
+list with another role). The rest of the list is untouched and no tool removes a member; Make itself refuses
+a change that would leave the connection without an administrator. Because the list read may show only the
+members visible to the token, a user it does not show can answer 409 on the `POST`, which is reported, never
+retried. A change is not repeated after a timeout, reset, 5xx, or unreadable answer; the result is then
+reported as uncertain. Both tools are named `connectionaccess` because tool ids have three segments.
+
 ## Untrusted data
 
 Scenario names, descriptions, scheduling configuration, blueprint content, run status, and every other value
@@ -378,6 +415,7 @@ a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
 call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, data stores, keys, teams, or organizations (it only reads the bound team
 and its organization), or read team or organization variables; those are out of scope. For connections it
-only lists and reads allow-listed metadata, lists editable parameter names, and tests a connection; it does
-not create, change, rename, or delete connections, set credentials, manage access lists, or handle credential
-requests.
+lists and reads allow-listed metadata, lists editable parameter names, tests, renames, and (through a tools
+list) deletes a connection of the bound team, and lists and sets the roles of users on its access list; it
+does not create connections, set credentials, remove access-list members, lock or unlock a connection, or
+handle credential requests.
