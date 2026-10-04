@@ -45,7 +45,8 @@ the separately offered `make.hookqueue.delete` needs `hooks:write` (with `hooks:
 `editableschema`) needs `connections:read`, and its separate `connections-test` profile
 (`make.connections.test`) additionally needs `connections:write`, as do the `connections-manage` profile
 (`make.connections.rename`), the `connections-access-manage` profile (`make.connectionaccess.set`, which additionally needs `user:read`), and the
-separately offered `make.connections.delete`; the `connections-access-read` profile
+separately offered `make.connections.delete`, `make.connections.create`, and `make.connections.setdata`
+(`setdata` additionally needs `connections:read`, which binds the connection first); the `connections-access-read` profile
 (`make.connectionaccess.list`) needs `connections:read`; the `credentialrequests-read` profile
 (`make.credentialrequests.list`, `get`) needs `credential-requests:read`, its `credentialrequests-manage`
 profile (plus `create`, which additionally needs `user:read`) and the
@@ -154,6 +155,8 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.connections.editableschema` | read | none | lists the names of the parameters Make allows to be edited on one connection; names only |
 | `make.connections.test` | execute | required | asks Make to verify one connection's stored credential against its third-party service; one request, never retried |
 | `make.connections.rename` | update | required | renames one connection of the bound team (`PATCH /connections/{id}`, name up to 128 characters), then reads it again |
+| `make.connections.create` | create | required | creates one connection in the bound team from plain fields and a `secret_ref` (`POST /connections?teamId=`); only offered by a tools list |
+| `make.connections.setdata` | update | required | replaces the data of one connection of the bound team from plain fields and a `secret_ref` (`POST /connections/{id}/set-data`); OAuth connections need a reauthorization in Make; only offered by a tools list |
 | `make.connections.delete` | delete | required | deletes one connection for good; without `confirm_scenarios_affected` it sends no `confirmed` and returns the scenarios Make names when it refuses; offered only through a tools list |
 | `make.connectionaccess.list` | read | none | lists the users and roles on a locked connection's access list; ids and roles only |
 | `make.connectionaccess.set` | update | required | gives one team user the role `admin` or `member` on a locked connection's access list; adds or changes that one member, removes nobody |
@@ -281,7 +284,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -408,6 +411,43 @@ members visible to the token, a user it does not show can answer 409 on the `POS
 retried. A change is not repeated after a timeout, reset, 5xx, or unreadable answer; the result is then
 reported as uncertain. Both tools are named `connectionaccess` because tool ids have three segments.
 
+### Creating connections and setting their data
+
+`make.connections.create` and `make.connections.setdata` send secrets to Make. A value is never an argument:
+`secret_ref` names a forward credential that the Qatlas connection releases in `forward_secrets`; the core
+checks it before the confirmation gate and refuses an unreleased or unknown name (`secret-ref-not-allowed`).
+The values are read only after the confirmation and, for `setdata`, after the connection was read and bound
+to the bound team, for the one request, registered with the redactor, and set into the request body under the
+field names of the forward credential. A plain field with the same name as a secret field, or with a member
+the tool sets itself, is refused, never overwritten. The plain `fields` argument is not redacted: put no
+secret into it. Because of `secret_ref`, both tools need a tools list entry, the `create` or `update`
+permission, and their own confirmation; they are in no profile. The secret role of the API token needs
+`connections:write` for them (and `connections:read` for `setdata`).
+
+- **Create.** `POST /connections?teamId=TEAM` with `accountName` (the `name`, 1 to 128 characters),
+  `accountType` (`connection_type`, letters, digits, `.`, `_`, `:`, `-`, at most 100 characters), optional
+  `scopes` (at most 50 entries of at most 256 characters), and the `fields` and secret fields as further
+  top-level properties. `fields` is an object of at most 50 entries, names of letters, digits, `_`, `-`, `.`
+  starting with a letter, values strings of at most 1024 characters, numbers, or booleans; `accountName`,
+  `accountType`, `scopes`, `accountVisibility`, and `teamId` are not accepted as field names. The team is
+  always the bound team, never an argument; a connection with a scenario allow-list refuses the tool locally.
+  The result is the allow-listed connection metadata, with the team re-checked (a mismatch is a
+  `provider-error`, the connection already exists). Locked visibility is not offered. A repeated call creates
+  another connection. An OAuth type is created but not authorized: a person has to complete the authorization
+  in Make's web interface.
+- **Set data.** `POST /connections/{id}/set-data` with the `fields` and the secret fields. The connection is read
+  first and refused, before any secret is read, unless Make reports it in the bound team (and organization,
+  when bound), without naming any other team. **Make replaces the stored data**: a field that is in neither
+  `fields` nor the referenced forward credential is set empty, a stored secret included, so give every plain
+  field in `fields` and every secret field through `secret_ref`; `make.connections.editableschema` lists the
+  parameter names. At least one of `fields` and `secret_ref` is required. For an OAuth connection a person must
+  afterwards log in to Make and confirm the change with the Reauthorize button; other types use the new data
+  at once. Make refuses a connection it cannot edit ("Cannot edit this connection"). The result is
+  `connection_id`, `team_id`, and `changed`.
+- **One request.** Each tool sends exactly one changing request and never retries it: after a timeout, reset,
+  5xx, or unreadable answer the outcome is reported as uncertain (list the connections before creating again,
+  test the connection before setting its data again).
+
 ## Credential requests
 
 A credential request asks a person to enter the secret of a connection or key themselves, through a link Make
@@ -454,8 +494,10 @@ deliberately does not, and has no tool to, delete or clone a scenario, replay a 
 call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, data stores, keys, teams, or organizations (it only reads the bound team
 and its organization), or read team or organization variables; those are out of scope. For connections it
 lists and reads allow-listed metadata, lists editable parameter names, tests, renames, and (through a tools
-list) deletes a connection of the bound team, and lists and sets the roles of users on its access list; it
-does not create connections, set credentials, or remove access-list members, or lock or unlock a connection. For
+list) creates, sets the data of, and deletes a connection of the bound team, taking secrets only from a
+released forward credential, and lists and sets the roles of users on its access list; it does not authorize
+an OAuth connection, create a locked connection, accept a secret as an argument, or remove access-list
+members, or lock or unlock a connection. For
 credential requests it creates, lists, reads, and (through a tools list) deletes them; it does not decline,
 reauthorize, or reset a request's credentials, list app modules, or read request details with their credential
 states. It invites no new user: only members of the bound team can be the provider.
