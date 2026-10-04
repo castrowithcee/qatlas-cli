@@ -19,11 +19,11 @@ and executions, including a bounded view of a failed execution's error, creates 
 activates and deactivates them, and retries and stops executions. It also lists, creates, renames, and
 deletes projects, see "Projects" below, lists, reads, creates, renames, and deletes data tables and manages their columns and rows, see
 "Data tables", "Data table columns", and "Data table rows" below, and lists, creates, updates, and deletes variables,
-see "Variables" below.
+see "Variables" below, and manages the instance-wide tags, see "Tags" below.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
-test-run action, and no credential, user, or tag management, and no way to clear all rows of a data table; those are
+test-run action, and no credential or user management, no tags on workflows, and no way to clear all rows of a data table; those are
 a later milestone.
 
 ## Configuration
@@ -141,6 +141,11 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.variables.create` | create | creates one project or global variable from key and value |
 | `n8n.variables.update` | update | replaces key and value of one variable, keeping its project or global status |
 | `n8n.variables.delete` | delete | deletes one variable; only offered by a tools list |
+| `n8n.tags.list` | read | lists tags, page by page |
+| `n8n.tags.get` | read | reads one tag by ID |
+| `n8n.tags.create` | create | creates one tag from a name |
+| `n8n.tags.update` | update | renames one tag |
+| `n8n.tags.delete` | delete | deletes one tag; only offered by a tools list |
 
 **There is no tool to start a workflow.** n8n's Public API documents no endpoint for it (`POST
 /workflows/{id}/activate` only flips the `active` flag; running a workflow on demand is an editor and
@@ -170,7 +175,7 @@ The member tools have their own profiles, in none of the others and recommended 
 | `members-read` | `n8n.projectmembers.list` |
 | `members-manage` | `n8n.projectmembers.list`, `n8n.projectmembers.add`, `n8n.projectmembers.setrole` |
 
-The data table, column, row, and variable tools have their own profiles, in none of the others:
+The data table, column, row, variable, and tag tools have their own profiles, in none of the others:
 
 | Profile | Tools |
 | --- | --- |
@@ -182,9 +187,11 @@ The data table, column, row, and variable tools have their own profiles, in none
 | `datarows-manage` | `n8n.datarows.list`, `n8n.datarows.insert` |
 | `variables-read` | `n8n.variables.list` |
 | `variables-manage` | `n8n.variables.list`, `n8n.variables.create`, `n8n.variables.update` |
+| `tags-read` | `n8n.tags.list`, `n8n.tags.get` |
+| `tags-manage` | `n8n.tags.list`, `n8n.tags.get`, `n8n.tags.create`, `n8n.tags.update` |
 
 `n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, `n8n.datacolumns.delete`, `n8n.datarows.update`, `n8n.datarows.upsert`,
-`n8n.datarows.delete`, and `n8n.variables.delete` are in no profile. Each
+`n8n.datarows.delete`, `n8n.variables.delete`, and `n8n.tags.delete` are in no profile. Each
 carries `requires_tool_allow_list`: a connection offers it only when its `tools` list names it explicitly,
 in addition to the `delete` permission and the per-call confirmation.
 
@@ -412,6 +419,21 @@ The variable tools call `GET /variables` (with n8n's `projectId` filter), `POST 
 - **Errors.** A 403 is reported as a license (`feat:variables`), scope, or role error, without telling which; a
   change whose outcome is unclear is reported as uncertain and never retried.
 
+## Tags
+
+The tag tools call `GET /tags` (paged by `limit` and `cursor`), `POST /tags`, `GET /tags/{id}`, and `PUT` and
+`DELETE /tags/{id}`. A tag is an instance-wide label with an `id`, a `name`, and creation and update times.
+
+- **Instance-wide gate.** Tags belong to the instance, not to a project or a workflow, so every tag tool is
+  refused locally on a connection with any `project/` or `workflow/` target, before a secret is read and
+  before any request; the refusal names no target. The gate is one reusable check, `requireInstanceScope`,
+  for any further instance-wide tool.
+- **Fields.** `name` is 1 to 24 characters without control characters; `tag_id` is validated as a single path
+  segment. Names are returned capped, as untrusted data. Tags on workflows are not managed here.
+- **Delete** cannot be undone, removes the tag from every workflow that carries it, and is in no profile.
+- **Errors.** A 403 is reported as an API key scope or role error, without telling which; a change whose
+  outcome is unclear is reported as uncertain and never retried.
+
 ## Version and plan boundaries
 
 `workflows.activate` and `workflows.deactivate` use n8n's own `POST /workflows/{id}/activate` and
@@ -494,9 +516,9 @@ interprets or executes any of it itself.
 This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
 and their executions, and lists, creates, renames, and deletes projects, and manages their members, and lists, reads, creates,
 renames, and deletes data tables and manages their columns and rows, and lists, creates, updates, and deletes
-variables. It does
+variables, and lists, reads, creates, renames, and deletes tags on connections without targets. It does
 not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
 execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move
 a project's content elsewhere before deleting it, create or invite users, or manage folders, credentials,
-users or tags, or clear all rows of a data table; those are deliberately out of
+users, or tags on workflows, or clear all rows of a data table; those are deliberately out of
 scope.

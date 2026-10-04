@@ -12,7 +12,7 @@
 // columns, renamed, and deleted (datatables.go); their columns are listed, added, renamed or moved, and
 // deleted (datacolumns.go); their rows are listed, inserted, updated, upserted, and deleted by a
 // structured filter, never cleared (datarows.go). Variables are listed, created, updated, and deleted, project-bound and global
-// ones kept apart (variables.go).
+// ones kept apart (variables.go). Tags are managed instance-wide (tags.go).
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -561,6 +561,18 @@ func Register(reg *capability.Registry) error {
 				"its own confirmation. Deleting a variable is never part of a profile: n8n.variables.delete is " +
 				"offered only by a connection whose tools list names it",
 			Tools: []string{variablesList.ID, variablesCreate.ID, variablesUpdate.ID},
+		}, {
+			ID: "tags-read", Title: "Read tags",
+			Description: "lists and reads the instance-wide tags; only on a connection without project and " +
+				"workflow targets; changes nothing",
+			Tools: []string{tagsList.ID, tagsGet.ID},
+		}, {
+			ID: "tags-manage", Title: "Manage tags",
+			Description: "lists, reads, creates, and renames the instance-wide tags; only on a connection " +
+				"without project and workflow targets; every change needs its own confirmation. Deleting a tag " +
+				"is never part of a profile: n8n.tags.delete is offered only by a connection whose tools list " +
+				"names it",
+			Tools: []string{tagsList.ID, tagsGet.ID, tagsCreate.ID, tagsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -602,6 +614,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: variablesCreate, Handler: capability.Handler(invokeVariablesCreate)},
 		capability.Operation{Descriptor: variablesUpdate, Handler: capability.Handler(invokeVariablesUpdate)},
 		capability.Operation{Descriptor: variablesDelete, Handler: capability.Handler(invokeVariablesDelete)},
+		capability.Operation{Descriptor: tagsList, Handler: capability.Handler(invokeTagsList)},
+		capability.Operation{Descriptor: tagsGet, Handler: capability.Handler(invokeTagsGet)},
+		capability.Operation{Descriptor: tagsCreate, Handler: capability.Handler(invokeTagsCreate)},
+		capability.Operation{Descriptor: tagsUpdate, Handler: capability.Handler(invokeTagsUpdate)},
+		capability.Operation{Descriptor: tagsDelete, Handler: capability.Handler(invokeTagsDelete)},
 	)
 }
 

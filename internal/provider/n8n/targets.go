@@ -200,3 +200,24 @@ func selectProjectFilter(resolved *config.Resolved, projectID string) error {
 	}
 	return nil
 }
+
+// instanceWide reports whether the connection carries neither a project nor a workflow target, which is
+// what an instance-wide tool requires: such a tool acts on objects no target can bound.
+func (s scope) instanceWide() bool {
+	return len(s.projects) == 0 && len(s.workflows) == 0
+}
+
+// requireInstanceScope is the local gate of every instance-wide tool. It admits only a connection without
+// project and workflow targets and refuses any other one, before a secret is resolved and before any
+// request is sent. what names the refused capability in the message, never a configured target.
+func requireInstanceScope(resolved *config.Resolved, what string) error {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return err
+	}
+	if !bound.instanceWide() {
+		return invalidRequest("this connection has project or workflow targets, so it cannot use " + what +
+			": it is instance-wide and only available on a connection without targets")
+	}
+	return nil
+}
