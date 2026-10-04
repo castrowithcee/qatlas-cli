@@ -19,13 +19,13 @@ and executions, including a bounded view of a failed execution's error, creates 
 activates and deactivates them, and retries and stops executions. It also lists, creates, renames, and
 deletes projects, see "Projects" below, lists, reads, creates, renames, and deletes data tables and manages their columns and rows, see
 "Data tables", "Data table columns", and "Data table rows" below, and lists, creates, updates, and deletes variables,
-see "Variables" below, manages the instance-wide tags, see "Tags" below, and lists, reads, and tests credentials
+see "Variables" below, manages the instance-wide tags, see "Tags" below, lists, reads, invites, re-roles, and deletes the instance's users, owner-only, see "Users" below, and lists, reads, and tests credentials
 as metadata only, reads credential type schemas, and creates, updates, moves, and deletes credentials, with
 secret values only by reference to a released forward credential, see "Credentials" below.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
-test-run action, no credential value as an argument, no user management, no tags on workflows, and no way to clear all rows of a data table; those are
+test-run action, no credential value as an argument, no users or roles beyond the "Users" tools, no tags on workflows, and no way to clear all rows of a data table; those are
 a later milestone.
 
 ## Configuration
@@ -148,6 +148,11 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.tags.create` | create | creates one tag from a name |
 | `n8n.tags.update` | update | renames one tag |
 | `n8n.tags.delete` | delete | deletes one tag; only offered by a tools list |
+| `n8n.users.list` | read | lists the instance's users, page by page |
+| `n8n.users.get` | read | reads one user by ID (not by email) |
+| `n8n.users.invite` | create | invites 1 to 10 users by email with one instance role |
+| `n8n.users.setrole` | update | sets one user's instance role |
+| `n8n.users.delete` | delete | deletes one user; only offered by a tools list |
 | `n8n.credentials.list` | read | lists credential metadata (id, name, type, times, never values), page by page |
 | `n8n.credentials.get` | read | reads one credential's metadata by ID |
 | `n8n.credentials.test` | execute | asks n8n to test one credential's connection; needs confirmation |
@@ -199,11 +204,13 @@ The data table, column, row, variable, and tag tools have their own profiles, in
 | `variables-manage` | `n8n.variables.list`, `n8n.variables.create`, `n8n.variables.update` |
 | `tags-read` | `n8n.tags.list`, `n8n.tags.get` |
 | `tags-manage` | `n8n.tags.list`, `n8n.tags.get`, `n8n.tags.create`, `n8n.tags.update` |
+| `users-read` | `n8n.users.list`, `n8n.users.get` |
+| `users-manage` | `n8n.users.list`, `n8n.users.get`, `n8n.users.invite`, `n8n.users.setrole` |
 | `credentials-read` | `n8n.credentials.list`, `n8n.credentials.get`, `n8n.credentials.schema` |
 | `credentials-test` | `n8n.credentials.test` |
 
 `n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, `n8n.datacolumns.delete`, `n8n.datarows.update`, `n8n.datarows.upsert`,
-`n8n.datarows.delete`, `n8n.variables.delete`, `n8n.tags.delete`, `n8n.credentials.create`,
+`n8n.datarows.delete`, `n8n.variables.delete`, `n8n.tags.delete`, `n8n.users.delete`, `n8n.credentials.create`,
 `n8n.credentials.update`, `n8n.credentials.transfer`, and `n8n.credentials.delete` are in no profile. Each
 carries `requires_tool_allow_list`: a connection offers it only when its `tools` list names it explicitly,
 in addition to the `delete` permission and the per-call confirmation.
@@ -447,6 +454,34 @@ The tag tools call `GET /tags` (paged by `limit` and `cursor`), `POST /tags`, `G
 - **Errors.** A 403 is reported as an API key scope or role error, without telling which; a change whose
   outcome is unclear is reported as uncertain and never retried.
 
+## Users
+
+The user tools call `GET /users` (paged by `limit` and `cursor`, with `includeRole=true`),
+`GET /users/{id}`, `POST /users`, `PATCH /users/{id}/role`, and `DELETE /users/{id}`. A user has an `id`, an
+`email`, a first and last name, an instance `role`, a pending status, and creation and update times; these are
+personal data (`data_sensitivity` `n8n-users-personal`) and returned capped, as untrusted data. MFA state is
+not returned.
+
+- **Owner-only and instance-wide.** n8n offers these endpoints to the instance owner only, so a 403 is
+  reported as an owner, license, or API key scope error, without telling which. Every user tool is refused
+  locally on a connection with any `project/` or `workflow/` target (`requireInstanceScope`), before a secret
+  is read and before any request.
+- **Read.** `n8n.users.get` takes the user ID only. n8n would also accept an email address there; Qatlas does
+  not. `n8n.users.list` does not forward n8n's `projectId` filter.
+- **Roles.** Only `global:admin`, `global:member`, and `global:chatUser` can be assigned, as `role` of
+  `n8n.users.setrole` (sent as `newRoleName`) and of `n8n.users.invite` (default `global:member`).
+  `global:owner` and free-form role names are never sent.
+- **Invite.** `emails` holds 1 to 10 distinct plain addresses (at most 254 characters, no display name) and
+  is sent as one `POST /users` array. n8n answers per address, so some may fail: each entry reports `ok`, and
+  the error text is not shown. An invite link that n8n returns when it sends no email is never output.
+- **Delete** cannot be undone and is in no profile. It needs exactly one choice for the user's workflows
+  and credentials: `transfer_project_id` moves them into that project (`DELETE /users/{id}?transferId=...`),
+  or `delete_owned_resources: true` deletes them permanently with the user (the request without
+  `transferId`). Neither, both, or `delete_owned_resources: false` without `transfer_project_id` is refused
+  locally, before a secret is read; there is no default. The result names the consequence (`transferred` or
+  `deleted_with_user`).
+- **Errors.** A change whose outcome is unclear is reported as uncertain and never retried.
+
 ## Credentials
 
 The credential tools call `GET /credentials`, `GET /credentials/{id}`, `POST /credentials/{id}/test`, and
@@ -581,10 +616,10 @@ interprets or executes any of it itself.
 This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
 and their executions, and lists, creates, renames, and deletes projects, and manages their members, and lists, reads, creates,
 renames, and deletes data tables and manages their columns and rows, and lists, creates, updates, and deletes
-variables, and lists, reads, creates, renames, and deletes tags on connections without targets, and lists, reads, and tests
+variables, and lists, reads, creates, renames, and deletes tags and lists, reads, invites, re-roles, and deletes users on connections without targets, and lists, reads, and tests
 credentials as metadata, reads credential type schemas, and creates, updates, moves between projects, and deletes credentials, secret values only by reference. It does
 not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
 execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move
-a project's content elsewhere before deleting it, create or invite users, or manage folders, accept any credential value as an argument, change a credential's type, update a credential's data in part (an update with data replaces all of it),
-move a credential to a project outside the allow-list, manage users, or manage tags on workflows, or clear all rows of a data table; those are deliberately out of
+a project's content elsewhere before deleting it, manage folders, manage roles or passwords, MFA, or single sign-on of users, accept any credential value as an argument, change a credential's type, update a credential's data in part (an update with data replaces all of it),
+move a credential to a project outside the allow-list, or manage tags on workflows, or clear all rows of a data table; those are deliberately out of
 scope.
