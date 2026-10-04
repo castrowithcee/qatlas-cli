@@ -20,11 +20,12 @@ activates and deactivates them, and retries and stops executions. It also lists,
 deletes projects, see "Projects" below, lists, reads, creates, renames, and deletes data tables and manages their columns and rows, see
 "Data tables", "Data table columns", and "Data table rows" below, and lists, creates, updates, and deletes variables,
 see "Variables" below, manages the instance-wide tags, see "Tags" below, and lists, reads, and tests credentials
-as metadata only and reads credential type schemas, see "Credentials" below.
+as metadata only, reads credential type schemas, and creates, updates, moves, and deletes credentials, with
+secret values only by reference to a released forward credential, see "Credentials" below.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
-test-run action, and no creation, change, move, or deletion of credentials, no user management, no tags on workflows, and no way to clear all rows of a data table; those are
+test-run action, no credential value as an argument, no user management, no tags on workflows, and no way to clear all rows of a data table; those are
 a later milestone.
 
 ## Configuration
@@ -151,6 +152,10 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.credentials.get` | read | reads one credential's metadata by ID |
 | `n8n.credentials.test` | execute | asks n8n to test one credential's connection; needs confirmation |
 | `n8n.credentials.schema` | read | reads the field schema of one credential type, in a bounded view |
+| `n8n.credentials.create` | create | creates one credential from plain fields and a `secret_ref`; only offered by a tools list |
+| `n8n.credentials.update` | update | renames a credential or replaces its whole data with plain fields and a `secret_ref`; only offered by a tools list |
+| `n8n.credentials.transfer` | update | moves a credential between projects of the allow-list; only offered by a tools list |
+| `n8n.credentials.delete` | delete | deletes one credential; workflows that use it fail afterwards; only offered by a tools list |
 
 **There is no tool to start a workflow.** n8n's Public API documents no endpoint for it (`POST
 /workflows/{id}/activate` only flips the `active` flag; running a workflow on demand is an editor and
@@ -198,7 +203,8 @@ The data table, column, row, variable, and tag tools have their own profiles, in
 | `credentials-test` | `n8n.credentials.test` |
 
 `n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, `n8n.datacolumns.delete`, `n8n.datarows.update`, `n8n.datarows.upsert`,
-`n8n.datarows.delete`, `n8n.variables.delete`, and `n8n.tags.delete` are in no profile. Each
+`n8n.datarows.delete`, `n8n.variables.delete`, `n8n.tags.delete`, `n8n.credentials.create`,
+`n8n.credentials.update`, `n8n.credentials.transfer`, and `n8n.credentials.delete` are in no profile. Each
 carries `requires_tool_allow_list`: a connection offers it only when its `tools` list names it explicitly,
 in addition to the `delete` permission and the per-call confirmation.
 
@@ -461,6 +467,36 @@ stored value never reaches a result or an error, whatever n8n sends.
 - **Schema.** `credential_type` is letters, digits, `.`, `-`, and `_` (at most 100 characters, starting with a
   letter or digit) and is sent as one escaped path segment. The result lists at most 200 fields (name, type,
   required), sorted; defaults and descriptions are not passed on.
+- **Create.** `credentials.create` calls `POST /credentials` with `name`, `type`, `data`, and, when given,
+  `projectId`. `data` is built from the plain `data` argument (an object of at most 50 fields; names of
+  letters, digits, `_`, `-`, `.`, starting with a letter; values strings of at most 1024 characters, numbers,
+  or booleans; never null, objects, or arrays) plus the fields of the `secret_ref`. At least one of them is
+  required. With a project allow-list `project_id` is required and must be one of its projects; without one it
+  is optional and n8n defaults to the API key owner's personal project. A repeated call creates another
+  credential.
+- **Update.** `credentials.update` calls `PATCH /credentials/{id}` with `name` and/or `data`. The type cannot be
+  changed. An update with `data` or `secret_ref` **replaces the whole stored data**: Qatlas sends the merged
+  `data` object without `isPartialData`, which n8n treats as false and replaces the entire data object. A field
+  that is in neither `data` nor the referenced forward credential, a stored secret included, is lost, so give
+  every plain field in `data` and every secret field through `secret_ref`. A rename (only `name`) sends no
+  `data` and leaves the stored data unchanged. At least one of `name`, `data`, `secret_ref` is required.
+- **Secret values.** A value is never an argument. `secret_ref` names a forward credential that the
+  connection releases in `forward_secrets`; the core checks it before the confirmation gate and refuses an
+  unreleased or unknown name (`secret-ref-not-allowed`). The values are read only after the confirmation, for
+  the one request, registered with the redactor, and set into `data` under the field names of the forward
+  credential. A plain `data` field with the same name as a secret field is refused, never overwritten.
+  Because of `secret_ref`, `create` and `update` need a tools list entry, the `create` or `update`
+  permission, and their own confirmation. The plain `data` argument is not redacted: put no secret into it.
+- **Transfer.** `credentials.transfer` calls `PUT /credentials/{id}/transfer` with `destinationProjectId`. It
+  needs a project allow-list, the credential must be found in one of its projects (the same bounded search as
+  `get`), and `destination_project_id` must be in the allow-list; otherwise it is refused, without a request
+  where that can be decided locally. Workflows in other projects may lose access to the moved credential.
+- **Delete.** `credentials.delete` calls `DELETE /credentials/{id}` after the same binding search. Workflows
+  that use the credential fail until another one is assigned, and the stored secret is lost.
+- **Changes.** Update, transfer, and delete find the credential through the binding search before the one
+  changing request; the search only reads. Every change needs its own confirmation, is sent once, and is never
+  retried; an unclear outcome is reported as uncertain. Results are the credential metadata, or `deleted` and
+  `transferred` flags; never a stored value.
 - **Errors.** A 403 is reported as a license, scope, or role error, without telling which.
 
 ## Version and plan boundaries
@@ -546,9 +582,9 @@ This provider reads, creates, and replaces workflows, and activates, deactivates
 and their executions, and lists, creates, renames, and deletes projects, and manages their members, and lists, reads, creates,
 renames, and deletes data tables and manages their columns and rows, and lists, creates, updates, and deletes
 variables, and lists, reads, creates, renames, and deletes tags on connections without targets, and lists, reads, and tests
-credentials as metadata and reads credential type schemas. It does
+credentials as metadata, reads credential type schemas, and creates, updates, moves between projects, and deletes credentials, secret values only by reference. It does
 not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
 execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move
-a project's content elsewhere before deleting it, create or invite users, or manage folders, create, change, move, or delete credentials,
-write any credential value, manage users, or manage tags on workflows, or clear all rows of a data table; those are deliberately out of
+a project's content elsewhere before deleting it, create or invite users, or manage folders, accept any credential value as an argument, change a credential's type, update a credential's data in part (an update with data replaces all of it),
+move a credential to a project outside the allow-list, manage users, or manage tags on workflows, or clear all rows of a data table; those are deliberately out of
 scope.

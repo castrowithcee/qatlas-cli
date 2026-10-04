@@ -13,8 +13,9 @@
 // deleted (datacolumns.go); their rows are listed, inserted, updated, upserted, and deleted by a
 // structured filter, never cleared (datarows.go). Variables are listed, created, updated, and deleted, project-bound and global
 // ones kept apart (variables.go). Tags are managed instance-wide (tags.go). Credentials are listed and read
-// as metadata only, never a stored value, tested, and their type schemas read (credentials.go); there is no
-// tool to create, change, move, or delete one.
+// as metadata only, never a stored value, tested, and their type schemas read (credentials.go); they are
+// created, updated, moved between projects, and deleted (credentialchanges.go), secret values only by a
+// reference to a released forward credential, never as an argument.
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -636,6 +637,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: credentialsGet, Handler: capability.Handler(invokeCredentialsGet)},
 		capability.Operation{Descriptor: credentialsTest, Handler: capability.Handler(invokeCredentialsTest)},
 		capability.Operation{Descriptor: credentialsSchema, Handler: capability.Handler(invokeCredentialsSchema)},
+		capability.Operation{Descriptor: credentialsCreate, Handler: capability.Handler(invokeCredentialsCreate)},
+		capability.Operation{Descriptor: credentialsUpdate, Handler: capability.Handler(invokeCredentialsUpdate)},
+		capability.Operation{Descriptor: credentialsTransfer, Handler: capability.Handler(invokeCredentialsTransfer)},
+		capability.Operation{Descriptor: credentialsDelete, Handler: capability.Handler(invokeCredentialsDelete)},
 	)
 }
 

@@ -1,9 +1,11 @@
 package n8n
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -43,6 +45,7 @@ func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) 
 type call struct {
 	method, host, path, apiKey string
 	query                      url.Values
+	body                       string
 }
 
 // serve replaces the package transport for one test and records every request. Every request must reach
@@ -51,9 +54,14 @@ func serve(t *testing.T, calls *[]call, handler func(*http.Request) (*http.Respo
 	t.Helper()
 	previous := transport
 	transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		var body []byte
+		if request.Body != nil {
+			body, _ = io.ReadAll(request.Body)
+			request.Body = io.NopCloser(bytes.NewReader(body))
+		}
 		*calls = append(*calls, call{
 			method: request.Method, host: request.URL.Host, path: request.URL.Path,
-			apiKey: request.Header.Get("X-N8N-API-KEY"), query: request.URL.Query(),
+			apiKey: request.Header.Get("X-N8N-API-KEY"), query: request.URL.Query(), body: string(body),
 		})
 		if request.URL.Host != apiHost {
 			return nil, errors.New("unexpected host " + request.URL.Host)
@@ -198,8 +206,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 45 {
-		t.Fatalf("tools = %+v, want 45", metadata.Tools)
+	if len(metadata.Tools) != 49 {
+		t.Fatalf("tools = %+v, want 49", metadata.Tools)
 	}
 }
 
