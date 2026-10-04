@@ -9,7 +9,8 @@
 // without a rewrite. Projects themselves are listed, created, renamed, and deleted (projects.go); see there
 // for the allow-list rules and for what deleting a project does. The members of a project are listed, added,
 // re-roled, and removed (members.go). Data tables are listed, read (columns, never rows), created without
-// columns, renamed, and deleted (datatables.go); their rows and columns are not managed.
+// columns, renamed, and deleted (datatables.go); their columns are listed, added, renamed or moved, and
+// deleted (datacolumns.go); their rows are not managed.
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -521,6 +522,18 @@ func Register(reg *capability.Registry) error {
 				"deletes all rows, so n8n.datatables.delete is offered only by a connection whose tools list " +
 				"names it",
 			Tools: []string{dataTablesList.ID, dataTablesGet.ID, dataTablesCreate.ID, dataTablesRename.ID},
+		}, {
+			ID: "datacolumns-read", Title: "Read data table columns",
+			Description: "lists the columns (id, name, type, position, never rows) of data tables of this " +
+				"connection's project allow-list; changes nothing",
+			Tools: []string{dataColumnsList.ID},
+		}, {
+			ID: "datacolumns-manage", Title: "Manage data table columns",
+			Description: "lists, adds, renames, and moves columns of data tables within this connection's " +
+				"project allow-list; every change needs its own confirmation. Deleting a column is never part " +
+				"of a profile: it deletes the column's data in every row, so n8n.datacolumns.delete is offered " +
+				"only by a connection whose tools list names it",
+			Tools: []string{dataColumnsList.ID, dataColumnsAdd.ID, dataColumnsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -549,6 +562,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataTablesCreate, Handler: capability.Handler(invokeDataTablesCreate)},
 		capability.Operation{Descriptor: dataTablesRename, Handler: capability.Handler(invokeDataTablesRename)},
 		capability.Operation{Descriptor: dataTablesDelete, Handler: capability.Handler(invokeDataTablesDelete)},
+		capability.Operation{Descriptor: dataColumnsList, Handler: capability.Handler(invokeDataColumnsList)},
+		capability.Operation{Descriptor: dataColumnsAdd, Handler: capability.Handler(invokeDataColumnsAdd)},
+		capability.Operation{Descriptor: dataColumnsUpdate, Handler: capability.Handler(invokeDataColumnsUpdate)},
+		capability.Operation{Descriptor: dataColumnsDelete, Handler: capability.Handler(invokeDataColumnsDelete)},
 	)
 }
 
