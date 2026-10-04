@@ -4,14 +4,15 @@
 // and replaces workflows, activates and deactivates them, and retries and stops executions. There is no tool
 // to start a workflow: the Public API documents no endpoint for it. There is also no tool to delete a
 // workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or test-run action, and
-// no credential, user, tag, or variable management; those are deliberately left
+// no credential, user, or tag management; those are deliberately left
 // to a later milestone, which this package's Client, error classes, and target model are built to extend
 // without a rewrite. Projects themselves are listed, created, renamed, and deleted (projects.go); see there
 // for the allow-list rules and for what deleting a project does. The members of a project are listed, added,
 // re-roled, and removed (members.go). Data tables are listed, read (columns, never rows), created without
 // columns, renamed, and deleted (datatables.go); their columns are listed, added, renamed or moved, and
 // deleted (datacolumns.go); their rows are listed, inserted, updated, upserted, and deleted by a
-// structured filter, never cleared (datarows.go).
+// structured filter, never cleared (datarows.go). Variables are listed, created, updated, and deleted, project-bound and global
+// ones kept apart (variables.go).
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -548,6 +549,18 @@ func Register(reg *capability.Registry) error {
 				"n8n.datarows.upsert, and n8n.datarows.delete are offered only by a connection whose tools " +
 				"list names them",
 			Tools: []string{dataRowsList.ID, dataRowsInsert.ID},
+		}, {
+			ID: "variables-read", Title: "Read variables",
+			Description: "lists the variables (key and plain-text value) of this connection's project " +
+				"allow-list, or all of them without one; needs the instance's feat:variables license; changes nothing",
+			Tools: []string{variablesList.ID},
+		}, {
+			ID: "variables-manage", Title: "Manage variables",
+			Description: "lists, creates, and updates variables within this connection's project allow-list; a " +
+				"global variable only on a connection without project and workflow targets; every change needs " +
+				"its own confirmation. Deleting a variable is never part of a profile: n8n.variables.delete is " +
+				"offered only by a connection whose tools list names it",
+			Tools: []string{variablesList.ID, variablesCreate.ID, variablesUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -585,6 +598,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataRowsUpdate, Handler: capability.Handler(invokeDataRowsUpdate)},
 		capability.Operation{Descriptor: dataRowsUpsert, Handler: capability.Handler(invokeDataRowsUpsert)},
 		capability.Operation{Descriptor: dataRowsDelete, Handler: capability.Handler(invokeDataRowsDelete)},
+		capability.Operation{Descriptor: variablesList, Handler: capability.Handler(invokeVariablesList)},
+		capability.Operation{Descriptor: variablesCreate, Handler: capability.Handler(invokeVariablesCreate)},
+		capability.Operation{Descriptor: variablesUpdate, Handler: capability.Handler(invokeVariablesUpdate)},
+		capability.Operation{Descriptor: variablesDelete, Handler: capability.Handler(invokeVariablesDelete)},
 	)
 }
 

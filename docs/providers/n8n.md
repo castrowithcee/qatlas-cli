@@ -18,11 +18,12 @@ n8n is a provider for the n8n Public API (n8n Cloud or self-hosted, `/api/v1`). 
 and executions, including a bounded view of a failed execution's error, creates and replaces workflows,
 activates and deactivates them, and retries and stops executions. It also lists, creates, renames, and
 deletes projects, see "Projects" below, lists, reads, creates, renames, and deletes data tables and manages their columns and rows, see
-"Data tables", "Data table columns", and "Data table rows" below.
+"Data tables", "Data table columns", and "Data table rows" below, and lists, creates, updates, and deletes variables,
+see "Variables" below.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
-test-run action, and no credential, user, tag, or variable management, and no way to clear all rows of a data table; those are
+test-run action, and no credential, user, or tag management, and no way to clear all rows of a data table; those are
 a later milestone.
 
 ## Configuration
@@ -136,6 +137,10 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.datarows.update` | update | sets column values on all rows matching a filter; only offered by a tools list |
 | `n8n.datarows.upsert` | update | updates the rows matching a filter or inserts one; only offered by a tools list |
 | `n8n.datarows.delete` | delete | deletes all rows matching a filter; only offered by a tools list |
+| `n8n.variables.list` | read | lists variables (key, plain-text value), project-bound ones apart from global ones, page by page |
+| `n8n.variables.create` | create | creates one project or global variable from key and value |
+| `n8n.variables.update` | update | replaces key and value of one variable, keeping its project or global status |
+| `n8n.variables.delete` | delete | deletes one variable; only offered by a tools list |
 
 **There is no tool to start a workflow.** n8n's Public API documents no endpoint for it (`POST
 /workflows/{id}/activate` only flips the `active` flag; running a workflow on demand is an editor and
@@ -165,7 +170,7 @@ The member tools have their own profiles, in none of the others and recommended 
 | `members-read` | `n8n.projectmembers.list` |
 | `members-manage` | `n8n.projectmembers.list`, `n8n.projectmembers.add`, `n8n.projectmembers.setrole` |
 
-The data table, column, and row tools have their own profiles, in none of the others:
+The data table, column, row, and variable tools have their own profiles, in none of the others:
 
 | Profile | Tools |
 | --- | --- |
@@ -175,9 +180,11 @@ The data table, column, and row tools have their own profiles, in none of the ot
 | `datacolumns-manage` | `n8n.datacolumns.list`, `n8n.datacolumns.add`, `n8n.datacolumns.update` |
 | `datarows-read` | `n8n.datarows.list` |
 | `datarows-manage` | `n8n.datarows.list`, `n8n.datarows.insert` |
+| `variables-read` | `n8n.variables.list` |
+| `variables-manage` | `n8n.variables.list`, `n8n.variables.create`, `n8n.variables.update` |
 
-`n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, `n8n.datacolumns.delete`, `n8n.datarows.update`, `n8n.datarows.upsert`, and
-`n8n.datarows.delete` are in no profile. Each
+`n8n.projectmembers.remove`, `n8n.projects.delete`, `n8n.datatables.delete`, `n8n.datacolumns.delete`, `n8n.datarows.update`, `n8n.datarows.upsert`,
+`n8n.datarows.delete`, and `n8n.variables.delete` are in no profile. Each
 carries `requires_tool_allow_list`: a connection offers it only when its `tools` list names it explicitly,
 in addition to the `delete` permission and the per-call confirmation.
 
@@ -378,6 +385,33 @@ The row tools are `n8n.datarows.list`, `insert`, `update`, `upsert`, and `delete
 - **Errors.** A 403 is reported as a license, scope, or role error; a change whose outcome is unclear is
   reported as uncertain and never retried. `insert` is not idempotent: a repeated call inserts the rows again.
 
+## Variables
+
+The variable tools call `GET /variables` (with n8n's `projectId` filter), `POST /variables`, and `PUT` and
+`DELETE /variables/{id}`. A variable is a key with a plain-text value, either bound to a project or global
+(`project` is null).
+
+- **Separation.** Output marks each variable `scope: project` (with `project_id`) or `scope: global`. With a
+  project allow-list, `list` returns only variables of those projects and never a global one; a `project_id`
+  argument must be on it. `create` then requires a `project_id` from the allow-list. A global variable can
+  only be created, read, changed, or deleted on a connection without project and workflow targets; both are
+  checked locally before a secret is read where possible.
+- **Update and delete** find the variable first by paging `GET /variables` (the Public API has no
+  `GET /variables/{id}`; at most 20 pages of 250) and refuse one that is global or of a foreign project on a
+  bound connection, or that is not found, before any change request; the refusal names neither the variable
+  nor its project. `update` sends `key`, `value`, and the variable's own `projectId` (null for a global one):
+  a variable is never moved between projects.
+- **Workflow allow-list.** A connection with a `workflow/` target refuses every variable tool locally (narrower
+  reading, as for data tables).
+- **Fields.** `key` is 1 to 50 characters of letters, digits, and `_`; a new key does not start with a digit.
+  `value` is a string of at most 1000 characters without control characters other than newline, carriage
+  return, and tab. Values are returned in clear (each capped), as untrusted data.
+- **Create** answers with the key and scope only: n8n reports no ID; `list` finds it. A repeated call may be
+  refused as a key conflict.
+- **Delete** cannot be undone and is in no profile.
+- **Errors.** A 403 is reported as a license (`feat:variables`), scope, or role error, without telling which; a
+  change whose outcome is unclear is reported as uncertain and never retried.
+
 ## Version and plan boundaries
 
 `workflows.activate` and `workflows.deactivate` use n8n's own `POST /workflows/{id}/activate` and
@@ -459,9 +493,10 @@ interprets or executes any of it itself.
 
 This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
 and their executions, and lists, creates, renames, and deletes projects, and manages their members, and lists, reads, creates,
-renames, and deletes data tables and manages their columns and rows. It does
+renames, and deletes data tables and manages their columns and rows, and lists, creates, updates, and deletes
+variables. It does
 not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
 execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move
 a project's content elsewhere before deleting it, create or invite users, or manage folders, credentials,
-users, tags, or variables, or clear all rows of a data table; those are deliberately out of
+users or tags, or clear all rows of a data table; those are deliberately out of
 scope.
