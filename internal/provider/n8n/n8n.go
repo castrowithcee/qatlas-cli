@@ -4,10 +4,11 @@
 // and replaces workflows, activates and deactivates them, and retries and stops executions. There is no tool
 // to start a workflow: the Public API documents no endpoint for it. There is also no tool to delete a
 // workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or test-run action, and
-// no credential, user, tag, variable, project member, or data table management; those are deliberately left
+// no credential, user, tag, variable, or data table management; those are deliberately left
 // to a later milestone, which this package's Client, error classes, and target model are built to extend
 // without a rewrite. Projects themselves are listed, created, renamed, and deleted (projects.go); see there
-// for the allow-list rules and for what deleting a project does.
+// for the allow-list rules and for what deleting a project does. The members of a project are listed, added,
+// re-roled, and removed (members.go).
 //
 // A connection binds one n8n instance, through its configured base URL, and one Public API key
 // (X-N8N-API-KEY header, see docs/connect/n8n-api/authentication.md), plus, optionally, an allow-list of
@@ -495,6 +496,18 @@ func Register(reg *capability.Registry) error {
 				"and data table the project owns, so n8n.projects.delete is offered only by a connection " +
 				"whose tools list names it",
 			Tools: []string{projectsList.ID, projectsCreate.ID, projectsUpdate.ID},
+		}, {
+			ID: "members-read", Title: "Read project members",
+			Description: "lists the members (id, email, name, role) of a project inside this connection's " +
+				"project allow-list; needs a project target and the Enterprise Projects feature; changes nothing",
+			Tools: []string{membersList.ID},
+		}, {
+			ID: "members-manage", Title: "Manage project members",
+			Description: "lists members, adds existing users to a project, and changes their role, within this " +
+				"connection's project allow-list; every change needs its own confirmation. Removing a member is " +
+				"never part of a profile: n8n.projectmembers.remove is offered only by a connection whose " +
+				"tools list names it",
+			Tools: []string{membersList.ID, membersAdd.ID, membersSetRole.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -514,6 +527,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: projectsCreate, Handler: capability.Handler(invokeProjectsCreate)},
 		capability.Operation{Descriptor: projectsUpdate, Handler: capability.Handler(invokeProjectsUpdate)},
 		capability.Operation{Descriptor: projectsDelete, Handler: capability.Handler(invokeProjectsDelete)},
+		capability.Operation{Descriptor: membersList, Handler: capability.Handler(invokeMembersList)},
+		capability.Operation{Descriptor: membersAdd, Handler: capability.Handler(invokeMembersAdd)},
+		capability.Operation{Descriptor: membersSetRole, Handler: capability.Handler(invokeMembersSetRole)},
+		capability.Operation{Descriptor: membersRemove, Handler: capability.Handler(invokeMembersRemove)},
 	)
 }
 

@@ -20,7 +20,7 @@ deletes projects, see "Projects" below.
 
 **There is no tool to start a workflow**: the Public API documents no endpoint for it. There is also no
 tool to delete a workflow or an execution, and no archive, unarchive, publish, unpublish, transfer, or
-test-run action, and no credential, user, tag, variable, project member, or data table management; those are
+test-run action, and no credential, user, tag, variable, or data table management; those are
 a later milestone.
 
 ## Configuration
@@ -116,6 +116,10 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.projects.create` | create | creates one team project from its name |
 | `n8n.projects.update` | update | renames one project |
 | `n8n.projects.delete` | delete | deletes one team project and everything it owns; only offered by a tools list |
+| `n8n.projectmembers.list` | read | lists the members (id, email, name, role) of one allow-listed project |
+| `n8n.projectmembers.add` | update | gives one existing user a role in one allow-listed project |
+| `n8n.projectmembers.setrole` | update | changes one member's role in one allow-listed project |
+| `n8n.projectmembers.remove` | delete | removes one member from one allow-listed project; only offered by a tools list |
 
 **There is no tool to start a workflow.** n8n's Public API documents no endpoint for it (`POST
 /workflows/{id}/activate` only flips the `active` flag; running a workflow on demand is an editor and
@@ -138,9 +142,16 @@ are in neither `read` nor `manage`:
 | `projects-read` | `n8n.projects.list` |
 | `projects-manage` | `n8n.projects.list`, `n8n.projects.create`, `n8n.projects.update` |
 
-`n8n.projects.delete` is in no profile. It carries `requires_tool_allow_list`: a connection offers it only
-when its `tools` list names it explicitly, in addition to the `delete` permission and the per-call
-confirmation.
+The member tools have their own profiles, in none of the others and recommended in none:
+
+| Profile | Tools |
+| --- | --- |
+| `members-read` | `n8n.projectmembers.list` |
+| `members-manage` | `n8n.projectmembers.list`, `n8n.projectmembers.add`, `n8n.projectmembers.setrole` |
+
+`n8n.projectmembers.remove` and `n8n.projects.delete` are in no profile. Both carry
+`requires_tool_allow_list`: a connection offers either only when its `tools` list names it explicitly, in
+addition to the `delete` permission and the per-call confirmation.
 
 ## Changes and their retry contract
 
@@ -191,7 +202,7 @@ there; the same re-check still runs defensively after its one `PUT`.
 ## Projects
 
 The four tools call `GET /projects`, `POST /projects`, `PUT /projects/{id}`, and `DELETE /projects/{id}`, and
-nothing else; project members and roles (`/projects/{id}/users`) and folders are not offered. The routes and
+nothing else; folders are not offered. Members are covered under "Project members" below. The routes and
 their scopes (`project:list`, `project:create`, `project:update`, `project:delete`) are those of
 `packages/cli/src/public-api/v1/openapi.decorator-routes.generated.yml` and
 `packages/cli/src/public-api/v1/controllers/projects.public.controller.ts` in n8n-io/n8n at commit
@@ -242,6 +253,29 @@ global `project:create` scope. n8n answers 403 for a missing license (the licens
 key scope, and a role that may not manage projects, and this provider does not read the response body, so
 every 403 of a project tool is reported as class `permission` with a message that names all three possible
 causes (license, API key scope, role).
+
+## Project members
+
+The four member tools call `GET /projects/{id}/users`, `POST /projects/{id}/users`,
+`PATCH /projects/{id}/users/{userId}`, and `DELETE /projects/{id}/users/{userId}`, and nothing else; the
+routes are those of n8n-io/n8n at commit `191a22e` (scopes `user:list` and `project:manageMembers`).
+
+- **Binding.** Like `projects.update`, every member tool, `list` included, accepts only a `project_id` of the
+  project allow-list. Without a `project/PROJECT_ID` target, with a project outside it, with a workflow
+  allow-list, or with a malformed `project_id` or `user_id`, the connection refuses locally, before a secret
+  is read and before any request is sent, without naming the project.
+- **Add.** `add` sends one `POST` with a single relation `{"relations":[{"userId","role"}]}` for an existing
+  user: nobody is created or invited, and there is no email argument. It is not idempotent.
+- **Roles.** `role` is one of `project:admin`, `project:editor`, `project:viewer`. `project:personalOwner`
+  and instance roles are refused locally. `setrole` sends `PATCH` with `{"role"}`.
+- **Output.** `list` returns only `id`, `email`, `name` (first and last name), and `role`, each at most 256
+  characters, with the data sensitivity `n8n-project-members` (personal data). It pages with `cursor` and
+  `limit` (default 100); more entries than `limit` are cut and flagged `truncated`.
+- **403.** n8n answers 403 for a missing Projects license, a missing API key scope, and a role that may not
+  manage members, and the body is not read, so every 403 is the neutral message "license or role missing",
+  class `permission`.
+- **Changes.** Each change needs `confirm`, sends exactly one request, and reports an unclear outcome
+  (5xx, timeout, reset, unreadable answer) as "may have taken effect" without retrying.
 
 ## Version and plan boundaries
 
@@ -323,8 +357,8 @@ interprets or executes any of it itself.
 ## Boundary
 
 This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
-and their executions, and lists, creates, renames, and deletes projects. It does not, and has no tool to,
-start a workflow (no Public API endpoint exists for that), delete a workflow or an execution, stop many
-executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move a project's content
-elsewhere before deleting it, manage project members or roles, folders, credentials, users, tags, variables,
-or data tables; those are deliberately out of scope.
+and their executions, and lists, creates, renames, and deletes projects, and manages their members. It does
+not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
+execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move
+a project's content elsewhere before deleting it, create or invite users, or manage folders, credentials,
+users, tags, variables, or data tables; those are deliberately out of scope.
