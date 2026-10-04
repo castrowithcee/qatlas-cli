@@ -165,6 +165,9 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.datastores.create` | create | required | creates one data store in the bound team (`POST /data-stores`) after reading that its data structure belongs to the team |
 | `make.datastores.update` | update | required | changes a data store's name, data structure, or maximum size (`PATCH /data-stores/{id}`), after reading the store and any named structure |
 | `make.datastores.delete` | delete | required | deletes one data store with its records (`DELETE /data-stores`, body `ids` with exactly one id); without `confirm_scenarios_affected` it sends no `confirmed`; offered only through a tools list |
+| `make.datastorerecords.list` | read | none | lists records (key and capped data) of one data store of the bound team after binding the store; at most 50 per page, each record capped; untrusted personal data |
+| `make.datastorerecords.create` | create | required | creates one record (`POST /data-stores/{id}/data`, optional `key` and a bounded `data` object) after binding the store |
+| `make.datastorerecords.delete` | delete | required | deletes explicitly named records (`DELETE /data-stores/{id}/data`, body `keys`, 1 to 50 distinct); never `all`, `exceptKeys`, or `confirmed`; offered only through a tools list |
 | `make.datastructures.list` | read | none | lists the bound team's data structures (id, name, strict), sorted by name, page by page |
 | `make.datastructures.get` | read | none | reads one data structure with its bounded field specification, with its team confirmed live |
 | `make.credentialrequests.list` | read | none | lists the bound team's credential requests by allow-listed metadata, at most 200; never a link or email |
@@ -291,7 +294,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store tools (the single-store read also names `organizations:read`, see "Data stores and data structures") and `udts:read` for the data structure tools and the structure check of a store create or update; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see "Data stores and data structures") and `udts:read` for the data structure tools and the structure check of a store create or update; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -507,6 +510,37 @@ names it. The profiles are `datastores-read`, `datastores-manage` (reads plus cr
 request after the reads, and are never retried; a timeout, a connection reset, a 5xx, or an unreadable answer is
 reported as uncertain, and a result outside the bound team after the change as a `provider-error`.
 
+## Data store records
+
+`make.datastorerecords.list`, `.create`, and `.delete` work on the records of one data store of the bound team.
+Tool ids have three segments, so the object is named `datastorerecords`. Every `datastore_id` is read and bound
+to the bound team first (see above), before the list or the one changing request; a store of another team is
+refused without naming it. A connection with a scenario allow-list reaches none of them.
+
+| Tool | Request | Make scope |
+| --- | --- | --- |
+| `make.datastorerecords.list` | `GET /data-stores/{id}/data` (`pg[offset]`, `pg[limit]`) | `datastores:read` |
+| `make.datastorerecords.create` | `POST /data-stores/{id}/data` with `data` and optional `key` | `datastores:write`, `datastores:read` |
+| `make.datastorerecords.delete` | `DELETE /data-stores/{id}/data` with body `{"keys":[...]}` | `datastores:write`, `datastores:read` |
+
+Source: developers.make.com API reference, Data stores, Data (checked against the published reference, not a
+live account). Record contents are untrusted user data and likely personal data (sensitivity
+`make-data-store-records-personal-data`). A page holds at most 50 records (20 by default); each record's data is
+capped to 8 KiB, 6 levels, 200 nodes, and 256 characters per string, with `truncated` set when anything was cut.
+`create` takes `data` as a JSON object of at most 64 KiB and 16 levels (a local ceiling; Make validates it
+against the store's data structure) and an optional `key` of 1 to 128 characters (letters, digits, `_`, `.`,
+`:`, `-`, not starting with a dot or hyphen; Make documents no key format, so this is the narrower local form);
+without a key Make generates one. `delete` takes 1 to 50 distinct keys of the same form and sends only the
+`keys` form: Make's `all`, `exceptKeys`, and `confirmed` are never sent. It reports the requested keys Make
+names as deleted. It is in no profile and is offered only when a connection's `tools` list names it. The profiles
+are `datastorerecords-read` and `datastorerecords-manage` (list and create). Changes need their own confirmation,
+send exactly one changing request, and are never retried; a timeout, a connection reset, a 5xx, or an unreadable
+answer is reported as uncertain.
+
+Replacing (`PUT /data-stores/{id}/data/{key}`) and updating (`PATCH`) a single record are not offered: the
+reference documents their body only as having "no predefined body properties" and publishes no request example,
+so whether the body is the record data itself or a `{"data":...}` wrapper is undocumented.
+
 ## Credential requests
 
 A credential request asks a person to enter the secret of a connection or key themselves, through a link Make
@@ -550,7 +584,7 @@ never renders it, follows a link inside it, or executes anything derived from it
 This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
-call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, data store records, keys, teams, or organizations (it only reads the bound team
+call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, replace or update a single data store record, delete all records of a store, manage keys, teams, or organizations (it only reads the bound team
 and its organization), or read team or organization variables; those are out of scope. For connections it
 lists and reads allow-listed metadata, lists editable parameter names, tests, renames, and (through a tools
 list) creates, sets the data of, and deletes a connection of the bound team, taking secrets only from a
@@ -559,4 +593,4 @@ an OAuth connection, create a locked connection, accept a secret as an argument,
 members, or lock or unlock a connection. For
 credential requests it creates, lists, reads, and (through a tools list) deletes them; it does not decline,
 reauthorize, or reset a request's credentials, list app modules, or read request details with their credential
-states. It invites no new user: only members of the bound team can be the provider. For data stores it lists, reads, creates, updates, and (through a tools list) deletes a store of the bound team and lists and reads data structures; it never reads or writes a store's records, never deletes several stores at once, and never creates, changes, or deletes a data structure.
+states. It invites no new user: only members of the bound team can be the provider. For data stores it lists, reads, creates, updates, and (through a tools list) deletes a store of the bound team and lists and reads data structures; it lists, creates, and (through a tools list) deletes explicitly named records of a store, never deletes several stores at once, and never creates, changes, or deletes a data structure.
