@@ -17,8 +17,8 @@
 #   QATLAS_INSTALL_PREFIX                installation prefix (default %LOCALAPPDATA%\Programs\qatlas)
 #   QATLAS_INSTALL_ALLOWED_SIGNERS_FILE  TEST ONLY: allowed-signers file used instead of the embedded key.
 #                                        It replaces only the key; the signature is still required.
-#   QATLAS_INSTALL_USER_PATH_FILE        TEST ONLY: file that stands in for the user PATH of the registry, so
-#                                        tests never change the real one.
+#   QATLAS_INSTALL_USER_PATH_FILE        TEST ONLY: file holding the raw (unexpanded) user PATH instead of the
+#                                        registry value HKCU\Environment\Path, so tests never change the real one.
 
 function Install-Qatlas {
     $ErrorActionPreference = 'Stop'
@@ -155,19 +155,21 @@ function Install-Qatlas {
             throw "could not install $exe"
         }
 
-        # User PATH: add <prefix>\bin only if missing; the session gets it too.
+        # User PATH: add <prefix>\bin only if missing. The raw (unexpanded) value is read and written back as
+        # REG_EXPAND_SZ, so existing %VAR% entries survive; the session gets the directory too.
         $pathChanged = $false
         $pathFile = $env:QATLAS_INSTALL_USER_PATH_FILE
         if ($pathFile) {
             $userPath = ''
             if (Test-Path -LiteralPath $pathFile) { $userPath = [IO.File]::ReadAllText($pathFile).Trim() }
         } else {
-            $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+            $userPath = [string](Get-Item -LiteralPath 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
         }
         $hasDir = {
             param([string]$list, [string]$dir)
             foreach ($entry in ([string]$list -split ';')) {
-                if ($entry.Trim().TrimEnd('\') -ieq $dir.TrimEnd('\')) { return $true }
+                $expanded = [Environment]::ExpandEnvironmentVariables($entry.Trim())
+                if ($expanded.TrimEnd('\') -ieq $dir.TrimEnd('\')) { return $true }
             }
             return $false
         }
@@ -176,7 +178,18 @@ function Install-Qatlas {
             if ($pathFile) {
                 [IO.File]::WriteAllText($pathFile, $newPath, (New-Object Text.UTF8Encoding($false)))
             } else {
-                [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+                [void](New-ItemProperty -LiteralPath 'HKCU:\Environment' -Name 'Path' -Value $newPath -PropertyType ExpandString -Force)
+                # Tell running programs (Explorer) about the change without rewriting PATH through
+                # SetEnvironmentVariable, which would store REG_SZ. A failure here is not fatal.
+                try {
+                    if (-not ('QatlasInstall.NativeMethods' -as [type])) {
+                        Add-Type -Namespace QatlasInstall -Name NativeMethods -MemberDefinition '[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out UIntPtr lpdwResult);'
+                    }
+                    $result = [UIntPtr]::Zero
+                    [void][QatlasInstall.NativeMethods]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$result)
+                } catch {
+                    Write-Warning 'qatlas-install: could not notify running programs about the PATH change; open a new terminal or sign in again'
+                }
             }
             $pathChanged = $true
         }

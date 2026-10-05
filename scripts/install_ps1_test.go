@@ -304,6 +304,34 @@ func TestInstallPS1PathHandling(t *testing.T) {
 	})
 }
 
+func TestInstallPS1KeepsUnexpandedPathEntries(t *testing.T) {
+	forEachShell(t, func(t *testing.T, e *psEnv) {
+		binDir := filepath.Join(e.prefix, "bin")
+		raw := `%USERPROFILE%\tools;C:\Tools`
+		if err := os.WriteFile(e.pathFile, []byte(raw), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		e.publish("v1.0.0", "program", releaseOptions{})
+		e.mustRun()
+		want := raw + ";" + binDir
+		if got := readFile(t, e.pathFile); got != want {
+			t.Errorf("user PATH = %q, want %q", got, want)
+		}
+		e.mustRun()
+		if got := readFile(t, e.pathFile); got != want {
+			t.Errorf("user PATH after second run = %q, want %q", got, want)
+		}
+		// An entry that only expands to the directory counts as present.
+		if err := os.WriteFile(e.pathFile, []byte(`%QATLAS_TEST_BIN%\`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		out := e.mustRun("QATLAS_TEST_BIN=" + binDir)
+		if got := readFile(t, e.pathFile); got != `%QATLAS_TEST_BIN%\` || strings.Contains(out, "new terminal") {
+			t.Errorf("user PATH = %q, output:\n%s", got, out)
+		}
+	})
+}
+
 func TestInstallPS1LeavesQatlasConfigUntouched(t *testing.T) {
 	forEachShell(t, func(t *testing.T, e *psEnv) {
 		cli := filepath.Join(e.home, ".qatlas", "cli")
@@ -384,8 +412,16 @@ func TestInstallPS1FailureOnFreshPrefixCreatesNothing(t *testing.T) {
 				t.Errorf("%s exists: %v", path, err)
 			}
 		}
-		if entries, _ := os.ReadDir(e.home); len(entries) != 0 {
-			t.Errorf("home changed: %v", entries)
+		// install.ps1 never touches USERPROFILE. PowerShell itself creates AppData below it (module analysis
+		// cache, Microsoft\Windows\PowerShell), so only that folder is tolerated there.
+		entries, _ := os.ReadDir(e.home)
+		for _, entry := range entries {
+			if !strings.EqualFold(entry.Name(), "AppData") {
+				t.Errorf("home changed: %v", entry.Name())
+			}
+		}
+		if _, err := os.Stat(filepath.Dir(e.prefix)); !os.IsNotExist(err) {
+			t.Errorf("parent of the prefix exists: %v", err)
 		}
 	})
 }
