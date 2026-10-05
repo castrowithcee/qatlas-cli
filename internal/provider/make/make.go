@@ -626,7 +626,9 @@ func Register(reg *capability.Registry) error {
 				"connections:write for the separately offered connection create and set-data tools, plus datastores:read " +
 				"for the datastores-read profile, datastores:write and udts:read for the datastores-manage profile " +
 				"and datastores:write for the separately offered data store delete tool, plus udts:read for the " +
-				"datastructures-read profile. A token belongs to one " +
+				"datastructures-read profile, plus datastores:read for the datastorerecords-read profile and " +
+				"datastores:read with datastores:write for the datastorerecords-manage profile and the " +
+				"separately offered record delete tool. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -765,6 +767,19 @@ func Register(reg *capability.Registry) error {
 				"udts:read scopes. Deleting a data store is in no profile",
 			Tools: []string{dataStoresList.ID, dataStoresGet.ID, dataStoresCreate.ID, dataStoresUpdate.ID},
 		}, {
+			ID: "datastorerecords-read", Title: "Read the records of the bound team's data stores",
+			Description: "lists the records of a data store of the bound team, capped in number and size; " +
+				"record contents are untrusted user data and likely personal data; changes nothing and needs " +
+				"the datastores:read scope (Make's reference lists organizations:read for reading a single " +
+				"store); refused on a connection with a scenario allow-list",
+			Tools: []string{dataStoreRecordsList.ID},
+		}, {
+			ID: "datastorerecords-manage", Title: "Create records in the bound team's data stores",
+			Description: "reads what datastorerecords-read reads and creates a record in a data store of the " +
+				"bound team; every creation needs its own confirmation, is never retried, and needs the " +
+				"datastores:read and datastores:write scopes. Deleting records is in no profile",
+			Tools: []string{dataStoreRecordsList.ID, dataStoreRecordsCreate.ID},
+		}, {
 			ID: "datastructures-read", Title: "Read the bound team's data structures",
 			Description: "lists and reads the data structures of the bound team with their field " +
 				"specification; changes nothing and needs the udts:read scope; refused on a connection " +
@@ -819,6 +834,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataStoresCreate, Handler: capability.Handler(invokeDataStoresCreate)},
 		capability.Operation{Descriptor: dataStoresUpdate, Handler: capability.Handler(invokeDataStoresUpdate)},
 		capability.Operation{Descriptor: dataStoresDelete, Handler: capability.Handler(invokeDataStoresDelete)},
+		capability.Operation{Descriptor: dataStoreRecordsList, Handler: capability.Handler(invokeDataStoreRecordsList)},
+		capability.Operation{Descriptor: dataStoreRecordsCreate, Handler: capability.Handler(invokeDataStoreRecordsCreate)},
+		capability.Operation{Descriptor: dataStoreRecordsDelete, Handler: capability.Handler(invokeDataStoreRecordsDelete)},
 		capability.Operation{Descriptor: dataStructuresList, Handler: capability.Handler(invokeDataStructuresList)},
 		capability.Operation{Descriptor: dataStructuresGet, Handler: capability.Handler(invokeDataStructuresGet)},
 		capability.Operation{Descriptor: credentialRequestsList, Handler: capability.Handler(invokeCredentialRequestsList)},
