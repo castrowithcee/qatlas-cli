@@ -93,7 +93,8 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 	noConnection := config.RefusalNoConnection
 	for _, metadata := range reg.ProviderMetadataAll() {
 		want := []application.SearchHit{}
-		indexed := toolSummaries(t, string(cliJSON("tools", metadata.ID, "--all")))
+		// A provider with tool groups answers with its groups above 50 tools; the query lists them all.
+		indexed := toolSummaries(t, string(cliJSON("tools", metadata.ID, "--all", "--query", metadata.ID)))
 		for i, descriptor := range reg.Provider(metadata.ID) {
 			hit := application.SearchHit{
 				ID: descriptor.ID, Title: descriptor.Title, Effect: descriptor.Risk.Effect, Reason: noConnection,
@@ -111,7 +112,7 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 		}
 
 		searched := []application.SearchHit{}
-		arguments := `{"provider":"` + metadata.ID + `","all":true}`
+		arguments := `{"provider":"` + metadata.ID + `","all":true,"limit":50}`
 		for {
 			input := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{` + mcpTestMeta +
 				`,"name":"qatlas.search","arguments":` + arguments + `}}` + "\n"

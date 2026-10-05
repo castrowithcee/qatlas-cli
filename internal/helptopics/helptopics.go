@@ -150,6 +150,10 @@ Narrow or widen the catalog:
                                     only the tools that connection offers
   qatlas tools <provider> --all     also the tools no connection offers,
                                     each with the reason
+  qatlas tools <provider> <group>   a provider with many tools (more than
+                                    50) answers with its groups first;
+                                    this lists the tools of one group;
+                                    --query still searches every group
 
 Invoke:
 
@@ -248,8 +252,8 @@ The sections stay apart so that a secret is stored once and used by several rout
 // the same ground, and more, at CLI length.
 const mcpGuide = `Three fixed MCP tools; 'qatlas agents' has the details.
 
-qatlas.search finds tools like 'qatlas tools', best match first: query, provider, connection, and effect filter; all adds the tools no connection offers, each with its reason. A hit has id, title, effect, requires (required arguments as name:form), confirm, and connections only where fewer than the top-level connections offer it: enough for a call; describe adds optional arguments. limit pages (default 50); pass next_cursor as cursor. list=providers or connections gives an overview; a connection may be unusable: vault-locked, or approval-required until the vault approves it.
+qatlas.search finds tools like 'qatlas tools', best match first: query, provider, connection, and effect filter; all adds the tools no connection offers, each with its reason. A hit has id, title, effect, requires (required arguments as name:form), confirm, and connections only where fewer than the top-level connections offer it: enough for a call; describe adds optional arguments. limit pages (default 50); pass next_cursor as cursor. Over 50 tools, a provider's groups come first; group lists one. list=providers or connections gives an overview; a connection may be unusable: vault-locked or approval-required.
 
 qatlas.describe and qatlas.invoke take a tool ID as operation. connection is needed only when several connections offer the tool: without it qatlas takes the tool's default, then the provider's, then the only connection offering it. describe returns the compact contract, or with full the complete schemas. invoke runs the tool with arguments as its input; a tool that changes data needs confirm set to true.
 
-A successful call returns its result once, as one JSON text block in content, without structuredContent. Empty fields and a field a set filter fixes (state with state open) are left out; missing means empty. fields (selectable_fields of describe) keeps only those members of each result-list entry; an unknown name or no list is invalid-request. A failed call has isError true and structuredContent with at least code and message; content holds the same text as "<code>: <message>". Key codes: confirmation-required (retry with confirm), vault-locked (ask the person to run 'qatlas vault unlock'), admin-required (only a person may), approval-required (a person must approve a changed connection; ask the user), connection-ambiguous (structuredContent lists the candidates: pass connection), connection-selection, unknown-operation, unknown-connection, unsupported-capability, auth, permission, not-found, timeout, rate-limited.`
+A successful call returns its result once, as one JSON text block in content, without structuredContent. Empty fields and a field a set filter fixes (state with state open) are left out; missing means empty. fields (selectable_fields of describe) keeps only those members of each result-list entry; an unknown name or no list is invalid-request. A failed call has isError true and structuredContent with at least code and message; content holds the same text as "<code>: <message>". Key codes: confirmation-required (retry with confirm), vault-locked (ask the person to run 'qatlas vault unlock'), admin-required (only a person may), approval-required (a person must approve; ask the user), connection-ambiguous (structuredContent lists the candidates: pass connection), connection-selection, unknown-operation, unknown-connection, unsupported-capability, auth, permission, not-found, timeout, rate-limited.`

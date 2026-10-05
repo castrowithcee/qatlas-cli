@@ -380,7 +380,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"twentycrm.companies.create", "twentycrm.companies.delete", "twentycrm.companies.get", "twentycrm.companies.list", "twentycrm.companies.update",
 		}},
 		{"namespace seatable", []string{"seatable"}, []string{"seatable.base.operations", "seatable.collaborators.list", "seatable.columns.create", "seatable.columns.delete", "seatable.columns.list", "seatable.columns.optionsadd", "seatable.columns.optionsdelete", "seatable.columns.optionsupdate", "seatable.columns.update", "seatable.comments.create", "seatable.comments.delete", "seatable.comments.list", "seatable.files.delete", "seatable.files.get", "seatable.files.upload", "seatable.links.create", "seatable.links.delete", "seatable.links.list", "seatable.links.update", "seatable.rows.activities", "seatable.rows.batchcreate", "seatable.rows.batchdelete", "seatable.rows.batchupdate", "seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.search", "seatable.rows.update", "seatable.snapshots.create", "seatable.tables.create", "seatable.tables.delete", "seatable.tables.duplicate", "seatable.tables.list", "seatable.tables.rename", "seatable.views.create", "seatable.views.delete", "seatable.views.get", "seatable.views.list", "seatable.views.update"}},
-		{"namespace github", []string{"github"}, []string{
+		{"namespace github", []string{"github", "--query", "github"}, []string{
 			"github.accounts.me",
 			"github.actionspermissions.get", "github.actionspermissions.update",
 			"github.blame.get",
@@ -523,7 +523,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 	})
 
 	t.Run("a second argument is a usage error", func(t *testing.T) {
-		code, _, stderr := runTools(t, nil, "tools", "bookstack", "telegram", "--config", cfg)
+		code, _, stderr := runTools(t, nil, "tools", "bookstack", "telegram", "extra", "--config", cfg)
 		if code != exitUsage || !strings.Contains(stderr, "expected at most one tool namespace") {
 			t.Errorf("exit=%d stderr=%q", code, stderr)
 		}
@@ -998,7 +998,7 @@ func TestToolCommandsKeepTheDataOfTheRemovedCommands(t *testing.T) {
 	// names exactly the catalog the removed commands published in one answer.
 	reachable := map[string]bool{}
 	for _, provider := range core.Providers().Providers {
-		listed, err := core.Tools(application.SearchRequest{Provider: provider.Provider, All: true})
+		listed, err := core.Tools(application.SearchRequest{Provider: provider.Provider, Query: provider.Provider, All: true})
 		if err != nil {
 			t.Fatalf("Tools(%s) = %v", provider.Provider, err)
 		}

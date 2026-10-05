@@ -123,7 +123,7 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 		all   bool
 	)
 	cmd := &cobra.Command{
-		Use:   "tools <namespace>",
+		Use:   "tools <namespace> [group]",
 		Short: "List the tools the configured connections offer",
 		Long: "Tools lists the tools of one namespace that a configured connection offers, each with its ID,\n" +
 			"its title, whether it reads or changes the remote system, the arguments it requires, and\n" +
@@ -138,7 +138,13 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"connections. All entries share one set of columns, so the listing is a table with a row per\n" +
 			"tool; a column that no entry uses is left out, and an empty value is \"\".\n\n" +
 			"The namespace argument is the provider prefix of the tool IDs; 'qatlas providers' lists the\n" +
-			"namespaces. --query answers the same form for a targeted search and may be used without a\n" +
+			"namespaces. A provider that sorts its tools into groups answers with the groups instead of the\n" +
+			"tools when more than 50 tools remain after --connection, --all, and the group: one row per group\n" +
+			"with its ID, title, description, and the number of tools in it, sorted by group ID, and with\n" +
+			"--all also offered, the number of those some connection offers. 'qatlas tools <namespace>\n" +
+			"<group>' lists the tools of one group in the usual form. --query always answers with tools, so\n" +
+			"it searches every group, and with a group it searches within it. A group that does not exist, or\n" +
+			"a group given for a provider without groups, is refused. --query answers the same form for a targeted search and may be used without a\n" +
 			"namespace, keeping only the tools where every term occurs in the ID, title, description, or\n" +
 			"tags, in the description or note of the provider, or in the description of a connection that\n" +
 			"offers the tool, so a word such as wiki or crm finds the provider or route it names. The best\n" +
@@ -168,11 +174,14 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"The output is " + toonContract + " with LF line endings. --output json returns the same data as\n" +
 			"JSON. When no connection offers a listed tool, the list is empty and a note on stderr points to\n" +
 			"--all.",
-		Args: atMostOneArg("tool namespace"),
+		Args: atMostTwoArgs("tool namespace", "group"),
 		RunE: func(c *cobra.Command, args []string) error {
 			format, err := discoveryFormat(c, opts)
 			if err != nil {
 				return err
+			}
+			if len(args) == 2 && args[0] == "" {
+				return newSyntaxError(errors.New("a group needs a tool namespace"))
 			}
 			// Without a namespace and without a query this would print the whole catalog, which is the
 			// answer the cascade exists to avoid. Naming the first step is more useful than that list.
@@ -181,7 +190,10 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 					"tools needs a namespace or --query; run 'qatlas providers' to list the namespaces"))
 			}
 			request := application.SearchRequest{Query: query, Connection: opts.Connection, All: all}
-			if len(args) == 1 {
+			if len(args) == 2 {
+				request.Group = args[1]
+			}
+			if len(args) >= 1 {
 				if _, ok := registry.ProviderMetadata(args[0]); !ok {
 					return &UsageError{fmt.Errorf("unknown tool namespace %q%s; run 'qatlas providers' to list "+
 						"the namespaces", args[0], application.DidYouMean(application.Suggest(args[0],
@@ -202,7 +214,15 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			}
 			// An empty answer that only the configuration causes says so on stderr, so stdout stays the
 			// payload and the caller still learns where the tools went.
-			if len(response.Tools) == 0 && !all {
+			if len(response.Groups) > 0 {
+				var total int
+				for _, group := range response.Groups {
+					total += group.Tools
+				}
+				fmt.Fprintf(c.ErrOrStderr(), "qatlas: %d tools in %d groups; 'qatlas tools %s <group>' lists one "+
+					"group, --query searches all\n", total, len(response.Groups), request.Provider)
+			}
+			if len(response.Tools) == 0 && len(response.Groups) == 0 && !all {
 				request.All = true
 				if every, err := core.Tools(request); err == nil && len(every.Tools) > 0 {
 					fmt.Fprintf(c.ErrOrStderr(), "qatlas: no connection offers any of the %d matching tools; "+
@@ -502,6 +522,16 @@ func exactlyOneArg(what string) cobra.PositionalArgs {
 	return func(_ *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			return newSyntaxError(fmt.Errorf("expected exactly one %s, got %d", what, len(args)))
+		}
+		return nil
+	}
+}
+
+func atMostTwoArgs(first, second string) cobra.PositionalArgs {
+	return func(_ *cobra.Command, args []string) error {
+		if len(args) > 2 {
+			return newSyntaxError(fmt.Errorf("expected at most one %s and one %s, got %d arguments", first,
+				second, len(args)))
 		}
 		return nil
 	}

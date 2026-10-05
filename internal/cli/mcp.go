@@ -790,13 +790,16 @@ func mcpTools() []mcpTool {
 				"effect, requires (required arguments with their form), confirm, and connections only where " +
 				"fewer than the connections named once at the top offer it; that suffices for a call, and " +
 				"qatlas.describe adds the optional arguments. all adds the tools no connection offers, each " +
-				"with its reason. has_more and next_cursor, passed back as cursor with the same filters, page " +
+				"with its reason. For a provider with tool groups and more than 50 matching tools, a first page " +
+				"without query, limit, or cursor returns groups (group, title, description, tools, and offered " +
+				"with all) instead of operations; group, only with provider, then returns the operations of " +
+				"one group. has_more and next_cursor, passed back as cursor with the same filters, page " +
 				"the result. list returns an overview instead: providers lists every provider with its " +
 				"description, note, and counts; connections lists the configured connections, of provider " +
 				"when given, with description, permitted effects, tools list, and unusable: vault-locked or " +
 				"approval-required where a person must act. list takes no other argument than provider with " +
 				"connections.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"list":{"type":"string","enum":["providers","connections"],"description":"Return the providers or the configured connections instead of tools; only provider may accompany connections"},"query":{"type":"string"},"provider":{"type":"string"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"list":{"type":"string","enum":["providers","connections"],"description":"Return the providers or the configured connections instead of tools; only provider may accompany connections"},"query":{"type":"string"},"provider":{"type":"string"},"group":{"type":"string","description":"Only the tools of this tool group; needs provider"},"connection":{"type":"string"},"effect":{"type":"string","enum":["read","create","update","delete","execute"]},"all":{"type":"boolean","description":"Also return the tools no connection offers, each with its reason"},"limit":{"type":"integer","description":"Page size; omitted, non-positive, or larger values become 50"},"cursor":{"type":"string","description":"Opaque next_cursor of a previous page with the same filters; the first page when omitted"}},"additionalProperties":false}`),
 		},
 		{
 			Name: "qatlas.describe",

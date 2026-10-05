@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -131,9 +132,11 @@ type SearchRequest struct {
 	Provider   string            `json:"provider,omitempty"`
 	Connection string            `json:"connection,omitempty"`
 	Effect     capability.Effect `json:"effect,omitempty"`
-	All        bool              `json:"all,omitempty"`
-	Limit      int               `json:"limit,omitempty"`
-	Cursor     string            `json:"cursor,omitempty"`
+	// Group keeps only the tools of one tool group of Provider, which it requires.
+	Group  string `json:"group,omitempty"`
+	All    bool   `json:"all,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
 }
 
 // SearchHit is the bounded discovery view of one descriptor, and the entry of both discovery answers: it
@@ -211,11 +214,86 @@ func (h Hits) MarshalJSON() ([]byte, error) {
 // offers one of the listed tools; a hit refers to connections only when it is offered by fewer of them.
 // HasMore is true exactly when another match follows this page; NextCursor is then the cursor of the
 // following page and absent otherwise.
+//
+// Above maxSearchResults matches of a provider that has tool groups, a first-page search without query,
+// limit, or cursor answers with Groups instead of Operations: see ToolGroupHit. The answer then has no
+// paging members.
 type SearchResponse struct {
-	Connections []string `json:"connections,omitempty"`
-	Operations  Hits     `json:"operations"`
-	HasMore     bool     `json:"has_more"`
-	NextCursor  string   `json:"next_cursor,omitempty"`
+	Connections []string       `json:"connections,omitempty"`
+	Operations  Hits           `json:"operations"`
+	Groups      []ToolGroupHit `json:"groups,omitempty"`
+	HasMore     bool           `json:"has_more"`
+	NextCursor  string         `json:"next_cursor,omitempty"`
+}
+
+// MarshalJSON writes the grouped answer without operations and paging members, and every other answer as
+// its fields declare.
+func (r SearchResponse) MarshalJSON() ([]byte, error) {
+	if len(r.Groups) > 0 {
+		return json.Marshal(struct {
+			Connections []string       `json:"connections,omitempty"`
+			Groups      []ToolGroupHit `json:"groups"`
+		}{r.Connections, r.Groups})
+	}
+	type plain SearchResponse
+	return json.Marshal(plain(r))
+}
+
+// ToolGroupHit is one tool group of an answer that lists groups before tools. Tools counts the matches of
+// the request's filters in the group; Offered, present only for a request with All, counts those of them
+// some connection offers.
+type ToolGroupHit struct {
+	Group       string `json:"group"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Tools       int    `json:"tools"`
+	Offered     *int   `json:"offered,omitempty"`
+}
+
+// groupBy sorts the matches into the groups of their provider when the answer is too long to list: the
+// request names a provider with groups, no group, no query, and no paging, and more than maxSearchResults
+// tools match. It returns nil otherwise. A group without a match is left out; the rest is sorted by ID.
+func (c *Core) groupBy(request SearchRequest, descriptors []capability.Descriptor) []ToolGroupHit {
+	if request.Provider == "" || request.Group != "" || strings.TrimSpace(request.Query) != "" ||
+		request.Limit > 0 || request.Cursor != "" || len(descriptors) <= maxSearchResults {
+		return nil
+	}
+	metadata, _ := c.registry.ProviderMetadata(request.Provider)
+	if len(metadata.Groups) == 0 {
+		return nil
+	}
+	groupOf := make(map[string]string, len(metadata.Tools))
+	for _, tool := range metadata.Tools {
+		groupOf[tool.ID] = tool.Group
+	}
+	groups := make([]ToolGroupHit, 0, len(metadata.Groups))
+	index := map[string]int{}
+	for _, group := range metadata.Groups {
+		index[group.ID] = len(groups)
+		hit := ToolGroupHit{Group: group.ID, Title: group.Title, Description: group.Description}
+		if request.All {
+			hit.Offered = new(int)
+		}
+		groups = append(groups, hit)
+	}
+	for _, descriptor := range descriptors {
+		i, ok := index[groupOf[descriptor.ID]]
+		if !ok {
+			continue
+		}
+		groups[i].Tools++
+		if request.All && c.refusal(request, descriptor) == "" {
+			*groups[i].Offered++
+		}
+	}
+	kept := groups[:0]
+	for _, group := range groups {
+		if group.Tools > 0 {
+			kept = append(kept, group)
+		}
+	}
+	sort.Slice(kept, func(i, j int) bool { return kept[i].Group < kept[j].Group })
+	return kept
 }
 
 // Search performs deterministic local discovery and never resolves credentials or calls a provider. Its
@@ -231,6 +309,17 @@ func (c *Core) Search(request SearchRequest) (SearchResponse, error) {
 	after, err := searchCursorAfter(request)
 	if err != nil {
 		return SearchResponse{}, err
+	}
+	// An answer too long to list names the tool groups first. Only a first page without limit can be one.
+	if request.Limit <= 0 && request.Cursor == "" && request.Provider != "" && request.Group == "" {
+		every, err := c.catalog(request, "", 0)
+		if err != nil {
+			return SearchResponse{}, err
+		}
+		if groups := c.groupBy(request, every); groups != nil {
+			connections, _ := c.hits(request, every)
+			return SearchResponse{Connections: connections, Groups: groups}, nil
+		}
 	}
 	// One extra match decides has_more without a second pass and without publishing that match.
 	descriptors, err := c.catalog(request, after, limit+1)
@@ -312,7 +401,7 @@ func searchCursorAfter(request SearchRequest) (string, error) {
 func searchFingerprint(request SearchRequest) []byte {
 	filters, _ := json.Marshal([]string{
 		strings.Join(strings.Fields(strings.ToLower(request.Query)), " "),
-		request.Provider, request.Connection, string(request.Effect), fmt.Sprint(request.All),
+		request.Provider, request.Connection, string(request.Effect), fmt.Sprint(request.All), request.Group,
 	})
 	sum := sha256.Sum256(filters)
 	return sum[:searchCursorBinding]
@@ -534,9 +623,25 @@ func (c *Core) Connections(provider string, unusable func(*config.Resolved) erro
 
 // ToolsResponse is the payload inside the CLI envelope: the entries and the connections of the search
 // answer, without paging.
+//
+// Above maxSearchResults matches of a provider that has tool groups, Tools is left out and Groups lists the
+// groups with their counts instead; 'tools <provider> <group>' then lists one group.
 type ToolsResponse struct {
-	Connections []string `json:"connections,omitempty"`
-	Tools       Hits     `json:"tools"`
+	Connections []string       `json:"connections,omitempty"`
+	Tools       Hits           `json:"tools"`
+	Groups      []ToolGroupHit `json:"groups,omitempty"`
+}
+
+// MarshalJSON writes the grouped answer without tools, and every other answer as its fields declare.
+func (r ToolsResponse) MarshalJSON() ([]byte, error) {
+	if len(r.Groups) > 0 {
+		return json.Marshal(struct {
+			Connections []string       `json:"connections,omitempty"`
+			Groups      []ToolGroupHit `json:"groups"`
+		}{r.Connections, r.Groups})
+	}
+	type plain ToolsResponse
+	return json.Marshal(plain(r))
 }
 
 // Tools is the second step of discovery: the tools of one namespace, or of one targeted query. It applies
@@ -551,6 +656,10 @@ func (c *Core) Tools(request SearchRequest) (ToolsResponse, error) {
 		return ToolsResponse{}, err
 	}
 	connections, tools := c.hits(request, descriptors)
+	// The CLI never pages, so only the group, the query, and the provider decide whether groups come first.
+	if groups := c.groupBy(request, descriptors); groups != nil {
+		return ToolsResponse{Connections: connections, Groups: groups}, nil
+	}
 	return ToolsResponse{Connections: connections, Tools: tools}, nil
 }
 
@@ -569,6 +678,30 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 			return nil, &InvalidRequestError{Message: fmt.Sprintf("unknown provider %q", request.Provider) +
 				DidYouMean(Suggest(request.Provider, ProviderIDs(c.registry))) +
 				"; leave the provider out to search every provider"}
+		}
+	}
+
+	var groupOf map[string]string
+	if request.Group != "" {
+		if request.Provider == "" {
+			return nil, &InvalidRequestError{Message: "group needs provider; name the provider whose group to list"}
+		}
+		metadata, _ := c.registry.ProviderMetadata(request.Provider)
+		if len(metadata.Groups) == 0 {
+			return nil, &InvalidRequestError{Message: fmt.Sprintf("provider %q has no groups", request.Provider)}
+		}
+		ids := make([]string, 0, len(metadata.Groups))
+		for _, group := range metadata.Groups {
+			ids = append(ids, group.ID)
+		}
+		if !slices.Contains(ids, request.Group) {
+			return nil, &InvalidRequestError{Message: fmt.Sprintf("unknown group %q of provider %q",
+				request.Group, request.Provider) + DidYouMean(Suggest(request.Group, ids)) +
+				"; the groups are " + strings.Join(sortedStrings(ids), ", ")}
+		}
+		groupOf = make(map[string]string, len(metadata.Tools))
+		for _, tool := range metadata.Tools {
+			groupOf[tool.ID] = tool.Group
 		}
 	}
 
@@ -592,6 +725,9 @@ func (c *Core) catalog(request SearchRequest, after string, limit int) ([]capabi
 			continue
 		}
 		if selectedProvider != "" && descriptor.Provider != selectedProvider {
+			continue
+		}
+		if request.Group != "" && groupOf[descriptor.ID] != request.Group {
 			continue
 		}
 		if !request.All && c.refusal(request, descriptor) != "" {
@@ -1348,4 +1484,10 @@ func (c *Core) checkSecretRefs(descriptor capability.Descriptor, resolved *confi
 	}
 	sort.Strings(refs)
 	return refs, nil
+}
+
+func sortedStrings(values []string) []string {
+	sorted := append([]string(nil), values...)
+	sort.Strings(sorted)
+	return sorted
 }
