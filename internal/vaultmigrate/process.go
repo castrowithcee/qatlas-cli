@@ -9,6 +9,10 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
+// SuccessorFlag is the hidden flag of 'qatlas vault serve' that starts it as the successor of a running
+// vault process, part of the successor contract; see StartSuccessor and HandoverFD.
+const SuccessorFlag = "--successor"
+
 // SyncChange hands a change already written to the vault on to the vault process client of v, once one is
 // reached: change runs against it, get, set, or delete, whatever the caller just did to the vault itself.
 // It is the shared core the CLI's own syncVaultProcess and the TUI's equivalent both run, so 'qatlas

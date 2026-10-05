@@ -6,8 +6,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/castrowithcee/qatlas-cli/internal/release"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
+
+// releaseKeys returns the public keys a vault process requires a release to be signed with before it hands
+// the vault over to a successor from it: the keys compiled into the program. It is a variable only so that a
+// test of this package can trust its own key in the processes it starts; nothing at run time changes it.
+var releaseKeys = release.TrustedKeys
 
 // errHandoverNeedsEncryption refuses the update behaviour of a vault without a passphrase.
 var errHandoverNeedsEncryption = errors.New("the update behaviour is stored in an encrypted vault: without a " +

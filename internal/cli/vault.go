@@ -99,7 +99,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"entry count is unknown unless this run holds the key: counting needs the passphrase, the same\n" +
 			"way reading a secret does. The state is the effective one: unlocked while a vault process holds\n" +
 			"the vault open for every connection. For an encrypted vault it also reports that process\n" +
-			"(process running, with its pid and when it locks itself, or none); for an\n" +
+			"(process running, with its pid, when it locks itself, and its update behaviour, which says\n" +
+			"whether 'qatlas update' hands the vault over to the new program or locks it, or none); for an\n" +
 			"unencrypted one it warns that connections are not bound to approvals. It asks for no\n" +
 			"passphrase and shows no secret value.",
 		Args: noArgs,
@@ -138,15 +139,21 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		},
 	}
 
+	var successor bool
 	serve := &cobra.Command{
 		Use:    "serve",
 		Short:  "Hold the unlocked vault open; started by 'qatlas vault unlock'",
 		Hidden: true,
 		Args:   noArgs,
 		RunE: func(*cobra.Command, []string) error {
-			return runVaultServe(opts, reg)
+			return runVaultServe(opts, reg, successor)
 		},
 	}
+	// The flag a vault process starts its successor with; its name is part of the successor contract (see
+	// vaultmigrate.SuccessorFlag), so it stays.
+	successorFlag := strings.TrimPrefix(vaultmigrate.SuccessorFlag, "--")
+	serve.Flags().BoolVar(&successor, successorFlag, false, "take the vault over from the running vault process")
+	_ = serve.Flags().MarkHidden(successorFlag)
 
 	encrypt := &cobra.Command{
 		Use:   "encrypt",
@@ -530,6 +537,9 @@ func vaultProcessOf(ctx context.Context, v *vault.Vault, state vault.State, warn
 		var status vaultproc.Status
 		status, err = client.Status(contextOrBackground(ctx))
 		if err == nil {
+			if status.SettingsUntrusted {
+				addWarning(warning, vault.ErrSettingsUntrusted.Error())
+			}
 			return vaultProcessState{State: "running", Status: status}
 		}
 	}
@@ -853,6 +863,9 @@ func vaultStatusObject(status vault.Status, process vaultProcessState) output.Ob
 		fields = append(fields,
 			output.Field{Name: "pid", Value: int64(process.Status.PID)},
 			output.Field{Name: "locks_at", Value: formatLocksAt(process.Status.LocksAt)})
+		if process.Status.Update != "" {
+			fields = append(fields, output.Field{Name: "update_behaviour", Value: string(process.Status.Update)})
+		}
 	}
 	if status.Warning != "" {
 		fields = append(fields, output.Field{Name: "warning", Value: status.Warning})

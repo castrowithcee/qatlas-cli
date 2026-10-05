@@ -4,7 +4,9 @@
 // The process listens on a Unix socket in a private runtime directory and answers one request per
 // connection: status, get, check, set, delete, bind, lock, for the invocation log, log and logcheck, and
 // approve-token, which approves open connection changes an agent token covers. Every message is one line of JSON, versioned
-// and bounded in size, and every connection has a deadline, so a peer that hangs cannot hold either side.
+// and bounded in size, and every connection has a deadline, so a peer that hangs cannot hold either side. The
+// one exception is handover, which hands the unlocked vault to a successor started from the program an update
+// installs, in two requests on one connection; see Client.PrepareHandover.
 //
 // A secret leaves the process only for a connection the vault approved (see vault.Bindings), and only for
 // this very program run by this very user. Both ends check each other. The server checks the process that
@@ -36,9 +38,9 @@ import (
 )
 
 // Version is the protocol version a request carries and an answer repeats. A server refuses a request of
-// another version rather than guessing what it meant. Version 6 lets a connection's scope name the forward
-// credentials it releases, so a get or a check may name one of them.
-const Version = 6
+// another version rather than guessing what it meant. Version 7 adds handover, which hands the vault over to
+// a successor started from an updated program, and the answer replaced, which sends a client on to it.
+const Version = 7
 
 // MaxMessage bounds one request or answer, newline included. It leaves room for any token or key a
 // credential holds, and keeps a peer from making the other side buffer without end.
@@ -50,6 +52,10 @@ const DefaultIdleTimeout = 12 * time.Hour
 // DefaultRequestTimeout bounds one request on either side of a connection. A caller's own, shorter limit
 // wins on the client.
 const DefaultRequestTimeout = 5 * time.Second
+
+// HandoverTimeout bounds each phase of a handover on either side of its connection: the prepare, the wait for
+// the commit while the program is replaced, and the commit, which starts the successor.
+const HandoverTimeout = 30 * time.Second
 
 // maxSocketPath is the longest socket path accepted, in bytes. The kernel's sun_path holds 108 bytes on
 // Linux and 104 on macOS and the BSDs, terminator included; a longer path would be cut off silently, and

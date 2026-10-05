@@ -35,6 +35,15 @@ const (
 	// token against the tokens the vault holds, writes the approvals into the vault itself, and logs each
 	// decision; it never answers with a token's value.
 	opApproveToken = "approve-token"
+	// opHandover hands the unlocked vault over to a successor, in two phases on one connection: prepare,
+	// which verifies a release, and commit, once the program was replaced; see Client.PrepareHandover.
+	opHandover = "handover"
+)
+
+// The phases of a handover request.
+const (
+	phasePrepare = "prepare"
+	phaseCommit  = "commit"
 )
 
 // The codes an answer's error carries. They are fixed words, never text built from a request, so an error
@@ -54,6 +63,14 @@ const (
 	codeTokenExpired   = "token-expired"
 	codeTokensTampered = "tokens-tampered"
 	codeTokenFailed    = "token-failed"
+	// codeReplaced answers a request the process no longer serves because it was replaced: it hands, or
+	// handed, the vault over to a successor, or an update replaced its own program. A client asks again.
+	codeReplaced = "replaced"
+	// The codes of a handover that did not happen. The process locked itself with each of them.
+	codeReleaseUnverified = "release-unverified"
+	codeProgramUnchanged  = "program-unchanged"
+	codeProgramMismatch   = "program-mismatch"
+	codeHandoverFailed    = "handover-failed"
 )
 
 // nonceSize is the number of random bytes a challenge holds.
@@ -74,7 +91,7 @@ type hello struct {
 // one is refused. Bindings replace the server's own on a bind. Entry is what a log appends, and Lines are
 // the stored log lines a logcheck checks. Token, Scopes, and Names belong to approve-token: the agent token
 // presented, the scope of every connection reading a vault credential as configured now, and the
-// connections to limit the approval to, none for all.
+// connections to limit the approval to, none for all. Phase and Release belong to handover.
 type request struct {
 	V          int             `json:"v"`
 	Op         string          `json:"op"`
@@ -88,6 +105,20 @@ type request struct {
 	Token      string          `json:"token,omitempty"`
 	Scopes     []vault.Scope   `json:"scopes,omitempty"`
 	Names      []string        `json:"names,omitempty"`
+	Phase      string          `json:"phase,omitempty"`
+	Release    *ReleaseFiles   `json:"release,omitempty"`
+}
+
+// ReleaseFiles names the files of a downloaded release that a handover is prepared with, each by its absolute
+// path, and the name of the archive as checksums.txt lists it. The vault process reads and verifies them
+// itself; nothing in them is taken on trust from the client.
+type ReleaseFiles struct {
+	// Checksums is checksums.txt, Signature checksums.txt.sig, and Archive the archive of this platform.
+	Checksums string `json:"checksums"`
+	Signature string `json:"signature"`
+	Archive   string `json:"archive"`
+	// ArchiveName is the archive's file name in the release, which checksums.txt lists it by.
+	ArchiveName string `json:"archive_name"`
 }
 
 // logEntry is what a client sends for one invoke to log: invokelog.Fields, without anything the server
@@ -118,8 +149,10 @@ func logEntryOf(f invokelog.Fields) *logEntry {
 }
 
 // response is a line a server answers with. Error is empty on success; Proof answers the hello, Found and
-// Value belong to get, PID and LocksAt to status, Valid, one per line asked, to logcheck, and Approval and
-// Unlogged to approve-token.
+// Value belong to get, PID and LocksAt to status, Valid, one per line asked, to logcheck, Approval and
+// Unlogged to approve-token, Handover to the prepare of a handover, and PID to its commit as well. A status
+// carries Handover too, the vault's update setting as the process reads it, with SettingsUntrusted where
+// settings.age could not be trusted and reads as lock.
 type response struct {
 	V        int                  `json:"v"`
 	Error    string               `json:"error,omitempty"`
@@ -131,6 +164,9 @@ type response struct {
 	Valid    []bool               `json:"valid,omitempty"`
 	Approval *vault.TokenApproval `json:"approval,omitempty"`
 	Unlogged bool                 `json:"unlogged,omitempty"`
+	Handover string               `json:"handover,omitempty"`
+	// SettingsUntrusted belongs to status.
+	SettingsUntrusted bool `json:"settings_untrusted,omitempty"`
 }
 
 // writeMessage sends v as one line of JSON. A message above MaxMessage is not sent at all. The encoded
@@ -182,6 +218,16 @@ var errUnproven = fmt.Errorf("%w: it cannot prove that it holds this vault's key
 // removed or replaced since it started. It wraps ErrRefused.
 var ErrProgramRefused = fmt.Errorf("%w: the vault process refused this program", ErrRefused)
 
+// ErrReplaced reports a vault process that no longer answers because it was replaced: it is handing the
+// vault over, or handed it over, to a successor, which a new connection reaches in a moment, or an update
+// replaced its own program. It wraps ErrProgramRefused, which a process whose program was replaced answered
+// before.
+var ErrReplaced = fmt.Errorf("%w; it was replaced by a newer one", ErrProgramRefused)
+
+// ErrHandover reports a handover that did not happen. The vault process locked itself instead; the error
+// wraps the reason, which never carries a secret or a path.
+var ErrHandover = errors.New("the vault process did not hand the vault over and locked itself")
+
 // answerError turns a response's error code into the error the client returns.
 func answerError(code string) error {
 	switch code {
@@ -209,6 +255,16 @@ func answerError(code string) error {
 		return vault.ErrTokensTampered
 	case codeTokenFailed:
 		return errors.New("the vault process could not approve with the agent token")
+	case codeReplaced:
+		return ErrReplaced
+	case codeReleaseUnverified:
+		return fmt.Errorf("%w: it could not verify the release", ErrHandover)
+	case codeProgramUnchanged:
+		return fmt.Errorf("%w: its program was not replaced", ErrHandover)
+	case codeProgramMismatch:
+		return fmt.Errorf("%w: the program installed is not the one the release holds", ErrHandover)
+	case codeHandoverFailed:
+		return fmt.Errorf("%w: no successor took the vault over", ErrHandover)
 	default:
 		return errors.New("the vault process could not read the request")
 	}

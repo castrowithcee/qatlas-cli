@@ -69,6 +69,12 @@ type Status struct {
 	PID int
 	// LocksAt is when the process locks itself unless a get comes first.
 	LocksAt time.Time
+	// Update is the vault's update setting as the process reads it from settings.age with its own key:
+	// whether an update hands the vault over to the new program or locks it. SettingsUntrusted reports a
+	// settings.age that could not be trusted, which reads as lock. Update is empty for a process that
+	// does not say.
+	Update            vault.UpdateBehaviour
+	SettingsUntrusted bool
 }
 
 // Status reports on the running vault process. ErrNotRunning means there is none.
@@ -77,7 +83,8 @@ func (c *Client) Status(ctx context.Context) (Status, error) {
 	if err != nil {
 		return Status{}, err
 	}
-	status := Status{PID: resp.PID}
+	status := Status{PID: resp.PID, Update: vault.UpdateBehaviour(resp.Handover),
+		SettingsUntrusted: resp.SettingsUntrusted}
 	if resp.LocksAt != nil {
 		status.LocksAt = *resp.LocksAt
 	}
@@ -133,7 +140,9 @@ func (c *Client) Delete(ctx context.Context, credential, role string) error {
 	return err
 }
 
-// Lock asks the vault process to overwrite its secrets and end. ErrNotRunning means there was none.
+// Lock asks the vault process to overwrite its secrets and end. ErrNotRunning means there was none. A lock
+// that reaches a process in the middle of a handover is answered replaced and asked again, which locks the
+// successor; a lock is never lost to a handover.
 //
 // A vault process of another protocol version, one left from before an update, cannot be asked; it is ended
 // with SIGTERM instead, on which it closes and overwrites its secrets just as on a lock. That process was
@@ -234,34 +243,138 @@ type logChecker struct {
 
 func (l logChecker) Check(lines [][]byte) ([]bool, error) { return l.client.CheckLog(l.ctx, lines) }
 
-// call connects, checks the server, and exchanges one request for its answer.
+// Handover is a handover of the vault process to a successor, prepared on one connection, which its commit
+// uses as well; see Client.PrepareHandover.
+type Handover struct {
+	client *Client
+	conn   net.Conn
+	pid    int
+}
+
+// PrepareHandover asks the vault process to hand the unlocked vault over to a successor started from the
+// program an update is about to install, which files describes: the release's checksums.txt, its signature,
+// and the archive downloaded, each by its absolute path. The process reads and verifies them itself, and
+// reads itself whether the vault hands over on an update or locks.
+//
+// It answers vault.UpdateHandover with the Handover to commit once the program is replaced, on this same
+// connection, or vault.UpdateLock once it locked itself as the vault asks. An ErrHandover means it could not
+// verify the release and locked itself; ErrNotRunning that there was nothing to hand over. The caller closes
+// a Handover it does not commit, which the process takes as the end of the handover: it locks itself then.
+func (c *Client) PrepareHandover(ctx context.Context, files ReleaseFiles) (vault.UpdateBehaviour, *Handover, error) {
+	deadline := c.deadlineWithin(ctx, HandoverTimeout)
+	conn, pid, err := c.dial(ctx, deadline)
+	if err != nil {
+		return "", nil, err
+	}
+	resp, err := c.exchange(ctx, conn, deadline, request{Op: opHandover, Phase: phasePrepare, Release: &files})
+	if err != nil {
+		_ = conn.Close()
+		return "", nil, c.named(ctx, pid, err)
+	}
+	switch vault.UpdateBehaviour(resp.Handover) {
+	case vault.UpdateHandover:
+		return vault.UpdateHandover, &Handover{client: c, conn: conn, pid: pid}, nil
+	case vault.UpdateLock:
+		_ = conn.Close()
+		return vault.UpdateLock, nil, nil
+	}
+	_ = conn.Close()
+	return "", nil, c.named(ctx, pid, errors.New("the vault process answered the handover with something unknown"))
+}
+
+// Commit tells the vault process that the program was replaced, and waits until it handed the vault over: it
+// checks that the program at its own path is now the one the release holds, starts the successor from it,
+// hands it the vault, and hands it the socket. It returns the successor's process id. Any error other than
+// one of ctx means the process locked itself instead. The connection is closed either way.
+func (h *Handover) Commit(ctx context.Context) (int, error) {
+	defer h.conn.Close()
+	deadline := h.client.deadlineWithin(ctx, HandoverTimeout)
+	if err := h.conn.SetDeadline(deadline); err != nil {
+		return 0, err
+	}
+	stop := context.AfterFunc(ctx, func() { _ = h.conn.SetDeadline(time.Unix(1, 0)) })
+	defer stop()
+	if err := writeMessage(h.conn, request{V: Version, Op: opHandover, Phase: phaseCommit}); err != nil {
+		return 0, h.client.named(ctx, h.pid, h.client.failed(ctx, err))
+	}
+	resp, err := h.client.answer(ctx, h.conn)
+	if err != nil {
+		return 0, h.client.named(ctx, h.pid, err)
+	}
+	return resp.PID, nil
+}
+
+// Close ends a handover that is not committed; the vault process locks itself then.
+func (h *Handover) Close() error { return h.conn.Close() }
+
+// The pauses and the overall limit within which a call asks again when a vault process answers replaced: a
+// handover moves the socket to the successor within moments of the commit.
+const (
+	replacedPause = 50 * time.Millisecond
+	replacedLimit = 2 * time.Second
+)
+
+// call connects, checks the server, and exchanges one request for its answer. A process that answers
+// replaced is asked again, on a new connection, for up to replacedLimit: while a vault process hands the
+// vault over, the next connection reaches its successor. Every other answer, a refusal included, is final.
+// A process whose own program was replaced and that has no successor still answers replaced once the
+// limit is reached.
 func (c *Client) call(ctx context.Context, req request) (response, error) {
-	if err := checkPathLength(c.Path); err != nil {
+	end := time.Now().Add(replacedLimit)
+	for {
+		resp, err := c.callOnce(ctx, req)
+		if !errors.Is(err, ErrReplaced) || !time.Now().Add(replacedPause).Before(end) {
+			return resp, err
+		}
+		select {
+		case <-ctx.Done():
+			return resp, err
+		case <-time.After(replacedPause):
+		}
+	}
+}
+
+// callOnce is one attempt of call.
+func (c *Client) callOnce(ctx context.Context, req request) (response, error) {
+	deadline := c.deadline(ctx)
+	conn, pid, err := c.dial(ctx, deadline)
+	if err != nil {
 		return response{}, err
+	}
+	defer conn.Close()
+	resp, err := c.exchange(ctx, conn, deadline, req)
+	return resp, c.named(ctx, pid, err)
+}
+
+// dial connects to the socket. The peer's process id is taken from what the kernel said right after
+// connecting: macOS no longer tells who was at the other end once a server that refused this client has
+// closed the connection.
+func (c *Client) dial(ctx context.Context, deadline time.Time) (net.Conn, int, error) {
+	if err := checkPathLength(c.Path); err != nil {
+		return nil, 0, err
 	}
 	if _, err := c.recipient(); err != nil {
-		return response{}, err
+		return nil, 0, err
 	}
-	deadline := c.deadline(ctx)
 	dialer := net.Dialer{Deadline: deadline}
 	conn, err := dialer.DialContext(ctx, "unix", c.Path)
 	if err != nil {
 		if notRunning(err) {
-			return response{}, ErrNotRunning
+			return nil, 0, ErrNotRunning
 		}
-		return response{}, c.failed(ctx, err)
+		return nil, 0, c.failed(ctx, err)
 	}
-	defer conn.Close()
-	// The peer is named from what the kernel said right after connecting: macOS no longer tells who was at
-	// the other end once a server that refused this client has closed the connection.
-	pid := peerPID(conn)
-	resp, err := c.exchange(ctx, conn, deadline, req)
+	return conn, peerPID(conn), nil
+}
+
+// named adds the process id of the peer to an error it caused, as a PeerError.
+func (c *Client) named(ctx context.Context, pid int, err error) error {
 	if err != nil && !errors.Is(err, ErrNotRunning) && ctx.Err() == nil && !errors.Is(err, context.DeadlineExceeded) {
 		if pid > 0 {
 			err = &PeerError{PID: pid, Err: err}
 		}
 	}
-	return resp, err
+	return err
 }
 
 // deadline is the earlier of the client's own limit and the end of ctx.
@@ -270,6 +383,11 @@ func (c *Client) deadline(ctx context.Context) time.Time {
 	if timeout <= 0 {
 		timeout = DefaultRequestTimeout
 	}
+	return c.deadlineWithin(ctx, timeout)
+}
+
+// deadlineWithin is the earlier of timeout from now and the end of ctx.
+func (c *Client) deadlineWithin(ctx context.Context, timeout time.Duration) time.Time {
 	deadline := time.Now().Add(timeout)
 	if end, ok := ctx.Deadline(); ok && end.Before(deadline) {
 		deadline = end

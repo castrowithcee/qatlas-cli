@@ -20,10 +20,15 @@ import (
 //
 // It also keeps 'vault unlock' from starting a vault process: such a process is this test binary started
 // anew, which a test enables with withVaultProcess alone. The binary started that way runs as qatlas
-// itself, selected by runAsQatlasEnv, instead of running the tests.
+// itself, selected by runAsQatlasEnv, instead of running the tests; started with vaultClientEnv, it is a
+// client of a vault process instead (see runVaultClient).
 func TestMain(m *testing.M) {
 	if os.Getenv(runAsQatlasEnv) == "1" {
+		trustTestReleaseKey()
 		os.Exit(Run(os.Args[1:], os.Stdout, os.Stderr))
+	}
+	if mode := os.Getenv(vaultClientEnv); mode != "" {
+		os.Exit(runVaultClient(mode))
 	}
 	if os.Getenv(runAsTUIEnv) == "1" {
 		os.Exit(runAsTUI())

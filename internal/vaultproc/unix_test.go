@@ -111,6 +111,8 @@ func TestHelperProcess(t *testing.T) {
 			os.Exit(1)
 		}
 		fmt.Println("locked")
+	case "successor", "successor-no-socket":
+		handoverHelper(mode, path)
 	case "harden":
 		if err := Harden(); err != nil {
 			fmt.Println("error", err)
