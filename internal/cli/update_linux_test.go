@@ -41,7 +41,7 @@ func TestUpdateAsksBeforeItReplaces(t *testing.T) {
 			if code != exitOK || len(asked) != 1 {
 				t.Fatalf("exit code = %d, questions = %d, stderr = %q", code, len(asked), stderr)
 			}
-			for _, want := range []string{"Update qatlas to v1.1.0?", "vault process is locked first",
+			for _, want := range []string{"Update qatlas to v1.1.0?", "vault process is handed over to the new version", "locked first otherwise",
 				"'qatlas vault unlock'", "'qatlas mcp' servers restart themselves", "'qatlas tui' and 'qatlas web'"} {
 				if !strings.Contains(asked[0], want) {
 					t.Errorf("the question does not say %q: %q", want, asked[0])

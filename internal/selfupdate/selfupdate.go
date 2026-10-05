@@ -66,15 +66,34 @@ type Client struct {
 	Executable string
 	// SigningKeys replaces the compiled-in release keys; tests only.
 	SigningKeys []ssh.PublicKey
-	// BeforeReplace, when set, runs once the release is downloaded and verified, right before the
-	// installed files are replaced, and not at all when nothing is replaced. A process of the old program
-	// that has to be stopped while it still passes for this program, such as the vault process, is stopped
-	// there.
-	BeforeReplace func(ctx context.Context)
+	// BeforeReplace, when set, runs once the release is downloaded and verified and the new files are staged
+	// next to the installed ones, right before the first of them replaces an installed file, and not at all
+	// when nothing is replaced. A process of the old program that has to be stopped while it still passes
+	// for this program, such as the vault process, is stopped there, or prepared for a successor. An error
+	// from it ends the update with nothing installed.
+	BeforeReplace func(ctx context.Context, release Release) error
+	// AfterReplace, when set, runs once the program is replaced, with the same release. The update is done
+	// by then, so it has no error to return; what it has to say, it keeps for its caller.
+	AfterReplace func(ctx context.Context, release Release)
 }
 
+// Release names the files of the verified release a hook of Client may read: copies in a private directory
+// that exists until Update returns.
+type Release struct {
+	// Signed reports that Signature holds a valid signature over Checksums.
+	Signed bool
+	// Checksums, Signature, and Archive are absolute paths; Signature is empty for a release without one.
+	Checksums, Signature, Archive string
+	// ArchiveName is the archive's file name in the release, which Checksums lists it by.
+	ArchiveName string
+}
+
+// testBaseURL is set at build time only (-ldflags -X) to point the updater of a test binary at a local
+// release server instead of GitHub, so that end-to-end tests can run real binaries against test releases.
+var testBaseURL string
+
 // New returns the production updater for version.
-func New(version string) *Client { return &Client{Version: version} }
+func New(version string) *Client { return &Client{Version: version, BaseURL: testBaseURL} }
 
 // Check reports whether GitHub has a newer stable release without downloading an artifact.
 func (c *Client) Check(ctx context.Context) (Result, error) {
@@ -116,8 +135,9 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("download checksums: %w", err)
 	}
+	var signature []byte
 	if signatureURL != "" {
-		signature, err := c.download(ctx, signatureURL, maxMetadataBytes)
+		signature, err = c.download(ctx, signatureURL, maxMetadataBytes)
 		if err != nil {
 			return Result{}, fmt.Errorf("download checksums signature: %w", err)
 		}
@@ -146,14 +166,44 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if c.BeforeReplace != nil {
-		c.BeforeReplace(ctx)
+	files := Release{Signed: result.Signed, ArchiveName: archiveName}
+	if c.BeforeReplace != nil || c.AfterReplace != nil {
+		dir, err := os.MkdirTemp("", "qatlas-release-*")
+		if err != nil {
+			return Result{}, fmt.Errorf("create release directory: %w", err)
+		}
+		defer os.RemoveAll(dir)
+		if files, err = writeRelease(dir, files, checksums, signature, archive); err != nil {
+			return Result{}, err
+		}
 	}
-	if err := c.install(payload, goos); err != nil {
+	if err := c.install(ctx, payload, goos, files); err != nil {
 		return Result{}, err
 	}
 	result.Updated = true
+	if c.AfterReplace != nil {
+		c.AfterReplace(ctx, files)
+	}
 	return result, nil
+}
+
+// writeRelease stores the verified release files in dir, which is private to this user, and names them.
+func writeRelease(dir string, files Release, checksums, signature, archive []byte) (Release, error) {
+	files.Checksums = filepath.Join(dir, "checksums.txt")
+	files.Archive = filepath.Join(dir, files.ArchiveName)
+	if err := os.WriteFile(files.Checksums, checksums, 0o600); err != nil {
+		return Release{}, fmt.Errorf("store checksums: %w", err)
+	}
+	if signature != nil {
+		files.Signature = filepath.Join(dir, "checksums.txt.sig")
+		if err := os.WriteFile(files.Signature, signature, 0o600); err != nil {
+			return Release{}, fmt.Errorf("store checksums signature: %w", err)
+		}
+	}
+	if err := os.WriteFile(files.Archive, archive, 0o600); err != nil {
+		return Release{}, fmt.Errorf("store %s: %w", files.ArchiveName, err)
+	}
+	return files, nil
 }
 
 type release struct {
@@ -435,7 +485,7 @@ func requirePayload(out payload, goos string) (payload, error) {
 	return out, nil
 }
 
-func (c *Client) install(files payload, goos string) error {
+func (c *Client) install(ctx context.Context, files payload, goos string, release Release) error {
 	executable := c.Executable
 	if executable == "" {
 		var err error
@@ -478,6 +528,11 @@ func (c *Client) install(files payload, goos string) error {
 		return fmt.Errorf("stage executable: %w", err)
 	}
 	defer os.Remove(stagedBinary)
+	if c.BeforeReplace != nil {
+		if err := c.BeforeReplace(ctx, release); err != nil {
+			return err
+		}
+	}
 	if err := os.Rename(stagedMan, filepath.Join(manDir, "qatlas.1")); err != nil {
 		return fmt.Errorf("install manpage: %w", err)
 	}

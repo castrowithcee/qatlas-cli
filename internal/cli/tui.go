@@ -340,7 +340,7 @@ func connectionTester(store *config.Store, opts *Options, reg *capability.Regist
 
 // tuiUpdater returns what the editor checks for a newer release with, or nil where it must not check: in a
 // dev build, which has no release to compare with, and when QATLAS_NO_UPDATE_CHECK is set. Its installation
-// locks a running vault process right before the program is replaced, the way 'qatlas update' does.
+// hands a running vault process over or locks it around the replacement, the way 'qatlas update' does.
 func tuiUpdater(opts *Options, buildVersion string) tui.Updater {
 	if buildVersion == "" || buildVersion == "dev" || os.Getenv(noUpdateCheck) != "" {
 		return nil
@@ -352,8 +352,8 @@ func tuiUpdater(opts *Options, buildVersion string) tui.Updater {
 	return &lockingUpdater{opts: opts, client: client}
 }
 
-// lockingUpdater is the editor's updater: the client with the vault lock of 'qatlas update' before the
-// replacement. Note keeps what that lock had to say, for the editor's status line.
+// lockingUpdater is the editor's updater: the client with the vault handover or lock of 'qatlas update'
+// around the replacement. Note keeps what that had to say, for the editor's status line.
 type lockingUpdater struct {
 	opts   *Options
 	client *selfupdate.Client
@@ -365,16 +365,11 @@ func (u *lockingUpdater) Check(ctx context.Context) (selfupdate.Result, error) {
 }
 
 func (u *lockingUpdater) Update(ctx context.Context) (selfupdate.Result, error) {
-	replacing := *u.client
-	replacing.BeforeReplace = func(ctx context.Context) {
-		u.note = lockVaultProcessOf(ctx, u.opts, "before qatlas was replaced",
-			"run 'qatlas vault unlock' to unlock the vault again")
-		if u.client.BeforeReplace != nil {
-			u.client.BeforeReplace(ctx)
-		}
-	}
-	return replacing.Update(ctx)
+	replacement := &vaultReplacement{opts: u.opts}
+	result, err := replacement.hooked(u.client).Update(ctx)
+	u.note = replacement.finish()
+	return result, err
 }
 
-// Note is what locking the vault process said during the last installation.
+// Note is what handing over or locking the vault process said during the last installation.
 func (u *lockingUpdater) Note() string { return u.note }
