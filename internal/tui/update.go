@@ -71,6 +71,11 @@ func (m *Model) askUpdate() {
 	if !m.updateOffered() {
 		return
 	}
+	if work := m.updateBlocker(); work != "" {
+		m.clearMessages()
+		m.status = "Wait until " + work + " finishes, then press u again."
+		return
+	}
 	m.updateFrom = m.screen
 	m.screen = screenUpdate
 	// Counted once here: the view is drawn on every key.
@@ -78,10 +83,27 @@ func (m *Model) askUpdate() {
 	m.clearMessages()
 }
 
+// updateBlocker names the store or vault work in flight, if any. An installation locks the vault process
+// and replaces the program, which such work must not meet halfway: a vault process still starting would be
+// refused by the new program, and a restart would not happen.
+func (m *Model) updateBlocker() string {
+	switch {
+	case m.busy != "":
+		return m.busy
+	case m.vaultBusy:
+		return "the vault work"
+	}
+	return ""
+}
+
 func (m *Model) updateUpdateConfirm(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "y":
 		m.screen = m.updateFrom
+		if work := m.updateBlocker(); work != "" {
+			m.status = "Update not installed: wait until " + work + " finishes, then press u again."
+			return nil
+		}
 		return m.startUpdate()
 	case "n", "esc":
 		m.screen = m.updateFrom

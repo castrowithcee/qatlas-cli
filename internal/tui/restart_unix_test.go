@@ -161,13 +161,19 @@ func TestNoRestartWhereTheNewProgramCannotRun(t *testing.T) {
 			}
 		},
 		"no restart on this platform": func(t *testing.T, m *Model, r *restartRecorder) { m.restart = nil },
-		"vault write in flight":       func(t *testing.T, m *Model, r *restartRecorder) { m.vaultBusy = true },
+		"vault write in flight":       func(t *testing.T, m *Model, r *restartRecorder) {},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := startedWith(t, newerRelease())
 			r := withRestart(t, m, true)
 			prepare(t, m, r)
-			pump(t, m, "u", "y")
+			press(t, m, "u")
+			_, cmd := m.Update(keyMsg("y"))
+			if name == "vault write in flight" {
+				// Work that began after the installation started; u itself refuses to start one meanwhile.
+				m.vaultBusy = true
+			}
+			deliver(m, cmd)
 			if r.command != nil || len(r.calls) != 0 {
 				t.Errorf("the editor restarted")
 			}
