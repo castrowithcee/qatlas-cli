@@ -16,8 +16,11 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update",
 		Short: "Update qatlas to the latest stable release",
-		Long: "Update checks the latest stable GitHub release, verifies the selected archive with its\n" +
-			"published SHA-256 checksum, and replaces a direct <prefix>/bin/qatlas installation.\n" +
+		Long: "Update checks the latest stable GitHub release, verifies the signature of its checksums.txt\n" +
+			"(checksums.txt.sig, an SSH signature checked against the release keys built into qatlas)\n" +
+			"and the selected archive with its published SHA-256 checksum, and replaces a direct\n" +
+			"<prefix>/bin/qatlas installation. A release with an invalid signature is refused and nothing is\n" +
+			"changed; a release without a signature is still installed, and the output says signed: false.\n" +
 			"It also refreshes qatlas.1 in the same prefix. Dev builds and symlink installations are\n" +
 			"not replaced. Use --check to report availability without changing files.\n\n" +
 			"Before it downloads anything, update names the new version and what the replacement does to\n" +
@@ -58,6 +61,7 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 				{Name: "latest", Value: result.Latest},
 				{Name: "update_available", Value: result.UpdateAvailable},
 				{Name: "updated", Value: result.Updated},
+				{Name: "signed", Value: result.Signed},
 			}})
 		},
 	}

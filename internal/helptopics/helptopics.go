@@ -107,7 +107,7 @@ const start = `Qatlas reaches the services you already run through named connect
      qatlas invoke bookstack.pages.list --connection <name> --arg limit=5
 
    The result arrives on stdout as JSON. A tool that changes data also needs --confirm.
-5. Stay current with 'qatlas update'; 'qatlas update --check' only reports whether a newer stable release exists. 'qatlas update' asks for y/n at the terminal and names what the update does to running processes. 'qatlas tui' shows a newer release at its top and asks the same question before it installs with u; on Linux and macOS it then restarts itself.
+5. Stay current with 'qatlas update'; 'qatlas update --check' only reports whether a newer stable release exists. Update verifies the release signature of checksums.txt against the keys built into qatlas and refuses an invalid one; a release without a signature installs and is reported as signed: false. 'qatlas update' asks for y/n at the terminal and names what the update does to running processes. 'qatlas tui' shows a newer release at its top and asks the same question before it installs with u; on Linux and macOS it then restarts itself.
 
 'qatlas help agents' explains how an agent uses qatlas, and 'qatlas help configuration' what services, credentials, connections, and defaults are. 'qatlas config validate' checks the configuration file.`
 
