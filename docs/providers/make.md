@@ -168,6 +168,10 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.datastorerecords.list` | read | none | lists records (key and capped data) of one data store of the bound team after binding the store; at most 50 per page, each record capped; untrusted personal data |
 | `make.datastorerecords.create` | create | required | creates one record (`POST /data-stores/{id}/data`, optional `key` and a bounded `data` object) after binding the store |
 | `make.datastorerecords.delete` | delete | required | deletes explicitly named records (`DELETE /data-stores/{id}/data`, body `keys`, 1 to 50 distinct); never `all`, `exceptKeys`, or `confirmed`; offered only through a tools list |
+| `make.teamvariables.list` | read | none | lists the bound team's custom and system variables (name, type, capped value, `is_system`); values may be secret |
+| `make.teamvariables.create` | create | required | creates one custom variable in the bound team (`POST /teams/{teamId}/variables`) |
+| `make.teamvariables.update` | update | required | sets type and value of one existing custom variable (`PATCH /teams/{teamId}/variables/{name}`) after listing it; never a system variable |
+| `make.teamvariables.delete` | delete | required | deletes one custom variable (`DELETE /teams/{teamId}/variables/{name}?confirmed=true`) after listing it, only with `confirmed: true`; offered only through a tools list |
 | `make.datastructures.list` | read | none | lists the bound team's data structures (id, name, strict), sorted by name, page by page |
 | `make.datastructures.get` | read | none | reads one data structure with its bounded field specification, with its team confirmed live |
 | `make.credentialrequests.list` | read | none | lists the bound team's credential requests by allow-listed metadata, at most 200; never a link or email |
@@ -294,7 +298,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see "Data stores and data structures") and `udts:read` for the data structure tools and the structure check of a store create or update; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see "Data stores and data structures"), `team-variables:read` and `team-variables:write` (with `team-variables:read`) for the team variable tools, and `udts:read` for the data structure tools and the structure check of a store create or update; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -541,6 +545,42 @@ Replacing (`PUT /data-stores/{id}/data/{key}`) and updating (`PATCH`) a single r
 reference documents their body only as having "no predefined body properties" and publishes no request example,
 so whether the body is the record data itself or a `{"data":...}` wrapper is undocumented.
 
+## Team variables
+
+`make.teamvariables.list`, `.create`, `.update`, and `.delete` work on the variables of the bound team. Tool ids
+have three segments, so the object is named `teamvariables`. None takes a team argument: the team is always the
+connection's own target. A connection with a scenario allow-list reaches none of them, refused before any secret
+is read. Organization variables are not offered.
+
+| Tool | Request | Make scope |
+| --- | --- | --- |
+| `make.teamvariables.list` | `GET /teams/{teamId}/variables` | `team-variables:read` |
+| `make.teamvariables.create` | `POST /teams/{teamId}/variables` with `typeId`, `name`, `value` | `team-variables:write` |
+| `make.teamvariables.update` | `PATCH /teams/{teamId}/variables/{name}` with `typeId`, `value` | `team-variables:write`, `team-variables:read` |
+| `make.teamvariables.delete` | `DELETE /teams/{teamId}/variables/{name}?confirmed=true` | `team-variables:write`, `team-variables:read` |
+
+Source: developers.make.com API reference, Teams, team variables (checked 2026-10-05 against the published
+reference, not a live account). Types are `number` (1), `text` (2, Make's string), `boolean` (3), and `date`
+(4, ISO 8601; only an RFC 3339 timestamp or `YYYY-MM-DD` is accepted, an assumption). A name has 1 to 128
+letters, digits, `$`, or `_` (Make documents the characters, not the length); a text value at most 4096 bytes;
+`null` is refused. Values may hold secrets or personal data (sensitivity `make-team-variables-may-hold-secrets`)
+and are untrusted; a listed value is capped like other payloads, with `truncated` set when anything was cut, at
+most 500 variables per list.
+
+Without the `customVariables` license (see `make.organization.get`) Make reports only its system variables and
+answers a delete with 404. The list therefore reports `custom_count` and `system_count`: `custom_count` 0 can mean
+that the feature is unavailable. `update` and `delete` first list the variables and refuse a system variable or an
+unknown name as an invalid request without sending the change; the reference does not say whether Make itself
+would refuse a system variable. Renaming and the history endpoint are not offered, and `update` always sends
+type and value together, as the reference asks.
+
+`delete` needs the argument `confirmed: true`, which is what sets Make's `confirmed=true`; the reference states
+that the call fails without it. Scenarios that read the variable by name lose its value, and Qatlas does not look
+them up, so check them first. It is in no profile and is offered only when a connection's `tools` list names it.
+The profiles are `teamvariables-read` and `teamvariables-manage` (list, create, update); neither is recommended.
+Changes need their own confirmation, send exactly one changing request, and are never retried; a timeout, a
+connection reset, a 5xx, or an unreadable answer is reported as uncertain.
+
 ## Credential requests
 
 A credential request asks a person to enter the secret of a connection or key themselves, through a link Make
@@ -585,7 +625,7 @@ This provider lists and reads scenarios and runs, reads a scenario's blueprint, 
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
 call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, replace or update a single data store record, delete all records of a store, manage keys, teams, or organizations (it only reads the bound team
-and its organization), or read team or organization variables; those are out of scope. For connections it
+and its organization), or read or change organization variables; those are out of scope. It lists, creates, updates, and (through a tools list) deletes the custom variables of the bound team, never a system variable. For connections it
 lists and reads allow-listed metadata, lists editable parameter names, tests, renames, and (through a tools
 list) creates, sets the data of, and deletes a connection of the bound team, taking secrets only from a
 released forward credential, and lists and sets the roles of users on its access list; it does not authorize

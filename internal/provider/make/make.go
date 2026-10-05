@@ -628,7 +628,9 @@ func Register(reg *capability.Registry) error {
 				"and datastores:write for the separately offered data store delete tool, plus udts:read for the " +
 				"datastructures-read profile, plus datastores:read for the datastorerecords-read profile and " +
 				"datastores:read with datastores:write for the datastorerecords-manage profile and the " +
-				"separately offered record delete tool. A token belongs to one " +
+				"separately offered record delete tool, plus team-variables:read for the teamvariables-read profile and " +
+				"team-variables:read with team-variables:write for the teamvariables-manage profile and the " +
+				"separately offered variable delete tool. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -780,6 +782,20 @@ func Register(reg *capability.Registry) error {
 				"datastores:read and datastores:write scopes. Deleting records is in no profile",
 			Tools: []string{dataStoreRecordsList.ID, dataStoreRecordsCreate.ID},
 		}, {
+			ID: "teamvariables-read", Title: "Read the bound team's variables",
+			Description: "lists the custom and system variables of the bound team with capped values, which " +
+				"may be secret; without the customVariables license Make reports only system variables; " +
+				"changes nothing and needs the team-variables:read scope; refused on a connection with a " +
+				"scenario allow-list",
+			Tools: []string{teamVariablesList.ID},
+		}, {
+			ID: "teamvariables-manage", Title: "Create and update the bound team's variables",
+			Description: "reads what teamvariables-read reads, creates a custom variable, and sets the type and " +
+				"value of a custom one, never a system variable; every change needs its own confirmation, is " +
+				"never retried, and needs the team-variables:read and team-variables:write scopes. Deleting a " +
+				"variable is in no profile",
+			Tools: []string{teamVariablesList.ID, teamVariablesCreate.ID, teamVariablesUpdate.ID},
+		}, {
 			ID: "datastructures-read", Title: "Read the bound team's data structures",
 			Description: "lists and reads the data structures of the bound team with their field " +
 				"specification; changes nothing and needs the udts:read scope; refused on a connection " +
@@ -837,6 +853,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataStoreRecordsList, Handler: capability.Handler(invokeDataStoreRecordsList)},
 		capability.Operation{Descriptor: dataStoreRecordsCreate, Handler: capability.Handler(invokeDataStoreRecordsCreate)},
 		capability.Operation{Descriptor: dataStoreRecordsDelete, Handler: capability.Handler(invokeDataStoreRecordsDelete)},
+		capability.Operation{Descriptor: teamVariablesList, Handler: capability.Handler(invokeTeamVariablesList)},
+		capability.Operation{Descriptor: teamVariablesCreate, Handler: capability.Handler(invokeTeamVariablesCreate)},
+		capability.Operation{Descriptor: teamVariablesUpdate, Handler: capability.Handler(invokeTeamVariablesUpdate)},
+		capability.Operation{Descriptor: teamVariablesDelete, Handler: capability.Handler(invokeTeamVariablesDelete)},
 		capability.Operation{Descriptor: dataStructuresList, Handler: capability.Handler(invokeDataStructuresList)},
 		capability.Operation{Descriptor: dataStructuresGet, Handler: capability.Handler(invokeDataStructuresGet)},
 		capability.Operation{Descriptor: credentialRequestsList, Handler: capability.Handler(invokeCredentialRequestsList)},
