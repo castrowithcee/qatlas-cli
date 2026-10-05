@@ -107,6 +107,8 @@ var testProviders ProviderCatalog = testProviderCatalog{
 			{ID: "github.projectitems.get", Effect: PermissionRead},
 			{ID: "github.projectitems.list", Effect: PermissionRead},
 			{ID: "github.projectitems.update", Effect: PermissionUpdate},
+			{ID: "github.repositorysettings.get", Effect: PermissionRead, RequiresToolAllowList: true},
+			{ID: "github.repositorysettings.update", Effect: PermissionUpdate, RequiresToolAllowList: true},
 			{ID: "github.workflowartifacts.list", Effect: PermissionRead},
 			{ID: "github.workflowfiles.create", Effect: PermissionCreate, RequiresToolAllowList: true},
 			{ID: "github.workflowfiles.get", Effect: PermissionRead, RequiresToolAllowList: true},

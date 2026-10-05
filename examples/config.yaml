@@ -488,7 +488,7 @@ connections:
       github.workflowfiles.create, github.workflowfiles.update, github.workflows.enable, github.workflows.disable]
 
   # An Actions administrator reads and changes whether Actions run, which actions they may use, and the
-  # default rights of the GITHUB_TOKEN. Its tools are listed only as well.
+  # default rights of the GITHUB_TOKEN, and the merge and branch settings. Its tools are listed only as well.
   ci-admin:
     service: github
     credential: github-maintainer
@@ -496,7 +496,7 @@ connections:
     description: administers the Actions settings of the example repository
     permissions: [read, update]
     tools: [github.actionspermissions.get, github.actionspermissions.update, github.workflowpermissions.get,
-      github.workflowpermissions.update]
+      github.workflowpermissions.update, github.repositorysettings.get, github.repositorysettings.update]
 
   # A Todoist connection binds one personal account to an explicit list of project IDs. Tasks, sections,
   # comments, and reminders of any other project are never returned, and no argument widens the list.

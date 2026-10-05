@@ -526,6 +526,19 @@ type actionsArguments struct {
 	DefaultWorkflowPermissions string `json:"default_workflow_permissions"`
 	CanApprove                 *bool  `json:"can_approve_pull_request_reviews"`
 
+	// The arguments of github.repositorysettings.update.
+	AllowMergeCommit         *bool  `json:"allow_merge_commit"`
+	AllowSquashMerge         *bool  `json:"allow_squash_merge"`
+	AllowRebaseMerge         *bool  `json:"allow_rebase_merge"`
+	AllowAutoMerge           *bool  `json:"allow_auto_merge"`
+	AllowUpdateBranch        *bool  `json:"allow_update_branch"`
+	DeleteBranchOnMerge      *bool  `json:"delete_branch_on_merge"`
+	WebCommitSignoffRequired *bool  `json:"web_commit_signoff_required"`
+	SquashMergeCommitTitle   string `json:"squash_merge_commit_title"`
+	SquashMergeCommitMessage string `json:"squash_merge_commit_message"`
+	MergeCommitTitle         string `json:"merge_commit_title"`
+	MergeCommitMessage       string `json:"merge_commit_message"`
+
 	list          string
 	page, perPage int
 	binding       []byte

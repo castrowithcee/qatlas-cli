@@ -185,7 +185,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,5,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",192,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", ",\"\",3,0,0\n",
 		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",28,0,0\n", ",\"\",6,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n", ",\"\",2,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -442,7 +442,8 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 			"github.releaseassets.list", "github.releases.create", "github.releases.delete",
 			"github.releases.get", "github.releases.list", "github.releases.update",
 			"github.repositories.create", "github.repositories.delete", "github.repositories.fork",
-			"github.repositories.list", "github.repositories.search", "github.repositoryadvisories.list", "github.repositorysubscriptions.set",
+			"github.repositories.list", "github.repositories.search", "github.repositoryadvisories.list", "github.repositorysettings.get",
+			"github.repositorysettings.update", "github.repositorysubscriptions.set",
 			"github.rulesets.create", "github.rulesets.delete", "github.rulesets.get", "github.rulesets.list",
 			"github.rulesets.update",
 			"github.secretscanningalerts.get", "github.secretscanningalerts.list",
