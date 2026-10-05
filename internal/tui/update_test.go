@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -304,8 +305,13 @@ func TestTheUpdateQuestionNamesTheConsequencesAndLocksBeforeReplacing(t *testing
 	m := startedWith(t, fake)
 	press(t, m, "u")
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"Update qatlas to v0.5.0?", "A running vault process is handed over to the new version",
-		"'qatlas tui' and 'qatlas web'"} {
+	wants := []string{"Update qatlas to v0.5.0?", "A running vault process is handed over to the new version",
+		"'qatlas tui' and 'qatlas web'"}
+	if runtime.GOOS == "windows" {
+		// Windows has no vault process; the question names the rename and the processes that keep running.
+		wants = []string{"Update qatlas to v0.5.0?", "renamed to qatlas.exe.old", "'qatlas tui' and 'qatlas web'"}
+	}
+	for _, want := range wants {
 		if !strings.Contains(view, want) {
 			t.Errorf("the question does not say %q:\n%s", want, screenOf(m))
 		}

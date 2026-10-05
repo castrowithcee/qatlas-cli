@@ -112,7 +112,10 @@ func TestNextUpdateRemovesLeftover(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertFile(t, executable, "v3")
-	assertFile(t, executable+".old", "v2")
+	// Neither the v1 leftover of the first update nor the v2 file, which no longer runs, remains.
+	if _, err := os.Stat(executable + ".old"); !os.IsNotExist(err) {
+		t.Errorf(".old remains although no replaced program runs: %v", err)
+	}
 	if matches, _ := filepath.Glob(executable + ".old-*"); len(matches) != 0 {
 		t.Errorf("unique leftovers: %v", matches)
 	}
