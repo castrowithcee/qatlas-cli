@@ -335,6 +335,31 @@ func headerOf(t *testing.T, raw []byte) mail.Header {
 	return message.Header
 }
 
+// hasBccLine reports whether any line of raw starts with a Bcc field name. It
+// checks lines instead of the whole text, because random MIME boundaries may
+// contain "bcc".
+func hasBccLine(raw []byte) bool {
+	for _, line := range strings.Split(string(raw), "\n") {
+		if strings.HasPrefix(strings.ToLower(line), "bcc:") {
+			return true
+		}
+	}
+	return false
+}
+
+func TestHasBccLineIgnoresBoundariesAndFindsTheField(t *testing.T) {
+	boundary := rawDraft(mailbox, "", `multipart/mixed; boundary="bcc74c1b"`,
+		"--bcc74c1b\r\nContent-Type: text/plain\r\n\r\nx\r\n--bcc74c1b--\r\n")
+	if hasBccLine([]byte(boundary)) {
+		t.Errorf("a boundary with bcc counts as a Bcc field")
+	}
+	for _, field := range []string{"Bcc: a@example.net\r\n", "BCC:a@example.net\r\n"} {
+		if !hasBccLine([]byte(rawDraft(mailbox, field, "text/plain", "x\r\n"))) {
+			t.Errorf("missed %q", field)
+		}
+	}
+}
+
 func TestMessagesSendSubmitsOnceOverStartTLSAndStoresTheCopy(t *testing.T) {
 	e := sendEnvironment(t, t.TempDir())
 	server := newSMTPServer(t, true, nil)
@@ -379,7 +404,7 @@ func TestMessagesSendSubmitsOnceOverStartTLSAndStoresTheCopy(t *testing.T) {
 	}
 	header := headerOf(t, messages[0])
 	if header.Get("From") != mailbox || header.Get("Message-ID") != got.MessageID || header.Get("Bcc") != "" ||
-		strings.Contains(strings.ToLower(string(messages[0])), "bcc") || strings.Contains(string(messages[0]), "secret-bcc") {
+		hasBccLine(messages[0]) || strings.Contains(string(messages[0]), "secret-bcc") {
 		t.Errorf("sent header = %v\n%s", header, messages[0])
 	}
 	// The copy is the sent message, flagged \Seen, and holds no Bcc either.
@@ -745,7 +770,7 @@ func TestDraftsSendSendsACheckedDraftWithoutBccAndKeepsIt(t *testing.T) {
 	}
 	sent := server.delivered()[0]
 	header := headerOf(t, sent)
-	if header.Get("Bcc") != "" || strings.Contains(strings.ToLower(string(sent)), "bcc") || strings.Contains(string(sent), "secret-bcc") ||
+	if header.Get("Bcc") != "" || hasBccLine(sent) || strings.Contains(string(sent), "secret-bcc") ||
 		header.Get("From") != mailbox || header.Get("Message-ID") != got.MessageID {
 		t.Errorf("sent message:\n%s", sent)
 	}
