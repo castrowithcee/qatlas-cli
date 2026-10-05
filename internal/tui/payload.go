@@ -111,7 +111,7 @@ func (m *Model) payloadFields(edit, source string) []field {
 // payloadValueRow is the masked row of one field. stored marks a field that already has a value: left empty,
 // it keeps that value.
 func (m *Model) payloadValueRow(name string, stored, lead bool) field {
-	f := m.maskedField(name, lead)
+	f := m.maskedField("", name, lead)
 	f.stored = stored
 	f.hint = fmt.Sprintf(payloadMaskHint, config.MinForwardValueLength)
 	if stored {

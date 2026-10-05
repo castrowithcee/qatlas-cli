@@ -188,10 +188,10 @@ func (m *Model) setupPage(step int) []field {
 		// what was typed as a secret is never shown as a variable name after a change of mind.
 		roles := m.credentialRoles(provider)
 		for i, role := range roles {
-			fields = append(fields, m.maskedField(role, i == 0))
+			fields = append(fields, m.maskedField(provider, role, i == 0))
 		}
 		for i, role := range roles {
-			fields = append(fields, m.roleField(role, "", config.CredentialTypeEnv, i == 0))
+			fields = append(fields, m.roleField(provider, role, "", config.CredentialTypeEnv, i == 0))
 		}
 		return fields
 	case stepScope:
@@ -214,18 +214,12 @@ func (m *Model) setupPage(step int) []field {
 }
 
 // maskedField is the row that takes the secret of one role of a new keyring credential.
-func (m *Model) maskedField(role string, lead bool) field {
+func (m *Model) maskedField(provider, role string, lead bool) field {
 	f := textField(role, "", false)
 	f.kind, f.roleLead = fieldMasked, lead
 	f.input.EchoMode = textinput.EchoPassword
-	var parts []string
-	if description := m.cfg.SecretRoleDescription(role); description != "" {
-		parts = append(parts, description)
-	}
-	if lead {
-		parts = append(parts, maskedHint)
-	}
-	f.hint = strings.Join(parts, "; ")
+	f.hint = m.roleHintText(provider, role, maskedHint, lead, false)
+	f.detail = m.roleDetail(provider, role, maskedHint, lead)
 	return f
 }
 

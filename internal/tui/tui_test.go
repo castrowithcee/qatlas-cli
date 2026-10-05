@@ -1403,11 +1403,17 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	view := screenOf(m)
 	words := strings.Join(strings.Fields(view), " ")
 	for _, want := range []string{
-		"the NAME of an environment variable", "never the secret", "value labeled Token ID", "not a name you choose",
-		"every role row",
+		"the NAME of an environment variable", "never the secret", "BookStack token ID", "every role row",
 	} {
 		if !strings.Contains(words, want) {
 			t.Errorf("the credential form does not say %q:\n%s", want, view)
+		}
+	}
+	// The inline hint is the short form; the whole explanation is one key away.
+	detail := strings.Join(strings.Fields(m.fieldDetail(m.fields[m.focus])), " ")
+	for _, want := range []string{"value labeled Token ID", "not a name you choose"} {
+		if !strings.Contains(detail, want) {
+			t.Errorf("the detail help of token-id does not say %q: %s", want, detail)
 		}
 	}
 	if strings.Contains(words, "value labeled Token Secret") {
@@ -1417,8 +1423,9 @@ func TestFieldHintsSayWhatAFieldExpects(t *testing.T) {
 	focusField(t, m, "token-secret")
 	view = screenOf(m)
 	words = strings.Join(strings.Fields(view), " ")
-	if !strings.Contains(words, "value labeled Token Secret") {
-		t.Errorf("the credential form does not explain %q:\n%s", "value labeled Token Secret", view)
+	if detail := strings.Join(strings.Fields(m.fieldDetail(m.fields[m.focus])), " "); !strings.Contains(detail,
+		"value labeled Token Secret") {
+		t.Errorf("the detail help of token-secret does not explain %q: %s", "value labeled Token Secret", detail)
 	}
 	if strings.Contains(words, "every role row") {
 		t.Errorf("the token-secret hint repeats the sentence shared by every role row:\n%s", view)
@@ -1781,8 +1788,10 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 	if !strings.Contains(before, "enter save credential first") {
 		t.Errorf("new credential does not explain the first save:\n%s", before)
 	}
-	if !strings.Contains(before, "value labeled Token ID") || !strings.Contains(before, "not a name you choose") {
-		t.Errorf("new credential does not explain token-id:\n%s", before)
+	detail := strings.Join(strings.Fields(m.fieldDetail(m.fields[m.focus])), " ")
+	if !strings.Contains(before, "BookStack token ID") || !strings.Contains(detail, "value labeled Token ID") ||
+		!strings.Contains(detail, "not a name you choose") {
+		t.Errorf("new credential does not explain token-id:\n%s\n%s", before, detail)
 	}
 	press(t, m, "enter")
 

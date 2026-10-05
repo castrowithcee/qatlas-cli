@@ -90,12 +90,15 @@ const (
 	stateStored      = "in system keyring"
 	stateStoredVault = "in the vault"
 	stateVaultLocked = "vault locked"
-	stateOverride    = "environment variable, overrides keyring"
-	statePlaintext   = "unencrypted file"
-	stateEmpty       = "not stored yet"
-	stateLocked      = "keyring locked"
-	stateUnreachable = "keyring unreachable"
-	stateOff         = "keyring switched off"
+	// stateVaultElsewhere is the same locked vault while the header shows it unlocked because a vault
+	// process elsewhere holds it open: that process can serve it, this window cannot read the entry itself.
+	stateVaultElsewhere = "locked in this window, unlocked in the vault process"
+	stateOverride       = "environment variable, overrides keyring"
+	statePlaintext      = "unencrypted file"
+	stateEmpty          = "not stored yet"
+	stateLocked         = "keyring locked"
+	stateUnreachable    = "keyring unreachable"
+	stateOff            = "keyring switched off"
 )
 
 // Where the secrets of a credential are kept. The guided setup and the credential form offer the same row,
@@ -897,6 +900,9 @@ func (m *Model) vaultRoleState(credential, role string) string {
 		return stateEmpty
 	}
 	if state == vault.StateLocked {
+		if m.vaultProcessUnlocked {
+			return stateVaultElsewhere
+		}
 		return stateVaultLocked
 	}
 	_, found, _, err := v.Get(credential, role, nil)
@@ -931,7 +937,7 @@ func secretState(source string) string {
 		return "missing"
 	case stateOverride:
 		return "env override"
-	case stateVaultLocked:
+	case stateVaultLocked, stateVaultElsewhere:
 		return "locked"
 	}
 	return source
@@ -971,9 +977,12 @@ func (m *Model) secretNextStep(credential, role string) string {
 // The keys are the same on every role row, so they are said once, on the first one, like the sentence an
 // env credential carries there; the stages differ per role, so every row keeps its own. The key line at the
 // foot of the form repeats the keys for whichever row the focus is on.
-func (m *Model) secretRowHint(credential, role string, lead bool) string {
+func (m *Model) secretRowHint(credential, role string, lead, full bool) string {
 	var parts []string
-	if description := m.cfg.SecretRoleDescription(role); description != "" {
+	if description := m.cfg.SecretRoleDescriptionOf(m.formProvider(), role); description != "" {
+		if !full {
+			description = shortDescription(description)
+		}
 		parts = append(parts, description)
 	}
 	if lead {
