@@ -997,6 +997,38 @@ func (c *Config) SecretRoleDescription(role string) string {
 	return ""
 }
 
+// SecretRoleDescriptionOf returns the help one provider authors for one of its roles. Role names are not
+// unique across providers ("token" exists in several), so a role is only explained by the provider it
+// belongs to. Without a provider the help is given only when every provider that defines the role words it
+// the same; an ambiguous role gets none rather than another provider's text.
+func (c *Config) SecretRoleDescriptionOf(provider, role string) string {
+	if provider != "" {
+		metadata, ok := c.providerCatalog().ProviderMetadata(provider)
+		if !ok {
+			return ""
+		}
+		for _, candidate := range metadata.SecretRoles {
+			if candidate.Name == role {
+				return candidate.Description
+			}
+		}
+		return ""
+	}
+	found := ""
+	for _, metadata := range c.providerCatalog().ProviderMetadataAll() {
+		for _, candidate := range metadata.SecretRoles {
+			if candidate.Name != role {
+				continue
+			}
+			if found != "" && found != candidate.Description {
+				return ""
+			}
+			found = candidate.Description
+		}
+	}
+	return found
+}
+
 func validateBaseURL(raw string) error {
 	if raw == "" {
 		return errors.New("must not be empty")

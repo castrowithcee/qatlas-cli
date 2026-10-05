@@ -446,3 +446,25 @@ func TestVaultHeaderFitsAtEveryLayoutBoundary(t *testing.T) {
 		})
 	}
 }
+
+// The header shows "vault unlocked" because a vault process elsewhere holds the vault open, while this
+// window itself cannot read the entry: the role row must say so instead of a bare "vault locked".
+func TestVaultRoleStateDoesNotContradictHeaderUnlockedByProcess(t *testing.T) {
+	m, _ := newEncryptedVaultModel(t, filepath.Join(t.TempDir(), "qatlas"), "hunter2", false)
+
+	if got := m.vaultRoleState("cred", "token"); got != stateVaultLocked {
+		t.Fatalf("role state with the vault locked everywhere = %q, want %q", got, stateVaultLocked)
+	}
+
+	m.vaultProcessUnlocked = true
+	if h := m.vaultHeaderText(); !strings.Contains(h, "vault unlocked") {
+		t.Fatalf("header = %q, want it to show %q", h, "vault unlocked")
+	}
+	got := m.vaultRoleState("cred", "token")
+	if got != stateVaultElsewhere || got == stateVaultLocked {
+		t.Fatalf("role state = %q, want %q", got, stateVaultElsewhere)
+	}
+	if secretState(got) != "locked" {
+		t.Fatalf("secretState(%q) = %q, want %q", got, secretState(got), "locked")
+	}
+}

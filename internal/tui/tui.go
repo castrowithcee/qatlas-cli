@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -177,6 +178,9 @@ type field struct {
 	// hint says in one line what this field expects. It stays general: every rule belongs to the
 	// configuration core, and the editor must not grow schema knowledge of its own.
 	hint string
+	// detail is the full text of a hint that is shown shortened under the focused row; empty when the hint
+	// is already complete. F1 opens it (see openFieldHelp).
+	detail string
 	// readOnly marks the name of an existing entry. Renaming would silently break every reference to it,
 	// so an entry is changed in place or deleted and created again. A read-only field takes no editing
 	// focus and says that it is locked instead of describing a choice that is no longer there.
@@ -522,7 +526,13 @@ type Model struct {
 
 	// helpTopic is the topic the help screen shows, scrolled to helpOffset; helpFrom is the screen it
 	// returns to.
-	helpTopic  int
+	helpTopic int
+	// hintCap, while a form is being fitted to the terminal, is how many lines its hint may take (see
+	// fittedEditorView); 0 outside of that.
+	hintCap int
+	// helpDetail, while set, is the text of the help screen instead of a topic: the whole hint of the form
+	// row that F1 was pressed on.
+	helpDetail string
 	helpOffset int
 	helpFrom   screen
 
@@ -1105,7 +1115,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 		m.screen = m.leaveFrom
 		return nil
 	case screenHelp:
-		m.screen = m.helpFrom
+		m.screen, m.helpDetail = m.helpFrom, ""
 		return nil
 	case screenUpdate:
 		m.screen = m.updateFrom
@@ -1309,6 +1319,10 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		if key.String() == "ctrl+c" {
 			return m.quit()
 		}
+		return nil
+	}
+	if key.String() == "f1" {
+		m.openFieldHelp()
 		return nil
 	}
 	if key.String() == "f2" {
@@ -2424,7 +2438,7 @@ func (m *Model) roleFields(cred config.Credential, provider, credType string) []
 	roles := m.credentialRoles(provider)
 	fields := make([]field, 0, len(roles))
 	for i, role := range roles {
-		fields = append(fields, m.roleField(role, cred.Values[role], credType, i == 0))
+		fields = append(fields, m.roleField(provider, role, cred.Values[role], credType, i == 0))
 	}
 	return fields
 }
@@ -2485,7 +2499,8 @@ func (m *Model) credentialTypeChosen() tea.Cmd {
 			// learn it, but the row still carries none of its own to make room for that.
 			f.kind, f.hint = fieldSecret, ""
 		} else {
-			f.kind, f.hint = fieldEnvName, m.roleHint(f.label, f.roleLead)
+			f.kind = fieldEnvName
+			f.hint, f.detail = m.roleHints(m.formProvider(), f.label, f.roleLead)
 		}
 	}
 	m.applyFocus()
@@ -2911,10 +2926,11 @@ func textField(label, value string, readOnly bool) field {
 // editor in either case.
 //
 // lead marks the first role row, the one that carries what all of them have in common.
-func (m *Model) roleField(role, envName, credType string, lead bool) field {
+func (m *Model) roleField(provider, role, envName, credType string, lead bool) field {
 	f := textField(role, envName, false)
 	f.roleLead = lead
-	f.kind, f.hint = fieldEnvName, m.roleHint(role, lead)
+	f.kind = fieldEnvName
+	f.hint, f.detail = m.roleHints(provider, role, lead)
 	if credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault {
 		// A secret row builds its hint from what the resolver reported, so it carries none itself. A
 		// vault credential's row is drawn the same way, even though s and x on it lead to the CLI instead
@@ -2926,15 +2942,62 @@ func (m *Model) roleField(role, envName, credType string, lead bool) field {
 
 // roleHint says what the provider-defined role means. Only the first row adds the explanation shared by
 // every env row; repeating that part under the next role would read like a fault.
-func (m *Model) roleHint(role string, lead bool) string {
+//
+// The description is the one of the provider the credential belongs to: a role name like "token" exists in
+// several providers, and another provider's text under the row would be wrong. The hint carries the short
+// form of the description; detail the full one, or nothing where the two are the same.
+func (m *Model) roleHints(provider, role string, lead bool) (hint, detail string) {
+	return m.roleHintText(provider, role, envHint, lead, false), m.roleDetail(provider, role, envHint, lead)
+}
+
+// roleHintText joins the description of a role with what its first row adds (lead); full keeps the whole
+// description instead of its short form.
+func (m *Model) roleHintText(provider, role, lead string, isLead, full bool) string {
 	var parts []string
-	if description := m.cfg.SecretRoleDescription(role); description != "" {
+	if description := m.cfg.SecretRoleDescriptionOf(provider, role); description != "" {
+		if !full {
+			description = shortDescription(description)
+		}
 		parts = append(parts, description)
 	}
-	if lead {
-		parts = append(parts, envHint)
+	if isLead {
+		parts = append(parts, lead)
 	}
 	return strings.Join(parts, "; ")
+}
+
+// roleDetail is the full hint of a role row, or "" where the short hint already says all of it.
+func (m *Model) roleDetail(provider, role, lead string, isLead bool) string {
+	full := m.roleHintText(provider, role, lead, isLead, true)
+	if full == m.roleHintText(provider, role, lead, isLead, false) {
+		return ""
+	}
+	return full
+}
+
+// shortDescriptionLimit is how many characters of a provider's description stand inline under a row.
+const shortDescriptionLimit = 80
+
+// shortDescription is the part of a provider's description that fits a form: its first clause, or, where
+// that is still long, what stands before its first colon, or else its first words. A cut text ends in an
+// ellipsis; the whole text stays one key away (see openFieldHelp).
+func shortDescription(text string) string {
+	ellipsis := ""
+	if i := strings.Index(text, ";"); i >= 0 {
+		text, ellipsis = text[:i], "…"
+	}
+	runes := []rune(text)
+	if len(runes) <= shortDescriptionLimit {
+		return text + ellipsis
+	}
+	if i := strings.Index(text, ":"); i > 0 && utf8.RuneCountInString(text[:i]) <= shortDescriptionLimit {
+		return text[:i] + "…"
+	}
+	cut := string(runes[:shortDescriptionLimit])
+	if i := strings.LastIndex(cut, " "); i > 0 {
+		cut = cut[:i]
+	}
+	return strings.TrimRight(cut, " ,") + "…"
 }
 
 func choiceField(label string, choices []string, value string) field {
@@ -3161,7 +3224,7 @@ func (m *Model) View() string {
 // workspaceView is the current screen, or, when it cannot fit the workspace, what it needs and the way out
 // of it. The sections and the path stay on screen either way.
 func (m *Model) workspaceView() string {
-	view := m.editorView()
+	view := m.fittedEditorView()
 	if m.screen == screenLeave || m.viewFits(view) {
 		return view
 	}
@@ -3226,6 +3289,7 @@ func (m *Model) editorView() string {
 		} else {
 			b.WriteString(titleStyle.Render(what) + "\n\n")
 		}
+		moreHelp := false
 		for i, f := range m.fields {
 			if f.hidden {
 				continue
@@ -3235,7 +3299,9 @@ func (m *Model) editorView() string {
 			// itself in its own value instead (see renderField), the way a read-only tool list already does.
 			if i == m.focus && !f.readOnly {
 				if hint := m.fieldHint(f); hint != "" {
-					b.WriteString(m.indented(hint) + "\n")
+					shown, cut := m.limitedHint(hint)
+					b.WriteString(shown + "\n")
+					moreHelp = cut || m.fieldDetail(f) != hint
 				}
 			}
 			// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
@@ -3282,6 +3348,9 @@ func (m *Model) editorView() string {
 		if m.section == sectionTokens && m.wizard == nil {
 			// A token is created, not saved: it goes to the vault, never into the configuration.
 			keys = strings.ReplaceAll(keys, " save", " create")
+		}
+		if moreHelp {
+			keys = fieldHelpKey + " more · " + keys
 		}
 		b.WriteString(m.hint(keys))
 	case screenSecret:
@@ -3381,6 +3450,7 @@ func (m *Model) editorView() string {
 // asks before unsaved input is lost. On a choice row enter opens the values, so choiceFormKeys names F2,
 // which saves from every row.
 const (
+	fieldHelpKey   = "F1"
 	leaveKeys      = "esc leave"
 	formKeys       = "enter save · " + leaveKeys
 	choiceFormKeys = "F2 save · " + leaveKeys
@@ -3743,7 +3813,7 @@ func (m *Model) activeScreenTooSmall() bool {
 	if m.screen == screenLeave {
 		return false
 	}
-	return m.terminalTooSmall() || !m.viewFits(m.editorView())
+	return m.terminalTooSmall() || !m.viewFits(m.fittedEditorView())
 }
 
 func (m *Model) viewFits(view string) bool {
@@ -4190,6 +4260,64 @@ func (m *Model) indented(text string) string {
 	return m.indentedWith(hintStyle, text)
 }
 
+// The hint of the focused row takes at most maxHintLines lines, and fewer where the form would not fit the
+// terminal otherwise, but never fewer than minHintLines. A form must stay operable on the usual terminal
+// sizes whatever a provider writes or a list has grown to; what does not fit stays one key away (see
+// openFieldHelp).
+const (
+	maxHintLines = 6
+	minHintLines = 2
+)
+
+// fittedEditorView is editorView with the hint of the focused row cut only as far as the terminal needs. The
+// resize notice is for a terminal too small for the form itself, not for a form made large by a long hint.
+func (m *Model) fittedEditorView() string {
+	defer func() { m.hintCap = 0 }()
+	if m.screen == screenForm {
+		for lines := maxHintLines; lines > minHintLines; lines-- {
+			m.hintCap = lines
+			if view := m.editorView(); m.viewFits(view) {
+				return view
+			}
+		}
+	}
+	m.hintCap = minHintLines
+	return m.editorView()
+}
+
+// limitedHint is indented, cut to maxHintLines; cut reports that text was left out, which the last line
+// then says with an ellipsis.
+func (m *Model) limitedHint(text string) (shown string, cut bool) {
+	indent, width := m.fit("    ")
+	var pieces []string
+	for _, line := range strings.Split(text, "\n") {
+		if lipgloss.Width(line) <= width {
+			pieces = append(pieces, line)
+			continue
+		}
+		for _, piece := range strings.Split(lipgloss.NewStyle().Width(width).Render(line), "\n") {
+			pieces = append(pieces, strings.TrimRight(piece, " "))
+		}
+	}
+	limit := maxHintLines
+	if m.hintCap > 0 {
+		limit = m.hintCap
+	}
+	if len(pieces) > limit {
+		cut = true
+		pieces = pieces[:limit]
+		last := []rune(strings.TrimRight(pieces[limit-1], " ,;"))
+		for len(last) > 0 && lipgloss.Width(string(last)+"…") > width {
+			last = last[:len(last)-1]
+		}
+		pieces[limit-1] = string(last) + "…"
+	}
+	for i, piece := range pieces {
+		pieces[i] = indent + hintStyle.Render(piece)
+	}
+	return strings.Join(pieces, "\n"), cut
+}
+
 func (m *Model) indentedWith(style lipgloss.Style, text string) string {
 	indent, width := m.fit("    ")
 	lines := strings.Split(render(style, width, text), "\n")
@@ -4201,11 +4329,26 @@ func (m *Model) indentedWith(style lipgloss.Style, text string) string {
 
 // fieldHint is what one form row says about itself. A secret row adds the stages the resolver checked,
 // which is the actionable half of a missing secret and names no value.
-func (m *Model) fieldHint(f field) string {
+func (m *Model) fieldHint(f field) string { return m.fieldHintText(f, false) }
+
+// fieldDetail is the whole hint of a row, which fieldHint may show shortened. The text is the same for
+// every terminal size.
+func (m *Model) fieldDetail(f field) string {
+	if f.detail != "" {
+		return f.detail
+	}
+	return m.fieldHintText(f, true)
+}
+
+// fieldHintText is fieldHint, or with full the hint without the shortening of a provider's description.
+func (m *Model) fieldHintText(f field, full bool) string {
 	if f.kind == fieldSecret {
 		if m.editing == "" {
 			var parts []string
-			if description := m.cfg.SecretRoleDescription(f.label); description != "" {
+			if description := m.cfg.SecretRoleDescriptionOf(m.formProvider(), f.label); description != "" {
+				if !full {
+					description = shortDescription(description)
+				}
 				parts = append(parts, description)
 			}
 			if f.roleLead {
@@ -4214,7 +4357,7 @@ func (m *Model) fieldHint(f field) string {
 			}
 			return strings.Join(parts, "; ")
 		}
-		return m.secretRowHint(m.editing, f.label, f.roleLead)
+		return m.secretRowHint(m.editing, f.label, f.roleLead, full)
 	}
 	if f.kind == fieldProvider {
 		return providerHint(f)
