@@ -176,8 +176,30 @@ func TestTUIRestartsIntoTheUpdateAndOpensTheUnlockDialog(t *testing.T) {
 	typeKeys(tuiPassphraseIn + "\r")
 	at = wait(at, "The vault is unlocked")
 
-	typeKeys("u")
-	at = wait(at, "Update qatlas to v2.0.0?")
+	// The editor refuses the question while the vault process is still starting; u asks again once that
+	// refusal is the last thing shown, never blind. The screen is redrawn as a whole now and then, so an
+	// earlier refusal may show again after the question: the last of the two decides.
+	for attempt := 0; ; attempt++ {
+		typeKeys("u")
+		var question, refused bool
+		for deadline := time.Now().Add(30 * time.Second); !question && !refused && time.Now().Before(deadline); {
+			time.Sleep(20 * time.Millisecond)
+			s := screen()
+			if at > len(s) {
+				continue
+			}
+			asked, wait := strings.LastIndex(s[at:], "Update qatlas to v2.0.0?"), strings.LastIndex(s[at:], "Wait until")
+			question, refused = asked >= 0 && asked > wait, wait >= 0 && wait > asked
+		}
+		at = len(screen())
+		if question {
+			break
+		}
+		if !refused || attempt >= 50 {
+			t.Fatalf("u neither asked nor was refused; the terminal shows:\n%s", screen())
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 	typeKeys("y")
 	wait(at, "qatlas updated from v1.0.0 to v2.0.0")
 	at = wait(at, "Unlock vault")
