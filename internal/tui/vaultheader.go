@@ -216,6 +216,9 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 func (m *Model) vaultUnlockPromptView() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Unlock vault") + "\n\n")
+	if m.restartNote != "" {
+		b.WriteString(m.indented(m.restartNote) + "\n\n")
+	}
 	b.WriteString("  " + m.vaultUnlock.input.View() + "\n")
 	b.WriteString(m.indented(m.vaultUnlockHint()) + "\n")
 	b.WriteString(m.hint("enter unlock · esc cancel"))
