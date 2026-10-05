@@ -2,8 +2,8 @@
 description: >
   Describes the Excalidraw+ provider (beta): the workspace API key and fixed API host, the collection targets,
   the collection, scene, and scene content reads with their client-side search, creating, renaming, and moving
-  scenes, patching and replacing scene content, deleting scenes and collections into the trash, the bounds, and the
-  errors.
+  scenes, patching and replacing scene content, deleting scenes and collections into the trash, workspace users and
+  invitations, the bounds, and the errors.
 type: knowledge
 edit: shared
 created: 2026-10-02
@@ -15,7 +15,9 @@ updated: 2026-10-03
 This provider reads the collections, scenes, and scene content of one Excalidraw+ workspace through its public
 REST API (`https://api.excalidraw.com/api/v1`). The recommended `read` profile changes nothing. The optional `manage`
 profile can create a scene, rename or move one, patch its elements, replace its whole content, and move a scene or a
-collection to the trash; there is no tool to manage users, invites, or activity logs, or to restore from the trash.
+collection to the trash. The optional `people` profile reads and manages workspace users and invites one e-mail
+address, and the optional `activity` profile reads the workspace activity log. There is no tool for team
+management, workspace settings, or restoring from the trash.
 
 **Beta.** The Excalidraw+ API is a public beta whose names and schemas may change. Every tool descriptor carries a
 `version` that increases with a breaking change.
@@ -183,6 +185,41 @@ repeated.
   connection, a 5xx answer, or an unreadable answer, the error says the change may have taken effect; read the state
   in Excalidraw+ before repeating it. Idempotency is reported as `unknown`.
 
+## Users and invitations
+
+The `people` profile (not recommended; it holds personal data and access rights, so the recommended `read` profile
+leaves it out) offers five tools. They are **workspace-wide**: only a connection with the target `*` offers them. On a
+connection with collection targets they are refused before any secret is read or request is sent, without naming a
+target, because users and invitations belong to no collection.
+
+| Tool | Request | Does |
+| --- | --- | --- |
+| `excalidrawplus.users.list` | `GET /workspaces/users` | lists users with `offset` and `limit` |
+| `excalidrawplus.users.get` | `GET /workspaces/users/{id}` | reads one user: `user_id` |
+| `excalidrawplus.users.update` | `PATCH /workspaces/users/{id}` | changes `name` and/or `role` (`member` or `admin`) |
+| `excalidrawplus.users.remove` | `DELETE /workspaces/users/{id}` | removes a user from the workspace |
+| `excalidrawplus.invitations.create` | `POST /workspaces/invites` | invites one e-mail address with a `role` |
+
+- The two reads are safe to repeat. They return `id`, `name`, `email`, `role`, `teams`, `created`, and `last_active`;
+  pictures, preferences, scene history, and rate limits are not passed on. The data is personal and untrusted:
+  strings are capped, `teams` holds at most 50 groups with 50 entries of 128 characters each, and an entry with an
+  invalid identifier is dropped from a list.
+- The three changes need `confirm`, are offered only to a connection whose `tools` list names them (also with the
+  matching permission), send exactly one request, and are never repeated. Idempotency is reported as `unknown`, the
+  data class is personal. Because a tool cannot be gated by argument, `users.update` is gated as a whole, so a name
+  change and a promotion to `admin` need the same release.
+- `users.remove` is final: Excalidraw+ revokes the user's access and removes the user's workspace data, and Qatlas
+  cannot undo it. `users.update` does not change the e-mail address (the API does not allow it) and does not change
+  teams.
+- `invitations.create` reaches a third party: Excalidraw+ sends the invitation to the address, and the invitee joins
+  with the given role. The address is checked strictly (the pattern from the API reference, at most 254 characters,
+  exactly one address per call). **Invitation links are not offered.** If the answer carries a link or a token, it
+  is never read or returned, because such a link is a secret that lets anyone join; it also never appears in an error.
+- `role` is the closed set `member` or `admin`; `user_id` is limited to ASCII letters, digits, hyphen, and underscore,
+  at most 64 characters.
+- After a timeout, a reset connection, a 5xx answer, or an unreadable answer, the error says the change may have taken
+  effect; read the user or the invitations in Excalidraw+ before repeating it.
+
 ## Pagination
 
 Lists take `offset` (0 to 1 000 000) and `limit` (1 to 100, 50 when omitted) and answer `has_next_page` and, when
@@ -246,3 +283,15 @@ bodies, what happens to the scenes of a deleted collection (assumed to leave wit
 collection may be deleted (refused locally), the shape of `GET /collections/{id}` (assumed to be the collection object
 as in the list, with `id`, `isDeleted`, and `isDefault`), and the effect of a repeated request. No live call has been
 made.
+
+The users and invitations tools follow the API reference pages for the user and invite endpoints. Documented: the paths
+above; `limit` (1 to 100) and `offset` on the list; the answer `{limit, offset, hasNextPage, data}` with the user fields
+`id`, `email`, `name`, `role`, `workspaceTeams`, `created`, `lastActive`; `PATCH` takes `name`, `picture`, `role`
+(`member` or `admin`), `workspaceTeams`, and `preferences`, and does not change the e-mail address; `DELETE` removes
+the user and its workspace data and answers 200 with a generic object; `POST /workspaces/invites` takes `role` and
+`email` (with the pattern used here) and answers an invitation with `id`, `type`, `status`, `email`, `role`, and more.
+Not documented, and therefore assumed: the format and length of user identifiers (narrowed to the local rule), the
+meaning of the keys in `workspaceTeams` (a map of string lists), whether a team write replaces or merges, the
+request that creates a link invitation and the field that carries its link, whether a workspace owner can be removed or
+demoted, the error bodies, and the effect of a repeated request. Because of these gaps no team write and no link
+invitation is offered. No live call has been made.
