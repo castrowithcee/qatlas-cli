@@ -599,8 +599,9 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "actions-admin", Title: "Actions administrator",
 			Description: "high risk: reads and changes whether Actions run in a repository, which " +
-				"actions they may use, and the default rights of its GITHUB_TOKEN; a connection offers these tools " +
-				"only while its tools list names them, and every change needs its own confirmation",
+				"actions they may use, the default rights of its GITHUB_TOKEN, and its merge and branch settings; a " +
+				"connection offers these tools only while its tools list names them, and every change needs its own " +
+				"confirmation",
 			Tools: append([]string{}, adminTools...),
 		}, {
 			ID: "pull-requests", Title: "Pull requests",

@@ -2588,8 +2588,9 @@ connections:
 
 Two more groups of repository tools change what runs in a repository and with which rights: the workflow
 maintainer writes workflow files, which decide what code runs with the repository's secrets, and the Actions
-administrator decides whether Actions run at all, which actions they may use, and what the `GITHUB_TOKEN` of
-every run may do. They are high risk, and Qatlas keeps them behind a boundary of their own:
+administrator decides whether Actions run at all, which actions they may use, what the `GITHUB_TOKEN` of
+every run may do, and how the repository accepts merges (the merge and branch settings). They are high risk,
+and Qatlas keeps them behind a boundary of their own:
 
 - **Listed only.** A connection offers such a tool only when its `tools` list names it and its `permissions`
   allow the tool's effect. A connection without a `tools` list never offers one, whatever its permissions: a
@@ -2620,6 +2621,8 @@ every run may do. They are high risk, and Qatlas keeps them behind a boundary of
 | `github.actionspermissions.update` | update | idempotent | required | changes `enabled` or `allowed_actions` |
 | `github.workflowpermissions.get` | read | safe | none | reads `default_workflow_permissions` and `can_approve_pull_request_reviews` |
 | `github.workflowpermissions.update` | update | idempotent | required | changes either of them |
+| `github.repositorysettings.get` | read | safe | none | reads the default branch, visibility, archived state, and merge settings |
+| `github.repositorysettings.update` | update | idempotent | required | changes the merge methods and merge settings |
 
 The reads are listed only as well: a workflow file and the Actions settings are part of what this group
 maintains, and the observer tools already read what diagnosing a run needs. A create and an update are
@@ -2679,6 +2682,33 @@ holds `before` and `after`.
 An organization or enterprise policy may fix a value; GitHub's refusal is reported, and nothing is changed or
 retried.
 
+### Repository merge and branch settings
+
+`github.repositorysettings.get` and `github.repositorysettings.update` belong to the Actions administrator
+group, so they are listed only, never part of a starting profile, and chosen with the profile `actions-admin`
+or by name in a `tools` list. Both act on one repository inside the connection's targets; a repository
+outside them is refused before a secret is read or GitHub is contacted, without naming it.
+
+`get` answers exactly these fields and nothing else of the repository: `default_branch`, `visibility`,
+`archived`, `allow_merge_commit`, `allow_squash_merge`, `allow_rebase_merge`, `allow_auto_merge`,
+`allow_update_branch`, `delete_branch_on_merge`, `squash_merge_commit_title`, `squash_merge_commit_message`,
+`merge_commit_title`, `merge_commit_message`, and `web_commit_signoff_required`. GitHub leaves the merge
+fields out for a token without write access; they are absent then.
+
+`update` accepts only these arguments: the booleans `allow_merge_commit`, `allow_squash_merge`,
+`allow_rebase_merge`, `allow_auto_merge`, `allow_update_branch`, `delete_branch_on_merge`, and
+`web_commit_signoff_required`, and the texts `squash_merge_commit_title` (`PR_TITLE` or
+`COMMIT_OR_PR_TITLE`), `squash_merge_commit_message` (`PR_BODY`, `COMMIT_MESSAGES`, or `BLANK`),
+`merge_commit_title` (`PR_TITLE` or `MERGE_MESSAGE`), and `merge_commit_message` (`PR_BODY`, `PR_TITLE`, or
+`BLANK`). At least one value is required, and only the values given are sent in one `PATCH` request that is
+never retried; after a timeout, a server error, or an unreadable answer the refusal says the change may have
+been applied. Name, description, visibility, default branch, archiving, feature switches, security settings,
+transfer, deletion, rulesets, and the Actions settings are not reachable. Giving `allow_merge_commit`,
+`allow_squash_merge`, and `allow_rebase_merge` all as `false` is refused locally, before any request; the
+current state is not read for that check. The answer names the settings the call gave with the values GitHub
+reports, and carries no `before` value, since the change is the only request. A refusal for a missing right
+names the permission below, never text from GitHub.
+
 ### Credential
 
 Give these connections a credential of their own, used by no other connection, ideally a fine-grained token
@@ -2694,6 +2724,8 @@ token would allow it.
 | `github.workflows.enable`, `disable` | `repo` | Actions: read and write |
 | `github.actionspermissions.get`, `github.workflowpermissions.get` | `repo`, as a repository administrator | Administration: read |
 | `github.actionspermissions.update`, `github.workflowpermissions.update` | `repo`, as a repository administrator | Administration: read and write |
+| `github.repositorysettings.get` | `repo` for a private repository | Metadata: read |
+| `github.repositorysettings.update` | `repo`, as a repository administrator | Administration: write |
 
 ```yaml
 connections:
@@ -2710,5 +2742,5 @@ connections:
     target: repos/octo-org/example
     permissions: [read, update]
     tools: [github.actionspermissions.get, github.actionspermissions.update, github.workflowpermissions.get,
-      github.workflowpermissions.update]
+      github.workflowpermissions.update, github.repositorysettings.get, github.repositorysettings.update]
 ```
