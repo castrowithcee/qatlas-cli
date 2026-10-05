@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -581,5 +582,93 @@ func TestVaultActionIsAsyncAndNotDoubleTriggered(t *testing.T) {
 	}
 	if m.fail != "" {
 		t.Errorf("the finished write reported %q", m.fail)
+	}
+}
+
+// The update behaviour row saves through the admin session into settings.age, never into config.yaml.
+func TestVaultSectionSavesUpdateBehaviourInTheVault(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	mustNoError(t, newTestStore(t, filepath.Join(dir, "config.yaml")).Save(newTestConfig(t)))
+	m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
+	configBefore, err := os.ReadFile(store.Path())
+	mustNoError(t, err)
+	settings := filepath.Join(dir, vault.DirName, "settings.age")
+
+	openVaultSection(t, m)
+	focusRole(t, m, "update behaviour")
+	if got := m.fieldValue("update behaviour"); got != "handover" {
+		t.Fatalf("update behaviour opens as %q, want the default handover", got)
+	}
+	press(t, m, "right")
+	if got := m.fieldValue("update behaviour"); got != "lock" {
+		t.Fatalf("right moved to %q, want lock", got)
+	}
+	press(t, m, "f2")
+	if m.screen != screenAdminAuth {
+		t.Fatalf("saving without an admin session = screen %v, want the admin dialog", m.screen)
+	}
+	if _, err := os.Stat(settings); !os.IsNotExist(err) {
+		t.Fatalf("settings.age exists before the admin session: %v", err)
+	}
+
+	typeText(t, m, "hunter2")
+	pump(t, m, "enter")
+	if m.fail != "" || m.screen != screenForm {
+		t.Fatalf("saving with the passphrase: screen %v fail %q", m.screen, m.fail)
+	}
+	got, err := m.secrets.Vault().UpdateBehaviour()
+	if got != vault.UpdateLock || err != nil {
+		t.Errorf("UpdateBehaviour() = %q, %v, want lock", got, err)
+	}
+	if m.fieldValue("update behaviour") != "lock" {
+		t.Errorf("the form shows %q after saving, want lock", m.fieldValue("update behaviour"))
+	}
+	if configAfter, _ := os.ReadFile(store.Path()); string(configAfter) != string(configBefore) {
+		t.Errorf("config.yaml changed:\n%s", configAfter)
+	}
+
+	// Timeouts keep saving into config.yaml beside it.
+	focusRole(t, m, "idle timeout")
+	typeText(t, m, "45m")
+	press(t, m, "f2")
+	loaded, err := store.Load()
+	mustNoError(t, err)
+	if loaded.VaultIdleTimeout() != 45*time.Minute {
+		t.Errorf("VaultIdleTimeout() = %v, want 45m", loaded.VaultIdleTimeout())
+	}
+	if got, _ := m.secrets.Vault().UpdateBehaviour(); got != vault.UpdateLock {
+		t.Errorf("saving a timeout changed the update behaviour to %q", got)
+	}
+}
+
+// Without an unlocked, encrypted vault the row cannot be changed and names why.
+func TestVaultSectionUpdateBehaviourNotChangeable(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	locked, _ := newEncryptedVaultModel(t, dir, "hunter2", false)
+
+	unencrypted := filepath.Join(t.TempDir(), "qatlas")
+	secrets, _ := newVaultResolver(t, unencrypted)
+	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", func(string) (string, error) { return "", nil }))
+	plain, err := New(newTestStore(t, filepath.Join(unencrypted, "config.yaml")), nil, secrets, nil)
+	mustNoError(t, err)
+
+	for name, c := range map[string]struct {
+		m      *Model
+		reason string
+	}{
+		"locked":      {locked, "unlock it"},
+		"unencrypted": {plain, "with a passphrase"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			openVaultSection(t, c.m)
+			f := c.m.field("update behaviour")
+			if f == nil || !f.readOnly || f.kind == fieldChoice || !strings.Contains(f.hint, c.reason) {
+				t.Fatalf("update behaviour row = %+v, want a read-only row that names %q", f, c.reason)
+			}
+			press(t, c.m, "right", "f2")
+			if _, err := os.Stat(filepath.Join(filepath.Dir(c.m.store.Path()), vault.DirName, "settings.age")); !os.IsNotExist(err) {
+				t.Errorf("settings.age exists: %v", err)
+			}
+		})
 	}
 }

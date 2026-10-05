@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -163,5 +164,72 @@ func TestVaultApproveWithoutTerminalNeedsAToken(t *testing.T) {
 	code, _, stderr = approve(plain)
 	if code != exitUsage || !strings.Contains(stderr, "admin-required: agent tokens need an encrypted vault") {
 		t.Errorf("with an unencrypted vault: exit %d, stderr %q, want admin-required", code, stderr)
+	}
+}
+
+// 'vault handover' shows and sets the update behaviour with the passphrase, needs a terminal and an
+// encrypted vault, and leaves config.yaml alone.
+func TestVaultHandoverCommand(t *testing.T) {
+	dir := encryptedTokenFixture(t)
+	configBefore, err := os.ReadFile(configIn(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	withInteractive(t, true)
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+	run := func(args ...string) (int, string, string) {
+		return runWithInput(t, &Options{}, "", append([]string{"vault", "handover"}, append(args, "--config", configIn(dir))...)...)
+	}
+
+	if code, stdout, stderr := run(); code != exitOK || stdout != "update behaviour: handover\n" {
+		t.Errorf("show: exit %d, stdout %q, stderr %q, want the default", code, stdout, stderr)
+	}
+	if code, stdout, stderr := run("lock"); code != exitOK || stdout != "update behaviour: lock\n" {
+		t.Errorf("set lock: exit %d, stdout %q, stderr %q", code, stdout, stderr)
+	}
+	if code, stdout, _ := run(); code != exitOK || stdout != "update behaviour: lock\n" {
+		t.Errorf("show after set: exit %d, stdout %q, want lock", code, stdout)
+	}
+	if code, _, stderr := run("sometimes"); code != exitUsage || !strings.Contains(stderr, "usage") {
+		t.Errorf("unknown value: exit %d, stderr %q, want usage", code, stderr)
+	}
+	if code, stdout, _ := run("handover"); code != exitOK || stdout != "update behaviour: handover\n" {
+		t.Errorf("set handover: exit %d, stdout %q", code, stdout)
+	}
+	if after, _ := os.ReadFile(configIn(dir)); string(after) != string(configBefore) {
+		t.Error("config.yaml changed")
+	}
+}
+
+func TestVaultHandoverCommandNeedsAdminAndEncryption(t *testing.T) {
+	dir := encryptedTokenFixture(t)
+	settings := filepath.Join(dir, vault.DirName, "settings.age")
+
+	withInteractive(t, false)
+	for _, args := range [][]string{{"vault", "handover"}, {"vault", "handover", "lock"}} {
+		code, stdout, stderr := runWithInput(t, &Options{}, "", append(args, "--config", configIn(dir))...)
+		if code != exitUsage || stdout != "" || !strings.Contains(stderr, "admin-required") {
+			t.Errorf("%v without a terminal: exit %d, stdout %q, stderr %q, want admin-required", args, code, stdout,
+				stderr)
+		}
+	}
+
+	withInteractive(t, true)
+	withVaultPassphrase(t, offeringPassphrase("wrong"))
+	code, stdout, stderr := runWithInput(t, &Options{}, "", "vault", "handover", "lock", "--config", configIn(dir))
+	if code != exitUsage || stdout != "" || !strings.Contains(stderr, "usage") {
+		t.Errorf("wrong passphrase: exit %d, stdout %q, stderr %q, want usage", code, stdout, stderr)
+	}
+	if _, err := os.Stat(settings); !os.IsNotExist(err) {
+		t.Errorf("a refused call wrote settings.age: %v", err)
+	}
+
+	plain := vaultCredentialFixture(t)
+	if err := vault.New(plain).Set("wiki-vault", "token-id", canaryVault, nil); err != nil {
+		t.Fatal(err)
+	}
+	code, _, stderr = runWithInput(t, &Options{}, "", "vault", "handover", "lock", "--config", configIn(plain))
+	if code != exitUsage || !strings.Contains(stderr, "run 'qatlas vault encrypt' first") {
+		t.Errorf("unencrypted vault: exit %d, stderr %q, want the encryption named", code, stderr)
 	}
 }

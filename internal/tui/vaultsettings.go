@@ -23,6 +23,12 @@ const (
 	vaultActionDecrypt    = "decrypt"
 )
 
+const (
+	updateBehaviourLabel = "update behaviour"
+	updateBehaviourHint  = "whether 'qatlas update' hands an unlocked vault over to the new program " +
+		"(handover) or locks it (lock); left/right change it, F2 saves it into the encrypted vault"
+)
+
 // Hints of the two vault settings rows every state offers.
 const (
 	vaultIdleTimeoutHint = "how long a vault process that holds the vault unlocked does so without a read " +
@@ -93,11 +99,43 @@ func (m *Model) vaultFields() []field {
 				"file once that is confirmed"))
 	}
 
+	fields = append(fields, m.updateBehaviourField())
 	fields = append(fields,
 		textField("idle timeout", m.cfg.Vault.IdleTimeout, false).withHint(vaultIdleTimeoutHint),
 		textField("admin timeout", m.cfg.Vault.AdminTimeout, false).withHint(vaultAdminTimeoutHint),
 	)
 	return fields
+}
+
+// updateBehaviourField is the "update behaviour" row: handover or lock, stored authenticated in the encrypted
+// vault's settings.age, never in config.yaml. It is a choice only while this run holds the vault unlocked,
+// the only time the stored value can be read and a change written; otherwise it is a read-only row that
+// names why.
+func (m *Model) updateBehaviourField() field {
+	m.handoverShown = ""
+	reason := ""
+	switch m.vaultState() {
+	case vault.StateUnlocked:
+		behaviour, err := m.secrets.Vault().UpdateBehaviour()
+		if err != nil && !errors.Is(err, vault.ErrSettingsUntrusted) {
+			reason = m.redactor.Apply(err.Error())
+			break
+		}
+		m.handoverShown = string(behaviour)
+		f := choiceField(updateBehaviourLabel, []string{string(vault.UpdateHandover), string(vault.UpdateLock)},
+			string(behaviour))
+		f.hint = updateBehaviourHint
+		if err != nil {
+			f.hint = "settings.age was not written by this vault or is not understood, so updates lock the " +
+				"vault; saving a value replaces it. " + updateBehaviourHint
+		}
+		return f
+	case vault.StateLocked:
+		reason = "the vault is locked; unlock it (ctrl+l) to see and change this"
+	default:
+		reason = "needs a vault with a passphrase, and there is none yet"
+	}
+	return textField(updateBehaviourLabel, "not available", true).withHint(reason)
 }
 
 // vaultActionField is one action row of the vault form: it runs at once on enter, never deferred to F2.
@@ -155,13 +193,28 @@ func (m *Model) vaultStateWarning() string {
 	return "the vault is unencrypted: no passphrase was set when its first secret was stored"
 }
 
-// saveVault saves vault.idle_timeout and vault.admin_timeout, the only two rows F2 ever saves on this form;
-// every action row already ran on its own enter (see runVaultActionField).
+// saveVault saves the update behaviour into the vault when its row was moved, and vault.idle_timeout and
+// vault.admin_timeout into the configuration, the only rows F2 ever saves on this form; every action row
+// already ran on its own enter (see runVaultActionField).
 func (m *Model) saveVault() tea.Cmd {
 	candidate := m.cfg.Clone()
 	candidate.Vault = config.VaultSettings{
 		IdleTimeout:  m.fieldValue("idle timeout"),
 		AdminTimeout: m.fieldValue("admin timeout"),
+	}
+	timeoutsChanged := candidate.Vault != m.cfg.Vault
+	if chosen := m.fieldValue(updateBehaviourLabel); m.handoverShown != "" && chosen != m.handoverShown {
+		if err := m.secrets.Vault().SetUpdateBehaviour(vault.UpdateBehaviour(chosen)); err != nil {
+			m.fail = m.redactor.Apply(err.Error())
+			return nil
+		}
+		m.handoverShown = chosen
+		if !timeoutsChanged {
+			// Only the vault changed; config.yaml stays exactly as it is.
+			m.clearMessages()
+			m.status = "Saved"
+			return m.openVaultForm()
+		}
 	}
 	if err := m.store.SaveIfUnchanged(candidate, m.rev); err != nil {
 		if !m.conflicted(err) {

@@ -68,7 +68,9 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"secret only to a connection it approved as it is configured now; any other access fails with\n" +
 			"the code approval-required, which only a person resolves: 'vault approve' lists every open\n" +
 			"connection with what changed and releases it, all at once or one at a time with --connection.\n" +
-			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n\n" +
+			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n" +
+			"'vault handover' shows or sets whether 'qatlas update' hands an unlocked vault over to the new\n" +
+			"program or locks it.\n\n" +
 			"On Linux and macOS 'vault unlock' hands the unlocked vault to a vault process that holds it open\n" +
 			"until it is idle for vault.idle_timeout (12h unless the configuration says otherwise), 'vault\n" +
 			"lock' ends it, or the machine restarts; elsewhere unlocking only lasts for the current process.\n" +
@@ -191,7 +193,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"way it does for a vault that was never encrypted at all. Run against a vault that is not\n" +
 			"encrypted, it refuses and says there is nothing to decrypt. A vault process that holds the vault\n" +
 			"unlocked is locked once the passphrase is entered, since it could not be reached afterwards.\n" +
-			"Approvals and agent tokens exist only while the vault is encrypted and are removed with it.",
+			"Approvals, agent tokens, and the update behaviour exist only while the vault is encrypted and are\n" +
+			"removed with it.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultDecrypt(c, opts, decryptConfirm)
@@ -288,7 +291,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		"approve only this connection, repeated per connection; the default approves every open one")
 
 	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate, approve,
-		newVaultTokenCommand(opts, reg), newVaultLogsCommand(opts))
+		newVaultTokenCommand(opts, reg), newVaultHandoverCommand(opts), newVaultLogsCommand(opts))
 	return cmd
 }
 
