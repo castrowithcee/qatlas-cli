@@ -20,6 +20,10 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/ssh"
+
+	releaseverify "github.com/castrowithcee/qatlas-cli/internal/release"
 )
 
 const (
@@ -45,6 +49,9 @@ type Result struct {
 	Latest          string
 	UpdateAvailable bool
 	Updated         bool
+	// Signed reports that the installed release carries a valid signature over its checksums. It is only
+	// set by Update.
+	Signed bool
 }
 
 // Client checks GitHub Releases and updates one installed executable. Exported fields are test seams;
@@ -57,6 +64,8 @@ type Client struct {
 	GOOS       string
 	GOARCH     string
 	Executable string
+	// SigningKeys replaces the compiled-in release keys; tests only.
+	SigningKeys []ssh.PublicKey
 	// BeforeReplace, when set, runs once the release is downloaded and verified, right before the
 	// installed files are replaced, and not at all when nothing is replaced. A process of the old program
 	// that has to be stopped while it still passes for this program, such as the vault process, is stopped
@@ -99,7 +108,7 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 		return Result{}, &UnsupportedInstallationError{Reason: "safe replacement of the running Windows executable is not supported yet"}
 	}
 	archiveName := assetName(result.Latest, goos, goarch)
-	archiveURL, checksumURL, err := releaseURLs(release, archiveName)
+	archiveURL, checksumURL, signatureURL, err := releaseURLs(release, archiveName)
 	if err != nil {
 		return Result{}, err
 	}
@@ -107,7 +116,21 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("download checksums: %w", err)
 	}
-	want, err := checksumFor(checksums, archiveName)
+	if signatureURL != "" {
+		signature, err := c.download(ctx, signatureURL, maxMetadataBytes)
+		if err != nil {
+			return Result{}, fmt.Errorf("download checksums signature: %w", err)
+		}
+		keys := c.SigningKeys
+		if keys == nil {
+			keys = releaseverify.TrustedKeys()
+		}
+		if err := releaseverify.VerifyChecksums(checksums, signature, keys); err != nil {
+			return Result{}, fmt.Errorf("release signature is invalid, nothing was changed: %w", err)
+		}
+		result.Signed = true
+	}
+	want, err := releaseverify.ChecksumFor(checksums, archiveName)
 	if err != nil {
 		return Result{}, err
 	}
@@ -287,8 +310,8 @@ func assetName(version, goos, goarch string) string {
 	return fmt.Sprintf("qatlas_%s_%s_%s%s", version, goos, goarch, extension)
 }
 
-func releaseURLs(r release, archiveName string) (string, string, error) {
-	var archiveURL, checksumURL string
+func releaseURLs(r release, archiveName string) (string, string, string, error) {
+	var archiveURL, checksumURL, signatureURL string
 	for _, asset := range r.Assets {
 		assetURL := asset.APIURL
 		if assetURL == "" {
@@ -299,26 +322,14 @@ func releaseURLs(r release, archiveName string) (string, string, error) {
 			archiveURL = assetURL
 		case "checksums.txt":
 			checksumURL = assetURL
+		case "checksums.txt.sig":
+			signatureURL = assetURL
 		}
 	}
 	if archiveURL == "" || checksumURL == "" {
-		return "", "", fmt.Errorf("release %s does not contain %s and checksums.txt", r.TagName, archiveName)
+		return "", "", "", fmt.Errorf("release %s does not contain %s and checksums.txt", r.TagName, archiveName)
 	}
-	return archiveURL, checksumURL, nil
-}
-
-func checksumFor(body []byte, filename string) (string, error) {
-	for _, line := range strings.Split(string(body), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) != 2 || strings.TrimPrefix(fields[1], "*") != filename {
-			continue
-		}
-		if decoded, err := hex.DecodeString(fields[0]); err == nil && len(decoded) == sha256.Size {
-			return strings.ToLower(fields[0]), nil
-		}
-		return "", fmt.Errorf("checksums.txt contains an invalid SHA-256 for %s", filename)
-	}
-	return "", fmt.Errorf("checksums.txt does not contain %s", filename)
+	return archiveURL, checksumURL, signatureURL, nil
 }
 
 type payload struct {
