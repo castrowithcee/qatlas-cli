@@ -496,6 +496,9 @@ type Model struct {
 	// the passphrase dropped, the moment the question is answered either way.
 	decryptConfirm    bool
 	decryptPassphrase string
+	// handoverShown is the update behaviour the vault form's choice row opened with, "" while that row is
+	// not editable. Only a row moved off it is saved (see saveVault).
+	handoverShown string
 	// migrate holds a 'migrate credentials.yaml' action's decided plan while any of its several screens are
 	// open, and nil otherwise; see internal/tui/migrate.go. migratePlanConfirm and migrateDeleteConfirm are
 	// its two y/n questions, asked apart: the first before anything is written, the second, once

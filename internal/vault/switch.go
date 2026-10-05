@@ -109,7 +109,7 @@ func (v *Vault) ChangePassphrase(oldPassphrase, newPassphrase string) error {
 }
 
 // Decrypt turns an encrypted vault back into an unencrypted one, after merging every pending entry so
-// nothing queued while it was locked is lost. Its approvals and its agent tokens are dropped. passphrase is verified fresh against key.age, the same way
+// nothing queued while it was locked is lost. Its approvals, its agent tokens, and its settings are dropped. passphrase is verified fresh against key.age, the same way
 // ChangePassphrase verifies old. Called on a vault that is not encrypted, it changes nothing and reports
 // ErrNotEncrypted.
 func (v *Vault) Decrypt(passphrase string) error {
@@ -136,7 +136,7 @@ func (v *Vault) Decrypt(passphrase string) error {
 
 	// The encrypted files are removed only once the plaintext document they are replaced by was written
 	// successfully. Agent tokens go with them: without a passphrase nobody could manage one.
-	for _, path := range []string{v.tokensPath(), v.secretsPath(), v.keyPath(), v.recipientPath()} {
+	for _, path := range []string{v.tokensPath(), v.settingsPath(), v.secretsPath(), v.keyPath(), v.recipientPath()} {
 		if err := os.Remove(path); err != nil && !isNotExist(err) {
 			return err
 		}
