@@ -12,6 +12,6 @@ import (
 // vaultmigrate.StartProcess, which reports vaultproc.ErrUnsupported here too).
 const vaultProcessPlatform = false
 
-func runVaultServe(*Options, *capability.Registry) error { return vaultproc.ErrUnsupported }
+func runVaultServe(*Options, *capability.Registry, bool) error { return vaultproc.ErrUnsupported }
 
 func sessionWarnings(string) []string { return nil }

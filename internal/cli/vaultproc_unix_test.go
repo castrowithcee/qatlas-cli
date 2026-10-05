@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -149,9 +150,18 @@ func TestVaultUnlockStartsAVaultProcess(t *testing.T) {
 	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "status", "--config", configIn(dir), "--output", "json")
 	if code != exitOK || !strings.Contains(stdout, `"process":"running"`) || !strings.Contains(stdout, `"pid":`+strconv.Itoa(status.PID)) ||
 		!strings.Contains(stdout, `"locks_at":`) || !strings.Contains(stdout, `"state":"unlocked"`) ||
-		!strings.Contains(stdout, `"entries":"unknown"`) {
+		!strings.Contains(stdout, `"entries":"unknown"`) || !strings.Contains(stdout, `"update_behaviour":"handover"`) {
 		// This run never unlocked the vault itself, yet the process holds it open: the effective state.
 		t.Fatalf("status: exit code = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	// The process reads the update behaviour itself, fresh for every status: a settings.age it cannot trust
+	// reads as lock, with a warning.
+	if err := os.WriteFile(filepath.Join(dir, vault.DirName, "settings.age"), []byte("not written by this vault"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, _ = runWithInput(t, &Options{}, "", "vault", "status", "--config", configIn(dir), "--output", "json")
+	if code != exitOK || !strings.Contains(stdout, `"update_behaviour":"lock"`) || !strings.Contains(stdout, "settings.age") {
+		t.Fatalf("status with an untrusted settings.age: exit code = %d, stdout = %q", code, stdout)
 	}
 
 	code, stdout, stderr = runWithInput(t, &Options{}, "", "vault", "lock", "--config", configIn(dir))
