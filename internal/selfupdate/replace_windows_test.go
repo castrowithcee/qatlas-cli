@@ -3,16 +3,20 @@
 package selfupdate
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
 
 func TestMain(m *testing.M) {
 	if os.Getenv("QATLAS_SELFUPDATE_HELPER") == "sleep" {
+		fmt.Println("ready")
 		time.Sleep(time.Minute)
 		return
 	}
@@ -40,11 +44,32 @@ func runningInstallation(t *testing.T) (executable string, stop func()) {
 	}
 	cmd := exec.Command(executable)
 	cmd.Env = append(os.Environ(), "QATLAS_SELFUPDATE_HELPER=sleep")
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	stop = func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }
 	t.Cleanup(stop)
+	// Wait until the copy really runs, so the tests do not depend on timing.
+	ready := make(chan error, 1)
+	go func() {
+		line, err := bufio.NewReader(out).ReadString('\n')
+		if err == nil && strings.TrimSpace(line) != "ready" {
+			err = fmt.Errorf("unexpected output %q", line)
+		}
+		ready <- err
+	}()
+	select {
+	case err := <-ready:
+		if err != nil {
+			t.Fatalf("the running copy did not report: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the running copy did not start")
+	}
 	return executable, stop
 }
 

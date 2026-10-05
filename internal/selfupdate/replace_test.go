@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // opsRecorder performs the real operations, records them, and fails the ones the test names.
@@ -196,4 +197,68 @@ func TestConsequencesTextOnWindowsNamesRunningProcesses(t *testing.T) {
 	if strings.Contains(text, "vault process") {
 		t.Errorf("windows text mentions the vault process: %q", text)
 	}
+}
+
+var errSharing = errors.New("sharing violation")
+
+func sharingOps(r *opsRecorder, failures int, slept *[]time.Duration) fileOps {
+	ops := r.ops()
+	real := ops.rename
+	n := 0
+	ops.rename = func(from, to string) error {
+		if filepath.Base(from) == "qatlas.exe" && n < failures {
+			n++
+			return errSharing
+		}
+		return real(from, to)
+	}
+	ops.transient = func(err error) bool { return errors.Is(err, errSharing) }
+	ops.sleep = func(d time.Duration) { *slept = append(*slept, d) }
+	return ops
+}
+
+func TestReplaceRunningRetriesTransientLock(t *testing.T) {
+	staged, target := replacementFiles(t)
+	var slept []time.Duration
+	if err := replaceRunning(sharingOps(&opsRecorder{}, 3, &slept), staged, target); err != nil {
+		t.Fatal(err)
+	}
+	if len(slept) != 3 || slept[0] >= slept[2] {
+		t.Errorf("waits = %v, want three growing ones", slept)
+	}
+	assertFile(t, target, "new")
+}
+
+func TestReplaceRunningGivesUpOnPermanentLock(t *testing.T) {
+	staged, target := replacementFiles(t)
+	var slept []time.Duration
+	err := replaceRunning(sharingOps(&opsRecorder{}, 1<<30, &slept), staged, target)
+	if !errors.Is(err, errSharing) {
+		t.Fatalf("err = %v, want the sharing violation", err)
+	}
+	var total time.Duration
+	for _, d := range slept {
+		total += d
+	}
+	if len(slept) != len(renameDelays) || total > 3*time.Second {
+		t.Errorf("waits = %v (%v)", slept, total)
+	}
+	assertFile(t, target, "old")
+	assertFile(t, staged, "new")
+}
+
+func TestReplaceRunningDoesNotRetryOtherErrors(t *testing.T) {
+	staged, target := replacementFiles(t)
+	var slept []time.Duration
+	r := &opsRecorder{failRename: map[string]error{"qatlas.exe>qatlas.exe.old": errors.New("other")}}
+	ops := r.ops()
+	ops.transient = func(err error) bool { return errors.Is(err, errSharing) }
+	ops.sleep = func(d time.Duration) { slept = append(slept, d) }
+	if err := replaceRunning(ops, staged, target); err == nil {
+		t.Fatal("want error")
+	}
+	if len(slept) != 0 {
+		t.Errorf("retried: %v", slept)
+	}
+	assertFile(t, target, "old")
 }

@@ -16,9 +16,37 @@ import (
 type fileOps struct {
 	rename func(oldPath, newPath string) error
 	remove func(path string) error
+	// transient reports a failure that a short wait may cure, such as a sharing violation caused by a
+	// scanner or loader holding the file for a moment. Nil means no failure is retried.
+	transient func(error) bool
+	// sleep waits between attempts; nil means time.Sleep.
+	sleep func(time.Duration)
 }
 
-var osFileOps = fileOps{rename: os.Rename, remove: os.Remove}
+var osFileOps = fileOps{rename: os.Rename, remove: os.Remove, transient: isTransientLock}
+
+// renameDelays are the waits between the attempts of one rename, 2.775 s in all at most.
+var renameDelays = []time.Duration{25 * time.Millisecond, 50 * time.Millisecond, 100 * time.Millisecond,
+	200 * time.Millisecond, 400 * time.Millisecond, 800 * time.Millisecond, 1200 * time.Millisecond}
+
+// renameRetrying renames, and repeats a rename that failed with a transient lock error after a short,
+// growing wait, for a bounded time. A rename that fails changed nothing, so repeating it is safe; any
+// other error is returned at once.
+func (o fileOps) renameRetrying(oldPath, newPath string) error {
+	err := o.rename(oldPath, newPath)
+	for _, delay := range renameDelays {
+		if err == nil || o.transient == nil || !o.transient(err) {
+			return err
+		}
+		if o.sleep != nil {
+			o.sleep(delay)
+		} else {
+			time.Sleep(delay)
+		}
+		err = o.rename(oldPath, newPath)
+	}
+	return err
+}
 
 // replaceRunning puts the staged file in place of target, which may be a running Windows executable: such
 // a file can be renamed but not overwritten. The running file becomes target+".old", a leftover of an
@@ -29,11 +57,11 @@ func replaceRunning(ops fileOps, staged, target string) error {
 	if err := ops.remove(old); err != nil && !errors.Is(err, os.ErrNotExist) {
 		old = target + ".old-" + strconv.FormatInt(time.Now().UnixNano(), 36)
 	}
-	if err := ops.rename(target, old); err != nil {
+	if err := ops.renameRetrying(target, old); err != nil {
 		return fmt.Errorf("move the running executable aside: %w", err)
 	}
-	if err := ops.rename(staged, target); err != nil {
-		if backErr := ops.rename(old, target); backErr != nil {
+	if err := ops.renameRetrying(staged, target); err != nil {
+		if backErr := ops.renameRetrying(old, target); backErr != nil {
 			return fmt.Errorf("replace executable: %w (restoring the previous one also failed: %v)", err, backErr)
 		}
 		return fmt.Errorf("replace executable: %w", err)
