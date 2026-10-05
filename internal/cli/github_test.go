@@ -61,7 +61,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 	var reads atomic.Int32
 
 	// By default the namespace lists only what a connection offers, each tool with its connections.
-	code, stdout, stderr := runTwentyCLI(t, &reads, "", "tools", "github", "--config", path)
+	code, stdout, stderr := runTwentyCLI(t, &reads, "", "tools", "github", "--query", "github", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
@@ -106,7 +106,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 
 	// --all lists the others as well and says why nobody offers them. Where connections disagree, the one
 	// closest to offering the tool gives the reason.
-	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--config", path)
+	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--query", "github", "--all", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
@@ -120,14 +120,14 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 			t.Errorf("tools --all output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--connection", "code",
+	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--query", "github", "--all", "--connection", "code",
 		"--config", path)
 	if code != exitOK || stderr != "" ||
 		!strings.Contains(stdout, `,false,"",requires-tool-allow-list`) ||
 		!strings.Contains(stdout, `  github.issues.create,Create a GitHub issue,create,title,true,"",effect-not-permitted`) {
 		t.Errorf("tools --all --connection code: exit=%d stderr=%q stdout:\n%s", code, stderr, stdout)
 	}
-	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--all", "--config", path)
+	code, stdout, stderr = runTwentyCLI(t, &reads, "", "tools", "github", "--query", "github", "--all", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
@@ -236,7 +236,7 @@ func TestGitHubToolsAreDiscoverable(t *testing.T) {
 		}
 	}
 	for _, connection := range []string{"code", "roadmap"} {
-		code, listed, stderr := runTwentyCLI(t, &reads, "", "tools", "github", "--connection", connection, "--config", path)
+		code, listed, stderr := runTwentyCLI(t, &reads, "", "tools", "github", "--query", "github", "--connection", connection, "--config", path)
 		if code != exitOK || stderr != "" || !strings.Contains(listed, "github.projectitems.list") {
 			t.Fatalf("tools --connection %s: exit=%d stdout=%q stderr=%q", connection, code, listed, stderr)
 		}
@@ -309,7 +309,7 @@ func TestGitHubMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"github"}}}`,
+			`,"name":"qatlas.search","arguments":{"provider":"github","limit":50}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.describe","arguments":{"operation":"github.projectitems.list","version":2}}}`,
 		`{"jsonrpc":"2.0","id":"stale","method":"tools/call","params":{` + mcpTestMeta +
