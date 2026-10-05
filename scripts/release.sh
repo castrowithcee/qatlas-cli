@@ -58,8 +58,16 @@ printf '%s\n' "$targets" | while read -r goos goarch; do
 	fi
 done
 
+# The installers are release assets and are listed in checksums.txt, so the signature covers them. install.sh
+# is required; install.ps1 is copied as soon as it exists.
+scripts_dir=$(dirname "$0")
+cp "$scripts_dir/install.sh" "$output/install.sh"
+if [ -f "$scripts_dir/install.ps1" ]; then
+	cp "$scripts_dir/install.ps1" "$output/install.ps1"
+fi
+
 if command -v sha256sum >/dev/null 2>&1; then
-	(cd "$output" && sha256sum qatlas_*) > "$output/checksums.txt"
+	(cd "$output" && sha256sum qatlas_* install.*) > "$output/checksums.txt"
 else
-	(cd "$output" && shasum -a 256 qatlas_*) > "$output/checksums.txt"
+	(cd "$output" && shasum -a 256 qatlas_* install.*) > "$output/checksums.txt"
 fi

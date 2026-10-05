@@ -174,6 +174,23 @@ func TestTrustedKeysMatchAllowedSigners(t *testing.T) {
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("compiled keys %q differ from .github/release-allowed-signers %q", got, want)
 	}
+	script, err := os.ReadFile(filepath.Join("..", "..", "scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var embedded []string
+	for _, line := range strings.Split(string(script), "\n") {
+		if rest, ok := strings.CutPrefix(line, "signer_line='"); ok {
+			embedded = append(embedded, strings.TrimSuffix(rest, "'"))
+		}
+	}
+	var wantLines []string
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		wantLines = append(wantLines, line)
+	}
+	if strings.Join(embedded, "\n") != strings.Join(wantLines, "\n") {
+		t.Fatalf("scripts/install.sh embeds %q, want %q from .github/release-allowed-signers", embedded, wantLines)
+	}
 	if len(TrustedKeys()) < len(got) {
 		t.Fatal("TrustedKeys() lost a key")
 	}
