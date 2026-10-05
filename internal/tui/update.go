@@ -203,7 +203,7 @@ func (m *Model) updateView() string {
 	after := "Restart qatlas tui afterwards to use it."
 	if m.restart != nil {
 		after = "This editor then restarts itself into the new version, and opens the unlock dialog if the " +
-			"vault was unlocked."
+			"update locked a vault that was unlocked."
 	}
 	return m.wrapped(titleStyle, question) + "\n" + m.wrapped(hintStyle, "y update · n/esc cancel") + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), m.updateText) + "\n\n" +
