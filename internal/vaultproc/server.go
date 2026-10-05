@@ -25,6 +25,10 @@ type Server struct {
 	// Verify checks the peer of every connection before it is answered. Nil means VerifyProgram; a test
 	// passes its own.
 	Verify Verifier
+	// LocksAt, when set, is the latest time the server locks itself at unless a get comes first: Serve
+	// takes it in place of IdleTimeout from its start where it is earlier. A successor takes the time of
+	// the process it took the vault over from, so a handover never extends an unlock.
+	LocksAt time.Time
 
 	mu      sync.Mutex
 	key     age.Identity                 // the vault's key, which answers a client's challenge
@@ -40,6 +44,16 @@ type Server struct {
 	vaultDir string
 	// tokenMu keeps approve-token requests apart, each of which reads and writes the vault.
 	tokenMu sync.Mutex
+	// handover is what a handover needs; see AllowHandover. ownProgram reports the program this process
+	// was started from and whether it was replaced since: ReplacedProgram, which a test replaces.
+	handover   handoverConfig
+	ownProgram func() (string, bool)
+	// handingOver is set once a handover is committed: every request from then on is answered replaced.
+	// inFlight counts the requests read before and not yet answered, which the commit waits for. pending
+	// is the connection of a prepared handover, which stopping the server ends.
+	handingOver bool
+	inFlight    int
+	pending     net.Conn
 
 	listener net.Listener
 	stopOnce sync.Once
@@ -61,7 +75,8 @@ func NewServer(key age.Identity, secrets map[string]map[string]string, bindings 
 			held[credential][role] = []byte(value)
 		}
 	}
-	s := &Server{key: key, secrets: held, bindings: copyBindings(bindings), stopped: make(chan struct{})}
+	s := &Server{key: key, secrets: held, bindings: copyBindings(bindings), stopped: make(chan struct{}),
+		ownProgram: ReplacedProgram}
 	if id, ok := key.(*age.X25519Identity); ok {
 		// A key the log key cannot be derived from leaves the server without one: it then refuses log and
 		// logcheck, and a client falls back to what it would do without a vault process.
@@ -112,11 +127,13 @@ func copyBindings(b vault.Bindings) vault.Bindings {
 // get, or through Close. It then closes l, waits for the requests in flight, overwrites the secrets, and
 // returns nil. It returns an error only when l fails otherwise; the secrets are overwritten then too.
 func (s *Server) Serve(l net.Listener) error {
-	idle := s.idle()
 	s.mu.Lock()
 	s.listener = l
-	s.locksAt = time.Now().Add(idle)
-	s.timer = time.AfterFunc(idle, s.stop)
+	s.locksAt = time.Now().Add(s.idle())
+	if !s.LocksAt.IsZero() && s.LocksAt.Before(s.locksAt) {
+		s.locksAt = s.LocksAt
+	}
+	s.timer = time.AfterFunc(time.Until(s.locksAt), s.stop)
 	s.mu.Unlock()
 	if s.stopping() {
 		// Close came first; stop found no listener to close yet.
@@ -168,7 +185,8 @@ func (s *Server) Close() error {
 	return nil
 }
 
-// stop ends Serve once: no further connection is accepted, and the idle timer is dropped.
+// stop ends Serve once: no further connection is accepted, the idle timer is dropped, and a prepared
+// handover still waiting for its commit is ended.
 func (s *Server) stop() {
 	s.stopOnce.Do(func() {
 		close(s.stopped)
@@ -179,6 +197,9 @@ func (s *Server) stop() {
 		}
 		if s.listener != nil {
 			_ = s.listener.Close()
+		}
+		if s.pending != nil {
+			_ = s.pending.SetReadDeadline(time.Unix(1, 0))
 		}
 	})
 }
@@ -208,11 +229,7 @@ func (s *Server) wipe() {
 // covers the whole connection.
 func (s *Server) serveConn(conn net.Conn) {
 	defer conn.Close()
-	timeout := s.RequestTimeout
-	if timeout <= 0 {
-		timeout = DefaultRequestTimeout
-	}
-	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+	if err := conn.SetDeadline(time.Now().Add(s.requestTimeout())); err != nil {
 		return
 	}
 
@@ -229,7 +246,13 @@ func (s *Server) serveConn(conn net.Conn) {
 		verify = VerifyProgram
 	}
 	if verify(conn) != nil {
-		_ = writeMessage(conn, response{V: Version, Error: codeRefused})
+		// A process whose own program an update replaced refuses every program, the new one included; it
+		// tells so, and the client finds the successor, if there is one, or ends up with the refusal.
+		code := codeRefused
+		if _, replaced := s.ownProgram(); replaced {
+			code = codeReplaced
+		}
+		_ = writeMessage(conn, response{V: Version, Error: code})
 		return
 	}
 	// A client of another build sends its own first line; whatever it is, its version tells.
@@ -253,8 +276,20 @@ func (s *Server) serveConn(conn net.Conn) {
 		return
 	}
 
+	if req.Op == opHandover {
+		s.serveHandover(conn, req)
+		return
+	}
+	if !s.begin() {
+		_ = writeMessage(conn, response{V: Version, Error: codeReplaced})
+		return
+	}
+	defer s.end()
+
 	var resp response
 	switch req.Op {
+	case opStatus:
+		resp = s.answerStatus(req)
 	case opLog, opLogCheck:
 		resp = s.answerLog(req)
 	case opApproveToken:
@@ -268,13 +303,41 @@ func (s *Server) serveConn(conn net.Conn) {
 	}
 }
 
+func (s *Server) requestTimeout() time.Duration {
+	if s.RequestTimeout <= 0 {
+		return DefaultRequestTimeout
+	}
+	return s.RequestTimeout
+}
+
+// begin counts a request that was read as in flight, unless a handover was committed, after which the
+// request is not served here: its answer would be lost to the successor. end counts it as answered.
+func (s *Server) begin() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.handingOver {
+		return false
+	}
+	s.inFlight++
+	return true
+}
+
+func (s *Server) end() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inFlight--
+}
+
 // solve answers a checked client's challenge with the proof that this server holds the vault's key.
 func (s *Server) solve(challenge []byte) response {
 	s.mu.Lock()
 	key := s.key
-	locked := s.locked || s.stopping()
+	handingOver, locked := s.handingOver, s.locked || s.stopping()
 	s.mu.Unlock()
-	if locked {
+	switch {
+	case handingOver:
+		return response{V: Version, Error: codeReplaced}
+	case locked:
 		return response{V: Version, Error: codeLocked}
 	}
 	proof, ok := solveChallenge(key, challenge)
@@ -367,6 +430,27 @@ func (s *Server) answer(req request) response {
 		return response{V: Version}
 	}
 	return response{V: Version, Error: codeBadRequest}
+}
+
+// answerStatus answers a checked status request, with the vault's update setting, which the server reads
+// from settings.age with its own key, outside s.mu, as a prepare of a handover does. A server that does not
+// hand over (see AllowHandover) reports no setting.
+func (s *Server) answerStatus(req request) response {
+	resp := s.answer(req)
+	if resp.Error != "" {
+		return resp
+	}
+	s.mu.Lock()
+	key, dir := s.key, s.handover.vaultDir
+	s.mu.Unlock()
+	id, ok := key.(*age.X25519Identity)
+	if dir == "" || !ok {
+		return resp
+	}
+	behaviour, err := vault.ReadUpdateBehaviour(dir, id)
+	resp.Handover = string(behaviour)
+	resp.SettingsUntrusted = errors.Is(err, vault.ErrSettingsUntrusted)
+	return resp
 }
 
 // answerLog carries out one checked log or logcheck request. It holds s.mu only to see whether the server

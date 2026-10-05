@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,7 +17,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+
+	"golang.org/x/crypto/ssh"
+
+	releaseverify "github.com/castrowithcee/qatlas-cli/internal/release"
+	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
 )
 
 func TestSemverOrdering(t *testing.T) {
@@ -138,9 +146,10 @@ func TestUpdateReplacesBinaryAndManpage(t *testing.T) {
 	}
 	// The hook runs once, with the old program still in place.
 	calls := 0
-	client.BeforeReplace = func(context.Context) {
+	client.BeforeReplace = func(context.Context, Release) error {
 		calls++
 		assertFile(t, executable, "old-binary")
+		return nil
 	}
 	result, err := client.Update(context.Background())
 	if err != nil {
@@ -149,8 +158,8 @@ func TestUpdateReplacesBinaryAndManpage(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("BeforeReplace ran %d times, want once", calls)
 	}
-	if !result.UpdateAvailable || !result.Updated || result.Latest != "v1.1.0" {
-		t.Fatalf("Update() = %+v", result)
+	if !result.UpdateAvailable || !result.Updated || result.Latest != "v1.1.0" || result.Signed {
+		t.Fatalf("Update() = %+v, want an unsigned update", result)
 	}
 	assertFile(t, executable, "new-binary")
 	assertFile(t, filepath.Join(prefix, "share", "man", "man1", "qatlas.1"), "new-manpage")
@@ -179,7 +188,10 @@ func TestUpdateLeavesInstallationUntouchedOnChecksumMismatch(t *testing.T) {
 	client := &Client{
 		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0",
 		GOOS: "linux", GOARCH: "amd64", Executable: executable,
-		BeforeReplace: func(context.Context) { t.Error("BeforeReplace ran although nothing is replaced") },
+		BeforeReplace: func(context.Context, Release) error {
+			t.Error("BeforeReplace ran although nothing is replaced")
+			return nil
+		},
 	}
 	if _, err := client.Update(context.Background()); err == nil {
 		t.Fatal("Update() = nil error, want checksum failure")
@@ -194,7 +206,10 @@ func TestUpdateDoesNotDowngrade(t *testing.T) {
 	server := releaseServer(t, "v1.0.0", nil, "")
 	defer server.Close()
 	client := &Client{BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.1.0",
-		BeforeReplace: func(context.Context) { t.Error("BeforeReplace ran although nothing is replaced") }}
+		BeforeReplace: func(context.Context, Release) error {
+			t.Error("BeforeReplace ran although nothing is replaced")
+			return nil
+		}}
 	result, err := client.Update(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -206,6 +221,21 @@ func TestUpdateDoesNotDowngrade(t *testing.T) {
 
 func releaseServer(t *testing.T, version string, archive []byte, checksumOverride string) *httptest.Server {
 	t.Helper()
+	return signedReleaseServer(t, version, archive, checksumOverride, nil)
+}
+
+// signedReleaseServer serves a release whose checksums.txt.sig is sign(checksums); without sign the
+// release carries no signature.
+func signedReleaseServer(t *testing.T, version string, archive []byte, checksumOverride string, sign func(checksums []byte) []byte) *httptest.Server {
+	t.Helper()
+	checksumsFor := func(asset string) []byte {
+		sum := sha256.Sum256(archive)
+		encoded := hex.EncodeToString(sum[:])
+		if checksumOverride != "" {
+			encoded = fmt.Sprintf("%-64s", checksumOverride)
+		}
+		return []byte(fmt.Sprintf("%s  %s\n", encoded, asset))
+	}
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		asset := assetName(version, "linux", "amd64")
@@ -217,17 +247,17 @@ func releaseServer(t *testing.T, version string, archive []byte, checksumOverrid
 					map[string]string{"name": asset, "url": server.URL + "/asset", "browser_download_url": server.URL + "/wrong"},
 					map[string]string{"name": "checksums.txt", "url": server.URL + "/checksums", "browser_download_url": server.URL + "/wrong"},
 				)
+				if sign != nil {
+					assets = append(assets, map[string]string{"name": "checksums.txt.sig", "url": server.URL + "/signature", "browser_download_url": server.URL + "/wrong"})
+				}
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": version, "assets": assets})
 		case "/asset":
 			_, _ = w.Write(archive)
 		case "/checksums":
-			sum := sha256.Sum256(archive)
-			encoded := hex.EncodeToString(sum[:])
-			if checksumOverride != "" {
-				encoded = fmt.Sprintf("%-64s", checksumOverride)
-			}
-			fmt.Fprintf(w, "%s  %s\n", encoded, asset)
+			_, _ = w.Write(checksumsFor(asset))
+		case "/signature":
+			_, _ = w.Write(sign(checksumsFor(asset)))
 		default:
 			http.NotFound(w, r)
 		}
@@ -268,5 +298,195 @@ func assertFile(t *testing.T, path, want string) {
 	}
 	if string(body) != want {
 		t.Fatalf("%s = %q, want %q", path, body, want)
+	}
+}
+
+func installedPrefix(t *testing.T) (prefix, executable string) {
+	t.Helper()
+	prefix = t.TempDir()
+	executable = filepath.Join(prefix, "bin", "qatlas")
+	if err := os.MkdirAll(filepath.Dir(executable), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(executable, []byte("old-binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manpage := filepath.Join(prefix, "share", "man", "man1", "qatlas.1")
+	if err := os.MkdirAll(filepath.Dir(manpage), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manpage, []byte("old-manpage"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return prefix, executable
+}
+
+func TestUpdateReportsValidSignature(t *testing.T) {
+	signer := releasetest.NewSigner(t)
+	archive := releaseArchive(t, []byte("new-binary"), []byte("new-manpage"))
+	server := signedReleaseServer(t, "v1.1.0", archive, "", func(checksums []byte) []byte {
+		return releasetest.Sign(t, signer, releaseverify.Namespace, "sha512", checksums)
+	})
+	defer server.Close()
+	prefix, executable := installedPrefix(t)
+	client := &Client{
+		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0",
+		GOOS: "linux", GOARCH: "amd64", Executable: executable,
+		SigningKeys: []ssh.PublicKey{signer.PublicKey()},
+	}
+	result, err := client.Update(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Updated || !result.Signed {
+		t.Fatalf("Update() = %+v, want a signed update", result)
+	}
+	assertFile(t, executable, "new-binary")
+	assertFile(t, filepath.Join(prefix, "share", "man", "man1", "qatlas.1"), "new-manpage")
+}
+
+func TestUpdateRefusesInvalidSignatureWithoutChanges(t *testing.T) {
+	trusted := releasetest.NewSigner(t)
+	rsaSigner := rsaTestSigner(t)
+	tests := map[string]func(checksums []byte) []byte{
+		"unknown key": func(c []byte) []byte {
+			return releasetest.Sign(t, releasetest.NewSigner(t), releaseverify.Namespace, "sha512", c)
+		},
+		"wrong namespace": func(c []byte) []byte { return releasetest.Sign(t, trusted, "file", "sha512", c) },
+		"rsa key":         func(c []byte) []byte { return releasetest.Sign(t, rsaSigner, releaseverify.Namespace, "sha512", c) },
+		"other data": func(c []byte) []byte {
+			return releasetest.Sign(t, trusted, releaseverify.Namespace, "sha512", append([]byte("x"), c...))
+		},
+		"broken blob": func([]byte) []byte { return []byte("not a signature") },
+	}
+	for name, sign := range tests {
+		t.Run(name, func(t *testing.T) {
+			archive := releaseArchive(t, []byte("new-binary"), []byte("new-manpage"))
+			server := signedReleaseServer(t, "v1.1.0", archive, "", sign)
+			defer server.Close()
+			prefix, executable := installedPrefix(t)
+			client := &Client{
+				BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0",
+				GOOS: "linux", GOARCH: "amd64", Executable: executable,
+				SigningKeys: []ssh.PublicKey{trusted.PublicKey(), rsaSigner.PublicKey()},
+				BeforeReplace: func(context.Context, Release) error {
+					t.Error("BeforeReplace ran although nothing is replaced")
+					return nil
+				},
+			}
+			result, err := client.Update(context.Background())
+			if err == nil || !strings.Contains(err.Error(), "signature is invalid") {
+				t.Fatalf("Update() = %+v, %v, want a signature failure", result, err)
+			}
+			assertFile(t, executable, "old-binary")
+			assertFile(t, filepath.Join(prefix, "share", "man", "man1", "qatlas.1"), "old-manpage")
+		})
+	}
+}
+
+func rsaTestSigner(t *testing.T) ssh.Signer {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.NewSignerFromKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signer
+}
+
+// The hooks see the verified release in a private directory: before, with the installed files untouched,
+// and after, with the new program in place. The directory is gone once Update returns.
+func TestUpdateHooksSeeTheVerifiedRelease(t *testing.T) {
+	signer := releasetest.NewSigner(t)
+	archive := releaseArchive(t, []byte("new-binary"), []byte("new-manpage"))
+	server := signedReleaseServer(t, "v1.1.0", archive, "", func(checksums []byte) []byte {
+		return releasetest.Sign(t, signer, releaseverify.Namespace, "sha512", checksums)
+	})
+	defer server.Close()
+	prefix, executable := installedPrefix(t)
+	manpage := filepath.Join(prefix, "share", "man", "man1", "qatlas.1")
+	var order []string
+	var seen Release
+	check := func(name string, rel Release) {
+		order = append(order, name)
+		seen = rel
+		if !rel.Signed || rel.ArchiveName != assetName("v1.1.0", "linux", "amd64") {
+			t.Errorf("%s: release = %+v", name, rel)
+		}
+		for _, path := range []string{rel.Checksums, rel.Signature, rel.Archive} {
+			info, err := os.Stat(path)
+			if err != nil || !filepath.IsAbs(path) || filepath.Dir(path) != filepath.Dir(rel.Checksums) {
+				t.Errorf("%s: %s: %v", name, path, err)
+				continue
+			}
+			if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
+				t.Errorf("%s: %s is readable by others: %v", name, path, info.Mode())
+			}
+		}
+		if runtime.GOOS != "windows" {
+			if info, err := os.Stat(filepath.Dir(rel.Checksums)); err != nil || info.Mode().Perm() != 0o700 {
+				t.Errorf("%s: directory = %v, %v, want 0700", name, info, err)
+			}
+		}
+	}
+	client := &Client{
+		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0",
+		GOOS: "linux", GOARCH: "amd64", Executable: executable,
+		SigningKeys: []ssh.PublicKey{signer.PublicKey()},
+		BeforeReplace: func(_ context.Context, rel Release) error {
+			check("before", rel)
+			assertFile(t, executable, "old-binary")
+			assertFile(t, manpage, "old-manpage")
+			return nil
+		},
+		AfterReplace: func(_ context.Context, rel Release) {
+			check("after", rel)
+			assertFile(t, executable, "new-binary")
+		},
+	}
+	if _, err := client.Update(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(order, ",") != "before,after" {
+		t.Fatalf("hooks ran %v, want before then after", order)
+	}
+	if _, err := os.Stat(filepath.Dir(seen.Checksums)); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the release directory is left behind: %v", err)
+	}
+}
+
+// An error of BeforeReplace ends the update with nothing installed and no AfterReplace.
+func TestUpdateBeforeReplaceErrorInstallsNothing(t *testing.T) {
+	archive := releaseArchive(t, []byte("new-binary"), []byte("new-manpage"))
+	server := releaseServer(t, "v1.1.0", archive, "")
+	defer server.Close()
+	prefix, executable := installedPrefix(t)
+	var dir string
+	client := &Client{
+		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0",
+		GOOS: "linux", GOARCH: "amd64", Executable: executable,
+		BeforeReplace: func(_ context.Context, rel Release) error {
+			dir = filepath.Dir(rel.Checksums)
+			if rel.Signed || rel.Signature != "" {
+				t.Errorf("an unsigned release is reported as %+v", rel)
+			}
+			return errors.New("cannot prepare")
+		},
+		AfterReplace: func(context.Context, Release) { t.Error("AfterReplace ran although nothing was replaced") },
+	}
+	if result, err := client.Update(context.Background()); err == nil || result.Updated {
+		t.Fatalf("Update() = %+v, %v, want the hook's error", result, err)
+	}
+	assertFile(t, executable, "old-binary")
+	assertFile(t, filepath.Join(prefix, "share", "man", "man1", "qatlas.1"), "old-manpage")
+	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the release directory is left behind: %v", err)
+	}
+	entries, _ := os.ReadDir(filepath.Join(prefix, "bin"))
+	if len(entries) != 1 {
+		t.Errorf("bin holds %d files, want only qatlas", len(entries))
 	}
 }

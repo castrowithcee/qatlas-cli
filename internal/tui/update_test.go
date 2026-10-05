@@ -304,7 +304,7 @@ func TestTheUpdateQuestionNamesTheConsequencesAndLocksBeforeReplacing(t *testing
 	m := startedWith(t, fake)
 	press(t, m, "u")
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"Update qatlas to v0.5.0?", "A running vault process is locked first.",
+	for _, want := range []string{"Update qatlas to v0.5.0?", "A running vault process is handed over to the new version",
 		"'qatlas tui' and 'qatlas web'"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the question does not say %q:\n%s", want, screenOf(m))
@@ -317,5 +317,39 @@ func TestTheUpdateQuestionNamesTheConsequencesAndLocksBeforeReplacing(t *testing
 	pump(t, m, "u", "y")
 	if got := strings.Join(fake.order, ","); got != "locked,replaced" {
 		t.Errorf("order = %q, want locked,replaced", got)
+	}
+}
+
+// An installation does not start while store or vault work runs: the vault process still starting would be
+// refused by the new program, and the restart would not happen.
+func TestUpdateWaitsForRunningWork(t *testing.T) {
+	for name, busy := range map[string]func(*Model){
+		"vault work": func(m *Model) { m.vaultBusy = true },
+		"store work": func(m *Model) { m.busy = "saving the configuration" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := newerRelease()
+			m := startedWith(t, fake)
+			busy(m)
+			press(t, m, "u")
+			if m.screen == screenUpdate || !strings.Contains(m.status, "then press u again") {
+				t.Fatalf("u opened the question or gave no reason: screen %v status %q", m.screen, m.status)
+			}
+
+			// Work that starts while the question is open stops the installation at y.
+			m.vaultBusy, m.busy = false, ""
+			press(t, m, "u")
+			busy(m)
+			_, cmd := m.Update(keyMsg("y"))
+			if cmd != nil || m.updating || fake.updates != 0 || !strings.Contains(m.status, "then press u again") {
+				t.Errorf("y installed during work: updating %v updates %d status %q", m.updating, fake.updates, m.status)
+			}
+
+			m.vaultBusy, m.busy = false, ""
+			pump(t, m, "u", "y")
+			if fake.updates != 1 {
+				t.Errorf("the update did not run once the work was done: %d", fake.updates)
+			}
+		})
 	}
 }

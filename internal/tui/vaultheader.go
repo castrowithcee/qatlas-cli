@@ -216,6 +216,9 @@ func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 func (m *Model) vaultUnlockPromptView() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Unlock vault") + "\n\n")
+	if m.restartNote != "" {
+		b.WriteString(m.indented(m.restartNote) + "\n\n")
+	}
 	b.WriteString("  " + m.vaultUnlock.input.View() + "\n")
 	b.WriteString(m.indented(m.vaultUnlockHint()) + "\n")
 	b.WriteString(m.hint("enter unlock · esc cancel"))
@@ -284,6 +287,10 @@ func (m *Model) handleVaultUnlocked(msg vaultUnlockedMsg) tea.Cmd {
 	m.screen = msg.back
 	m.startAdminSession()
 	m.status = "The vault is unlocked"
+	if m.section == sectionVault && m.screen == screenForm && m.formState() == m.pristine {
+		// The update behaviour row can only be read now; rebuilding drops nothing, the form is unedited.
+		m.openVaultForm()
+	}
 	m.vaultProcessUnlocked = false
 	if cmd := m.startVaultProcess(); cmd != nil {
 		return cmd

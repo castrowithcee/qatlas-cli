@@ -265,9 +265,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"At start the editor asks GitHub in the background, for at most five seconds, whether a newer\n" +
 			"stable release exists, and names it in the top line, for example Update available v0.4.0 →\n" +
 			"v0.5.0 · u update. u on the sidebar or in a list asks first and then installs it the way\n" +
-			"'qatlas update' does; the editor keeps running the old version until it is restarted. A failed\n" +
-			"check stays silent. A dev build never checks, and a non-empty QATLAS_NO_UPDATE_CHECK turns\n" +
-			"the check off.",
+			"'qatlas update' does. On Linux and macOS the editor then restarts itself: it locks a vault process\n" +
+			"first, runs the new program at the same path with the same arguments, and says qatlas updated\n" +
+			"from one version to the other. If the vault was unlocked before, the new editor opens the\n" +
+			"unlock dialog at once; esc leaves it locked. Unsaved input in an open form is never dropped\n" +
+			"silently: the editor asks first, and not now keeps editing on the old version. Where the editor\n" +
+			"cannot restart itself, on Windows or when the new program cannot be run, it keeps running the\n" +
+			"old version until it is restarted by hand. A failed check stays silent. A dev build never\n" +
+			"checks, and a non-empty QATLAS_NO_UPDATE_CHECK turns the check off.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			secret.SetLongRunning("tui")
@@ -286,7 +291,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			}
 			store := config.NewStore(path, reg)
 			return classifyUserError(tui.Run(store, connectionTester(store, opts, reg), secrets, opts.Redactor,
-				tuiUpdater(opts, buildVersion), os.Stdin, os.Stdout))
+				tuiUpdater(opts, buildVersion), tuiRestart(), os.Stdin, os.Stdout))
 		},
 	}
 }
@@ -335,7 +340,7 @@ func connectionTester(store *config.Store, opts *Options, reg *capability.Regist
 
 // tuiUpdater returns what the editor checks for a newer release with, or nil where it must not check: in a
 // dev build, which has no release to compare with, and when QATLAS_NO_UPDATE_CHECK is set. Its installation
-// locks a running vault process right before the program is replaced, the way 'qatlas update' does.
+// hands a running vault process over or locks it around the replacement, the way 'qatlas update' does.
 func tuiUpdater(opts *Options, buildVersion string) tui.Updater {
 	if buildVersion == "" || buildVersion == "dev" || os.Getenv(noUpdateCheck) != "" {
 		return nil
@@ -347,8 +352,8 @@ func tuiUpdater(opts *Options, buildVersion string) tui.Updater {
 	return &lockingUpdater{opts: opts, client: client}
 }
 
-// lockingUpdater is the editor's updater: the client with the vault lock of 'qatlas update' before the
-// replacement. Note keeps what that lock had to say, for the editor's status line.
+// lockingUpdater is the editor's updater: the client with the vault handover or lock of 'qatlas update'
+// around the replacement. Note keeps what that had to say, for the editor's status line.
 type lockingUpdater struct {
 	opts   *Options
 	client *selfupdate.Client
@@ -360,16 +365,11 @@ func (u *lockingUpdater) Check(ctx context.Context) (selfupdate.Result, error) {
 }
 
 func (u *lockingUpdater) Update(ctx context.Context) (selfupdate.Result, error) {
-	replacing := *u.client
-	replacing.BeforeReplace = func(ctx context.Context) {
-		u.note = lockVaultProcessOf(ctx, u.opts, "before qatlas was replaced",
-			"run 'qatlas vault unlock' to unlock the vault again")
-		if u.client.BeforeReplace != nil {
-			u.client.BeforeReplace(ctx)
-		}
-	}
-	return replacing.Update(ctx)
+	replacement := &vaultReplacement{opts: u.opts}
+	result, err := replacement.hooked(u.client).Update(ctx)
+	u.note = replacement.finish()
+	return result, err
 }
 
-// Note is what locking the vault process said during the last installation.
+// Note is what handing over or locking the vault process said during the last installation.
 func (u *lockingUpdater) Note() string { return u.note }

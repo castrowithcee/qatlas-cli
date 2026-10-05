@@ -31,7 +31,12 @@ const socketCheckInterval = 10 * time.Second
 // runVaultServe is 'qatlas vault serve', the vault process itself. It is started by 'qatlas vault unlock',
 // or by the TUI's own 'ctrl+l' (see vaultmigrate.StartProcess, which both run to start it), with the
 // handover and the report it inherits; run any other way, it refuses before it reads anything.
-func runVaultServe(opts *Options, reg *capability.Registry) error {
+//
+// As a successor, started by a running vault process from the program an update installed (see
+// vaultmigrate.StartSuccessor), it listens beside the vault socket, at vaultproc.NextPath, reports ready, and
+// waits until that process moved its socket onto the vault socket; it keeps the time that process would have
+// locked at.
+func runVaultServe(opts *Options, reg *capability.Registry, successor bool) error {
 	if !inheritedPipe(vaultmigrate.HandoverFD) || !inheritedPipe(vaultmigrate.ReportFD) {
 		return &UsageError{errors.New("'qatlas vault serve' is started by 'qatlas vault unlock'; run that instead")}
 	}
@@ -63,6 +68,12 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 		answer(err.Error())
 		return err
 	}
+	if successor && snap.LocksAt == nil {
+		// A successor without the time to lock at would extend the unlock; it does not start at all.
+		err = errors.New("the vault handed over does not say when it locks")
+		answer(err.Error())
+		return err
+	}
 
 	path, err := absConfigPath(opts)
 	if err != nil {
@@ -80,8 +91,12 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 		answer(err.Error())
 		return err
 	}
-	listener, err := vaultproc.Listen(socket)
-	if errors.Is(err, vaultproc.ErrRunning) {
+	listenAt := socket
+	if successor {
+		listenAt = vaultproc.NextPath(socket)
+	}
+	listener, err := vaultproc.Listen(listenAt)
+	if errors.Is(err, vaultproc.ErrRunning) && !successor {
 		answer(vaultmigrate.ReportRunning)
 		return err
 	}
@@ -92,11 +107,19 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 
 	server := vaultproc.NewServer(key, snap.Secrets, snap.Bindings)
 	server.IdleTimeout = idle
+	if snap.LocksAt != nil {
+		server.LocksAt = *snap.LocksAt
+	}
 	// While it runs, this process is the one writer that signs the invocation log of this vault, with the
 	// retention the configuration had when it started.
 	server.KeepLog(vaultDir, retentionDays)
 	// It also approves open connection changes an agent token covers, in this same vault.
 	server.ApproveWithTokens(vaultDir)
+	// And it hands the vault over to a successor from a verified release, should an update ask it to.
+	server.AllowHandover(vaultDir, releaseKeys(), func(ctx context.Context, program string, next vault.Snapshot) (
+		int, func(), error) {
+		return vaultmigrate.StartSuccessor(ctx, program, path, next)
+	})
 	snap.Secrets = nil
 
 	signals := make(chan os.Signal, 1)
@@ -108,12 +131,18 @@ func runVaultServe(opts *Options, reg *capability.Registry) error {
 		select {
 		case <-signals:
 			_ = server.Close()
+			cancel()
 		case <-ctx.Done():
 		}
 	}()
-	go watchSocket(ctx, socket, func() { _ = server.Close() })
 
 	answer(vaultmigrate.ReportReady)
+	// A successor serves only once its socket is the vault socket; one that never gets there locks at once.
+	if successor && vaultproc.AwaitHandover(ctx, listener, socket, vaultproc.HandoverTimeout) != nil {
+		_ = server.Close()
+	} else {
+		go watchSocket(ctx, socket, func() { _ = server.Close() })
+	}
 	return server.Serve(listener)
 }
 

@@ -71,6 +71,11 @@ func (m *Model) askUpdate() {
 	if !m.updateOffered() {
 		return
 	}
+	if work := m.updateBlocker(); work != "" {
+		m.clearMessages()
+		m.status = "Wait until " + work + " finishes, then press u again."
+		return
+	}
 	m.updateFrom = m.screen
 	m.screen = screenUpdate
 	// Counted once here: the view is drawn on every key.
@@ -78,10 +83,27 @@ func (m *Model) askUpdate() {
 	m.clearMessages()
 }
 
+// updateBlocker names the store or vault work in flight, if any. An installation locks the vault process
+// and replaces the program, which such work must not meet halfway: a vault process still starting would be
+// refused by the new program, and a restart would not happen.
+func (m *Model) updateBlocker() string {
+	switch {
+	case m.busy != "":
+		return m.busy
+	case m.vaultBusy:
+		return "the vault work"
+	}
+	return ""
+}
+
 func (m *Model) updateUpdateConfirm(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "y":
 		m.screen = m.updateFrom
+		if work := m.updateBlocker(); work != "" {
+			m.status = "Update not installed: wait until " + work + " finishes, then press u again."
+			return nil
+		}
 		return m.startUpdate()
 	case "n", "esc":
 		m.screen = m.updateFrom
@@ -95,6 +117,7 @@ func (m *Model) updateUpdateConfirm(key tea.KeyMsg) tea.Cmd {
 // startUpdate installs the release in the background. The editor keeps working on the version it runs.
 func (m *Model) startUpdate() tea.Cmd {
 	m.updating = true
+	m.updateUnlocked = m.vaultOpen()
 	m.clearMessages()
 	updater := m.updater
 	return func() tea.Msg {
@@ -103,9 +126,20 @@ func (m *Model) startUpdate() tea.Cmd {
 	}
 }
 
-// updateDone reports the outcome. The running process is not replaced in memory, so a successful update
-// asks for a restart instead of pretending to be the new version.
-func (m *Model) updateDone(msg updateDoneMsg) {
+// vaultOpen reports whether the vault is encrypted and unlocked, in this process or in a vault process.
+func (m *Model) vaultOpen() bool {
+	v := m.secrets.Vault()
+	if v == nil {
+		return false
+	}
+	state, err := v.State()
+	return err == nil && m.vaultDisplayUnlocked(state)
+}
+
+// updateDone reports the outcome. The running process is not replaced in memory: where the editor can
+// restart, it replaces itself with the new program, asking first when that would drop unsaved input;
+// elsewhere a successful update asks for a restart instead of pretending to be the new version.
+func (m *Model) updateDone(msg updateDoneMsg) tea.Cmd {
 	m.updating = false
 	var unsupported *selfupdate.UnsupportedInstallationError
 	switch {
@@ -121,16 +155,15 @@ func (m *Model) updateDone(msg updateDoneMsg) {
 	case msg.result.Updated:
 		m.updated = msg.result.Latest
 		m.fail = ""
-		m.status = "Updated to " + m.updated + ". Restart qatlas tui to use it."
-		if noter, ok := m.updater.(updateNoter); ok && noter.Note() != "" {
-			m.status += " " + noter.Note()
-		}
+		m.status = m.restartHint()
+		return m.restartAfterUpdate(msg.result.Current, msg.result.Latest)
 	default:
 		// Nothing newer was there by the time of the installation.
 		m.release = selfupdate.Result{}
 		m.fail = ""
 		m.status = "qatlas is already up to date"
 	}
+	return nil
 }
 
 // updateBanners are the forms of the banner in the top line, longest first. Each form reads without colour;
@@ -167,8 +200,12 @@ func (m *Model) updateBanner(room int) string {
 // still shows them.
 func (m *Model) updateView() string {
 	question := "Update qatlas to " + m.release.Latest + "?"
+	after := "Restart qatlas tui afterwards to use it."
+	if m.restart != nil {
+		after = "This editor then restarts itself into the new version, and opens the unlock dialog if the " +
+			"update locked a vault that was unlocked."
+	}
 	return m.wrapped(titleStyle, question) + "\n" + m.wrapped(hintStyle, "y update · n/esc cancel") + "\n\n" +
 		m.wrapped(lipgloss.NewStyle(), m.updateText) + "\n\n" +
-		m.wrapped(lipgloss.NewStyle(), "Installs the release like 'qatlas update' and verifies its checksum. "+
-			"Restart qatlas tui afterwards to use it.")
+		m.wrapped(lipgloss.NewStyle(), "Installs the release like 'qatlas update' and verifies its checksum. "+after)
 }

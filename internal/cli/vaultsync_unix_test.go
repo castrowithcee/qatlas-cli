@@ -22,7 +22,10 @@ import (
 	"testing"
 
 	"filippo.io/age"
+	"golang.org/x/crypto/ssh"
 
+	"github.com/castrowithcee/qatlas-cli/internal/release"
+	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
@@ -32,6 +35,12 @@ import (
 // 'qatlas vault unlock' hands it to a vault process, and lets every command of the test reach it. The
 // server checks its clients by their program, which is this test binary on both ends.
 func serveVaultInProcess(t *testing.T, dir string) (*vaultproc.Server, *vaultproc.Client) {
+	t.Helper()
+	return serveVaultInProcessWith(t, dir, nil)
+}
+
+// serveVaultInProcessWith is serveVaultInProcess for a server that configure sets up before it serves.
+func serveVaultInProcessWith(t *testing.T, dir string, configure func(*vaultproc.Server)) (*vaultproc.Server, *vaultproc.Client) {
 	t.Helper()
 	original := vaultProcessSupported
 	vaultProcessSupported = true
@@ -59,6 +68,9 @@ func serveVaultInProcess(t *testing.T, dir string) (*vaultproc.Server, *vaultpro
 		t.Fatalf("Listen() = %v", err)
 	}
 	server := vaultproc.NewServer(key, snap.Secrets, snap.Bindings)
+	if configure != nil {
+		configure(server)
+	}
 	done := make(chan struct{})
 	go func() { _ = server.Serve(l); close(done) }()
 	t.Cleanup(func() { _ = server.Close(); <-done })
@@ -242,10 +254,11 @@ func TestUpdateLocksTheVaultProcess(t *testing.T) {
 		if code != exitOK || !strings.Contains(stdout, `"updated":true`) {
 			t.Fatalf("refuse=%v: exit code = %d, stdout = %q, stderr = %q", refuse, code, stdout, stderr)
 		}
-		want := "qatlas: the vault process was locked before qatlas was replaced; run 'qatlas vault unlock' to " +
+		want := "qatlas: the vault process was locked because the release is not signed, before qatlas was replaced; run 'qatlas vault unlock' to " +
 			"unlock the vault again\n"
 		if refuse {
-			want = "qatlas: warning: the vault process could not be locked before qatlas was replaced: "
+			want = "qatlas: warning: the vault process could not be locked because the release is not signed, " +
+				"before qatlas was replaced: "
 		}
 		if !strings.HasPrefix(stderr, want) || (refuse && !strings.Contains(stderr, "kill "+strconv.Itoa(os.Getpid()))) {
 			t.Fatalf("refuse=%v: stderr = %q, want %q", refuse, stderr, want)
@@ -279,8 +292,16 @@ func installedProgram(t *testing.T) string {
 }
 
 // releaseUpdater returns an updater for executable against a local release v1.1.0 whose program is
-// "new-program". before runs right before the installed files are replaced, after the command's own hook.
+// "new-program" and which carries no signature. before runs right before the installed files are replaced,
+// after the command's own hook.
 func releaseUpdater(t *testing.T, executable string, before func()) *selfupdate.Client {
+	t.Helper()
+	return signedReleaseUpdater(t, executable, nil, nil, before)
+}
+
+// signedReleaseUpdater is releaseUpdater for a release whose checksums signer signed, which the updater
+// trusts only if trusted is that signer's key; a nil signer publishes no signature.
+func signedReleaseUpdater(t *testing.T, executable string, signer ssh.Signer, trusted ssh.PublicKey, before func()) *selfupdate.Client {
 	t.Helper()
 	var archive bytes.Buffer
 	gz := gzip.NewWriter(&archive)
@@ -295,26 +316,41 @@ func releaseUpdater(t *testing.T, executable string, before func()) *selfupdate.
 	_ = gz.Close()
 	const asset = "qatlas_v1.1.0_linux_amd64.tar.gz"
 	sum := sha256.Sum256(archive.Bytes())
+	checksums := []byte(fmt.Sprintf("%s  %s\n", hex.EncodeToString(sum[:]), asset))
 
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/releases/latest":
-			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v1.1.0", "assets": []map[string]string{
+			assets := []map[string]string{
 				{"name": asset, "url": server.URL + "/asset"},
 				{"name": "checksums.txt", "url": server.URL + "/checksums"},
-			}})
+			}
+			if signer != nil {
+				assets = append(assets, map[string]string{"name": "checksums.txt.sig", "url": server.URL + "/signature"})
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"tag_name": "v1.1.0", "assets": assets})
 		case "/asset":
 			_, _ = w.Write(archive.Bytes())
 		case "/checksums":
-			fmt.Fprintf(w, "%s  %s\n", hex.EncodeToString(sum[:]), asset)
+			_, _ = w.Write(checksums)
+		case "/signature":
+			_, _ = w.Write(releasetest.Sign(t, signer, release.Namespace, "sha512", checksums))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
 	t.Cleanup(server.Close)
-	return &selfupdate.Client{
+	client := &selfupdate.Client{
 		BaseURL: server.URL, HTTPClient: server.Client(), Version: "v1.0.0", GOOS: "linux", GOARCH: "amd64",
-		Executable: executable, BeforeReplace: func(context.Context) { before() },
+		Executable: executable,
+		BeforeReplace: func(context.Context, selfupdate.Release) error {
+			before()
+			return nil
+		},
 	}
+	if trusted != nil {
+		client.SigningKeys = []ssh.PublicKey{trusted}
+	}
+	return client
 }

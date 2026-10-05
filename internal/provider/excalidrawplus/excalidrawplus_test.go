@@ -86,6 +86,10 @@ func coreConfig() *config.Config {
 				Tools: []string{scenesGet.ID, contentPatch.ID, contentReplace.ID, scenesDelete.ID, collectionsDelete.ID}},
 			"listedAll": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "*",
 				Tools: []string{collectionsDelete.ID}},
+			"peopleOne": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "collection/" + ownCollection,
+				Tools: peopleToolIDs},
+			"peopleAll": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "*",
+				Tools: peopleToolIDs},
 			"every": {Service: "excalidraw", Credential: "excalidraw-reader", Permissions: perms, Target: "*"},
 		},
 	}
@@ -134,11 +138,11 @@ func isInvalidRequest(err error) bool {
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	metadata, ok := registry(t).ProviderMetadata(Provider)
 	if !ok || metadata.Name != "Excalidraw+" || metadata.DefaultBaseURL != baseURL || len(metadata.SecretRoles) != 1 ||
-		metadata.SecretRoles[0].Name != roleAPIKey || !metadata.Target.Required || len(metadata.Tools) != 11 {
+		metadata.SecretRoles[0].Name != roleAPIKey || !metadata.Target.Required || len(metadata.Tools) != 16 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	recommended, ok := metadata.RecommendedProfile()
-	if !ok || len(metadata.Profiles) != 3 || len(recommended.Tools) != 4 {
+	if !ok || len(metadata.Profiles) != 4 || len(recommended.Tools) != 4 {
 		t.Fatalf("profiles = %+v", metadata.Profiles)
 	}
 	for _, d := range []capability.Descriptor{collectionsList, scenesList, scenesGet, scenesContent} {

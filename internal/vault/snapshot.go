@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 )
@@ -14,6 +15,10 @@ var ErrNotUnlocked = errors.New("the vault is not unlocked in this process")
 
 // Snapshot is what an unlocked vault holds, handed to the vault process that keeps it open for later
 // invocations: the vault's own key and the decrypted secrets, keyed by credential name and then by role.
+//
+// Its JSON is what a vault process reads from its handover pipe, and a vault process of one release hands it
+// to its successor of the next (see vaultmigrate.StartSuccessor): the field names below are a contract
+// between consecutive releases, and a change keeps what an older release writes readable.
 type Snapshot struct {
 	// Identity is the vault's private key as age text. It is as secret as the secrets it decrypts.
 	Identity string `json:"identity"`
@@ -21,6 +26,9 @@ type Snapshot struct {
 	Secrets map[string]map[string]string `json:"secrets"`
 	// Bindings says which connection may read which credential; see Bindings.
 	Bindings Bindings `json:"bindings"`
+	// LocksAt is when a vault process handing the vault over to a successor would have locked itself, which
+	// the successor keeps; nil for an unlock, after which the idle timeout runs from the start.
+	LocksAt *time.Time `json:"locks_at,omitempty"`
 }
 
 // Snapshot returns what this process unlocked, pending entries already merged in by Unlock. The maps are

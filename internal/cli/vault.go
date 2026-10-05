@@ -68,7 +68,9 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"secret only to a connection it approved as it is configured now; any other access fails with\n" +
 			"the code approval-required, which only a person resolves: 'vault approve' lists every open\n" +
 			"connection with what changed and releases it, all at once or one at a time with --connection.\n" +
-			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n\n" +
+			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n" +
+			"'vault handover' shows or sets whether 'qatlas update' hands an unlocked vault over to the new\n" +
+			"program or locks it.\n\n" +
 			"On Linux and macOS 'vault unlock' hands the unlocked vault to a vault process that holds it open\n" +
 			"until it is idle for vault.idle_timeout (12h unless the configuration says otherwise), 'vault\n" +
 			"lock' ends it, or the machine restarts; elsewhere unlocking only lasts for the current process.\n" +
@@ -97,7 +99,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"entry count is unknown unless this run holds the key: counting needs the passphrase, the same\n" +
 			"way reading a secret does. The state is the effective one: unlocked while a vault process holds\n" +
 			"the vault open for every connection. For an encrypted vault it also reports that process\n" +
-			"(process running, with its pid and when it locks itself, or none); for an\n" +
+			"(process running, with its pid, when it locks itself, and its update behaviour, which says\n" +
+			"whether 'qatlas update' hands the vault over to the new program or locks it, or none); for an\n" +
 			"unencrypted one it warns that connections are not bound to approvals. It asks for no\n" +
 			"passphrase and shows no secret value.",
 		Args: noArgs,
@@ -136,15 +139,21 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		},
 	}
 
+	var successor bool
 	serve := &cobra.Command{
 		Use:    "serve",
 		Short:  "Hold the unlocked vault open; started by 'qatlas vault unlock'",
 		Hidden: true,
 		Args:   noArgs,
 		RunE: func(*cobra.Command, []string) error {
-			return runVaultServe(opts, reg)
+			return runVaultServe(opts, reg, successor)
 		},
 	}
+	// The flag a vault process starts its successor with; its name is part of the successor contract (see
+	// vaultmigrate.SuccessorFlag), so it stays.
+	successorFlag := strings.TrimPrefix(vaultmigrate.SuccessorFlag, "--")
+	serve.Flags().BoolVar(&successor, successorFlag, false, "take the vault over from the running vault process")
+	_ = serve.Flags().MarkHidden(successorFlag)
 
 	encrypt := &cobra.Command{
 		Use:   "encrypt",
@@ -191,7 +200,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"way it does for a vault that was never encrypted at all. Run against a vault that is not\n" +
 			"encrypted, it refuses and says there is nothing to decrypt. A vault process that holds the vault\n" +
 			"unlocked is locked once the passphrase is entered, since it could not be reached afterwards.\n" +
-			"Approvals and agent tokens exist only while the vault is encrypted and are removed with it.",
+			"Approvals, agent tokens, and the update behaviour exist only while the vault is encrypted and are\n" +
+			"removed with it.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultDecrypt(c, opts, decryptConfirm)
@@ -288,7 +298,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		"approve only this connection, repeated per connection; the default approves every open one")
 
 	cmd.AddCommand(status, unlock, lock, serve, encrypt, passphrase, decrypt, migrate, approve,
-		newVaultTokenCommand(opts, reg), newVaultLogsCommand(opts))
+		newVaultTokenCommand(opts, reg), newVaultHandoverCommand(opts), newVaultLogsCommand(opts))
 	return cmd
 }
 
@@ -527,6 +537,9 @@ func vaultProcessOf(ctx context.Context, v *vault.Vault, state vault.State, warn
 		var status vaultproc.Status
 		status, err = client.Status(contextOrBackground(ctx))
 		if err == nil {
+			if status.SettingsUntrusted {
+				addWarning(warning, vault.ErrSettingsUntrusted.Error())
+			}
 			return vaultProcessState{State: "running", Status: status}
 		}
 	}
@@ -850,6 +863,9 @@ func vaultStatusObject(status vault.Status, process vaultProcessState) output.Ob
 		fields = append(fields,
 			output.Field{Name: "pid", Value: int64(process.Status.PID)},
 			output.Field{Name: "locks_at", Value: formatLocksAt(process.Status.LocksAt)})
+		if process.Status.Update != "" {
+			fields = append(fields, output.Field{Name: "update_behaviour", Value: string(process.Status.Update)})
+		}
 	}
 	if status.Warning != "" {
 		fields = append(fields, output.Field{Name: "warning", Value: status.Warning})
