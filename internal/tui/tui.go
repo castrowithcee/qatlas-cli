@@ -107,6 +107,8 @@ const (
 	screenHelp
 	// screenUpdate asks before a newer release of qatlas is installed.
 	screenUpdate
+	// screenRestart asks before the editor restarts into an installed release and drops unsaved input.
+	screenRestart
 	// screenTargets edits the target list of a connection entry by entry.
 	screenTargets
 	// screenPaths edits the path list of a connection entry by entry, with tab completion for directories.
@@ -529,6 +531,19 @@ type Model struct {
 	updating   bool
 	updated    string
 	updateFrom screen
+	// updateUnlocked is whether the vault was unlocked when the installation started; the restarted editor
+	// is told. restart replaces the process after an installation, nil where this platform cannot, and
+	// execute runs the command that does so with the terminal released. restartPath, restartFrom and
+	// restartTo are what a pending restart runs and tells, restartBack the screen the question returns to,
+	// and restartNote what a restarted editor says in the unlock dialog it opens.
+	updateUnlocked bool
+	restart        *Restart
+	execute        func(tea.ExecCommand, tea.ExecCallback) tea.Cmd
+	restartPath    string
+	restartFrom    string
+	restartTo      string
+	restartBack    screen
+	restartNote    string
 	// updateText is what the update question says an installation does, set when it opens.
 	updateText string
 
@@ -581,7 +596,7 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 		sources:   map[string]secret.Source{},
 		checked:   map[string][]string{},
 		termWidth: defaultWidth, termHeight: defaultHeight, configExists: configExists,
-		startDir: startDir,
+		startDir: startDir, execute: tea.Exec,
 	}
 	m.layoutWorkspace()
 	m.list = newFilterList(m.describe)
@@ -667,7 +682,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateChecked(msg)
 		return m, nil
 	case updateDoneMsg:
-		m.updateDone(msg)
+		return m, m.updateDone(msg)
+	case restartFailedMsg:
+		m.restartFailed(msg)
 		return m, nil
 	case tea.WindowSizeMsg:
 		// A zero dimension is also how focused tests report only the dimension they exercise. Real size
@@ -734,6 +751,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.updateHelp(msg)
 		case screenUpdate:
 			cmd = m.updateUpdateConfirm(msg)
+		case screenRestart:
+			cmd = m.updateRestartConfirm(msg)
 		case screenTargets:
 			cmd = m.updateTargets(msg)
 		case screenPaths:
@@ -1087,6 +1106,10 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return nil
 	case screenUpdate:
 		m.screen = m.updateFrom
+		return nil
+	case screenRestart:
+		m.screen = m.restartBack
+		m.status = m.restartHint()
 		return nil
 	case screenForm, screenSummary:
 		return m.requestLeave()
@@ -3164,6 +3187,8 @@ func (m *Model) editorView() string {
 		return m.helpView()
 	case screenUpdate:
 		return m.updateView() + m.notes()
+	case screenRestart:
+		return m.restartView() + m.notes()
 	case screenTargets:
 		return m.targetsView()
 	case screenPaths:
@@ -3773,7 +3798,7 @@ func (m *Model) frame(workspace string) string {
 	switch {
 	case m.screen == screenHelp:
 		title = "Help"
-	case m.screen == screenUpdate:
+	case m.screen == screenUpdate || m.screen == screenRestart:
 		title = "Update"
 	case m.wizard != nil:
 		title = "Guided setup"
@@ -4568,14 +4593,21 @@ func keyHintGroup(group string) string {
 }
 
 // Run starts the editor on the given terminal streams. The updater may be nil, in which case the editor does
-// not look for a newer release.
+// not look for a newer release. The restart may be nil, in which case an installed release waits for a
+// restart by hand.
 func Run(store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor, updater Updater,
-	in, out *os.File) error {
+	restart *Restart, in, out *os.File) error {
+	// Read before anything else, so that no child of the editor inherits the handoff.
+	predecessor := takeHandoff()
 	model, err := New(store, tester, secrets, redactor)
 	if err != nil {
 		return err
 	}
 	model.updater = updater
+	model.restart = restart
+	if predecessor != nil {
+		model.adopt(predecessor)
+	}
 	_, err = tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(out)).Run()
 	return err
 }

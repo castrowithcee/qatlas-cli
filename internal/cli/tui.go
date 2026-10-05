@@ -265,9 +265,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"At start the editor asks GitHub in the background, for at most five seconds, whether a newer\n" +
 			"stable release exists, and names it in the top line, for example Update available v0.4.0 →\n" +
 			"v0.5.0 · u update. u on the sidebar or in a list asks first and then installs it the way\n" +
-			"'qatlas update' does; the editor keeps running the old version until it is restarted. A failed\n" +
-			"check stays silent. A dev build never checks, and a non-empty QATLAS_NO_UPDATE_CHECK turns\n" +
-			"the check off.",
+			"'qatlas update' does. On Linux and macOS the editor then restarts itself: it locks a vault process\n" +
+			"first, runs the new program at the same path with the same arguments, and says qatlas updated\n" +
+			"from one version to the other. If the vault was unlocked before, the new editor opens the\n" +
+			"unlock dialog at once; esc leaves it locked. Unsaved input in an open form is never dropped\n" +
+			"silently: the editor asks first, and not now keeps editing on the old version. Where the editor\n" +
+			"cannot restart itself, on Windows or when the new program cannot be run, it keeps running the\n" +
+			"old version until it is restarted by hand. A failed check stays silent. A dev build never\n" +
+			"checks, and a non-empty QATLAS_NO_UPDATE_CHECK turns the check off.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			secret.SetLongRunning("tui")
@@ -286,7 +291,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			}
 			store := config.NewStore(path, reg)
 			return classifyUserError(tui.Run(store, connectionTester(store, opts, reg), secrets, opts.Redactor,
-				tuiUpdater(opts, buildVersion), os.Stdin, os.Stdout))
+				tuiUpdater(opts, buildVersion), tuiRestart(), os.Stdin, os.Stdout))
 		},
 	}
 }

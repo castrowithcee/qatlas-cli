@@ -25,6 +25,9 @@ func TestMain(m *testing.M) {
 	if os.Getenv(runAsQatlasEnv) == "1" {
 		os.Exit(Run(os.Args[1:], os.Stdout, os.Stderr))
 	}
+	if os.Getenv(runAsTUIEnv) == "1" {
+		os.Exit(runAsTUI())
+	}
 	checkInteractive = func() bool { return true }
 	vaultProcessSupported = false
 	// No test finds an agent token of the machine it runs on; a test that needs one sets its own.
