@@ -24,8 +24,13 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 			"and the selected archive with its published SHA-256 checksum, and replaces a direct\n" +
 			"<prefix>/bin/qatlas installation. A release with an invalid signature is refused and nothing is\n" +
 			"changed; a release without a signature is still installed, and the output says signed: false.\n" +
-			"It also refreshes qatlas.1 in the same prefix. Dev builds and symlink installations are\n" +
-			"not replaced. Use --check to report availability without changing files.\n\n" +
+			"It also refreshes qatlas.1 in the same prefix. On Windows the installation is\n" +
+			"<prefix>\\bin\\qatlas.exe: the running file is renamed to qatlas.exe.old, the new one takes its place\n" +
+			"(the old one is put back should that fail), and qatlas.exe.old is removed at the next start or update.\n" +
+			"Windows has no vault process to hand over; running 'qatlas mcp', 'qatlas tui' and 'qatlas web'\n" +
+			"keep running the old version until they are restarted or reconnected.\n" +
+			"Dev builds and symlink installations are not replaced. Use --check to report availability\n" +
+			"without changing files.\n\n" +
 			"Before it downloads anything, update names the new version and what the replacement does to\n" +
 			"running qatlas processes and asks for y/n at the terminal; n or an empty answer changes nothing.\n" +
 			"--yes answers y. Without a terminal, and in agent mode, update refuses unless --yes is given;\n" +

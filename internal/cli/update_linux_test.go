@@ -133,7 +133,7 @@ func TestConsequencesTextOfThePlatforms(t *testing.T) {
 	if !strings.Contains(darwin, "1 other qatlas process of yours is running") || !strings.Contains(darwin, "restart themselves") {
 		t.Errorf("darwin: %q", darwin)
 	}
-	if strings.Contains(other, "other qatlas") || !strings.Contains(other, "Reconnect") || strings.Contains(other, "restart themselves") {
+	if strings.Contains(other, "other qatlas") || !strings.Contains(other, "old version") || strings.Contains(other, "restart themselves") {
 		t.Errorf("windows: %q", other)
 	}
 }

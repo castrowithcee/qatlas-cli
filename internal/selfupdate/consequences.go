@@ -20,6 +20,17 @@ func Consequences() string { return ConsequencesText(runtime.GOOS, OtherProcesse
 // qatlas processes of this user, or negative where it is not known; goos selects the platform's next step.
 func ConsequencesText(goos string, others int) string {
 	var b strings.Builder
+	if goos == "windows" {
+		b.WriteString("The running qatlas.exe is renamed to qatlas.exe.old and replaced; the old file is removed " +
+			"at the next start or update.")
+		if others > 0 {
+			fmt.Fprintf(&b, " %d other qatlas %s of yours %s running.", others, plural(others, "process", "processes"),
+				plural(others, "is", "are"))
+		}
+		b.WriteString(" Running 'qatlas mcp', 'qatlas tui' and 'qatlas web' keep running the old version until " +
+			"they are restarted or, for 'qatlas mcp', reconnected in their client.")
+		return b.String()
+	}
 	b.WriteString("A running vault process is handed over to the new version if the release is signed and the " +
 		"update behaviour is handover, and locked first otherwise.")
 	if others > 0 {

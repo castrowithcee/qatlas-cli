@@ -123,9 +123,6 @@ func (c *Client) Update(ctx context.Context) (Result, error) {
 		return result, err
 	}
 	goos, goarch := c.platform()
-	if goos == "windows" {
-		return Result{}, &UnsupportedInstallationError{Reason: "safe replacement of the running Windows executable is not supported yet"}
-	}
 	archiveName := assetName(result.Latest, goos, goarch)
 	archiveURL, checksumURL, signatureURL, err := releaseURLs(release, archiveName)
 	if err != nil {
@@ -515,14 +512,18 @@ func (c *Client) install(ctx context.Context, files payload, goos string, releas
 	}
 	prefix := filepath.Dir(binDir)
 	manDir := filepath.Join(prefix, "share", "man", "man1")
-	if err := os.MkdirAll(manDir, 0o755); err != nil {
-		return fmt.Errorf("create man directory: %w", err)
+	stagedMan := ""
+	if len(files.manpage) > 0 {
+		if err := os.MkdirAll(manDir, 0o755); err != nil {
+			return fmt.Errorf("create man directory: %w", err)
+		}
+		var err error
+		stagedMan, err = stageFile(manDir, ".qatlas-man-*", files.manpage, 0o644)
+		if err != nil {
+			return fmt.Errorf("stage manpage: %w", err)
+		}
+		defer os.Remove(stagedMan)
 	}
-	stagedMan, err := stageFile(manDir, ".qatlas-man-*", files.manpage, 0o644)
-	if err != nil {
-		return fmt.Errorf("stage manpage: %w", err)
-	}
-	defer os.Remove(stagedMan)
 	stagedBinary, err := stageFile(binDir, ".qatlas-bin-*", files.executable, info.Mode().Perm()|0o500)
 	if err != nil {
 		return fmt.Errorf("stage executable: %w", err)
@@ -533,8 +534,13 @@ func (c *Client) install(ctx context.Context, files payload, goos string, releas
 			return err
 		}
 	}
-	if err := os.Rename(stagedMan, filepath.Join(manDir, "qatlas.1")); err != nil {
-		return fmt.Errorf("install manpage: %w", err)
+	if stagedMan != "" {
+		if err := os.Rename(stagedMan, filepath.Join(manDir, "qatlas.1")); err != nil {
+			return fmt.Errorf("install manpage: %w", err)
+		}
+	}
+	if goos == "windows" {
+		return replaceRunning(osFileOps, stagedBinary, absolute)
 	}
 	if err := os.Rename(stagedBinary, absolute); err != nil {
 		return fmt.Errorf("replace executable: %w", err)
