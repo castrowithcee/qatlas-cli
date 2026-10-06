@@ -549,7 +549,14 @@ func TestMutationsReportUncertainty(t *testing.T) {
 		})
 	}
 	run("5xx", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }, 0, true)
-	run("timeout", func(w http.ResponseWriter, _ *http.Request) { time.Sleep(150 * time.Millisecond) }, 20*time.Millisecond, true)
+	// The handler answers long after the deadline, which only has to outlast the TLS handshake for the request
+	// to arrive.
+	run("timeout", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(2 * time.Second):
+		}
+	}, 500*time.Millisecond, true)
 	run("unreadable response", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not json")) }, 0, true)
 	run("422 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(422) }, 0, false)
 	run("404 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(404) }, 0, false)
@@ -753,8 +760,8 @@ func TestRegister(t *testing.T) {
 	}
 
 	got := reg.Provider(Provider)
-	if len(got) != 5 {
-		t.Fatalf("capabilities = %d, want 5", len(got))
+	if len(got) != 6 {
+		t.Fatalf("capabilities = %d, want 6", len(got))
 	}
 	wantRisk := capability.Risk{
 		Effect:          capability.EffectRead,
@@ -772,6 +779,7 @@ func TestRegister(t *testing.T) {
 		{Provider + ".pages.create", pagesCreate.Risk},
 		{Provider + ".pages.update", pagesUpdate.Risk},
 		{Provider + ".pages.delete", pagesDelete.Risk},
+		{Provider + ".content.search", wantRisk},
 	} {
 		if tt.risk.Effect != capability.EffectRead && (tt.risk.Confirmation != capability.ConfirmationRequired ||
 			tt.risk.Idempotency == "" || !tt.risk.OpenWorld || tt.risk.DataSensitivity == "") {

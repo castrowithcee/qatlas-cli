@@ -64,18 +64,18 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 	pressNew(t, m)
 	for label, want := range map[string]string{
 		profileLabel: "read", "permissions": "read", toolsLabel: toolsSelected,
-		toolListLabel: "bookstack.pages.get, bookstack.pages.list",
+		toolListLabel: "bookstack.content.search, bookstack.pages.get, bookstack.pages.list",
 	} {
 		if got := m.fieldValue(label); got != want {
 			t.Errorf("%s = %q, want %q", label, got, want)
 		}
 	}
 	if hint := m.fieldHint(*m.field(toolListLabel)); !strings.HasSuffix(hint,
-		"ticked: bookstack.pages.get, bookstack.pages.list") {
+		"ticked: bookstack.content.search, bookstack.pages.get, bookstack.pages.list") {
 		t.Errorf("the tool list does not name its ticks: %q", hint)
 	}
 	for _, want := range []string{"not a role", "do not narrow what the credential itself may do",
-		"ticks permissions read and tools bookstack.pages.list, bookstack.pages.get"} {
+		"ticks permissions read and tools bookstack.pages.list, bookstack.pages.get, bookstack.content.search"} {
 		if hint := m.field(profileLabel).hint; !strings.Contains(hint, want) {
 			t.Errorf("the profile row does not say %q: %q", want, hint)
 		}
@@ -87,6 +87,7 @@ func TestANewConnectionStartsOnTheRecommendedProfile(t *testing.T) {
 	typeText(t, m, "fresh")
 	toggleTool(t, m, "bookstack.pages.get")
 	toggleTool(t, m, "bookstack.pages.list")
+	toggleTool(t, m, "bookstack.content.search")
 	if got := m.fieldValue(toolListLabel); got != "" {
 		t.Fatalf("the preselected tools could not be unticked: %q", got)
 	}
@@ -185,7 +186,7 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 			Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
 			Tools:       []string{"bookstack.pages.list", "bookstack.pages.create"}},
 		"matching": {Service: "wiki", Credential: "reader", Permissions: []config.Permission{config.PermissionRead},
-			Tools: []string{"bookstack.pages.list", "bookstack.pages.get"}},
+			Tools: []string{"bookstack.pages.list", "bookstack.pages.get", "bookstack.content.search"}},
 	})
 	before, err := os.ReadFile(path)
 	if err != nil {
@@ -223,7 +224,7 @@ func TestASavedConnectionIsNotChangedByProfiles(t *testing.T) {
 	press(t, m, "right", "y")
 	pump(t, m, "f2")
 	saved := savedConnection(t, path, reg, "all")
-	if !reflect.DeepEqual(saved.Tools, []string{"bookstack.pages.get", "bookstack.pages.list"}) ||
+	if !reflect.DeepEqual(saved.Tools, []string{"bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}) ||
 		config.FormatPermissions(saved.Permissions) != "read" {
 		t.Fatalf("a confirmed profile saved %+v", saved)
 	}
@@ -260,7 +261,7 @@ func TestALaterToolJoinsNoSavedConnection(t *testing.T) {
 		t.Fatalf("saved tools = %#v, want the listed tool only", got)
 	}
 	pressNew(t, m)
-	if got := m.fieldValue(toolListLabel); got != "bookstack.pages.get, bookstack.pages.list" {
+	if got := m.fieldValue(toolListLabel); got != "bookstack.content.search, bookstack.pages.get, bookstack.pages.list" {
 		t.Fatalf("the recommended profile of a new connection ticks %q", got)
 	}
 }
@@ -279,11 +280,12 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 60})
 	walkSetup(t, m, stepPermissions)
 	if m.fieldValue(profileLabel) != "read" || m.fieldValue("permissions") != "read" ||
-		m.fieldValue(toolListLabel) != "bookstack.pages.get, bookstack.pages.list" {
+		m.fieldValue(toolListLabel) != "bookstack.content.search, bookstack.pages.get, bookstack.pages.list" {
 		t.Fatalf("permissions step = profile %q, permissions %q, tools %q", m.fieldValue(profileLabel),
 			m.fieldValue("permissions"), m.fieldValue(toolListLabel))
 	}
 	toggleTool(t, m, "bookstack.pages.list")
+	toggleTool(t, m, "bookstack.content.search")
 	if m.fieldValue(profileLabel) != profileCustom {
 		t.Fatalf("profile = %q after a change by hand", m.fieldValue(profileLabel))
 	}

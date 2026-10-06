@@ -181,8 +181,8 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read pages", Recommended: true,
-			Description: "lists and reads pages; changes nothing in BookStack",
-			Tools:       []string{pagesList.ID, pagesGet.ID},
+			Description: "lists and reads pages and searches content; changes nothing in BookStack",
+			Tools:       []string{pagesList.ID, pagesGet.ID, contentSearch.ID},
 		}},
 	}, func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor) (provider.Class, error) {
@@ -200,6 +200,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: pagesCreate, Handler: capability.Handler(invokePagesCreate)},
 		capability.Operation{Descriptor: pagesUpdate, Handler: capability.Handler(invokePagesUpdate)},
 		capability.Operation{Descriptor: pagesDelete, Handler: capability.Handler(invokePagesDelete)},
+		capability.Operation{Descriptor: contentSearch, Handler: capability.Handler(invokeContentSearch)},
 	)
 }
 

@@ -126,7 +126,7 @@ func TestAConnectionWithoutToolsIsSavedWithoutTools(t *testing.T) {
 		t.Fatalf("save failed: %s", m.fail)
 	}
 	if got := savedTools(t, path, reg, "fresh"); !reflect.DeepEqual(got,
-		[]string{"bookstack.pages.get", "bookstack.pages.list"}) {
+		[]string{"bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}) {
 		t.Fatalf("a new connection was saved with tools %#v, want the recommended read tools", got)
 	}
 }
@@ -151,7 +151,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 		t.Fatalf("space on the tool list opened screen %v, want the picker", m.screen)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"ticked: 0 of 5", "[ ] bookstack.pages.list  read",
+	for _, want := range []string{"ticked: 0 of 6", "[ ] bookstack.pages.list  read",
 		"[ ] bookstack.pages.delete  delete  (listed only)  (not permitted)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("picker lacks %q:\n%s", want, view)
@@ -186,7 +186,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	}
 	focusField(t, m, toolListLabel)
 	press(t, m, " ", " ", "enter")
-	if !strings.Contains(screenOf(m), "none of 5 ticked: no tool is offered") {
+	if !strings.Contains(screenOf(m), "none of 6 ticked: no tool is offered") {
 		t.Fatalf("an empty selection does not say that it closes the route:\n%s", screenOf(m))
 	}
 	pump(t, m, "f2")
