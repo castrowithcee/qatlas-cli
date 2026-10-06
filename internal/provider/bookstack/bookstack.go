@@ -75,9 +75,11 @@ var (
 		Tags:         []string{"knowledge", "pages", "bookstack"},
 		Risk:         bookstackReadRisk,
 		Provider:     Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1},"chapter_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at"]}}`),
 		Arguments: []capability.Argument{
+			{Name: "book_id", Description: "Only pages of this book; mutually exclusive with chapter_id; required for a connection bound to several books"},
+			{Name: "chapter_id", Description: "Only pages of this chapter; mutually exclusive with book_id"},
 			{Name: "limit", Description: "Maximum number of pages to return; 0 returns all"},
 			{Name: "offset", Description: "Number of pages to skip"},
 		},
@@ -165,7 +167,18 @@ func Register(reg *capability.Registry) error {
 			{Name: roleTokenID, Description: "BookStack token ID: the value labeled Token ID when you create an API token; it is not a name you choose"},
 			{Name: roleTokenSecret, Description: "BookStack token secret: the value labeled Token Secret when you create the same API token"},
 		},
-		Target: config.TargetMetadata{Label: "target", Description: "optional provider-specific scope inside the service"},
+		Target: config.TargetMetadata{
+			Label:       "books",
+			Multiple:    true,
+			Description: "optional books this connection is bound to; without a target the whole token scope is reachable",
+			Kinds: []config.TargetKind{{
+				Name:        "book",
+				Description: "a book whose pages this connection may list, read, create, update, and delete",
+				Forms:       []string{"book/BOOK_ID"},
+			}},
+			Validate:    validateTarget,
+			ValidateSet: validateSet,
+		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read pages", Recommended: true,
 			Description: "lists and reads pages; changes nothing in BookStack",
@@ -193,17 +206,39 @@ func Register(reg *capability.Registry) error {
 func invokePagesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
-		Limit  int `json:"limit"`
-		Offset int `json:"offset"`
+		BookID    *int64 `json:"book_id"`
+		ChapterID *int64 `json:"chapter_id"`
+		Limit     int    `json:"limit"`
+		Offset    int    `json:"offset"`
 	}
 	if err := json.Unmarshal(raw, &arguments); err != nil {
+		return nil, err
+	}
+	var target listTarget
+	if arguments.BookID != nil {
+		target.BookID = *arguments.BookID
+		if target.BookID <= 0 {
+			return nil, invalidRequest("book_id must be a positive integer")
+		}
+	}
+	if arguments.ChapterID != nil {
+		target.ChapterID = *arguments.ChapterID
+		if target.ChapterID <= 0 {
+			return nil, invalidRequest("chapter_id must be a positive integer")
+		}
+	}
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := bound.listBook(target); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	return client.ListPages(ctx, arguments.Limit, arguments.Offset)
+	return client.ListPages(ctx, target, arguments.Limit, arguments.Offset)
 }
 
 func invokePagesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -233,6 +268,15 @@ func invokePagesCreate(ctx context.Context, resolved *config.Resolved, secrets *
 	var input pageMutation
 	if json.Unmarshal(raw, &input) != nil || (input.BookID == 0) == (input.ChapterID == 0) {
 		return nil, providerError("create page", "exactly one of book_id or chapter_id is required")
+	}
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if input.BookID != 0 {
+		if err := bound.checkBook(input.BookID); err != nil {
+			return nil, err
+		}
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -285,14 +329,19 @@ func invokePagesDelete(ctx context.Context, resolved *config.Resolved, secrets *
 
 // Client talks to one BookStack instance with one credential.
 type Client struct {
-	base *url.URL
-	auth string
-	http *http.Client
+	scope scope
+	base  *url.URL
+	auth  string
+	http  *http.Client
 }
 
 // Open builds a client for a resolved connection. The secrets come from the resolver, which owns the
 // cascade and the redaction; this provider only asks for the two roles it needs and never returns them.
 func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
 	base, err := url.Parse(resolved.BaseURL)
 	if err != nil {
 		return nil, &provider.Error{
@@ -314,8 +363,9 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	}
 
 	return &Client{
-		base: base,
-		auth: "Token " + tokenID + ":" + tokenSecret,
+		scope: bound,
+		base:  base,
+		auth:  "Token " + tokenID + ":" + tokenSecret,
 		http: &http.Client{
 			Timeout: defaultTimeout,
 			// A redirect is never followed: it would carry the credential to a location the user did not
@@ -366,25 +416,84 @@ type errorJSON struct {
 	} `json:"error"`
 }
 
+// maxScanRequests bounds how many list requests one call may send while it filters rows itself, so a server
+// that ignores the filter or reports an endless total cannot keep the call reading.
+const maxScanRequests = 200
+
+// listTarget names the book or chapter a list is limited to; zero means not given.
+type listTarget struct {
+	BookID    int64
+	ChapterID int64
+}
+
+// listBook applies the local rules of a list against the connection's books, before any request. It returns
+// the target with the book that applies; a chapter still needs its evidence read.
+func (s scope) listBook(t listTarget) (listTarget, error) {
+	if t.BookID != 0 && t.ChapterID != 0 {
+		return t, invalidRequest("book_id and chapter_id are mutually exclusive")
+	}
+	if t.BookID != 0 {
+		return t, s.checkBook(t.BookID)
+	}
+	if !s.bound() || t.ChapterID != 0 {
+		return t, nil
+	}
+	if len(s.books) > 1 {
+		return t, invalidRequest(bookIDRequiredMsg)
+	}
+	t.BookID = s.books[0]
+	return t, nil
+}
+
 // ListPages returns pages, honouring limit and offset. A limit of zero or less returns every page the
-// instance reports, fetched in pages of at most 500 records.
-func (c *Client) ListPages(ctx context.Context, limit, offset int) (output.Collection, error) {
+// instance reports, fetched in pages of at most 500 records. With a book or chapter, or a bound connection,
+// every row is checked here against its book and chapter and foreign rows are dropped, because BookStack
+// silently ignores a filter it does not know; limit and offset then count the rows that remain.
+func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset int) (output.Collection, error) {
+	target, err := c.scope.listBook(target)
+	if err != nil {
+		return output.Collection{}, err
+	}
+	if target.ChapterID != 0 && c.scope.bound() {
+		book, err := c.chapterBook(ctx, target.ChapterID)
+		if err != nil {
+			return output.Collection{}, err
+		}
+		target.BookID = book
+	}
+	filtered := target.BookID != 0 || target.ChapterID != 0
+
 	columns := fieldNames(pagesList)
 	rows := make([]output.Row, 0, 32)
 	// An instance that ignores the offset would otherwise hand back the same records until the reported
 	// total is reached, which looks like a complete list but is not one.
 	seen := map[int64]bool{}
+	scanned := 0 // rows received in filtered mode, the offset sent to the server
+	skipped := 0 // matching rows skipped for the caller's offset in filtered mode
 
-	for {
+	for requests := 0; ; requests++ {
+		if filtered && requests >= maxScanRequests {
+			return output.Collection{}, &provider.Error{Class: provider.ClassInvalidResponse, Op: "list pages",
+				Message: "the listing exceeds the scan limit; narrow it with book_id or chapter_id"}
+		}
 		count := maxCount
-		if limit > 0 && limit-len(rows) < count {
+		serverOffset := offset + len(rows)
+		if filtered {
+			serverOffset = scanned
+		} else if limit > 0 && limit-len(rows) < count {
 			count = limit - len(rows)
 		}
 
 		query := url.Values{}
 		query.Set("count", strconv.Itoa(count))
-		query.Set("offset", strconv.Itoa(offset+len(rows)))
+		query.Set("offset", strconv.Itoa(serverOffset))
 		query.Set("sort", "+id")
+		if target.BookID != 0 {
+			query.Set("filter[book_id]", strconv.FormatInt(target.BookID, 10))
+		}
+		if target.ChapterID != 0 {
+			query.Set("filter[chapter_id]", strconv.FormatInt(target.ChapterID, 10))
+		}
 
 		var page listJSON
 		if err := c.get(ctx, "list pages", "/api/pages", query, &page, argNames(pagesList), provider.ClassPermission); err != nil {
@@ -397,14 +506,28 @@ func (c *Client) ListPages(ctx context.Context, limit, offset int) (output.Colle
 				continue
 			}
 			seen[p.ID] = true
-			rows = append(rows, listRow(p))
 			added++
+			if (target.BookID != 0 && p.BookID != target.BookID) ||
+				(target.ChapterID != 0 && p.ChapterID != target.ChapterID) {
+				continue
+			}
+			if filtered && skipped < offset {
+				skipped++
+				continue
+			}
+			if limit > 0 && len(rows) >= limit {
+				break
+			}
+			rows = append(rows, listRow(p))
 		}
+		scanned += len(page.Data)
 
 		// No progress means the instance cannot deliver more, whatever its total claims.
-		done := added == 0 ||
-			(limit > 0 && len(rows) >= limit) ||
-			offset+len(rows) >= page.Total
+		reached := offset + len(rows)
+		if filtered {
+			reached = scanned
+		}
+		done := added == 0 || (limit > 0 && len(rows) >= limit) || reached >= page.Total
 		if done {
 			break
 		}
@@ -413,27 +536,67 @@ func (c *Client) ListPages(ctx context.Context, limit, offset int) (output.Colle
 	return output.Collection{Columns: columns, Rows: rows}, nil
 }
 
-// GetPage returns one page including its untrusted content.
+// bookRef is the part of a page or chapter read as evidence of the book it belongs to.
+type bookRef struct {
+	ID     int64 `json:"id"`
+	BookID int64 `json:"book_id"`
+}
+
+// chapterBook reads a chapter once and returns its book if the connection is bound to it.
+func (c *Client) chapterBook(ctx context.Context, id int64) (int64, error) {
+	var ref bookRef
+	if err := c.get(ctx, "get chapter", "/api/chapters/"+strconv.FormatInt(id, 10), nil, &ref, nil, provider.ClassPermission); err != nil {
+		return 0, err
+	}
+	if !c.scope.allows(ref.BookID) {
+		return 0, invalidRequest(outsideChapter)
+	}
+	return ref.BookID, nil
+}
+
+// requirePageBound reads a page once as evidence of its book before a change; an unbound connection reads
+// nothing.
+func (c *Client) requirePageBound(ctx context.Context, id string) error {
+	if !c.scope.bound() {
+		return nil
+	}
+	var ref bookRef
+	if err := c.get(ctx, "get page", "/api/pages/"+url.PathEscape(id), nil, &ref, nil, provider.ClassPermission); err != nil {
+		return err
+	}
+	if !c.scope.allows(ref.BookID) {
+		return invalidRequest(outsidePage)
+	}
+	return nil
+}
+
+// GetPage returns one page including its untrusted content. On a bound connection this read is also the
+// evidence that the page belongs to one of the books.
 func (c *Client) GetPage(ctx context.Context, id string) (output.Object, error) {
 	var page pageJSON
 	if err := c.get(ctx, "get page", "/api/pages/"+url.PathEscape(id), nil, &page, argNames(pagesGet), provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
+	if c.scope.bound() && !c.scope.allows(page.BookID) {
+		return output.Object{}, invalidRequest(outsidePage)
+	}
 
-	return output.Object{Fields: []output.Field{
-		{Name: "id", Value: page.ID},
-		{Name: "name", Value: page.Name},
-		{Name: "slug", Value: page.Slug},
-		{Name: "book_id", Value: page.BookID},
-		{Name: "chapter_id", Value: page.ChapterID},
-		{Name: "created_at", Value: page.CreatedAt},
-		{Name: "updated_at", Value: page.UpdatedAt},
-		{Name: "html", Value: page.HTML},
-		{Name: "markdown", Value: page.Markdown},
-	}}, nil
+	return pageObject(page), nil
 }
 
 func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Object, error) {
+	if c.scope.bound() {
+		if input.BookID != 0 {
+			if err := c.scope.checkBook(input.BookID); err != nil {
+				return output.Object{}, err
+			}
+		}
+		if input.ChapterID != 0 {
+			if _, err := c.chapterBook(ctx, input.ChapterID); err != nil {
+				return output.Object{}, err
+			}
+		}
+	}
 	var page pageJSON
 	if err := c.mutate(ctx, "create page", http.MethodPost, "/api/pages", input, &page, argNames(pagesCreate)); err != nil {
 		return output.Object{}, err
@@ -442,6 +605,9 @@ func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Obj
 }
 
 func (c *Client) UpdatePage(ctx context.Context, id string, input pageMutation) (output.Object, error) {
+	if err := c.requirePageBound(ctx, id); err != nil {
+		return output.Object{}, err
+	}
 	var page pageJSON
 	if err := c.mutate(ctx, "update page", http.MethodPut, "/api/pages/"+url.PathEscape(id), input, &page, argNames(pagesUpdate)); err != nil {
 		return output.Object{}, err
@@ -450,6 +616,9 @@ func (c *Client) UpdatePage(ctx context.Context, id string, input pageMutation) 
 }
 
 func (c *Client) DeletePage(ctx context.Context, id string) error {
+	if err := c.requirePageBound(ctx, id); err != nil {
+		return err
+	}
 	return c.mutate(ctx, "delete page", http.MethodDelete, "/api/pages/"+url.PathEscape(id), nil, nil, argNames(pagesDelete))
 }
 

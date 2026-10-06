@@ -29,7 +29,7 @@ func pressNew(t *testing.T, m *Model) {
 // templateConnection has its own rights, tools, targets and description, none of which the recommended
 // profile would have chosen.
 var templateConnection = config.Connection{
-	Service: "wiki", Credential: "reader", Target: "acme", Description: "wiki for customer A",
+	Service: "wiki", Credential: "reader", Target: "book/12", Description: "wiki for customer A",
 	Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate},
 	Tools:       []string{"bookstack.pages.list", "bookstack.pages.create"},
 }
@@ -383,7 +383,7 @@ func TestSetupStartsFromAnExistingConnection(t *testing.T) {
 	press(t, m, "f2")
 	if m.wizard.step != stepScope || m.fieldValue("name") != "github-ops-copy" ||
 		m.fieldValue("description") != "wiki for customer A" ||
-		!slices.Equal(targetEntries(m.fields), []string{"acme"}) {
+		!slices.Equal(targetEntries(m.fields), []string{"book/12"}) {
 		t.Fatalf("scope step: name %q description %q targets %v", m.fieldValue("name"),
 			m.fieldValue("description"), targetEntries(m.fields))
 	}

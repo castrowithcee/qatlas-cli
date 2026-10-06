@@ -15,8 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -102,7 +104,7 @@ func TestListPages(t *testing.T) {
 	}))
 	defer server.Close()
 
-	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), 10, 0)
+	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{}, 10, 0)
 
 	if err != nil {
 		t.Fatalf("ListPages() = %v", err)
@@ -153,7 +155,7 @@ func TestListPagesPagination(t *testing.T) {
 	client := newClient(t, server.URL, nil)
 
 	t.Run("a limit is honoured across requests", func(t *testing.T) {
-		got, err := client.ListPages(context.Background(), 5, 0)
+		got, err := client.ListPages(context.Background(), listTarget{}, 5, 0)
 		if err != nil {
 			t.Fatalf("ListPages() = %v", err)
 		}
@@ -166,7 +168,7 @@ func TestListPagesPagination(t *testing.T) {
 	})
 
 	t.Run("no limit fetches everything", func(t *testing.T) {
-		got, err := client.ListPages(context.Background(), 0, 0)
+		got, err := client.ListPages(context.Background(), listTarget{}, 0, 0)
 		if err != nil {
 			t.Fatalf("ListPages() = %v", err)
 		}
@@ -176,7 +178,7 @@ func TestListPagesPagination(t *testing.T) {
 	})
 
 	t.Run("offset skips records", func(t *testing.T) {
-		got, err := client.ListPages(context.Background(), 2, 4)
+		got, err := client.ListPages(context.Background(), listTarget{}, 2, 4)
 		if err != nil {
 			t.Fatalf("ListPages() = %v", err)
 		}
@@ -199,7 +201,7 @@ func TestListPagesStopsWithoutProgress(t *testing.T) {
 	}))
 	defer server.Close()
 
-	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), 0, 0)
+	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{}, 0, 0)
 
 	if err != nil {
 		t.Fatalf("ListPages() = %v", err)
@@ -270,7 +272,7 @@ func TestOnlyReadRequests(t *testing.T) {
 
 	client := newClient(t, server.URL, nil)
 	ctx := context.Background()
-	if _, err := client.ListPages(ctx, 1, 0); err != nil {
+	if _, err := client.ListPages(ctx, listTarget{}, 1, 0); err != nil {
 		t.Fatalf("ListPages() = %v", err)
 	}
 	if _, err := client.GetPage(ctx, "1"); err != nil {
@@ -422,7 +424,7 @@ func TestRedirects(t *testing.T) {
 			defer origin.Close()
 
 			c := newClient(t, origin.URL, nil)
-			_, err := c.ListPages(context.Background(), 1, 0)
+			_, err := c.ListPages(context.Background(), listTarget{}, 1, 0)
 			var perr *provider.Error
 			if !errors.As(err, &perr) || perr.Class != provider.ClassProviderError {
 				t.Fatalf("error = %v, want a provider error", err)
@@ -628,7 +630,7 @@ func TestConnectionsStaySeparate(t *testing.T) {
 
 	ctx := context.Background()
 	for _, c := range []*Client{reader, auditor, other} {
-		if _, err := c.ListPages(ctx, 1, 0); err != nil {
+		if _, err := c.ListPages(ctx, listTarget{}, 1, 0); err != nil {
 			t.Fatalf("ListPages() = %v", err)
 		}
 	}
@@ -660,7 +662,7 @@ func TestNoSecretsInErrors(t *testing.T) {
 	red := &redact.Redactor{}
 	client := newClient(t, server.URL, red)
 
-	_, err := client.ListPages(context.Background(), 1, 0)
+	_, err := client.ListPages(context.Background(), listTarget{}, 1, 0)
 
 	if err == nil {
 		t.Fatal("ListPages() = nil, want an error")
@@ -831,4 +833,457 @@ func equal(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// scopedServer serves pages and chapters of several books and records every request. Page 1 and chapter 10
+// belong to book 7, page 2 and chapter 20 to book 9. With ignoreFilter set, the list route answers like an
+// instance that does not know the filter and returns every page.
+func scopedServer(t *testing.T, rec *recorder, ignoreFilter bool) *httptest.Server {
+	t.Helper()
+	pages := []map[string]any{
+		{"id": 1, "book_id": 7, "chapter_id": 10, "name": "Own"},
+		{"id": 2, "book_id": 9, "chapter_id": 20, "name": "Foreign"},
+		{"id": 3, "book_id": 7, "chapter_id": 0, "name": "Own loose"},
+		{"id": 4, "book_id": 9, "chapter_id": 0, "name": "Foreign loose"},
+		{"id": 5, "book_id": 7, "chapter_id": 10, "name": "Own two"},
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/pages", func(w http.ResponseWriter, r *http.Request) {
+		rec.record(r)
+		if r.Method == http.MethodPost {
+			_ = json.NewEncoder(w).Encode(page(50, "Created"))
+			return
+		}
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		count, _ := strconv.Atoi(r.URL.Query().Get("count"))
+		var matching []map[string]any
+		for _, p := range pages {
+			if !ignoreFilter {
+				if v := r.URL.Query().Get("filter[book_id]"); v != "" && v != fmt.Sprint(p["book_id"]) {
+					continue
+				}
+				if v := r.URL.Query().Get("filter[chapter_id]"); v != "" && v != fmt.Sprint(p["chapter_id"]) {
+					continue
+				}
+			}
+			matching = append(matching, p)
+		}
+		end := min(offset+count, len(matching))
+		window := []map[string]any{}
+		if offset < end {
+			window = matching[offset:end]
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": window, "total": len(matching)})
+	})
+	mux.HandleFunc("/api/pages/", func(w http.ResponseWriter, r *http.Request) {
+		rec.record(r)
+		id, _ := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/api/pages/"))
+		if r.Method != http.MethodGet {
+			if r.Method == http.MethodDelete {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(page(int64(id), "Changed"))
+			return
+		}
+		for _, p := range pages {
+			if p["id"] == id {
+				_ = json.NewEncoder(w).Encode(p)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusNotFound)
+	})
+	mux.HandleFunc("/api/chapters/", func(w http.ResponseWriter, r *http.Request) {
+		rec.record(r)
+		switch strings.TrimPrefix(r.URL.Path, "/api/chapters/") {
+		case "10":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 10, "book_id": 7})
+		case "20":
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": 20, "book_id": 9})
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	return server
+}
+
+func boundResolved(baseURL string, targets ...string) *config.Resolved {
+	return &config.Resolved{
+		Name: "wiki", Provider: Provider, BaseURL: baseURL, Targets: targets,
+		Secrets: envCredential(map[string]string{roleTokenID: "TEST_TOKEN_ID", roleTokenSecret: "TEST_TOKEN_SECRET"}),
+	}
+}
+
+func boundClient(t *testing.T, baseURL string, targets ...string) *Client {
+	t.Helper()
+	t.Setenv("TEST_TOKEN_ID", canaryID)
+	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+	client, err := Open(context.Background(), boundResolved(baseURL, targets...), resolver(nil), nil)
+	if err != nil {
+		t.Fatalf("Open() = %v", err)
+	}
+	return client
+}
+
+func isInvalidRequest(err error) bool {
+	var invalid *application.InvalidRequestError
+	return errors.As(err, &invalid)
+}
+
+func ids(rows []output.Row) []int64 {
+	out := []int64{}
+	for _, row := range rows {
+		out = append(out, row["id"].(int64))
+	}
+	return out
+}
+
+// A book_id outside the targets is refused before any secret is read and before any request is sent.
+func TestForeignBookIsRefusedBeforeSecretsAndIO(t *testing.T) {
+	rec := &recorder{}
+	server := scopedServer(t, rec, false)
+	// No token variables are set: a secret access would fail with a different error.
+	t.Setenv("TEST_TOKEN_ID", "")
+	t.Setenv("TEST_TOKEN_SECRET", "")
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	resolved := boundResolved(server.URL, "book/7")
+	for _, tt := range []struct{ id, args string }{
+		{pagesList.ID, `{"book_id":9}`},
+		{pagesCreate.ID, `{"name":"x","book_id":9,"markdown":"m"}`},
+	} {
+		_, handler, _ := reg.Lookup(tt.id)
+		_, err := handler(context.Background(), resolved, resolver(nil), nil, json.RawMessage(tt.args))
+		if !isInvalidRequest(err) || !strings.Contains(err.Error(), "outside the books") || strings.Contains(err.Error(), "9") {
+			t.Errorf("%s: err = %v, want an invalid-request without the book", tt.id, err)
+		}
+	}
+	if methods, _, _, _ := rec.snapshot(); len(methods) != 0 {
+		t.Errorf("requests = %v, want none", methods)
+	}
+}
+
+func TestSeveralBooksNeedABookID(t *testing.T) {
+	rec := &recorder{}
+	server := scopedServer(t, rec, false)
+	t.Setenv("TEST_TOKEN_ID", "")
+	t.Setenv("TEST_TOKEN_SECRET", "")
+	reg := capability.NewRegistry()
+	_ = Register(reg)
+	_, handler, _ := reg.Lookup(pagesList.ID)
+	_, err := handler(context.Background(), boundResolved(server.URL, "book/7", "book/9"), resolver(nil), nil, json.RawMessage(`{}`))
+	if !isInvalidRequest(err) || err.Error() != "book_id is required for a connection bound to several books" {
+		t.Errorf("err = %v", err)
+	}
+	_, err = handler(context.Background(), boundResolved(server.URL, "book/7", "book/9"), resolver(nil), nil,
+		json.RawMessage(`{"book_id":7,"chapter_id":10}`))
+	if !isInvalidRequest(err) {
+		t.Errorf("book_id and chapter_id together: err = %v", err)
+	}
+	if methods, _, _, _ := rec.snapshot(); len(methods) != 0 {
+		t.Errorf("requests = %v, want none", methods)
+	}
+}
+
+func TestOneBoundBookIsTheDefault(t *testing.T) {
+	rec := &recorder{}
+	server := scopedServer(t, rec, false)
+	got, err := boundClient(t, server.URL, "book/7").ListPages(context.Background(), listTarget{}, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int64{1, 3, 5}; !reflect.DeepEqual(ids(got.Rows), want) {
+		t.Errorf("ids = %v, want %v", ids(got.Rows), want)
+	}
+	_, _, queries, _ := rec.snapshot()
+	if len(queries) != 1 || !strings.Contains(queries[0], "filter%5Bbook_id%5D=7") {
+		t.Errorf("queries = %v, want one request filtered to book 7", queries)
+	}
+}
+
+// BookStack ignores filters it does not know; the client check is what holds the boundary.
+func TestIgnoredFilterIsEnforcedOnTheClient(t *testing.T) {
+	for _, tt := range []struct {
+		name          string
+		target        listTarget
+		limit, offset int
+		want          []int64
+	}{
+		{"book", listTarget{BookID: 7}, 0, 0, []int64{1, 3, 5}},
+		{"book limit", listTarget{BookID: 7}, 2, 0, []int64{1, 3}},
+		{"book offset", listTarget{BookID: 7}, 0, 1, []int64{3, 5}},
+		{"chapter", listTarget{ChapterID: 10}, 0, 0, []int64{1, 5}},
+		{"implicit book", listTarget{}, 0, 0, []int64{1, 3, 5}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := &recorder{}
+			server := scopedServer(t, rec, true)
+			got, err := boundClient(t, server.URL, "book/7").ListPages(context.Background(), tt.target, tt.limit, tt.offset)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(ids(got.Rows), tt.want) {
+				t.Errorf("ids = %v, want %v", ids(got.Rows), tt.want)
+			}
+		})
+	}
+}
+
+func TestListWithoutTargetsFiltersForTheGivenBookOnly(t *testing.T) {
+	rec := &recorder{}
+	server := scopedServer(t, rec, true)
+	got, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{BookID: 9}, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int64{2, 4}; !reflect.DeepEqual(ids(got.Rows), want) {
+		t.Errorf("ids = %v, want %v", ids(got.Rows), want)
+	}
+	// An unbound connection reads no evidence for a chapter either.
+	if _, err := newClient(t, server.URL, nil).ListPages(context.Background(), listTarget{ChapterID: 20}, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	_, recorded, _, _ := rec.snapshot()
+	for _, path := range recorded {
+		if strings.HasPrefix(path, "/api/chapters/") {
+			t.Errorf("unexpected evidence read %s", path)
+		}
+	}
+}
+
+// A server that never stops delivering new rows cannot keep a filtered listing reading.
+func TestFilteredListingIsBounded(t *testing.T) {
+	var requests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		data := []map[string]any{}
+		for i := 0; i < 500; i++ {
+			data = append(data, map[string]any{"id": offset + i + 1, "book_id": 9})
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data, "total": 1 << 30})
+	}))
+	defer server.Close()
+	_, err := boundClient(t, server.URL, "book/7").ListPages(context.Background(), listTarget{}, 0, 0)
+	var perr *provider.Error
+	if !errors.As(err, &perr) || perr.Class != provider.ClassInvalidResponse {
+		t.Fatalf("err = %v, want invalid-provider-response", err)
+	}
+	if requests != maxScanRequests {
+		t.Errorf("requests = %d, want %d", requests, maxScanRequests)
+	}
+}
+
+func TestChapterIsBoundThroughOneRead(t *testing.T) {
+	rec := &recorder{}
+	server := scopedServer(t, rec, false)
+	c := boundClient(t, server.URL, "book/7")
+
+	got, err := c.ListPages(context.Background(), listTarget{ChapterID: 10}, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []int64{1, 5}; !reflect.DeepEqual(ids(got.Rows), want) {
+		t.Errorf("ids = %v, want %v", ids(got.Rows), want)
+	}
+	if _, paths, _, _ := rec.snapshot(); len(paths) != 2 {
+		t.Errorf("requests = %v, want one chapter read and one list", paths)
+	}
+
+	rec2 := &recorder{}
+	server2 := scopedServer(t, rec2, false)
+	c2 := boundClient(t, server2.URL, "book/7")
+	_, err = c2.ListPages(context.Background(), listTarget{ChapterID: 20}, 0, 0)
+	if !isInvalidRequest(err) || strings.Contains(err.Error(), "20") || strings.Contains(err.Error(), "9") {
+		t.Errorf("foreign chapter: err = %v", err)
+	}
+	_, err = c2.CreatePage(context.Background(), pageMutation{Name: "x", ChapterID: 20, Markdown: "m"})
+	if !isInvalidRequest(err) {
+		t.Errorf("create in a foreign chapter: err = %v", err)
+	}
+	methods, paths, _, _ := rec2.snapshot()
+	want := []string{"GET /api/chapters/20", "GET /api/chapters/20"}
+	got2 := []string{}
+	for i := range methods {
+		got2 = append(got2, methods[i]+" "+paths[i])
+	}
+	if !reflect.DeepEqual(got2, want) {
+		t.Errorf("requests = %v, want %v", got2, want)
+	}
+
+	// Creating in an own chapter reads the chapter once, then posts.
+	rec3 := &recorder{}
+	server3 := scopedServer(t, rec3, false)
+	if _, err := boundClient(t, server3.URL, "book/7").CreatePage(context.Background(), pageMutation{Name: "x", ChapterID: 10, Markdown: "m"}); err != nil {
+		t.Fatal(err)
+	}
+	methods, paths, _, _ = rec3.snapshot()
+	if len(methods) != 2 || methods[0] != "GET" || paths[0] != "/api/chapters/10" || methods[1] != "POST" {
+		t.Errorf("requests = %v %v", methods, paths)
+	}
+}
+
+// A foreign page costs exactly one evidence read and no change.
+func TestForeignPageIsRefusedAfterOneRead(t *testing.T) {
+	rec := &recorder{}
+	server := scopedServer(t, rec, false)
+	c := boundClient(t, server.URL, "book/7")
+
+	_, err := c.UpdatePage(context.Background(), "2", pageMutation{Name: "x"})
+	if !isInvalidRequest(err) || err.Error() != "the page is outside the books this connection is bound to" {
+		t.Errorf("update: err = %v", err)
+	}
+	err = c.DeletePage(context.Background(), "2")
+	if !isInvalidRequest(err) {
+		t.Errorf("delete: err = %v", err)
+	}
+	_, err = c.GetPage(context.Background(), "2")
+	if !isInvalidRequest(err) {
+		t.Errorf("get: err = %v", err)
+	}
+	methods, paths, _, _ := rec.snapshot()
+	for i := range methods {
+		if methods[i] != http.MethodGet || paths[i] != "/api/pages/2" {
+			t.Errorf("request %d = %s %s, want only the evidence read", i, methods[i], paths[i])
+		}
+	}
+	if len(methods) != 3 {
+		t.Errorf("requests = %d, want 3 (one per call)", len(methods))
+	}
+}
+
+func TestOwnPageChangesReadOnceThenChange(t *testing.T) {
+	rec := &recorder{}
+	server := scopedServer(t, rec, false)
+	c := boundClient(t, server.URL, "book/7")
+	if _, err := c.UpdatePage(context.Background(), "1", pageMutation{Name: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeletePage(context.Background(), "1"); err != nil {
+		t.Fatal(err)
+	}
+	methods, paths, _, _ := rec.snapshot()
+	got := []string{}
+	for i := range methods {
+		got = append(got, methods[i]+" "+paths[i])
+	}
+	want := []string{"GET /api/pages/1", "PUT /api/pages/1", "GET /api/pages/1", "DELETE /api/pages/1"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("requests = %v, want %v", got, want)
+	}
+}
+
+// pages.get on a bound connection is its own evidence: one request.
+func TestBoundGetIsOneRequestAndUnboundAddsNoRead(t *testing.T) {
+	rec := &recorder{}
+	server := scopedServer(t, rec, false)
+	obj, err := boundClient(t, server.URL, "book/7").GetPage(context.Background(), "1")
+	if err != nil || len(obj.Fields) != 9 {
+		t.Fatalf("GetPage() = %v, %v", obj, err)
+	}
+	if methods, _, _, _ := rec.snapshot(); len(methods) != 1 {
+		t.Errorf("requests = %d, want 1", len(methods))
+	}
+
+	rec2 := &recorder{}
+	server2 := scopedServer(t, rec2, false)
+	c := newClient(t, server2.URL, nil)
+	if _, err := c.UpdatePage(context.Background(), "2", pageMutation{Name: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeletePage(context.Background(), "2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.CreatePage(context.Background(), pageMutation{Name: "x", ChapterID: 20, Markdown: "m"}); err != nil {
+		t.Fatal(err)
+	}
+	methods, _, _, _ := rec2.snapshot()
+	if want := []string{"PUT", "DELETE", "POST"}; !reflect.DeepEqual(methods, want) {
+		t.Errorf("requests = %v, want %v and no evidence read", methods, want)
+	}
+}
+
+func TestInvalidTargetsFailClosedWithoutQuotingTheValue(t *testing.T) {
+	huge := make([]string, 101)
+	for i := range huge {
+		huge[i] = "book/" + strconv.Itoa(i+1)
+	}
+	for _, tt := range []struct {
+		name    string
+		targets []string
+	}{
+		{"leading zero", []string{"book/07"}},
+		{"zero", []string{"book/0"}},
+		{"negative", []string{"book/-4"}},
+		{"duplicate", []string{"book/7", "book/7"}},
+		{"wildcard", []string{"*"}},
+		{"wrong form", []string{"shelf/7"}},
+		{"text id", []string{"book/seven77"}},
+		{"too many", huge},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := &recorder{}
+			server := scopedServer(t, rec, false)
+			t.Setenv("TEST_TOKEN_ID", canaryID)
+			t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+			_, err := Open(context.Background(), boundResolved(server.URL, tt.targets...), resolver(nil), nil)
+			if err == nil {
+				t.Fatal("Open() accepted an invalid target")
+			}
+			for _, value := range tt.targets[:1] {
+				if strings.Contains(err.Error(), value) {
+					t.Errorf("error = %q quotes %q", err, value)
+				}
+			}
+			if methods, _, _, _ := rec.snapshot(); len(methods) != 0 {
+				t.Errorf("requests = %v, want none", methods)
+			}
+			meta := targetMetadata(t)
+			var verr error
+			if len(tt.targets) == 1 {
+				verr = meta.Validate(tt.targets[0])
+			}
+			if verr == nil {
+				verr = meta.ValidateSet(tt.targets)
+			}
+			if verr == nil {
+				t.Error("the configuration validators accept the invalid target")
+			}
+		})
+	}
+	// A legacy single target is read too, and an unreadable one stays closed.
+	_, err := Open(context.Background(), &config.Resolved{Name: "w", Provider: Provider, BaseURL: "https://x.invalid", Target: "bogus"}, resolver(nil), nil)
+	if err == nil {
+		t.Error("Open() accepted an invalid single target")
+	}
+}
+
+func targetMetadata(t *testing.T) config.TargetMetadata {
+	t.Helper()
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	meta, _ := reg.ProviderMetadata(Provider)
+	target := meta.Target
+	if target.Label != "books" || !target.Multiple || len(target.Kinds) != 1 || target.Kinds[0].Name != "book" ||
+		!equal(target.Kinds[0].Forms, []string{"book/BOOK_ID"}) || target.Required || target.Wildcard != "" {
+		t.Fatalf("target metadata = %+v", target)
+	}
+	return target
+}
+
+func TestValidTargetsAreAccepted(t *testing.T) {
+	meta := targetMetadata(t)
+	if err := meta.Validate("book/12"); err != nil {
+		t.Errorf("Validate() = %v", err)
+	}
+	if err := meta.ValidateSet([]string{"book/12", "book/13"}); err != nil {
+		t.Errorf("ValidateSet() = %v", err)
+	}
 }
