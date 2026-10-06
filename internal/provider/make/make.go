@@ -664,7 +664,7 @@ func Register(reg *capability.Registry) error {
 				"teams:read for the org-admin profile's list and teams:write for its create and update tools and " +
 				"the separately offered team delete tool, plus organization-variables:read for the organizationvariables-read " +
 				"profile and organization-variables:read with organization-variables:write for the " +
-				"organizationvariables-manage profile and the separately offered organization variable delete tool, plus organizations:write for the org-admin profile's organization update and invite and user:read for its invite and member list. A token belongs to one " +
+				"organizationvariables-manage profile and the separately offered organization variable delete tool, plus organizations:write for the org-admin profile's organization update and invite and user:read for its invite and member list, and organizations:read for the org-billing-read profile's subscription, usage, and invoice reads. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -857,6 +857,13 @@ func Register(reg *capability.Registry) error {
 				"organization; every change needs its own confirmation, is never retried, and needs the " +
 				"teams:read and teams:write scopes; also changes the organization's name, country, or time zone (organizations:write), invites a person as member, and lists the members with their organization role (user:read). Deleting a team is in no profile",
 			Tools: []string{teamsList.ID, teamsCreate.ID, teamsUpdate.ID, organizationUpdate.ID, organizationInvite.ID, organizationMembers.ID},
+		}, {
+			ID: "org-billing-read", Title: "Read subscription, usage, and invoices of the bound organization",
+			Description: "for a connection bound to an organization: reads the subscription (plan, next billing " +
+				"date, pause state), the daily usage, and the invoice list without payment method or invoice " +
+				"links; financial data, kept apart from org-admin; changes nothing and needs the " +
+				"organizations:read scope",
+			Tools: []string{organizationSubscription.ID, organizationUsage.ID, organizationPayments.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -930,6 +937,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: organizationUpdate, Handler: capability.Handler(invokeOrganizationUpdate)},
 		capability.Operation{Descriptor: organizationInvite, Handler: capability.Handler(invokeOrganizationInvite)},
 		capability.Operation{Descriptor: organizationMembers, Handler: capability.Handler(invokeOrganizationMembers)},
+		capability.Operation{Descriptor: organizationSubscription, Handler: capability.Handler(invokeOrganizationSubscription)},
+		capability.Operation{Descriptor: organizationUsage, Handler: capability.Handler(invokeOrganizationUsage)},
+		capability.Operation{Descriptor: organizationPayments, Handler: capability.Handler(invokeOrganizationPayments)},
 	)
 }
 

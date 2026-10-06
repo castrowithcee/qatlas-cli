@@ -243,6 +243,19 @@ quoted in errors. `make.organization.members` reads the same role list once, the
 `role_id`, and `role_name` (at most 20 roles and 200 members, `truncated` when more may exist). Names and emails are
 personal data and untrusted. Both tools are in `org-admin`; changing roles and removing members are not offered.
 
+## Financial data (read only)
+
+`make.organization.subscription`, `make.organization.usage`, and `make.organization.payments` (organization mode
+only, all `organizations:read`) read `GET /organizations/{organizationId}/subscription`, `/usage`, and
+`/payments` of the bound organization (checked 2026-10-06 against developers.make.com, not a live account). The
+subscription answers plan id and name, next billing date, and pause state; usage the daily operations, data
+transfer, and centicredits of Make's last 30 days; payments `invoice_number`, `created`, `type`, `status`,
+`amount_total`, `currency`, `period_from`, and `period_to`, newest first, with `offset` and `limit` (1 to 100, 25
+when omitted; `has_more` is true when a page came back full). Payment methods, the plan price, and invoice links
+are never returned, and no plan change, payment method, discount, or other write is offered. The tools sit in
+their own profile `org-billing-read`, not in `org-admin`. Text values are untrusted. A missing scope answers
+403 and names `organizations:read`.
+
 ## Pagination
 
 Both list tools take `offset` and `limit` (1 to 200; 50 when omitted) and answer `offset`, `count`, and
