@@ -89,7 +89,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 	if _, _, err := Approve(context.Background(), cfg, v, nil); err != nil {
 		t.Fatal(err)
 	}
-	cfg.Services["wiki"] = config.Service{Provider: "bookstack", BaseURL: "http://127.0.0.1:9"}
+	cfg.Services["wiki"] = config.Service{Provider: "bookstack", BaseURL: "https://moved.example.invalid"}
 	write := cfg.Connections["wiki-write"]
 	write.Permissions = append(write.Permissions, config.PermissionDelete)
 	write.Tools = []string{}
@@ -106,7 +106,7 @@ func TestPendingNamesWhatChanged(t *testing.T) {
 		t.Fatalf("Pending().Open = %v", got)
 	}
 	want := []FieldChange{
-		{Field: FieldOrigin, Before: "https://wiki.example.test", After: "http://127.0.0.1:9"},
+		{Field: FieldOrigin, Before: "https://wiki.example.test", After: "https://moved.example.invalid"},
 		{Field: FieldPermissions, Before: "create read", After: "create delete read",
 			Added: []string{"delete"}, Kept: []string{"create", "read"}},
 		{Field: FieldTargets, Before: "(none)", After: "shelf-1 shelf-2", Added: []string{"shelf-1", "shelf-2"}},

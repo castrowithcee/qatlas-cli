@@ -26,7 +26,7 @@ func runAtTerminal(t *testing.T, c *runner, input string, args ...string) (strin
 	master, slave := openPTY(t)
 	defer master.Close()
 	cmd := exec.Command(c.bin, args...)
-	cmd.Env = c.env
+	cmd.Env = c.environ(t)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
 	if err := cmd.Start(); err != nil {

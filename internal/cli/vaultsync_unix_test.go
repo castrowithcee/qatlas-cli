@@ -122,7 +122,7 @@ func TestVaultApproveSyncsARunningVaultProcess(t *testing.T) {
 		t.Fatalf("Check() before the change = %v, want the connection approved as it was started", err)
 	}
 
-	edited := strings.Replace(vaultCredentialConfig, "https://wiki.example.invalid", "http://127.0.0.1:9", 1)
+	edited := strings.Replace(vaultCredentialConfig, "https://wiki.example.invalid", "https://moved.example.invalid", 1)
 	if err := os.WriteFile(configIn(dir), []byte(edited), 0o600); err != nil {
 		t.Fatal(err)
 	}

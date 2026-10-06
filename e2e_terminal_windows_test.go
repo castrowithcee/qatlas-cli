@@ -153,7 +153,7 @@ func startInConsole(t *testing.T, console windows.Handle, c *runner, args []stri
 	}
 	var pi windows.ProcessInformation
 	if err := windows.CreateProcess(nil, commandLine, nil, nil, false,
-		windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT, environmentBlock(c.env), nil,
+		windows.EXTENDED_STARTUPINFO_PRESENT|windows.CREATE_UNICODE_ENVIRONMENT, environmentBlock(c.environ(t)), nil,
 		&si.StartupInfo, &pi); err != nil {
 		t.Fatalf("starting %v: %v", args, err)
 	}

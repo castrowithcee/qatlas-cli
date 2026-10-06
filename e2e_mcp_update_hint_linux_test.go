@@ -46,7 +46,7 @@ func TestMCPServerThatCannotRestartAsksForAReconnect(t *testing.T) {
 	}
 	bin := filepath.Join(prefix, "qatlas")
 	buildVersion := func(path, version string) {
-		build := exec.Command("go", "build", "-buildvcs=false",
+		build := exec.Command("go", "build", "-tags", "e2e", "-buildvcs=false",
 			"-ldflags", "-X github.com/castrowithcee/qatlas-cli/internal/cli.version="+version, "-o", path, ".")
 		build.Stderr = os.Stderr
 		if err := build.Run(); err != nil {
@@ -128,7 +128,7 @@ defaults:
 
 	// The MCP client: a legacy session with initialize, and roots naming the project directory.
 	cmd := exec.Command(bin, "mcp")
-	cmd.Env = c.env
+	cmd.Env = c.environ(t)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)

@@ -342,12 +342,9 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	base, err := url.Parse(resolved.BaseURL)
+	base, err := baseOf(resolved.BaseURL)
 	if err != nil {
-		return nil, &provider.Error{
-			Class: provider.ClassProviderError, Op: "open",
-			Message: fmt.Sprintf("connection %q has an unusable base URL", resolved.Name),
-		}
+		return nil, &provider.Error{Class: provider.ClassProviderError, Op: "open", Message: err.Error()}
 	}
 
 	tokenID, err := role(ctx, resolved, secrets, roleTokenID)
@@ -366,13 +363,32 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 		scope: bound,
 		base:  base,
 		auth:  "Token " + tokenID + ":" + tokenSecret,
-		http: &http.Client{
-			Timeout: defaultTimeout,
-			// A redirect is never followed: it would carry the credential to a location the user did not
-			// configure and could turn a change into a different request.
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		},
+		http:  newHTTPClient(),
 	}, nil
+}
+
+// transport carries every request. A nil value is Go's default transport; tests replace it.
+var transport http.RoundTripper
+
+// baseOf accepts an https URL of a BookStack instance, optionally below an installation path, never with
+// user info, a query, or a fragment. The reason does not quote the URL.
+func baseOf(raw string) (*url.URL, error) {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil ||
+		parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" || parsed.Opaque != "" {
+		return nil, errors.New("a BookStack service needs a usable https URL, without user, query, or fragment")
+	}
+	return parsed, nil
+}
+
+// newHTTPClient never follows a redirect: it would carry the credential to a location the user did not
+// configure and could turn a change into a different request.
+func newHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout:       defaultTimeout,
+		Transport:     transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 }
 
 // role resolves one secret role of the connection. Which stage delivers is not this provider's business:

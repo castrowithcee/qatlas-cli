@@ -91,7 +91,7 @@ func updateHandoverCase(t *testing.T, behaviour vault.UpdateBehaviour) {
 
 	build := func(path, version string) {
 		t.Helper()
-		cmd := exec.Command("go", "build", "-buildvcs=false", "-ldflags",
+		cmd := exec.Command("go", "build", "-tags", "e2e", "-buildvcs=false", "-ldflags",
 			"-X github.com/castrowithcee/qatlas-cli/internal/cli.version="+version+
 				" -X 'github.com/castrowithcee/qatlas-cli/internal/release.extraKeyLines="+keyLine+"'"+
 				" -X github.com/castrowithcee/qatlas-cli/internal/selfupdate.testBaseURL="+releases.URL,

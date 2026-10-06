@@ -24,6 +24,16 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
+// TestMain trusts the certificate of httptest's TLS servers for every request of this package, so no test
+// needs the Internet or a weaker URL rule.
+func TestMain(m *testing.M) {
+	trust := httptest.NewTLSServer(http.NotFoundHandler())
+	transport = trust.Client().Transport
+	code := m.Run()
+	trust.Close()
+	os.Exit(code)
+}
+
 // resolver returns a resolver that reads the process environment and an empty in-process credential store.
 // No test in this package may reach the credential store of the machine it runs on.
 func resolver(red *redact.Redactor) *secret.Resolver {
@@ -94,7 +104,7 @@ func newClient(t *testing.T, baseURL string, red *redact.Redactor) *Client {
 
 func TestListPages(t *testing.T) {
 	rec := &recorder{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec.record(r)
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -138,7 +148,7 @@ func TestListPages(t *testing.T) {
 func TestListPagesPagination(t *testing.T) {
 	const total = 7
 	rec := &recorder{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec.record(r)
 		count, _ := strconv.Atoi(r.URL.Query().Get("count"))
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
@@ -191,7 +201,7 @@ func TestListPagesPagination(t *testing.T) {
 // An instance that ignores the offset must not produce a list that looks complete but repeats records.
 func TestListPagesStopsWithoutProgress(t *testing.T) {
 	var requests int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		requests++
 		// The server claims nine pages but always answers with the same three.
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -225,7 +235,7 @@ func TestListPagesStopsWithoutProgress(t *testing.T) {
 
 func TestGetPage(t *testing.T) {
 	rec := &recorder{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec.record(r)
 		p := page(42, "Runbook")
 		// Content that would break a naive encoder, plus HTML and Markdown.
@@ -264,7 +274,7 @@ func TestGetPage(t *testing.T) {
 // Every read path must use GET. A mutating request would be a contract violation.
 func TestOnlyReadRequests(t *testing.T) {
 	rec := &recorder{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rec.record(r)
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{page(1, "A")}, "total": 1})
 	}))
@@ -348,7 +358,7 @@ func TestTestConnectionClasses(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(tt.handler)
+			server := httptest.NewTLSServer(tt.handler)
 			defer server.Close()
 
 			if got := newClient(t, server.URL, nil).TestConnection(context.Background()); got != tt.want {
@@ -358,7 +368,7 @@ func TestTestConnectionClasses(t *testing.T) {
 	}
 
 	t.Run("a closed server is unreachable", func(t *testing.T) {
-		server := httptest.NewServer(http.NotFoundHandler())
+		server := httptest.NewTLSServer(http.NotFoundHandler())
 		url := server.URL
 		server.Close()
 
@@ -382,6 +392,9 @@ func TestTestConnectionClasses(t *testing.T) {
 		defer server.Close()
 
 		// The client uses the system roots, so the test server's own certificate is not trusted.
+		previous := transport
+		transport = nil
+		defer func() { transport = previous }()
 		if got := newClient(t, server.URL, nil).TestConnection(context.Background()); got != provider.ClassTLS {
 			t.Errorf("TestConnection() = %q, want tls", got)
 		}
@@ -390,7 +403,7 @@ func TestTestConnectionClasses(t *testing.T) {
 	// A request that ran into its deadline may still have arrived, so it keeps the unambiguous timeout
 	// class every provider reports, not the unreachable one that claims nothing was sent.
 	t.Run("an exhausted deadline is a timeout", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			time.Sleep(200 * time.Millisecond)
 		}))
 		defer server.Close()
@@ -408,12 +421,12 @@ func TestRedirects(t *testing.T) {
 	for _, target := range []string{"/moved", "elsewhere"} {
 		t.Run("a redirect is not followed to "+target, func(t *testing.T) {
 			rec := &recorder{}
-			elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			elsewhere := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				rec.record(r)
 				_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}, "total": 0})
 			}))
 			defer elsewhere.Close()
-			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				location := target
 				if target == "elsewhere" {
 					location = elsewhere.URL + "/api/pages"
@@ -455,7 +468,7 @@ func TestErrorClassesHideProviderText(t *testing.T) {
 		{418, "", provider.ClassProviderError, "(HTTP 418)"},
 	} {
 		t.Run(strconv.Itoa(tt.status), func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.status)
 				body := tt.body
 				if body == "" {
@@ -480,7 +493,7 @@ func TestErrorClassesHideProviderText(t *testing.T) {
 }
 
 func TestValidationNamesOnlyArguments(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		_, _ = w.Write([]byte(`{"error":{"validation":{"name":["bad"],"secret_field":["x"]}}}`))
 	}))
@@ -497,7 +510,7 @@ func TestMutationsReportUncertainty(t *testing.T) {
 	run := func(name string, handler http.HandlerFunc, ctxTimeout time.Duration, wantHint bool) {
 		t.Run(name, func(t *testing.T) {
 			rec := &recorder{}
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				rec.record(r)
 				handler(w, r)
 			}))
@@ -543,7 +556,7 @@ func TestMutationsReportUncertainty(t *testing.T) {
 }
 
 func TestReadResponseCap(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"id":1,"html":"`))
 		chunk := []byte(strings.Repeat("a", 1<<20))
 		for i := 0; i < 17; i++ {
@@ -602,9 +615,9 @@ func TestConnectionsStaySeparate(t *testing.T) {
 			})
 		}
 	}
-	first := httptest.NewServer(handler("first"))
+	first := httptest.NewTLSServer(handler("first"))
 	defer first.Close()
-	second := httptest.NewServer(handler("second"))
+	second := httptest.NewTLSServer(handler("second"))
 	defer second.Close()
 
 	t.Setenv("READER_ID", "reader-id-0001")
@@ -653,7 +666,7 @@ func TestConnectionsStaySeparate(t *testing.T) {
 
 // Secrets must not reach any message, and the redactor must know them.
 func TestNoSecretsInErrors(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":{"code":401,"message":"denied"}}`))
 	}))
@@ -793,7 +806,7 @@ func TestRegister(t *testing.T) {
 
 func TestPageMutationsUseOnlyThePagesRoute(t *testing.T) {
 	methods := []string{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		methods = append(methods, r.Method+" "+r.URL.Path)
 		if r.Method == http.MethodDelete {
 			w.WriteHeader(http.StatusNoContent)
@@ -905,7 +918,7 @@ func scopedServer(t *testing.T, rec *recorder, ignoreFilter bool) *httptest.Serv
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
-	server := httptest.NewServer(mux)
+	server := httptest.NewTLSServer(mux)
 	t.Cleanup(server.Close)
 	return server
 }
@@ -1059,7 +1072,7 @@ func TestListWithoutTargetsFiltersForTheGivenBookOnly(t *testing.T) {
 // A server that never stops delivering new rows cannot keep a filtered listing reading.
 func TestFilteredListingIsBounded(t *testing.T) {
 	var requests int
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests++
 		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 		data := []map[string]any{}
@@ -1285,5 +1298,49 @@ func TestValidTargetsAreAccepted(t *testing.T) {
 	}
 	if err := meta.ValidateSet([]string{"book/12", "book/13"}); err != nil {
 		t.Errorf("ValidateSet() = %v", err)
+	}
+}
+
+func TestOpenRejectsUnusableBaseURL(t *testing.T) {
+	for _, base := range []string{
+		"http://wiki.example.com", "http://localhost", "http://127.0.0.1:6875", "ftp://wiki.example.com",
+		"https://user@wiki.example.com", "https://user:pw@wiki.example.com", "https://wiki.example.com?x=1",
+		"https://wiki.example.com/wiki?", "https://wiki.example.com#frag", "wiki.example.com", "https://",
+	} {
+		t.Run(base, func(t *testing.T) {
+			reads := 0
+			secrets := secret.NewWith(func(string) string { reads++; return "x" }, secret.NewMemoryStore(), nil, nil)
+			_, err := Open(context.Background(), &config.Resolved{
+				Name: "wiki", Provider: Provider, BaseURL: base,
+				Secrets: envCredential(map[string]string{roleTokenID: "A", roleTokenSecret: "B"}),
+			}, secrets, nil)
+			var perr *provider.Error
+			if !errors.As(err, &perr) || perr.Class != provider.ClassProviderError {
+				t.Fatalf("Open() error = %v, want a provider error", err)
+			}
+			if !strings.Contains(err.Error(), "a BookStack service needs a usable https URL") ||
+				strings.Contains(err.Error(), "wiki.example.com") || strings.Contains(err.Error(), "127.0.0.1") {
+				t.Errorf("message = %q", err.Error())
+			}
+			if reads != 0 {
+				t.Errorf("secret reads = %d, want 0", reads)
+			}
+		})
+	}
+}
+
+func TestInstallationPathIsKept(t *testing.T) {
+	rec := &recorder{}
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec.record(r)
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}, "total": 0})
+	}))
+	defer server.Close()
+
+	if _, err := newClient(t, server.URL+"/wiki/", nil).ListPages(context.Background(), listTarget{}, 1, 0); err != nil {
+		t.Fatalf("ListPages() = %v", err)
+	}
+	if _, paths, _, _ := rec.snapshot(); len(paths) != 1 || paths[0] != "/wiki/api/pages" {
+		t.Errorf("paths = %v, want /wiki/api/pages", paths)
 	}
 }

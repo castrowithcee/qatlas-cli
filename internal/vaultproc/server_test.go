@@ -575,7 +575,7 @@ func TestServerHandsSecretsOnlyToApprovedConnections(t *testing.T) {
 	c := testClient()
 
 	changed := map[string]func(*vault.Scope){
-		"origin":      func(sc *vault.Scope) { sc.Origin = "http://127.0.0.1:9" },
+		"origin":      func(sc *vault.Scope) { sc.Origin = "https://moved.example.invalid" },
 		"permissions": func(sc *vault.Scope) { sc.Permissions = []string{"read", "delete"} },
 		"targets":     func(sc *vault.Scope) { sc.Targets = []string{"other"} },
 		"tools":       func(sc *vault.Scope) { sc.Tools = []string{} },

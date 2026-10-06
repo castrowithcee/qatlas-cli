@@ -52,7 +52,7 @@ func (c *runner) run(t *testing.T, args ...string) (int, string, string) {
 func (c *runner) runInput(t *testing.T, input string, args ...string) (int, string, string) {
 	t.Helper()
 	cmd := exec.Command(c.bin, args...)
-	cmd.Env = c.env
+	cmd.Env = c.environ(t)
 	cmd.Stdin = strings.NewReader(input)
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
@@ -122,9 +122,48 @@ func mock(t *testing.T, wantAuth string, pages []map[string]any, content string)
 		p["markdown"] = "# Title\n\n- a\\b\n- c|d"
 		_ = json.NewEncoder(w).Encode(p)
 	})
-	server := httptest.NewServer(mux)
+	// BookStack is https-only: the e2e build trusts httptest's certificate through QATLAS_E2E_CA_FILE.
+	server := httptest.NewTLSServer(mux)
 	t.Cleanup(server.Close)
 	return server
+}
+
+var (
+	testCAOnce sync.Once
+	testCAPath string
+)
+
+// testCA writes the certificate of httptest's TLS servers, the same in every server, once per test run.
+func testCA(t *testing.T) string {
+	t.Helper()
+	testCAOnce.Do(func() {
+		probe := httptest.NewTLSServer(http.NotFoundHandler())
+		defer probe.Close()
+		dir, err := os.MkdirTemp("", "qatlas-e2e-ca")
+		if err != nil {
+			return
+		}
+		path := filepath.Join(dir, "ca.pem")
+		pemBytes := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: probe.Certificate().Raw})
+		if os.WriteFile(path, pemBytes, 0o600) == nil {
+			testCAPath = path
+		}
+	})
+	if testCAPath == "" {
+		t.Fatal("writing the test CA")
+	}
+	return testCAPath
+}
+
+// environ is the binary's environment: the runner's own, plus trust in the mock servers' certificate.
+func (c *runner) environ(t *testing.T) []string {
+	t.Helper()
+	for _, entry := range c.env {
+		if strings.HasPrefix(entry, "QATLAS_E2E_CA_FILE=") {
+			return c.env
+		}
+	}
+	return append(append([]string{}, c.env...), "QATLAS_E2E_CA_FILE="+testCA(t))
 }
 
 // binaryName is the file name the command under test gets on this platform; Windows only starts a file
@@ -152,7 +191,7 @@ func buildBinary(t *testing.T, dir string) string {
 	bin := filepath.Join(dir, binaryName())
 	// The throwaway binary needs no VCS stamping, and stamping fails in a working copy without a
 	// repository of its own.
-	build := exec.Command("go", "build", "-buildvcs=false", "-o", bin, ".")
+	build := exec.Command("go", "build", "-tags", "e2e", "-buildvcs=false", "-o", bin, ".")
 	build.Stderr = os.Stderr
 	if err := build.Run(); err != nil {
 		t.Fatalf("building the binary: %v", err)
@@ -1158,7 +1197,7 @@ defaults:
 	pipe := func(t *testing.T, in string, args ...string) (int, string, string) {
 		t.Helper()
 		cmd := exec.Command(bin, args...)
-		cmd.Env = c.env
+		cmd.Env = c.environ(t)
 		cmd.Stdin = strings.NewReader(in)
 		var stdout, stderr strings.Builder
 		cmd.Stdout = &stdout

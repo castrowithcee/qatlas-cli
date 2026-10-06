@@ -102,7 +102,7 @@ func pagesServer(t *testing.T) *httptest.Server {
 			"markdown": "# T\n\n- a\\b",
 		})
 	})
-	server := httptest.NewServer(mux)
+	server := httptest.NewTLSServer(mux)
 	t.Cleanup(server.Close)
 	return server
 }
@@ -266,7 +266,7 @@ func TestBookStackInvokeKeepsConnectionsSeparate(t *testing.T) {
 	var primaryCalls, auditCalls atomic.Int32
 	server := func(label, auth string, calls *atomic.Int32) *httptest.Server {
 		t.Helper()
-		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			calls.Add(1)
 			if got := r.Header.Get("Authorization"); got != auth {
 				t.Errorf("%s authorization = %q, want %q", label, got, auth)
@@ -378,7 +378,7 @@ func TestBookStackInvokeProviderFailures(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.status)
 				_, _ = w.Write([]byte(tt.body))
 			}))
@@ -396,7 +396,7 @@ func TestBookStackInvokeProviderFailures(t *testing.T) {
 	}
 
 	t.Run("an echoed credential never reaches the error", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = fmt.Fprintf(w, `{"error":{"message":%q}}`, r.Header.Get("Authorization"))
 		}))
@@ -445,7 +445,7 @@ func TestBookStackInvokeRedactsSuccessfulPayloads(t *testing.T) {
 	const escapedCanary = `canary-"\|=secret-3d72`
 
 	auth := "Token " + canaryID + ":" + escapedCanary
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != auth {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -494,7 +494,7 @@ func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 		"'qatlas credential set <credential> <role>' or in 'qatlas tui'"
 	for _, status := range []int{http.StatusUnauthorized} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(status)
 				_, _ = fmt.Fprintf(w, `{"error":{"code":%d,"message":%q}}`, status,
 					"denied "+r.Header.Get("Authorization"))
