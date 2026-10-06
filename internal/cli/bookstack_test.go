@@ -395,7 +395,7 @@ func TestBookStackInvokeProviderFailures(t *testing.T) {
 		})
 	}
 
-	t.Run("an echoed credential is redacted", func(t *testing.T) {
+	t.Run("an echoed credential never reaches the error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = fmt.Fprintf(w, `{"error":{"message":%q}}`, r.Header.Get("Authorization"))
@@ -412,8 +412,8 @@ func TestBookStackInvokeProviderFailures(t *testing.T) {
 				t.Errorf("stderr leaks %q: %s", canary, stderr)
 			}
 		}
-		if !strings.Contains(stderr, redact.Marker) {
-			t.Errorf("stderr = %q, want the redaction marker", stderr)
+		if !strings.Contains(stderr, "HTTP 500") {
+			t.Errorf("stderr = %q, want the status", stderr)
 		}
 	})
 }
@@ -488,12 +488,11 @@ func TestBookStackInvokeRedactsSuccessfulPayloads(t *testing.T) {
 }
 
 // A refused credential names how to check or renew it, in the same words on the command line and over MCP,
-// whether the provider said 401 or, as BookStack does for a token without API access, 403. The secret the
-// request carried never appears, even where the provider echoes it.
+// when the provider said 401. The secret the request carried never appears, even where the provider echoes it.
 func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 	const step = "; check or renew the credential of this connection with " +
 		"'qatlas credential set <credential> <role>' or in 'qatlas tui'"
-	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+	for _, status := range []int{http.StatusUnauthorized} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(status)

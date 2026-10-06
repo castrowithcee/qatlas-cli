@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -40,7 +41,18 @@ const (
 // maxCount is the largest page size the BookStack API accepts.
 const maxCount = 500
 
+// maxPageContentBytes bounds the content of a write request.
 const maxPageContentBytes = 1 << 20
+
+// maxReadResponseBytes bounds every response that is read.
+const maxReadResponseBytes = 16 << 20
+
+// changeUncertain is appended to a failure of a change whose request may have reached BookStack. Qatlas
+// never repeats such a request by itself.
+const changeUncertain = "; this change may have taken effect, read the current state in BookStack before repeating it"
+
+// permissionHint explains a refused action without relaying any provider text.
+const permissionHint = "the token's user lacks the BookStack role permission for this action, or the token expired or lacks API access"
 
 // defaultTimeout bounds every request. Without it a hanging server would block the command forever.
 const defaultTimeout = 30 * time.Second
@@ -134,12 +146,13 @@ var (
 
 	pagesDelete = capability.Descriptor{
 		ID: Provider + ".pages.delete", Version: 1, Title: "Delete a BookStack page",
-		Description: "Permanently delete one page by identifier",
+		Description: "Delete one page by identifier; BookStack moves the page to the recycle bin",
 		Tags:        []string{"knowledge", "pages", "bookstack", "delete"}, Provider: Provider,
-		Risk:         capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
-		Arguments:    []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}},
+		RequiresToolAllowList: true,
+		Risk:                  capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+		InputSchema:           json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
+		OutputSchema:          json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
+		Arguments:             []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}},
 	}
 )
 
@@ -305,14 +318,9 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 		auth: "Token " + tokenID + ":" + tokenSecret,
 		http: &http.Client{
 			Timeout: defaultTimeout,
-			// A redirect off the configured origin would carry the credential to a host the user never
-			// configured, so it is refused rather than followed.
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if sameOrigin(via[0].URL, req.URL) {
-					return nil
-				}
-				return &redirectRefusedError{From: via[0].URL.Host}
-			},
+			// A redirect is never followed: it would carry the credential to a location the user did not
+			// configure and could turn a change into a different request.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 	}, nil
 }
@@ -331,18 +339,6 @@ func role(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 		return "", err
 	}
 	return value.Secret, nil
-}
-
-// redirectRefusedError reports a redirect that would have left the configured origin. The credential is
-// never sent to a host the user did not configure.
-type redirectRefusedError struct{ From string }
-
-func (e *redirectRefusedError) Error() string {
-	return fmt.Sprintf("refused to follow a redirect from %s to a different origin", e.From)
-}
-
-func sameOrigin(a, b *url.URL) bool {
-	return a.Scheme == b.Scheme && a.Host == b.Host
 }
 
 // pageJSON mirrors the BookStack API fields this provider reads.
@@ -391,7 +387,7 @@ func (c *Client) ListPages(ctx context.Context, limit, offset int) (output.Colle
 		query.Set("sort", "+id")
 
 		var page listJSON
-		if err := c.get(ctx, "list pages", "/api/pages", query, &page); err != nil {
+		if err := c.get(ctx, "list pages", "/api/pages", query, &page, argNames(pagesList), provider.ClassPermission); err != nil {
 			return output.Collection{}, err
 		}
 
@@ -420,7 +416,7 @@ func (c *Client) ListPages(ctx context.Context, limit, offset int) (output.Colle
 // GetPage returns one page including its untrusted content.
 func (c *Client) GetPage(ctx context.Context, id string) (output.Object, error) {
 	var page pageJSON
-	if err := c.get(ctx, "get page", "/api/pages/"+url.PathEscape(id), nil, &page); err != nil {
+	if err := c.get(ctx, "get page", "/api/pages/"+url.PathEscape(id), nil, &page, argNames(pagesGet), provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
 
@@ -439,7 +435,7 @@ func (c *Client) GetPage(ctx context.Context, id string) (output.Object, error) 
 
 func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Object, error) {
 	var page pageJSON
-	if err := c.mutate(ctx, "create page", http.MethodPost, "/api/pages", input, &page); err != nil {
+	if err := c.mutate(ctx, "create page", http.MethodPost, "/api/pages", input, &page, argNames(pagesCreate)); err != nil {
 		return output.Object{}, err
 	}
 	return pageObject(page), nil
@@ -447,14 +443,14 @@ func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Obj
 
 func (c *Client) UpdatePage(ctx context.Context, id string, input pageMutation) (output.Object, error) {
 	var page pageJSON
-	if err := c.mutate(ctx, "update page", http.MethodPut, "/api/pages/"+url.PathEscape(id), input, &page); err != nil {
+	if err := c.mutate(ctx, "update page", http.MethodPut, "/api/pages/"+url.PathEscape(id), input, &page, argNames(pagesUpdate)); err != nil {
 		return output.Object{}, err
 	}
 	return pageObject(page), nil
 }
 
 func (c *Client) DeletePage(ctx context.Context, id string) error {
-	return c.mutate(ctx, "delete page", http.MethodDelete, "/api/pages/"+url.PathEscape(id), nil, nil)
+	return c.mutate(ctx, "delete page", http.MethodDelete, "/api/pages/"+url.PathEscape(id), nil, nil, argNames(pagesDelete))
 }
 
 func pageObject(page pageJSON) output.Object {
@@ -467,7 +463,7 @@ func (c *Client) TestConnection(ctx context.Context) provider.Class {
 	query.Set("count", "1")
 
 	var page listJSON
-	err := c.get(ctx, "test connection", "/api/pages", query, &page)
+	err := c.get(ctx, "test connection", "/api/pages", query, &page, nil, provider.ClassAuth)
 	if err == nil {
 		return provider.ClassOK
 	}
@@ -479,7 +475,8 @@ func (c *Client) TestConnection(ctx context.Context) provider.Class {
 }
 
 // get performs one read request and decodes the response into out.
-func (c *Client) get(ctx context.Context, op, path string, query url.Values, out any) error {
+func (c *Client) get(ctx context.Context, op, path string, query url.Values, out any, arguments []string,
+	forbidden provider.Class) error {
 	target := c.base.JoinPath(path)
 	target.RawQuery = query.Encode()
 
@@ -492,14 +489,18 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return transportError(op, err)
+		return transportError(op, err, false)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return statusError(op, resp)
+		return statusError(op, resp, arguments, forbidden, false)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxReadResponseBytes+1))
+	if err != nil || len(data) > maxReadResponseBytes {
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the response could not be read within the size limit"}
+	}
+	if err := json.Unmarshal(data, out); err != nil {
 		return &provider.Error{
 			Class: provider.ClassProviderError, Op: op,
 			Message: "the response was not valid JSON",
@@ -508,7 +509,8 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	return nil
 }
 
-func (c *Client) mutate(ctx context.Context, op, method, path string, input any, out any) error {
+// mutate sends one change request, never repeated. A failure that may have reached BookStack says so.
+func (c *Client) mutate(ctx context.Context, op, method, path string, input any, out any, arguments []string) error {
 	var body io.Reader
 	if input != nil {
 		encoded, err := json.Marshal(input)
@@ -528,27 +530,31 @@ func (c *Client) mutate(ctx context.Context, op, method, path string, input any,
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return transportError(op, err)
+		return transportError(op, err, true)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return statusError(op, resp)
+		return statusError(op, resp, arguments, provider.ClassPermission, true)
+	}
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, maxReadResponseBytes+1))
+	if err != nil || len(responseBody) > maxReadResponseBytes {
+		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the response could not be read within the size limit" + changeUncertain}
 	}
 	if out == nil {
-		read, err := io.Copy(io.Discard, io.LimitReader(resp.Body, maxPageContentBytes+1))
-		if err != nil || read > maxPageContentBytes {
-			return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the response exceeded the size limit"}
-		}
 		return nil
 	}
-	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, maxPageContentBytes+1))
-	if err != nil || len(responseBody) > maxPageContentBytes {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the response exceeded the size limit"}
-	}
 	if err := json.Unmarshal(responseBody, out); err != nil {
-		return providerError(op, "the response was not valid JSON")
+		return providerError(op, "the response was not valid JSON"+changeUncertain)
 	}
 	return nil
+}
+
+func argNames(d capability.Descriptor) []string {
+	names := make([]string, len(d.Arguments))
+	for i, a := range d.Arguments {
+		names[i] = a.Name
+	}
+	return names
 }
 
 func providerError(op, message string) error {
@@ -557,41 +563,58 @@ func providerError(op, message string) error {
 
 // transportError classifies a failure that happened before a status code existed. The shared classifier
 // owns the rules, so BookStack publishes the same class and the same transport cause as every other
-// provider, and the original error text is never copied.
-func transportError(op string, err error) error {
-	// A refused redirect is a policy decision, not an unreachable server.
-	var refused *redirectRefusedError
-	if errors.As(err, &refused) {
-		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: refused.Error()}
+// provider, and the original error text is never copied. For a change, a failure that may have reached the
+// server carries the uncertainty hint.
+func transportError(op string, err error, change bool) error {
+	failure := provider.Transport(op, "the server", err)
+	if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
+		failure.Cause == provider.CauseUnknown) {
+		failure.Message += changeUncertain
 	}
-	return provider.Transport(op, "the server", err)
+	return failure
 }
 
-// statusError maps an HTTP status to a stable class. The provider message is passed through because
-// BookStack reports the reason there; secrets are removed centrally before anything is shown.
-func statusError(op string, resp *http.Response) error {
-	message := ""
-	if body, err := io.ReadAll(io.LimitReader(resp.Body, 4096)); err == nil {
-		var parsed errorJSON
-		if json.Unmarshal(body, &parsed) == nil {
-			message = parsed.Error.Message
-		}
-	}
-	if message == "" {
-		message = http.StatusText(resp.StatusCode)
-	}
-
+// statusError maps an HTTP status to a stable class. The provider body is only read for the field names of
+// a validation failure; no provider text reaches the message. forbidden is the class of a 403.
+func statusError(op string, resp *http.Response, arguments []string, forbidden provider.Class, change bool) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	status := resp.StatusCode
 	switch {
-	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == http.StatusForbidden:
-		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: message}
-	case resp.StatusCode == http.StatusTooManyRequests:
-		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: message}
-	default:
-		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op,
-			Message: fmt.Sprintf("%s (HTTP %d)", message, resp.StatusCode),
+	case status == http.StatusUnauthorized:
+		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "BookStack rejected the API token"}
+	case status == http.StatusForbidden && forbidden == provider.ClassAuth:
+		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "BookStack refused the API token"}
+	case status == http.StatusForbidden:
+		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: permissionHint}
+	case status == http.StatusNotFound:
+		return &provider.Error{Class: provider.ClassNotFound, Op: op, Message: "BookStack does not hold this resource or does not show it to this token"}
+	case status == http.StatusTooManyRequests:
+		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "BookStack rate-limited the operation"}
+	case status == http.StatusUnprocessableEntity:
+		message := "BookStack rejected the input (HTTP 422)"
+		var parsed struct {
+			Error struct {
+				Validation map[string]json.RawMessage `json:"validation"`
+			} `json:"error"`
 		}
+		if json.Unmarshal(body, &parsed) == nil {
+			var names []string
+			for _, name := range arguments {
+				if _, ok := parsed.Error.Validation[name]; ok {
+					names = append(names, name)
+				}
+			}
+			if len(names) > 0 {
+				message += "; invalid: " + strings.Join(names, ", ")
+			}
+		}
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message}
 	}
+	message := fmt.Sprintf("BookStack answered with an unexpected status (HTTP %d)", status)
+	if change && status >= 500 {
+		message += changeUncertain
+	}
+	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message}
 }
 
 func listRow(p pageJSON) output.Row {

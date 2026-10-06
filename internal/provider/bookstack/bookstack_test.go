@@ -313,7 +313,7 @@ func TestTestConnectionClasses(t *testing.T) {
 			want: provider.ClassAuth,
 		},
 		{
-			name: "forbidden is auth",
+			name: "forbidden is auth for the connection test",
 			handler: func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusForbidden)
 				_, _ = w.Write([]byte(`{"error":{"code":403,"message":"denied"}}`))
@@ -403,56 +403,187 @@ func TestTestConnectionClasses(t *testing.T) {
 }
 
 func TestRedirects(t *testing.T) {
-	t.Run("a redirect within the same origin is followed", func(t *testing.T) {
-		mux := http.NewServeMux()
-		mux.HandleFunc("/api/pages", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/moved", http.StatusFound)
+	for _, target := range []string{"/moved", "elsewhere"} {
+		t.Run("a redirect is not followed to "+target, func(t *testing.T) {
+			rec := &recorder{}
+			elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				rec.record(r)
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}, "total": 0})
+			}))
+			defer elsewhere.Close()
+			origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				location := target
+				if target == "elsewhere" {
+					location = elsewhere.URL + "/api/pages"
+				}
+				rec.record(r)
+				http.Redirect(w, r, location, http.StatusFound)
+			}))
+			defer origin.Close()
+
+			c := newClient(t, origin.URL, nil)
+			_, err := c.ListPages(context.Background(), 1, 0)
+			var perr *provider.Error
+			if !errors.As(err, &perr) || perr.Class != provider.ClassProviderError {
+				t.Fatalf("error = %v, want a provider error", err)
+			}
+			if methods, _, _, _ := rec.snapshot(); len(methods) != 1 {
+				t.Errorf("requests = %v, want exactly the first", methods)
+			}
+			if err := c.DeletePage(context.Background(), "1"); err == nil {
+				t.Error("DeletePage() followed a redirect")
+			}
 		})
-		mux.HandleFunc("/moved", func(w http.ResponseWriter, _ *http.Request) {
-			_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{page(1, "A")}, "total": 1})
+	}
+}
+
+func TestErrorClassesHideProviderText(t *testing.T) {
+	const canary = "canary-provider-text-77"
+	for _, tt := range []struct {
+		status int
+		body   string
+		class  provider.Class
+		want   string
+	}{
+		{401, "", provider.ClassAuth, ""},
+		{403, "", provider.ClassPermission, "lacks the BookStack role permission"},
+		{404, "", provider.ClassNotFound, ""},
+		{429, "", provider.ClassRateLimited, ""},
+		{422, `{"error":{"validation":{"name":["` + canary + `"],"other":["x"],"id":["y"]}}}`, provider.ClassProviderError, "invalid: id"},
+		{418, "", provider.ClassProviderError, "(HTTP 418)"},
+	} {
+		t.Run(strconv.Itoa(tt.status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.status)
+				body := tt.body
+				if body == "" {
+					body = `{"error":{"code":1,"message":"` + canary + `"}}`
+				}
+				_, _ = w.Write([]byte(body))
+			}))
+			defer server.Close()
+			_, err := newClient(t, server.URL, nil).GetPage(context.Background(), "1")
+			var perr *provider.Error
+			if !errors.As(err, &perr) || perr.Class != tt.class {
+				t.Fatalf("error = %v, want class %s", err, tt.class)
+			}
+			if strings.Contains(err.Error(), canary) || strings.Contains(err.Error(), "other") {
+				t.Errorf("error leaks provider text: %q", err)
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %q, want %q", err, tt.want)
+			}
 		})
-		server := httptest.NewServer(mux)
-		defer server.Close()
+	}
+}
 
-		got, err := newClient(t, server.URL, nil).ListPages(context.Background(), 1, 0)
+func TestValidationNamesOnlyArguments(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"error":{"validation":{"name":["bad"],"secret_field":["x"]}}}`))
+	}))
+	defer server.Close()
+	_, err := newClient(t, server.URL, nil).CreatePage(context.Background(), pageMutation{Name: "n", BookID: 1, Markdown: "m"})
+	if err == nil || !strings.Contains(err.Error(), "invalid: name") || strings.Contains(err.Error(), "secret_field") ||
+		strings.Contains(err.Error(), "bad") || strings.Contains(err.Error(), "uncertain") {
+		t.Fatalf("error = %v", err)
+	}
+}
 
-		if err != nil {
-			t.Fatalf("ListPages() = %v", err)
-		}
-		if len(got.Rows) != 1 {
-			t.Errorf("rows = %d, want 1", len(got.Rows))
-		}
-	})
+func TestMutationsReportUncertainty(t *testing.T) {
+	const hint = "this change may have taken effect, read the current state in BookStack before repeating it"
+	run := func(name string, handler http.HandlerFunc, ctxTimeout time.Duration, wantHint bool) {
+		t.Run(name, func(t *testing.T) {
+			rec := &recorder{}
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				rec.record(r)
+				handler(w, r)
+			}))
+			defer server.Close()
+			c := newClient(t, server.URL, nil)
+			calls := []func(context.Context) error{
+				func(ctx context.Context) error {
+					_, err := c.CreatePage(ctx, pageMutation{Name: "n", BookID: 1, Markdown: "m"})
+					return err
+				},
+				func(ctx context.Context) error { _, err := c.UpdatePage(ctx, "1", pageMutation{Name: "n"}); return err },
+				func(ctx context.Context) error { return c.DeletePage(ctx, "1") },
+			}
+			for n, call := range calls {
+				ctx := context.Background()
+				if ctxTimeout > 0 {
+					var cancel context.CancelFunc
+					ctx, cancel = context.WithTimeout(ctx, ctxTimeout)
+					defer cancel()
+				}
+				err := call(ctx)
+				// A delete reads no response body, so an unreadable body cannot fail it.
+				if n == 2 && name == "unreadable response" {
+					if err != nil {
+						t.Errorf("delete error = %v", err)
+					}
+					continue
+				}
+				if err == nil || strings.Contains(err.Error(), hint) != wantHint {
+					t.Errorf("error = %v, hint wanted %v", err, wantHint)
+				}
+			}
+			if methods, _, _, _ := rec.snapshot(); len(methods) != 3 {
+				t.Errorf("requests = %d, want 3 (one per call, no retry)", len(methods))
+			}
+		})
+	}
+	run("5xx", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }, 0, true)
+	run("timeout", func(w http.ResponseWriter, _ *http.Request) { time.Sleep(150 * time.Millisecond) }, 20*time.Millisecond, true)
+	run("unreadable response", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not json")) }, 0, true)
+	run("422 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(422) }, 0, false)
+	run("404 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(404) }, 0, false)
+}
 
-	t.Run("a cross-origin redirect is refused before the credential travels", func(t *testing.T) {
-		rec := &recorder{}
-		elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			rec.record(r)
-			_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{}, "total": 0})
-		}))
-		defer elsewhere.Close()
+func TestReadResponseCap(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":1,"html":"`))
+		chunk := []byte(strings.Repeat("a", 1<<20))
+		for i := 0; i < 17; i++ {
+			_, _ = w.Write(chunk)
+		}
+		_, _ = w.Write([]byte(`"}`))
+	}))
+	defer server.Close()
+	_, err := newClient(t, server.URL, nil).GetPage(context.Background(), "1")
+	var perr *provider.Error
+	if !errors.As(err, &perr) || perr.Class != provider.ClassInvalidResponse {
+		t.Fatalf("error = %v, want invalid-provider-response", err)
+	}
+}
 
-		origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, elsewhere.URL+"/api/pages", http.StatusFound)
-		}))
-		defer origin.Close()
-
-		_, err := newClient(t, origin.URL, nil).ListPages(context.Background(), 1, 0)
-
-		if err == nil {
-			t.Fatal("ListPages() = nil, want a refusal")
+func TestDeleteNeedsToolAllowList(t *testing.T) {
+	if !pagesDelete.RequiresToolAllowList {
+		t.Error("pages.delete must require a tool allow list")
+	}
+	for _, d := range []capability.Descriptor{pagesList, pagesGet, pagesCreate, pagesUpdate} {
+		if d.RequiresToolAllowList {
+			t.Errorf("%s must not require a tool allow list", d.ID)
 		}
-		var perr *provider.Error
-		if !errors.As(err, &perr) || perr.Class != provider.ClassProviderError {
-			t.Fatalf("error = %v, want a provider error", err)
+	}
+	if !strings.Contains(pagesDelete.Description, "recycle bin") || strings.Contains(pagesDelete.Description, "Permanently") {
+		t.Errorf("description = %q", pagesDelete.Description)
+	}
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	meta, ok := reg.ProviderMetadata(Provider)
+	if !ok {
+		t.Fatal("provider metadata missing")
+	}
+	for _, profile := range meta.Profiles {
+		for _, id := range profile.Tools {
+			if id == pagesDelete.ID {
+				t.Errorf("profile %s contains pages.delete", profile.ID)
+			}
 		}
-		if !strings.Contains(err.Error(), "different origin") {
-			t.Errorf("error = %q", err)
-		}
-		if methods, _, _, auth := rec.snapshot(); len(methods) != 0 {
-			t.Errorf("the other origin received %d requests with authorization %v", len(methods), auth)
-		}
-	})
+	}
 }
 
 // Two connections to different servers and two credentials on one server stay separate.
@@ -627,6 +758,10 @@ func TestRegister(t *testing.T) {
 		{Provider + ".pages.update", pagesUpdate.Risk},
 		{Provider + ".pages.delete", pagesDelete.Risk},
 	} {
+		if tt.risk.Effect != capability.EffectRead && (tt.risk.Confirmation != capability.ConfirmationRequired ||
+			tt.risk.Idempotency == "" || !tt.risk.OpenWorld || tt.risk.DataSensitivity == "") {
+			t.Errorf("%s risk is incomplete: %+v", tt.id, tt.risk)
+		}
 		t.Run(tt.id, func(t *testing.T) {
 			var descriptor capability.Descriptor
 			for _, candidate := range got {
@@ -640,6 +775,9 @@ func TestRegister(t *testing.T) {
 			}
 			if descriptor.Risk != tt.risk {
 				t.Errorf("risk = %+v, want %+v", descriptor.Risk, tt.risk)
+			}
+			if descriptor.RequiresToolAllowList != (tt.id == Provider+".pages.delete") {
+				t.Errorf("requires_tool_allow_list = %v", descriptor.RequiresToolAllowList)
 			}
 			if descriptor.Provider != Provider || descriptor.Version != 1 {
 				t.Errorf("operation = %+v, want provider %q version 1", descriptor, Provider)
