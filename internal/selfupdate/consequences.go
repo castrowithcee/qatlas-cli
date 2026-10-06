@@ -27,6 +27,8 @@ func ConsequencesText(goos string, others int) string {
 			fmt.Fprintf(&b, " %d other qatlas %s of yours %s running.", others, plural(others, "process", "processes"),
 				plural(others, "is", "are"))
 		}
+		b.WriteString(" A running vault process is locked first, because Windows has no handover; " +
+			"'qatlas vault unlock' unlocks it again.")
 		b.WriteString(" Running 'qatlas mcp', 'qatlas tui' and 'qatlas web' keep running the old version until " +
 			"they are restarted or, for 'qatlas mcp', reconnected in their client.")
 		return b.String()

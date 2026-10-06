@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -163,6 +164,40 @@ func TestUpdateLocksBeforeTheReplacementWhenTheReleaseIsNotSigned(t *testing.T) 
 				}
 			}
 		})
+	}
+}
+
+// A platform without a handover, Windows, locks the vault process whatever the update behaviour and the
+// signature say, and the note says why.
+func TestUpdateLocksWhereThePlatformHasNoHandover(t *testing.T) {
+	original := vaultHandoverPlatform
+	vaultHandoverPlatform = false
+	t.Cleanup(func() { vaultHandoverPlatform = original })
+	for surface := range updateSurfaces {
+		for _, signed := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s signed %v", surface, signed), func(t *testing.T) {
+				dir := encryptedVaultFixture(t, "")
+				signer := releasetest.NewSigner(t)
+				client := handoverServer(t, dir, signer.PublicKey())
+				var run handoverRun
+				if signed {
+					run = runHandoverUpdate(t, surface, dir, signer, signer.PublicKey(), client)
+				} else {
+					run = runHandoverUpdate(t, surface, dir, nil, nil, client)
+				}
+				if run.err != nil || !run.updated || run.program != "new-program" {
+					t.Fatalf("run = %+v", run)
+				}
+				if run.runningBefore || running(client) {
+					t.Error("the vault process was not locked before the replacement")
+				}
+				for _, want := range []string{"Windows locks the vault process instead of handing it over", "'qatlas vault unlock'"} {
+					if !strings.Contains(run.note, want) {
+						t.Errorf("note does not say %q: %q", want, run.note)
+					}
+				}
+			})
+		}
 	}
 }
 

@@ -139,7 +139,8 @@ func mcpCommandLong() string {
 		"On Linux and macOS the server restarts itself after an update replaces the program: it runs the\n" +
 		"new one in place, keeping the session. An unlocked vault is handed over to the new program when the\n" +
 		"release is signed and the update behaviour is handover; only after the update locked it does the\n" +
-		"vault need a new 'qatlas vault unlock'.\n\n" +
+		"vault need a new 'qatlas vault unlock'. On Windows the server does not restart itself, and an\n" +
+		"update always locks the vault process, as Windows has no handover.\n\n" +
 		"The guide below is exactly what server/discover and initialize hand the client as instructions;\n" +
 		"'qatlas agents' covers the same ground, and more, at CLI length.\n\n" +
 		helptopics.MCP().Text

@@ -27,8 +27,8 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 			"It also refreshes qatlas.1 in the same prefix. On Windows the installation is\n" +
 			"<prefix>\\bin\\qatlas.exe: the running file is renamed to qatlas.exe.old, the new one takes its place\n" +
 			"(the old one is put back should that fail), and qatlas.exe.old is removed at the next start or update.\n" +
-			"Windows has no vault process to hand over; running 'qatlas mcp', 'qatlas tui' and 'qatlas web'\n" +
-			"keep running the old version until they are restarted or reconnected.\n" +
+			"Running 'qatlas mcp', 'qatlas tui' and 'qatlas web' keep running the old version until they are\n" +
+			"restarted or reconnected.\n" +
 			"Dev builds and symlink installations are not replaced. Use --check to report availability\n" +
 			"without changing files.\n\n" +
 			"Before it downloads anything, update names the new version and what the replacement does to\n" +
@@ -42,7 +42,9 @@ func newUpdateCommand(opts *Options, buildVersion string) *cobra.Command {
 			"setting lock, or a handover that cannot be prepared, it is locked right before qatlas is\n" +
 			"replaced; 'qatlas vault unlock' unlocks the vault again. The command says which of the two\n" +
 			"happened. Should the process not lock, the update goes ahead and the warning names its process\n" +
-			"id and how to end it. A release with an invalid signature is refused before anything is touched.",
+			"id and how to end it. On Windows there is no handover: the vault process is always locked, whatever the\n" +
+			"update behaviour says, and the command says so. A release with an invalid signature is refused\n" +
+			"before anything is touched.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			updater := opts.Updater
@@ -95,7 +97,8 @@ func replaceProgram(c *cobra.Command, opts *Options, updater *selfupdate.Client)
 // vaultReplacement carries a vault process through one installation, for the command and the editor alike.
 // With a signed release and the update behaviour handover, the vault process verifies the release and
 // prepares its successor before the program is replaced, and hands the unlocked vault over once it is. In
-// every other case it is locked before the program is replaced, as an update always did.
+// every other case it is locked before the program is replaced, as an update always did; so it is on
+// Windows, which has no handover whatever the update behaviour says.
 type vaultReplacement struct {
 	opts     *Options
 	handover *vaultproc.Handover
@@ -134,7 +137,11 @@ func (r *vaultReplacement) before(ctx context.Context, release selfupdate.Releas
 		return
 	}
 	why := "before qatlas was replaced"
-	if !release.Signed {
+	if !vaultHandoverPlatform {
+		// Windows has no handover, so neither the update behaviour nor the signature matters here: the vault
+		// process is locked.
+		why = "because Windows locks the vault process instead of handing it over, before qatlas was replaced"
+	} else if !release.Signed {
 		why = "because the release is not signed, before qatlas was replaced"
 	} else if client, err := vaultmigrate.ProcessClientOf(v); err == nil {
 		behaviour, handover, err := client.PrepareHandover(contextOrBackground(ctx), vaultproc.ReleaseFiles{

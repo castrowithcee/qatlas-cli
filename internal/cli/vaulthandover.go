@@ -26,7 +26,8 @@ func newVaultHandoverCommand(opts *Options) *cobra.Command {
 		Long: "The update behaviour controls whether 'qatlas update' hands an unlocked vault over to the new\n" +
 			"program or locks it. handover, the default, keeps the vault unlocked across the update; lock locks\n" +
 			"it the way an update always did. Without an argument the command shows the current value; with\n" +
-			"handover or lock it sets it.\n\n" +
+			"handover or lock it sets it. Windows has no handover: there an update always locks the vault process,\n" +
+			"and this setting has no effect.\n\n" +
 			"The setting is stored authenticated inside the encrypted vault as settings.age, never in\n" +
 			"config.yaml, so only a person with the passphrase can change it. A settings.age that was not\n" +
 			"written by this vault, or is not understood, reads as lock and is reported in a warning. Both\n" +
