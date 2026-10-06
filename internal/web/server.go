@@ -168,12 +168,12 @@ func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, store *c
 		_ = listener.Close()
 		return nil, err
 	}
-	tmpl, err := template.New("overview").Parse(overviewTemplate)
+	tmpl, err := template.New("overview").Funcs(layoutFuncs).Parse(layoutTemplates + overviewTemplate)
 	if err != nil {
 		_ = listener.Close()
 		return nil, err
 	}
-	credTmpl, err := template.New("credentials").Parse(credentialTemplates + payloadTemplates)
+	credTmpl, err := template.New("credentials").Funcs(layoutFuncs).Parse(layoutTemplates + credentialTemplates + payloadTemplates)
 	if err != nil {
 		_ = listener.Close()
 		return nil, err
@@ -289,6 +289,7 @@ const sessionCookieName = "qatlas_web_session"
 func (s *Server) mux() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.handleRoot)
+	mux.HandleFunc("GET "+stylesheetPath, s.withSession(s.handleStylesheet))
 	mux.HandleFunc("POST /admin", s.withSessionGuard(s.handleAdminAuth))
 	mux.HandleFunc("GET /credentials/new", s.withSession(s.handleNewCredentialForm))
 	mux.HandleFunc("POST /credentials/new", s.withAdminGuard(s.handleCreateCredential))
@@ -324,15 +325,15 @@ func (s *Server) withSession(next http.HandlerFunc) http.HandlerFunc {
 
 // withSecurityHeaders adds the headers every response of this server carries, whatever it answers:
 // nothing is ever cached, no referrer ever leaves this response, and a content security policy keeps a
-// browser from loading anything but the document itself and submitting its own forms back to it, since the
-// page ships no external asset and no script.
+// browser from loading anything but the document itself and its own stylesheet, and from submitting
+// forms anywhere but back to it, since the page ships no external asset and no script.
 func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Cache-Control", "no-store")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("Content-Security-Policy",
-			"default-src 'none'; style-src 'none'; script-src 'none'; img-src 'none'; "+
+			"default-src 'none'; style-src 'self'; script-src 'none'; img-src 'none'; "+
 				"base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 		h.Set("X-Content-Type-Options", "nosniff")
 		next.ServeHTTP(w, r)
@@ -531,60 +532,85 @@ func (s *Server) renderOverview(w http.ResponseWriter, adminError string) {
 }
 
 // overviewTemplate renders the secretfree overview, together with the admin status and its masked
-// passphrase form, with no external asset, no inline style, and no script, so the content security policy
-// this server sends is never a compromise; the form's own submission is the one thing form-action 'self'
-// loosens.
+// passphrase form, inside the shared layout (see layoutTemplates), with no external asset, no inline style,
+// and no script, so the content security policy this server sends is never a compromise; the form's own
+// submission is the one thing form-action 'self' loosens.
 var overviewTemplate = strings.TrimSpace(`
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>qatlas web</title></head>
-<body>
-<h1>qatlas</h1>
+{{template "layout-top" (page "Overview" "overview")}}
+<h1>Overview</h1>
 
-<h2>Admin</h2>
+<section class="section" id="admin" aria-labelledby="admin-heading">
+<h2 id="admin-heading">Admin</h2>
 {{if .AdminUnprotected}}
-<p>This vault holds no passphrase: every coupled browser may manage without one.</p>
+<p class="notice notice-ok" role="status">This vault holds no passphrase: every coupled browser may manage without one.</p>
 {{else if .AdminActive}}
-<p>Admin approval active{{if .AdminRemainingText}} ({{.AdminRemainingText}}){{end}}.</p>
+<p class="notice notice-ok" role="status">Admin approval active{{if .AdminRemainingText}} ({{.AdminRemainingText}}){{end}}.</p>
 {{else}}
-<p>Admin approval not active.</p>
-{{if .AdminError}}<p>{{.AdminError}}</p>{{end}}
+<p class="notice" role="status">Admin approval not active. Enter the vault passphrase to change credentials or connections.</p>
 <form method="post" action="/admin">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
-<label>Vault passphrase <input type="password" name="passphrase" autocomplete="off"></label>
+<div class="field">
+<label for="admin-passphrase">Vault passphrase</label>
+<input id="admin-passphrase" type="password" name="passphrase" autocomplete="off"{{if .AdminError}} aria-invalid="true" aria-describedby="admin-passphrase-error"{{end}}>
+{{if .AdminError}}<p class="field-error" id="admin-passphrase-error">{{.AdminError}}</p>{{end}}
+</div>
 <button type="submit">Approve</button>
 </form>
 {{end}}
+</section>
 
-<h2>Providers</h2>
-<table border="1" cellpadding="4">
-<tr><th>Provider</th><th>Description</th><th>Note</th><th>Tools</th><th>Connections</th><th>Configured</th></tr>
+<section class="section" id="providers" aria-labelledby="providers-heading">
+<h2 id="providers-heading">Providers</h2>
+<div class="table-wrap" role="region" aria-labelledby="providers-heading" tabindex="0">
+<table>
+<thead><tr><th scope="col">Provider</th><th scope="col">Description</th><th scope="col">Note</th><th scope="col">Tools</th><th scope="col">Connections</th><th scope="col">Configured</th></tr></thead>
+<tbody>
 {{range .Providers}}<tr><td>{{.Provider}}</td><td>{{.Description}}</td><td>{{.Note}}</td><td>{{.Tools}}</td><td>{{.Connections}}</td><td>{{.Configured}}</td></tr>
-{{end}}
+{{end}}</tbody>
 </table>
+{{if not .Providers}}<p class="empty">No providers.</p>{{end}}
+</div>
+</section>
 
-<h2>Services</h2>
-<table border="1" cellpadding="4">
-<tr><th>Name</th><th>Provider</th><th>Base URL</th></tr>
+<section class="section" id="services" aria-labelledby="services-heading">
+<h2 id="services-heading">Services</h2>
+<div class="table-wrap" role="region" aria-labelledby="services-heading" tabindex="0">
+<table>
+<thead><tr><th scope="col">Name</th><th scope="col">Provider</th><th scope="col">Base URL</th></tr></thead>
+<tbody>
 {{range .Services}}<tr><td>{{.Name}}</td><td>{{.Provider}}</td><td>{{.BaseURL}}</td></tr>
-{{end}}
+{{end}}</tbody>
 </table>
+{{if not .Services}}<p class="empty">No services.</p>{{end}}
+</div>
+</section>
 
-<h2>Credentials</h2>
-{{if .CredentialsUsable}}<p><a href="/credentials/new">Add a credential</a> · <a href="/credentials/new/payload">Add a payload credential</a></p>{{end}}
-<table border="1" cellpadding="4">
-<tr><th>Name</th><th>Provider</th><th>Type</th></tr>
+<section class="section" id="credentials" aria-labelledby="credentials-heading">
+<h2 id="credentials-heading">Credentials</h2>
+{{if .CredentialsUsable}}<p class="actions"><a href="/credentials/new">Add a credential</a> <a href="/credentials/new/payload">Add a payload credential</a></p>{{end}}
+<div class="table-wrap" role="region" aria-labelledby="credentials-heading" tabindex="0">
+<table>
+<thead><tr><th scope="col">Name</th><th scope="col">Provider</th><th scope="col">Type</th></tr></thead>
+<tbody>
 {{range .Credentials}}<tr><td>{{if $.CredentialsUsable}}<a href="/credentials/{{.Name}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td><td>{{.Provider}}</td><td>{{.Type}}</td></tr>
-{{end}}
+{{end}}</tbody>
 </table>
+{{if not .Credentials}}<p class="empty">No credentials yet.</p>{{end}}
+</div>
+</section>
 
-<h2>Connections</h2>
-{{if .CredentialsUsable}}<p><a href="/connections/new">Set up a connection</a></p>{{end}}
-<table border="1" cellpadding="4">
-<tr><th>Name</th><th>Provider</th><th>Description</th><th>Permissions</th><th>Tools</th></tr>
+<section class="section" id="connections" aria-labelledby="connections-heading">
+<h2 id="connections-heading">Connections</h2>
+{{if .CredentialsUsable}}<p class="actions"><a href="/connections/new">Set up a connection</a></p>{{end}}
+<div class="table-wrap" role="region" aria-labelledby="connections-heading" tabindex="0">
+<table>
+<thead><tr><th scope="col">Name</th><th scope="col">Provider</th><th scope="col">Description</th><th scope="col">Permissions</th><th scope="col">Tools</th></tr></thead>
+<tbody>
 {{range .Connections}}<tr><td>{{.Name}}</td><td>{{.Provider}}</td><td>{{.Description}}</td><td>{{.Permissions}}</td><td>{{.Tools}}</td></tr>
-{{end}}
+{{end}}</tbody>
 </table>
-</body>
-</html>
+{{if not .Connections}}<p class="empty">No connections yet.</p>{{end}}
+</div>
+</section>
+{{template "layout-bottom"}}
 `)
