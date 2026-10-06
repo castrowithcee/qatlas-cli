@@ -664,7 +664,7 @@ func Register(reg *capability.Registry) error {
 				"teams:read for the org-admin profile's list and teams:write for its create and update tools and " +
 				"the separately offered team delete tool, plus organization-variables:read for the organizationvariables-read " +
 				"profile and organization-variables:read with organization-variables:write for the " +
-				"organizationvariables-manage profile and the separately offered organization variable delete tool, plus organizations:write for the org-admin profile's organization update. A token belongs to one " +
+				"organizationvariables-manage profile and the separately offered organization variable delete tool, plus organizations:write for the org-admin profile's organization update and invite and user:read for its invite and member list. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -674,7 +674,7 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Description: "either organization mode, exactly one organization/ORG_ID target and no team or scenario " +
-				"target, which offers only the organization tools (make.teams.*, make.organizationvariables.*, make.organization.update) and refuses every team tool; or " +
+				"target, which offers only the organization tools (make.teams.*, make.organizationvariables.*, make.organization.update, make.organization.invite, make.organization.members) and refuses every team tool; or " +
 				"team mode: exactly one team/TEAM_ID target this connection is bound to, plus an optional " +
 				"organization/ORG_ID target and an optional, repeatable allow-list of scenario/SCENARIO_ID " +
 				"targets of that team; without a scenario target, every scenario of the bound team the token " +
@@ -855,8 +855,8 @@ func Register(reg *capability.Registry) error {
 			Description: "for a connection bound to an organization: lists the organization's teams, creates a " +
 				"team in it, and renames a team or changes its operations limit after binding it to the " +
 				"organization; every change needs its own confirmation, is never retried, and needs the " +
-				"teams:read and teams:write scopes; also changes the organization's name, country, or time zone, which needs the organizations:write scope. Deleting a team is in no profile",
-			Tools: []string{teamsList.ID, teamsCreate.ID, teamsUpdate.ID, organizationUpdate.ID},
+				"teams:read and teams:write scopes; also changes the organization's name, country, or time zone (organizations:write), invites a person as member, and lists the members with their organization role (user:read). Deleting a team is in no profile",
+			Tools: []string{teamsList.ID, teamsCreate.ID, teamsUpdate.ID, organizationUpdate.ID, organizationInvite.ID, organizationMembers.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -928,6 +928,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: teamsUpdate, Handler: capability.Handler(invokeTeamsUpdate)},
 		capability.Operation{Descriptor: teamsDelete, Handler: capability.Handler(invokeTeamsDelete)},
 		capability.Operation{Descriptor: organizationUpdate, Handler: capability.Handler(invokeOrganizationUpdate)},
+		capability.Operation{Descriptor: organizationInvite, Handler: capability.Handler(invokeOrganizationInvite)},
+		capability.Operation{Descriptor: organizationMembers, Handler: capability.Handler(invokeOrganizationMembers)},
 	)
 }
 
