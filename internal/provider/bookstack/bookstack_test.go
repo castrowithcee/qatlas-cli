@@ -549,7 +549,14 @@ func TestMutationsReportUncertainty(t *testing.T) {
 		})
 	}
 	run("5xx", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(502) }, 0, true)
-	run("timeout", func(w http.ResponseWriter, _ *http.Request) { time.Sleep(150 * time.Millisecond) }, 20*time.Millisecond, true)
+	// The handler answers long after the deadline, which only has to outlast the TLS handshake for the request
+	// to arrive.
+	run("timeout", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(2 * time.Second):
+		}
+	}, 500*time.Millisecond, true)
 	run("unreadable response", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("not json")) }, 0, true)
 	run("422 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(422) }, 0, false)
 	run("404 is certain", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(404) }, 0, false)
