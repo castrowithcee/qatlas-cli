@@ -985,18 +985,6 @@ func (c *Config) IdleWarning(name string) string {
 	return fmt.Sprintf("connection %q offers no tool: %s, so no agent can use it", name, reason)
 }
 
-// SecretRoleDescription returns the provider-authored help for a role.
-func (c *Config) SecretRoleDescription(role string) string {
-	for _, metadata := range c.providerCatalog().ProviderMetadataAll() {
-		for _, candidate := range metadata.SecretRoles {
-			if candidate.Name == role {
-				return candidate.Description
-			}
-		}
-	}
-	return ""
-}
-
 // SecretRoleDescriptionOf returns the help one provider authors for one of its roles. Role names are not
 // unique across providers ("token" exists in several), so a role is only explained by the provider it
 // belongs to. Without a provider the help is given only when every provider that defines the role words it

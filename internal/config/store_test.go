@@ -70,12 +70,12 @@ func TestSecretRoleDescriptionsExplainTheBookStackValues(t *testing.T) {
 		"token-id":     "value labeled Token ID",
 		"token-secret": "value labeled Token Secret",
 	} {
-		if got := New(testProviders).SecretRoleDescription(role); !strings.Contains(got, want) {
-			t.Errorf("SecretRoleDescription(%q) = %q, want it to contain %q", role, got, want)
+		if got := New(testProviders).SecretRoleDescriptionOf("bookstack", role); !strings.Contains(got, want) {
+			t.Errorf("SecretRoleDescriptionOf(%q) = %q, want it to contain %q", role, got, want)
 		}
 	}
-	if got := New(testProviders).SecretRoleDescription("unknown"); got != "" {
-		t.Errorf("SecretRoleDescription(unknown) = %q, want empty", got)
+	if got := New(testProviders).SecretRoleDescriptionOf("bookstack", "unknown"); got != "" {
+		t.Errorf("SecretRoleDescriptionOf(unknown) = %q, want empty", got)
 	}
 }
 
