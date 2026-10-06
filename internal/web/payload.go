@@ -479,63 +479,88 @@ func (s *Server) forwardChangeNotice(cand *config.Config, connName string) strin
 // external asset, and every masked input is rendered empty.
 const payloadTemplates = `
 {{define "payload"}}
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>qatlas web · {{if .Edit}}{{.Name}}{{else}}add a payload credential{{end}}</title></head>
-<body>
-<p><a href="/">&larr; overview</a></p>
+{{if .Edit}}{{template "layout-top" (page .Name "credentials")}}{{else}}{{template "layout-top" (page "Add a payload credential" "credentials")}}{{end}}
 <h1>{{if .Edit}}{{.Name}}{{else}}Add a payload credential{{end}}</h1>
 <p>A payload credential holds freely named fields. A tool may pass their values on to a third party by reference, but only through a connection that lists it in forward_secrets.</p>
-{{if .Notice}}<p>{{.Notice}}</p>{{end}}
-{{if .Error}}<p>{{.Error}}</p>{{end}}
-{{if .BindingNote}}<p>{{.BindingNote}}</p>{{end}}
+{{if .Notice}}<p class="notice notice-ok" role="status">{{.Notice}}</p>{{end}}
+{{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
+{{if .BindingNote}}<p class="notice" role="status">{{.BindingNote}}</p>{{end}}
 <form method="post" action="{{.Action}}">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
 <input type="hidden" name="cfgver" value="{{.CfgVer}}">
 {{if .Edit}}
 <p>Type: {{.Storage}}</p>
 {{else}}
-<p><label>Name <input type="text" name="name" value="{{.Name}}" autocomplete="off"></label></p>
-<p>Values are kept in:</p>
-<label><input type="radio" name="storage" value="keyring"{{if ne .Storage "vault"}} checked{{end}}> the system keyring</label><br>
-<label><input type="radio" name="storage" value="vault"{{if eq .Storage "vault"}} checked{{end}}> the vault</label>
-<p>{{.StorageText}}</p>
+<div class="field">
+<label for="pay-name">Name</label>
+<input id="pay-name" type="text" name="name" value="{{.Name}}" autocomplete="off">
+</div>
+<fieldset class="field">
+<legend>Values are kept in</legend>
+<div class="choice"><input id="storage-keyring" type="radio" name="storage" value="keyring"{{if ne .Storage "vault"}} checked{{end}}> <label for="storage-keyring">the system keyring</label></div>
+<div class="choice"><input id="storage-vault" type="radio" name="storage" value="vault"{{if eq .Storage "vault"}} checked{{end}}> <label for="storage-vault">the vault</label></div>
+<p class="hint">{{.StorageText}}</p>
+</fieldset>
 {{end}}
-<p><label>Description <input type="text" name="description" value="{{.Description}}" autocomplete="off"></label><br>{{.DescriptionText}}</p>
+<div class="field">
+<label for="pay-description">Description</label>
+<input id="pay-description" type="text" name="description" value="{{.Description}}" autocomplete="off">
+<p class="hint">{{.DescriptionText}}</p>
+</div>
 
 {{if .Rows}}
-<h2>Fields</h2>
+<section class="section" aria-labelledby="fields-heading">
+<h2 id="fields-heading">Fields</h2>
 <p>Values are typed masked, at least {{.MinLength}} characters, and are never shown. Leave a value empty to keep the stored one.</p>
-<table border="1" cellpadding="4">
-<tr><th>Field</th><th>Status</th><th>New value</th><th>Remove</th></tr>
+<div class="table-wrap" role="region" aria-labelledby="fields-heading" tabindex="0">
+<table>
+<thead><tr><th scope="col">Field</th><th scope="col">Status</th><th scope="col">New value</th><th scope="col">Remove</th></tr></thead>
+<tbody>
 {{range .Rows}}<tr>
 <td>{{.Name}}</td>
 <td>{{.State}}</td>
-<td><input type="password" name="value_{{.Name}}" autocomplete="new-password"></td>
-<td><label><input type="checkbox" name="remove" value="{{.Name}}"{{if .Remove}} checked{{end}}> remove, with its stored value</label></td>
+<td><label class="visually-hidden" for="value-{{.Name}}">New value for {{.Name}}</label><input id="value-{{.Name}}" type="password" name="value_{{.Name}}" autocomplete="new-password"></td>
+<td><div class="choice"><input id="remove-{{.Name}}" type="checkbox" name="remove" value="{{.Name}}"{{if .Remove}} checked{{end}}> <label for="remove-{{.Name}}">remove, with its stored value</label></div></td>
 </tr>
-{{end}}
+{{end}}</tbody>
 </table>
+</div>
+</section>
 {{end}}
 
-<h2>{{if .Rows}}Add fields{{else}}Fields{{end}}</h2>
+<section class="section" aria-labelledby="newfields-heading">
+<h2 id="newfields-heading">{{if .Rows}}Add fields{{else}}Fields{{end}}</h2>
 <p>A field name uses letters, digits, - _ . ; its value is typed masked, at least {{.MinLength}} characters. Leave a row empty to add none.</p>
-{{range .NewRows}}<p><label>Field name <input type="text" name="newname_{{.Index}}" value="{{.Name}}" autocomplete="off"></label>
-<label>Value <input type="password" name="newvalue_{{.Index}}" autocomplete="new-password"></label></p>
+{{range .NewRows}}<div class="field-row">
+<div class="field">
+<label for="newname-{{.Index}}">Field name</label>
+<input id="newname-{{.Index}}" type="text" name="newname_{{.Index}}" value="{{.Name}}" autocomplete="off">
+</div>
+<div class="field">
+<label for="newvalue-{{.Index}}">Value</label>
+<input id="newvalue-{{.Index}}" type="password" name="newvalue_{{.Index}}" autocomplete="new-password">
+</div>
+</div>
 {{end}}
+</section>
 
 {{if .ShowPassphrase}}
-<fieldset>
+<fieldset class="field">
 <legend>Vault passphrase</legend>
-<p>Only used if the values go to the vault and this is the vault's very first secret. Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt it instead.</p>
-<p><label>New passphrase <input type="password" name="vault_passphrase" autocomplete="new-password"></label></p>
-<p><label>Confirm <input type="password" name="vault_passphrase_confirm" autocomplete="new-password"></label></p>
+<p class="hint">Only used if the values go to the vault and this is the vault's very first secret. Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt it instead.</p>
+<div class="field">
+<label for="vault-passphrase">New passphrase</label>
+<input id="vault-passphrase" type="password" name="vault_passphrase" autocomplete="new-password">
+</div>
+<div class="field">
+<label for="vault-passphrase-confirm">Confirm</label>
+<input id="vault-passphrase-confirm" type="password" name="vault_passphrase_confirm" autocomplete="new-password">
+</div>
 </fieldset>
 {{end}}
 
-<button type="submit">{{if .Edit}}Save{{else}}Create payload credential{{end}}</button>
+<div class="actions"><button type="submit">{{if .Edit}}Save{{else}}Create payload credential{{end}}</button></div>
 </form>
-</body>
-</html>
+{{template "layout-bottom"}}
 {{end}}
 `

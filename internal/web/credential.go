@@ -527,79 +527,94 @@ func contains(haystack []string, needle string) bool {
 // a secret field is always rendered empty.
 const credentialTemplates = `
 {{define "new"}}
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>qatlas web · add a credential</title></head>
-<body>
-<p><a href="/">&larr; overview</a></p>
+{{template "layout-top" (page "Add a credential" "credentials")}}
 <h1>Add a credential</h1>
-{{if .Error}}<p>{{.Error}}</p>{{end}}
+{{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
 
-<h2>1. Provider</h2>
+<section class="section" aria-labelledby="provider-heading">
+<h2 id="provider-heading">1. Provider</h2>
 <form method="get" action="/credentials/new">
-<label>Provider
-<select name="provider">
+<div class="field">
+<label for="provider">Provider</label>
+<select id="provider" name="provider">
 <option value="">choose a provider</option>
 {{range .Providers}}<option value="{{.}}"{{if eq . $.Selected}} selected{{end}}>{{.}}</option>
 {{end}}
 </select>
-</label>
-<button type="submit">Choose</button>
+</div>
+<div class="actions"><button type="submit">Choose</button></div>
 </form>
+</section>
 
 {{if .Selected}}
-<h2>2. Name and secrets</h2>
+<section class="section" aria-labelledby="secrets-heading">
+<h2 id="secrets-heading">2. Name and secrets</h2>
 <form method="post" action="/credentials/new">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
 <input type="hidden" name="cfgver" value="{{.CfgVer}}">
 <input type="hidden" name="provider" value="{{.Selected}}">
-<p><label>Name <input type="text" name="name" value="{{.Name}}" autocomplete="off"></label></p>
+<div class="field">
+<label for="cred-name">Name</label>
+<input id="cred-name" type="text" name="name" value="{{.Name}}" autocomplete="off">
+</div>
 
-<p>Secrets are kept in:</p>
-<label><input type="radio" name="storage" value="keyring"{{if eq .Storage "keyring"}} checked{{end}}> the system keyring</label><br>
-<label><input type="radio" name="storage" value="vault"{{if eq .Storage "vault"}} checked{{end}}> the vault</label><br>
-<label><input type="radio" name="storage" value="env"{{if eq .Storage "env"}} checked{{end}}> environment variables</label>
+<fieldset class="field">
+<legend>Secrets are kept in</legend>
+<div class="choice"><input id="storage-keyring" type="radio" name="storage" value="keyring"{{if eq .Storage "keyring"}} checked{{end}}> <label for="storage-keyring">the system keyring</label></div>
+<div class="choice"><input id="storage-vault" type="radio" name="storage" value="vault"{{if eq .Storage "vault"}} checked{{end}}> <label for="storage-vault">the vault</label></div>
+<div class="choice"><input id="storage-env" type="radio" name="storage" value="env"{{if eq .Storage "env"}} checked{{end}}> <label for="storage-env">environment variables</label></div>
+</fieldset>
 
 {{range .Roles}}
-<fieldset>
+<fieldset class="field">
 <legend>{{.Name}}</legend>
-{{if .Description}}<p>{{.Description}}</p>{{end}}
-<p><label>Secret value, if secrets are kept in the system keyring or the vault
-<input type="password" name="secret_{{.Name}}" autocomplete="new-password"></label></p>
-<p><label>Environment variable name, if secrets are kept in environment variables
-<input type="text" name="envname_{{.Name}}" autocomplete="off"></label></p>
+{{if .Description}}<p class="hint">{{.Description}}</p>{{end}}
+<div class="field">
+<label for="secret-{{.Name}}">Secret value, if secrets are kept in the system keyring or the vault</label>
+<input id="secret-{{.Name}}" type="password" name="secret_{{.Name}}" autocomplete="new-password">
+</div>
+<div class="field">
+<label for="envname-{{.Name}}">Environment variable name, if secrets are kept in environment variables</label>
+<input id="envname-{{.Name}}" type="text" name="envname_{{.Name}}" autocomplete="off">
+</div>
 </fieldset>
 {{end}}
 
-<fieldset>
+<fieldset class="field">
 <legend>Vault passphrase</legend>
-<p>Only used if this credential's secrets go to the vault and this is the vault's very first secret.
+<p class="hint">Only used if this credential's secrets go to the vault and this is the vault's very first secret.
 Leave both empty and it stays unencrypted: its secrets are then readable by anyone who can read that file.
 Type a passphrase, twice, to encrypt it instead.</p>
-<p><label>New passphrase <input type="password" name="vault_passphrase" autocomplete="new-password"></label></p>
-<p><label>Confirm <input type="password" name="vault_passphrase_confirm" autocomplete="new-password"></label></p>
+<div class="field">
+<label for="vault-passphrase">New passphrase</label>
+<input id="vault-passphrase" type="password" name="vault_passphrase" autocomplete="new-password">
+</div>
+<div class="field">
+<label for="vault-passphrase-confirm">Confirm</label>
+<input id="vault-passphrase-confirm" type="password" name="vault_passphrase_confirm" autocomplete="new-password">
+</div>
 </fieldset>
 
-<button type="submit">Create credential</button>
+<div class="actions"><button type="submit">Create credential</button></div>
 </form>
+</section>
 {{end}}
-</body>
-</html>
+{{template "layout-bottom"}}
 {{end}}
 
 {{define "detail"}}
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>qatlas web · {{.Name}}</title></head>
-<body>
-<p><a href="/">&larr; overview</a></p>
+{{template "layout-top" (page .Name "credentials")}}
 <h1>{{.Name}}</h1>
 <p>Provider: {{.Provider}} · Type: {{.Type}}</p>
-{{if .Notice}}<p>{{.Notice}}</p>{{end}}
-{{if .Error}}<p>{{.Error}}</p>{{end}}
+{{if .Notice}}<p class="notice notice-ok" role="status">{{.Notice}}</p>{{end}}
+{{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
 
-<table border="1" cellpadding="4">
-<tr><th>Role</th><th>Status</th><th>Replace</th></tr>
+<section class="section" aria-labelledby="roles-heading">
+<h2 id="roles-heading">Roles</h2>
+<div class="table-wrap" role="region" aria-labelledby="roles-heading" tabindex="0">
+<table>
+<thead><tr><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Replace</th></tr></thead>
+<tbody>
 {{$root := .}}
 {{range .Roles}}
 <tr>
@@ -611,137 +626,204 @@ Type a passphrase, twice, to encrypt it instead.</p>
 <input type="hidden" name="csrf" value="{{$root.CSRF}}">
 <input type="hidden" name="cfgver" value="{{$root.CfgVer}}">
 <input type="hidden" name="role" value="{{.Role}}">
-<label>New secret <input type="password" name="value" autocomplete="new-password"></label>
-<label>Vault passphrase, only for the vault's very first secret
-<input type="password" name="vault_passphrase" autocomplete="new-password"></label>
-<label>Confirm <input type="password" name="vault_passphrase_confirm" autocomplete="new-password"></label>
-<button type="submit">Replace</button>
+<div class="field">
+<label for="value-{{.Role}}">New secret</label>
+<input id="value-{{.Role}}" type="password" name="value" autocomplete="new-password">
+</div>
+<div class="field">
+<label for="vault-passphrase-{{.Role}}">Vault passphrase, only for the vault's very first secret</label>
+<input id="vault-passphrase-{{.Role}}" type="password" name="vault_passphrase" autocomplete="new-password">
+</div>
+<div class="field">
+<label for="vault-passphrase-confirm-{{.Role}}">Confirm</label>
+<input id="vault-passphrase-confirm-{{.Role}}" type="password" name="vault_passphrase_confirm" autocomplete="new-password">
+</div>
+<div class="actions"><button type="submit">Replace</button></div>
 </form>
 {{end}}
 </td>
 </tr>
 {{end}}
+</tbody>
 </table>
-</body>
-</html>
+{{if not .Roles}}<p class="empty">No roles.</p>{{end}}
+</div>
+</section>
+{{template "layout-bottom"}}
 {{end}}
 
 {{define "connection-provider"}}
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>qatlas web · set up a connection</title></head>
-<body>
-<p><a href="/">&larr; overview</a></p>
-<h1>Set up a connection · step 1 of 3 · Provider</h1>
+{{template "layout-top" (page "Set up a connection" "connections")}}
+<h1>Set up a connection</h1>
+<p class="step">Step 1 of 3 · Provider</p>
 <p>Choose the system to connect to. The next steps offer only what this provider defines.</p>
-{{if .Error}}<p>{{.Error}}</p>{{end}}
+{{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
 <form method="get" action="/connections/new">
-<label>Provider
-<select name="provider">
+<div class="field">
+<label for="provider">Provider</label>
+<select id="provider" name="provider">
 <option value="">choose a provider</option>
 {{range .Providers}}<option value="{{.}}">{{.}}</option>
 {{end}}
 </select>
-</label>
-<button type="submit">Choose</button>
+</div>
+<div class="actions"><button type="submit">Choose</button></div>
 </form>
-</body>
-</html>
+{{template "layout-bottom"}}
 {{end}}
 
 {{define "connection-build"}}
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>qatlas web · set up a connection</title></head>
-<body>
-<p><a href="/connections/new">&larr; choose another provider</a></p>
-<h1>Set up a connection · step 2 of 3 · Service, credential, scope, permissions</h1>
-{{if .Error}}<p>{{.Error}}</p>{{end}}
+{{template "layout-top" (page "Set up a connection" "connections")}}
+<h1>Set up a connection</h1>
+<p class="step">Step 2 of 3 · Service, credential, scope, permissions</p>
+<p class="actions"><a href="/connections/new">Choose another provider</a></p>
+{{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
 <form method="get" action="/connections/new/review">
 <input type="hidden" name="provider" value="{{.Provider}}">
 
-<h2>Service</h2>
-<label>Reuse a service, or choose {{printf "%s" "(new service)"}}
-<select name="service">
+<section class="section" aria-labelledby="service-heading">
+<h2 id="service-heading">Service</h2>
+<div class="field">
+<label for="service">Reuse a service, or choose {{printf "%s" "(new service)"}}</label>
+<select id="service" name="service">
 {{range .Services}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
 {{end}}
 </select>
-</label>
-<p><label>New service name <input type="text" name="svcname" value="{{.Form.SvcName}}" autocomplete="off"></label></p>
-<p><label>New service base URL <input type="text" name="svcbaseurl" value="{{.Form.SvcBaseURL}}" autocomplete="off"></label></p>
+</div>
+<div class="field">
+<label for="svcname">New service name</label>
+<input id="svcname" type="text" name="svcname" value="{{.Form.SvcName}}" autocomplete="off">
+</div>
+<div class="field">
+<label for="svcbaseurl">New service base URL</label>
+<input id="svcbaseurl" type="text" name="svcbaseurl" value="{{.Form.SvcBaseURL}}" autocomplete="off">
+</div>
+</section>
 
-<h2>Credential</h2>
-<label>Reuse a credential, or choose {{printf "%s" "(new credential)"}}
-<select name="credential">
+<section class="section" aria-labelledby="credential-heading">
+<h2 id="credential-heading">Credential</h2>
+<div class="field">
+<label for="credential">Reuse a credential, or choose {{printf "%s" "(new credential)"}}</label>
+<select id="credential" name="credential">
 {{range .Credentials}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
 {{end}}
 </select>
-</label>
-<p><label>New credential name <input type="text" name="credname" value="{{.Form.CredName}}" autocomplete="off"></label></p>
-<p>Secrets of a new credential are kept in:</p>
-<label><input type="radio" name="credstorage" value="keyring"{{if eq .Form.CredStorage "keyring"}} checked{{end}}> the system keyring</label><br>
-<label><input type="radio" name="credstorage" value="vault"{{if eq .Form.CredStorage "vault"}} checked{{end}}> the vault</label><br>
-<label><input type="radio" name="credstorage" value="env"{{if eq .Form.CredStorage "env"}} checked{{end}}> environment variables</label>
-<p>{{.StorageHint}}</p>
+</div>
+<div class="field">
+<label for="credname">New credential name</label>
+<input id="credname" type="text" name="credname" value="{{.Form.CredName}}" autocomplete="off">
+</div>
+<fieldset class="field">
+<legend>Secrets of a new credential are kept in</legend>
+<div class="choice"><input id="credstorage-keyring" type="radio" name="credstorage" value="keyring"{{if eq .Form.CredStorage "keyring"}} checked{{end}}> <label for="credstorage-keyring">the system keyring</label></div>
+<div class="choice"><input id="credstorage-vault" type="radio" name="credstorage" value="vault"{{if eq .Form.CredStorage "vault"}} checked{{end}}> <label for="credstorage-vault">the vault</label></div>
+<div class="choice"><input id="credstorage-env" type="radio" name="credstorage" value="env"{{if eq .Form.CredStorage "env"}} checked{{end}}> <label for="credstorage-env">environment variables</label></div>
+<p class="hint">{{.StorageHint}}</p>
+</fieldset>
 {{$form := .Form}}
 {{range .Roles}}
-<p><label>{{.Name}} environment variable name, only used if a new credential keeps its secrets in environment variables
-<input type="text" name="envname_{{.Name}}" value="{{index $form.EnvNames .Name}}" autocomplete="off"></label>
-{{if .Description}}<br>{{.Description}}{{end}}
-{{if ne $form.CredStorage "env"}}<br>Its secret value, if kept in the system keyring or the vault, is typed on the next page.{{end}}</p>
+<div class="field">
+<label for="envname-{{.Name}}">{{.Name}} environment variable name, only used if a new credential keeps its secrets in environment variables</label>
+<input id="envname-{{.Name}}" type="text" name="envname_{{.Name}}" value="{{index $form.EnvNames .Name}}" autocomplete="off">
+{{if .Description}}<p class="hint">{{.Description}}</p>{{end}}
+{{if ne $form.CredStorage "env"}}<p class="hint">Its secret value, if kept in the system keyring or the vault, is typed on the next page.</p>{{end}}
+</div>
 {{end}}
+</section>
 
-<h2>Scope</h2>
-<p><label>Connection name <input type="text" name="connname" value="{{.Form.ConnName}}" autocomplete="off"></label></p>
-<p><label>Targets <input type="text" name="targets" value="{{.Form.Targets}}" autocomplete="off"></label><br>{{.TargetHint}}</p>
-<p><label>Description <input type="text" name="description" value="{{.Form.Description}}" autocomplete="off"></label></p>
+<section class="section" aria-labelledby="scope-heading">
+<h2 id="scope-heading">Scope</h2>
+<div class="field">
+<label for="connname">Connection name</label>
+<input id="connname" type="text" name="connname" value="{{.Form.ConnName}}" autocomplete="off">
+</div>
+<div class="field">
+<label for="targets">Targets</label>
+<input id="targets" type="text" name="targets" value="{{.Form.Targets}}" autocomplete="off">
+<p class="hint">{{.TargetHint}}</p>
+</div>
+<div class="field">
+<label for="description">Description</label>
+<input id="description" type="text" name="description" value="{{.Form.Description}}" autocomplete="off">
+</div>
+</section>
+
 {{if or .FilesRead .FilesWrite}}
-<h2>Local files</h2>
+<section class="section" aria-labelledby="files-heading">
+<h2 id="files-heading">Local files</h2>
 <p>Directories on this machine the tools of this connection may use, absolute or starting with ~/, one per line. A directory gives access to it and everything below. Leave a field empty to release nothing. A change later needs a new approval.</p>
-{{if .FilesRead}}<p><label>Upload directories (files the tools may read)<br><textarea name="filesread" rows="3" cols="60" autocomplete="off">{{.Form.FilesRead}}</textarea></label></p>{{end}}
-{{if .FilesWrite}}<p><label>Download directories (where the tools may write files)<br><textarea name="fileswrite" rows="3" cols="60" autocomplete="off">{{.Form.FilesWrite}}</textarea></label></p>{{end}}
+{{if .FilesRead}}<div class="field">
+<label for="filesread">Upload directories (files the tools may read)</label>
+<textarea id="filesread" name="filesread" rows="3" cols="60" autocomplete="off">{{.Form.FilesRead}}</textarea>
+</div>{{end}}
+{{if .FilesWrite}}<div class="field">
+<label for="fileswrite">Download directories (where the tools may write files)</label>
+<textarea id="fileswrite" name="fileswrite" rows="3" cols="60" autocomplete="off">{{.Form.FilesWrite}}</textarea>
+</div>{{end}}
+</section>
 {{end}}
 
-<h2>Permissions</h2>
-<label><input type="radio" name="permmode" value="default"{{if eq .Form.PermMode "default"}} checked{{end}}> use the provider's default</label><br>
-<label><input type="radio" name="permmode" value="custom"{{if eq .Form.PermMode "custom"}} checked{{end}}> choose explicitly</label>
-{{range .Permissions}}<br><label><input type="checkbox" name="perm" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label>
-{{end}}
+<section class="section" aria-labelledby="permissions-heading">
+<h2 id="permissions-heading">Permissions</h2>
+<fieldset class="field">
+<legend>Permission mode</legend>
+<div class="choice"><input id="permmode-default" type="radio" name="permmode" value="default"{{if eq .Form.PermMode "default"}} checked{{end}}> <label for="permmode-default">use the provider's default</label></div>
+<div class="choice"><input id="permmode-custom" type="radio" name="permmode" value="custom"{{if eq .Form.PermMode "custom"}} checked{{end}}> <label for="permmode-custom">choose explicitly</label></div>
+</fieldset>
+{{if .Permissions}}<fieldset class="field">
+<legend>Permissions</legend>
+{{range $i, $p := .Permissions}}<div class="choice"><input id="perm-{{$i}}" type="checkbox" name="perm" value="{{$p.Value}}"{{if $p.Selected}} checked{{end}}> <label for="perm-{{$i}}">{{$p.Label}}</label></div>
+{{end}}</fieldset>{{end}}
+</section>
 
 {{if .ForwardChoices}}
-<h2>Payload credentials</h2>
+<section class="section" aria-labelledby="forward-heading">
+<h2 id="forward-heading">Payload credentials</h2>
 <p>{{.ForwardText}}</p>
-{{if .BindingNote}}<p>{{.BindingNote}}</p>{{end}}
-{{range .ForwardChoices}}<label><input type="checkbox" name="forward" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label><br>
-{{end}}
-{{end}}
-
-<h2>Tools</h2>
-<label><input type="radio" name="toolsmode" value="all"{{if eq .Form.ToolsMode "all"}} checked{{end}}> offer every tool the permissions allow</label><br>
-<label><input type="radio" name="toolsmode" value="selected"{{if eq .Form.ToolsMode "selected"}} checked{{end}}> offer only the tools ticked below</label>
-{{range .Tools}}<br><label><input type="checkbox" name="tool" value="{{.ID}}"{{if .Selected}} checked{{end}}> {{.ID}} ({{.Effect}})</label>
+{{if .BindingNote}}<p class="notice" role="status">{{.BindingNote}}</p>{{end}}
+<fieldset class="field">
+<legend>Released payload credentials</legend>
+{{range $i, $c := .ForwardChoices}}<div class="choice"><input id="forward-{{$i}}" type="checkbox" name="forward" value="{{$c.Value}}"{{if $c.Selected}} checked{{end}}> <label for="forward-{{$i}}">{{$c.Label}}</label></div>
+{{end}}</fieldset>
+</section>
 {{end}}
 
-<p><button type="submit">Review</button></p>
+<section class="section" aria-labelledby="tools-heading">
+<h2 id="tools-heading">Tools</h2>
+<fieldset class="field">
+<legend>Tool mode</legend>
+<div class="choice"><input id="toolsmode-all" type="radio" name="toolsmode" value="all"{{if eq .Form.ToolsMode "all"}} checked{{end}}> <label for="toolsmode-all">offer every tool the permissions allow</label></div>
+<div class="choice"><input id="toolsmode-selected" type="radio" name="toolsmode" value="selected"{{if eq .Form.ToolsMode "selected"}} checked{{end}}> <label for="toolsmode-selected">offer only the tools ticked below</label></div>
+</fieldset>
+{{if .Tools}}<fieldset class="field">
+<legend>Tools</legend>
+{{range $i, $t := .Tools}}<div class="choice"><input id="tool-{{$i}}" type="checkbox" name="tool" value="{{$t.ID}}"{{if $t.Selected}} checked{{end}}> <label for="tool-{{$i}}">{{$t.ID}} ({{$t.Effect}})</label></div>
+{{end}}</fieldset>{{end}}
+</section>
+
+<div class="actions"><button type="submit">Review</button></div>
 </form>
-</body>
-</html>
+{{template "layout-bottom"}}
 {{end}}
 
 {{define "connection-review"}}
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>qatlas web · set up a connection</title></head>
-<body>
-<p><a href="/connections/new?provider={{.Form.Provider}}">&larr; back</a></p>
-<h1>Set up a connection · step 3 of 3 · Review</h1>
-{{if .Error}}<p>{{.Error}}</p>{{end}}
+{{template "layout-top" (page "Set up a connection" "connections")}}
+<h1>Set up a connection</h1>
+<p class="step">Step 3 of 3 · Review</p>
+<p class="actions"><a href="/connections/new?provider={{.Form.Provider}}">Back to the settings</a></p>
+{{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
 <p>Nothing is written yet. This summary carries no secret.</p>
-{{if .BindingNote}}<p>{{.BindingNote}}</p>{{end}}
-<table border="1" cellpadding="4">
-{{range .Summary}}<tr><th>{{.Label}}</th><td>{{.Value}}</td></tr>
-{{end}}
+{{if .BindingNote}}<p class="notice" role="status">{{.BindingNote}}</p>{{end}}
+<section class="section" aria-labelledby="summary-heading">
+<h2 id="summary-heading">Summary</h2>
+<div class="table-wrap" role="region" aria-labelledby="summary-heading" tabindex="0">
+<table>
+<tbody>
+{{range .Summary}}<tr><th scope="row">{{.Label}}</th><td>{{.Value}}</td></tr>
+{{end}}</tbody>
 </table>
+</div>
+</section>
 
 <form method="post" action="/connections/new/review">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
@@ -771,77 +853,96 @@ Type a passphrase, twice, to encrypt it instead.</p>
 {{end}}
 
 {{if .NewCredential}}
-<h2>Secrets for the new credential {{.CredentialName}}</h2>
+<section class="section" aria-labelledby="newsecrets-heading">
+<h2 id="newsecrets-heading">Secrets for the new credential {{.CredentialName}}</h2>
 {{if eq .Storage "env"}}
 <p>This credential keeps its secrets in environment variables, already named on the previous page: nothing more to type here.</p>
 {{else}}
 {{range .Roles}}
-<fieldset>
+<fieldset class="field">
 <legend>{{.Name}}</legend>
-{{if .Description}}<p>{{.Description}}</p>{{end}}
-<p><label>Secret value <input type="password" name="secret_{{.Name}}" autocomplete="new-password"></label></p>
+{{if .Description}}<p class="hint">{{.Description}}</p>{{end}}
+<div class="field">
+<label for="secret-{{.Name}}">Secret value</label>
+<input id="secret-{{.Name}}" type="password" name="secret_{{.Name}}" autocomplete="new-password">
+</div>
 </fieldset>
 {{end}}
-<fieldset>
+<fieldset class="field">
 <legend>Vault passphrase</legend>
-<p>Only used if this credential's secrets go to the vault and this is the vault's very first secret.
+<p class="hint">Only used if this credential's secrets go to the vault and this is the vault's very first secret.
 Leave both empty and it stays unencrypted. Type a passphrase, twice, to encrypt it instead.</p>
-<p><label>New passphrase <input type="password" name="vault_passphrase" autocomplete="new-password"></label></p>
-<p><label>Confirm <input type="password" name="vault_passphrase_confirm" autocomplete="new-password"></label></p>
+<div class="field">
+<label for="vault-passphrase">New passphrase</label>
+<input id="vault-passphrase" type="password" name="vault_passphrase" autocomplete="new-password">
+</div>
+<div class="field">
+<label for="vault-passphrase-confirm">Confirm</label>
+<input id="vault-passphrase-confirm" type="password" name="vault_passphrase_confirm" autocomplete="new-password">
+</div>
 </fieldset>
 {{end}}
+</section>
 {{end}}
 
-<button type="submit">Create connection</button>
+<div class="actions"><button type="submit">Create connection</button></div>
 </form>
-</body>
-</html>
+{{template "layout-bottom"}}
 {{end}}
 
 {{define "connection-result"}}
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><title>qatlas web · {{.Name}}</title></head>
-<body>
-<p><a href="/">&larr; overview</a></p>
+{{template "layout-top" (page .Name "connections")}}
 <h1>{{.Name}}</h1>
-{{if .Notice}}<p>{{.Notice}}</p>{{end}}
-{{if .Error}}<p>{{.Error}}</p>{{end}}
-<table border="1" cellpadding="4">
-<tr><th>Provider</th><td>{{.Provider}}</td></tr>
-<tr><th>Service</th><td>{{.Service}}</td></tr>
-<tr><th>Credential</th><td>{{.Credential}}</td></tr>
-<tr><th>Targets</th><td>{{.Targets}}</td></tr>
-<tr><th>Files</th><td>{{.Files}}</td></tr>
-<tr><th>Description</th><td>{{.Description}}</td></tr>
-<tr><th>Permissions</th><td>{{.Permissions}}</td></tr>
-<tr><th>Tools</th><td>{{.Tools}}</td></tr>
+{{if .Notice}}<p class="notice notice-ok" role="status">{{.Notice}}</p>{{end}}
+{{if .Error}}<p class="notice notice-error" role="alert">{{.Error}}</p>{{end}}
+<section class="section" aria-labelledby="details-heading">
+<h2 id="details-heading">Details</h2>
+<div class="table-wrap" role="region" aria-labelledby="details-heading" tabindex="0">
+<table>
+<tbody>
+<tr><th scope="row">Provider</th><td>{{.Provider}}</td></tr>
+<tr><th scope="row">Service</th><td>{{.Service}}</td></tr>
+<tr><th scope="row">Credential</th><td>{{.Credential}}</td></tr>
+<tr><th scope="row">Targets</th><td>{{.Targets}}</td></tr>
+<tr><th scope="row">Files</th><td>{{.Files}}</td></tr>
+<tr><th scope="row">Description</th><td>{{.Description}}</td></tr>
+<tr><th scope="row">Permissions</th><td>{{.Permissions}}</td></tr>
+<tr><th scope="row">Tools</th><td>{{.Tools}}</td></tr>
+</tbody>
 </table>
+</div>
+</section>
 
 {{if .ShowForward}}
-<h2>Payload credentials</h2>
+<section class="section" aria-labelledby="forward-heading">
+<h2 id="forward-heading">Payload credentials</h2>
 <p>{{.ForwardText}}</p>
-{{if .BindingNote}}<p>{{.BindingNote}}</p>{{end}}
+{{if .BindingNote}}<p class="notice" role="status">{{.BindingNote}}</p>{{end}}
 <p>Saving a changed list never approves it: a connection that was approved stays open until a person approves it.</p>
 <form method="post" action="/connections/{{.Name}}/forward">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
 <input type="hidden" name="cfgver" value="{{.CfgVer}}">
-{{range .ForwardChoices}}<label><input type="checkbox" name="forward" value="{{.Value}}"{{if .Selected}} checked{{end}}> {{.Label}}</label><br>
-{{end}}
-<button type="submit">Save released payload credentials</button>
+<fieldset class="field">
+<legend>Released payload credentials</legend>
+{{range $i, $c := .ForwardChoices}}<div class="choice"><input id="forward-{{$i}}" type="checkbox" name="forward" value="{{$c.Value}}"{{if $c.Selected}} checked{{end}}> <label for="forward-{{$i}}">{{$c.Label}}</label></div>
+{{end}}</fieldset>
+<div class="actions"><button type="submit">Save released payload credentials</button></div>
 </form>
+</section>
 {{end}}
 
-{{if .TestResult}}<p>{{.TestResult}}</p>{{end}}
+<section class="section" aria-labelledby="test-heading">
+<h2 id="test-heading">Test</h2>
+{{if .TestResult}}<p class="notice" role="status">{{.TestResult}}</p>{{end}}
 {{if .TesterAvailable}}
 <form method="post" action="/connections/{{.Name}}/test">
 <input type="hidden" name="csrf" value="{{.CSRF}}">
-<button type="submit">Test this connection</button>
+<div class="actions"><button type="submit">Test this connection</button></div>
 </form>
 {{else}}
-<p>Connection testing is not available for this run.</p>
+<p class="empty">Connection testing is not available for this run.</p>
 {{end}}
-</body>
-</html>
+</section>
+{{template "layout-bottom"}}
 {{end}}
 `
