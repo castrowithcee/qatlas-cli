@@ -189,8 +189,65 @@ func TestCouplingThenOverview(t *testing.T) {
 			t.Fatalf("header %s = %q, want %q", k, got, want)
 		}
 	}
-	if csp := overview.Header().Get("Content-Security-Policy"); !strings.Contains(csp, "default-src 'none'") {
-		t.Fatalf("missing strict CSP: %q", csp)
+	const wantCSP = "default-src 'none'; style-src 'self'; script-src 'none'; img-src 'none'; " +
+		"base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+	if csp := overview.Header().Get("Content-Security-Policy"); csp != wantCSP {
+		t.Fatalf("CSP = %q, want %q", csp, wantCSP)
+	}
+	body := overview.Body.String()
+	if !strings.Contains(body, `href="`+stylesheetPath+`"`) {
+		t.Fatalf("overview does not link the stylesheet: %s", body)
+	}
+	if strings.Contains(body, "<style") || strings.Contains(body, " style=") || strings.Contains(body, "<script") {
+		t.Fatalf("overview carries an inline style or script: %s", body)
+	}
+}
+
+func TestStylesheetServedToCoupledSession(t *testing.T) {
+	s, cookie, _ := coupledServer(t, nil, defaultTestAdminTimeout)
+
+	rec := s.request(t, http.MethodGet, stylesheetPath, s.addr, cookie, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("stylesheet status = %d, want 200", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "text/css; charset=utf-8" {
+		t.Fatalf("stylesheet Content-Type = %q", ct)
+	}
+	for k, want := range map[string]string{
+		"X-Content-Type-Options": "nosniff",
+		"Cache-Control":          "no-store",
+		"Referrer-Policy":        "no-referrer",
+	} {
+		if got := rec.Header().Get(k); got != want {
+			t.Fatalf("stylesheet header %s = %q, want %q", k, got, want)
+		}
+	}
+	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "style-src 'self'") {
+		t.Fatalf("stylesheet response lacks the CSP: %q", rec.Header().Get("Content-Security-Policy"))
+	}
+	if !strings.Contains(rec.Body.String(), "prefers-color-scheme: dark") {
+		t.Fatalf("stylesheet body is not the embedded stylesheet")
+	}
+	if strings.Contains(rec.Body.String(), "http://") || strings.Contains(rec.Body.String(), "https://") ||
+		strings.Contains(rec.Body.String(), "@import") || strings.Contains(rec.Body.String(), "url(") {
+		t.Fatalf("stylesheet references an external or additional resource")
+	}
+}
+
+func TestStylesheetRefusedWithoutSessionOrLocalBoundary(t *testing.T) {
+	s, cookie, _ := coupledServer(t, nil, defaultTestAdminTimeout)
+
+	if rec := s.request(t, http.MethodGet, stylesheetPath, s.addr, nil, nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("uncoupled stylesheet status = %d, want 403", rec.Code)
+	}
+	if rec := s.request(t, http.MethodGet, stylesheetPath, "evil.example:80", cookie, nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("foreign host stylesheet status = %d, want 403", rec.Code)
+	}
+	if rec := s.request(t, http.MethodGet, stylesheetPath, s.addr, cookie, map[string]string{"Origin": "http://evil.example"}); rec.Code != http.StatusForbidden {
+		t.Fatalf("foreign origin stylesheet status = %d, want 403", rec.Code)
+	}
+	if rec := s.request(t, http.MethodPost, stylesheetPath, s.addr, cookie, nil); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("POST stylesheet status = %d, want 405", rec.Code)
 	}
 }
 
@@ -284,8 +341,9 @@ func TestNoExternalAssetsInOverview(t *testing.T) {
 	redeem := s.request(t, http.MethodGet, link.RequestURI(), s.addr, nil, nil)
 	sessionCookie := redeem.Result().Cookies()[0]
 	overview := s.request(t, http.MethodGet, "/", s.addr, sessionCookie, nil)
-	body := overview.Body.String()
-	for _, forbidden := range []string{"<script", "<link", "http://", "https://cdn", "src=\""} {
+	// The one link allowed is the shared stylesheet on this server's own origin; anything else is external.
+	body := strings.Replace(overview.Body.String(), `<link rel="stylesheet" href="`+stylesheetPath+`">`, "", 1)
+	for _, forbidden := range []string{"<script", "<link", "<style", " style=", "http://", "https://cdn", "src=\""} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("overview body must ship no external or scripted asset, found %q in: %s", forbidden, body)
 		}
