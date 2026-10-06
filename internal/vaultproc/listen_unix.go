@@ -70,14 +70,6 @@ func Listen(path string) (net.Listener, error) {
 	return &lockedListener{UnixListener: listener, lock: lock, own: own, path: path}, nil
 }
 
-// nextSuffix names the socket a successor listens on beside the vault socket until the handover moves it
-// onto the vault socket; with ".lock" appended, it names the successor's lock.
-const nextSuffix = ".next"
-
-// NextPath returns the path the successor of the vault process at socket listens on until the handover
-// moves its socket, and its lock beside it, onto socket.
-func NextPath(socket string) string { return socket + nextSuffix }
-
 // listenLocked replaces a dead socket of this user and listens at path. The caller holds the lock.
 func listenLocked(path string) (*net.UnixListener, error) {
 	info, err := os.Lstat(path)

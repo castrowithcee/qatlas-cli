@@ -71,9 +71,10 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n" +
 			"'vault handover' shows or sets whether 'qatlas update' hands an unlocked vault over to the new\n" +
 			"program or locks it.\n\n" +
-			"On Linux and macOS 'vault unlock' hands the unlocked vault to a vault process that holds it open\n" +
-			"until it is idle for vault.idle_timeout (12h unless the configuration says otherwise), 'vault\n" +
-			"lock' ends it, or the machine restarts; elsewhere unlocking only lasts for the current process.\n" +
+			"On Linux, macOS, and Windows 'vault unlock' hands the unlocked vault to a vault process that holds\n" +
+			"it open until it is idle for vault.idle_timeout (12h unless the configuration says otherwise),\n" +
+			"'vault lock' ends it, or the machine restarts; elsewhere unlocking only lasts for the current\n" +
+			"process. On Windows it guards its memory less strictly than on Linux; see 'qatlas vault unlock'.\n" +
 			"ctrl+l in 'qatlas tui' unlocks and locks it the same way. Every later\n" +
 			"command and the MCP broker, one started before included, read their secrets from that process\n" +
 			"without asking for anything. 'credential set', 'credential delete', and 'vault migrate' hand it\n" +
@@ -113,14 +114,19 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		Use:   "unlock",
 		Short: "Unlock the vault, merge its pending entries, and keep it open in a vault process",
 		Long: "Asks for the vault's passphrase on the terminal and, once it opens the vault, merges every\n" +
-			"entry that was queued in pending while it was locked. On Linux and macOS it then starts a vault\n" +
-			"process that holds the unlocked vault in memory, detached from the terminal, so it outlives the\n" +
-			"session that started it; it locks itself after vault.idle_timeout without a read, on 'qatlas vault\n" +
-			"lock', or when the machine restarts. A vault process that is already running is reported, not\n" +
-			"started a second time, and nothing is asked. Where systemd-logind would end the process at logout\n" +
-			"or remove its socket, a warning names the setting, such as 'loginctl enable-linger'. On other\n" +
-			"platforms the vault stays unlocked only for this process. Run against a vault that is not\n" +
-			"encrypted and locked, it asks for nothing and just reports the vault's status.",
+			"entry that was queued in pending while it was locked. On Linux, macOS, and Windows it then starts a\n" +
+			"vault process that holds the unlocked vault in memory, detached from the terminal, so it outlives\n" +
+			"the session that started it; it locks itself after vault.idle_timeout without a read, on 'qatlas\n" +
+			"vault lock', or when the machine restarts. A vault process that is already running is reported,\n" +
+			"not started a second time, and nothing is asked. Where systemd-logind would end the process at\n" +
+			"logout or remove its socket, a warning names the setting, such as 'loginctl enable-linger'.\n\n" +
+			"On Windows the process listens on a named pipe only this user can open, has no console, so closing\n" +
+			"the terminal, Windows Terminal or the console window alike, leaves it running, and ends at logout or\n" +
+			"restart at the latest. It keeps other processes of this user from reading its memory, but less\n" +
+			"strictly than on Linux: a process of this user that takes over one of its threads, or that runs\n" +
+			"elevated with the debug privilege, still can. On other platforms the vault stays unlocked only for\n" +
+			"this process. Run against a vault that is not encrypted and locked, it asks for nothing and just\n" +
+			"reports the vault's status.",
 		Args: noArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
 			return runVaultUnlock(c, opts, reg)

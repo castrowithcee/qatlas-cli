@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build linux || darwin || windows
 
 package main
 
@@ -11,7 +11,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -107,7 +106,7 @@ defaults:
 	t.Cleanup(func() {
 		_, _, _ = c.run(t, "vault", "lock")
 		if processID != 0 {
-			_ = syscall.Kill(processID, syscall.SIGKILL)
+			killProcess(processID)
 		}
 	})
 
@@ -216,7 +215,7 @@ defaults:
 	if code, stdout, stderr := c.run(t, "vault", "lock"); code != 0 || !strings.Contains(stdout, "the vault is locked") {
 		t.Fatalf("lock: exit %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
-	for deadline := time.Now().Add(5 * time.Second); syscall.Kill(processID, 0) == nil; {
+	for deadline := time.Now().Add(5 * time.Second); processAlive(processID); {
 		if time.Now().After(deadline) {
 			t.Fatalf("the vault process %d did not end when it was locked", processID)
 		}

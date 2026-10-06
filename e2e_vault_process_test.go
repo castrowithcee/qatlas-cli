@@ -1,4 +1,4 @@
-//go:build linux || darwin
+//go:build linux || darwin || windows
 
 package main
 
@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,9 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
 
@@ -93,7 +90,7 @@ defaults:
 	}
 
 	// The socket path must stay within what a socket address holds, which a test's own temporary
-	// directory does not promise.
+	// directory does not promise. Windows, whose vault pipe lives in no directory, ignores it.
 	runtimeDir, err := os.MkdirTemp("", "qv")
 	if err != nil {
 		t.Fatal(err)
@@ -115,9 +112,9 @@ defaults:
 		if processID == 0 {
 			return
 		}
-		for deadline := time.Now().Add(5 * time.Second); syscall.Kill(processID, 0) == nil; {
+		for deadline := time.Now().Add(5 * time.Second); processAlive(processID); {
 			if time.Now().After(deadline) {
-				_ = syscall.Kill(processID, syscall.SIGKILL)
+				killProcess(processID)
 				t.Errorf("the vault process %d did not end when it was locked", processID)
 				return
 			}
@@ -400,66 +397,4 @@ func (b *broker) stop(t *testing.T) {
 	if err := b.cmd.Wait(); err != nil {
 		t.Errorf("the broker ended with %v", err)
 	}
-}
-
-// runAtTerminal runs the binary with a pseudo-terminal as its controlling terminal and standard streams,
-// types input once the passphrase prompt appeared, and returns everything it wrote there and its exit code.
-func runAtTerminal(t *testing.T, c *runner, input string, args ...string) (string, int) {
-	t.Helper()
-	master, slave := openPTY(t)
-	defer master.Close()
-	cmd := exec.Command(c.bin, args...)
-	cmd.Env = c.env
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = slave, slave, slave
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true, Ctty: 0}
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("starting %v: %v", args, err)
-	}
-	_ = slave.Close()
-
-	var mu sync.Mutex
-	var out strings.Builder
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		buf := make([]byte, 4096)
-		for {
-			n, err := master.Read(buf)
-			mu.Lock()
-			out.Write(buf[:n])
-			mu.Unlock()
-			if err != nil {
-				// EIO once the last process holding the terminal ended.
-				return
-			}
-		}
-	}()
-	text := func() string { mu.Lock(); defer mu.Unlock(); return out.String() }
-
-	// The prompt is written before the echo is switched off, so typing waits for both: input typed in
-	// between would be echoed back and look like a leaked passphrase.
-	for deadline := time.Now().Add(10 * time.Second); !strings.Contains(text(), "passphrase: ") || !echoOff(master); {
-		if time.Now().After(deadline) {
-			_ = cmd.Process.Kill()
-			t.Fatalf("no passphrase prompt with echo off appeared: %q", text())
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if _, err := io.WriteString(master, input); err != nil {
-		t.Fatalf("typing at the terminal: %v", err)
-	}
-	err := cmd.Wait()
-	code := 0
-	var exit *exec.ExitError
-	if errors.As(err, &exit) {
-		code = exit.ExitCode()
-	} else if err != nil {
-		t.Fatalf("running %v: %v", args, err)
-	}
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-	}
-	c.seen.WriteString(text())
-	return text(), code
 }
