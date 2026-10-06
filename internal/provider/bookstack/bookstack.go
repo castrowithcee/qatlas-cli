@@ -259,6 +259,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(booksGet), Handler: capability.Handler(invokeBooksGet)},
 		capability.Operation{Descriptor: withGroup(chaptersList), Handler: capability.Handler(invokeChaptersList)},
 		capability.Operation{Descriptor: withGroup(chaptersGet), Handler: capability.Handler(invokeChaptersGet)},
+		capability.Operation{Descriptor: withGroup(booksCreate), Handler: capability.Handler(invokeBooksCreate)},
+		capability.Operation{Descriptor: withGroup(booksUpdate), Handler: capability.Handler(invokeBooksUpdate)},
+		capability.Operation{Descriptor: withGroup(chaptersCreate), Handler: capability.Handler(invokeChaptersCreate)},
+		capability.Operation{Descriptor: withGroup(chaptersUpdate), Handler: capability.Handler(invokeChaptersUpdate)},
 	)
 }
 
@@ -339,16 +343,8 @@ func (m pageMutation) validate() error {
 		return invalidRequest("name exceeds 255 characters")
 	}
 	if m.Tags != nil {
-		if len(*m.Tags) > maxPageTags {
-			return invalidRequest("tags holds more than 50 entries")
-		}
-		for _, tag := range *m.Tags {
-			if tag.Name == "" {
-				return invalidRequest("a tag needs a name")
-			}
-			if utf8.RuneCountInString(tag.Name) > maxTagTextChars || utf8.RuneCountInString(tag.Value) > maxTagTextChars {
-				return invalidRequest("a tag name or value exceeds 255 characters")
-			}
+		if err := validateTags(*m.Tags); err != nil {
+			return err
 		}
 	}
 	if m.Priority != nil && *m.Priority < 0 {
@@ -356,6 +352,22 @@ func (m pageMutation) validate() error {
 	}
 	if m.Changelog != "" && utf8.RuneCountInString(m.Changelog) > maxChangelogChars {
 		return invalidRequest("changelog exceeds 180 characters")
+	}
+	return nil
+}
+
+// validateTags applies the limits of a tag list.
+func validateTags(tags []tagJSON) error {
+	if len(tags) > maxPageTags {
+		return invalidRequest("tags holds more than 50 entries")
+	}
+	for _, tag := range tags {
+		if tag.Name == "" {
+			return invalidRequest("a tag needs a name")
+		}
+		if utf8.RuneCountInString(tag.Name) > maxTagTextChars || utf8.RuneCountInString(tag.Value) > maxTagTextChars {
+			return invalidRequest("a tag name or value exceeds 255 characters")
+		}
 	}
 	return nil
 }

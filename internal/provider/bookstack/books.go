@@ -203,6 +203,7 @@ type chapterJSON struct {
 	UpdatedBy         *userJSON   `json:"updated_by"`
 	OwnedBy           *userJSON   `json:"owned_by"`
 	DefaultTemplateID int64       `json:"default_template_id"`
+	Priority          int64       `json:"priority"`
 	Tags              []tagJSON   `json:"tags"`
 	Pages             []entryJSON `json:"pages"`
 }
