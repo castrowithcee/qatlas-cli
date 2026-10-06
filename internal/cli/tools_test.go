@@ -183,7 +183,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// provider none. An unconfigured namespace stays visible with zero. Every row names the provider
 		// first, then its description and the note the configuration keeps, which is empty where there is
 		// none, then the counts of tools, usable connections, and configured connections.
-		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,6,1,1\n",
+		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,10,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
 		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", ",\"\",3,0,0\n",
 		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",28,0,0\n", ",\"\",6,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n", ",\"\",2,0,0\n",
@@ -285,7 +285,11 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 	// The connection is named once; both tools are offered by it, so no row repeats it. The entries share
 	// their columns, so the listing stays a table with one row per tool.
 	if want := "connections[1]: wiki\n" +
-		"tools[3]{id,title,effect,requires}:\n" +
+		"tools[7]{id,title,effect,requires}:\n" +
+		"  bookstack.books.get,Get a BookStack book,read,id\n" +
+		"  bookstack.books.list,List BookStack books,read,\"\"\n" +
+		"  bookstack.chapters.get,Get a BookStack chapter,read,id\n" +
+		"  bookstack.chapters.list,List BookStack chapters,read,\"\"\n" +
 		"  bookstack.content.search,Search BookStack content,read,query\n" +
 		"  bookstack.pages.get,Get a BookStack page,read,id\n" +
 		"  bookstack.pages.list,List BookStack pages,read,\"\"\n"; stdout != want {
@@ -326,7 +330,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Fatalf("exit=%d stderr=%q", code, stderr)
 		}
 		for _, want := range []string{
-			"connections[1]: wiki\ntools[6]{id,title,effect,requires,confirm,reason}:\n",
+			"connections[1]: wiki\ntools[10]{id,title,effect,requires,confirm,reason}:\n",
 			`  bookstack.pages.create,Create a BookStack page,create,name; markdown,true,effect-not-permitted` + "\n",
 			`  bookstack.pages.delete,Delete a BookStack page,delete,id,true,effect-not-permitted` + "\n",
 			`  bookstack.pages.get,Get a BookStack page,read,id,false,""` + "\n",
@@ -374,7 +378,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		args []string
 		want []string
 	}{
-		{"namespace", []string{"bookstack"}, []string{"bookstack.content.search", "bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update"}},
+		{"namespace", []string{"bookstack"}, []string{"bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.content.search", "bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update"}},
 		{"namespace telegram", []string{"telegram"}, []string{"telegram.messages.delete", "telegram.messages.edit", "telegram.messages.send"}},
 		{"namespace lexware", []string{"lexware"}, []string{"lexware.invoices.create", "lexware.invoices.get", "lexware.invoices.list"}},
 		{"namespace twentycrm", []string{"twentycrm"}, []string{
@@ -464,8 +468,8 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		{"namespace nextcloud", []string{"nextcloud"}, []string{
 			"nextcloud.files.create", "nextcloud.files.delete", "nextcloud.files.get", "nextcloud.files.list", "nextcloud.files.stat", "nextcloud.files.update",
 		}},
-		{"query", []string{"--query", "pages"}, []string{"bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.content.search"}},
-		{"namespace and query", []string{"bookstack", "--query", "list"}, []string{"bookstack.pages.list"}},
+		{"query", []string{"--query", "pages"}, []string{"bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.books.get", "bookstack.chapters.get", "bookstack.content.search"}},
+		{"namespace and query", []string{"bookstack", "--query", "list"}, []string{"bookstack.books.list", "bookstack.chapters.list", "bookstack.pages.list", "bookstack.chapters.get"}},
 		{"query without a match", []string{"--query", "absent"}, []string{}},
 	}
 	// --all filters the complete catalog, so namespace and query select every tool they match.
@@ -489,15 +493,15 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		args []string
 		want []string
 	}{
-		{"offered by namespace", []string{"bookstack"}, []string{"bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}},
-		{"offered by query", []string{"--query", "pages"}, []string{"bookstack.pages.get", "bookstack.pages.list", "bookstack.content.search"}},
+		{"offered by namespace", []string{"bookstack"}, []string{"bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}},
+		{"offered by query", []string{"--query", "pages"}, []string{"bookstack.pages.get", "bookstack.pages.list", "bookstack.books.get", "bookstack.chapters.get", "bookstack.content.search"}},
 		{"offered by a connection", []string{"telegram", "--connection", "alerts"}, []string{"telegram.messages.send"}},
 		{"offered by another provider's connection", []string{"--query", "pages", "--connection", "alerts"}, []string{}},
 		// A query also finds a tool by the description and the note of its provider and by the description
 		// of a connection that offers it.
 		{"offered by the provider description", []string{"--query", "instant"}, []string{"telegram.messages.send"}},
-		{"offered by the provider note", []string{"--query", "Handbook"}, []string{"bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}},
-		{"offered by a connection description", []string{"--query", "read-only account"}, []string{"bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}},
+		{"offered by the provider note", []string{"--query", "Handbook"}, []string{"bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}},
+		{"offered by a connection description", []string{"--query", "read-only account"}, []string{"bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			args := append([]string{"tools"}, tt.args...)

@@ -126,7 +126,8 @@ func TestAConnectionWithoutToolsIsSavedWithoutTools(t *testing.T) {
 		t.Fatalf("save failed: %s", m.fail)
 	}
 	if got := savedTools(t, path, reg, "fresh"); !reflect.DeepEqual(got,
-		[]string{"bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}) {
+		[]string{"bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list",
+			"bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list"}) {
 		t.Fatalf("a new connection was saved with tools %#v, want the recommended read tools", got)
 	}
 }
@@ -151,8 +152,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 		t.Fatalf("space on the tool list opened screen %v, want the picker", m.screen)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"ticked: 0 of 6", "[ ] bookstack.pages.list  read",
-		"[ ] bookstack.pages.delete  delete  (listed only)  (not permitted)"} {
+	for _, want := range []string{"0/10 ticked", "Content (10)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("picker lacks %q:\n%s", want, view)
 		}
@@ -167,7 +167,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 		t.Fatalf("esc kept the ticks: %q", got)
 	}
 	press(t, m, "/")
-	typeText(t, m, "get")
+	typeText(t, m, "pages.get")
 	press(t, m, " ", "enter")
 	if got := m.fieldValue(toolListLabel); got != "bookstack.pages.get" {
 		t.Fatalf("tool list = %q, want bookstack.pages.get", got)
@@ -185,8 +185,9 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 		t.Fatalf("a listed connection opens in mode %q", got)
 	}
 	focusField(t, m, toolListLabel)
-	press(t, m, " ", " ", "enter")
-	if !strings.Contains(screenOf(m), "none of 6 ticked: no tool is offered") {
+	// The grouped picker starts on its all-groups row: the first space ticks everything, the second clears it.
+	press(t, m, " ", " ", " ", "enter")
+	if !strings.Contains(screenOf(m), "none of 10 ticked: no tool is offered") {
 		t.Fatalf("an empty selection does not say that it closes the route:\n%s", screenOf(m))
 	}
 	pump(t, m, "f2")
