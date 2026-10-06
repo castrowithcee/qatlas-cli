@@ -419,8 +419,8 @@ defaults:
 		if stdout != "" {
 			t.Errorf("stdout = %q, want empty", stdout)
 		}
-		if !strings.Contains(stderr, redact.Marker) {
-			t.Errorf("stderr = %q, want the credential replaced by %s", stderr, redact.Marker)
+		if !strings.Contains(stderr, "HTTP 500") || strings.Contains(stderr, canaryPrimarySecret) {
+			t.Errorf("stderr = %q, want the status without provider text", stderr)
 		}
 	})
 
@@ -468,7 +468,7 @@ defaults:
 			{"unknown tool", []string{"describe", "absent.pages.get"}, "", 2, "unknown-operation", ""},
 			{"unknown namespace", []string{"tools", "absent"}, "", 2, "usage", ""},
 			{"unknown tool verb", []string{"describe", "show", "bookstack.pages.list"}, "", 2, "usage", "qatlas describe <tool-id> [flags]"},
-			{"missing page", []string{"invoke", "bookstack.pages.get"}, `{"id":99}`, 1, "provider-error", ""},
+			{"missing page", []string{"invoke", "bookstack.pages.get"}, `{"id":99}`, 1, "not-found", ""},
 		}
 
 		for _, tt := range tests {
@@ -1236,11 +1236,10 @@ defaults:
 			t.Errorf("stdout = %q, want the page", stdout)
 		}
 
-		// The same secret, handed back by the provider: the vault delivered it, and the redactor still
-		// has to keep it out of the message.
+		// The same secret, handed back by the provider: provider text never reaches the message.
 		_, _, stderr = c.runInput(t, `{"id":`+echoPageID+`}`, "invoke", "bookstack.pages.get")
-		if !strings.Contains(stderr, redact.Marker) {
-			t.Errorf("stderr = %q, want the credential replaced by %s", stderr, redact.Marker)
+		if strings.Contains(stderr, storedID) || strings.Contains(stderr, storedSecret) {
+			t.Errorf("stderr = %q leaks the credential", stderr)
 		}
 	})
 

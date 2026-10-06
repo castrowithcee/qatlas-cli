@@ -395,7 +395,7 @@ func TestBookStackInvokeProviderFailures(t *testing.T) {
 		})
 	}
 
-	t.Run("an echoed credential is redacted", func(t *testing.T) {
+	t.Run("an echoed credential never reaches the error", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = fmt.Fprintf(w, `{"error":{"message":%q}}`, r.Header.Get("Authorization"))
@@ -412,8 +412,8 @@ func TestBookStackInvokeProviderFailures(t *testing.T) {
 				t.Errorf("stderr leaks %q: %s", canary, stderr)
 			}
 		}
-		if !strings.Contains(stderr, redact.Marker) {
-			t.Errorf("stderr = %q, want the redaction marker", stderr)
+		if !strings.Contains(stderr, "HTTP 500") {
+			t.Errorf("stderr = %q, want the status", stderr)
 		}
 	})
 }
@@ -488,12 +488,11 @@ func TestBookStackInvokeRedactsSuccessfulPayloads(t *testing.T) {
 }
 
 // A refused credential names how to check or renew it, in the same words on the command line and over MCP,
-// whether the provider said 401 or, as BookStack does for a token without API access, 403. The secret the
-// request carried never appears, even where the provider echoes it.
+// when the provider said 401. The secret the request carried never appears, even where the provider echoes it.
 func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 	const step = "; check or renew the credential of this connection with " +
 		"'qatlas credential set <credential> <role>' or in 'qatlas tui'"
-	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+	for _, status := range []int{http.StatusUnauthorized} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(status)
@@ -537,4 +536,85 @@ func TestBookStackAuthNamesTheNextStepOverCLIAndMCP(t *testing.T) {
 			}
 		})
 	}
+}
+
+// bookstackTargetsConfig is bookstackConfig with a targets list on the connection.
+func bookstackTargetsConfig(t *testing.T, baseURL string, targets ...string) string {
+	t.Helper()
+	t.Setenv("QATLAS_CONFIG", "")
+	t.Setenv("QATLAS_CLI_HOME", "")
+	t.Setenv("TEST_TOKEN_ID", canaryID)
+	t.Setenv("TEST_TOKEN_SECRET", canarySecret)
+	var list strings.Builder
+	for _, target := range targets {
+		fmt.Fprintf(&list, "      - %q\n", target)
+	}
+	return writeConfig(t, fmt.Sprintf(`
+version: 1
+services:
+  wiki:
+    provider: bookstack
+    base_url: %s
+credentials:
+  reader:
+    type: env
+    values:
+      token-id: TEST_TOKEN_ID
+      token-secret: TEST_TOKEN_SECRET
+connections:
+  wiki:
+    service: wiki
+    credential: reader
+    targets:
+%sdefaults: {}
+`, baseURL, list.String()))
+}
+
+// A connection bound to books enforces the binding through the shared invoke path.
+func TestBookStackBookTargets(t *testing.T) {
+	server := pagesServer(t)
+
+	t.Run("several books need a book_id", func(t *testing.T) {
+		cfg := bookstackTargetsConfig(t, server.URL, "book/7", "book/9")
+		code, stdout, stderr := runInvoke(t, "", "invoke", "bookstack.pages.list", "--config", cfg)
+		if code == exitOK || stdout != "" || !strings.Contains(stderr, "invalid-request") ||
+			!strings.Contains(stderr, "book_id is required for a connection bound to several books") {
+			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+	})
+
+	t.Run("a bound book lists its pages", func(t *testing.T) {
+		cfg := bookstackTargetsConfig(t, server.URL, "book/7", "book/9")
+		code, stdout, stderr := runInvoke(t, `{"book_id":7}`, "invoke", "bookstack.pages.list", "--config", cfg)
+		if code != exitOK || stderr != "" {
+			t.Fatalf("exit=%d stderr=%q", code, stderr)
+		}
+		if _, _, _, result := invokeResult(t, stdout); !strings.Contains(string(result), "Alpha") {
+			t.Errorf("result = %s", result)
+		}
+	})
+
+	t.Run("a foreign book is refused without naming it", func(t *testing.T) {
+		cfg := bookstackTargetsConfig(t, server.URL, "book/7")
+		code, stdout, stderr := runInvoke(t, `{"book_id":8}`, "invoke", "bookstack.pages.list", "--config", cfg)
+		if code == exitOK || stdout != "" || !strings.Contains(stderr, "invalid-request") || strings.Contains(stderr, "8") {
+			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+	})
+
+	t.Run("a foreign page is refused", func(t *testing.T) {
+		cfg := bookstackTargetsConfig(t, server.URL, "book/8")
+		code, stdout, stderr := runInvoke(t, `{"id":1}`, "invoke", "bookstack.pages.get", "--config", cfg)
+		if code == exitOK || stdout != "" || !strings.Contains(stderr, "outside the books") {
+			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+	})
+
+	t.Run("an invalid target makes the connection invalid", func(t *testing.T) {
+		cfg := bookstackTargetsConfig(t, server.URL, "book/07")
+		code, stdout, stderr := runInvoke(t, "", "invoke", "bookstack.pages.list", "--config", cfg)
+		if code == exitOK || stdout != "" || stderr == "" || strings.Contains(stderr, "book/07") {
+			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
+		}
+	})
 }

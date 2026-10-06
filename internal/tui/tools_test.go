@@ -152,12 +152,12 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	}
 	view := screenOf(m)
 	for _, want := range []string{"ticked: 0 of 5", "[ ] bookstack.pages.list  read",
-		"[ ] bookstack.pages.delete  delete  (not permitted)"} {
+		"[ ] bookstack.pages.delete  delete  (listed only)  (not permitted)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("picker lacks %q:\n%s", want, view)
 		}
 	}
-	typeText(t, m, "list")
+	typeText(t, m, "pages.list")
 	press(t, m, " ")
 	if !strings.Contains(screenOf(m), "[x] bookstack.pages.list") {
 		t.Fatalf("space did not tick the shown tool:\n%s", screenOf(m))

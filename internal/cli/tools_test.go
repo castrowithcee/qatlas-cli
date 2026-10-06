@@ -550,7 +550,7 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 	}
 	if !strings.HasPrefix(toon, "tool:\n  id: bookstack.pages.list\n  version: 1\n  title: ") ||
 		!strings.Contains(toon, "\nconnections[1]{name,description}:\n") ||
-		!strings.Contains(toon, "  arguments[2]{name,type,required,form,limits,description}:\n") ||
+		!strings.Contains(toon, "  arguments[4]{name,type,required,form,limits,description}:\n") ||
 		!strings.Contains(toon, "  fields[7]{name,description}:\n") {
 		t.Errorf("TOON output does not name the tool first and carry both tables:\n%s", toon)
 	}
