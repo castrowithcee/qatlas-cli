@@ -224,6 +224,16 @@ required argument and the only way Make's `confirmed` flag is sent. The tool is 
 when a connection's `tools` list names it. The profile `org-admin` holds list, create, and update. Team names
 are untrusted data.
 
+## Organization master data
+
+`make.organization.update` (organization mode only) changes the bound organization's `name` (1 to 128 characters:
+letters, numbers, spaces, and `' - . ( ) * + , @ _ /`), `country_id`, or `timezone_id` with one
+`PATCH /organizations/{organizationId}` (`organizations:write`). The organization is always the connection's
+target; plan, license, and payment fields are not offered. The answer must report the bound organization,
+otherwise the result is uncertain. It needs its own confirmation, sends exactly one request, is never retried, and
+is in the `org-admin` profile. Inviting people and listing members with their organization role are not offered:
+the API reference documents no member list with organization roles and no fixed role IDs for the invitation.
+
 ## Pagination
 
 Both list tools take `offset` and `limit` (1 to 200; 50 when omitted) and answer `offset`, `count`, and
@@ -331,7 +341,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see "Data stores and data structures"), `team-variables:read` and `team-variables:write` (with `team-variables:read`) for the team variable tools, and `udts:read` for the data structure tools and the structure check of a store create or update, `teams:read` and `teams:write` (with `teams:read`) for the organization-mode team tools; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see "Data stores and data structures"), `team-variables:read` and `team-variables:write` (with `team-variables:read`) for the team variable tools, and `udts:read` for the data structure tools and the structure check of a store create or update, `teams:read` and `teams:write` (with `teams:read`) for the organization-mode team tools, `organizations:write` for `make.organization.update`; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |

@@ -46,7 +46,8 @@ func TestEveryTeamToolRefusesOrganizationModeBeforeSecretAndIO(t *testing.T) {
 	reg := registry(t)
 	checked := 0
 	for _, d := range reg.Provider(Provider) {
-		if strings.HasPrefix(d.ID, Provider+".teams.") || strings.HasPrefix(d.ID, Provider+".organizationvariables.") {
+		if strings.HasPrefix(d.ID, Provider+".teams.") || strings.HasPrefix(d.ID, Provider+".organizationvariables.") ||
+			d.ID == organizationUpdate.ID {
 			continue
 		}
 		_, handler, ok := reg.Lookup(d.ID)
