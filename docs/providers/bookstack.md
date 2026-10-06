@@ -9,8 +9,9 @@ updated: 2026-10-06
 
 # BookStack
 
-A connection selects one BookStack instance and one API token. It supports listing and reading pages
-(`read`), creating pages (`create`), changing title or Markdown (`update`), and deleting pages (`delete`).
+A connection selects one BookStack instance and one API token. It supports listing and reading pages and
+searching content (`read`), creating pages (`create`), changing title or Markdown (`update`), and deleting
+pages (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
 
@@ -20,9 +21,9 @@ cannot grant rights the token lacks. An optional `tools` list narrows a connecti
 for example `[bookstack.pages.get]` for a route that reads a known page but cannot list pages; it never
 admits an effect `permissions` excludes. Page content is treated as untrusted data. The terminal editor
 starts a new connection on the setup profile `read`, which ticks `[read]` and
-`[bookstack.pages.list, bookstack.pages.get]`. A profile is a visible starting selection, not a role: only the
-ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection
-never follows a profile.
+`[bookstack.pages.list, bookstack.pages.get, bookstack.content.search]`. A profile is a visible starting
+selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
+saving, and a saved connection never follows a profile.
 
 ## Credential and base URL
 
@@ -66,6 +67,29 @@ server that delivers more fails the call as `invalid-provider-response`.
 
 Limit of the binding: the proof read and the change are two requests. A page moved to another book between
 them, for example by another user, can still be changed once.
+
+## Search
+
+`bookstack.content.search` finds shelves, books, chapters, and pages with the BookStack search. Arguments:
+`query` (required, 1 to 1000 characters), at most one of `book_id` and `chapter_id`, `page` (from 1, default 1),
+and `count` (1 to 100, default 20). Without `book_id` and `chapter_id` the search covers the instance
+(`GET /api/search`); with `book_id` one book (`GET /api/search/book/{id}`); with `chapter_id` one chapter
+(`GET /api/search/chapter/{id}`). `query` is sent only as a URL-encoded query parameter of that endpoint;
+beside `page` and `count` no other parameter is sent. The
+[BookStack search syntax](https://www.bookstackapp.com/docs/user/searching/) (`{type:page}`, `[tag=value]`,
+`{created_by:me}`, and so on) is allowed because it only filters within the chosen endpoint.
+
+On a connection bound to books, `book_id` must be one of the books (checked before the secrets are read and
+before any request); `chapter_id` is bound through one proof read of the chapter. Without an argument, a
+connection bound to exactly one book searches that book; a connection bound to several books is refused
+locally as `invalid-request`. Every hit is also checked on the client: hits of other books, shelves, and hits
+without a book are dropped, so a page can hold fewer hits than `count`. A connection without targets can use
+all three endpoints.
+
+Each hit has `type`, `id`, `name`, `slug`, `book_id`, `chapter_id`, `url`, `tags` (at most 50 `name`/`value`
+pairs), `preview_name`, and `preview_content`. The previews are untrusted HTML, cut to 2000 characters; never
+render or run them. `total` is the number BookStack reports and is an estimate. Further provider fields are
+not passed on.
 
 ## Limits
 
