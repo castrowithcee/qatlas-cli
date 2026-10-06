@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes BookStack page operations, credentials, connection permissions, and safety boundaries.
+  Describes BookStack page, book, and chapter operations, credentials, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -10,8 +10,8 @@ updated: 2026-10-07
 # BookStack
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
-and chapters and searching content (`read`), creating pages (`create`), changing or moving pages
-(`update`), and deleting pages (`delete`).
+and chapters and searching content (`read`), creating pages, books, and chapters (`create`), changing or
+moving pages and changing books and chapters (`update`), and deleting pages (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
 
@@ -51,9 +51,10 @@ On a bound connection every tool stays inside the listed books and a refusal nev
 
 - `book_id` of `pages.create`, `pages.update` (move), and `pages.list` must be one of the books. It is
   checked before the secrets are read and before any request is sent.
-- `book_id` of `chapters.list` and the `id` of `books.get` follow the same rule.
+- `book_id` of `chapters.list` and `chapters.create`, the `id` of `books.get` and `books.update`, and the target
+  `book_id` of `chapters.update` follow the same rule.
 - A page identifier (`pages.get`, `pages.update`, `pages.delete`) or chapter identifier (`pages.create` and
-  `pages.list` with `chapter_id`, `chapters.get`) is bound to its book by one proof read
+  `pages.list` with `chapter_id`, `chapters.get`, `chapters.update`) is bound to its book by one proof read
   (`GET /api/pages/{id}` or `GET /api/chapters/{id}`) before the detail or the change follows. A move reads
   the page and the target chapter once each. For `pages.get`
   and `chapters.get` this read is the answer; no second request is sent. A page or chapter of another book is
@@ -95,6 +96,32 @@ content tree or page list holds at most 2000 entries in total; `truncated` is th
 strings to 1000. Descriptions are untrusted data, `description_html` is HTML that must never be rendered or
 run. `books.get` shows the `shelves` of the book (`id`, `name`, `slug`) only on a connection without
 targets, because shelves span the whole instance. Cover images are not passed on.
+
+## Writing books and chapters
+
+`books.create` and `books.update` take `name` (1 to 255 characters), at most one of `description` (plain text,
+at most 1900 characters) and `description_html` (at most 2000 characters), `tags`, and `default_template_id`.
+`chapters.create` and `chapters.update` take the same fields and `priority` (0 or more); `chapters.create`
+requires `book_id` and `name`, `chapters.update` requires only `id`. `books.update` and `chapters.update`
+need at least one field to change. A violation of these limits is refused locally as `invalid-request` before
+any secret is read and before any request. A description cannot be emptied through these tools. Cover
+images and deleting are not available.
+
+- `tags` replaces all existing tags; an empty list removes them. Omit `tags` to keep them.
+- `default_template_id` is the identifier of a template page. On `update`, `null` removes the default
+  template. BookStack validates that the page is a template the token may see.
+- `chapters.update` with `book_id` moves the chapter into that book. BookStack requires the permission to
+  delete the chapter in addition to the permission to update it. Without it the call fails as `permission`.
+
+On a bound connection `books.create` is refused locally as `invalid-request`, because a new book would lie
+outside the bound books. For the other three tools the book is checked before the secrets are read: the `id` of
+`books.update`, the `book_id` of `chapters.create`, and a target `book_id` of `chapters.update`. The chapter
+of `chapters.update` is proven by one read, and a `default_template_id` is proven by one read of that page: its
+book must be one of the bound books. A foreign target, chapter, or template page is refused without a change
+request and without naming it. A connection without targets sends no proof read.
+
+The tools are not part of any profile. All four require confirmation; the creating tools are not idempotent.
+Each change is sent once and never retried; the result shows the changed object without its content tree.
 
 ## Pages
 

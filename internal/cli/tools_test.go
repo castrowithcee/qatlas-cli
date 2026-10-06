@@ -183,7 +183,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// provider none. An unconfigured namespace stays visible with zero. Every row names the provider
 		// first, then its description and the note the configuration keeps, which is empty where there is
 		// none, then the counts of tools, usable connections, and configured connections.
-		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,10,1,1\n",
+		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,14,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
 		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", ",\"\",3,0,0\n",
 		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",28,0,0\n", ",\"\",6,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n", ",\"\",2,0,0\n",
@@ -330,7 +330,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Fatalf("exit=%d stderr=%q", code, stderr)
 		}
 		for _, want := range []string{
-			"connections[1]: wiki\ntools[10]{id,title,effect,requires,confirm,reason}:\n",
+			"connections[1]: wiki\ntools[14]{id,title,effect,requires,confirm,reason}:\n",
 			`  bookstack.pages.create,Create a BookStack page,create,name,true,effect-not-permitted` + "\n",
 			`  bookstack.pages.delete,Delete a BookStack page,delete,id,true,effect-not-permitted` + "\n",
 			`  bookstack.pages.get,Get a BookStack page,read,id,false,""` + "\n",
@@ -378,7 +378,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		args []string
 		want []string
 	}{
-		{"namespace", []string{"bookstack"}, []string{"bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.content.search", "bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update"}},
+		{"namespace", []string{"bookstack"}, []string{"bookstack.books.create", "bookstack.books.get", "bookstack.books.list", "bookstack.books.update", "bookstack.chapters.create", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.chapters.update", "bookstack.content.search", "bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update"}},
 		{"namespace telegram", []string{"telegram"}, []string{"telegram.messages.delete", "telegram.messages.edit", "telegram.messages.send"}},
 		{"namespace lexware", []string{"lexware"}, []string{"lexware.invoices.create", "lexware.invoices.get", "lexware.invoices.list"}},
 		{"namespace twentycrm", []string{"twentycrm"}, []string{
