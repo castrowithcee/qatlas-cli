@@ -9,9 +9,9 @@ updated: 2026-10-06
 
 # BookStack
 
-A connection selects one BookStack instance and one API token. It supports listing and reading pages and
-searching content (`read`), creating pages (`create`), changing title or Markdown (`update`), and deleting
-pages (`delete`).
+A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
+and chapters and searching content (`read`), creating pages (`create`), changing title or Markdown
+(`update`), and deleting pages (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
 
@@ -21,7 +21,8 @@ cannot grant rights the token lacks. An optional `tools` list narrows a connecti
 for example `[bookstack.pages.get]` for a route that reads a known page but cannot list pages; it never
 admits an effect `permissions` excludes. Page content is treated as untrusted data. The terminal editor
 starts a new connection on the setup profile `read`, which ticks `[read]` and
-`[bookstack.pages.list, bookstack.pages.get, bookstack.content.search]`. A profile is a visible starting
+`[bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list,
+bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get]`. A profile is a visible starting
 selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
 saving, and a saved connection never follows a profile.
 
@@ -50,10 +51,12 @@ On a bound connection every tool stays inside the listed books and a refusal nev
 
 - `book_id` of `pages.create` and `pages.list` must be one of the books. It is checked before the secrets
   are read and before any request is sent.
+- `book_id` of `chapters.list` and the `id` of `books.get` follow the same rule.
 - A page identifier (`pages.get`, `pages.update`, `pages.delete`) or chapter identifier (`pages.create` and
-  `pages.list` with `chapter_id`) is bound to its book by one proof read (`GET /api/pages/{id}` or
-  `GET /api/chapters/{id}`) before the detail or the change follows. For `pages.get` this read is the answer;
-  no second request is sent. A page or chapter of another book is refused as `invalid-request`.
+  `pages.list` with `chapter_id`, `chapters.get`) is bound to its book by one proof read
+  (`GET /api/pages/{id}` or `GET /api/chapters/{id}`) before the detail or the change follows. For `pages.get`
+  and `chapters.get` this read is the answer; no second request is sent. A page or chapter of another book is
+  refused as `invalid-request`.
 - A connection without targets sends no proof read.
 
 `bookstack.pages.list` takes the optional, mutually exclusive arguments `book_id` and `chapter_id`. On a bound
@@ -67,6 +70,35 @@ server that delivers more fails the call as `invalid-provider-response`.
 
 Limit of the binding: the proof read and the change are two requests. A page moved to another book between
 them, for example by another user, can still be changed once.
+
+## Books and chapters
+
+`bookstack.books.list` and `bookstack.chapters.list` take `limit` and `offset` and page through the instance
+in records of at most 500, sorted by `id`. `bookstack.books.get` and `bookstack.chapters.get` take an `id`.
+All four only read.
+
+On a bound connection `books.list` returns only the bound books: BookStack has no filter for it, so each row
+is checked on the client and `limit` and `offset` count the remaining rows. `chapters.list` takes an
+optional `book_id` and follows the rule of `pages.list`: it is required on a connection bound to several
+books ("book_id is required for a connection bound to several books") and implied when exactly one book is
+bound. Qatlas sends `filter[book_id]` as an optimization only and checks every row against its book. A
+filtered listing sends at most 200 requests; a server that delivers more fails the call as
+`invalid-provider-response`. A listing stops as soon as the instance returns no new record.
+
+`books.get` returns the metadata, `description` and `description_html`, `tags` (at most 50),
+`default_template_id` (0 when there is none), and `contents`: the chapters with their pages and the loose
+pages in book order, each entry with `type`, `id`, `name`, `slug`, `updated_at`, and for pages `chapter_id`,
+`draft`, and `template`. `chapters.get` returns the same metadata, `book_id`, `book_slug`, and `pages`. A
+content tree or page list holds at most 2000 entries in total; `truncated` is then `true`. `created_by`,
+`updated_by`, and `owned_by` show `id` and `name` only. Descriptions are cut to 20000 characters and other
+strings to 1000. Descriptions are untrusted data, `description_html` is HTML that must never be rendered or
+run. `books.get` shows the `shelves` of the book (`id`, `name`, `slug`) only on a connection without
+targets, because shelves span the whole instance. Cover images are not passed on.
+
+## Tool groups
+
+All BookStack tools belong to the group `content`: pages, search, books, and chapters. Tool lists and pickers
+show the group so that agents and people can find tools by subject.
 
 ## Search
 

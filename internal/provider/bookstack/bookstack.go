@@ -163,6 +163,7 @@ func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "BookStack", DefaultPermissions: []config.Permission{config.PermissionRead},
 		Description: "Self-hosted documentation platform for team knowledge",
+		Groups:      toolGroups,
 		SecretRoles: []config.SecretRole{
 			{Name: roleTokenID, Description: "BookStack token ID: the value labeled Token ID when you create an API token; it is not a name you choose"},
 			{Name: roleTokenSecret, Description: "BookStack token secret: the value labeled Token Secret when you create the same API token"},
@@ -180,9 +181,10 @@ func Register(reg *capability.Registry) error {
 			ValidateSet: validateSet,
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "Read pages", Recommended: true,
-			Description: "lists and reads pages and searches content; changes nothing in BookStack",
-			Tools:       []string{pagesList.ID, pagesGet.ID, contentSearch.ID},
+			ID: "read", Title: "Read content", Recommended: true,
+			Description: "lists and reads pages, books, and chapters and searches content; changes nothing in BookStack",
+			Tools: []string{pagesList.ID, pagesGet.ID, contentSearch.ID, booksList.ID, booksGet.ID,
+				chaptersList.ID, chaptersGet.ID},
 		}},
 	}, func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor) (provider.Class, error) {
@@ -195,12 +197,16 @@ func Register(reg *capability.Registry) error {
 		return err
 	}
 	return reg.Register(Provider,
-		capability.Operation{Descriptor: pagesList, Handler: capability.Handler(invokePagesList)},
-		capability.Operation{Descriptor: pagesGet, Handler: capability.Handler(invokePagesGet)},
-		capability.Operation{Descriptor: pagesCreate, Handler: capability.Handler(invokePagesCreate)},
-		capability.Operation{Descriptor: pagesUpdate, Handler: capability.Handler(invokePagesUpdate)},
-		capability.Operation{Descriptor: pagesDelete, Handler: capability.Handler(invokePagesDelete)},
-		capability.Operation{Descriptor: contentSearch, Handler: capability.Handler(invokeContentSearch)},
+		capability.Operation{Descriptor: withGroup(pagesList), Handler: capability.Handler(invokePagesList)},
+		capability.Operation{Descriptor: withGroup(pagesGet), Handler: capability.Handler(invokePagesGet)},
+		capability.Operation{Descriptor: withGroup(pagesCreate), Handler: capability.Handler(invokePagesCreate)},
+		capability.Operation{Descriptor: withGroup(pagesUpdate), Handler: capability.Handler(invokePagesUpdate)},
+		capability.Operation{Descriptor: withGroup(pagesDelete), Handler: capability.Handler(invokePagesDelete)},
+		capability.Operation{Descriptor: withGroup(contentSearch), Handler: capability.Handler(invokeContentSearch)},
+		capability.Operation{Descriptor: withGroup(booksList), Handler: capability.Handler(invokeBooksList)},
+		capability.Operation{Descriptor: withGroup(booksGet), Handler: capability.Handler(invokeBooksGet)},
+		capability.Operation{Descriptor: withGroup(chaptersList), Handler: capability.Handler(invokeChaptersList)},
+		capability.Operation{Descriptor: withGroup(chaptersGet), Handler: capability.Handler(invokeChaptersGet)},
 	)
 }
 
@@ -480,77 +486,116 @@ func (c *Client) ListPages(ctx context.Context, target listTarget, limit, offset
 	}
 	filtered := target.BookID != 0 || target.ChapterID != 0
 
-	columns := fieldNames(pagesList)
+	query := url.Values{}
+	if target.BookID != 0 {
+		query.Set("filter[book_id]", strconv.FormatInt(target.BookID, 10))
+	}
+	if target.ChapterID != 0 {
+		query.Set("filter[chapter_id]", strconv.FormatInt(target.ChapterID, 10))
+	}
+	rows, err := scanList(ctx, c, scanSpec[pageJSON]{
+		op: "list pages", path: "/api/pages", query: query, filtered: filtered, limit: limit, offset: offset,
+		narrow: "book_id or chapter_id", arguments: argNames(pagesList),
+		id: func(p pageJSON) int64 { return p.ID },
+		keep: func(p pageJSON) bool {
+			return !(target.BookID != 0 && p.BookID != target.BookID) &&
+				!(target.ChapterID != 0 && p.ChapterID != target.ChapterID)
+		},
+		row: listRow,
+	})
+	if err != nil {
+		return output.Collection{}, err
+	}
+	return output.Collection{Columns: fieldNames(pagesList), Rows: rows}, nil
+}
+
+// scanSpec describes one paginated list of a fixed endpoint: which rows belong to the caller and how a row
+// is shown. query carries the fixed filters; count, offset, and sort are set by scanList.
+type scanSpec[T any] struct {
+	op, path, narrow string
+	query            url.Values
+	filtered         bool
+	limit, offset    int
+	arguments        []string
+	id               func(T) int64
+	keep             func(T) bool
+	row              func(T) output.Row
+}
+
+// scanList pages through a list endpoint in records of at most 500. In filtered mode every row is checked
+// with keep and foreign rows are dropped, so limit and offset count the remaining rows and the scan is
+// bounded by maxScanRequests. An instance that ignores the offset or reports an endless total ends the scan
+// as soon as a request brings no new record.
+func scanList[T any](ctx context.Context, c *Client, spec scanSpec[T]) ([]output.Row, error) {
 	rows := make([]output.Row, 0, 32)
-	// An instance that ignores the offset would otherwise hand back the same records until the reported
-	// total is reached, which looks like a complete list but is not one.
 	seen := map[int64]bool{}
 	scanned := 0 // rows received in filtered mode, the offset sent to the server
 	skipped := 0 // matching rows skipped for the caller's offset in filtered mode
+	limit, offset := spec.limit, spec.offset
 
 	for requests := 0; ; requests++ {
-		if filtered && requests >= maxScanRequests {
-			return output.Collection{}, &provider.Error{Class: provider.ClassInvalidResponse, Op: "list pages",
-				Message: "the listing exceeds the scan limit; narrow it with book_id or chapter_id"}
+		if spec.filtered && requests >= maxScanRequests {
+			message := "the listing exceeds the scan limit"
+			if spec.narrow != "" {
+				message += "; narrow it with " + spec.narrow
+			}
+			return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: spec.op, Message: message}
 		}
 		count := maxCount
 		serverOffset := offset + len(rows)
-		if filtered {
+		if spec.filtered {
 			serverOffset = scanned
 		} else if limit > 0 && limit-len(rows) < count {
 			count = limit - len(rows)
 		}
 
 		query := url.Values{}
+		for key, values := range spec.query {
+			query[key] = values
+		}
 		query.Set("count", strconv.Itoa(count))
 		query.Set("offset", strconv.Itoa(serverOffset))
 		query.Set("sort", "+id")
-		if target.BookID != 0 {
-			query.Set("filter[book_id]", strconv.FormatInt(target.BookID, 10))
-		}
-		if target.ChapterID != 0 {
-			query.Set("filter[chapter_id]", strconv.FormatInt(target.ChapterID, 10))
-		}
 
-		var page listJSON
-		if err := c.get(ctx, "list pages", "/api/pages", query, &page, argNames(pagesList), provider.ClassPermission); err != nil {
-			return output.Collection{}, err
+		var page struct {
+			Data  []T `json:"data"`
+			Total int `json:"total"`
+		}
+		if err := c.get(ctx, spec.op, spec.path, query, &page, spec.arguments, provider.ClassPermission); err != nil {
+			return nil, err
 		}
 
 		added := 0
-		for _, p := range page.Data {
-			if seen[p.ID] {
+		for _, item := range page.Data {
+			if seen[spec.id(item)] {
 				continue
 			}
-			seen[p.ID] = true
+			seen[spec.id(item)] = true
 			added++
-			if (target.BookID != 0 && p.BookID != target.BookID) ||
-				(target.ChapterID != 0 && p.ChapterID != target.ChapterID) {
+			if !spec.keep(item) {
 				continue
 			}
-			if filtered && skipped < offset {
+			if spec.filtered && skipped < offset {
 				skipped++
 				continue
 			}
 			if limit > 0 && len(rows) >= limit {
 				break
 			}
-			rows = append(rows, listRow(p))
+			rows = append(rows, spec.row(item))
 		}
 		scanned += len(page.Data)
 
 		// No progress means the instance cannot deliver more, whatever its total claims.
 		reached := offset + len(rows)
-		if filtered {
+		if spec.filtered {
 			reached = scanned
 		}
-		done := added == 0 || (limit > 0 && len(rows) >= limit) || reached >= page.Total
-		if done {
+		if added == 0 || (limit > 0 && len(rows) >= limit) || reached >= page.Total {
 			break
 		}
 	}
-
-	return output.Collection{Columns: columns, Rows: rows}, nil
+	return rows, nil
 }
 
 // bookRef is the part of a page or chapter read as evidence of the book it belongs to.
