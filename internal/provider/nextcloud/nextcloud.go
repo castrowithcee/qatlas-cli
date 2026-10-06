@@ -53,6 +53,9 @@ const dataSensitivity = "nextcloud-files"
 // them, and the configured root folder follows the user ID.
 var filesRoot = []string{"remote.php", "dav", "files"}
 
+// uploadsRoot are the fixed path segments of the upload area for chunked uploads; the user ID follows them.
+var uploadsRoot = []string{"remote.php", "dav", "uploads"}
+
 // methodPropfind is the only HTTP method this adapter ever produces. A read of metadata needs nothing
 // else, and a server can therefore not receive a writing or content-delivering request through it.
 const methodPropfind = "PROPFIND"
@@ -92,9 +95,13 @@ const (
 	transferTimeout = 30 * time.Minute
 )
 
-// maxPathUploadBytes is the largest local file one single PUT carries. A larger file is refused until
-// chunked upload exists.
+// maxPathUploadBytes is the largest local file one single PUT carries. A larger file goes through the
+// chunked upload of Nextcloud; see chunked.go.
 var maxPathUploadBytes int64 = 64 << 20
+
+// uncertainFile is appended to the failure of a file write whose request may have reached Nextcloud: the
+// file may have been stored although no confirmation ever arrived. Qatlas never repeats such a request.
+const uncertainFile = "; the file may have been stored, stat the file before repeating"
 
 // pathPattern is the schema form of one path relative to the connection root: one or more segments
 // separated by a single slash, where no segment is empty, "." or "..", and no character is a backslash or
@@ -238,9 +245,11 @@ func uploadDescriptor(d capability.Descriptor, etag bool) capability.Descriptor 
 	action := strings.TrimPrefix(d.ID, Provider+".files.")
 	d.LocalFiles = config.LocalFilesRead
 	d.Description += "; the content comes from content_base64 up to 4 MiB or from local_path, a file in a directory " +
-		"the connection releases for reading, up to 64 MiB, which is then reported by metadata only"
+		"the connection releases for reading, which is then reported by metadata only; a file above 64 MiB is " +
+		"uploaded in chunks"
 	d.OutputSchema = json.RawMessage(`{"type":"object","properties":{"` + action + `d":{"type":"boolean"},"etag":{"type":"string"},` +
-		`"path":{"type":"string"},"name":{"type":"string"},"size":{"type":"integer"},"sha256":{"type":"string"}},` +
+		`"path":{"type":"string"},"name":{"type":"string"},"size":{"type":"integer"},"sha256":{"type":"string"},` +
+		`"method":{"type":"string","enum":["single","chunked"]}},` +
 		`"required":["` + action + `d"],"additionalProperties":false}`)
 	d.Arguments = []capability.Argument{
 		{Name: "path", Description: "File relative to the fixed root folder of this connection", Required: true},
@@ -424,14 +433,22 @@ func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secre
 		return nil, err
 	}
 	defer upload.Close()
-	if upload.Size > maxPathUploadBytes {
-		return nil, providerError(op, "the local file exceeds the single-request upload limit of 64 MiB")
+	chunked := upload.Size > maxPathUploadBytes
+	if chunked && chunkCount(upload.Size) > maxChunks {
+		return nil, providerError(op, "the local file needs more chunks than one Nextcloud upload allows")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	etag, err := client.putStream(ctx, op, rel, upload, match)
+	method := "single"
+	var etag string
+	if chunked {
+		method = "chunked"
+		etag, err = client.uploadChunked(ctx, op, rel, upload, match)
+	} else {
+		etag, err = client.putStream(ctx, op, rel, upload, match)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -440,7 +457,7 @@ func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secre
 		return nil, providerError(op, "the local file changed while it was read")
 	}
 	return map[string]any{key: true, "etag": etag, "path": input.Path, "name": rel[len(rel)-1],
-		"size": upload.Size, "sha256": sum}, nil
+		"size": upload.Size, "sha256": sum, "method": method}, nil
 }
 func invokeFilesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
 	client, input, err := openForContent(ctx, resolved, secrets, red, raw)
@@ -460,6 +477,9 @@ type Client struct {
 	// prefix are the decoded path segments up to and including the user ID: the optional installation
 	// path, the fixed Files WebDAV segments, and the identity.
 	prefix []string
+	// uploads are the decoded segments of the upload area of the same identity, below which chunked
+	// uploads create their one folder.
+	uploads []string
 	// root are the decoded segments of the fixed root folder below the Files root of that identity.
 	root []string
 	auth string
@@ -514,7 +534,9 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 
 	prefix := append(append([]string{}, install...), filesRoot...)
 	prefix = append(prefix, userID)
-	client := &Client{origin: origin, prefix: prefix, root: root, auth: header}
+	uploads := append(append([]string{}, install...), uploadsRoot...)
+	uploads = append(uploads, userID)
+	client := &Client{origin: origin, prefix: prefix, uploads: uploads, root: root, auth: header}
 	client.http = newHTTPClient(origin, escapePath(prefix))
 	return client, nil
 }
@@ -829,7 +851,7 @@ func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
 	if err != nil || len(rel) == 0 {
 		return nil, providerError("get file", "a file path below the connection root is required")
 	}
-	response, err := c.webdav(ctx, "get file", http.MethodGet, rel, nil, "", "")
+	response, err := c.webdav(ctx, "get file", http.MethodGet, rel, nil, "", "", false)
 	if err != nil {
 		return nil, err
 	}
@@ -873,11 +895,11 @@ func (c *Client) putStream(ctx context.Context, op string, rel []string, upload 
 	}
 	response, err := c.transferClient().Do(req)
 	if err != nil {
-		return "", transportError(op, err)
+		return "", sentTransportError(op, err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return "", statusError(op, response.StatusCode)
+		return "", sentStatusError(op, response.StatusCode)
 	}
 	return bounded(strings.Trim(response.Header.Get("ETag"), `"`)), nil
 }
@@ -962,7 +984,7 @@ func (c *Client) PutFile(ctx context.Context, op, path, encoded, match string) (
 	if match == "*" {
 		header = "If-None-Match"
 	}
-	response, err := c.webdav(ctx, op, http.MethodPut, rel, strings.NewReader(string(content)), header, match)
+	response, err := c.webdav(ctx, op, http.MethodPut, rel, strings.NewReader(string(content)), header, match, true)
 	if err != nil {
 		return "", err
 	}
@@ -985,7 +1007,7 @@ func (c *Client) DeleteFile(ctx context.Context, path, etag string) error {
 	if entry.Type != typeFile {
 		return providerError("delete file", "folders cannot be deleted by this operation")
 	}
-	response, err := c.webdav(ctx, "delete file", http.MethodDelete, rel, nil, "If-Match", etag)
+	response, err := c.webdav(ctx, "delete file", http.MethodDelete, rel, nil, "If-Match", etag, false)
 	if err != nil {
 		return err
 	}
@@ -1006,7 +1028,7 @@ func validETag(value string) bool {
 	return true
 }
 
-func (c *Client) webdav(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value string) (*http.Response, error) {
+func (c *Client) webdav(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value string, sent bool) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.requestURL(rel), body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
@@ -1019,10 +1041,16 @@ func (c *Client) webdav(ctx context.Context, op, method string, rel []string, bo
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
+		if sent {
+			return nil, sentTransportError(op, err)
+		}
 		return nil, transportError(op, err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		defer response.Body.Close()
+		if sent {
+			return nil, sentStatusError(op, response.StatusCode)
+		}
 		return nil, statusError(op, response.StatusCode)
 	}
 	return response, nil
@@ -1272,6 +1300,35 @@ func transportError(op string, err error) error {
 		return providerError(op, refused.Error())
 	}
 	return provider.Transport(op, "Nextcloud", err)
+}
+
+// sentTransportError is transportError for a request that writes a file: whatever ended it, the server may
+// have acted on it. Only a refused redirect, a local decision, leaves the outcome clear.
+func sentTransportError(op string, err error) error {
+	var refused *redirectRefusedError
+	if errors.As(err, &refused) {
+		return transportError(op, err)
+	}
+	return withUncertainty(transportError(op, err))
+}
+
+// sentStatusError is statusError for a request that writes a file: a client error is a clear refusal, any
+// other non-success status leaves the outcome open.
+func sentStatusError(op string, status int) error {
+	if status >= 400 && status < 500 {
+		return statusError(op, status)
+	}
+	return withUncertainty(statusError(op, status))
+}
+
+func withUncertainty(err error) error {
+	var providerErr *provider.Error
+	if errors.As(err, &providerErr) {
+		changed := *providerErr
+		changed.Message += uncertainFile
+		return &changed
+	}
+	return err
 }
 
 func providerError(op, message string) error {

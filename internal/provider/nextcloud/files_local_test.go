@@ -107,22 +107,6 @@ func TestLocalUploadIsRefusedBeforeSecretAndIO(t *testing.T) {
 	}
 }
 
-func TestLocalUploadAboveTheSingleRequestLimitIsRefused(t *testing.T) {
-	dir := t.TempDir()
-	source := filepath.Join(dir, "in.txt")
-	_ = os.WriteFile(source, []byte("hello"), 0o600)
-	previous := maxPathUploadBytes
-	maxPathUploadBytes = 4
-	t.Cleanup(func() { maxPathUploadBytes = previous })
-	refuse(t)
-	red := &redact.Redactor{}
-	_, err := invokeFilesCreate(context.Background(), localConnection(dir, ""), resolver(red), red,
-		json.RawMessage(`{"path":"a.txt","local_path":`+strconv.Quote(source)+`}`))
-	if classOf(err) == "" {
-		t.Errorf("err = %v, want a provider refusal", err)
-	}
-}
-
 func TestLocalUploadFailureIsNotRetried(t *testing.T) {
 	dir := t.TempDir()
 	source := filepath.Join(dir, "in.txt")
@@ -133,7 +117,7 @@ func TestLocalUploadFailureIsNotRetried(t *testing.T) {
 	red := &redact.Redactor{}
 	_, err := invokeFilesCreate(context.Background(), localConnection(dir, ""), resolver(red), red,
 		json.RawMessage(`{"path":"a.txt","local_path":`+strconv.Quote(source)+`}`))
-	if err == nil || strings.Contains(err.Error(), bodyCanary) || len(*calls) != 1 {
+	if err == nil || strings.Contains(err.Error(), bodyCanary) || len(*calls) != 1 || !strings.Contains(err.Error(), "stat the file before repeating") {
 		t.Errorf("err = %v, calls = %d", err, len(*calls))
 	}
 }
