@@ -4,13 +4,13 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-06
+updated: 2026-10-07
 ---
 
 # BookStack
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
-and chapters and searching content (`read`), creating pages (`create`), changing title or Markdown
+and chapters and searching content (`read`), creating pages (`create`), changing or moving pages
 (`update`), and deleting pages (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
@@ -49,12 +49,13 @@ quotes the configured value.
 
 On a bound connection every tool stays inside the listed books and a refusal never names the foreign target:
 
-- `book_id` of `pages.create` and `pages.list` must be one of the books. It is checked before the secrets
-  are read and before any request is sent.
+- `book_id` of `pages.create`, `pages.update` (move), and `pages.list` must be one of the books. It is
+  checked before the secrets are read and before any request is sent.
 - `book_id` of `chapters.list` and the `id` of `books.get` follow the same rule.
 - A page identifier (`pages.get`, `pages.update`, `pages.delete`) or chapter identifier (`pages.create` and
   `pages.list` with `chapter_id`, `chapters.get`) is bound to its book by one proof read
-  (`GET /api/pages/{id}` or `GET /api/chapters/{id}`) before the detail or the change follows. For `pages.get`
+  (`GET /api/pages/{id}` or `GET /api/chapters/{id}`) before the detail or the change follows. A move reads
+  the page and the target chapter once each. For `pages.get`
   and `chapters.get` this read is the answer; no second request is sent. A page or chapter of another book is
   refused as `invalid-request`.
 - A connection without targets sends no proof read.
@@ -95,6 +96,38 @@ strings to 1000. Descriptions are untrusted data, `description_html` is HTML tha
 run. `books.get` shows the `shelves` of the book (`id`, `name`, `slug`) only on a connection without
 targets, because shelves span the whole instance. Cover images are not passed on.
 
+## Pages
+
+`pages.get` returns `id`, `name`, `slug`, `book_id`, `chapter_id` (0 when there is none), `created_at`,
+`updated_at`, `html` (rendered), `markdown` (only for pages saved with the Markdown editor), `raw_html` (as
+stored, what the editor shows), `priority`, `draft`, `template`, `revision_count`, `editor`, `tags`
+(`name`/`value` pairs, at most 50), and `created_by`, `updated_by`, `owned_by`. The three users show `id` and
+`name` only. The comment tree is not returned. `pages.list` shows `priority`, `draft`, `template`, and
+`owned_by` in addition to its former columns. All content, tags, and names are untrusted data; `html` and
+`raw_html` must never be rendered or run.
+
+`pages.create` takes `name` and exactly one of `book_id` and `chapter_id`, and exactly one of `html` and
+`markdown`. It takes optional `tags` (at most 50 entries of `name` and `value`, each at most 255 characters)
+and `priority` (0 or more, the position among the siblings). `pages.update` takes `id` and any of `name`,
+`html` or `markdown` (mutually exclusive), `tags`, `priority`, and `changelog` (1 to 180 characters, the note
+of the new revision). BookStack stores a revision when the content or title changes or when a `changelog` is
+given. `html` or `markdown` larger than 1 MiB, more or longer tags, and `html` together with `markdown` are
+refused locally as `invalid-request` before any secret is read and before any request. Draft and template
+status and revisions cannot be set; BookStack offers no API for them.
+
+Side effects of a write:
+
+- `html` that contains `data:` images makes BookStack extract them and store them as gallery images of the
+  page when it saves.
+- `tags` replaces all existing tags of the page; an empty list removes them. Omit `tags` to keep them.
+
+Moving: `pages.update` with exactly one of `book_id` and `chapter_id` moves the page into that book or chapter.
+BookStack requires the permission to delete the page in addition to the permission to update it and to create
+pages in the target. Without delete permission the call fails as `permission`. On a bound connection the
+target book is checked before the secrets are read; the source page and a target chapter are each proven by
+one read. A foreign page or target is refused as `invalid-request` without a change request and without
+naming it.
+
 ## Tool groups
 
 All BookStack tools belong to the group `content`: pages, search, books, and chapters. Tool lists and pickers
@@ -126,7 +159,8 @@ not passed on.
 ## Limits
 
 Reading accepts a response of up to 16 MiB; a larger one fails as `invalid-provider-response`. Writing
-accepts at most 1 MiB of page content. Redirects are never followed: a 3xx answer is a `provider-error`.
+accepts at most 1 MiB of page content (`html` or `markdown`). Redirects are never followed: a 3xx answer is a
+`provider-error`.
 
 ## Deleting
 

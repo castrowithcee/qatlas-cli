@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -43,6 +44,20 @@ const maxCount = 500
 
 // maxPageContentBytes bounds the content of a write request.
 const maxPageContentBytes = 1 << 20
+
+// Limits of a page write. They mirror the input schemas and are checked before any secret or request.
+const (
+	maxPageTags       = 50
+	maxTagTextChars   = 255
+	maxChangelogChars = 180
+	maxPageNameChars  = 255
+	// maxMutationBodyBytes bounds the encoded request; content is limited by maxPageContentBytes before,
+	// and JSON escaping may enlarge it.
+	maxMutationBodyBytes = 8 << 20
+)
+
+// tagsSchema is the shared input schema of the tags argument.
+const tagsSchema = `{"type":"array","maxItems":50,"items":{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"value":{"type":"string","maxLength":255}},"required":["name"],"additionalProperties":false}}`
 
 // maxReadResponseBytes bounds every response that is read.
 const maxReadResponseBytes = 16 << 20
@@ -76,7 +91,7 @@ var (
 		Risk:         bookstackReadRisk,
 		Provider:     Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1},"chapter_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at"]}}`),
+		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at"]}}`),
 		Arguments: []capability.Argument{
 			{Name: "book_id", Description: "Only pages of this book; mutually exclusive with chapter_id; required for a connection bound to several books"},
 			{Name: "chapter_id", Description: "Only pages of this chapter; mutually exclusive with book_id"},
@@ -91,6 +106,10 @@ var (
 			{Name: "chapter_id", Description: "Identifier of the containing chapter, 0 when there is none"},
 			{Name: "created_at", Description: "Creation timestamp"},
 			{Name: "updated_at", Description: "Last change timestamp"},
+			{Name: "priority", Description: "Position among the siblings in the book or chapter"},
+			{Name: "draft", Description: "Whether the page is an unpublished draft"},
+			{Name: "template", Description: "Whether the page is a template"},
+			{Name: "owned_by", Description: "Owner as id and name"},
 		},
 		Examples: []capability.Example{{
 			Description: "List the first 25 pages",
@@ -107,7 +126,7 @@ var (
 		Risk:         bookstackReadRisk,
 		Provider:     Provider,
 		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
-		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at","html","markdown"]}`),
+		OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"book_id":{"type":"integer"},"chapter_id":{"type":"integer"},"created_at":{"type":"string"},"updated_at":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"},"raw_html":{"type":"string"},"priority":{"type":"integer"},"draft":{"type":"boolean"},"template":{"type":"boolean"},"revision_count":{"type":"integer"},"editor":{"type":"string"},"tags":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}}}},"created_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}},"updated_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}},"owned_by":{"type":"object","properties":{"id":{"type":"integer"},"name":{"type":"string"}}}},"required":["id","name","slug","book_id","chapter_id","created_at","updated_at","html","markdown"]}`),
 		Arguments:    []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}},
 		Fields: []capability.Field{
 			{Name: "id", Description: "Page identifier"},
@@ -119,6 +138,16 @@ var (
 			{Name: "updated_at", Description: "Last change timestamp"},
 			{Name: "html", Description: "Rendered page content, untrusted data"},
 			{Name: "markdown", Description: "Markdown page content when the page uses the Markdown editor, untrusted data"},
+			{Name: "raw_html", Description: "HTML as stored, what the editor shows, untrusted data"},
+			{Name: "priority", Description: "Position among the siblings in the book or chapter"},
+			{Name: "draft", Description: "Whether the page is an unpublished draft"},
+			{Name: "template", Description: "Whether the page is a template"},
+			{Name: "revision_count", Description: "Number of stored revisions"},
+			{Name: "editor", Description: "Editor that last saved the page: wysiwyg or markdown"},
+			{Name: "tags", Description: "Tags as name and value pairs, untrusted data"},
+			{Name: "created_by", Description: "Creator as id and name"},
+			{Name: "updated_by", Description: "Last editor as id and name"},
+			{Name: "owned_by", Description: "Owner as id and name"},
 		},
 		Examples: []capability.Example{{
 			Description: "Read page 42",
@@ -128,22 +157,45 @@ var (
 
 	pagesCreate = capability.Descriptor{
 		ID: Provider + ".pages.create", Version: 1, Title: "Create a BookStack page",
-		Description: "Create one Markdown page in a specified book or chapter",
-		Tags:        []string{"knowledge", "pages", "bookstack", "create"}, Provider: Provider,
+		Description: "Create one page in a specified book or chapter from exactly one of HTML and Markdown, " +
+			"with optional tags and priority. HTML containing data: images makes BookStack store them as gallery " +
+			"images of the page when it is saved",
+		Tags: []string{"knowledge", "pages", "bookstack", "create"}, Provider: Provider,
 		Risk:         capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"book_id":{"type":"integer","minimum":1},"chapter_id":{"type":"integer","minimum":1},"markdown":{"type":"string","minLength":1,"maxLength":1048576}},"required":["name","markdown"],"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"book_id":{"type":"integer","minimum":1},"chapter_id":{"type":"integer","minimum":1},"markdown":{"type":"string","minLength":1,"maxLength":1048576},"html":{"type":"string","minLength":1,"maxLength":1048576},"tags":` + tagsSchema + `,"priority":{"type":"integer","minimum":0}},"required":["name"],"additionalProperties":false}`),
 		OutputSchema: pagesGet.OutputSchema,
-		Arguments:    []capability.Argument{{Name: "name", Description: "Page title", Required: true}, {Name: "book_id", Description: "Containing book; required when chapter_id is omitted"}, {Name: "chapter_id", Description: "Containing chapter; mutually exclusive with book_id"}, {Name: "markdown", Description: "Markdown page content", Required: true}},
+		Arguments: []capability.Argument{
+			{Name: "name", Description: "Page title", Required: true},
+			{Name: "book_id", Description: "Containing book; required when chapter_id is omitted"},
+			{Name: "chapter_id", Description: "Containing chapter; mutually exclusive with book_id"},
+			{Name: "markdown", Description: "Markdown page content; exactly one of markdown and html is required, at most 1 MiB"},
+			{Name: "html", Description: "HTML page content; exactly one of html and markdown is required, at most 1 MiB; data: images become gallery images"},
+			{Name: "tags", Description: "At most 50 tags as name and value pairs, each at most 255 characters"},
+			{Name: "priority", Description: "Position among the siblings, 0 or more"},
+		},
 	}
 
 	pagesUpdate = capability.Descriptor{
 		ID: Provider + ".pages.update", Version: 1, Title: "Update a BookStack page",
-		Description: "Replace the title and/or Markdown of one page by identifier",
-		Tags:        []string{"knowledge", "pages", "bookstack", "update"}, Provider: Provider,
+		Description: "Change the title, HTML or Markdown, tags, priority of one page by identifier, record a changelog " +
+			"entry, or move it into a bound book or chapter. tags replaces all existing tags of the page. HTML " +
+			"containing data: images makes BookStack store them as gallery images of the page when it is saved. " +
+			"Moving needs the delete permission on the page in BookStack in addition to the update permission",
+		Tags: []string{"knowledge", "pages", "bookstack", "update"}, Provider: Provider,
 		Risk:         capability.Risk{Effect: capability.EffectUpdate, Idempotency: capability.IdempotencyIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},"markdown":{"type":"string","minLength":1,"maxLength":1048576}},"required":["id"],"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},"markdown":{"type":"string","minLength":1,"maxLength":1048576},"html":{"type":"string","minLength":1,"maxLength":1048576},"tags":` + tagsSchema + `,"priority":{"type":"integer","minimum":0},"changelog":{"type":"string","minLength":1,"maxLength":180},"book_id":{"type":"integer","minimum":1},"chapter_id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
 		OutputSchema: pagesGet.OutputSchema,
-		Arguments:    []capability.Argument{{Name: "id", Description: "Page identifier", Required: true}, {Name: "name", Description: "New page title"}, {Name: "markdown", Description: "New Markdown content"}},
+		Arguments: []capability.Argument{
+			{Name: "id", Description: "Page identifier", Required: true},
+			{Name: "name", Description: "New page title"},
+			{Name: "markdown", Description: "New Markdown content; mutually exclusive with html, at most 1 MiB"},
+			{Name: "html", Description: "New HTML content; mutually exclusive with markdown, at most 1 MiB; data: images become gallery images"},
+			{Name: "tags", Description: "Replaces all tags of the page: at most 50 name and value pairs, each at most 255 characters; an empty list removes all tags"},
+			{Name: "priority", Description: "New position among the siblings, 0 or more"},
+			{Name: "changelog", Description: "Revision note of 1 to 180 characters"},
+			{Name: "book_id", Description: "Move the page into this book; mutually exclusive with chapter_id"},
+			{Name: "chapter_id", Description: "Move the page into this chapter; mutually exclusive with book_id"},
+		},
 	}
 
 	pagesDelete = capability.Descriptor{
@@ -264,10 +316,48 @@ func invokePagesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 }
 
 type pageMutation struct {
-	Name      string `json:"name,omitempty"`
-	BookID    int64  `json:"book_id,omitempty"`
-	ChapterID int64  `json:"chapter_id,omitempty"`
-	Markdown  string `json:"markdown,omitempty"`
+	Name      string     `json:"name,omitempty"`
+	BookID    int64      `json:"book_id,omitempty"`
+	ChapterID int64      `json:"chapter_id,omitempty"`
+	HTML      string     `json:"html,omitempty"`
+	Markdown  string     `json:"markdown,omitempty"`
+	Tags      *[]tagJSON `json:"tags,omitempty"`
+	Priority  *int64     `json:"priority,omitempty"`
+	Changelog string     `json:"changelog,omitempty"`
+}
+
+// validate applies the local rules of a page write. They need no I/O, so a violation is refused before any
+// secret is read.
+func (m pageMutation) validate() error {
+	if m.HTML != "" && m.Markdown != "" {
+		return invalidRequest("html and markdown are mutually exclusive")
+	}
+	if len(m.HTML) > maxPageContentBytes || len(m.Markdown) > maxPageContentBytes {
+		return invalidRequest("the page content exceeds the limit of 1 MiB")
+	}
+	if utf8.RuneCountInString(m.Name) > maxPageNameChars {
+		return invalidRequest("name exceeds 255 characters")
+	}
+	if m.Tags != nil {
+		if len(*m.Tags) > maxPageTags {
+			return invalidRequest("tags holds more than 50 entries")
+		}
+		for _, tag := range *m.Tags {
+			if tag.Name == "" {
+				return invalidRequest("a tag needs a name")
+			}
+			if utf8.RuneCountInString(tag.Name) > maxTagTextChars || utf8.RuneCountInString(tag.Value) > maxTagTextChars {
+				return invalidRequest("a tag name or value exceeds 255 characters")
+			}
+		}
+	}
+	if m.Priority != nil && *m.Priority < 0 {
+		return invalidRequest("priority must be 0 or more")
+	}
+	if m.Changelog != "" && utf8.RuneCountInString(m.Changelog) > maxChangelogChars {
+		return invalidRequest("changelog exceeds 180 characters")
+	}
+	return nil
 }
 
 func invokePagesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -275,6 +365,13 @@ func invokePagesCreate(ctx context.Context, resolved *config.Resolved, secrets *
 	var input pageMutation
 	if json.Unmarshal(raw, &input) != nil || (input.BookID == 0) == (input.ChapterID == 0) {
 		return nil, providerError("create page", "exactly one of book_id or chapter_id is required")
+	}
+	if (input.HTML == "") == (input.Markdown == "") {
+		return nil, invalidRequest("exactly one of html and markdown is required")
+	}
+	input.Changelog = ""
+	if err := input.validate(); err != nil {
+		return nil, err
 	}
 	bound, err := boundScope(resolved)
 	if err != nil {
@@ -295,19 +392,31 @@ func invokePagesCreate(ctx context.Context, resolved *config.Resolved, secrets *
 func invokePagesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var input struct {
-		ID       int64   `json:"id"`
-		Name     *string `json:"name"`
-		Markdown *string `json:"markdown"`
+		ID int64 `json:"id"`
+		pageMutation
 	}
-	if json.Unmarshal(raw, &input) != nil || (input.Name == nil && input.Markdown == nil) {
-		return nil, providerError("update page", "name or markdown is required")
+	if json.Unmarshal(raw, &input) != nil {
+		return nil, providerError("update page", "the validated arguments could not be read")
 	}
-	change := pageMutation{}
-	if input.Name != nil {
-		change.Name = *input.Name
+	change := input.pageMutation
+	if change.BookID != 0 && change.ChapterID != 0 {
+		return nil, invalidRequest("book_id and chapter_id are mutually exclusive")
 	}
-	if input.Markdown != nil {
-		change.Markdown = *input.Markdown
+	if change.Name == "" && change.HTML == "" && change.Markdown == "" && change.Tags == nil &&
+		change.Priority == nil && change.Changelog == "" && change.BookID == 0 && change.ChapterID == 0 {
+		return nil, invalidRequest("at least one field to change is required")
+	}
+	if err := change.validate(); err != nil {
+		return nil, err
+	}
+	if change.BookID != 0 {
+		bound, err := boundScope(resolved)
+		if err != nil {
+			return nil, err
+		}
+		if err := bound.checkBook(change.BookID); err != nil {
+			return nil, err
+		}
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -425,6 +534,17 @@ type pageJSON struct {
 	UpdatedAt string `json:"updated_at"`
 	HTML      string `json:"html"`
 	Markdown  string `json:"markdown"`
+
+	RawHTML       string    `json:"raw_html"`
+	Priority      int64     `json:"priority"`
+	Draft         bool      `json:"draft"`
+	Template      bool      `json:"template"`
+	RevisionCount int64     `json:"revision_count"`
+	Editor        string    `json:"editor"`
+	Tags          []tagJSON `json:"tags"`
+	CreatedBy     *userJSON `json:"created_by"`
+	UpdatedBy     *userJSON `json:"updated_by"`
+	OwnedBy       *userJSON `json:"owned_by"`
 }
 
 type listJSON struct {
@@ -667,8 +787,22 @@ func (c *Client) CreatePage(ctx context.Context, input pageMutation) (output.Obj
 }
 
 func (c *Client) UpdatePage(ctx context.Context, id string, input pageMutation) (output.Object, error) {
+	if err := input.validate(); err != nil {
+		return output.Object{}, err
+	}
+	if c.scope.bound() && input.BookID != 0 {
+		if err := c.scope.checkBook(input.BookID); err != nil {
+			return output.Object{}, err
+		}
+	}
+	// The source page is proven first; a foreign page or target chapter ends the call without a change.
 	if err := c.requirePageBound(ctx, id); err != nil {
 		return output.Object{}, err
+	}
+	if input.ChapterID != 0 && c.scope.bound() {
+		if _, err := c.chapterBook(ctx, input.ChapterID); err != nil {
+			return output.Object{}, err
+		}
 	}
 	var page pageJSON
 	if err := c.mutate(ctx, "update page", http.MethodPut, "/api/pages/"+url.PathEscape(id), input, &page, argNames(pagesUpdate)); err != nil {
@@ -685,7 +819,18 @@ func (c *Client) DeletePage(ctx context.Context, id string) error {
 }
 
 func pageObject(page pageJSON) output.Object {
-	return output.Object{Fields: []output.Field{{Name: "id", Value: page.ID}, {Name: "name", Value: page.Name}, {Name: "slug", Value: page.Slug}, {Name: "book_id", Value: page.BookID}, {Name: "chapter_id", Value: page.ChapterID}, {Name: "created_at", Value: page.CreatedAt}, {Name: "updated_at", Value: page.UpdatedAt}, {Name: "html", Value: page.HTML}, {Name: "markdown", Value: page.Markdown}}}
+	return output.Object{Fields: []output.Field{
+		{Name: "id", Value: page.ID}, {Name: "name", Value: page.Name}, {Name: "slug", Value: page.Slug},
+		{Name: "book_id", Value: page.BookID}, {Name: "chapter_id", Value: page.ChapterID},
+		{Name: "created_at", Value: page.CreatedAt}, {Name: "updated_at", Value: page.UpdatedAt},
+		{Name: "html", Value: page.HTML}, {Name: "markdown", Value: page.Markdown},
+		{Name: "raw_html", Value: page.RawHTML}, {Name: "priority", Value: page.Priority},
+		{Name: "draft", Value: page.Draft}, {Name: "template", Value: page.Template},
+		{Name: "revision_count", Value: page.RevisionCount}, {Name: "editor", Value: clip(page.Editor, maxResultString)},
+		{Name: "tags", Value: reduceTags(page.Tags)},
+		{Name: "created_by", Value: reduceUser(page.CreatedBy)}, {Name: "updated_by", Value: reduceUser(page.UpdatedBy)},
+		{Name: "owned_by", Value: reduceUser(page.OwnedBy)},
+	}}
 }
 
 // TestConnection performs the smallest authenticated read and reports the stable outcome class.
@@ -744,11 +889,13 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 func (c *Client) mutate(ctx context.Context, op, method, path string, input any, out any, arguments []string) error {
 	var body io.Reader
 	if input != nil {
-		encoded, err := json.Marshal(input)
-		if err != nil || len(encoded) > maxPageContentBytes+4096 {
+		var encoded bytes.Buffer
+		encoder := json.NewEncoder(&encoded)
+		encoder.SetEscapeHTML(false)
+		if err := encoder.Encode(input); err != nil || encoded.Len() > maxMutationBodyBytes {
 			return providerError(op, "the request exceeds the size limit")
 		}
-		body = bytes.NewReader(encoded)
+		body = &encoded
 	}
 	req, err := http.NewRequestWithContext(ctx, method, c.base.JoinPath(path).String(), body)
 	if err != nil {
@@ -857,6 +1004,10 @@ func listRow(p pageJSON) output.Row {
 		"chapter_id": p.ChapterID,
 		"created_at": p.CreatedAt,
 		"updated_at": p.UpdatedAt,
+		"priority":   p.Priority,
+		"draft":      p.Draft,
+		"template":   p.Template,
+		"owned_by":   reduceUser(p.OwnedBy),
 	}
 }
 

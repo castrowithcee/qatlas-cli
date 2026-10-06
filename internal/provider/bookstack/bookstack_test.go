@@ -125,7 +125,7 @@ func TestListPages(t *testing.T) {
 	if got.Rows[0]["name"] != "Alpha" || got.Rows[1]["id"] != int64(2) {
 		t.Errorf("rows = %v", got.Rows)
 	}
-	if want := []string{"id", "name", "slug", "book_id", "chapter_id", "created_at", "updated_at"}; !equal(got.Columns, want) {
+	if want := []string{"id", "name", "slug", "book_id", "chapter_id", "created_at", "updated_at", "priority", "draft", "template", "owned_by"}; !equal(got.Columns, want) {
 		t.Errorf("columns = %v, want %v", got.Columns, want)
 	}
 
@@ -1211,7 +1211,7 @@ func TestBoundGetIsOneRequestAndUnboundAddsNoRead(t *testing.T) {
 	rec := &recorder{}
 	server := scopedServer(t, rec, false)
 	obj, err := boundClient(t, server.URL, "book/7").GetPage(context.Background(), "1")
-	if err != nil || len(obj.Fields) != 9 {
+	if err != nil || len(obj.Fields) != 19 {
 		t.Fatalf("GetPage() = %v, %v", obj, err)
 	}
 	if methods, _, _, _ := rec.snapshot(); len(methods) != 1 {

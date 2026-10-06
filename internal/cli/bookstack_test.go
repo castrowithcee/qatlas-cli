@@ -147,6 +147,15 @@ func TestBookStackInvokeReadsPages(t *testing.T) {
 		if _, ok := page["id"].(float64); !ok {
 			t.Errorf("id = %T, want a JSON number", page["id"])
 		}
+		for _, name := range []string{"raw_html", "priority", "draft", "template", "revision_count", "editor",
+			"created_by", "updated_by", "owned_by"} {
+			if _, ok := page[name]; !ok {
+				t.Errorf("page has no %s: %v", name, page)
+			}
+		}
+		if owner, _ := page["owned_by"].(map[string]any); len(owner) != 2 {
+			t.Errorf("owned_by = %v, want id and name only", page["owned_by"])
+		}
 	})
 
 	t.Run("empty stdin invokes without arguments", func(t *testing.T) {
