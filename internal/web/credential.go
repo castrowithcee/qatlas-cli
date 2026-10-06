@@ -161,7 +161,7 @@ func (s *Server) renderNewCredential(w http.ResponseWriter, cfg *config.Config, 
 	}
 	if selected != "" {
 		for _, role := range cfg.SecretRolesOf(selected) {
-			data.Roles = append(data.Roles, roleField{Name: role, Description: cfg.SecretRoleDescription(role)})
+			data.Roles = append(data.Roles, roleField{Name: role, Description: cfg.SecretRoleDescriptionOf(selected, role)})
 		}
 	}
 	if fp, err := s.configFingerprint(); err == nil {
@@ -340,7 +340,7 @@ func (s *Server) renderCredential(w http.ResponseWriter, cfg *config.Config, nam
 
 // roleRow reports where one secret role of an existing credential currently stands, never what it holds.
 func (s *Server) roleRow(cfg *config.Config, name string, cred config.Credential, role string) roleRow {
-	row := roleRow{Role: role, Description: cfg.SecretRoleDescription(role)}
+	row := roleRow{Role: role, Description: cfg.SecretRoleDescriptionOf(cred.Provider, role)}
 	switch cred.Type {
 	case config.CredentialTypeEnv:
 		if v := cred.Values[role]; v != "" {
