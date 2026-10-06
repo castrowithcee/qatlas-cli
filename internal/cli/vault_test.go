@@ -368,7 +368,7 @@ func TestInvokeThroughAChangedConnectionNeedsApproval(t *testing.T) {
 		t.Fatalf("vault Set() = %v", err)
 	}
 	approveConnections(t, dir, v)
-	edited := strings.Replace(vaultCredentialConfig, "https://wiki.example.invalid", "http://127.0.0.1:9", 1)
+	edited := strings.Replace(vaultCredentialConfig, "https://wiki.example.invalid", "https://moved.example.invalid", 1)
 	if err := os.WriteFile(configIn(dir), []byte(edited), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +25,7 @@ import (
 // itself, selected by runAsQatlasEnv, instead of running the tests; started with vaultClientEnv, it is a
 // client of a vault process instead (see runVaultClient).
 func TestMain(m *testing.M) {
+	trustTestServers()
 	if os.Getenv(runAsQatlasEnv) == "1" {
 		trustTestReleaseKey()
 		os.Exit(Run(os.Args[1:], os.Stdout, os.Stderr))
@@ -235,5 +238,16 @@ func TestVaultPassphraseAndDecryptAskThePassphraseOnlyOnce(t *testing.T) {
 		"vault", "decrypt", "--confirm", "--config", configIn(dir))
 	if code != exitOK {
 		t.Fatalf("decrypt: exit code = %d, want %d (stderr: %s)", code, exitOK, stderr)
+	}
+}
+
+// trustTestServers lets the default transport trust the certificate every httptest TLS server presents, so
+// a test can serve a https-only provider locally. The certificate is the same in every process of this test
+// binary, which includes the copies it starts as qatlas.
+func trustTestServers() {
+	probe := httptest.NewTLSServer(http.NotFoundHandler())
+	defer probe.Close()
+	if base, ok := http.DefaultTransport.(*http.Transport); ok {
+		base.TLSClientConfig = probe.Client().Transport.(*http.Transport).TLSClientConfig.Clone()
 	}
 }

@@ -34,7 +34,7 @@ func catalogEnvironment(t *testing.T) (string, *atomic.Int32, string) {
 	t.Helper()
 	const providerCanary = "provider-body-canary-4b71"
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
 		_, _ = w.Write([]byte(`{"data":[{"id":1,"name":"` + providerCanary + `"}],"total":1}`))
 	}))

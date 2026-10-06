@@ -207,7 +207,7 @@ defaults:
 	// A connection changed by hand, here pointed at another server, no longer gets the secret: nothing is
 	// sent there, and the CLI and the broker both say that a person has to approve the change first.
 	var reached atomic.Int32
-	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	elsewhere := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		reached.Add(1)
 		w.WriteHeader(http.StatusUnauthorized)
 	}))
@@ -325,7 +325,7 @@ type broker struct {
 func startBroker(t *testing.T, c *runner) *broker {
 	t.Helper()
 	cmd := exec.Command(c.bin, "mcp")
-	cmd.Env = c.env
+	cmd.Env = c.environ(t)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)

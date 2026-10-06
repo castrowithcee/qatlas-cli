@@ -612,7 +612,7 @@ func TestStoredSecretNeverReachesTheOutput(t *testing.T) {
 			"id": 1, "name": "Vault Runbook", "html": "authenticated with " + r.Header.Get("Authorization"),
 		})
 	})
-	server := httptest.NewServer(mux)
+	server := httptest.NewTLSServer(mux)
 	defer server.Close()
 
 	dir := t.TempDir()

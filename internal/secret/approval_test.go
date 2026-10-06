@@ -14,7 +14,7 @@ import (
 // scopeChanges are the ways a connection can change after it was approved, each of which leaves it open.
 func scopeChanges() map[string]func(*config.Resolved) {
 	return map[string]func(*config.Resolved){
-		"origin":      func(r *config.Resolved) { r.BaseURL = "http://127.0.0.1:9" },
+		"origin":      func(r *config.Resolved) { r.BaseURL = "https://moved.example.invalid" },
 		"provider":    func(r *config.Resolved) { r.Provider = "nextcloud" },
 		"permissions": func(r *config.Resolved) { r.Permissions = append(r.Permissions, config.PermissionDelete) },
 		"target":      func(r *config.Resolved) { r.Target = "shelf-9" },
@@ -160,7 +160,7 @@ func TestApprovalLeavesOtherSourcesAlone(t *testing.T) {
 		r := NewWith(func(name string) string { return env[name] }, store, nil, &redact.Redactor{}).
 			WithVault(vault.New(dir), offeringPassphrase("s3cret"))
 		unapproved := wikiConnection()
-		unapproved.BaseURL = "http://127.0.0.1:9"
+		unapproved.BaseURL = "https://moved.example.invalid"
 		ctx := ForConnection(context.Background(), unapproved)
 
 		keyring := config.Credential{Type: config.CredentialTypeKeyring}

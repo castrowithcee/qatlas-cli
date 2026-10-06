@@ -24,6 +24,17 @@ starts a new connection on the setup profile `read`, which ticks `[read]` and
 ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection
 never follows a profile.
 
+## Credential and base URL
+
+`base_url` must be an `https` URL of the BookStack instance, optionally below an installation path (for
+example `https://host/wiki`). A URL with `http`, user info, a query (even an empty `?`), or a fragment is
+refused before any secret is read and before any request, and the refusal does not repeat the URL. There is
+no exception for `http`, not even for loopback, so the token is never sent in clear text. No redirect is
+followed, so the token never travels to another host.
+
+Existing connections with an `http://` URL are refused after this change and fail closed. Put TLS in front
+of the instance, for example with a reverse proxy, and change `base_url` to the `https` address.
+
 ## Books
 
 A connection may be bound to books with `target` or the `targets` list; each entry has the form
