@@ -662,7 +662,9 @@ func Register(reg *capability.Registry) error {
 				"team-variables:read with team-variables:write for the teamvariables-manage profile and the " +
 				"separately offered variable delete tool, plus, for a connection bound to an organization, " +
 				"teams:read for the org-admin profile's list and teams:write for its create and update tools and " +
-				"the separately offered team delete tool. A token belongs to one " +
+				"the separately offered team delete tool, plus organization-variables:read for the organizationvariables-read " +
+				"profile and organization-variables:read with organization-variables:write for the " +
+				"organizationvariables-manage profile and the separately offered organization variable delete tool. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -672,7 +674,7 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Description: "either organization mode, exactly one organization/ORG_ID target and no team or scenario " +
-				"target, which offers only the organization tools (make.teams.*) and refuses every team tool; or " +
+				"target, which offers only the organization tools (make.teams.*, make.organizationvariables.*) and refuses every team tool; or " +
 				"team mode: exactly one team/TEAM_ID target this connection is bound to, plus an optional " +
 				"organization/ORG_ID target and an optional, repeatable allow-list of scenario/SCENARIO_ID " +
 				"targets of that team; without a scenario target, every scenario of the bound team the token " +
@@ -836,6 +838,19 @@ func Register(reg *capability.Registry) error {
 				"with a scenario allow-list",
 			Tools: []string{dataStructuresList.ID, dataStructuresGet.ID},
 		}, {
+			ID: "organizationvariables-read", Title: "Read the bound organization's variables",
+			Description: "for a connection bound to an organization: lists the custom and system variables of the " +
+				"organization with capped values, which may be secret; without the customVariables license Make " +
+				"reports only system variables; changes nothing and needs the organization-variables:read scope",
+			Tools: []string{organizationVariablesList.ID},
+		}, {
+			ID: "organizationvariables-manage", Title: "Create and update the bound organization's variables",
+			Description: "reads what organizationvariables-read reads, creates a custom variable, and sets the type " +
+				"and value of a custom one, never a system variable; every change needs its own confirmation, is " +
+				"never retried, and needs the organization-variables:read and organization-variables:write scopes. " +
+				"Deleting a variable is in no profile",
+			Tools: []string{organizationVariablesList.ID, organizationVariablesCreate.ID, organizationVariablesUpdate.ID},
+		}, {
 			ID: "org-admin", Title: "List, create, and update the teams of the bound organization",
 			Description: "for a connection bound to an organization: lists the organization's teams, creates a " +
 				"team in it, and renames a team or changes its operations limit after binding it to the " +
@@ -898,6 +913,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: teamVariablesCreate, Handler: capability.Handler(invokeTeamVariablesCreate)},
 		capability.Operation{Descriptor: teamVariablesUpdate, Handler: capability.Handler(invokeTeamVariablesUpdate)},
 		capability.Operation{Descriptor: teamVariablesDelete, Handler: capability.Handler(invokeTeamVariablesDelete)},
+		capability.Operation{Descriptor: organizationVariablesList, Handler: capability.Handler(invokeOrganizationVariablesList)},
+		capability.Operation{Descriptor: organizationVariablesCreate, Handler: capability.Handler(invokeOrganizationVariablesCreate)},
+		capability.Operation{Descriptor: organizationVariablesUpdate, Handler: capability.Handler(invokeOrganizationVariablesUpdate)},
+		capability.Operation{Descriptor: organizationVariablesDelete, Handler: capability.Handler(invokeOrganizationVariablesDelete)},
 		capability.Operation{Descriptor: dataStructuresList, Handler: capability.Handler(invokeDataStructuresList)},
 		capability.Operation{Descriptor: dataStructuresGet, Handler: capability.Handler(invokeDataStructuresGet)},
 		capability.Operation{Descriptor: credentialRequestsList, Handler: capability.Handler(invokeCredentialRequestsList)},

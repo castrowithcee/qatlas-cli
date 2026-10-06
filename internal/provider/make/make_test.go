@@ -136,6 +136,8 @@ func coreConfig() *config.Config {
 				Targets: []string{"team/" + itoa64(ownTeam), "organization/" + itoa64(ownOrg)}},
 			"orgmode": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
 				Target: "organization/" + itoa64(ownOrg)},
+			"orgvariablesdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+				Tools: []string{Provider + ".organizationvariables.delete"}, Target: "organization/" + itoa64(ownOrg)},
 			"orgdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
 				Tools: []string{Provider + ".teams.delete"}, Target: "organization/" + itoa64(ownOrg)},
 			"scenario": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
@@ -205,14 +207,14 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 60 {
-		t.Fatalf("tools = %+v, want 60", metadata.Tools)
+	if len(metadata.Tools) != 64 {
+		t.Fatalf("tools = %+v, want 64", metadata.Tools)
 	}
 	profiles := map[string]int{}
 	for _, profile := range metadata.Profiles {
 		profiles[profile.ID] = len(profile.Tools)
 	}
-	if len(profiles) != 22 || profiles["org-admin"] != 3 || profiles["hookqueue-read"] != 3 || profiles["hooks-read"] != 4 || profiles["hooks-manage"] != 8 || profiles["team"] != 3 || profiles["organization"] != 1 {
+	if len(profiles) != 24 || profiles["org-admin"] != 3 || profiles["hookqueue-read"] != 3 || profiles["hooks-read"] != 4 || profiles["hooks-manage"] != 8 || profiles["team"] != 3 || profiles["organization"] != 1 {
 		t.Fatalf("profiles = %+v, want read, manage, team (3), and organization (1)", profiles)
 	}
 }

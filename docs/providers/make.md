@@ -583,7 +583,7 @@ so whether the body is the record data itself or a `{"data":...}` wrapper is und
 `make.teamvariables.list`, `.create`, `.update`, and `.delete` work on the variables of the bound team. Tool ids
 have three segments, so the object is named `teamvariables`. None takes a team argument: the team is always the
 connection's own target. A connection with a scenario allow-list reaches none of them, refused before any secret
-is read. Organization variables are not offered.
+is read. Organization variables are in the next section.
 
 | Tool | Request | Make scope |
 | --- | --- | --- |
@@ -613,6 +613,27 @@ them up, so check them first. It is in no profile and is offered only when a con
 The profiles are `teamvariables-read` and `teamvariables-manage` (list, create, update); neither is recommended.
 Changes need their own confirmation, send exactly one changing request, and are never retried; a timeout, a
 connection reset, a 5xx, or an unreadable answer is reported as uncertain.
+
+## Organization variables
+
+`make.organizationvariables.list`, `.create`, `.update`, and `.delete` work on the variables of the organization
+a connection in organization mode is bound to; a team connection is refused before any secret is read. None
+takes an organization argument. They behave like the team variables: same names, types, caps, validation, system
+variable refusal, and uncertain-result handling.
+
+| Tool | Request | Make scope |
+| --- | --- | --- |
+| `make.organizationvariables.list` | `GET /organizations/{organizationId}/variables` | `organization-variables:read` |
+| `make.organizationvariables.create` | `POST /organizations/{organizationId}/variables` with `typeId`, `name`, `value` | `organization-variables:write` |
+| `make.organizationvariables.update` | `PATCH /organizations/{organizationId}/variables/{name}` with `typeId`, `value` | `organization-variables:write`, `organization-variables:read` |
+| `make.organizationvariables.delete` | `DELETE /organizations/{organizationId}/variables/{name}?confirmed=true` | `organization-variables:write`, `organization-variables:read` |
+
+Source: developers.make.com API reference, Organizations (checked 2026-10-06 against the published reference,
+not a live account). The list answer is read as an array under `organizationVariables`, an assumption from the
+team variables. `delete` needs `confirmed: true`, is in no profile, and is offered only when a connection's
+`tools` list names it. The profiles are `organizationvariables-read` and `organizationvariables-manage` (list,
+create, update); neither is recommended. A 403 names `organization-variables:read` or `:write`. Sensitivity is
+`make-organization-variables-may-hold-secrets`; values are untrusted.
 
 ## Credential requests
 
