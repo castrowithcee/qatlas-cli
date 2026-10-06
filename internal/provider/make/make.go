@@ -121,6 +121,8 @@ const (
 	// needTeamsRead and needOrgRead belong to the team and organization read tools.
 	needTeamsRead = "the teams:read scope"
 	needOrgRead   = "the organizations:read scope (and teams:read, which finds the organization)"
+	// needTeamsWrite belongs to the organization's team tools, which bind a team to the organization first.
+	needTeamsWrite = "the teams:write scope (and teams:read, which binds the team to the organization)"
 	// needHooksRead belongs to the hook read tools.
 	needHooksRead        = "the hooks:read scope"
 	needHooksWrite       = "the hooks:write scope (and hooks:read, which binds the hook)"
@@ -223,21 +225,32 @@ type Client struct {
 }
 
 // Open resolves the API token of one selected connection and returns a client for its bound zone and scope.
+// It serves the team tools only: a connection in organization mode is refused before any secret is read.
 func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
-	return open(ctx, resolved, secrets, red, nil)
+	return open(ctx, resolved, secrets, red, nil, false)
+}
+
+// openOrganization is Open for the organization tools: a connection in team mode is refused before any
+// secret is read.
+func openOrganization(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor) (*Client, error) {
+	return open(ctx, resolved, secrets, red, nil, true)
 }
 
 // open is the internal seam. A caller may supply the rate limiter, and the package's own tests replace the
 // transport, so no test ever reaches a real Make zone.
 func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
-	lim *ratelimit.Limiter) (*Client, error) {
+	lim *ratelimit.Limiter, organization bool) (*Client, error) {
 	const op = "open"
-	if resolved == nil {
-		return nil, providerError(op, "no connection was selected")
-	}
-	bound, err := scopeOf(resolved)
+	bound, err := anyScope(resolved)
 	if err != nil {
-		return nil, providerError(op, err.Error())
+		return nil, err
+	}
+	if organization != bound.organizationMode() {
+		if organization {
+			return nil, errNeedsOrganizationConnection()
+		}
+		return nil, errNeedsTeamConnection()
 	}
 	origin, err := parseInstance(resolved.BaseURL)
 	if err != nil {
@@ -581,7 +594,11 @@ func validJSONObject(raw json.RawMessage, maxBytes, maxDepth int, label string) 
 // run a connection's own operations name is checked again on its own request.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
-	client, err := Open(ctx, resolved, secrets, red)
+	organization := false
+	if bound, err := anyScope(resolved); err == nil {
+		organization = bound.organizationMode()
+	}
+	client, err := open(ctx, resolved, secrets, red, nil, organization)
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {
@@ -590,6 +607,19 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 		return "", err
 	}
 	const op = "test connection"
+	if organization {
+		// Organization mode: one team of the bound organization proves the token and its teams:read scope.
+		var teams teamsPageJSON
+		query := url.Values{"organizationId": {strconv.FormatInt(client.scope.orgID, 10)}, "pg[limit]": {"1"}}
+		if err := client.get(ctx, op, "/teams", query, &teams, needTeamsRead); err != nil {
+			var providerErr *provider.Error
+			if errors.As(err, &providerErr) {
+				return providerErr.Class, nil
+			}
+			return provider.ClassProviderError, nil
+		}
+		return provider.ClassOK, nil
+	}
 	var page scenariosPageJSON
 	query := url.Values{"teamId": {strconv.FormatInt(client.scope.teamID, 10)}, "pg[limit]": {"1"}}
 	if err := client.get(ctx, op, "/scenarios", query, &page, needRead); err != nil {
@@ -630,16 +660,22 @@ func Register(reg *capability.Registry) error {
 				"datastores:read with datastores:write for the datastorerecords-manage profile and the " +
 				"separately offered record delete tool, plus team-variables:read for the teamvariables-read profile and " +
 				"team-variables:read with team-variables:write for the teamvariables-manage profile and the " +
-				"separately offered variable delete tool. A token belongs to one " +
+				"separately offered variable delete tool, plus, for a connection bound to an organization, " +
+				"teams:read for the org-admin profile's list and teams:write for its create and update tools and " +
+				"the separately offered team delete tool, plus organization-variables:read for the organizationvariables-read " +
+				"profile and organization-variables:read with organization-variables:write for the " +
+				"organizationvariables-manage profile and the separately offered organization variable delete tool, plus organizations:write for the org-admin profile's organization update and invite and user:read for its invite and member list, and organizations:read for the org-billing-read profile's subscription, usage, and invoice reads. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
 		}},
 		Target: config.TargetMetadata{
-			Label:    "team, organization, and scenarios",
+			Label:    "team and scenarios, or organization",
 			Required: true,
 			Multiple: true,
-			Description: "exactly one team/TEAM_ID target this connection is bound to, plus an optional " +
+			Description: "either organization mode, exactly one organization/ORG_ID target and no team or scenario " +
+				"target, which offers only the organization tools (make.teams.*, make.organizationvariables.*, make.organization.update, make.organization.invite, make.organization.members) and refuses every team tool; or " +
+				"team mode: exactly one team/TEAM_ID target this connection is bound to, plus an optional " +
 				"organization/ORG_ID target and an optional, repeatable allow-list of scenario/SCENARIO_ID " +
 				"targets of that team; without a scenario target, every scenario of the bound team the token " +
 				"can reach is reachable. A scenario_id argument outside a configured allow-list is refused " +
@@ -651,12 +687,12 @@ func Register(reg *capability.Registry) error {
 				"can never already be on that list",
 			Kinds: []config.TargetKind{{
 				Name: "team",
-				Description: "the Make team this connection may reach; required, exactly one; find it as the " +
+				Description: "the Make team this connection may reach; required in team mode, exactly one, and absent in organization mode; find it as the " +
 					"numeric team identifier in Make's team settings URL or in a scenario's own teamId",
 				Forms: []string{"team/TEAM_ID"},
 			}, {
 				Name: "organization",
-				Description: "the Make organization the bound team belongs to; optional, at most one. A " +
+				Description: "the Make organization: in team mode the one the bound team belongs to, optional, at most one; in organization mode the one this connection administers, required. A " +
 					"scenario itself reports no organizationId of its own, only teamId, so this target is verified " +
 					"against a run's own report and the bound team's own answer, never against a scenario directly",
 				Forms: []string{"organization/ORG_ID"},
@@ -801,6 +837,33 @@ func Register(reg *capability.Registry) error {
 				"specification; changes nothing and needs the udts:read scope; refused on a connection " +
 				"with a scenario allow-list",
 			Tools: []string{dataStructuresList.ID, dataStructuresGet.ID},
+		}, {
+			ID: "organizationvariables-read", Title: "Read the bound organization's variables",
+			Description: "for a connection bound to an organization: lists the custom and system variables of the " +
+				"organization with capped values, which may be secret; without the customVariables license Make " +
+				"reports only system variables; changes nothing and needs the organization-variables:read scope",
+			Tools: []string{organizationVariablesList.ID},
+		}, {
+			ID: "organizationvariables-manage", Title: "Create and update the bound organization's variables",
+			Description: "reads what organizationvariables-read reads, creates a custom variable, and sets the type " +
+				"and value of a custom one, never a system variable; every change needs its own confirmation, is " +
+				"never retried, and needs the organization-variables:read and organization-variables:write scopes. " +
+				"Deleting a variable is in no profile",
+			Tools: []string{organizationVariablesList.ID, organizationVariablesCreate.ID, organizationVariablesUpdate.ID},
+		}, {
+			ID: "org-admin", Title: "List, create, and update the teams of the bound organization",
+			Description: "for a connection bound to an organization: lists the organization's teams, creates a " +
+				"team in it, and renames a team or changes its operations limit after binding it to the " +
+				"organization; every change needs its own confirmation, is never retried, and needs the " +
+				"teams:read and teams:write scopes; also changes the organization's name, country, or time zone (organizations:write), invites a person as member, and lists the members with their organization role (user:read). Deleting a team is in no profile",
+			Tools: []string{teamsList.ID, teamsCreate.ID, teamsUpdate.ID, organizationUpdate.ID, organizationInvite.ID, organizationMembers.ID},
+		}, {
+			ID: "org-billing-read", Title: "Read subscription, usage, and invoices of the bound organization",
+			Description: "for a connection bound to an organization: reads the subscription (plan, next billing " +
+				"date, pause state), the daily usage, and the invoice list without payment method or invoice " +
+				"links; financial data, kept apart from org-admin; changes nothing and needs the " +
+				"organizations:read scope",
+			Tools: []string{organizationSubscription.ID, organizationUsage.ID, organizationPayments.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -857,12 +920,26 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: teamVariablesCreate, Handler: capability.Handler(invokeTeamVariablesCreate)},
 		capability.Operation{Descriptor: teamVariablesUpdate, Handler: capability.Handler(invokeTeamVariablesUpdate)},
 		capability.Operation{Descriptor: teamVariablesDelete, Handler: capability.Handler(invokeTeamVariablesDelete)},
+		capability.Operation{Descriptor: organizationVariablesList, Handler: capability.Handler(invokeOrganizationVariablesList)},
+		capability.Operation{Descriptor: organizationVariablesCreate, Handler: capability.Handler(invokeOrganizationVariablesCreate)},
+		capability.Operation{Descriptor: organizationVariablesUpdate, Handler: capability.Handler(invokeOrganizationVariablesUpdate)},
+		capability.Operation{Descriptor: organizationVariablesDelete, Handler: capability.Handler(invokeOrganizationVariablesDelete)},
 		capability.Operation{Descriptor: dataStructuresList, Handler: capability.Handler(invokeDataStructuresList)},
 		capability.Operation{Descriptor: dataStructuresGet, Handler: capability.Handler(invokeDataStructuresGet)},
 		capability.Operation{Descriptor: credentialRequestsList, Handler: capability.Handler(invokeCredentialRequestsList)},
 		capability.Operation{Descriptor: credentialRequestsGet, Handler: capability.Handler(invokeCredentialRequestsGet)},
 		capability.Operation{Descriptor: credentialRequestsCreate, Handler: capability.Handler(invokeCredentialRequestsCreate)},
 		capability.Operation{Descriptor: credentialRequestsDelete, Handler: capability.Handler(invokeCredentialRequestsDelete)},
+		capability.Operation{Descriptor: teamsList, Handler: capability.Handler(invokeTeamsList)},
+		capability.Operation{Descriptor: teamsCreate, Handler: capability.Handler(invokeTeamsCreate)},
+		capability.Operation{Descriptor: teamsUpdate, Handler: capability.Handler(invokeTeamsUpdate)},
+		capability.Operation{Descriptor: teamsDelete, Handler: capability.Handler(invokeTeamsDelete)},
+		capability.Operation{Descriptor: organizationUpdate, Handler: capability.Handler(invokeOrganizationUpdate)},
+		capability.Operation{Descriptor: organizationInvite, Handler: capability.Handler(invokeOrganizationInvite)},
+		capability.Operation{Descriptor: organizationMembers, Handler: capability.Handler(invokeOrganizationMembers)},
+		capability.Operation{Descriptor: organizationSubscription, Handler: capability.Handler(invokeOrganizationSubscription)},
+		capability.Operation{Descriptor: organizationUsage, Handler: capability.Handler(invokeOrganizationUsage)},
+		capability.Operation{Descriptor: organizationPayments, Handler: capability.Handler(invokeOrganizationPayments)},
 	)
 }
 

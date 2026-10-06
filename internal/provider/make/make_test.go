@@ -134,6 +134,12 @@ func coreConfig() *config.Config {
 				Tools: []string{Provider + ".hookqueue.delete"}, Target: "team/" + itoa64(ownTeam)},
 			"org": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
 				Targets: []string{"team/" + itoa64(ownTeam), "organization/" + itoa64(ownOrg)}},
+			"orgmode": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+				Target: "organization/" + itoa64(ownOrg)},
+			"orgvariablesdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+				Tools: []string{Provider + ".organizationvariables.delete"}, Target: "organization/" + itoa64(ownOrg)},
+			"orgdelete": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
+				Tools: []string{Provider + ".teams.delete"}, Target: "organization/" + itoa64(ownOrg)},
 			"scenario": {Service: "make", Credential: "make-reader", Permissions: allPermissions,
 				Targets: []string{"team/" + itoa64(ownTeam), "scenario/" + itoa64(ownScenario)}},
 		},
@@ -201,14 +207,14 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 3 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 56 {
-		t.Fatalf("tools = %+v, want 56", metadata.Tools)
+	if len(metadata.Tools) != 70 {
+		t.Fatalf("tools = %+v, want 70", metadata.Tools)
 	}
 	profiles := map[string]int{}
 	for _, profile := range metadata.Profiles {
 		profiles[profile.ID] = len(profile.Tools)
 	}
-	if len(profiles) != 21 || profiles["hookqueue-read"] != 3 || profiles["hooks-read"] != 4 || profiles["hooks-manage"] != 8 || profiles["team"] != 3 || profiles["organization"] != 1 {
+	if len(profiles) != 25 || profiles["org-admin"] != 6 || profiles["hookqueue-read"] != 3 || profiles["hooks-read"] != 4 || profiles["hooks-manage"] != 8 || profiles["team"] != 3 || profiles["organization"] != 1 {
 		t.Fatalf("profiles = %+v, want read, manage, team (3), and organization (1)", profiles)
 	}
 }
@@ -230,6 +236,9 @@ func TestTargetValidation(t *testing.T) {
 		{"two organizations", []string{"team/1", "organization/2", "organization/3"}, true},
 		{"duplicate scenario", []string{"team/1", "scenario/3", "scenario/3"}, true},
 		{"org and scenario without team", []string{"organization/2", "scenario/3"}, true},
+		{"organization mode", []string{"organization/2"}, false},
+		{"organization mode, two organizations", []string{"organization/2", "organization/3"}, true},
+		{"scenario only", []string{"scenario/3"}, true},
 		{"malformed kind", []string{"project/1"}, true},
 		{"free-form value", []string{"1"}, true},
 		{"leading zero", []string{"team/01"}, true},

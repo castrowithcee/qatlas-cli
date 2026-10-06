@@ -8,10 +8,12 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
 
-// The three target kinds a connection may combine: exactly one team, at most one organization, and zero or
-// more scenarios. Every value is a plain positive integer, the form every Make identifier this provider
-// reads takes (scenarioId, teamId, organizationId are all documented as integers), so a target is never a
-// free-form string that could be mistaken for a path or a URL.
+// The three target kinds a connection may combine. Team mode: exactly one team, at most one organization,
+// and zero or more scenarios. Organization mode: no team, exactly one organization, and no scenario (the
+// narrower reading, since a scenario belongs to a team). Exactly one of the two modes applies. Every value
+// is a plain positive integer, the form every Make identifier this provider reads takes (scenarioId, teamId,
+// organizationId are all documented as integers), so a target is never a free-form string that could be
+// mistaken for a path or a URL.
 const (
 	teamPrefix         = "team/"
 	organizationPrefix = "organization/"
@@ -29,6 +31,9 @@ type scope struct {
 	orgID     int64 // 0 means no organization target was configured
 	scenarios []int64
 }
+
+// organizationMode reports whether the connection is bound to an organization instead of a team.
+func (s scope) organizationMode() bool { return s.teamID == 0 }
 
 // allowsScenario reports whether a scenario belongs to this connection's local scenario boundary. It says
 // nothing about the scenario's team; that is always checked separately, live, against Make's own report,
@@ -61,8 +66,9 @@ func scopeOf(resolved *config.Resolved) (scope, error) {
 	return parseScope(values)
 }
 
-// parseScope reads the configured targets of one connection: exactly one team/TEAM_ID, at most one
-// organization/ORG_ID, and zero or more scenario/SCENARIO_ID entries, none named twice within its own kind.
+// parseScope reads the configured targets of one connection: either exactly one team/TEAM_ID, at most one
+// organization/ORG_ID, and zero or more scenario/SCENARIO_ID entries (team mode), or no team and exactly one
+// organization/ORG_ID (organization mode), none named twice within its own kind.
 // No error ever quotes a configured value.
 func parseScope(values []string) (scope, error) {
 	var bound scope
@@ -93,7 +99,13 @@ func parseScope(values []string) (scope, error) {
 		}
 	}
 	if !teamSet {
-		return scope{}, errors.New("a Make connection needs exactly one team/TEAM_ID target")
+		if !orgSet {
+			return scope{}, errors.New("a Make connection needs exactly one team/TEAM_ID target, or, in " +
+				"organization mode, exactly one organization/ORG_ID target and no team")
+		}
+		if len(bound.scenarios) > 0 {
+			return scope{}, errors.New("a Make connection bound to an organization cannot target scenarios")
+		}
 	}
 	return bound, nil
 }
@@ -142,9 +154,32 @@ func validPositiveID(raw string) bool {
 	return true
 }
 
-// boundScope reads the connection's scope, wrapping a parse failure as a provider error the same way a
-// missing connection is: both are configuration problems that exist before any secret is resolved.
+// errNeedsTeamConnection and errNeedsOrganizationConnection refuse a tool in the wrong connection mode,
+// before any secret is resolved or request is sent.
+func errNeedsTeamConnection() error {
+	return invalidRequest("this tool needs a team connection; this connection is bound to an organization")
+}
+
+func errNeedsOrganizationConnection() error {
+	return invalidRequest("this tool needs an organization connection; this connection is bound to a team")
+}
+
+// boundScope reads the connection's scope for a team tool, wrapping a parse failure as a provider error the
+// same way a missing connection is: both are configuration problems that exist before any secret is
+// resolved. A connection in organization mode is refused here, the one gate every team tool passes.
 func boundScope(resolved *config.Resolved) (scope, error) {
+	bound, err := anyScope(resolved)
+	if err != nil {
+		return scope{}, err
+	}
+	if bound.organizationMode() {
+		return scope{}, errNeedsTeamConnection()
+	}
+	return bound, nil
+}
+
+// anyScope reads the connection's scope in either mode.
+func anyScope(resolved *config.Resolved) (scope, error) {
 	if resolved == nil {
 		return scope{}, providerError("open", "no connection was selected")
 	}

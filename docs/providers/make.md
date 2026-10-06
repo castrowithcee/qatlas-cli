@@ -9,7 +9,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-27
-updated: 2026-10-04
+updated: 2026-10-06
 ---
 
 # Make
@@ -50,7 +50,9 @@ separately offered `make.connections.delete`, `make.connections.create`, and `ma
 (`make.connectionaccess.list`) needs `connections:read`; the `credentialrequests-read` profile
 (`make.credentialrequests.list`, `get`) needs `credential-requests:read`, its `credentialrequests-manage`
 profile (plus `create`, which additionally needs `user:read`) and the
-separately offered `make.credentialrequests.delete` need `credential-requests:write`. A 403 names the missing scope. A Make token
+separately offered `make.credentialrequests.delete` need `credential-requests:write`. A 403 names the missing scope. The `org-admin` profile
+(`make.teams.list`, `create`, `update`, organization mode only) needs `teams:read` and `teams:write`, as does the
+separately offered `make.teams.delete`. A Make token
 belongs to exactly one zone: Make's own guidance is to create a separate token for each zone a person has
 access to, so a token created for a different zone than this connection's own is rejected here the same way
 as any other invalid token. The token carries API scopes, while Make also limits resources by the user's
@@ -79,9 +81,18 @@ A connection binds one zone, through its base URL and API token, and:
 
 | Target | Binds |
 | --- | --- |
-| `team/TEAM_ID` | the one Make team this connection may reach; required, exactly one |
-| `organization/ORG_ID` | the organization the bound team belongs to; optional, at most one |
-| `scenario/SCENARIO_ID` | one scenario of the bound team; optional, repeatable |
+| `team/TEAM_ID` | the one Make team this connection may reach; team mode: required, exactly one |
+| `organization/ORG_ID` | team mode: the organization the bound team belongs to, optional, at most one; organization mode: required, exactly one |
+| `scenario/SCENARIO_ID` | one scenario of the bound team; optional, repeatable; team mode only |
+
+A connection has exactly one of two modes. **Team mode** (the default described here): exactly one `team/TEAM_ID`,
+an optional `organization/ORG_ID`, and optional scenarios. **Organization mode**: no team and exactly one
+`organization/ORG_ID`; scenario targets are refused (the narrower reading, since a scenario belongs to a team).
+Configuration errors never quote a configured value. In organization mode every team tool (all tools except
+`make.teams.*`, including `make.team.*` and `make.organization.get`) is refused as an invalid request ("needs a
+team connection") before a secret is read or a request is sent; in team mode the `make.teams.*` tools are
+refused the same way ("needs an organization connection"). The connection test of an organization connection
+reads one team of the organization (`GET /teams`, `teams:read`).
 
 ```yaml
 connections:
@@ -191,6 +202,60 @@ invalid request that never names the other organization. Organization details ar
 the license object's flat scalar values (nested values are dropped, at most 64 entries). Role names are not
 resolved, because that needs the separate `user:read` scope.
 
+## Teams of an organization
+
+`make.teams.list`, `.create`, `.update`, and `.delete` work on the teams of the bound organization, in
+organization mode only. None takes an organization argument; update and delete take `team_id`, which is read
+live (`GET /teams/{teamId}`) and bound to the connection's organization through its `organizationId` before
+anything changes. A team of another organization, and a personal space, is refused as an invalid request
+without naming it, and no changing request is sent.
+
+| Tool | Request | Scope |
+| --- | --- | --- |
+| `make.teams.list` | `GET /teams?organizationId=` (up to 200, personal spaces left out) | `teams:read` |
+| `make.teams.create` | `POST /teams` with `name` (1 to 128), `organizationId`, optional `operations_limit` (0 to 2,000,000,000) | `teams:write` |
+| `make.teams.update` | `PATCH /teams/{teamId}` with `name` and/or `operations_limit` | `teams:write`, `teams:read` |
+| `make.teams.delete` | `DELETE /teams/{teamId}?confirmed=true` | `teams:write`, `teams:read` |
+
+Changes need their own confirmation, send exactly one changing request, and are never retried; a timeout,
+a connection reset, a 5xx, or an unreadable answer is reported as uncertain. **Deleting a team also deletes all of
+its data: scenarios, webhooks, and custom team variables.** Qatlas does not look them up. `confirmed: true` is a
+required argument and the only way Make's `confirmed` flag is sent. The tool is in no profile and is offered only
+when a connection's `tools` list names it. The profile `org-admin` holds list, create, and update. Team names
+are untrusted data.
+
+## Organization master data
+
+`make.organization.update` (organization mode only) changes the bound organization's `name` (1 to 128 characters:
+letters, numbers, spaces, and `' - . ( ) * + , @ _ /`), `country_id`, or `timezone_id` with one
+`PATCH /organizations/{organizationId}` (`organizations:write`). The organization is always the connection's
+target; plan, license, and payment fields are not offered. The answer must report the bound organization,
+otherwise the result is uncertain. It needs its own confirmation, sends exactly one request, is never retried, and
+is in the `org-admin` profile.
+
+`make.organization.invite` invites one person (`email`, `name`) with `POST /organizations/{organizationId}/invite`
+(`organizations:write`) and the body `email`, `name`, `usersRoleId` only; no team assignment, no note, no role
+argument. The role is always the predefined organization role `member`, resolved live with
+`GET /users/roles?category=organization&organizationId=` (`user:read`); it is refused, with nothing sent, unless
+exactly one non-custom role matches. The email must be a plain ASCII address of at most 254 characters and is never
+quoted in errors. `make.organization.members` reads the same role list once, then
+`GET /users?organizationId=&organizationRoleId=` per role (`user:read`), and returns `user_id`, `name`, `email`,
+`role_id`, and `role_name` (at most 20 roles and 200 members, `truncated` when more may exist). Names and emails are
+personal data and untrusted. Both tools are in `org-admin`; changing roles and removing members are not offered.
+
+## Financial data (read only)
+
+`make.organization.subscription`, `make.organization.usage`, and `make.organization.payments` (organization mode
+only, all `organizations:read`) read `GET /organizations/{organizationId}/subscription`, `/usage`, and
+`/payments` of the bound organization (checked 2026-10-06 against developers.make.com, not a live account). The
+subscription answers plan id and name, next billing date, and pause state; usage the daily operations, data
+transfer, and centicredits of Make's last 30 days; payments `invoice_number`, `created`, `type`, `status`,
+`amount_total`, `currency`, `period_from`, and `period_to`, newest first, with `offset` and `limit` (1 to 100, 25
+when omitted; `has_more` is true when a page came back full). Payment methods, the plan price, and invoice links
+are never returned, and no plan change, payment method, discount, or other write is offered. The tools sit in
+their own profile `org-billing-read`, not in `org-admin`. Text values are untrusted. A missing scope answers
+403 and names `organizations:read`.
+
 ## Pagination
 
 Both list tools take `offset` and `limit` (1 to 200; 50 when omitted) and answer `offset`, `count`, and
@@ -298,7 +363,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see "Data stores and data structures"), `team-variables:read` and `team-variables:write` (with `team-variables:read`) for the team variable tools, and `udts:read` for the data structure tools and the structure check of a store create or update; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see "Data stores and data structures"), `team-variables:read` and `team-variables:write` (with `team-variables:read`) for the team variable tools, and `udts:read` for the data structure tools and the structure check of a store create or update, `teams:read` and `teams:write` (with `teams:read`) for the organization-mode team tools, `organizations:write` for `make.organization.update` and `make.organization.invite`, `user:read` for the organization invite and member tools; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -550,7 +615,7 @@ so whether the body is the record data itself or a `{"data":...}` wrapper is und
 `make.teamvariables.list`, `.create`, `.update`, and `.delete` work on the variables of the bound team. Tool ids
 have three segments, so the object is named `teamvariables`. None takes a team argument: the team is always the
 connection's own target. A connection with a scenario allow-list reaches none of them, refused before any secret
-is read. Organization variables are not offered.
+is read. Organization variables are in the next section.
 
 | Tool | Request | Make scope |
 | --- | --- | --- |
@@ -580,6 +645,27 @@ them up, so check them first. It is in no profile and is offered only when a con
 The profiles are `teamvariables-read` and `teamvariables-manage` (list, create, update); neither is recommended.
 Changes need their own confirmation, send exactly one changing request, and are never retried; a timeout, a
 connection reset, a 5xx, or an unreadable answer is reported as uncertain.
+
+## Organization variables
+
+`make.organizationvariables.list`, `.create`, `.update`, and `.delete` work on the variables of the organization
+a connection in organization mode is bound to; a team connection is refused before any secret is read. None
+takes an organization argument. They behave like the team variables: same names, types, caps, validation, system
+variable refusal, and uncertain-result handling.
+
+| Tool | Request | Make scope |
+| --- | --- | --- |
+| `make.organizationvariables.list` | `GET /organizations/{organizationId}/variables` | `organization-variables:read` |
+| `make.organizationvariables.create` | `POST /organizations/{organizationId}/variables` with `typeId`, `name`, `value` | `organization-variables:write` |
+| `make.organizationvariables.update` | `PATCH /organizations/{organizationId}/variables/{name}` with `typeId`, `value` | `organization-variables:write`, `organization-variables:read` |
+| `make.organizationvariables.delete` | `DELETE /organizations/{organizationId}/variables/{name}?confirmed=true` | `organization-variables:write`, `organization-variables:read` |
+
+Source: developers.make.com API reference, Organizations (checked 2026-10-06 against the published reference,
+not a live account). The list answer is read as an array under `organizationVariables`, an assumption from the
+team variables. `delete` needs `confirmed: true`, is in no profile, and is offered only when a connection's
+`tools` list names it. The profiles are `organizationvariables-read` and `organizationvariables-manage` (list,
+create, update); neither is recommended. A 403 names `organization-variables:read` or `:write`. Sensitivity is
+`make-organization-variables-may-hold-secrets`; values are untrusted.
 
 ## Credential requests
 
@@ -624,8 +710,8 @@ never renders it, follows a link inside it, or executes anything derived from it
 This provider lists and reads scenarios and runs, reads a scenario's blueprint, creates a scenario, replaces
 a scenario's blueprint, scheduling, name, or folder, starts and stops a scenario, and runs one on demand. It
 deliberately does not, and has no tool to, delete or clone a scenario, replay a run, make a generic webhook
-call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, replace or update a single data store record, delete all records of a store, manage keys, teams, or organizations (it only reads the bound team
-and its organization), or read or change organization variables; those are out of scope. It lists, creates, updates, and (through a tools list) deletes the custom variables of the bound team, never a system variable. For connections it
+call, start or stop a hook's learning mode, set a hook's data, delete all queued hook items at once or replay or process them, manage labels, replace or update a single data store record, delete all records of a store, manage keys or organizations (it only reads the bound team
+and its organization; in organization mode it lists, creates, updates, and, through a tools list, deletes teams of the bound organization, and nothing else; changing an organization, inviting or removing members, and organization variables are not offered), or read or change organization variables; those are out of scope. It lists, creates, updates, and (through a tools list) deletes the custom variables of the bound team, never a system variable. For connections it
 lists and reads allow-listed metadata, lists editable parameter names, tests, renames, and (through a tools
 list) creates, sets the data of, and deletes a connection of the bound team, taking secrets only from a
 released forward credential, and lists and sets the roles of users on its access list; it does not authorize
