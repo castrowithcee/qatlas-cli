@@ -107,7 +107,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"symbol and word together so it reads without colour, plus the admin abbreviation while it is\n" +
 			"encrypted: admin off, admin Nm left, or admin: confirm each change for vault.admin_timeout: 0.\n" +
 			"ctrl+l works everywhere, forms included: on a locked vault it opens a masked prompt that unlocks\n" +
-			"it, hands it to a vault process on Linux and macOS the same way 'qatlas vault unlock' does, and\n" +
+			"it, hands it to a vault process on Linux, macOS, and Windows the same way 'qatlas vault unlock' does, and\n" +
 			"starts this window's admin session in the same step; on an unlocked, encrypted vault it asks Lock\n" +
 			"the vault now?, and y locks the vault process, forgets the key this window held, and ends the\n" +
 			"admin session. An unencrypted vault has nothing to lock, and ctrl+l says so.\n\n" +
@@ -117,7 +117,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"the configuration, unencrypted or encrypted to a passphrase, for a machine without a usable\n" +
 			"keyring; storing its very first secret, here or with 'qatlas credential set', offers one, typed\n" +
 			"masked and twice, and leaving it empty keeps the vault unencrypted. On a role row, s stores the\n" +
-			"secret in the place the secrets row names; x removes it. On Linux and macOS, storing or removing\n" +
+			"secret in the place the secrets row names; x removes it. On Linux, macOS, and Windows, storing or removing\n" +
 			"a vault secret here, or through the guided setup's own save, is handed on to a vault process that\n" +
 			"holds the vault unlocked outside this run, exactly the way 'qatlas credential set' and 'qatlas\n" +
 			"credential delete' already do; elsewhere, or when no such process runs, there is nothing to tell.\n" +
@@ -134,7 +134,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"passphrase, then an explicit confirmation that every secret ends up unencrypted on disk). The\n" +
 			"current passphrase is verified before anything else is asked; a wrong one reopens that very\n" +
 			"prompt with error: wrong passphrase instead of asking for a new passphrase or the confirmation\n" +
-			"for nothing, and nothing is ever asked on this process's own terminal. On Linux and macOS,\n" +
+			"for nothing, and nothing is ever asked on this process's own terminal. On Linux, macOS, and Windows,\n" +
 			"changing the passphrase or turning encryption off also locks a vault process that holds the vault\n" +
 			"unlocked with the old identity, the same way 'qatlas vault passphrase' and 'qatlas vault decrypt'\n" +
 			"already do, and says so once the change is done. While a plaintext\n" +
@@ -271,7 +271,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"unlock dialog at once; esc leaves it locked. Unsaved input in an open form is never dropped\n" +
 			"silently: the editor asks first, and not now keeps editing on the old version. Where the editor\n" +
 			"cannot restart itself, on Windows or when the new program cannot be run, it keeps running the\n" +
-			"old version until it is restarted by hand. A failed check stays silent. A dev build never\n" +
+			"old version until it is restarted by hand. On Windows u also locks a vault process before the\n" +
+			"program is replaced, since Windows has no handover; 'qatlas vault unlock' unlocks it again. A failed check stays silent. A dev build never\n" +
 			"checks, and a non-empty QATLAS_NO_UPDATE_CHECK turns the check off.",
 		Args: noArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {

@@ -70,7 +70,7 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 			"connection with what changed and releases it, all at once or one at a time with --connection.\n" +
 			"'vault token' creates, shows, and revokes the agent tokens an agent approves with instead.\n" +
 			"'vault handover' shows or sets whether 'qatlas update' hands an unlocked vault over to the new\n" +
-			"program or locks it.\n\n" +
+			"program or locks it; Windows has no handover and always locks.\n\n" +
 			"On Linux, macOS, and Windows 'vault unlock' hands the unlocked vault to a vault process that holds\n" +
 			"it open until it is idle for vault.idle_timeout (12h unless the configuration says otherwise),\n" +
 			"'vault lock' ends it, or the machine restarts; elsewhere unlocking only lasts for the current\n" +

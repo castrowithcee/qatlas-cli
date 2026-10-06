@@ -13,8 +13,9 @@ import (
 )
 
 // vaultHandoverPlatform reports whether a vault process here hands the vault over to a successor when an
-// update asks it to. On Windows it never does: an update locks it instead.
-const vaultHandoverPlatform = false
+// update asks it to. On Windows it never does: an update locks it instead, whatever the update behaviour
+// says. It is a variable only so that a test can run the update flow of either platform.
+var vaultHandoverPlatform = false
 
 // stopSignals are the signals that lock a vault process, as a lock request would. A vault process has no
 // console, so Windows sends it none of them in practice; it ends with the system at logout or restart.

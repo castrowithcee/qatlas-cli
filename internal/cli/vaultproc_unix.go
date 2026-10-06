@@ -15,7 +15,8 @@ import (
 
 // vaultHandoverPlatform reports whether a vault process here hands the vault over to a successor when an
 // update asks it to.
-const vaultHandoverPlatform = true
+// It is a variable only so that a test can run the update flow of either platform.
+var vaultHandoverPlatform = true
 
 // socketCheckInterval is how often a vault process checks that its socket is still in place.
 const socketCheckInterval = 10 * time.Second
