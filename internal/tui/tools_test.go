@@ -152,7 +152,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 		t.Fatalf("space on the tool list opened screen %v, want the picker", m.screen)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"0/21 ticked", "Content (20)", "Administration (1)"} {
+	for _, want := range []string{"0/24 ticked", "Content (23)", "Administration (1)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("picker lacks %q:\n%s", want, view)
 		}
@@ -187,7 +187,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	focusField(t, m, toolListLabel)
 	// The grouped picker starts on its all-groups row: the first space ticks everything, the second clears it.
 	press(t, m, " ", " ", " ", "enter")
-	if !strings.Contains(screenOf(m), "none of 21 ticked: no tool is offered") {
+	if !strings.Contains(screenOf(m), "none of 24 ticked: no tool is offered") {
 		t.Fatalf("an empty selection does not say that it closes the route:\n%s", screenOf(m))
 	}
 	pump(t, m, "f2")

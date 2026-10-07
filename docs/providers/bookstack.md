@@ -11,7 +11,7 @@ updated: 2026-10-07
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
 chapters, shelves, and tags, reading the instance information, and searching content (`read`), creating pages, books, chapters, and shelves (`create`),
-changing or moving pages and changing books, chapters, and shelves (`update`), and deleting pages (`delete`).
+changing or moving pages and changing books, chapters, and shelves (`update`), and deleting pages, books, chapters, and shelves (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
 
@@ -235,10 +235,18 @@ accepts at most 1 MiB of page content (`html` or `markdown`). Redirects are neve
 
 ## Deleting
 
-`bookstack.pages.delete` moves the page to the BookStack recycle bin; it does not erase it permanently.
-Behavior change: the tool requires a tool allow list and is part of no profile. A connection offers it only
-when its `tools` list names `bookstack.pages.delete` and its `permissions` include `delete`; a connection
-without a `tools` list no longer offers it.
+`bookstack.pages.delete`, `bookstack.books.delete`, and `bookstack.chapters.delete` move the object to the
+BookStack recycle bin. A book goes with all its chapters and pages, a chapter with all its pages. Only a
+BookStack admin can restore them, until the recycle bin is emptied automatically (30 days by default,
+`RECYCLE_BIN_LIFETIME`; with `0` the deletion is immediate and final). `bookstack.shelves.delete` removes only
+the shelf; its books stay. Each call sends exactly one `DELETE` without retry; after a timeout or a 5xx answer
+the result is reported as uncertain.
+
+These tools require a tool allow list and are part of no profile. A connection offers one only when its `tools`
+list names it and its `permissions` include `delete`; a connection without a `tools` list does not offer them.
+On a connection bound to books, `books.delete` checks `id` against the books before any request, and
+`chapters.delete` proves the chapter's book by one read; deleting a bound book is allowed, but the target then
+points at nothing. `shelves.delete` is instance-wide and refused on a connection with book targets.
 
 ## Errors
 

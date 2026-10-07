@@ -760,8 +760,8 @@ func TestRegister(t *testing.T) {
 	}
 
 	got := reg.Provider(Provider)
-	if len(got) != 21 {
-		t.Fatalf("capabilities = %d, want 21", len(got))
+	if len(got) != 24 {
+		t.Fatalf("capabilities = %d, want 24", len(got))
 	}
 	wantRisk := capability.Risk{
 		Effect:          capability.EffectRead,
@@ -792,6 +792,9 @@ func TestRegister(t *testing.T) {
 		{Provider + ".shelves.get", wantRisk},
 		{Provider + ".shelves.create", shelvesCreate.Risk},
 		{Provider + ".shelves.update", shelvesUpdate.Risk},
+		{Provider + ".books.delete", booksDelete.Risk},
+		{Provider + ".chapters.delete", chaptersDelete.Risk},
+		{Provider + ".shelves.delete", shelvesDelete.Risk},
 	} {
 		if tt.risk.Effect != capability.EffectRead && (tt.risk.Confirmation != capability.ConfirmationRequired ||
 			tt.risk.Idempotency == "" || !tt.risk.OpenWorld || tt.risk.DataSensitivity == "") {
@@ -811,7 +814,7 @@ func TestRegister(t *testing.T) {
 			if descriptor.Risk != tt.risk {
 				t.Errorf("risk = %+v, want %+v", descriptor.Risk, tt.risk)
 			}
-			if descriptor.RequiresToolAllowList != (tt.id == Provider+".pages.delete") {
+			if descriptor.RequiresToolAllowList != strings.HasSuffix(tt.id, ".delete") {
 				t.Errorf("requires_tool_allow_list = %v", descriptor.RequiresToolAllowList)
 			}
 			if descriptor.Group != "content" {
