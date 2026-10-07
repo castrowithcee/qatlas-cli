@@ -54,7 +54,7 @@ func openApprovalModel(t *testing.T, store *config.Store, dir string) *Model {
 	t.Helper()
 	secrets, _ := newResolver(t, dir, nil)
 	secrets = secrets.WithVault(vault.New(dir), nil)
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -397,7 +397,7 @@ func TestUnencryptedVaultUnaffectedBySaving(t *testing.T) {
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -513,7 +513,7 @@ func TestApprovalsSectionWhileUnencrypted(t *testing.T) {
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir) // a vault directory that holds nothing yet: state absent
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

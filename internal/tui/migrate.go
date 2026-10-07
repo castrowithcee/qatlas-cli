@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
@@ -235,21 +236,21 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 	v := m.secrets.Vault()
 	cfg := m.cfg.Clone()
 	base := m.rev
-	store, secrets, previous := m.store, m.secrets, m.cfg
+	store, svc, previous := m.store, m.svc, m.cfg
 	m.vaultBusy = true
 	m.writes++
 	m.busy = "migrating credentials.yaml into the vault"
 	m.screen = screenForm
 	return func() tea.Msg {
 		var warning string
-		err := vaultmigrate.Write(v, p.plan, offer, vaultMigrateSync(v, &warning))
+		err := vaultmigrate.Write(v, p.plan, offer, vaultMigrateSync(svc, &warning))
 		if err == nil {
 			err = vaultmigrate.Verify(v, p.plan)
 		}
 		if err == nil {
 			err = vaultmigrate.SwitchCredentials(store, cfg, base, p.switched)
 			if err == nil {
-				if logged := recordConnections(store, secrets, previous, cfg); logged != "" {
+				if logged := svc.RecordConnections(previous, cfg); logged != "" {
 					if warning != "" {
 						warning += "; "
 					}
@@ -261,15 +262,15 @@ func (m *Model) runVaultMigrateWrite(offer vault.PassphraseFunc) tea.Cmd {
 	}
 }
 
-// vaultMigrateSync hands the entries a migrate action just wrote on to a vault process that holds v
-// unlocked outside this run, exactly the way 'qatlas vault migrate' does for the same plan, through the
-// same syncVaultProcess every other vault write in this editor uses (see vaultsettings.go): a process that
+// vaultMigrateSync hands the entries a migrate action just wrote on to a vault process that holds the
+// vault unlocked outside this run, exactly the way 'qatlas vault migrate' does for the same plan, through the
+// same manage.Service.SyncVaultProcess every other vault write in this editor uses: a process that
 // cannot be reached at all, is not running, or this platform runs none, needs nothing said. Any other
 // failure is worth a warning, written to *warning rather than printed, since this editor has no terminal of
 // its own to print to: the vault already holds the change and keeps it.
-func vaultMigrateSync(v *vault.Vault, warning *string) vaultmigrate.Sync {
+func vaultMigrateSync(svc *manage.Service, warning *string) vaultmigrate.Sync {
 	return func(plan []vaultmigrate.Entry) {
-		*warning = syncVaultProcess(v, func(ctx context.Context, client *vaultproc.Client) error {
+		*warning = svc.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
 			for _, p := range plan {
 				if err := client.Set(ctx, p.Name, p.Role, p.Value); err != nil {
 					return err

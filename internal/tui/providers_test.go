@@ -52,7 +52,7 @@ func providerRegistry(t *testing.T, n int) *capability.Registry {
 func providerModel(t *testing.T, reg *capability.Registry) (*Model, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	m, err := New(config.NewStore(path, reg), nil, nil, &redact.Redactor{})
+	m, err := buildModel(config.NewStore(path, reg), nil, nil, &redact.Redactor{})
 	mustNoError(t, err)
 	for _, id := range m.cfg.Providers() {
 		m.cfg.Services["svc-"+id] = config.Service{Provider: id, BaseURL: "https://" + id + ".example.invalid"}
@@ -189,7 +189,7 @@ func TestTheProviderTableTakesOnlyTheMarkedProvider(t *testing.T) {
 		mustNoError(t, register(reg))
 	}
 	store := config.NewStore(filepath.Join(t.TempDir(), "config.yaml"), reg)
-	m, err := New(store, nil, nil, &redact.Redactor{})
+	m, err := buildModel(store, nil, nil, &redact.Redactor{})
 	mustNoError(t, err)
 	m.cfg.Services["wiki"] = config.Service{Provider: "bookstack", BaseURL: "https://wiki.example.invalid"}
 	m.cfg.Services["notifications"] = config.Service{Provider: "telegram", BaseURL: "https://api.telegram.org"}

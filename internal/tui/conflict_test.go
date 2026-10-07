@@ -44,7 +44,7 @@ var foreignWriters = []foreignWriter{
 
 func secondEditor(t *testing.T, m *Model, store *config.Store) *Model {
 	t.Helper()
-	other, err := New(store, nil, m.secrets, nil)
+	other, err := buildModel(store, nil, m.secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -262,7 +262,7 @@ func TestCommitSetupFailedSecretLeavesNothingBehind(t *testing.T) {
 		credential: "reader", storage: storageKeyring, roles: []string{"token-id", "token-secret"},
 		secrets: map[string]string{"token-id": "id-1", "token-secret": "sec-2"},
 	}
-	_, err := commitSetup(store, &failingSecrets{Secrets: secrets}, cfg, config.RevisionAbsent, plan, nil)
+	_, err := commitSetup(testService(store, &failingSecrets{Secrets: secrets}, nil), cfg, config.RevisionAbsent, plan, nil)
 	if err == nil {
 		t.Fatal("commitSetup() succeeded with a refusing keyring")
 	}
@@ -281,7 +281,7 @@ func TestCommitSetupConflictWritesNoSecret(t *testing.T) {
 		credential: "reader", storage: storageKeyring, roles: []string{"token-id"},
 		secrets: map[string]string{"token-id": "id-1"},
 	}
-	_, err := commitSetup(store, secrets, cfg, config.RevisionAbsent, plan, nil)
+	_, err := commitSetup(testService(store, secrets, nil), cfg, config.RevisionAbsent, plan, nil)
 	if !errors.Is(err, config.ErrConflict) {
 		t.Fatalf("commitSetup() = %v, want a conflict", err)
 	}
@@ -300,7 +300,7 @@ func TestVaultMigrateConflictKeepsTheOtherChangeAndRepeatSucceeds(t *testing.T) 
 	mustNoError(t, store.Save(cfg))
 	writeLegacyCredentialsYAML(t, dir, map[string]map[string]string{"reader": {"token-id": "id-1"}})
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
-	"github.com/castrowithcee/qatlas-cli/internal/secretcommit"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -514,11 +514,11 @@ func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 	m.screen = screenSummary
 	m.clearMessages()
 	m.busy = "saving " + plan.connection
-	store, secrets, previous := m.store, m.secrets, m.cfg
+	svc, previous := m.svc, m.cfg
 	return func() tea.Msg {
-		warning, err := commitSetup(store, secrets, candidate, base, plan, offer)
+		warning, err := commitSetup(svc, candidate, base, plan, offer)
 		if err == nil {
-			if logged := recordConnections(store, secrets, previous, candidate); logged != "" {
+			if logged := svc.RecordConnections(previous, candidate); logged != "" {
 				if warning != "" {
 					warning += "; "
 				}
@@ -530,11 +530,11 @@ func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 }
 
 // commitSetup stores the secrets of a new credential and then saves the configuration, through
-// secretcommit.Commit: the shared commit boundary the browser's own new-credential form in internal/web
-// uses too, so the two never leave a different thing behind on a failure (see internal/secretcommit).
-func commitSetup(store *config.Store, secrets Secrets, cfg *config.Config, base config.Revision, plan setupPlan, offer vault.PassphraseFunc) (string, error) {
+// manage.Service.CommitSecrets, the commit the browser's new-credential form uses too, so the two never
+// leave a different thing behind on a failure.
+func commitSetup(svc *manage.Service, cfg *config.Config, base config.Revision, plan setupPlan, offer vault.PassphraseFunc) (string, error) {
 	toVault := storageType(plan.storage) == config.CredentialTypeVault
-	return secretcommit.Commit(store, secrets, cfg, base, plan.credential, toVault, plan.roles, plan.secrets, offer)
+	return svc.CommitSecrets(cfg, base, plan.credential, toVault, plan.roles, plan.secrets, offer)
 }
 
 // setupSaved applies the outcome of the final save.

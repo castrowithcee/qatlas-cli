@@ -42,7 +42,7 @@ func newPayloadHarness(t *testing.T, withVault bool) *payloadHarness {
 	} else {
 		secrets, mem = newResolver(t, dir, nil)
 	}
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

@@ -616,7 +616,7 @@ func (m *Model) loadApprovalOrigin(name string) tea.Cmd {
 		return nil
 	}
 	v := m.logVault()
-	configPath := m.store.Path()
+	configPath := m.svc.Path()
 	retention := m.cfg.LogRetentionDays()
 	return func() tea.Msg {
 		checker, _, done := logChecker(context.Background(), v)

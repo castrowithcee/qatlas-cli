@@ -403,7 +403,7 @@ func TestGuidedSetupTestsWithTheSameTester(t *testing.T) {
 		calls = append(calls, name)
 		return provider.ClassAuth, nil
 	}
-	m, err := New(store, tester, secrets, nil)
+	m, err := buildModel(store, tester, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -484,7 +484,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 	mustNoError(t, store.Save(cfg))
 	for _, credential := range []string{"store", "vars"} {
 		secrets, _ := newResolver(t, dir, nil)
-		m, err := New(store, nil, secrets, nil)
+		m, err := buildModel(store, nil, secrets, nil)
 		if err != nil {
 			t.Fatalf("New() = %v", err)
 		}

@@ -1,8 +1,8 @@
 //go:build linux || darwin
 
 // This editor hands every vault write, removal, and rekey on to a vault process that holds the vault
-// unlocked outside this run, exactly the way the CLI already does (see syncVaultProcess and
-// lockVaultProcessForRekey in vaultsettings.go); these tests exercise that against a real vaultproc.Server,
+// unlocked outside this run, exactly the way the CLI already does (see manage.Service.SyncVaultProcess
+// and LockVaultProcess); these tests exercise that against a real vaultproc.Server,
 // the way internal/cli/vaultsync_unix_test.go already does for the CLI, so the process seam behind
 // vaultmigrate.SyncChange and vaultmigrate.LockProcess is proven, not just its callers' plumbing.
 package tui
@@ -19,6 +19,7 @@ import (
 	"filippo.io/age"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
@@ -113,7 +114,7 @@ func TestVaultRoleWriteAndRemoveSyncTheVaultProcess(t *testing.T) {
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeVault}))
 	mustNoError(t, store.Save(cfg))
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -164,7 +165,7 @@ func TestVaultRoleWriteIsSilentWithoutARunningVaultProcess(t *testing.T) {
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeVault}))
 	mustNoError(t, store.Save(cfg))
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -200,7 +201,7 @@ func TestVaultRoleWriteWarnsWhenTheVaultProcessRefuses(t *testing.T) {
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeVault}))
 	mustNoError(t, store.Save(cfg))
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -228,8 +229,45 @@ func TestVaultRoleWriteWarnsWhenTheVaultProcessRefuses(t *testing.T) {
 	}
 }
 
+// The warning of a refusing vault process is redacted before it reaches the status line.
+func TestVaultProcessWarningIsRedactedInTheStatusLine(t *testing.T) {
+	const passphrase = "hunter2"
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
+	secrets, _ := newVaultResolver(t, dir)
+	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
+	server, _ := serveVaultProcess(t, dir, passphrase)
+	server.Verify = refuseEveryClient
+
+	cfg := newTestConfig(t)
+	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeVault}))
+	mustNoError(t, store.Save(cfg))
+
+	const marked = "the vault holds the change"
+	red := &redact.Redactor{}
+	red.Add(marked)
+	m, err := buildModel(store, nil, secrets, red)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	openSectionByName(t, m, sectionCredentials)
+	pump(t, m, "enter")
+	focusRole(t, m, "token-id")
+	press(t, m, "s")
+	typeText(t, m, "canary-redacted-5f6a")
+	pump(t, m, "enter")
+	typeText(t, m, passphrase)
+	pump(t, m, "enter")
+	if m.fail != "" {
+		t.Fatalf("storing in the vault reported %q", m.fail)
+	}
+	if strings.Contains(m.status, marked) || !strings.Contains(m.status, redact.Marker) {
+		t.Errorf("status = %q, want the vault process warning redacted", m.status)
+	}
+}
+
 // The guided setup's own save hands a new vault credential's secrets on to a running vault process too,
-// through commitSetup, the same syncVaultProcess helper the role rows use.
+// through commitSetup, the same manage.Service.SyncVaultProcess the role rows use.
 func TestCommitSetupSyncsNewVaultSecretsToARunningProcess(t *testing.T) {
 	const passphrase = "hunter2"
 	dir := filepath.Join(t.TempDir(), "qatlas")
@@ -246,7 +284,7 @@ func TestCommitSetupSyncsNewVaultSecretsToARunningProcess(t *testing.T) {
 		credential: "reader", storage: storageVault, roles: []string{"token-id", "token-secret"},
 		secrets: map[string]string{"token-id": "canary-setup-id-1a2b", "token-secret": "canary-setup-secret-3c4d"},
 	}
-	warning, err := commitSetup(store, secrets, cfg, config.RevisionAbsent, plan, nil)
+	warning, err := commitSetup(testService(store, secrets, nil), cfg, config.RevisionAbsent, plan, nil)
 	if err != nil {
 		t.Fatalf("commitSetup() = %v", err)
 	}
@@ -284,7 +322,7 @@ func TestVaultRekeyLocksTheVaultProcess(t *testing.T) {
 			locked, _ := newVaultResolver(t, dir)
 			_, client := serveVaultProcess(t, dir, passphrase)
 
-			m, err := New(store, nil, locked, nil)
+			m, err := buildModel(store, nil, locked, nil)
 			if err != nil {
 				t.Fatalf("New() = %v", err)
 			}
@@ -331,7 +369,7 @@ func TestVaultRekeyIsSilentWithoutARunningVaultProcess(t *testing.T) {
 		func(string) (string, error) { return passphrase, nil }))
 	locked, _ := newVaultResolver(t, dir)
 
-	m, err := New(store, nil, locked, nil)
+	m, err := buildModel(store, nil, locked, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -400,7 +438,7 @@ func TestCtrlLStartsARealVaultProcess(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 	withStartableVaultProcess(t)
 
-	m, err := New(store, nil, locked, nil)
+	m, err := buildModel(store, nil, locked, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -415,7 +453,7 @@ func TestCtrlLStartsARealVaultProcess(t *testing.T) {
 	// Another window over the same directory, still locked in its own process: the vault process ctrl+l
 	// just started is what tells its header "unlocked" too.
 	elsewhere, _ := newVaultResolver(t, dir)
-	other, err := New(newTestStore(t, path), nil, elsewhere, nil)
+	other, err := buildModel(newTestStore(t, path), nil, elsewhere, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -448,7 +486,7 @@ func TestCtrlLLocksARealVaultProcess(t *testing.T) {
 	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", func(string) (string, error) { return passphrase, nil }))
 	_, client := serveVaultProcess(t, dir, passphrase)
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -481,7 +519,7 @@ func TestCtrlLLocksARealVaultProcessWhenOnlyTheProcessHoldsItUnlocked(t *testing
 	_, client := serveVaultProcess(t, dir, passphrase)
 	locked, _ := newVaultResolver(t, dir)
 
-	m, err := New(store, nil, locked, nil)
+	m, err := buildModel(store, nil, locked, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

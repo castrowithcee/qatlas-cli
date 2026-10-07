@@ -206,7 +206,7 @@ type placedMsg struct {
 // vaultBusy: a keyring outcome that happened to land while a vault write of another credential is still in
 // flight must not release a guard that is not its own. procWarning is set only for a vault outcome, when
 // the change could not reach a vault process that holds the vault unlocked outside this run (see
-// syncVaultProcess in vaultsettings.go); "" the rest of the time, including every keyring outcome, which
+// manage.Service.SyncVaultProcess); "" the rest of the time, including every keyring outcome, which
 // this editor never tells such a process about.
 type writtenMsg struct {
 	credential  string
@@ -569,7 +569,7 @@ func (m *Model) writeVaultSecret(credential, role, value string, offer vault.Pas
 	m.writes++
 	m.busy = fmt.Sprintf("storing the secret for %s.%s in the vault", credential, role)
 
-	secrets := m.secrets
+	secrets, svc := m.secrets, m.svc
 	return func() tea.Msg {
 		err := secrets.SetVault(credential, role, value, offer)
 		msg := writtenMsg{credential: credential, role: role, vault: true, err: err, approvalBefore: before}
@@ -577,7 +577,7 @@ func (m *Model) writeVaultSecret(credential, role, value string, offer vault.Pas
 			msg.done = fmt.Sprintf("Stored %s.%s in the vault", credential, role)
 			// The vault already holds the change; a vault process that holds it unlocked outside this run
 			// is told too, the same way 'qatlas credential set' already does.
-			msg.procWarning = syncVaultProcess(secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
+			msg.procWarning = svc.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
 				return client.Set(ctx, credential, role, value)
 			})
 		}
@@ -592,7 +592,7 @@ func (m *Model) removeVaultSecret(credential, role string, before approvalBefore
 	m.writes++
 	m.busy = fmt.Sprintf("removing the stored secret for %s.%s from the vault", credential, role)
 
-	secrets := m.secrets
+	secrets, svc := m.secrets, m.svc
 	return func() tea.Msg {
 		err := secrets.DeleteVault(credential, role)
 		msg := writtenMsg{credential: credential, role: role, vault: true, err: err, approvalBefore: before}
@@ -600,7 +600,7 @@ func (m *Model) removeVaultSecret(credential, role string, before approvalBefore
 			msg.done = fmt.Sprintf("Removed %s.%s from the vault", credential, role)
 			// The vault already dropped the secret; a vault process that holds it unlocked outside this run
 			// is told too, the same way 'qatlas credential delete' already does.
-			msg.procWarning = syncVaultProcess(secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
+			msg.procWarning = svc.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
 				return client.Delete(ctx, credential, role)
 			})
 		}

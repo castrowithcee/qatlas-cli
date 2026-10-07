@@ -67,7 +67,7 @@ func scaleStore(tb testing.TB, units int) *config.Store {
 func scaleOpen(tb testing.TB, store *config.Store) *Model {
 	tb.Helper()
 	secrets := secret.NewWith(func(string) string { return "" }, secret.NewMemoryStore(), nil, nil)
-	model, err := New(store, nil, secrets, nil)
+	model, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		tb.Fatalf("New() = %v", err)
 	}

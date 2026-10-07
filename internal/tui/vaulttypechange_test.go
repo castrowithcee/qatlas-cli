@@ -26,7 +26,7 @@ func TestVaultTypeChangeRefusedWhileASecretIsStored(t *testing.T) {
 			mustNoError(t, store.Save(cfg))
 			mustNoError(t, secrets.SetVault("reader", "token-secret", "canary-orphan-vault-9a1c", nil))
 
-			m, err := New(store, nil, secrets, nil)
+			m, err := buildModel(store, nil, secrets, nil)
 			if err != nil {
 				t.Fatalf("New() = %v", err)
 			}
@@ -103,7 +103,7 @@ func TestVaultTypeChangeUnlocksThenAppliesTheSameGuard(t *testing.T) {
 
 	// A fresh resolver over the same directory starts genuinely locked.
 	locked, _ := newVaultResolver(t, dir)
-	m, err := New(store, nil, locked, nil)
+	m, err := buildModel(store, nil, locked, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -148,7 +148,7 @@ func TestVaultTypeChangeAllowedWithNothingStoredYet(t *testing.T) {
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeVault}))
 	mustNoError(t, store.Save(cfg))
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

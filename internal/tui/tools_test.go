@@ -41,7 +41,7 @@ func toolsModel(t *testing.T, reg *capability.Registry, connections map[string]c
 		mustNoError(t, cfg.SetConnection(name, connection))
 	}
 	mustNoError(t, store.Save(cfg))
-	m, err := New(store, nil, nil, &redact.Redactor{})
+	m, err := buildModel(store, nil, nil, &redact.Redactor{})
 	if err != nil {
 		t.Fatal(err)
 	}

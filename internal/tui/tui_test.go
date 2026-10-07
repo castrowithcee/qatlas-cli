@@ -13,7 +13,10 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -45,6 +48,16 @@ func newTestStore(t *testing.T, path string) *config.Store {
 	return config.NewStore(path, testCatalog(t))
 }
 
+// testService returns the management service the editor under test works through.
+func testService(store *config.Store, secrets Secrets, redactor *redact.Redactor) *manage.Service {
+	return manage.New(store, secrets, connlog.SurfaceTUI, redactor)
+}
+
+// buildModel builds the editor over store the way the command does, with a service over the same secrets.
+func buildModel(store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor) (*Model, error) {
+	return New(testService(store, secrets, redactor), store, tester, secrets, redactor)
+}
+
 func newTestConfig(t *testing.T) *config.Config {
 	t.Helper()
 	return config.New(testCatalog(t))
@@ -68,7 +81,7 @@ func newEnvModel(t *testing.T, env map[string]string) (*Model, *config.Store, st
 	store := newTestStore(t, path)
 
 	secrets, _ := newResolver(t, dir, env)
-	model, err := New(store, nil, secrets, nil)
+	model, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
