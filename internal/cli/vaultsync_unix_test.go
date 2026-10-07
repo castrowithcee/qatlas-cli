@@ -24,6 +24,7 @@ import (
 	"filippo.io/age"
 	"golang.org/x/crypto/ssh"
 
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/release"
 	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
@@ -159,6 +160,24 @@ func TestCredentialSetWarnsWhenTheVaultProcessRefuses(t *testing.T) {
 	got, found, _, err := vault.New(dir).Get("wiki-vault", "token-id", offeringPassphrase("s3cret-phrase"))
 	if err != nil || !found || got != "changed-"+canaryVault {
 		t.Fatalf("the vault holds %q, %v, %v, want the stored secret kept", got, found, err)
+	}
+}
+
+// The warning of a refused vault process goes through the redaction like every other message of the
+// command: a registered value inside it never reaches standard error, and the prefix stays.
+func TestCredentialSetRedactsTheVaultProcessWarning(t *testing.T) {
+	dir := encryptedVaultFixture(t, "")
+	server, _ := serveVaultInProcess(t, dir)
+	server.Verify = refuseEveryClient
+	withVaultPassphrase(t, offeringPassphrase("s3cret-phrase"))
+
+	opts := &Options{Redactor: &redact.Redactor{}}
+	opts.Redactor.Add("could not take it and still answers")
+	code, _, stderr := runWithInput(t, opts, "changed-"+canaryVault+"\n",
+		"credential", "set", "wiki-vault", "token-id", "--config", configIn(dir))
+	if code != exitOK || !strings.HasPrefix(stderr, "qatlas: warning: the vault holds the change") ||
+		strings.Contains(stderr, "could not take it and still answers") || !strings.Contains(stderr, redact.Marker) {
+		t.Fatalf("set: exit code = %d, stderr = %q, want the warning redacted", code, stderr)
 	}
 }
 

@@ -159,6 +159,8 @@ func TestWebLogFailureIsAWarningAndKeepsTheSave(t *testing.T) {
 	s, store, _, path := newConnectionTestServer(t, nil)
 	cookie, csrf := coupleAndApprove(t, s, nil)
 	vaultDir := vault.New(filepath.Dir(path)).Dir()
+	// A registered value inside the log failure never reaches the notice.
+	s.redactor.Add(vaultDir)
 	if err := os.MkdirAll(vaultDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -184,5 +186,7 @@ func TestWebLogFailureIsAWarningAndKeepsTheSave(t *testing.T) {
 	}
 	if notice := s.takeNotice(); !strings.Contains(notice, "warning: the change was saved") {
 		t.Errorf("notice = %q, want the log warning", notice)
+	} else if strings.Contains(notice, vaultDir) {
+		t.Errorf("notice = %q, want the registered value redacted", notice)
 	}
 }

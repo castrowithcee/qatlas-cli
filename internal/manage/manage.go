@@ -51,6 +51,26 @@ func New(store *config.Store, secrets Secrets, surface string, redactor *redact.
 	return &Service{store: store, secrets: secrets, surface: surface, redactor: redactor, processOK: vaultproc.Supported}
 }
 
+// ForVault returns the service for surface over exactly the vault v, for a caller that reaches no secret
+// store beyond it: it syncs and locks the vault process and logs connections, and its CommitSecrets writes
+// nothing and fails. store may be nil for a caller that only syncs or locks the vault process. v may be nil.
+func ForVault(store *config.Store, v *vault.Vault, surface string, redactor *redact.Redactor) *Service {
+	return New(store, vaultOnly{v: v}, surface, redactor)
+}
+
+// vaultOnly is the Secrets of a service built by ForVault: it names its vault and stores nothing.
+type vaultOnly struct{ v *vault.Vault }
+
+var errNoSecretStore = errors.New("no secret store is configured for this service")
+
+func (o vaultOnly) Set(string, string, string) error               { return errNoSecretStore }
+func (o vaultOnly) Delete(string, string) ([]secret.Source, error) { return nil, errNoSecretStore }
+func (o vaultOnly) Vault() *vault.Vault                            { return o.v }
+func (o vaultOnly) SetVault(string, string, string, vault.PassphraseFunc) error {
+	return errNoSecretStore
+}
+func (o vaultOnly) DeleteVault(string, string) error { return errNoSecretStore }
+
 // WithVaultProcessSupport returns a copy of s that treats the vault process as supported or not, in place
 // of vaultproc.Supported. A caller with its own switch, such as a test lever, passes it here.
 func (s *Service) WithVaultProcessSupport(supported bool) *Service {

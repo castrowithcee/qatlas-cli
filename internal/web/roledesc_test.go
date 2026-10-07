@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -53,7 +55,7 @@ func TestRoleHelpComesFromTheCredentialsProvider(t *testing.T) {
 	}
 	red := &redact.Redactor{}
 	resolver := secret.NewWith(func(string) string { return "" }, secret.NewMemoryStore(), nil, red)
-	s, err := New(testOverview(), nil, defaultTestAdminTimeout, store, resolver, red, nil)
+	s, err := New(testOverview(), nil, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

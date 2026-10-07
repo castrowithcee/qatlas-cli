@@ -25,7 +25,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return

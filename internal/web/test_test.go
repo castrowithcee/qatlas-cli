@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -102,7 +104,7 @@ func TestConnectionTestButtonRedactsError(t *testing.T) {
 		red.Add(testerCanarySecret)
 		return "", fmt.Errorf("auth failed with token %s", testerCanarySecret)
 	})
-	s, err := New(testOverview(), nil, defaultTestAdminTimeout, store, resolver, red, tester)
+	s, err := New(testOverview(), nil, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, tester)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

@@ -164,7 +164,7 @@ func (r *vaultReplacement) before(ctx context.Context, release selfupdate.Releas
 			return
 		}
 	}
-	r.note = lockVaultProcess(ctx, v, why, unlockAgain)
+	r.note = lockVaultProcess(ctx, r.opts, v, why, unlockAgain)
 }
 
 // after hands the vault over once the program is replaced.

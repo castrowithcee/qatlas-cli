@@ -365,3 +365,17 @@ func TestExportedMethodsDoNotReturnGuardedHandles(t *testing.T) {
 		}
 	}
 }
+
+func TestForVaultNamesItsVaultAndStoresNothing(t *testing.T) {
+	v := vault.New(t.TempDir())
+	svc := ForVault(nil, v, connlog.SurfaceCLI, nil)
+	if got := svc.vault(); got != v {
+		t.Fatalf("vault() = %v, want the vault given", got)
+	}
+	if err := svc.secrets.Set("c", "r", "x"); err == nil {
+		t.Fatal("Set() succeeded, want an error: ForVault stores nothing")
+	}
+	if got := ForVault(nil, nil, connlog.SurfaceCLI, nil).vault(); got != nil {
+		t.Fatalf("vault() = %v, want nil", got)
+	}
+}
