@@ -10,8 +10,8 @@ updated: 2026-10-07
 # BookStack
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
-chapters, shelves, and tags, reading the instance information, and searching content (`read`), creating pages, books, chapters, and shelves (`create`),
-changing or moving pages and changing books, chapters, and shelves (`update`), and deleting pages, books, chapters, and shelves (`delete`).
+chapters, shelves, tags, and page comments, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, and comments (`create`),
+changing or moving pages and changing books, chapters, shelves, and comments (`update`), and deleting pages, books, chapters, shelves, and comments (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
 
@@ -23,7 +23,8 @@ admits an effect `permissions` excludes. Page content is treated as untrusted da
 starts a new connection on the setup profile `read`, which ticks `[read]` and
 `[bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list,
 bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list,
-bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.system.get]`. A profile is a visible starting
+bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.comments.list, bookstack.comments.get,
+bookstack.system.get]`. A profile is a visible starting
 selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
 saving, and a saved connection never follows a profile.
 
@@ -200,9 +201,44 @@ naming it.
 
 ## Tool groups
 
-BookStack tools belong to the group `content` (pages, search, books, chapters, shelves, and tags) or the group
-`administration` (`bookstack.system.get`). Tool lists and pickers
+BookStack tools belong to the group `content` (pages, search, books, chapters, shelves, and tags), the group
+`comments` (page comments), or the group `administration` (`bookstack.system.get`). Tool lists and pickers
 show the group so that agents and people can find tools by subject.
+
+## Comments
+
+Comments are read and managed on pages only; comments on other object types are not reachable.
+
+`comments.list` takes an optional `page_id` (required on a connection bound to books), `limit`, and `offset`. It
+lists the comments of the page without their text: `id`, `page_id`, `parent_id`, `local_id`, `content_ref`,
+`created_by`, `updated_by`, `created_at`, `updated_at`. `parent_id` is the `local_id` of the parent comment on the
+same page (0 for a top-level comment); `local_id` is a number scoped to the page, `id` is global. Without
+`page_id` on a connection without targets, the page comments of the whole instance are listed. The filters sent
+to BookStack are only an optimization: every row is checked again for the page and for the comment type, because
+BookStack ignores filters it does not know, and `limit` and `offset` count the remaining rows.
+
+`comments.get` takes the global `id` and returns the comment with `html` (untrusted data, never render or run
+it), `archived`, and its direct replies, which are checked to belong to the same page and parent. The text of
+each comment is cut at 64 KiB and at most 200 replies are returned; `truncated` says whether anything was cut.
+
+`comments.create` takes `page_id`, `html` (1 to 65536 characters), an optional `reply_to` (the `local_id` of a
+comment of the same page, not its global `id`), and an optional `content_ref` (at most 255 characters, the part
+of the page content the comment is attached to). `comments.update` takes `id` and `html` and/or `archived`;
+BookStack accepts `archived` for top-level comments only and refuses it for a reply. Create and update answer
+with the comment fields without `html`; read the text with `comments.get`. Invalid input is refused locally as
+`invalid-request` before any secret is read and before any request.
+
+`comments.delete` takes `id` and deletes the comment for good: BookStack has no recycle bin for comments and
+cannot restore them. It requires a tool allow list entry and is part of no profile, like the other delete
+tools. `comments.create` is not idempotent; `comments.update` is idempotent. All three changes require
+confirmation, send exactly one request, and are never retried; after a timeout or a 5xx answer the result is
+reported as uncertain.
+
+On a connection bound to books, `comments.list` and `comments.create` prove the page by one read of it. `get`,
+`update`, and `delete` read the comment and prove its page by a second read; only a comment of a page in a bound
+book is returned or changed. A comment that is not a page comment is refused. A refusal is an `invalid-request`
+that does not name the other book, page, or comment, and no change request is sent. A connection without targets
+needs no proof reads.
 
 ## Search
 
