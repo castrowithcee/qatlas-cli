@@ -267,10 +267,36 @@ change sends exactly one request (`PUT` or `DELETE`) without retry; after a time
 reported as uncertain. The tools are part of no profile, and `destroy` additionally requires a tool allow list
 that names it and the `delete` permission.
 
+## Users, roles, and audit log
+
+These tools cover the whole instance, so they are refused on a connection with book targets (before any secret is
+read), are part of no profile, and are classified as `bookstack-people` data (e-mail addresses, external
+authentication identifiers, IP addresses). Names and texts are untrusted data.
+
+`bookstack.users.list` (`limit`, `offset`) and `bookstack.users.get` (`id`) need the role permission
+`users-manage`. They return `id`, `name`, `slug`, `email`, `external_auth_id`, `created_at`, `updated_at`,
+`last_activity_at`, `profile_url`, and `roles` (`id`, `display_name`). BookStack does not report roles in the
+listing, so only `get` carries them. Avatar and edit addresses are never returned.
+
+`bookstack.roles.list` (`limit`, `offset`) and `bookstack.roles.get` (`id`) need `user-roles-manage`. The listing
+returns `id`, `display_name`, `description`, `system_name`, `external_auth_id`, `mfa_enforced`, `users_count`,
+`permissions_count`, `created_at`, and `updated_at`. `get` returns the same descriptive fields plus the
+`permissions` (names) and the `users` (`id`, `name`) of the role, at most 1000 users; `truncated` is true when the
+users or permissions were cut.
+
+`bookstack.auditlog.list` needs `settings-manage` and `users-manage`. It contains IP addresses and sign-in events
+of all users, so it is offered only by a connection whose `tools` list names it. It takes `limit`, `offset`, and
+the filters `type` (lowercase letters, digits, and underscores, at most 64 characters), `user_id`,
+`loggable_type` (`page`, `chapter`, `book`, or `bookshelf`), `loggable_id`, and `created_after`/`created_before`
+(`YYYY-MM-DD` or RFC 3339; dates are UTC and a date alone means the start of that day). Values are checked before
+any request. BookStack ignores filters it does not know, so every returned entry is checked again against all
+filters. Entries carry `id`, `type`, `detail`, `user_id`, `user_name`, `loggable_type`, `loggable_id`, `ip`, and
+`created_at`.
+
 ## Tool groups
 
 BookStack tools belong to the group `content` (pages, search, books, chapters, shelves, and tags), the group
-`comments` (page comments), the group `files` (page attachments and images), or the group `administration` (`bookstack.system.get`, the content permission tools, and the recycle bin tools). Tool lists and pickers
+`comments` (page comments), the group `files` (page attachments and images), or the group `administration` (`bookstack.system.get`, the content permission tools, the recycle bin tools, and the user, role, and audit log tools). Tool lists and pickers
 show the group so that agents and people can find tools by subject.
 
 ## Comments
