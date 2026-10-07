@@ -10,7 +10,7 @@ updated: 2026-10-07
 # BookStack
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
-chapters, and shelves and searching content (`read`), creating pages, books, chapters, and shelves (`create`),
+chapters, shelves, and tags, reading the instance information, and searching content (`read`), creating pages, books, chapters, and shelves (`create`),
 changing or moving pages and changing books, chapters, and shelves (`update`), and deleting pages (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
@@ -23,7 +23,7 @@ admits an effect `permissions` excludes. Page content is treated as untrusted da
 starts a new connection on the setup profile `read`, which ticks `[read]` and
 `[bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list,
 bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list,
-bookstack.shelves.get]`. A profile is a visible starting
+bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.system.get]`. A profile is a visible starting
 selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
 saving, and a saved connection never follows a profile.
 
@@ -151,6 +151,21 @@ shows the changed shelf without its books; read it with `shelves.get`. Both tool
 part of no profile; `create` is not idempotent. Each change is sent once and never retried. Cover images and
 deleting shelves are not available.
 
+## Tags and instance information
+
+`bookstack.tags.list` lists the tag names used on content the token can see, with `values` (distinct values),
+`usages`, and the counts per item type (`page_count`, `chapter_count`, `book_count`, `shelf_count`). It takes
+`limit`, `offset`, and optional `name_contains`. `bookstack.tags.values` takes a required `name` and optional
+`value_contains`, `limit`, and `offset` and lists that name's values with the same counts. The contains
+arguments (at most 255 characters, case-insensitive) are sent as a `%...%` filter in which `%`, `_`, and `\` are
+masked as literals; every returned row is checked against the filter again, because BookStack ignores filters
+it does not know. Tags aggregate over the whole instance, so both tools are refused locally on a connection bound
+to books, like the shelf tools. Names and values are untrusted data. Tags are written through the items that
+carry them.
+
+`bookstack.system.get` returns `version`, `app_name`, `instance_id`, and `base_url` (no logo). It returns no
+content and therefore also works on a connection bound to books.
+
 ## Pages
 
 `pages.get` returns `id`, `name`, `slug`, `book_id`, `chapter_id` (0 when there is none), `created_at`,
@@ -185,7 +200,8 @@ naming it.
 
 ## Tool groups
 
-All BookStack tools belong to the group `content`: pages, search, books, chapters, and shelves. Tool lists and pickers
+BookStack tools belong to the group `content` (pages, search, books, chapters, shelves, and tags) or the group
+`administration` (`bookstack.system.get`). Tool lists and pickers
 show the group so that agents and people can find tools by subject.
 
 ## Search

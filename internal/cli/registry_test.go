@@ -109,7 +109,7 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Fatal("defaultRegistry() = nil")
 	}
 	got := reg.Provider("bookstack")
-	if len(got) != 18 {
+	if len(got) != 21 {
 		t.Fatalf("provider capabilities = %v, want eighteen BookStack capabilities", got)
 	}
 	if got[0].ID != "bookstack.books.create" || got[17].ID != "bookstack.shelves.update" {
