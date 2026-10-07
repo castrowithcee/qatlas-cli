@@ -313,6 +313,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withAdministrationGroup(rolesUpdate), Handler: capability.Handler(invokeRolesUpdate)},
 		capability.Operation{Descriptor: withAdministrationGroup(rolesDelete), Handler: capability.Handler(invokeRolesDelete)},
 		capability.Operation{Descriptor: withAdministrationGroup(auditLogList), Handler: capability.Handler(invokeAuditLogList)},
+		capability.Operation{Descriptor: withImportsGroup(importsList), Handler: capability.Handler(invokeImportsList)},
+		capability.Operation{Descriptor: withImportsGroup(importsGet), Handler: capability.Handler(invokeImportsGet)},
+		capability.Operation{Descriptor: withImportsGroup(importsUpload), Handler: capability.Handler(invokeImportsUpload)},
+		capability.Operation{Descriptor: withImportsGroup(importsRun), Handler: capability.Handler(invokeImportsRun)},
+		capability.Operation{Descriptor: withImportsGroup(importsDelete), Handler: capability.Handler(invokeImportsDelete)},
 	)
 }
 

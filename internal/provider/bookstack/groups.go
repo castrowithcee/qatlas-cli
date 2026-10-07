@@ -14,6 +14,8 @@ const (
 	filesGroup = "files"
 	// administrationGroup is the group of the instance information and content permission tools.
 	administrationGroup = "administration"
+	// importsGroup is the group of the ZIP import tools.
+	importsGroup = "imports"
 )
 
 // toolGroups are the subject areas BookStack's tools are sorted into for display.
@@ -22,6 +24,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: commentsGroup, Title: "Comments", Description: "Comments and replies on pages"},
 	{ID: filesGroup, Title: "Files", Description: "Attachments and images of pages"},
 	{ID: administrationGroup, Title: "Administration", Description: "Information about the BookStack instance and permissions of its content"},
+	{ID: importsGroup, Title: "Imports", Description: "Upload, inspect, run, and discard ZIP imports of books, chapters, and pages"},
 }
 
 func withGroup(d capability.Descriptor) capability.Descriptor {
@@ -41,5 +44,10 @@ func withCommentsGroup(d capability.Descriptor) capability.Descriptor {
 
 func withFilesGroup(d capability.Descriptor) capability.Descriptor {
 	d.Group = filesGroup
+	return d
+}
+
+func withImportsGroup(d capability.Descriptor) capability.Descriptor {
+	d.Group = importsGroup
 	return d
 }
