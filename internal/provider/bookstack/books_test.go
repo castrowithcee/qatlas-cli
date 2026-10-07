@@ -300,7 +300,11 @@ func TestEveryToolHasAGroupTheRegistryAccepts(t *testing.T) {
 		t.Fatalf("Register() = %v", err)
 	}
 	for _, d := range reg.Provider(Provider) {
-		if d.Group != "content" {
+		want := "content"
+		if d.ID == systemGet.ID {
+			want = "administration"
+		}
+		if d.Group != want {
 			t.Errorf("%s group = %q", d.ID, d.Group)
 		}
 	}
