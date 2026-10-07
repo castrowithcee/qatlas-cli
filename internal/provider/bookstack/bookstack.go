@@ -283,6 +283,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withFilesGroup(attachmentsList), Handler: capability.Handler(invokeAttachmentsList)},
 		capability.Operation{Descriptor: withFilesGroup(attachmentsGet), Handler: capability.Handler(invokeAttachmentsGet)},
 		capability.Operation{Descriptor: withFilesGroup(attachmentsDownload), Handler: capability.Handler(invokeAttachmentsDownload)},
+		capability.Operation{Descriptor: withFilesGroup(attachmentsLink), Handler: capability.Handler(invokeAttachmentsLink)},
+		capability.Operation{Descriptor: withFilesGroup(attachmentsUpload), Handler: capability.Handler(invokeAttachmentsUpload)},
+		capability.Operation{Descriptor: withFilesGroup(attachmentsUpdate), Handler: capability.Handler(invokeAttachmentsUpdate)},
+		capability.Operation{Descriptor: withFilesGroup(attachmentsReplace), Handler: capability.Handler(invokeAttachmentsReplace)},
+		capability.Operation{Descriptor: withFilesGroup(attachmentsDelete), Handler: capability.Handler(invokeAttachmentsDelete)},
 		capability.Operation{Descriptor: withAdministrationGroup(systemGet), Handler: capability.Handler(invokeSystemGet)},
 	)
 }
@@ -921,6 +926,8 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 // mutate sends one change request, never repeated. A failure that may have reached BookStack says so.
 func (c *Client) mutate(ctx context.Context, op, method, path string, input any, out any, arguments []string) error {
 	var body io.Reader
+	var length int64
+	contentType := ""
 	if input != nil {
 		var encoded bytes.Buffer
 		encoder := json.NewEncoder(&encoded)
@@ -928,18 +935,27 @@ func (c *Client) mutate(ctx context.Context, op, method, path string, input any,
 		if err := encoder.Encode(input); err != nil || encoded.Len() > maxMutationBodyBytes {
 			return providerError(op, "the request exceeds the size limit")
 		}
-		body = &encoded
+		body, length, contentType = &encoded, int64(encoded.Len()), "application/json"
 	}
+	return c.send(ctx, c.http, op, method, path, body, length, contentType, out, arguments)
+}
+
+// send is the one change request: body may be nil, a non-nil body has the announced length.
+func (c *Client) send(ctx context.Context, httpClient *http.Client, op, method, path string, body io.Reader,
+	length int64, contentType string, out any, arguments []string) error {
 	req, err := http.NewRequestWithContext(ctx, method, c.base.JoinPath(path).String(), body)
 	if err != nil {
 		return providerError(op, "could not build the request")
 	}
+	if body != nil {
+		req.ContentLength = length
+	}
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("Accept", "application/json")
-	if input != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
-	resp, err := c.http.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return transportError(op, err, true)
 	}
