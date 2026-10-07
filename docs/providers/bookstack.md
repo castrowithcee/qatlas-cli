@@ -178,6 +178,47 @@ carry them.
 `bookstack.system.get` returns `version`, `app_name`, `instance_id`, and `base_url` (no logo). It returns no
 content and therefore also works on a connection bound to books.
 
+## Content permissions
+
+`bookstack.contentpermissions.get` reads the permission overrides of one `page`, `chapter`, `book`, or
+`bookshelf` (`type` and `id`): the owner (`id`, `name`, `slug`), the role overrides (`role_id`, `display_name`,
+`view`, `create`, `update`, `delete`; at most 100, otherwise `truncated`), and the fallback permissions
+(`inheriting`, plus the four values when not inheriting) that apply to every role without an override. Owner and
+role names are personal data and untrusted provider content.
+
+`bookstack.contentpermissions.update` changes those permissions for existing roles in one request. Every
+category is optional, but at least one is required, and BookStack applies exactly what is sent:
+
+- `owner_id`: the new owner (a positive user id).
+- `role_permissions`: replaces all role overrides. At most 100 entries with a unique positive `role_id` and all
+  of `view`, `create`, `update`, `delete`. A category that is left out stays unchanged; an empty list removes
+  all role overrides.
+- `fallback_permissions`: `inheriting`, and all four values when `inheriting` is `false` (no values when it is
+  `true`).
+
+Public access is never opened. BookStack stores the fallback as an override that applies to every role without
+an entry of its own, guests included, so Qatlas protects the guest role (the system role `public`). Before it
+changes anything it determines that role (a read of the role list, at most 100 roles, and a read of the role to
+confirm its system name and list its users), reads the current permissions of the item, and refuses locally,
+without sending the change, when
+
+- an entry for the guest role sets any value to `true`, unless the entry is identical to the guest entry that
+  already exists,
+- `role_permissions` is sent and omits an existing guest entry (also an empty list while a guest entry exists),
+- `fallback_permissions` differs from the current fallback and the resulting role overrides (the sent
+  `role_permissions`, otherwise the current ones) have no explicit guest entry with all four values `false`, or
+- `owner_id` is a user of the guest role, because ownership would pass to anonymous visitors.
+
+If the guest role cannot be determined (for example the token's user lacks the BookStack permission to manage
+user roles, no role has the system name `public`, or the confirmation differs), the change is refused as well.
+The refusals never name the other target or relay provider text. The guest lookup is made once per call and not
+cached beyond it.
+
+The tool requires confirmation and a tool allow list, is idempotent, is part of no profile, and sends exactly
+one `PUT` without retry; after a timeout or a 5xx answer the result is reported as uncertain. On a connection
+bound to books a `book` must be a bound book, a `chapter` or `page` is proven to lie in a bound book by one
+read, and a `bookshelf` is only available on a connection without book targets.
+
 ## Pages
 
 `pages.get` returns `id`, `name`, `slug`, `book_id`, `chapter_id` (0 when there is none), `created_at`,
@@ -213,7 +254,7 @@ naming it.
 ## Tool groups
 
 BookStack tools belong to the group `content` (pages, search, books, chapters, shelves, and tags), the group
-`comments` (page comments), the group `files` (page attachments and images), or the group `administration` (`bookstack.system.get`). Tool lists and pickers
+`comments` (page comments), the group `files` (page attachments and images), or the group `administration` (`bookstack.system.get` and the content permission tools). Tool lists and pickers
 show the group so that agents and people can find tools by subject.
 
 ## Comments

@@ -760,8 +760,8 @@ func TestRegister(t *testing.T) {
 	}
 
 	got := reg.Provider(Provider)
-	if len(got) != 48 {
-		t.Fatalf("capabilities = %d, want 48", len(got))
+	if len(got) != 50 {
+		t.Fatalf("capabilities = %d, want 50", len(got))
 	}
 	wantRisk := capability.Risk{
 		Effect:          capability.EffectRead,
@@ -797,6 +797,8 @@ func TestRegister(t *testing.T) {
 		{Provider + ".shelves.delete", shelvesDelete.Risk},
 		{Provider + ".content.export", wantRisk},
 		{Provider + ".content.download", wantRisk},
+		{Provider + ".contentpermissions.get", contentPermissionsGet.Risk},
+		{Provider + ".contentpermissions.update", contentPermissionsUpdate.Risk},
 	} {
 		if tt.risk.Effect != capability.EffectRead && (tt.risk.Confirmation != capability.ConfirmationRequired ||
 			tt.risk.Idempotency == "" || !tt.risk.OpenWorld || tt.risk.DataSensitivity == "") {
@@ -816,11 +818,11 @@ func TestRegister(t *testing.T) {
 			if descriptor.Risk != tt.risk {
 				t.Errorf("risk = %+v, want %+v", descriptor.Risk, tt.risk)
 			}
-			if descriptor.RequiresToolAllowList != strings.HasSuffix(tt.id, ".delete") {
+			if descriptor.RequiresToolAllowList != (strings.HasSuffix(tt.id, ".delete") || tt.id == Provider+".contentpermissions.update") {
 				t.Errorf("requires_tool_allow_list = %v", descriptor.RequiresToolAllowList)
 			}
-			if descriptor.Group != "content" {
-				t.Errorf("group = %q, want content", descriptor.Group)
+			if wantGroup := map[bool]string{true: "administration", false: "content"}[strings.Contains(tt.id, ".contentpermissions.")]; descriptor.Group != wantGroup {
+				t.Errorf("group = %q, want %s", descriptor.Group, wantGroup)
 			}
 			if descriptor.Provider != Provider || descriptor.Version != 1 {
 				t.Errorf("operation = %+v, want provider %q version 1", descriptor, Provider)
