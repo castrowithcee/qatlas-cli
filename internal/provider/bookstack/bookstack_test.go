@@ -760,8 +760,8 @@ func TestRegister(t *testing.T) {
 	}
 
 	got := reg.Provider(Provider)
-	if len(got) != 31 {
-		t.Fatalf("capabilities = %d, want 31", len(got))
+	if len(got) != 34 {
+		t.Fatalf("capabilities = %d, want 34", len(got))
 	}
 	wantRisk := capability.Risk{
 		Effect:          capability.EffectRead,

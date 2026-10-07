@@ -10,6 +10,8 @@ const (
 	contentGroup = "content"
 	// commentsGroup is the group of the page comment tools.
 	commentsGroup = "comments"
+	// filesGroup is the group of the tools that read and download files.
+	filesGroup = "files"
 	// administrationGroup is the group of the instance information tools.
 	administrationGroup = "administration"
 )
@@ -18,6 +20,7 @@ const (
 var toolGroups = []config.ToolGroup{
 	{ID: contentGroup, Title: "Content", Description: "Pages, search, books, chapters, and shelves of the knowledge base"},
 	{ID: commentsGroup, Title: "Comments", Description: "Comments and replies on pages"},
+	{ID: filesGroup, Title: "Files", Description: "Attachments of pages"},
 	{ID: administrationGroup, Title: "Administration", Description: "Information about the BookStack instance"},
 }
 
@@ -33,5 +36,10 @@ func withAdministrationGroup(d capability.Descriptor) capability.Descriptor {
 
 func withCommentsGroup(d capability.Descriptor) capability.Descriptor {
 	d.Group = commentsGroup
+	return d
+}
+
+func withFilesGroup(d capability.Descriptor) capability.Descriptor {
+	d.Group = filesGroup
 	return d
 }
