@@ -321,6 +321,11 @@ func (c *Client) GetRole(ctx context.Context, id int64) (output.Object, error) {
 		provider.ClassPermission); err != nil {
 		return output.Object{}, err
 	}
+	return roleObject(role), nil
+}
+
+// roleObject reduces one role with permission names and at most maxRoleMembers users.
+func roleObject(role roleJSON) output.Object {
 	row := roleRow(role)
 	delete(row, "users_count")
 	delete(row, "permissions_count")
@@ -340,7 +345,7 @@ func (c *Client) GetRole(ctx context.Context, id int64) (output.Object, error) {
 		permissions = append(permissions, clip(name, maxResultString))
 	}
 	row["permissions"], row["users"], row["truncated"] = permissions, users, truncated
-	return rowObject(row, fieldNames(rolesGet)), nil
+	return rowObject(row, fieldNames(rolesGet))
 }
 
 // rowObject orders a reduced row by the declared fields; fields without a value are left out.

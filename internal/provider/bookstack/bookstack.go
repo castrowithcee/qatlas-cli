@@ -307,6 +307,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withAdministrationGroup(usersGet), Handler: capability.Handler(invokeUsersGet)},
 		capability.Operation{Descriptor: withAdministrationGroup(rolesList), Handler: capability.Handler(invokeRolesList)},
 		capability.Operation{Descriptor: withAdministrationGroup(rolesGet), Handler: capability.Handler(invokeRolesGet)},
+		capability.Operation{Descriptor: withAdministrationGroup(rolesCreate), Handler: capability.Handler(invokeRolesCreate)},
+		capability.Operation{Descriptor: withAdministrationGroup(rolesUpdate), Handler: capability.Handler(invokeRolesUpdate)},
+		capability.Operation{Descriptor: withAdministrationGroup(rolesDelete), Handler: capability.Handler(invokeRolesDelete)},
 		capability.Operation{Descriptor: withAdministrationGroup(auditLogList), Handler: capability.Handler(invokeAuditLogList)},
 	)
 }
