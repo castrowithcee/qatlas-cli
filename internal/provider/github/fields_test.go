@@ -12,6 +12,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
@@ -117,7 +118,7 @@ func TestFieldSchemaRefusalsBeforeIO(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), fieldsConfig(base), resolver(red, &reads), red)
 
-	invalid := &application.InvalidRequestError{}
+	invalid := &provider.InvalidRequestError{}
 	unsupported := &capability.UnsupportedError{}
 	unconfirmed := &application.ConfirmationRequiredError{}
 	for _, tt := range []struct {

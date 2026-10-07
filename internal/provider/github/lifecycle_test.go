@@ -10,6 +10,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
@@ -116,7 +117,7 @@ func TestProjectLifecycleRefusalsBeforeIO(t *testing.T) {
 	red := &redact.Redactor{}
 	core := application.New(registry(t), lifecycleConfig(base), resolver(red, &reads), red)
 
-	invalid := &application.InvalidRequestError{}
+	invalid := &provider.InvalidRequestError{}
 	for _, tt := range []struct {
 		name, operation, connection, arguments string
 		confirmed                              bool

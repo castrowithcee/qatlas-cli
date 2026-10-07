@@ -17,9 +17,7 @@ import (
 
 // InvalidRequestError reports malformed JSON or arguments that do not satisfy the input schema. The message
 // carries no prefix of its own: every diagnostic already leads with the invalid-request code.
-type InvalidRequestError struct{ Message string }
-
-func (e *InvalidRequestError) Error() string { return e.Message }
+type InvalidRequestError = provider.InvalidRequestError
 
 // UnknownOperationError reports an operation ID or requested version absent from the registry. Suggestion
 // is the registered ID the unknown one most likely misspells, or empty.

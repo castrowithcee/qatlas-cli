@@ -36,7 +36,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -84,14 +83,6 @@ var limiters = ratelimit.NewRegistry(minInterval)
 // transport carries every request. A nil value is Go's default transport; the package's tests replace it.
 var transport http.RoundTripper
 
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
-
 // Client binds one workspace key to its connection's collection scope.
 type Client struct {
 	scope   scope
@@ -125,7 +116,7 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if red != nil {
 		red.Add(value.Secret, "Bearer "+value.Secret)
 	}
-	return &Client{scope: bound, origin: origin, key: value.Secret, http: newHTTPClient(),
+	return &Client{scope: bound, origin: origin, key: value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport),
 		limiter: limiters.For(value.Secret)}, nil
 }
 
@@ -228,8 +219,7 @@ func (c *Client) sendBounded(ctx context.Context, op, method, path string, paylo
 	response, err := c.http.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "Excalidraw+", err)
-		if failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown {
+		if failure.MayHaveArrived() {
 			failure.Message += changeUncertain
 		}
 		return failure
@@ -315,7 +305,7 @@ func invalidResponse(op, message string) error {
 // invalidRequest refuses a request the connection's own configuration decides against. No message quotes
 // the refused value or names the real collection of a scene.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // bounded keeps an oversized provider string out of a result without interpreting it, never splitting a

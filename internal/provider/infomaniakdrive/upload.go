@@ -557,14 +557,13 @@ func (c *Client) exchange(ctx context.Context, op string, spec exchangeSpec) (*e
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "qatlas-cli")
 
-	client := newHTTPClient()
+	client := provider.NoRedirectClient(defaultTimeout, transport)
 	client.Timeout = transferTimeout
 	response, err := client.Do(req)
 	if err != nil {
-		failure := transportError(op, err)
+		failure := provider.Transport(op, "Infomaniak", err)
 		var providerErr *provider.Error
-		if errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
-			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
+		if errors.As(failure, &providerErr) && providerErr.MayHaveArrived() {
 			providerErr.Message += spec.hint
 			spec.markUnclear()
 		}

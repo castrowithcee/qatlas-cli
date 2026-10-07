@@ -7,6 +7,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 // The target arguments. Every tool takes the repository or the project it acts on; a tool that adds an issue
@@ -126,10 +127,7 @@ func withTargetArgument(d capability.Descriptor) capability.Descriptor {
 type allowlist []target
 
 func allowlistOf(resolved *config.Resolved) (allowlist, error) {
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	return parseAllowlist(values)
 }
 

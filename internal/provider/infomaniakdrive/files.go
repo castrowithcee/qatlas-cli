@@ -379,7 +379,7 @@ func (c *Client) openDownload(ctx context.Context, op string, driveID, fileID in
 
 	response, err := newDownloadClient().Do(req)
 	if err != nil {
-		return nil, transportError(op, err)
+		return nil, provider.Transport(op, "Infomaniak", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		defer response.Body.Close()

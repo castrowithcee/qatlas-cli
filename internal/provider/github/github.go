@@ -155,7 +155,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -1146,7 +1145,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: "open", Message: "the GitHub token is unusable"}
 	}
 	if red != nil {
@@ -1155,7 +1154,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	client := &Client{endpoints: api, allowed: allowed, auth: "Bearer " + value.Secret, http: newHTTPClient(),
+	client := &Client{endpoints: api, allowed: allowed, auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport),
 		limiter: lim}
 	for _, entry := range allowed {
 		if !entry.pattern() && entry.kind != kindOwner {
@@ -1179,16 +1178,6 @@ func openAt(ctx context.Context, resolved *config.Resolved, secrets *secret.Reso
 // transport carries every GitHub request. A nil value is Go's default transport; the package's own tests
 // replace it with a local test server.
 var transport http.RoundTripper
-
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:   defaultTimeout,
-		Transport: transport,
-		// The token travels in the Authorization header, so no redirect is followed: a redirect could only
-		// move a credential to a place the user never configured.
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // TestConnection performs the smallest authenticated read of the first target the connection names exactly:
 // the project with its field definitions, or the repository; without such a target, the user of the token.
@@ -1814,8 +1803,7 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 	}
 	if err != nil {
 		failure := provider.Transport(op, "GitHub", err)
-		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown) {
+		if change && failure.MayHaveArrived() {
 			failure.Message += uncertain
 		}
 		return failure
@@ -1964,19 +1952,5 @@ func providerError(op, message string) error {
 }
 
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
-}
-
-// validToken keeps an obviously unusable value out of a request. The real check is GitHub's.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for _, r := range value {
-		// A header value may not carry control characters, and a GitHub token never does.
-		if r < 0x21 || r > 0x7e {
-			return false
-		}
-	}
-	return true
+	return &provider.InvalidRequestError{Message: message}
 }

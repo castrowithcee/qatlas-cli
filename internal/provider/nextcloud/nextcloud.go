@@ -677,6 +677,10 @@ func (c *Client) requestURL(rel []string) string {
 // tests replace it with recorded responses.
 var transport http.RoundTripper
 
+// redirectLeavesMessage is the message of a redirect that would have carried the app password off the
+// configured origin or out of the Files root of the configured identity. It names neither.
+const redirectLeavesMessage = "refused to follow a redirect that leaves the configured Nextcloud instance or root"
+
 // newHTTPClient bounds every request in time and keeps a credential-carrying redirect on the configured
 // origin and inside the Files root of the configured identity.
 func newHTTPClient(origin, prefix string) *http.Client {
@@ -685,23 +689,15 @@ func newHTTPClient(origin, prefix string) *http.Client {
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
 			if req.URL.Scheme+"://"+req.URL.Host != origin {
-				return &redirectRefusedError{}
+				return &provider.RedirectRefused{Message: redirectLeavesMessage}
 			}
 			escaped := req.URL.EscapedPath()
 			if escaped != prefix && !strings.HasPrefix(escaped, prefix+"/") {
-				return &redirectRefusedError{}
+				return &provider.RedirectRefused{Message: redirectLeavesMessage}
 			}
 			return nil
 		},
 	}
-}
-
-// redirectRefusedError reports a redirect that would have carried the app password off the configured
-// origin or out of the Files root of the configured identity. Its message names neither.
-type redirectRefusedError struct{}
-
-func (e *redirectRefusedError) Error() string {
-	return "refused to follow a redirect that leaves the configured Nextcloud instance or root"
 }
 
 // TestConnection performs the smallest safe authenticated read: one PROPFIND of depth 0 on the fixed root
@@ -936,7 +932,7 @@ func (c *Client) DownloadFile(ctx context.Context, path string, download *localf
 	req.Header.Set("Authorization", c.auth)
 	response, err := c.transferClient().Do(req)
 	if err != nil {
-		return nil, transportError(op, err)
+		return nil, provider.Transport(op, "Nextcloud", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -1044,7 +1040,7 @@ func (c *Client) webdav(ctx context.Context, op, method string, rel []string, bo
 		if sent {
 			return nil, sentTransportError(op, err)
 		}
-		return nil, transportError(op, err)
+		return nil, provider.Transport(op, "Nextcloud", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		defer response.Body.Close()
@@ -1195,7 +1191,7 @@ func (c *Client) propfindWith(ctx context.Context, op string, rel []string, dept
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return nil, transportError(op, err)
+		return nil, provider.Transport(op, "Nextcloud", err)
 	}
 	defer response.Body.Close()
 
@@ -1290,26 +1286,14 @@ func statusError(op string, status int) error {
 	}
 }
 
-// transportError classifies a failure that happened before a status code existed. The shared classifier
-// owns the rules, so Nextcloud publishes the same class and the same transport cause as every other
-// provider, and the original error text is never copied.
-func transportError(op string, err error) error {
-	// A refused redirect is a policy decision, not an unreachable server.
-	var refused *redirectRefusedError
-	if errors.As(err, &refused) {
-		return providerError(op, refused.Error())
-	}
-	return provider.Transport(op, "Nextcloud", err)
-}
-
 // sentTransportError is transportError for a request that writes a file: whatever ended it, the server may
 // have acted on it. Only a refused redirect, a local decision, leaves the outcome clear.
 func sentTransportError(op string, err error) error {
-	var refused *redirectRefusedError
+	var refused *provider.RedirectRefused
 	if errors.As(err, &refused) {
-		return transportError(op, err)
+		return provider.Transport(op, "Nextcloud", err)
 	}
-	return withUncertainty(transportError(op, err))
+	return withUncertainty(provider.Transport(op, "Nextcloud", err))
 }
 
 // sentStatusError is statusError for a request that writes a file: a client error is a clear refusal, any

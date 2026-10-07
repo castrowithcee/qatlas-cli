@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 // maxBaseNameLength bounds a configured base name well above what SeaTable accepts.
@@ -74,10 +75,7 @@ func validateSet(values []string) error {
 
 // baseOf reads the bound base of a selected connection, before any secret is resolved.
 func baseOf(resolved *config.Resolved) (boundBase, error) {
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	if err := validateSet(values); err != nil {
 		return boundBase{}, err
 	}

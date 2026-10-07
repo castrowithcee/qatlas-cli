@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
@@ -972,7 +971,7 @@ func boundClient(t *testing.T, baseURL string, targets ...string) *Client {
 }
 
 func isInvalidRequest(err error) bool {
-	var invalid *application.InvalidRequestError
+	var invalid *provider.InvalidRequestError
 	return errors.As(err, &invalid)
 }
 

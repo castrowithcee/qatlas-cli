@@ -100,7 +100,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -263,7 +262,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: op, Message: "the Make API token is unusable"}
 	}
 	auth := "Token " + value.Secret
@@ -273,7 +272,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{scope: bound, origin: origin, token: value.Secret, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{scope: bound, origin: origin, token: value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // instanceReason is the one refusal message of a malformed or unknown base URL. It never quotes the value
@@ -305,17 +304,6 @@ func parseInstance(raw string) (string, error) {
 // transport carries every Make request. A nil value is Go's default transport; the package's own tests
 // replace it with a local fake.
 var transport http.RoundTripper
-
-// newHTTPClient is used for every request this provider sends. The token travels in the Authorization
-// header, and no endpoint this provider calls is documented to redirect, so none is followed: a redirect
-// here could only be a mistake or an exfiltration route to a host this connection was never bound to.
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // uncertain is appended to a failure of a change request whose request may have reached Make: the change
 // may have taken effect although no confirmation ever arrived. Qatlas never repeats such a request by
@@ -384,8 +372,7 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	response, err := c.http.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "Make", err)
-		if changing && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown) {
+		if changing && failure.MayHaveArrived() {
 			failure.Message += note
 		}
 		return failure
@@ -458,7 +445,7 @@ func (c *Client) statusError(op string, response *http.Response, need string) *p
 		// will not fix that, unlike every other 429 this provider still holds its own limiter for.
 		code := pausedErrorCode(response.Body)
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-		c.limiter.HoldFor(retryAfter(response.Header))
+		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 		if code == "IM310" {
 			return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Make reports this " +
 				"organization or team is paused (IM310); this is not a transient rate limit, and repeating " +
@@ -486,16 +473,6 @@ func (c *Client) statusError(op string, response *http.Response, need string) *p
 	}
 }
 
-// retryAfter reads how long Make asks a client to wait after a rate limit. Zero means Make named no time,
-// or an unusable one.
-func retryAfter(header http.Header) time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After")))
-	if err != nil || seconds <= 0 {
-		return 0
-	}
-	return time.Duration(seconds) * time.Second
-}
-
 func providerError(op, message string) error {
 	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message}
 }
@@ -508,23 +485,7 @@ func invalidResponse(op, message string) error {
 // against, before the matching content is ever returned. No message ever quotes the refused value or names
 // a scenario's or a run's real team or organization.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
-}
-
-// validToken keeps an obviously unusable value out of a request header. The real check is Make's own. Make
-// issues its API tokens as UUIDs (developers.make.com's own authentication guide shows one as an example),
-// but this accepts any printable-ASCII value in a generous range, the same tolerance the n8n and kChat
-// providers give their own credential shape, in case Make changes the format later.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for i := 0; i < len(value); i++ {
-		if value[i] < 0x21 || value[i] > 0x7e {
-			return false
-		}
-	}
-	return true
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // bounded keeps an oversized provider string out of a result without interpreting it.

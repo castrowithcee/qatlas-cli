@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 // The two target kinds a connection may combine. A kChat identifier is the character class the instance's
@@ -54,10 +55,7 @@ func (s scope) allowsChannel(channelID string) bool {
 
 // scopeOf reads the bound teams and channel allow-list of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	return parseScope(values)
 }
 

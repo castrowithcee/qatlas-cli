@@ -535,7 +535,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 		lim = limiters.For(value.Secret)
 	}
 	return &Client{
-		origin: origin, apiToken: value.Secret, scope: bound, http: newHTTPClient(),
+		origin: origin, apiToken: value.Secret, scope: bound, http: provider.NoRedirectClient(defaultTimeout, transport),
 		limiter: lim, redactor: red,
 	}, nil
 }
@@ -705,16 +705,6 @@ func validName(value string) bool {
 // transport carries every SeaTable request. A nil value is Go's default transport; the package's own
 // tests replace it with recorded responses.
 var transport http.RoundTripper
-
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:   defaultTimeout,
-		Transport: transport,
-		// A token travels in the Authorization header, so no redirect is followed: a redirect could only
-		// move a credential to an origin the user never configured.
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // TestConnection verifies that the API token is exchangeable for the configured instance and that every
 // allow-listed table and view still exists. A wildcard validates base access without silently selecting a
@@ -1521,7 +1511,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, tok
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return transportError(op, err)
+		return provider.Transport(op, "SeaTable", err)
 	}
 	defer response.Body.Close()
 	c.observeRateLimit(response.Header)
@@ -1557,7 +1547,7 @@ func (c *Client) change(ctx context.Context, op, method, path, token string, bod
 	req.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(req)
 	if err != nil {
-		return transportError(op, err)
+		return provider.Transport(op, "SeaTable", err)
 	}
 	defer response.Body.Close()
 	c.observeRateLimit(response.Header)
@@ -1621,13 +1611,6 @@ func statusError(op string, status int) error {
 			Message: fmt.Sprintf("SeaTable rejected the operation (HTTP %d)", status),
 		}
 	}
-}
-
-// transportError classifies a failure that happened before a status code existed. The shared classifier
-// owns the rules, so SeaTable publishes the same class and the same transport cause as every other
-// provider, and the original error text is never copied.
-func transportError(op string, err error) error {
-	return provider.Transport(op, "SeaTable", err)
 }
 
 func providerError(op, message string) error {

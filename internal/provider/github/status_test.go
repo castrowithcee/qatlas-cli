@@ -114,7 +114,7 @@ func TestProjectStatusRefusalsBeforeIO(t *testing.T) {
 	reads := 0
 	core := statusCore(t, f, &reads)
 
-	invalid := &application.InvalidRequestError{}
+	invalid := &provider.InvalidRequestError{}
 	unsupported := &capability.UnsupportedError{}
 	unconfirmed := &application.ConfirmationRequiredError{}
 	for _, tt := range []struct {

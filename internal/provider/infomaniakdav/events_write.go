@@ -699,10 +699,9 @@ func (c *Client) mutate(ctx context.Context, op string, kind writeKind, method s
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		failure := transportError(op, err)
+		failure := provider.Transport(op, "Infomaniak", err)
 		var providerErr *provider.Error
-		if errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
-			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
+		if errors.As(failure, &providerErr) && providerErr.MayHaveArrived() {
 			providerErr.Message += writeUncertain
 		}
 		return nil, failure

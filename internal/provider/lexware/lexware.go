@@ -379,7 +379,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{auth: "Bearer " + value.Secret, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // isGateway reports whether a configured base URL names the fixed production gateway. A trailing slash is
@@ -391,16 +391,6 @@ func isGateway(raw string) bool {
 // transport carries every Lexware request. A nil value is Go's default transport; the package's own tests
 // replace it with recorded responses.
 var transport http.RoundTripper
-
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:   defaultTimeout,
-		Transport: transport,
-		// The API key travels in the Authorization header, so no redirect is followed: a redirect could
-		// only move a credential to an origin the user never configured.
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // TestConnection performs the smallest authenticated read of the confirmed workflow and reports the
 // stable outcome class. It reads one invoice metadata record and nothing else.
@@ -832,7 +822,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return transportError(op, err)
+		return provider.Transport(op, "Lexware", err)
 	}
 	defer response.Body.Close()
 
@@ -875,7 +865,7 @@ func (c *Client) post(ctx context.Context, op, path string, query url.Values, pa
 	req.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(req)
 	if err != nil {
-		return transportError(op, err)
+		return provider.Transport(op, "Lexware", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -927,13 +917,6 @@ func statusError(op string, status int) error {
 			Message: fmt.Sprintf("Lexware rejected the operation (HTTP %d)", status),
 		}
 	}
-}
-
-// transportError classifies a failure that happened before a status code existed. The shared classifier
-// owns the rules, so Lexware publishes the same class and the same transport cause as every other
-// provider, and the original error text is never copied.
-func transportError(op string, err error) error {
-	return provider.Transport(op, "Lexware", err)
 }
 
 func providerError(op, message string) error {

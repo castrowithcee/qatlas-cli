@@ -429,7 +429,7 @@ func (c *Client) do(ctx context.Context, op, method, apiMethod string, body io.R
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		return nil, transportError(op, err)
+		return nil, provider.Transport(op, "Telegram", err)
 	}
 	return response, nil
 }
@@ -458,13 +458,6 @@ func statusError(op string, status int) error {
 			Message: fmt.Sprintf("Telegram rejected the operation (HTTP %d)", status),
 		}
 	}
-}
-
-// transportError classifies a failure that happened before a status code existed. The shared classifier
-// owns the rules, so Telegram publishes the same class and the same transport cause as every other
-// provider, and the original error text is never copied.
-func transportError(op string, err error) error {
-	return provider.Transport(op, "Telegram", err)
 }
 
 func errorClass(err error) provider.Class {

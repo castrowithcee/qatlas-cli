@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 const (
@@ -25,7 +25,7 @@ const (
 	bookIDRequiredMsg = "book_id is required for a connection bound to several books"
 )
 
-func invalidRequest(message string) error { return &application.InvalidRequestError{Message: message} }
+func invalidRequest(message string) error { return &provider.InvalidRequestError{Message: message} }
 
 // scope is the book boundary of one connection. An unbound scope (no target configured) reaches everything
 // the token reaches.
@@ -107,10 +107,7 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 	if resolved == nil {
 		return scope{}, providerError("open", "no connection was selected")
 	}
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	bound, err := parseScope(values)
 	if err != nil {
 		return scope{}, providerError("open", err.Error())

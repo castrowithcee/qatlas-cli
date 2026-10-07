@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 // The two target kinds a connection may combine. Every value is a plain positive integer, the form
@@ -41,10 +42,7 @@ func (s scope) allowsDrive(driveID int64) bool {
 
 // scopeOf reads the bound account and drive allow-list of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	return parseAllowlist(values)
 }
 

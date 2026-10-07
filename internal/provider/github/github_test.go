@@ -783,7 +783,7 @@ func classOf(err error) provider.Class {
 }
 
 func isInvalidRequest(err error) bool {
-	var invalid *application.InvalidRequestError
+	var invalid *provider.InvalidRequestError
 	return errors.As(err, &invalid)
 }
 

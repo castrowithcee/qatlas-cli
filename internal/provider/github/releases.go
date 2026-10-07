@@ -673,8 +673,7 @@ func (c *Client) createRelease(ctx context.Context, a *releaseArguments) (*Relea
 	defer c.limiter.HoldFor(mutationInterval)
 	if err != nil {
 		failure := provider.Transport(op, "GitHub", err)
-		if failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown {
+		if failure.MayHaveArrived() {
 			failure.Message += uncertain
 		}
 		return nil, failure

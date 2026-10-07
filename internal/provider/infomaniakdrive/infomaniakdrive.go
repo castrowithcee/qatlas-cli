@@ -67,7 +67,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -149,7 +148,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: "open", Message: "the Infomaniak API token is unusable"}
 	}
 	auth := "Bearer " + value.Secret
@@ -159,7 +158,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{scope: bound, auth: auth, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{scope: bound, auth: auth, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // isAPIRoot reports whether a configured base URL names the official API root. An empty value and a
@@ -173,17 +172,6 @@ func isAPIRoot(raw string) bool {
 // transport; the package's own tests replace it with a local fake.
 var transport http.RoundTripper
 
-// newHTTPClient is used for every JSON request. The token travels in the Authorization header, and no JSON
-// endpoint this provider calls is documented to redirect, so none is followed: a redirect here could only
-// be a mistake or an exfiltration route.
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
-
 // newDownloadClient is used for the one endpoint Infomaniak documents as possibly answering with a redirect
 // to the actual storage location of a file's content. At most one redirect is followed, only to an https
 // location, and the Authorization header is removed before the redirected request is sent to any host other
@@ -194,10 +182,10 @@ func newDownloadClient() *http.Client {
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 2 {
-				return &redirectRefusedError{message: "refused to follow more than one redirect for a file download"}
+				return &provider.RedirectRefused{Message: "refused to follow more than one redirect for a file download"}
 			}
 			if req.URL.Scheme != "https" {
-				return &redirectRefusedError{message: "refused to follow a redirect to a non-https location"}
+				return &provider.RedirectRefused{Message: "refused to follow a redirect to a non-https location"}
 			}
 			if req.URL.Host != apiHost {
 				req.Header.Del("Authorization")
@@ -206,12 +194,6 @@ func newDownloadClient() *http.Client {
 		},
 	}
 }
-
-// redirectRefusedError reports a redirect this provider deliberately did not follow, or followed without
-// the credential. Its message never names the host it refused or stripped the credential for.
-type redirectRefusedError struct{ message string }
-
-func (e *redirectRefusedError) Error() string { return e.message }
 
 // envelope is the generic Infomaniak response shape: result is "success", "error", or "asynchronous", and
 // data carries the payload. A read accepts only "success". A change also accepts "asynchronous", which
@@ -288,10 +270,9 @@ func (c *Client) request(ctx context.Context, op, method, path string, query url
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		failure := transportError(op, err)
+		failure := provider.Transport(op, "Infomaniak", err)
 		var providerErr *provider.Error
-		if change && errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
-			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
+		if change && errors.As(failure, &providerErr) && providerErr.MayHaveArrived() {
 			providerErr.Message += uncertain
 		}
 		return nil, nil, failure
@@ -393,16 +374,6 @@ func retryAfter(header http.Header) time.Duration {
 	return wait
 }
 
-// transportError classifies a failure that happened before a status code existed. A refused redirect is a
-// policy decision, not an unreachable server.
-func transportError(op string, err error) error {
-	var refused *redirectRefusedError
-	if errors.As(err, &refused) {
-		return providerError(op, refused.Error())
-	}
-	return provider.Transport(op, "Infomaniak", err)
-}
-
 func providerError(op, message string) error {
 	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message}
 }
@@ -415,21 +386,7 @@ func invalidResponse(op, message string) error {
 // reaches Infomaniak: a drive outside the connection's allow-list, or an argument outside its schema's
 // reach. No message ever quotes the refused value.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
-}
-
-// validToken keeps an obviously unusable value out of a request header. The real check is Infomaniak's.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for i := 0; i < len(value); i++ {
-		// A header value may not carry control characters, and an Infomaniak token never does.
-		if value[i] < 0x21 || value[i] > 0x7e {
-			return false
-		}
-	}
-	return true
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // bounded keeps an oversized provider string out of a result without interpreting it.

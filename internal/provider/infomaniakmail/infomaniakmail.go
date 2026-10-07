@@ -82,7 +82,6 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -291,7 +290,7 @@ func invalidResponse(op, message string) error {
 // invalidRequest refuses a request the connection's own configuration decides against. No message ever
 // quotes the refused value or names what the connection does allow.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // clean makes one string from the mailbox safe to return: valid UTF-8, no control or line-separator

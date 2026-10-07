@@ -42,7 +42,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
@@ -135,10 +134,7 @@ func (s scope) selectProject(projectID string) error {
 }
 
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	return parseScope(values)
 }
 
@@ -302,7 +298,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: "open", Message: "the Todoist token is unusable"}
 	}
 	if red != nil {
@@ -311,7 +307,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{scope: bound, auth: "Bearer " + value.Secret, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{scope: bound, auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // isAPIRoot reports whether a configured base URL names the official API root. An empty value and a
@@ -324,16 +320,6 @@ func isAPIRoot(raw string) bool {
 // transport carries every Todoist request. A nil value is Go's default transport; the package's own tests
 // replace it with a local test server.
 var transport http.RoundTripper
-
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:   defaultTimeout,
-		Transport: transport,
-		// The token travels in the Authorization header, so no redirect is followed: a redirect could only
-		// move a credential to a place the user never configured.
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // TestConnection performs the smallest authenticated read of the configured scope: each configured
 // project, or one project of the account for a wildcard connection. Success proves that this token can see
@@ -532,8 +518,7 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 	response, err := c.http.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "Todoist", err)
-		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown) {
+		if change && failure.MayHaveArrived() {
 			failure.Message += uncertain
 		}
 		return failure
@@ -706,25 +691,11 @@ func providerError(op, message string) error {
 }
 
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // outsideScope refuses a resource of a project this connection is not bound to. It names the kind of
 // resource and never its identifier or content.
 func outsideScope(kind string) error {
 	return invalidRequest("the " + kind + " is not in a project of this connection")
-}
-
-// validToken keeps an obviously unusable value out of a request. The real check is Todoist's.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for _, r := range value {
-		// A header value may not carry control characters, and a Todoist token never does.
-		if r < 0x21 || r > 0x7e {
-			return false
-		}
-	}
-	return true
 }

@@ -79,7 +79,7 @@ func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upl
 
 	response, err := c.chunkRequest(ctx, "MKCOL", folder, destination, "", nil, 0)
 	if err != nil {
-		return fail(transportError(op, err))
+		return fail(provider.Transport(op, "Nextcloud", err))
 	}
 	response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -95,7 +95,7 @@ func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upl
 			if source.err != nil && ctx.Err() == nil {
 				return fail(providerError(op, "the local file could not be read completely"))
 			}
-			return fail(transportError(op, err))
+			return fail(provider.Transport(op, "Nextcloud", err))
 		}
 		response.Body.Close()
 		if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -112,11 +112,11 @@ func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upl
 
 	response, err = c.chunkRequest(ctx, "MOVE", folder+"/.file", destination, total, nil, 0)
 	if err != nil {
-		var refused *redirectRefusedError
+		var refused *provider.RedirectRefused
 		if errors.As(err, &refused) {
-			return fail(transportError(op, err))
+			return fail(provider.Transport(op, "Nextcloud", err))
 		}
-		return "", withUncertainty(transportError(op, err))
+		return "", withUncertainty(provider.Transport(op, "Nextcloud", err))
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {

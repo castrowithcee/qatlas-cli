@@ -10,6 +10,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
@@ -126,7 +127,7 @@ func TestProjectViewRefusalsBeforeIO(t *testing.T) {
 	reads := 0
 	core := viewsCore(t, f, &reads)
 
-	invalid := &application.InvalidRequestError{}
+	invalid := &provider.InvalidRequestError{}
 	unsupported := &capability.UnsupportedError{}
 	unconfirmed := &application.ConfirmationRequiredError{}
 	long := strings.Repeat("a", 506)

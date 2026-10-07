@@ -50,7 +50,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -130,7 +129,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: op, Message: "the kChat personal access token is unusable"}
 	}
 	auth := "Bearer " + value.Secret
@@ -140,7 +139,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{scope: bound, origin: origin, auth: auth, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{scope: bound, origin: origin, auth: auth, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // kchatDomain is the fixed domain every kChat instance lives directly below. Infomaniak's own kChat MCP
@@ -203,18 +202,6 @@ func validTeamLabel(label string) bool {
 // replace it with a local fake.
 var transport http.RoundTripper
 
-// newHTTPClient is used for every request this provider sends. The token travels in the Authorization
-// header, and no endpoint this provider calls is documented to redirect, so no redirect is ever followed: a
-// redirect here could only be a mistake or an exfiltration route to a host other than the one this
-// connection is bound to.
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
-
 // uncertain is appended to a failure of the send operation whose request may have reached kChat: the
 // message may have been posted although no confirmation ever arrived. Qatlas never repeats such a request
 // by itself.
@@ -259,8 +246,7 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	response, err := c.http.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "kChat", err)
-		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown) {
+		if change && failure.MayHaveArrived() {
 			failure.Message += uncertain
 		}
 		return failure
@@ -310,7 +296,7 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 		return &provider.Error{Class: provider.ClassNotFound, Op: op,
 			Message: "kChat does not hold this resource or does not show it to this token"}
 	case status == http.StatusTooManyRequests:
-		c.limiter.HoldFor(retryAfter(response.Header))
+		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "kChat rate-limited the operation"}
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
@@ -323,16 +309,6 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("kChat rejected the operation (HTTP %d)", status)}
 	}
-}
-
-// retryAfter reads how long kChat asks a client to wait after a rate limit. Zero means kChat named no
-// time, or an unusable one.
-func retryAfter(header http.Header) time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After")))
-	if err != nil || seconds <= 0 {
-		return 0
-	}
-	return time.Duration(seconds) * time.Second
 }
 
 // verifyChannelScope confirms, with kChat's own channel detail endpoint (GET /api/v4/channels/{channel_id}),
@@ -448,21 +424,7 @@ func providerError(op, message string) error {
 // outside the connection's boundary, or an argument outside its schema's reach. No message ever quotes the
 // refused value or any message content.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
-}
-
-// validToken keeps an obviously unusable value out of a request header. The real check is kChat's.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for i := 0; i < len(value); i++ {
-		// A header value may not carry control characters, and a kChat token never does.
-		if value[i] < 0x21 || value[i] > 0x7e {
-			return false
-		}
-	}
-	return true
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // bounded keeps an oversized provider string out of a result without interpreting it.

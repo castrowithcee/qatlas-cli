@@ -332,7 +332,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{origin: origin, auth: "Bearer " + value.Secret, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{origin: origin, auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // originOf validates the configured service origin and returns it without a trailing slash. Twenty Cloud
@@ -357,16 +357,6 @@ func originOf(raw string) (string, error) {
 // transport carries every Twenty request. A nil value is Go's default transport; the package's own tests
 // replace it with recorded responses.
 var transport http.RoundTripper
-
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:   defaultTimeout,
-		Transport: transport,
-		// The API key travels in the Authorization header, so no redirect is followed: a redirect could
-		// only move a credential to an origin the user never configured.
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // TestConnection verifies that the workspace behind one connection can serve this provider at all: its
 // generated API document must still describe the company fields the stable projection reads, and the API
@@ -766,7 +756,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, lim
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return transportError(op, err)
+		return provider.Transport(op, "Twenty", err)
 	}
 	defer response.Body.Close()
 
@@ -811,7 +801,7 @@ func (c *Client) change(ctx context.Context, op, method, path string, payload an
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		return transportError(op, err)
+		return provider.Transport(op, "Twenty", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
@@ -866,13 +856,6 @@ func statusError(op string, status int) error {
 			Message: fmt.Sprintf("Twenty rejected the operation (HTTP %d)", status),
 		}
 	}
-}
-
-// transportError classifies a failure that happened before a status code existed. The shared classifier
-// owns the rules, so Twenty publishes the same class and the same transport cause as every other
-// provider, and the original error text is never copied.
-func transportError(op string, err error) error {
-	return provider.Transport(op, "Twenty", err)
 }
 
 func providerError(op, message string) error {

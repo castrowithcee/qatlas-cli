@@ -370,8 +370,7 @@ func (c *Client) send(ctx context.Context, hc *http.Client, op, method, path str
 	response, err := hc.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "Baserow", err)
-		if failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown {
+		if failure.MayHaveArrived() {
 			failure.Message += uncertain
 		}
 		return nil, failure

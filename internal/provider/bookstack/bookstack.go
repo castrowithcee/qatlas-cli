@@ -546,7 +546,7 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 		scope: bound,
 		base:  base,
 		auth:  "Token " + tokenID + ":" + tokenSecret,
-		http:  newHTTPClient(),
+		http:  provider.NoRedirectClient(defaultTimeout, transport),
 	}, nil
 }
 
@@ -562,16 +562,6 @@ func baseOf(raw string) (*url.URL, error) {
 		return nil, errors.New("a BookStack service needs a usable https URL, without user, query, or fragment")
 	}
 	return parsed, nil
-}
-
-// newHTTPClient never follows a redirect: it would carry the credential to a location the user did not
-// configure and could turn a change into a different request.
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	}
 }
 
 // role resolves one secret role of the connection. Which stage delivers is not this provider's business:
@@ -1023,8 +1013,7 @@ func providerError(op, message string) error {
 // server carries the uncertainty hint.
 func transportError(op string, err error, change bool) error {
 	failure := provider.Transport(op, "the server", err)
-	if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-		failure.Cause == provider.CauseUnknown) {
+	if change && failure.MayHaveArrived() {
 		failure.Message += changeUncertain
 	}
 	return failure

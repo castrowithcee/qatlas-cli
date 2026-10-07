@@ -71,7 +71,8 @@ func (e *Error) Error() string {
 // Transport normalises a failure that happened before a status code existed. Every provider shares it, so
 // the same failure reaches the CLI, the agent output, and MCP as the same class and the same cause.
 // Subject names the reachable side in the message, for example "Telegram" or "the server". The original
-// error text is never copied, so a URL carrying credentials can never reach the message.
+// error text is never copied, so a URL carrying credentials can never reach the message. A RedirectRefused
+// in the chain is a local policy decision: it stays a provider error and publishes its own message.
 //
 // A timeout and a TLS failure stay their own unambiguous class and carry no cause: a request that ran into
 // a deadline may well have arrived, which is exactly what a mutation must not treat as a retryable
@@ -85,7 +86,10 @@ func Transport(op, subject string, err error) *Error {
 		recordErr  tls.RecordHeaderError
 		invalidErr x509.CertificateInvalidError
 	)
+	var refused *RedirectRefused
 	switch {
+	case errors.As(err, &refused):
+		return &Error{Class: ClassProviderError, Op: op, Message: refused.Message}
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &netErr) && netErr.Timeout():
 		return &Error{Class: ClassTimeout, Op: op, Message: subject + " did not answer in time"}
 	case errors.As(err, &certErr), errors.As(err, &hostErr), errors.As(err, &authErr),
