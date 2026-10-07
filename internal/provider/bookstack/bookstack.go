@@ -268,6 +268,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(shelvesGet), Handler: capability.Handler(invokeShelvesGet)},
 		capability.Operation{Descriptor: withGroup(shelvesCreate), Handler: capability.Handler(invokeShelvesCreate)},
 		capability.Operation{Descriptor: withGroup(shelvesUpdate), Handler: capability.Handler(invokeShelvesUpdate)},
+		capability.Operation{Descriptor: withGroup(booksSetCover), Handler: capability.Handler(invokeBooksSetCover)},
+		capability.Operation{Descriptor: withGroup(shelvesSetCover), Handler: capability.Handler(invokeShelvesSetCover)},
 		capability.Operation{Descriptor: withGroup(booksDelete), Handler: capability.Handler(invokeBooksDelete)},
 		capability.Operation{Descriptor: withGroup(chaptersDelete), Handler: capability.Handler(invokeChaptersDelete)},
 		capability.Operation{Descriptor: withGroup(shelvesDelete), Handler: capability.Handler(invokeShelvesDelete)},

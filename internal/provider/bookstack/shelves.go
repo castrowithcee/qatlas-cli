@@ -107,11 +107,11 @@ var (
 		ID: Provider + ".shelves.update", Version: 1, Title: "Update a BookStack shelf",
 		Description: "Change the name, description, tags, or books of one shelf by identifier. tags replaces all " +
 			"existing tags; books replaces all books on the shelf with the given ordered list, an empty list removes " +
-			"every book from the shelf, and omitting books leaves them unchanged. Shelves span the whole instance, " +
+			"every book from the shelf, and omitting books leaves them unchanged. remove_cover true removes the cover image. Shelves span the whole instance, " +
 			"so a connection bound to books cannot use this tool",
 		Tags: []string{"knowledge", "shelves", "bookstack", "update"}, Provider: Provider,
 		Risk:         bookWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},` + shelfWriteProperties + `},"required":["id"],"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},` + shelfWriteProperties + `,"remove_cover":{"type":"boolean"}},"required":["id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(shelfWriteOutput),
 		Arguments: []capability.Argument{
 			{Name: "id", Description: "Shelf identifier", Required: true},
@@ -120,6 +120,7 @@ var (
 			{Name: "description_html", Description: "New description as HTML, at most 2000 characters; mutually exclusive with description"},
 			{Name: "tags", Description: "Replaces all tags of the shelf: at most 50 name and value pairs, each at most 255 characters; an empty list removes all tags"},
 			{Name: "books", Description: "Replaces all books on the shelf with this ordered list of at most 500 unique positive integers; an empty list removes every book from the shelf; omit it to keep the books"},
+			removeCoverArgument,
 		},
 		Fields: shelfMetadataFields,
 	}
@@ -152,10 +153,12 @@ type shelfMutation struct {
 	DescriptionHTML string     `json:"description_html,omitempty"`
 	Tags            *[]tagJSON `json:"tags,omitempty"`
 	Books           *[]int64   `json:"books,omitempty"`
+	// Image is the JSON null that removes a cover, set from remove_cover and never taken from arguments.
+	Image json.RawMessage `json:"image,omitempty"`
 }
 
 func (m shelfMutation) empty() bool {
-	return m.Name == "" && m.Description == "" && m.DescriptionHTML == "" && m.Tags == nil && m.Books == nil
+	return m.Name == "" && m.Description == "" && m.DescriptionHTML == "" && m.Tags == nil && m.Books == nil && len(m.Image) == 0
 }
 
 // validate applies the local rules of a write. They need no I/O, so a violation is refused before any secret.
@@ -186,9 +189,14 @@ func decodeShelf(raw json.RawMessage, op string) (int64, shelfMutation, error) {
 	var input struct {
 		ID int64 `json:"id"`
 		shelfMutation
+		RemoveCover bool `json:"remove_cover"`
 	}
 	if json.Unmarshal(raw, &input) != nil {
 		return 0, shelfMutation{}, providerError(op, "the validated arguments could not be read")
+	}
+	input.Image = nil
+	if input.RemoveCover {
+		input.Image = json.RawMessage("null")
 	}
 	return input.ID, input.shelfMutation, nil
 }
