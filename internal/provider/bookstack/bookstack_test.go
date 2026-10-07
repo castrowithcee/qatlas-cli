@@ -760,8 +760,8 @@ func TestRegister(t *testing.T) {
 	}
 
 	got := reg.Provider(Provider)
-	if len(got) != 14 {
-		t.Fatalf("capabilities = %d, want 14", len(got))
+	if len(got) != 18 {
+		t.Fatalf("capabilities = %d, want 18", len(got))
 	}
 	wantRisk := capability.Risk{
 		Effect:          capability.EffectRead,
@@ -788,6 +788,10 @@ func TestRegister(t *testing.T) {
 		{Provider + ".books.update", booksUpdate.Risk},
 		{Provider + ".chapters.create", chaptersCreate.Risk},
 		{Provider + ".chapters.update", chaptersUpdate.Risk},
+		{Provider + ".shelves.list", wantRisk},
+		{Provider + ".shelves.get", wantRisk},
+		{Provider + ".shelves.create", shelvesCreate.Risk},
+		{Provider + ".shelves.update", shelvesUpdate.Risk},
 	} {
 		if tt.risk.Effect != capability.EffectRead && (tt.risk.Confirmation != capability.ConfirmationRequired ||
 			tt.risk.Idempotency == "" || !tt.risk.OpenWorld || tt.risk.DataSensitivity == "") {

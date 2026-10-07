@@ -298,7 +298,7 @@ defaults:
 			rows[fields[0]] = [3]string{fields[n-3], fields[n-2], fields[n-1]}
 		}
 		for provider, want := range map[string][3]string{
-			"bookstack": {"14", "2", "2"}, "telegram": {"3", "0", "0"}, "lexware": {"3", "0", "0"},
+			"bookstack": {"18", "2", "2"}, "telegram": {"3", "0", "0"}, "lexware": {"3", "0", "0"},
 			"twentycrm": {"5", "0", "0"}, "seatable": {"40", "0", "0"}, "nextcloud": {"6", "0", "0"},
 			"github": {"194", "0", "0"}, "todoist": {"39", "0", "0"}, "n8n": {"58", "0", "0"},
 			"make": {"70", "0", "0"}, "infomaniakdav": {"12", "0", "0"}, "infomaniakmail": {"13", "0", "0"}, "seatableaccount": {"2", "0", "0"}, "baserow": {"14", "0", "0"}, "penpot": {"37", "0", "0"},
@@ -333,12 +333,13 @@ defaults:
 		if code != 0 {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		if !strings.HasPrefix(stdout, "connections[2]: archive,primary\ntools[7]{id,title,effect,requires}:\n") {
+		if !strings.HasPrefix(stdout, "connections[2]: archive,primary\ntools[9]{id,title,effect,requires}:\n") {
 			t.Errorf("stdout = %q, want a TOON listing of the offered BookStack tools", stdout)
 		}
 		for _, want := range []string{"  bookstack.books.get,Get a BookStack book,read,id\n", "  bookstack.chapters.list,List BookStack chapters,read,\"\"\n",
 			"  bookstack.content.search,Search BookStack content,read,query\n", "  bookstack.pages.get,Get a BookStack page,read,id\n",
-			"  bookstack.pages.list,List BookStack pages,read,\"\"\n"} {
+			"  bookstack.pages.list,List BookStack pages,read,\"\"\n",
+			"  bookstack.shelves.get,Get a BookStack shelf,read,id\n", "  bookstack.shelves.list,List BookStack shelves,read,\"\"\n"} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout = %q, want it to contain %q", stdout, want)
 			}
