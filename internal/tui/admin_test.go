@@ -33,7 +33,7 @@ func newEncryptedVaultModel(t *testing.T, dir, passphrase string, unlockedInProc
 	if !unlockedInProcess {
 		secrets, _ = newVaultResolver(t, dir)
 	}
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -268,7 +268,7 @@ func TestAdminSessionNoneForUnencryptedVault(t *testing.T) {
 	secrets, _ := newVaultResolver(t, dir)
 	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", nil))
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

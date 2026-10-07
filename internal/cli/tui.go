@@ -9,6 +9,8 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
@@ -291,7 +293,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 				return err
 			}
 			store := config.NewStore(path, reg)
-			return classifyUserError(tui.Run(store, connectionTester(store, opts, reg), secrets, opts.Redactor,
+			svc := manage.New(store, secrets, connlog.SurfaceTUI, opts.Redactor)
+			return classifyUserError(tui.Run(svc, store, connectionTester(store, opts, reg), secrets, opts.Redactor,
 				tuiUpdater(opts, buildVersion), tuiRestart(), os.Stdin, os.Stdout))
 		},
 	}

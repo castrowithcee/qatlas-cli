@@ -277,7 +277,7 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	path := filepath.Join(dir, "config.yaml")
 	secrets, _ := newResolver(t, dir, nil)
-	m, err := New(config.NewStore(path, reg), nil, secrets, nil)
+	m, err := buildModel(config.NewStore(path, reg), nil, secrets, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

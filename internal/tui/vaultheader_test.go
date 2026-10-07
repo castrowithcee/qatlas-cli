@@ -45,7 +45,7 @@ func unencryptedVaultModel(t *testing.T) *Model {
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
 	mustNoError(t, secrets.SetVault("other", "role", "seed", nil))
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

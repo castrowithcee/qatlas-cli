@@ -31,7 +31,7 @@ func newTableModel(t *testing.T, width int) *Model {
 	if err := keyring.Set(secret.StoreKey("wiki-reader", "token-id"), "canary-wiki-id"); err != nil {
 		t.Fatalf("store secret: %v", err)
 	}
-	m, err := New(config.NewStore(filepath.Join(dir, "config.yaml"), reg), nil, secrets, nil)
+	m, err := buildModel(config.NewStore(filepath.Join(dir, "config.yaml"), reg), nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

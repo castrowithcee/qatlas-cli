@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -129,9 +129,9 @@ type Server struct {
 
 	overview Overview
 
-	// store, secrets, and redactor back the credential forms (see credential.go). They are nil in a test
+	// svc, secrets, and redactor back the credential forms (see credential.go). They are nil in a test
 	// that only exercises the overview and the admin guard, which never reaches a route that needs them.
-	store    *config.Store
+	svc      *manage.Service
 	secrets  *secret.Resolver
 	redactor *redact.Redactor
 
@@ -147,17 +147,17 @@ type Server struct {
 // this run's vault, or nil when none is configured; adminTimeout is vault.admin_timeout, read once at
 // startup exactly like every other vault-facing setting this run uses.
 //
-// store and secrets back the credential forms (see credential.go): store loads and saves the configuration
-// file this run uses, and secrets is the same resolver the rest of this run reads and writes credentials
-// through. redactor removes secret values from anything a credential form's own error text might otherwise
+// svc and secrets back the credential forms (see credential.go): svc loads and saves the configuration
+// file this run uses and completes every write, and secrets is the same resolver the rest of this run
+// reads and writes credentials through. redactor removes secret values from anything a credential form's own error text might otherwise
 // carry. All three may be nil, which leaves the overview and the admin approval usable and every credential
 // route refusing with a fixed, generic error, never a partial write: a test that only exercises those two
-// never has to build a configuration store or a resolver of its own.
+// never has to build a management service or a resolver of its own.
 //
 // tester runs the connection test the result page's "Test this connection" button offers (see
 // connection.go and internal/cli/web.go's own connectionTester); nil leaves the button unusable without
 // affecting anything else this run serves.
-func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, store *config.Store,
+func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, svc *manage.Service,
 	secrets *secret.Resolver, redactor *redact.Redactor, tester Tester) (*Server, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -188,7 +188,7 @@ func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, store *c
 		overview:     overview,
 		vault:        v,
 		adminTimeout: adminTimeout,
-		store:        store,
+		svc:          svc,
 		secrets:      secrets,
 		redactor:     redactor,
 		tester:       tester,
@@ -454,10 +454,10 @@ type pageData struct {
 // snapshot New was built with. It reports an error rather than a partial list when the file cannot be read
 // right now, so a transient failure never replaces a real credential list with an empty one.
 func (s *Server) credentialRows() ([]CredentialRow, error) {
-	if s.store == nil {
+	if s.svc == nil {
 		return nil, fmt.Errorf("no configuration store is configured for this run")
 	}
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +520,7 @@ func (s *Server) renderOverview(w http.ResponseWriter, adminError string) {
 		AdminRemainingText: remaining,
 		AdminError:         adminError,
 		CSRF:               csrf,
-		CredentialsUsable:  s.store != nil && s.secrets != nil,
+		CredentialsUsable:  s.svc != nil && s.secrets != nil,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

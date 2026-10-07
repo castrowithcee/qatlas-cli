@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -96,7 +98,7 @@ func newConnectionTestServer(t *testing.T, v *vault.Vault, tester ...Tester) (*S
 	if len(tester) > 0 {
 		tst = tester[0]
 	}
-	s, err := New(testOverview(), v, defaultTestAdminTimeout, store, resolver, red, tst)
+	s, err := New(testOverview(), v, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, tst)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

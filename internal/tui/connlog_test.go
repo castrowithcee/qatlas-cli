@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -147,6 +148,37 @@ func TestALogFailureIsAWarningAndKeepsTheSave(t *testing.T) {
 	}
 }
 
+// The warning of a failed log reaches the status line redacted.
+func TestALogFailureWarningIsRedactedInTheStatusLine(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	path := filepath.Join(dir, "config.yaml")
+	secrets, _ := newResolver(t, dir, nil)
+	const marked = "the change was saved"
+	red := &redact.Redactor{}
+	red.Add(marked)
+	m, err := buildModel(newTestStore(t, path), nil, secrets, red)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	addService(t, m, "wiki", "https://wiki.example.invalid")
+	addCredential(t, m, "reader", "WIKI_ID", "WIKI_SECRET")
+	vaultDir := vault.New(filepath.Dir(path)).Dir()
+	if err := os.MkdirAll(vaultDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vaultDir, "logs"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	addConnection(t, m, "wiki", "wiki", "reader")
+	if m.fail != "" {
+		t.Fatalf("a log failure was reported as an error: %q", m.fail)
+	}
+	if strings.Contains(m.status, marked) || !strings.Contains(m.status, redact.Marker) {
+		t.Errorf("status = %q, want the log warning redacted", m.status)
+	}
+}
+
 func TestGuidedSetupLogsTheNewConnection(t *testing.T) {
 	m, _, path, _, _ := newStoreModel(t)
 	walkSetup(t, m, stepSummary)
@@ -182,7 +214,7 @@ func TestServiceChangeLogsTheConnectionsItReaches(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	path := filepath.Join(dir, "config.yaml")
 	secrets, _ := newVaultResolver(t, dir)
-	m, err := New(newTestStore(t, path), nil, secrets, nil)
+	m, err := buildModel(newTestStore(t, path), nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

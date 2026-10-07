@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -66,7 +68,7 @@ func scaleConfigYAML(units int) []byte {
 func scalePage(b *testing.B, overview Overview, store *config.Store) func() *httptest.ResponseRecorder {
 	b.Helper()
 	resolver := secret.NewWith(func(string) string { return "" }, secret.NewMemoryStore(), nil, &redact.Redactor{})
-	s, err := New(overview, nil, defaultTestAdminTimeout, store, resolver, &redact.Redactor{}, nil)
+	s, err := New(overview, nil, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, &redact.Redactor{}), resolver, &redact.Redactor{}, nil)
 	if err != nil {
 		b.Fatalf("New: %v", err)
 	}

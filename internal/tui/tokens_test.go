@@ -73,7 +73,7 @@ func TestTokensNeedAnEncryptedVault(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

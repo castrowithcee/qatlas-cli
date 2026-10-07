@@ -217,7 +217,7 @@ func (m *Model) logVault() *vault.Vault {
 	if v := m.secrets.Vault(); v != nil {
 		return v
 	}
-	return vault.New(filepath.Dir(m.store.Path()))
+	return vault.New(filepath.Dir(m.svc.Path()))
 }
 
 // loadLogs reads and checks the UTC files overlapping the selected local days as a command. The walk

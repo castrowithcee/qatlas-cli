@@ -39,7 +39,7 @@ func TestVaultMigrateRowOffersOnlyWithLegacyEntries(t *testing.T) {
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -49,7 +49,7 @@ func TestVaultMigrateRowOffersOnlyWithLegacyEntries(t *testing.T) {
 	}
 
 	writeLegacyCredentialsYAML(t, dir, map[string]map[string]string{"reader": {"token-id": "canary-row-1"}})
-	m2, err := New(store, nil, secrets, nil)
+	m2, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -72,7 +72,7 @@ func TestVaultMigrateOverviewCancelledWritesNothing(t *testing.T) {
 	mustNoError(t, store.Save(cfg))
 	writeLegacyCredentialsYAML(t, dir, map[string]map[string]string{"reader": {"token-id": canaryID}})
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -122,7 +122,7 @@ func TestVaultMigrateWritesSwitchesAndDeletes(t *testing.T) {
 		"reader": {"token-id": canaryID, "token-secret": canarySecret},
 	})
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -198,7 +198,7 @@ func TestVaultMigrateWithALockedVaultAndDeclinedDelete(t *testing.T) {
 	})
 
 	locked, _ := newVaultResolver(t, dir)
-	m, err := New(store, nil, locked, nil)
+	m, err := buildModel(store, nil, locked, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -271,7 +271,7 @@ func TestVaultMigrateAsksForAdminSessionWhenTheVaultIsAlreadyUnlocked(t *testing
 	mustNoError(t, store.Save(cfg))
 	writeLegacyCredentialsYAML(t, dir, map[string]map[string]string{"reader": {"token-id": "canary-4b8e"}})
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

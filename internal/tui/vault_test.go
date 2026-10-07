@@ -37,7 +37,7 @@ func TestStoragePreselectsTheConfiguredDefault(t *testing.T) {
 			secrets, _ := newResolver(t, dir, nil)
 
 			// The credential form.
-			e, err := New(store, nil, secrets, nil)
+			e, err := buildModel(store, nil, secrets, nil)
 			if err != nil {
 				t.Fatalf("New() = %v", err)
 			}
@@ -52,7 +52,7 @@ func TestStoragePreselectsTheConfiguredDefault(t *testing.T) {
 			}
 
 			// The guided setup.
-			m, err := New(store, nil, secrets, nil)
+			m, err := buildModel(store, nil, secrets, nil)
 			if err != nil {
 				t.Fatalf("New() = %v", err)
 			}
@@ -108,7 +108,7 @@ func TestVaultOfferSetsAPassphrase(t *testing.T) {
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -179,7 +179,7 @@ func TestVaultOfferMismatchStaysOpen(t *testing.T) {
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -230,7 +230,7 @@ func TestVaultOfferSkippedLeavesTheVaultUnencrypted(t *testing.T) {
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -274,7 +274,7 @@ func TestVaultOfferCancelledWritesNothing(t *testing.T) {
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newVaultResolver(t, dir)
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -323,7 +323,7 @@ func TestVaultWriteIsAsyncAndNotDoubleTriggered(t *testing.T) {
 	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", nil))
 	blocking := vaultBlockingSecrets{Resolver: secrets, gate: make(chan struct{})}
 
-	m, err := New(store, nil, blocking, nil)
+	m, err := buildModel(store, nil, blocking, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -413,7 +413,7 @@ func TestVaultRoleDeleteUnlocksTheVaultThenRemoves(t *testing.T) {
 		config.Credential{Provider: "bookstack", Type: config.CredentialTypeVault}))
 	mustNoError(t, store.Save(cfg))
 
-	m, err := New(store, nil, locked, nil)
+	m, err := buildModel(store, nil, locked, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

@@ -12,9 +12,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
-	"github.com/castrowithcee/qatlas-cli/internal/secretcommit"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -73,7 +71,7 @@ const credentialsUnavailable = "credential management is not available for this 
 // credentialsReady reports whether this run can read and write credentials at all, and refuses the request
 // with the one fixed line above when it cannot.
 func (s *Server) credentialsReady(w http.ResponseWriter) bool {
-	if s.store == nil || s.secrets == nil {
+	if s.svc == nil || s.secrets == nil {
 		http.Error(w, credentialsUnavailable, http.StatusServiceUnavailable)
 		return false
 	}
@@ -98,7 +96,7 @@ func (s *Server) saveFailure(err error) string {
 // file on disk stops as a conflict instead of overwriting a change nothing on this page ever saw (see
 // handleCreateCredential and handleReplaceRole).
 func (s *Server) configFingerprint() (string, error) {
-	data, err := os.ReadFile(s.store.Path())
+	data, err := os.ReadFile(s.svc.Path())
 	if err != nil {
 		return "", err
 	}
@@ -139,7 +137,7 @@ func (s *Server) handleNewCredentialForm(w http.ResponseWriter, r *http.Request)
 	if !s.credentialsReady(w) {
 		return
 	}
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -175,7 +173,7 @@ func (s *Server) renderNewCredential(w http.ResponseWriter, cfg *config.Config, 
 
 // handleCreateCredential creates a credential with type keyring, vault, or env, and, for a keyring or vault
 // credential, every one of its provider's secret roles in the same commit as the credential entry itself,
-// through secretcommit.Commit: the same boundary internal/tui's guided setup uses, so a store that turns out
+// through manage.Service.CommitSecrets: the same boundary internal/tui's guided setup uses, so a store that turns out
 // to be locked or missing after some roles were written leaves neither a stray secret nor a stray
 // credential. An env credential only ever writes variable names, never a value, straight into the
 // configuration.
@@ -187,7 +185,7 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 	name := r.PostFormValue("name")
 	storage := r.PostFormValue("storage")
 
-	cfg, rev, err := s.store.LoadVersioned()
+	cfg, rev, err := s.svc.Load()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -253,24 +251,24 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 
 	var warning string
 	if storage == config.CredentialTypeEnv {
-		if err := s.store.SaveIfUnchanged(cfg, rev); err != nil {
+		warning, err = s.svc.SaveConfig(before, cfg, rev)
+		if err != nil {
 			fail(s.saveFailure(err))
 			return
 		}
 	} else {
 		toVault := storage == config.CredentialTypeVault
-		warning, err = secretcommit.Commit(s.store, s.secrets, cfg, rev, name, toVault, roles, values, vaultOfferFromForm(r))
+		warning, err = s.svc.CommitSecrets(cfg, rev, name, toVault, roles, values, vaultOfferFromForm(r))
 		if err != nil {
 			fail(s.saveFailure(err))
 			return
 		}
-	}
-
-	if logged := s.recordConnections(before, cfg); logged != "" {
-		if warning != "" {
-			warning += "; "
+		if logged := s.svc.RecordConnections(before, cfg); logged != "" {
+			if warning != "" {
+				warning += "; "
+			}
+			warning += logged
 		}
-		warning += logged
 	}
 	target := "/credentials/" + url.PathEscape(name) + "?created=1"
 	if warning != "" {
@@ -288,7 +286,7 @@ func (s *Server) handleCredentialForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -425,7 +423,7 @@ func (s *Server) handleReplaceRole(w http.ResponseWriter, r *http.Request) {
 	role := r.PostFormValue("role")
 	value := r.PostFormValue("value")
 
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -461,7 +459,7 @@ func (s *Server) handleReplaceRole(w http.ResponseWriter, r *http.Request) {
 			fail(s.redact(err.Error()))
 			return
 		}
-		warning = s.syncVaultProcess(func(ctx context.Context, client *vaultproc.Client) error {
+		warning = s.svc.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
 			return client.Set(ctx, name, role, value)
 		})
 	} else {
@@ -476,22 +474,6 @@ func (s *Server) handleReplaceRole(w http.ResponseWriter, r *http.Request) {
 		target += "&warning=" + url.QueryEscape(warning)
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
-}
-
-// syncVaultProcess hands a change already written to the vault on to a vault process that holds it unlocked
-// outside this run, the same way internal/tui/vaultsettings.go's own helper of this name does for the
-// editor, and internal/cli/vault.go's own does for the CLI.
-func (s *Server) syncVaultProcess(change func(context.Context, *vaultproc.Client) error) string {
-	v := s.secrets.Vault()
-	if !vaultproc.Supported || v == nil {
-		return ""
-	}
-	if err := vaultmigrate.SyncChange(context.Background(), v, change); err != nil {
-		return fmt.Sprintf("warning: the vault holds the change, but the vault process that holds it "+
-			"unlocked could not take it and still answers with what it held before: %s; %s",
-			s.redact(err.Error()), s.redact(secret.VaultProcessRemedy(err)))
-	}
-	return ""
 }
 
 // vaultOfferFromForm reads a masked vault passphrase form's two fields, the same offer 'qatlas credential

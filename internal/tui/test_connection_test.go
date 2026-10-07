@@ -23,7 +23,7 @@ func newTestableModel(t *testing.T, tester Tester, red *redact.Redactor) *Model 
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	secrets, _ := newResolver(t, dir, nil)
 
-	m, err := New(store, tester, secrets, red)
+	m, err := buildModel(store, tester, secrets, red)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -280,7 +280,7 @@ func TestConnectionTestGuards(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "qatlas")
 		store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 		secrets, _ := newResolver(t, dir, nil)
-		m, err := New(store, func(context.Context, string) (provider.Class, error) {
+		m, err := buildModel(store, func(context.Context, string) (provider.Class, error) {
 			return provider.ClassOK, nil
 		}, secrets, nil)
 		if err != nil {

@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -133,7 +135,7 @@ func TestWebSaveForeignWriterBetweenReadAndCommit(t *testing.T) {
 	}
 	red := &redact.Redactor{}
 	s.secrets = secret.NewWith(func(string) string { return "" }, hook, nil, red)
-	_ = store
+	s.svc = manage.New(store, s.secrets, connlog.SurfaceWeb, red)
 
 	rec := s.postForm(t, "/credentials/new", s.addr, cookie, "http://"+s.addr, csrf,
 		keyringForm(t, s, cookie, "wiki-mine", cfgver))

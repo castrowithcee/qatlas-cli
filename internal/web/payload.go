@@ -12,7 +12,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
-	"github.com/castrowithcee/qatlas-cli/internal/secretcommit"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -20,7 +19,7 @@ import (
 // party by reference; a connection releases it with forward_secrets. Its form is one page for a new and for an
 // existing credential: the name, where the values are kept, an optional description, one masked row per stored
 // field, and a few blank rows that add a field with its value. The values leave the form only towards the
-// credential store, through secretcommit.Commit; they are never rendered back, never put into a redirect or a
+// credential store, through manage.Service.CommitSecrets; they are never rendered back, never put into a redirect or a
 // message, and never written into the configuration.
 
 // payloadNewRows is how many blank rows of "new field name, its value" a payload form offers. The page ships
@@ -141,7 +140,7 @@ func (s *Server) handleNewPayloadForm(w http.ResponseWriter, _ *http.Request) {
 	if !s.credentialsReady(w) {
 		return
 	}
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -222,13 +221,13 @@ func (s *Server) handleCreatePayload(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSavePayload(w http.ResponseWriter, r *http.Request) { s.savePayload(w, r, true) }
 
 // savePayload checks the form against a candidate configuration, the core's Validate and the value rule, and
-// then commits the values and the configuration entry together through secretcommit.Commit. Values the form
+// then commits the values and the configuration entry together through manage.Service.CommitSecrets. Values the form
 // left empty keep what is stored; the stored value of a removed field is deleted after the commit.
 func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) {
 	if !s.credentialsReady(w) {
 		return
 	}
-	cfg, rev, err := s.store.LoadVersioned()
+	cfg, rev, err := s.svc.Load()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -354,7 +353,7 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 	}
 
 	toVault := cred.Type == config.CredentialTypeVault
-	warning, err := secretcommit.Commit(s.store, s.secrets, candidate, rev, name, toVault, roles, values,
+	warning, err := s.svc.CommitSecrets(candidate, rev, name, toVault, roles, values,
 		vaultOfferFromForm(r))
 	if err != nil {
 		if errors.Is(err, config.ErrConflict) {
@@ -376,7 +375,7 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 				"'qatlas credential delete %s %s'", f, name, f)
 		}
 	}
-	if logged := s.recordConnections(cfg, candidate); logged != "" {
+	if logged := s.svc.RecordConnections(cfg, candidate); logged != "" {
 		warning += "; " + logged
 	}
 	warning = strings.TrimPrefix(warning, "; ")
@@ -414,7 +413,7 @@ func (s *Server) handleSetForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := r.PathValue("name")
-	cfg, rev, err := s.store.LoadVersioned()
+	cfg, rev, err := s.svc.Load()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -440,11 +439,12 @@ func (s *Server) handleSetForward(w http.ResponseWriter, r *http.Request) {
 		fail(s.redact(err.Error()))
 		return
 	}
-	if err := s.store.SaveIfUnchanged(cand, rev); err != nil {
+	logged, err := s.svc.SaveConfig(cfg, cand, rev)
+	if err != nil {
 		fail(s.saveFailure(err))
 		return
 	}
-	s.setNotice(withWarning(s.forwardChangeNotice(cand, name), s.recordConnections(cfg, cand)))
+	s.setNotice(withWarning(s.forwardChangeNotice(cand, name), logged))
 	http.Redirect(w, r, "/connections/"+url.PathEscape(name)+"?forward=1", http.StatusSeeOther)
 }
 

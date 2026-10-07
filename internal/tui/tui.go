@@ -26,6 +26,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -370,6 +371,12 @@ func (f field) marked() []string {
 
 // Model is the whole editor state.
 type Model struct {
+	// svc performs every configuration read and save, secret commit, vault process handover and connection
+	// log entry of the editor (see internal/manage).
+	svc *manage.Service
+	// store is the editor's own handle on the configuration file, meant only for the vault form's migrate
+	// action and for approving connections when the vault gets encrypted; both reach the store beyond what
+	// the management service offers. Nothing else reads or writes through it.
 	store *config.Store
 	cfg   *config.Config
 
@@ -580,18 +587,19 @@ type Model struct {
 	quitting bool
 }
 
-// New builds the editor over an existing store. A missing configuration file starts an empty one. The
+// New builds the editor over the management service svc. store is only the handle the vault form's migrate
+// and encrypt actions need (see Model.store). A missing configuration file starts an empty one. The
 // tester may be nil, in which case connection testing is unavailable; secrets may be nil, in which case the
 // configuration stays editable and only the operations that would reach a store report why they cannot.
-func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor) (*Model, error) {
-	cfg, rev, err := store.LoadVersioned()
+func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor) (*Model, error) {
+	cfg, rev, err := svc.Load()
 	configExists := true
 	if err != nil {
 		var notFound *config.NotFoundError
 		if !asNotFound(err, &notFound) {
 			return nil, err
 		}
-		cfg = store.New()
+		cfg = svc.NewConfig()
 		rev = config.RevisionAbsent
 		configExists = false
 	}
@@ -604,7 +612,7 @@ func New(store *config.Store, tester Tester, secrets Secrets, redactor *redact.R
 	// Without a working directory a new path simply starts without a suggestion.
 	startDir, _ := os.Getwd()
 	m := &Model{
-		store: store, cfg: cfg, rev: rev, tester: tester, redactor: redactor,
+		svc: svc, store: store, cfg: cfg, rev: rev, tester: tester, redactor: redactor,
 		secrets:   secrets,
 		sources:   map[string]secret.Source{},
 		checked:   map[string][]string{},
@@ -2652,14 +2660,14 @@ func (m *Model) save(name string) tea.Cmd {
 		m.fail = m.redactor.Apply(err.Error())
 		return nil
 	}
-	if err := m.store.SaveIfUnchanged(candidate, m.rev); err != nil {
+	logged, err := m.svc.SaveConfig(previous, candidate, m.rev)
+	if err != nil {
 		if !m.conflicted(err) {
 			m.fail = m.redactor.Apply(err.Error())
 		}
 		return nil
 	}
 	m.adoptSaved(candidate)
-	logged := recordConnections(m.store, m.secrets, previous, candidate)
 	// A connection saved directly here is what autoApprove's direct means; every other section saves no
 	// single connection by name.
 	direct := ""
@@ -2802,7 +2810,8 @@ func (m *Model) delete() tea.Cmd {
 		m.screen = screenList
 		return nil
 	}
-	if err := m.store.SaveIfUnchanged(candidate, m.rev); err != nil {
+	logged, err := m.svc.SaveConfig(previous, candidate, m.rev)
+	if err != nil {
 		if !m.conflicted(err) {
 			m.fail = m.redactor.Apply(err.Error())
 		}
@@ -2810,7 +2819,6 @@ func (m *Model) delete() tea.Cmd {
 		return nil
 	}
 	m.adoptSaved(candidate)
-	logged := recordConnections(m.store, m.secrets, previous, candidate)
 	cmd := m.returnToList("")
 	m.status = "Deleted " + name
 	m.addWarning(logged)
@@ -3929,7 +3937,7 @@ func (m *Model) pathLine(vaultText string) string {
 		// the path and drops its label rather than the path itself.
 		label, suffix = "", ""
 	}
-	path := truncateLeft(m.store.Path(), rest-lipgloss.Width(label+suffix))
+	path := truncateLeft(m.svc.Path(), rest-lipgloss.Width(label+suffix))
 	return titleStyle.Render(title) + vaultText + sep + okStyle.Render(banner) + hintStyle.Render(label+path+suffix)
 }
 
@@ -4741,11 +4749,11 @@ func keyHintGroup(group string) string {
 // Run starts the editor on the given terminal streams. The updater may be nil, in which case the editor does
 // not look for a newer release. The restart may be nil, in which case an installed release waits for a
 // restart by hand.
-func Run(store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor, updater Updater,
-	restart *Restart, in, out *os.File) error {
+func Run(svc *manage.Service, store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor,
+	updater Updater, restart *Restart, in, out *os.File) error {
 	// Read before anything else, so that no child of the editor inherits the handoff.
 	predecessor := takeHandoff()
-	model, err := New(store, tester, secrets, redactor)
+	model, err := New(svc, store, tester, secrets, redactor)
 	if err != nil {
 		return err
 	}

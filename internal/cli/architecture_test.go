@@ -12,6 +12,9 @@ package cli
 //  2. Code outside internal/provider names no provider in a string literal.
 //  3. Provider packages depend on the provider contract and a few shared leaf packages, never on another
 //     provider.
+//  4. Surfaces do not open the stores themselves: the qualified identifiers that construct or hold a config,
+//     vault or secret store handle are used only where listed, so store access runs through the management core
+//     (internal/manage). Types and constants of those packages stay free.
 
 import (
 	"fmt"
@@ -23,6 +26,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,13 +40,15 @@ const (
 	ruleSurfaceAccess = 1
 	ruleProviderNames = 2
 	ruleProviderDeps  = 3
+	ruleStoreHandles  = 4
 
 	registryFile = "internal/cli/registry.go"
 	providerRoot = "internal/provider/"
 )
 
 // archFinding is one violation: the rule, the slash-separated file path, and what was found. For rules 1 and 3
-// the item is the module-relative import path, for rule 2 the provider name, ID or tool ID prefix.
+// the item is the module-relative import path, for rule 2 the provider name, ID or tool ID prefix, for rule 4
+// the qualified identifier such as "config.Store" (always with the package's own name, never an import alias).
 type archFinding struct {
 	Rule int
 	File string
@@ -63,11 +69,17 @@ var surfaceForbidden = map[string]bool{
 	"internal/vault":        true,
 	"internal/vaultproc":    true,
 	"internal/approval":     true,
-	"internal/secretcommit": true,
 	"internal/vaultmigrate": true,
 	"internal/connlog":      true,
 	"internal/capability":   true,
 	"internal/cli":          true,
+}
+
+// Qualified identifiers that surfaces must not use beyond their exceptions, by module-relative package path.
+var storeHandles = map[string]map[string]bool{
+	"internal/config": {"Store": true, "NewStore": true, "Save": true},
+	"internal/vault":  {"New": true, "OpenWithKey": true},
+	"internal/secret": {"New": true, "NewWith": true, "SystemStore": true, "NewFile": true},
 }
 
 // Packages a provider may import from the module.
@@ -88,12 +100,14 @@ var (
 )
 
 const (
-	hintCore     = "move the logic into the core and let the surface call it"
+	hintCore     = "move the logic into the core (internal/manage for management flows) and let the surface call it"
+	hintStore    = "route the store access through the management core (internal/manage)"
 	hintProvider = "keep provider specifics in internal/provider and let core and surfaces read them from the registry"
 )
 
 const (
 	debtSurface = "existing debt: the surface reaches the store directly instead of through the core"
+	debtHandle  = "existing debt: the surface holds or opens a store handle instead of calling the management core"
 	debtOutput  = "existing debt: provider code uses the shared output package instead of the provider contract"
 	debtName    = "existing debt: help or error text names a provider instead of reading it from the registry"
 	releaseHost = "permanent: the text names GitHub as the release host, not as a provider"
@@ -104,8 +118,6 @@ var architectureExceptions = []archException{
 	{ruleSurfaceAccess, "internal/tui/admin.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/approvals.go", "internal/approval", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/approvals.go", "internal/vault", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/connlog.go", "internal/connlog", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/connlog.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/logs.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/logs.go", "internal/vaultmigrate", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/logs.go", "internal/vaultproc", debtSurface},
@@ -114,7 +126,6 @@ var architectureExceptions = []archException{
 	{ruleSurfaceAccess, "internal/tui/migrate.go", "internal/vaultmigrate", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/migrate.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/payload.go", "internal/secret", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/payload.go", "internal/secretcommit", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/payload.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/payload.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/restart.go", "internal/vault", debtSurface},
@@ -122,7 +133,6 @@ var architectureExceptions = []archException{
 	{ruleSurfaceAccess, "internal/tui/secrets.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/secrets.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/setup.go", "internal/secret", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/setup.go", "internal/secretcommit", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/setup.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/tokens.go", "internal/approval", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/tokens.go", "internal/vault", debtSurface},
@@ -133,28 +143,23 @@ var architectureExceptions = []archException{
 	{ruleSurfaceAccess, "internal/tui/vaultheader.go", "internal/vaultmigrate", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/vaultheader.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/vaultsettings.go", "internal/approval", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/vaultsettings.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/vaultsettings.go", "internal/vault", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/vaultsettings.go", "internal/vaultmigrate", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/vaultsettings.go", "internal/vaultproc", debtSurface},
 	// Rule 1: surface access, internal/web.
 	{ruleSurfaceAccess, "internal/web/admin.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/web/connection.go", "internal/approval", debtSurface},
-	{ruleSurfaceAccess, "internal/web/connection.go", "internal/secretcommit", debtSurface},
 	{ruleSurfaceAccess, "internal/web/connection.go", "internal/vault", debtSurface},
-	{ruleSurfaceAccess, "internal/web/connlog.go", "internal/connlog", debtSurface},
-	{ruleSurfaceAccess, "internal/web/connlog.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/web/credential.go", "internal/secret", debtSurface},
-	{ruleSurfaceAccess, "internal/web/credential.go", "internal/secretcommit", debtSurface},
 	{ruleSurfaceAccess, "internal/web/credential.go", "internal/vault", debtSurface},
-	{ruleSurfaceAccess, "internal/web/credential.go", "internal/vaultmigrate", debtSurface},
 	{ruleSurfaceAccess, "internal/web/credential.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/web/payload.go", "internal/approval", debtSurface},
 	{ruleSurfaceAccess, "internal/web/payload.go", "internal/secret", debtSurface},
-	{ruleSurfaceAccess, "internal/web/payload.go", "internal/secretcommit", debtSurface},
 	{ruleSurfaceAccess, "internal/web/payload.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/web/server.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/web/server.go", "internal/vault", debtSurface},
+	// Rule 4: store handles.
+	{ruleStoreHandles, "internal/tui/logs.go", "vault.New", debtHandle},
+	{ruleStoreHandles, "internal/tui/tui.go", "config.Store", debtHandle},
+	{ruleStoreHandles, "internal/tui/vaultsettings.go", "config.Store", debtHandle},
 	// Rule 2: provider names in string literals.
 	{ruleProviderNames, "internal/cli/tui.go", "GitHub", debtName},
 	{ruleProviderNames, "internal/cli/tui.go", "SeaTable", debtName},
@@ -278,6 +283,8 @@ func describeFinding(f archFinding) string {
 		return fmt.Sprintf("rule 1 (surface storage access): imports %s; %s", f.Item, hintCore)
 	case ruleProviderNames:
 		return fmt.Sprintf("rule 2 (provider neutrality): string literal names %q; %s", f.Item, hintProvider)
+	case ruleStoreHandles:
+		return fmt.Sprintf("rule 4 (surface store handles): uses %s; %s", f.Item, hintStore)
 	default:
 		return fmt.Sprintf("rule 3 (provider dependencies): imports %s; %s", f.Item, hintProvider)
 	}
@@ -346,6 +353,9 @@ func architectureFindings(fsys fs.FS, providers []config.ProviderMetadata) ([]ar
 				findings = append(findings, archFinding{ruleProviderDeps, p, rel})
 			}
 		}
+		if surface {
+			findings = append(findings, storeHandleFindings(file, p, module)...)
+		}
 		if names {
 			ast.Inspect(file, func(n ast.Node) bool {
 				switch n := n.(type) {
@@ -370,6 +380,46 @@ func architectureFindings(fsys fs.FS, providers []config.ProviderMetadata) ([]ar
 		return nil, err
 	}
 	return dedupeFindings(findings), nil
+}
+
+// storeHandleFindings returns the protected qualified identifiers a file uses. A selector counts when its
+// package name resolves, through the file's imports and their aliases, to one of the protected packages; the
+// finding names the package's own name.
+func storeHandleFindings(file *ast.File, p, module string) []archFinding {
+	type pkg struct{ rel, name string }
+	byLocal := map[string]pkg{}
+	for _, imp := range file.Imports {
+		target, err := strconv.Unquote(imp.Path.Value)
+		if err != nil {
+			continue
+		}
+		rel, ok := strings.CutPrefix(target, module+"/")
+		if !ok || storeHandles[rel] == nil {
+			continue
+		}
+		local := path.Base(rel)
+		if imp.Name != nil {
+			local = imp.Name.Name
+		}
+		byLocal[local] = pkg{rel, path.Base(rel)}
+	}
+	if len(byLocal) == 0 {
+		return nil
+	}
+	var findings []archFinding
+	ast.Inspect(file, func(n ast.Node) bool {
+		sel, ok := n.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		if id, ok := sel.X.(*ast.Ident); ok {
+			if target, ok := byLocal[id.Name]; ok && storeHandles[target.rel][sel.Sel.Name] {
+				findings = append(findings, archFinding{ruleStoreHandles, p, target.name + "." + sel.Sel.Name})
+			}
+		}
+		return true
+	})
+	return findings
 }
 
 func dedupeFindings(findings []archFinding) []archFinding {
@@ -556,6 +606,13 @@ func TestArchitectureChecksDetectViolations(t *testing.T) {
 		{"a surface that imports the capability layer", map[string]string{
 			"internal/tui/x.go": "package tui\n\nimport _ \"example.com/m/internal/capability\"\n",
 		}, archFinding{ruleSurfaceAccess, "internal/tui/x.go", "internal/capability"}},
+		{"a surface that opens a config store", map[string]string{
+			"internal/web/x.go": "package web\n\nimport \"example.com/m/internal/config\"\n\nvar _ = config.NewStore\n",
+		}, archFinding{ruleStoreHandles, "internal/web/x.go", "config.NewStore"}},
+		{"a surface that holds a store through an import alias", map[string]string{
+			"internal/tui/x.go": "package tui\n\nimport cfg \"example.com/m/internal/config\"\n\ntype T struct{ s *cfg.Store }\n" +
+				"\nfunc f() { _ = cfg.Config{}; _ = cfg.Store{} }\n",
+		}, archFinding{ruleStoreHandles, "internal/tui/x.go", "config.Store"}},
 		{"a provider name in a string", map[string]string{
 			"internal/core/x.go": "package core\n\nconst Hint = \"Use Alpha here\"\n",
 		}, archFinding{ruleProviderNames, "internal/core/x.go", "Alpha"}},
@@ -602,13 +659,28 @@ func TestArchitectureChecksDetectViolations(t *testing.T) {
 		"internal/core/testdata/data.go":     "package data\n\nconst A = \"Alpha\"\n",
 		"internal/provider/alpha/ok.go":      "package alpha\n\nconst A = \"Alpha alpha.items.list\"\n",
 		"internal/provider/alpha/ok_test.go": "package alpha\n\nimport _ \"example.com/m/internal/application\"\n",
+		"internal/web/free.go":               "package web\n\nimport \"example.com/m/internal/config\"\n\nvar _ config.Config\n",
 		"internal/web/ok_test.go":            "package web\n\nimport _ \"example.com/m/internal/vault\"\n",
 	}
 	if findings, err := architectureFindings(archFS(allowed), archTestProviders()); err != nil || len(findings) != 0 {
 		t.Errorf("allowed code: findings = %v, err = %v, want none", findings, err)
 	}
 
-	for rule := ruleSurfaceAccess; rule <= ruleProviderDeps; rule++ {
+	// Only the handle identifiers are protected, and a vault or secret handle also trips rule 1 by its import.
+	both := map[string]string{
+		"internal/web/y.go": "package web\n\nimport (\n\t\"example.com/m/internal/secret\"\n\t\"example.com/m/internal/vault\"\n)\n\n" +
+			"var _ secret.Source\nvar _ = vault.StateReady\nvar _ = secret.NewFile\n",
+	}
+	wantBoth := []archFinding{
+		{ruleSurfaceAccess, "internal/web/y.go", "internal/secret"},
+		{ruleSurfaceAccess, "internal/web/y.go", "internal/vault"},
+		{ruleStoreHandles, "internal/web/y.go", "secret.NewFile"},
+	}
+	if got, err := architectureFindings(archFS(both), archTestProviders()); err != nil || !slices.Equal(got, wantBoth) {
+		t.Errorf("vault and secret use: findings = %v, err = %v, want %v", got, err, wantBoth)
+	}
+
+	for rule := ruleSurfaceAccess; rule <= ruleStoreHandles; rule++ {
 		stale := []archException{{rule, "internal/x.go", "item", "reason"}}
 		problems := architectureProblems(nil, stale)
 		if len(problems) != 1 || !strings.Contains(problems[0], "stale") {

@@ -28,7 +28,7 @@ func newStoreModel(t *testing.T) (*Model, *config.Store, string, *secret.Resolve
 	store := newTestStore(t, path)
 
 	secrets, mem := newResolver(t, dir, nil)
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -195,7 +195,7 @@ func TestKeyringCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 	mustNoError(t, secrets.Set("reader", "token-id", "canary-existing-id"))
 
 	// The editor is started on that file, the way a user finds it.
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -261,7 +261,7 @@ func TestVaultCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 	mustNoError(t, store.Save(cfg))
 
 	// The editor is started on that file, the way a user finds it.
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -364,7 +364,7 @@ func TestTypeChangeIsRefusedWhileASecretIsStored(t *testing.T) {
 	mustNoError(t, store.Save(cfg))
 	mustNoError(t, secrets.Set("reader", "token-secret", "canary-orphan-candidate"))
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -585,7 +585,7 @@ func TestKeyringRowsTellEveryStateApart(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, cfgStore, _, secrets, mem := storedCredential(t, tt.env)
 			tt.arrange(mem)
-			m, err := New(cfgStore, nil, secrets, nil)
+			m, err := buildModel(cfgStore, nil, secrets, nil)
 			if err != nil {
 				t.Fatalf("New() = %v", err)
 			}
@@ -689,7 +689,7 @@ func TestSlowStoreDoesNotBlockTheEditor(t *testing.T) {
 	// Only the write is slow here; the question where a role resolves from is answered at once.
 	close(slow.probes)
 
-	m, err := New(store, nil, slow, nil)
+	m, err := buildModel(store, nil, slow, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -756,7 +756,7 @@ func TestSlowStatusQueryDoesNotBlockTheEditor(t *testing.T) {
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 	slow := newBlockingSecrets()
 
-	m, err := New(store, nil, slow, nil)
+	m, err := buildModel(store, nil, slow, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -847,7 +847,7 @@ func TestLongMessagesStayReadable(t *testing.T) {
 func TestWithoutAResolver(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	store := newTestStore(t, filepath.Join(dir, "config.yaml"))
-	m, err := New(store, nil, nil, nil)
+	m, err := buildModel(store, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -972,7 +972,7 @@ func TestTypeChangeGuardAsksWhatIsStoredNotWhatDelivers(t *testing.T) {
 			dir, store, path, secrets, mem := storedCredential(t, tt.env)
 			injected := tt.arrange(t, dir, secrets, mem)
 
-			m, err := New(store, nil, injected, nil)
+			m, err := buildModel(store, nil, injected, nil)
 			if err != nil {
 				t.Fatalf("New() = %v", err)
 			}
@@ -1048,7 +1048,7 @@ func TestEveryWriteOutcomeReachesTheUser(t *testing.T) {
 	}
 
 	store := newTestStore(t, filepath.Join(t.TempDir(), "qatlas", "config.yaml"))
-	m, err := New(store, nil, scripted, nil)
+	m, err := buildModel(store, nil, scripted, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -1120,7 +1120,7 @@ func TestAWaitingTypeChangeSurvivesADisplayRefresh(t *testing.T) {
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeKeyring}))
 	mustNoError(t, store.Save(cfg))
 
-	m, err := New(store, nil, slow, nil)
+	m, err := buildModel(store, nil, slow, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -1241,7 +1241,7 @@ func TestTheGuardsWayOutReallyLeadsOut(t *testing.T) {
 	// A fallback that no longer delivers still holds its entry, and that is what the guard reports.
 	switchOffFallback(t, dir)
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -1291,7 +1291,7 @@ func TestQuittingDropsAWaitingTypeChange(t *testing.T) {
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeKeyring}))
 	mustNoError(t, store.Save(cfg))
 
-	m, err := New(store, nil, slow, nil)
+	m, err := buildModel(store, nil, slow, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}

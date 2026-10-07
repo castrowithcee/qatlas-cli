@@ -11,7 +11,6 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/secretcommit"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -542,7 +541,7 @@ func (s *Server) handleConnectionsNew(w http.ResponseWriter, r *http.Request) {
 	if !s.credentialsReady(w) {
 		return
 	}
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -567,7 +566,7 @@ func (s *Server) handleConnectionReview(w http.ResponseWriter, r *http.Request) 
 	if !s.credentialsReady(w) {
 		return
 	}
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -583,8 +582,8 @@ func (s *Server) handleConnectionReview(w http.ResponseWriter, r *http.Request) 
 
 // handleCreateConnection is the guided connection setup's one and only write: it rebuilds and revalidates
 // the candidate exactly as handleConnectionReview does, refuses a configuration that changed since the
-// review page was shown as a conflict, and, only then, saves it: directly with store.SaveIfUnchanged when the
-// connection reuses an existing credential, or through secretcommit.Commit, the same commit boundary
+// review page was shown as a conflict, and, only then, saves it: directly with manage.Service.SaveConfig when the
+// connection reuses an existing credential, or through manage.Service.CommitSecrets, the same commit boundary
 // internal/tui's own guided setup uses, when it created a new keyring or vault credential, so a store that
 // turns out to be locked or missing after some roles were written leaves neither a stray secret nor a stray
 // credential.
@@ -592,7 +591,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	if !s.credentialsReady(w) {
 		return
 	}
-	cfg, rev, err := s.store.LoadVersioned()
+	cfg, rev, err := s.svc.Load()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -617,11 +616,12 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	storage := cand.Credentials[credName].Type
 
 	if !newCredential || storage == config.CredentialTypeEnv {
-		if err := s.store.SaveIfUnchanged(cand, rev); err != nil {
+		logged, err := s.svc.SaveConfig(cfg, cand, rev)
+		if err != nil {
 			failReview(s.saveFailure(err))
 			return
 		}
-		s.setNotice(withWarning(s.approvalNotice(cand, connName), s.recordConnections(cfg, cand)))
+		s.setNotice(withWarning(s.approvalNotice(cand, connName), logged))
 		http.Redirect(w, r, "/connections/"+url.PathEscape(connName)+"?created=1", http.StatusSeeOther)
 		return
 	}
@@ -639,13 +639,13 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 
 	toVault := storage == config.CredentialTypeVault
-	warning, err := secretcommit.Commit(s.store, s.secrets, cand, rev, credName, toVault, roles, values, vaultOfferFromForm(r))
+	warning, err := s.svc.CommitSecrets(cand, rev, credName, toVault, roles, values, vaultOfferFromForm(r))
 	if err != nil {
 		failReview(s.saveFailure(err))
 		return
 	}
 
-	notice := withWarning(s.approvalNotice(cand, connName), s.recordConnections(cfg, cand))
+	notice := withWarning(s.approvalNotice(cand, connName), s.svc.RecordConnections(cfg, cand))
 	if warning != "" {
 		warningText := "warning: " + s.redact(warning)
 		if notice != "" {
@@ -761,7 +761,7 @@ func (s *Server) handleConnectionResult(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	name := r.PathValue("name")
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		http.Error(w, s.redact(err.Error()), http.StatusInternalServerError)
 		return
@@ -834,10 +834,10 @@ func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Confi
 // same way credentialRows already does for credentials: never from the one-time snapshot New was built
 // with, so a connection created in this run is visible without restarting it.
 func (s *Server) connectionRows() ([]ConnectionRow, error) {
-	if s.store == nil {
+	if s.svc == nil {
 		return nil, fmt.Errorf("no configuration store is configured for this run")
 	}
-	cfg, err := s.store.Load()
+	cfg, err := s.loadConfig()
 	if err != nil {
 		return nil, err
 	}

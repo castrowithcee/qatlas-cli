@@ -41,7 +41,7 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "missing", "config.yaml")
 	store := config.NewStore(path, reg)
-	m, err := New(store, nil, nil, &redact.Redactor{})
+	m, err := buildModel(store, nil, nil, &redact.Redactor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 		}
 	}
 	store := config.NewStore(filepath.Join(t.TempDir(), "config.yaml"), reg)
-	m, err := New(store, nil, nil, &redact.Redactor{})
+	m, err := buildModel(store, nil, nil, &redact.Redactor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +324,7 @@ func TestCredentialProviderDecidesItsSecretRoles(t *testing.T) {
 		}
 	}
 	store := config.NewStore(filepath.Join(t.TempDir(), "config.yaml"), reg)
-	m, err := New(store, nil, nil, &redact.Redactor{})
+	m, err := buildModel(store, nil, nil, &redact.Redactor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestAConnectionSettlesTheProviderOfACredential(t *testing.T) {
 		}
 	}
 	store := config.NewStore(filepath.Join(t.TempDir(), "config.yaml"), reg)
-	m, err := New(store, nil, nil, &redact.Redactor{})
+	m, err := buildModel(store, nil, nil, &redact.Redactor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +469,7 @@ func TestTheConnectionFormOffersOneProviderAtATime(t *testing.T) {
 		}
 	}
 	store := config.NewStore(filepath.Join(t.TempDir(), "config.yaml"), reg)
-	m, err := New(store, nil, nil, &redact.Redactor{})
+	m, err := buildModel(store, nil, nil, &redact.Redactor{})
 	if err != nil {
 		t.Fatal(err)
 	}

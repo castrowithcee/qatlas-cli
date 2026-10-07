@@ -81,7 +81,7 @@ func TestVaultSectionShowsStateAndActions(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "qatlas")
 		store := newTestStore(t, filepath.Join(dir, "config.yaml"))
 		secrets, _ := newVaultResolver(t, dir)
-		m, err := New(store, nil, secrets, nil)
+		m, err := buildModel(store, nil, secrets, nil)
 		if err != nil {
 			t.Fatalf("New() = %v", err)
 		}
@@ -103,7 +103,7 @@ func TestVaultSectionShowsStateAndActions(t *testing.T) {
 		secrets, _ := newVaultResolver(t, dir)
 		mustNoError(t, secrets.SetVault("reader", "token-id", "canary-unencrypted-88a1", nil))
 
-		m, err := New(store, nil, secrets, nil)
+		m, err := buildModel(store, nil, secrets, nil)
 		if err != nil {
 			t.Fatalf("New() = %v", err)
 		}
@@ -131,7 +131,7 @@ func TestVaultSectionShowsStateAndActions(t *testing.T) {
 
 		// A fresh resolver over the same directory starts genuinely locked, the way a new 'qatlas tui' would.
 		locked, _ := newVaultResolver(t, dir)
-		m, err := New(store, nil, locked, nil)
+		m, err := buildModel(store, nil, locked, nil)
 		if err != nil {
 			t.Fatalf("New() = %v", err)
 		}
@@ -170,7 +170,7 @@ func TestVaultEncryptTurnsEncryptionOn(t *testing.T) {
 	mustNoError(t, cfg.SetConnection("wiki", config.Connection{Service: "wiki", Credential: "reader"}))
 	mustNoError(t, store.Save(cfg))
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -257,7 +257,7 @@ func TestVaultChangePassphrase(t *testing.T) {
 		mustNoError(t, setup.SetVault("reader", "token-id", "canary-change-a1b2",
 			func(string) (string, error) { return current, nil }))
 		locked, _ := newVaultResolver(t, dir)
-		m, err := New(store, nil, locked, nil)
+		m, err := buildModel(store, nil, locked, nil)
 		if err != nil {
 			t.Fatalf("New() = %v", err)
 		}
@@ -348,7 +348,7 @@ func TestVaultDecrypt(t *testing.T) {
 		mustNoError(t, setup.SetVault("reader", "token-id", "canary-decrypt-9c3d",
 			func(string) (string, error) { return passphrase, nil }))
 		locked, _ := newVaultResolver(t, dir)
-		m, err := New(store, nil, locked, nil)
+		m, err := buildModel(store, nil, locked, nil)
 		if err != nil {
 			t.Fatalf("New() = %v", err)
 		}
@@ -442,7 +442,7 @@ func TestVaultDecryptConfirmationWarns(t *testing.T) {
 	mustNoError(t, setup.SetVault("reader", "token-id", "canary-warn-1a2b",
 		func(string) (string, error) { return "hunter2", nil }))
 	locked, _ := newVaultResolver(t, dir)
-	m, err := New(store, nil, locked, nil)
+	m, err := buildModel(store, nil, locked, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -465,7 +465,7 @@ func TestVaultSectionSavesTimeouts(t *testing.T) {
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -510,7 +510,7 @@ func TestVaultSectionLeaveAsksBeforeLosingTimeoutChanges(t *testing.T) {
 	path := filepath.Join(dir, "config.yaml")
 	store := newTestStore(t, path)
 	secrets, _ := newVaultResolver(t, dir)
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -545,7 +545,7 @@ func TestVaultActionIsAsyncAndNotDoubleTriggered(t *testing.T) {
 	secrets, _ := newVaultResolver(t, dir)
 	mustNoError(t, secrets.SetVault("reader", "token-id", "canary-async-5e6f", nil))
 
-	m, err := New(store, nil, secrets, nil)
+	m, err := buildModel(store, nil, secrets, nil)
 	if err != nil {
 		t.Fatalf("New() = %v", err)
 	}
@@ -649,7 +649,7 @@ func TestVaultSectionUpdateBehaviourNotChangeable(t *testing.T) {
 	unencrypted := filepath.Join(t.TempDir(), "qatlas")
 	secrets, _ := newVaultResolver(t, unencrypted)
 	mustNoError(t, secrets.SetVault("other", "role", "canary-seed", func(string) (string, error) { return "", nil }))
-	plain, err := New(newTestStore(t, filepath.Join(unencrypted, "config.yaml")), nil, secrets, nil)
+	plain, err := buildModel(newTestStore(t, filepath.Join(unencrypted, "config.yaml")), nil, secrets, nil)
 	mustNoError(t, err)
 
 	for name, c := range map[string]struct {

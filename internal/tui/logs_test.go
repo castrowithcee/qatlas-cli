@@ -101,7 +101,7 @@ func (f *logFixture) model(unlocked bool, day string) *Model {
 			f.t.Fatalf("Unlock() = %v", err)
 		}
 	}
-	m, err := New(store, nil, secrets.WithVault(v, nil), nil)
+	m, err := buildModel(store, nil, secrets.WithVault(v, nil), nil)
 	mustNoError(f.t, err)
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m.logs.day = day
@@ -411,7 +411,7 @@ func TestLogsNeverPrintControlCharactersOrSecrets(t *testing.T) {
 	})
 	store := newTestStore(t, filepath.Join(f.dir, "config.yaml"))
 	secrets, _ := newResolver(t, f.dir, nil)
-	m, err := New(store, nil, secrets.WithVault(vault.New(f.dir), nil), nil)
+	m, err := buildModel(store, nil, secrets.WithVault(vault.New(f.dir), nil), nil)
 	mustNoError(t, err)
 	m.redactor.Add("canary-secret-value-77")
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})

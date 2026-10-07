@@ -18,6 +18,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/connlog"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -753,6 +754,14 @@ func awaitLocked(ctx context.Context, client *vaultproc.Client) {
 	}
 }
 
+// vaultService returns the management service of the command line over exactly the vault v, for the
+// commands that reach no secret store beyond it. store may be nil where the command only syncs or locks the
+// vault process. The vault process switch is read when the service is built, so a test lever set before the
+// command runs is honoured.
+func vaultService(opts *Options, store *config.Store, v *vault.Vault) *manage.Service {
+	return manage.ForVault(store, v, connlog.SurfaceCLI, opts.Redactor).WithVaultProcessSupport(vaultProcessSupported)
+}
+
 // lockVaultProcess locks the vault process that holds v unlocked, ahead of a change after which it would
 // serve what the vault no longer holds, or could not be reached to lock at all: an update replaces the
 // program it passes for, 'vault decrypt' removes the key a client checks it with, and 'vault passphrase'
@@ -760,45 +769,27 @@ func awaitLocked(ctx context.Context, client *vaultproc.Client) {
 //
 // It returns what to tell the person once the change is done: that the process was locked, followed by
 // next, or that it could not be, with its process id and how to end it; "" when no vault process runs.
-func lockVaultProcess(ctx context.Context, v *vault.Vault, why, next string) string {
-	if !vaultProcessSupported || v == nil {
-		return ""
-	}
-	locked, err := vaultmigrate.LockProcess(contextOrBackground(ctx), v)
-	switch {
-	case err != nil:
-		return fmt.Sprintf("qatlas: warning: the vault process could not be locked %s: %s; it keeps the "+
-			"secrets it holds until it locks itself, unless you %s", why, err, secret.EndVaultProcess(err))
-	case locked:
-		return fmt.Sprintf("qatlas: the vault process was locked %s; %s", why, next)
-	default:
-		return ""
-	}
-}
-
-// lockVaultProcessOf is lockVaultProcess for the vault of this run. A run that has no vault to find, such
-// as one whose configuration cannot be located, has no vault process to lock either.
-func lockVaultProcessOf(ctx context.Context, opts *Options, why, next string) string {
-	v, err := vaultOf(opts)
-	if err != nil {
-		return ""
-	}
-	return lockVaultProcess(ctx, v, why, next)
+func lockVaultProcess(ctx context.Context, opts *Options, v *vault.Vault, why, next string) string {
+	return withQatlasPrefix(vaultService(opts, nil, v).LockVaultProcess(contextOrBackground(ctx), why, next))
 }
 
 // syncVaultProcess hands a change just written to the vault on to the vault process that holds it
 // unlocked, so the process keeps answering what the vault holds. The client checks the process, its user
 // and its key, before it sends anything, the secret included. Without a vault process there is nothing to
 // update. Any other failure is a warning: the vault already holds the change and keeps it.
-func syncVaultProcess(c *cobra.Command, v *vault.Vault, change func(context.Context, *vaultproc.Client) error) {
-	if !vaultProcessSupported || v == nil {
-		return
+func syncVaultProcess(c *cobra.Command, opts *Options, v *vault.Vault, change func(context.Context, *vaultproc.Client) error) {
+	warning := vaultService(opts, nil, v).SyncVaultProcess(contextOrBackground(c.Context()), change)
+	if warning != "" {
+		fmt.Fprintln(c.ErrOrStderr(), withQatlasPrefix(warning))
 	}
-	if err := vaultmigrate.SyncChange(contextOrBackground(c.Context()), v, change); err != nil {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: the vault holds the change, but the vault process that "+
-			"holds it unlocked could not take it and still answers with what it held before: %s; %s\n",
-			err, secret.VaultProcessRemedy(err))
+}
+
+// withQatlasPrefix puts the command line's "qatlas: " in front of a service message; "" stays "".
+func withQatlasPrefix(message string) string {
+	if message == "" {
+		return ""
 	}
+	return "qatlas: " + message
 }
 
 // absConfigPath returns the configuration file of this run as an absolute path, the form a vault process
@@ -1298,7 +1289,7 @@ func runVaultPassphrase(c *cobra.Command, opts *Options) error {
 
 	// A passphrase is changed because the old one should no longer open the vault; a vault process
 	// unlocked with it would keep the vault open regardless, so it is locked first.
-	note := lockVaultProcess(c.Context(), v, "before the passphrase changed",
+	note := lockVaultProcess(c.Context(), opts, v, "before the passphrase changed",
 		"run 'qatlas vault unlock' to unlock the vault again")
 	defer printNote(c, note)
 	if err := v.ChangePassphrase(oldPassphrase, newPassphrase); err != nil {
@@ -1350,7 +1341,7 @@ func runVaultDecrypt(c *cobra.Command, opts *Options, confirmed bool) error {
 
 	// Once the vault is decrypted, its recipient is gone and a vault process could not be checked, nor
 	// therefore asked to lock, any more; it would hold the secrets until its idle timeout.
-	note := lockVaultProcess(c.Context(), v, "before the vault was decrypted",
+	note := lockVaultProcess(c.Context(), opts, v, "before the vault was decrypted",
 		"the unencrypted vault needs no unlocking")
 	defer printNote(c, note)
 	if err := v.Decrypt(passphrase); err != nil {
@@ -1444,7 +1435,7 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 	}
 
 	sync := func(written []vaultmigrate.Entry) {
-		syncVaultProcess(c, v, func(ctx context.Context, client *vaultproc.Client) error {
+		syncVaultProcess(c, opts, v, func(ctx context.Context, client *vaultproc.Client) error {
 			for _, p := range written {
 				if err := client.Set(ctx, p.Name, p.Role, p.Value); err != nil {
 					return err
@@ -1466,13 +1457,13 @@ func runVaultMigrate(c *cobra.Command, opts *Options, reg *capability.Registry) 
 	// Every credential whose entries just moved is switched to type vault. The configuration is backed up
 	// first, atomically and at mode 0600; a failed backup stops here, before config.yaml is touched.
 	before := cfg.Clone()
-	if err := vaultmigrate.SwitchCredentials(config.NewStore(path, reg), cfg, baseRev, switched); err != nil {
+	store := config.NewStore(path, reg)
+	if err := vaultmigrate.SwitchCredentials(store, cfg, baseRev, switched); err != nil {
 		return classifyUserError(err)
 	}
 	// A credential that now lives in the vault can open the approval of the connections that read it.
-	if err := connlog.NewRecorder(connlog.SurfaceCLI, path, cfg.LogRetentionDays(), v, vaultProcessSupported).
-		Record(before, cfg); err != nil {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %v\n", err)
+	if warning := vaultService(opts, store, v).RecordConnections(before, cfg); warning != "" {
+		fmt.Fprintln(c.ErrOrStderr(), withQatlasPrefix(warning))
 	}
 
 	noun := plural(len(plan), "entry", "entries")

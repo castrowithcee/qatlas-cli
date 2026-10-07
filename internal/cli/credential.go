@@ -130,7 +130,7 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 		if err := secrets.SetVault(name, role, value, offerVaultPassphrase); err != nil {
 			return classifyUserError(err)
 		}
-		syncVaultProcess(c, secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
+		syncVaultProcess(c, opts, secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
 			return client.Set(ctx, name, role, value)
 		})
 	default:
@@ -199,7 +199,7 @@ func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry,
 			}
 			return classifyUserError(err)
 		}
-		syncVaultProcess(c, secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
+		syncVaultProcess(c, opts, secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
 			return client.Delete(ctx, name, role)
 		})
 		if env := secret.DerivedEnvName(name, role); secrets.Lookup(env) {

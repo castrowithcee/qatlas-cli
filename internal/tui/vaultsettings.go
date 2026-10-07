@@ -10,10 +10,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // Vault actions: what a fieldVaultAction row of the vault form runs on enter.
@@ -45,7 +42,7 @@ const (
 
 // vaultActionMsg carries the outcome of Encrypt, ChangePassphrase, or Decrypt back into the event loop.
 // procNote is set only for ChangePassphrase and Decrypt, which lock a running vault process first (see
-// lockVaultProcessForRekey): what that found, in the editor's own short words, "" when there was nothing to
+// manage.Service.LockVaultProcess): what that found, in the editor's own short words, "" when there was nothing to
 // lock.
 type vaultActionMsg struct {
 	action   string
@@ -216,7 +213,8 @@ func (m *Model) saveVault() tea.Cmd {
 			return m.openVaultForm()
 		}
 	}
-	if err := m.store.SaveIfUnchanged(candidate, m.rev); err != nil {
+	// Only the vault settings differ, so no connection changes and nothing is logged.
+	if _, err := m.svc.SaveConfig(m.cfg, candidate, m.rev); err != nil {
 		if !m.conflicted(err) {
 			m.fail = m.redactor.Apply(err.Error())
 		}
@@ -419,11 +417,12 @@ func (m *Model) runVaultChangePassphrase(current, newPassphrase string) tea.Cmd 
 	m.vaultBusy = true
 	m.writes++
 	m.busy = "changing the vault's passphrase"
+	svc := m.svc
 	return func() tea.Msg {
 		// A passphrase is changed because the old one should no longer open the vault; a vault process
 		// unlocked with it would keep the vault open regardless, so it is locked first, the way 'qatlas
 		// vault passphrase' already does.
-		note := lockVaultProcessForRekey(v, "unlock it again with 'qatlas vault unlock'")
+		note := svc.LockVaultProcess(context.Background(), "", "unlock it again with 'qatlas vault unlock'")
 		return vaultActionMsg{
 			action: vaultActionPassphrase, err: v.ChangePassphrase(current, newPassphrase), procNote: note,
 		}
@@ -456,53 +455,13 @@ func (m *Model) runVaultDecrypt(passphrase string) tea.Cmd {
 	m.vaultBusy = true
 	m.writes++
 	m.busy = "turning the vault's encryption off"
+	svc := m.svc
 	return func() tea.Msg {
 		// Once the vault is decrypted, its recipient is gone and a vault process could not be checked, nor
 		// therefore asked to lock, any more; it would hold the secrets until its idle timeout. Locking first
 		// mirrors 'qatlas vault decrypt'.
-		note := lockVaultProcessForRekey(v, "the unencrypted vault needs no unlocking")
+		note := svc.LockVaultProcess(context.Background(), "", "the unencrypted vault needs no unlocking")
 		return vaultActionMsg{action: vaultActionDecrypt, err: v.Decrypt(passphrase), procNote: note}
-	}
-}
-
-// syncVaultProcess hands one change already written to the vault on to the vault process that holds it
-// unlocked outside this run, exactly the way 'qatlas credential set' and 'qatlas credential delete' already
-// do for the CLI (see vaultmigrate.SyncChange): an unsupported platform, an unencrypted vault, or no process
-// running needs nothing said. Any other failure becomes a short warning meant for the status line, never
-// printed to a terminal and never carrying the secret's own value. It serves a role row's own write or
-// delete (see secrets.go), the guided setup's save (see setup.go), and, through vaultMigrateSync, a migrate
-// action's whole plan (see migrate.go).
-func syncVaultProcess(v *vault.Vault, change func(context.Context, *vaultproc.Client) error) string {
-	if !vaultproc.Supported || v == nil {
-		return ""
-	}
-	if err := vaultmigrate.SyncChange(context.Background(), v, change); err != nil {
-		return fmt.Sprintf("warning: the vault holds the change, but the vault process that holds it "+
-			"unlocked could not take it and still answers with what it held before: %s; %s",
-			err, secret.VaultProcessRemedy(err))
-	}
-	return ""
-}
-
-// lockVaultProcessForRekey locks the vault process that holds v unlocked, ahead of ChangePassphrase or
-// Decrypt, the same way the CLI's own lockVaultProcess does for 'qatlas vault passphrase' and 'qatlas vault
-// decrypt' (see vaultmigrate.LockProcess): the change goes ahead either way. next is what to say the
-// process was locked for, in the editor's own shorter words; it returns "" when there was nothing to lock
-// (an unsupported platform, an unencrypted vault, or no process running), and a short warning, never on a
-// terminal and never naming a secret, when the process refused to be locked.
-func lockVaultProcessForRekey(v *vault.Vault, next string) string {
-	if !vaultproc.Supported || v == nil {
-		return ""
-	}
-	locked, err := vaultmigrate.LockProcess(context.Background(), v)
-	switch {
-	case err != nil:
-		return fmt.Sprintf("warning: the vault process could not be locked: %s; it keeps the secrets it "+
-			"holds until it locks itself, unless you %s", err, secret.EndVaultProcess(err))
-	case locked:
-		return "the vault process was locked; " + next
-	default:
-		return ""
 	}
 }
 

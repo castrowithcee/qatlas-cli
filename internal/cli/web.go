@@ -19,6 +19,8 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/web"
@@ -86,8 +88,9 @@ func newWebCommand(opts *Options, registry *capability.Registry) *cobra.Command 
 				return err
 			}
 
+			svc := manage.New(store, secrets, connlog.SurfaceWeb, opts.Redactor)
 			server, err := web.New(buildOverview(registry, cfg), secrets.Vault(), cfg.VaultAdminTimeout(),
-				store, secrets, opts.Redactor, web.Tester(connectionTester(store, opts, registry)))
+				svc, secrets, opts.Redactor, web.Tester(connectionTester(store, opts, registry)))
 			if err != nil {
 				return err
 			}

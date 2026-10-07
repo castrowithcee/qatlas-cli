@@ -1,7 +1,7 @@
 // The payload secrets of the Credentials section: a credential with forward: true holds freely named
 // fields whose values a tool may pass on to a third party by reference, and a connection releases it with
 // forward_secrets. Its form is one row per field with a masked value, plus a row that adds a field; the
-// values leave the editor only towards the credential store, through secretcommit.Commit, and are never
+// values leave the editor only towards the credential store, through manage.Service.CommitSecrets, and are never
 // drawn, never put into a message, and never written into the configuration.
 package tui
 
@@ -16,7 +16,6 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
-	"github.com/castrowithcee/qatlas-cli/internal/secretcommit"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
@@ -250,7 +249,7 @@ func (m *Model) savePayload() tea.Cmd {
 			m.fail = fmt.Sprintf("the field %q needs a value", f.label)
 			return nil
 		}
-		// The same check secretcommit.Commit repeats before it writes anything; here it answers at once.
+		// The same check manage.Service.CommitSecrets repeats before it writes anything; here it answers at once.
 		if err := cred.CheckForwardValue(f.label, value); err != nil {
 			m.fail = fmt.Sprintf("credential %s: %v", name, err)
 			return nil
@@ -306,11 +305,11 @@ func (m *Model) commitPayload(candidate *config.Config, base config.Revision, na
 	if toVault {
 		m.vaultBusy = true
 	}
-	store, secrets, previous := m.store, m.secrets, m.cfg
+	svc, secrets, previous := m.svc, m.secrets, m.cfg
 	return func() tea.Msg {
-		warning, err := secretcommit.Commit(store, secrets, candidate, base, name, toVault, roles, values, offer)
+		warning, err := svc.CommitSecrets(candidate, base, name, toVault, roles, values, offer)
 		if err == nil {
-			if logged := recordConnections(store, secrets, previous, candidate); logged != "" {
+			if logged := svc.RecordConnections(previous, candidate); logged != "" {
 				if warning != "" {
 					warning += "; "
 				}
@@ -333,7 +332,7 @@ func (m *Model) commitPayload(candidate *config.Config, base config.Revision, na
 				continue
 			}
 			if toVault {
-				if w := syncVaultProcess(secrets.Vault(), func(ctx context.Context, c *vaultproc.Client) error {
+				if w := svc.SyncVaultProcess(context.Background(), func(ctx context.Context, c *vaultproc.Client) error {
 					return c.Delete(ctx, name, field)
 				}); w != "" && msg.warning == "" {
 					msg.warning = w

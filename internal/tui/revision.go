@@ -18,7 +18,7 @@ const staleRevision config.Revision = "stale"
 // return a change another writer made right after this save, which this state does not contain.
 func (m *Model) adoptSaved(saved *config.Config) {
 	m.cfg, m.configExists = saved, true
-	rev, err := m.store.RevisionOf(saved)
+	rev, err := m.svc.RevisionOf(saved)
 	if err != nil {
 		rev = staleRevision
 	}
@@ -29,13 +29,13 @@ func (m *Model) adoptSaved(saved *config.Config) {
 // file that is gone is an empty configuration, like at start. Forms, typed input and the selection stay as
 // they are, so the change can be repeated against the new state.
 func (m *Model) reloadConfig() error {
-	cfg, rev, err := m.store.LoadVersioned()
+	cfg, rev, err := m.svc.Load()
 	if err != nil {
 		var notFound *config.NotFoundError
 		if !asNotFound(err, &notFound) {
 			return err
 		}
-		cfg, rev = m.store.New(), config.RevisionAbsent
+		cfg, rev = m.svc.NewConfig(), config.RevisionAbsent
 		m.configExists = false
 	} else {
 		m.configExists = true
@@ -52,7 +52,7 @@ func (m *Model) conflicted(err error) bool {
 	if !errors.Is(err, config.ErrConflict) {
 		return false
 	}
-	name := filepath.Base(m.store.Path())
+	name := filepath.Base(m.svc.Path())
 	if rerr := m.reloadConfig(); rerr != nil {
 		m.rev = staleRevision
 		m.fail = m.redactor.Apply(fmt.Sprintf("%s changed outside this editor and could not be reloaded: %v; "+

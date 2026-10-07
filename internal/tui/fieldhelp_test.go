@@ -45,7 +45,7 @@ func roleCollisionModel(t *testing.T) *Model {
 	mustNoError(t, cfg.SetCredential("c-cred", config.Credential{Type: config.CredentialTypeEnv,
 		Values: map[string]string{"token": "ANY_TOKEN"}}))
 	mustNoError(t, store.Save(cfg))
-	m, err := New(store, nil, nil, nil)
+	m, err := buildModel(store, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

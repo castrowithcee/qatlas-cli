@@ -316,7 +316,7 @@ var startVaultProcessFn = vaultmigrate.StartProcess
 // runs no vault process at all, so the caller never has to ask vaultproc.Supported itself. A process already
 // running elsewhere, or none running yet because this platform never starts one, stays silent; any other
 // failure becomes a warning with secret.VaultProcessRemedy, never with a secret value, the same rule
-// syncVaultProcess and lockVaultProcessForRekey already follow in vaultsettings.go.
+// manage.Service.SyncVaultProcess and LockVaultProcess already follow.
 func (m *Model) startVaultProcess() tea.Cmd {
 	if !vaultproc.Supported {
 		return nil
@@ -325,7 +325,7 @@ func (m *Model) startVaultProcess() tea.Cmd {
 	if v == nil {
 		return nil
 	}
-	configPath, err := filepath.Abs(m.store.Path())
+	configPath, err := filepath.Abs(m.svc.Path())
 	if err != nil {
 		return func() tea.Msg { return vaultProcessStartedMsg{err: err} }
 	}

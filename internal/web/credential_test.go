@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
@@ -67,7 +69,7 @@ func newCredentialTestServer(t *testing.T, v *vault.Vault) (*Server, *config.Sto
 		resolver.WithVault(v, nil)
 	}
 
-	s, err := New(testOverview(), v, defaultTestAdminTimeout, store, resolver, red, nil)
+	s, err := New(testOverview(), v, defaultTestAdminTimeout, manage.New(store, resolver, connlog.SurfaceWeb, red), resolver, red, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
