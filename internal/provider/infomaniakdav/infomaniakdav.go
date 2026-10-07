@@ -133,19 +133,15 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 	return bound, nil
 }
 
-// redirectRefusedError reports that a redirect was not followed. Its message names no location.
-type redirectRefusedError struct{}
-
-func (e *redirectRefusedError) Error() string {
-	return "refused to follow a redirect from the Infomaniak sync service"
-}
-
 // newHTTPClient bounds every request in time and refuses every redirect.
 func newHTTPClient() *http.Client {
 	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(*http.Request, []*http.Request) error { return &redirectRefusedError{} },
+		Timeout:   defaultTimeout,
+		Transport: transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return &provider.RedirectRefused{
+				Message: "refused to follow a redirect from the Infomaniak sync service"}
+		},
 	}
 }
 
@@ -176,7 +172,7 @@ func (c *Client) request(ctx context.Context, op, method string, segments []stri
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return nil, nil, transportError(op, err)
+		return nil, nil, provider.Transport(op, "Infomaniak", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != wantStatus {
@@ -345,14 +341,6 @@ func statusError(op string, status int) error {
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("Infomaniak rejected the operation (HTTP %d)", status)}
 	}
-}
-
-func transportError(op string, err error) error {
-	var refused *redirectRefusedError
-	if errors.As(err, &refused) {
-		return providerError(op, refused.Error())
-	}
-	return provider.Transport(op, "Infomaniak", err)
 }
 
 func providerError(op, message string) error {

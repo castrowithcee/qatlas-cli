@@ -176,7 +176,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{origin: origin, token: value.Secret, scope: bound, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{origin: origin, token: value.Secret, scope: bound, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // originOf accepts an https URL of a Penpot instance: Cloud or self-hosted, optionally below an installation
@@ -189,15 +189,6 @@ func originOf(raw string) (string, error) {
 		return "", errors.New(reason)
 	}
 	return "https://" + parsed.Host + strings.TrimSuffix(parsed.EscapedPath(), "/"), nil
-}
-
-// newHTTPClient never follows a redirect: the token must not travel to a host the connection is not bound to.
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
 }
 
 // isCommand keeps the client from sending anything but one of the fixed commands; isChange tells the
@@ -326,7 +317,7 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 		return &provider.Error{Class: provider.ClassNotFound, Op: op,
 			Message: "Penpot does not hold this resource or does not show it to this token"}
 	case status == http.StatusTooManyRequests:
-		c.limiter.HoldFor(retryAfter(response.Header))
+		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Penpot rate-limited the operation"}
 	case status == http.StatusServiceUnavailable:
 		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "Penpot is unavailable or in maintenance"}
@@ -338,14 +329,6 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 	}
 	return &provider.Error{Class: provider.ClassProviderError, Op: op,
 		Message: "Penpot rejected the operation (HTTP " + strconv.Itoa(status) + ")"}
-}
-
-func retryAfter(header http.Header) time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After")))
-	if err != nil || seconds <= 0 {
-		return 0
-	}
-	return time.Duration(seconds) * time.Second
 }
 
 func providerError(op, message string) error {

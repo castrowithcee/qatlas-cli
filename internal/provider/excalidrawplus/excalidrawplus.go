@@ -84,14 +84,6 @@ var limiters = ratelimit.NewRegistry(minInterval)
 // transport carries every request. A nil value is Go's default transport; the package's tests replace it.
 var transport http.RoundTripper
 
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
-
 // Client binds one workspace key to its connection's collection scope.
 type Client struct {
 	scope   scope
@@ -125,7 +117,7 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if red != nil {
 		red.Add(value.Secret, "Bearer "+value.Secret)
 	}
-	return &Client{scope: bound, origin: origin, key: value.Secret, http: newHTTPClient(),
+	return &Client{scope: bound, origin: origin, key: value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport),
 		limiter: limiters.For(value.Secret)}, nil
 }
 

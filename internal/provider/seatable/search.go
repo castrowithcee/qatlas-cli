@@ -472,7 +472,7 @@ func (c *Client) post(ctx context.Context, op, path, token string, body []byte, 
 	req.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(req)
 	if err != nil {
-		return transportError(op, err)
+		return provider.Transport(op, "SeaTable", err)
 	}
 	defer response.Body.Close()
 	c.observeRateLimit(response.Header)

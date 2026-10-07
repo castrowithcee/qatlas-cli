@@ -140,7 +140,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{scope: bound, origin: origin, auth: auth, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{scope: bound, origin: origin, auth: auth, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // kchatDomain is the fixed domain every kChat instance lives directly below. Infomaniak's own kChat MCP
@@ -202,18 +202,6 @@ func validTeamLabel(label string) bool {
 // transport carries every kChat request. A nil value is Go's default transport; the package's own tests
 // replace it with a local fake.
 var transport http.RoundTripper
-
-// newHTTPClient is used for every request this provider sends. The token travels in the Authorization
-// header, and no endpoint this provider calls is documented to redirect, so no redirect is ever followed: a
-// redirect here could only be a mistake or an exfiltration route to a host other than the one this
-// connection is bound to.
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // uncertain is appended to a failure of the send operation whose request may have reached kChat: the
 // message may have been posted although no confirmation ever arrived. Qatlas never repeats such a request
@@ -310,7 +298,7 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 		return &provider.Error{Class: provider.ClassNotFound, Op: op,
 			Message: "kChat does not hold this resource or does not show it to this token"}
 	case status == http.StatusTooManyRequests:
-		c.limiter.HoldFor(retryAfter(response.Header))
+		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "kChat rate-limited the operation"}
 	case status >= 300 && status < 400:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
@@ -323,16 +311,6 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("kChat rejected the operation (HTTP %d)", status)}
 	}
-}
-
-// retryAfter reads how long kChat asks a client to wait after a rate limit. Zero means kChat named no
-// time, or an unusable one.
-func retryAfter(header http.Header) time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After")))
-	if err != nil || seconds <= 0 {
-		return 0
-	}
-	return time.Duration(seconds) * time.Second
 }
 
 // verifyChannelScope confirms, with kChat's own channel detail endpoint (GET /api/v4/channels/{channel_id}),

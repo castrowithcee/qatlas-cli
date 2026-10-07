@@ -436,7 +436,7 @@ func (c *Client) sendOnce(ctx context.Context, op, method, path, token string, b
 	req.Header.Set("Content-Type", "application/json")
 	response, err := c.http.Do(req)
 	if err != nil {
-		failure := transportError(op, err)
+		failure := provider.Transport(op, "SeaTable", err)
 		var providerErr *provider.Error
 		if errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
 			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {

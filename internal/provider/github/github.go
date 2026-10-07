@@ -1155,7 +1155,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	client := &Client{endpoints: api, allowed: allowed, auth: "Bearer " + value.Secret, http: newHTTPClient(),
+	client := &Client{endpoints: api, allowed: allowed, auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport),
 		limiter: lim}
 	for _, entry := range allowed {
 		if !entry.pattern() && entry.kind != kindOwner {
@@ -1179,16 +1179,6 @@ func openAt(ctx context.Context, resolved *config.Resolved, secrets *secret.Reso
 // transport carries every GitHub request. A nil value is Go's default transport; the package's own tests
 // replace it with a local test server.
 var transport http.RoundTripper
-
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:   defaultTimeout,
-		Transport: transport,
-		// The token travels in the Authorization header, so no redirect is followed: a redirect could only
-		// move a credential to a place the user never configured.
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // TestConnection performs the smallest authenticated read of the first target the connection names exactly:
 // the project with its field definitions, or the repository; without such a target, the user of the token.

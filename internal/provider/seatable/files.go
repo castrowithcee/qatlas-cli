@@ -537,7 +537,7 @@ func (c *Client) DownloadFile(ctx context.Context, input FileInput, download *lo
 	}
 	response, err := c.transferClient().Do(req)
 	if err != nil {
-		return nil, transportError(op, err)
+		return nil, provider.Transport(op, "SeaTable", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
@@ -552,7 +552,7 @@ func (c *Client) DownloadFile(ctx context.Context, input FileInput, download *lo
 		body := &trackedReader{Reader: response.Body}
 		if _, err := download.ReadFrom(body); err != nil {
 			if body.err != nil {
-				return nil, transportError(op, body.err)
+				return nil, provider.Transport(op, "SeaTable", body.err)
 			}
 			return nil, err
 		}
@@ -563,7 +563,7 @@ func (c *Client) DownloadFile(ctx context.Context, input FileInput, download *lo
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxInlineFileBytes+1))
 	if err != nil {
-		return nil, transportError(op, err)
+		return nil, provider.Transport(op, "SeaTable", err)
 	}
 	if len(data) > maxInlineFileBytes {
 		return nil, providerError(op, "the file is larger than 4 MiB, use "+localfile.LocalPathArgument)
@@ -734,7 +734,7 @@ func (t *trackedReader) Read(p []byte) (int, error) {
 }
 
 func uncertainTransport(op string, err error, hint string) error {
-	failure := transportError(op, err)
+	failure := provider.Transport(op, "SeaTable", err)
 	var providerErr *provider.Error
 	if errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
 		providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {

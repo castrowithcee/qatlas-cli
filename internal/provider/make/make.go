@@ -273,7 +273,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{scope: bound, origin: origin, token: value.Secret, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{scope: bound, origin: origin, token: value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // instanceReason is the one refusal message of a malformed or unknown base URL. It never quotes the value
@@ -305,17 +305,6 @@ func parseInstance(raw string) (string, error) {
 // transport carries every Make request. A nil value is Go's default transport; the package's own tests
 // replace it with a local fake.
 var transport http.RoundTripper
-
-// newHTTPClient is used for every request this provider sends. The token travels in the Authorization
-// header, and no endpoint this provider calls is documented to redirect, so none is followed: a redirect
-// here could only be a mistake or an exfiltration route to a host this connection was never bound to.
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // uncertain is appended to a failure of a change request whose request may have reached Make: the change
 // may have taken effect although no confirmation ever arrived. Qatlas never repeats such a request by
@@ -458,7 +447,7 @@ func (c *Client) statusError(op string, response *http.Response, need string) *p
 		// will not fix that, unlike every other 429 this provider still holds its own limiter for.
 		code := pausedErrorCode(response.Body)
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-		c.limiter.HoldFor(retryAfter(response.Header))
+		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 		if code == "IM310" {
 			return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Make reports this " +
 				"organization or team is paused (IM310); this is not a transient rate limit, and repeating " +
@@ -484,16 +473,6 @@ func (c *Client) statusError(op string, response *http.Response, need string) *p
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("Make rejected the operation (HTTP %d)", status)}
 	}
-}
-
-// retryAfter reads how long Make asks a client to wait after a rate limit. Zero means Make named no time,
-// or an unusable one.
-func retryAfter(header http.Header) time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After")))
-	if err != nil || seconds <= 0 {
-		return 0
-	}
-	return time.Duration(seconds) * time.Second
 }
 
 func providerError(op, message string) error {

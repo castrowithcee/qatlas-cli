@@ -93,7 +93,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -203,7 +202,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{scope: bound, origin: origin, apiKey: value.Secret, http: newHTTPClient(), limiter: lim}, nil
+	return &Client{scope: bound, origin: origin, apiKey: value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
 }
 
 // instanceReason is the one refusal message of a malformed base URL. It never quotes the value that was
@@ -234,17 +233,6 @@ func parseInstance(raw string) (string, error) {
 // transport carries every n8n request. A nil value is Go's default transport; the package's own tests
 // replace it with a local fake.
 var transport http.RoundTripper
-
-// newHTTPClient is used for every request this provider sends. The API key travels in a header, and no
-// endpoint this provider calls is documented to redirect, so none is followed: a redirect here could only be
-// a mistake or an exfiltration route to a host this connection was never bound to.
-func newHTTPClient() *http.Client {
-	return &http.Client{
-		Timeout:       defaultTimeout,
-		Transport:     transport,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse },
-	}
-}
 
 // get sends one bounded GET below the Public API root and decodes its body into out. maxBytes bounds how
 // much of the answer this process reads before giving up; every read of this provider uses maxResponseBytes
@@ -370,7 +358,7 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 			Message: "n8n does not hold this resource, does not show it to this API key, or this instance's " +
 				"Public API version does not have this endpoint"}
 	case status == http.StatusTooManyRequests:
-		c.limiter.HoldFor(retryAfter(response.Header))
+		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "n8n rate-limited the operation"}
 	case status == http.StatusServiceUnavailable:
 		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "n8n is unavailable or in maintenance"}
@@ -383,16 +371,6 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 		return &provider.Error{Class: provider.ClassProviderError, Op: op,
 			Message: fmt.Sprintf("n8n rejected the operation (HTTP %d)", status)}
 	}
-}
-
-// retryAfter reads how long n8n asks a client to wait after a rate limit. Zero means n8n named no time, or
-// an unusable one.
-func retryAfter(header http.Header) time.Duration {
-	seconds, err := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After")))
-	if err != nil || seconds <= 0 {
-		return 0
-	}
-	return time.Duration(seconds) * time.Second
 }
 
 func providerError(op, message string) error {
