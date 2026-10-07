@@ -116,12 +116,9 @@ type Server struct {
 	// adminTimeout is vault.admin_timeout: how long an admin approval stays active without activity of the
 	// coupled session, or 0, which means an approval only ever covers exactly the next mutation.
 	adminTimeout time.Duration
-	// adminUntil is the admin approval's idle deadline for adminTimeout > 0; the zero value means no
-	// session-shaped approval is active.
-	adminUntil time.Time
-	// adminOnce is the one-shot admin approval adminTimeout == 0 grants: good for exactly the next mutation
-	// withAdminGuard lets through, then cleared.
-	adminOnce bool
+	// admin is the admin approval: a session for adminTimeout > 0, or, for 0, a one-shot approval good for
+	// exactly the next mutation withAdminGuard lets through. Guarded by mu.
+	admin manage.AdminSession
 
 	// writeMu serializes every mutation this run's coupled session may make to config, keyring, or vault, so
 	// two concurrent writes from the same session can never interleave.
@@ -193,6 +190,7 @@ func New(overview Overview, v *vault.Vault, adminTimeout time.Duration, svc *man
 		redactor:     redactor,
 		tester:       tester,
 	}
+	s.admin = manage.NewAdminSession(true, func() time.Time { return s.now() })
 	s.tokenAt = s.now()
 	s.http = &http.Server{Handler: s.mux()}
 	return s, nil
@@ -261,8 +259,7 @@ func (s *Server) close() {
 	s.sessionSet = false
 	s.session = ""
 	s.csrf = ""
-	s.adminUntil = time.Time{}
-	s.adminOnce = false
+	s.admin.End()
 	s.pendingNotice = ""
 	s.mu.Unlock()
 }
@@ -417,8 +414,7 @@ func (s *Server) redeem(token string) (session string, ok bool) {
 	// A freshly coupled session starts every run's admin approval from scratch, whatever an earlier
 	// coupling of this same run once had: close() already clears it when a session ends, but a fresh
 	// redeem is the other place an approval must never carry over from.
-	s.adminUntil = time.Time{}
-	s.adminOnce = false
+	s.admin.End()
 	return newSession, true
 }
 
@@ -491,10 +487,10 @@ func (s *Server) renderOverview(w http.ResponseWriter, adminError string) {
 	active := s.adminActiveLocked()
 	var remaining string
 	switch {
-	case active && required && s.adminOnce:
+	case active && required && s.admin.SingleUse():
 		remaining = "the next change only"
-	case active && required && !s.adminUntil.IsZero():
-		remaining = s.adminUntil.Sub(s.now()).Round(time.Minute).String() + " left"
+	case active && required && s.admin.Remaining() > 0:
+		remaining = s.admin.Remaining().Round(time.Minute).String() + " left"
 	}
 	csrf := s.csrf
 	s.mu.Unlock()

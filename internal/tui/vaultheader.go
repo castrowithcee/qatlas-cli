@@ -409,10 +409,7 @@ func (m *Model) beginVaultLock() tea.Cmd {
 // be reached to lock as well.
 func (m *Model) handleVaultLocked(msg vaultLockedMsg) tea.Cmd {
 	m.vaultBusy, m.busy = false, ""
-	// Ends this window's admin session directly: nothing here is the passphrase check startAdminSession and
-	// touchAdminSession both assume, and admin.go exposes no separate "end" of its own to call instead (see
-	// its own comment on why only a proof of the passphrase ever starts or renews one).
-	m.adminSessionUntil = time.Time{}
+	m.endAdminSession()
 	m.vaultProcessUnlocked = false
 	if msg.err != nil {
 		m.fail = fmt.Sprintf("the vault process could not be locked: %s; %s",

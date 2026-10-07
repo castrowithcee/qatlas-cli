@@ -233,7 +233,7 @@ func TestAdminSessionIdlesOutAndKeysRenewIt(t *testing.T) {
 
 	// A key press while the session is active renews its idle deadline: simulate it having almost expired,
 	// then press an unrelated key and confirm it is back to nearly the full timeout.
-	m.adminSessionUntil = time.Now().Add(2 * time.Second)
+	m.admin.Grant(2 * time.Second)
 	press(t, m, "down")
 	if remaining := m.AdminSessionRemaining(); remaining < 5*time.Minute {
 		t.Fatalf("AdminSessionRemaining() = %v after a key press, want it renewed close to the full timeout",
@@ -242,7 +242,7 @@ func TestAdminSessionIdlesOutAndKeysRenewIt(t *testing.T) {
 
 	// Simulate the idle timeout having passed without any activity: the session is then simply inactive, and
 	// the next managing action asks again, exactly as a fresh one would.
-	m.adminSessionUntil = time.Now().Add(-time.Second)
+	m.admin.End()
 	if m.AdminSessionActive() {
 		t.Fatal("AdminSessionActive() = true past its own deadline")
 	}
@@ -464,4 +464,50 @@ func mustLoad(t *testing.T, store *config.Store) *config.Config {
 		t.Fatalf("Load() = %v", err)
 	}
 	return cfg
+}
+
+// A vault action that proves the passphrase on its own (here "change passphrase") starts a session like the
+// admin dialog does, so with vault.admin_timeout: 0 it keeps none: the next change asks again. With a
+// timeout above zero the same action leaves the session open and the next change runs at once.
+func TestAdminTimeoutZeroAsksAgainAfterVaultAction(t *testing.T) {
+	for _, tc := range []struct {
+		name, timeout string
+		wantDialog    bool
+	}{
+		{"timeout 0", "0", true},
+		{"timeout 10m", "10m", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "qatlas")
+			m, store := newEncryptedVaultModel(t, dir, "hunter2", true)
+			setAdminTimeout(t, store, tc.timeout)
+			m.cfg = mustLoad(t, store)
+			syncRevision(t, m)
+
+			openVaultSection(t, m)
+			focusRole(t, m, "change passphrase")
+			press(t, m, "enter")
+			typeText(t, m, "hunter2")
+			pump(t, m, "enter")
+			typeText(t, m, "a whole new passphrase")
+			pump(t, m, "enter")
+			typeText(t, m, "a whole new passphrase")
+			pump(t, m, "enter")
+			if m.fail != "" {
+				t.Fatalf("changing the passphrase reported %q", m.fail)
+			}
+
+			openSectionByName(t, m, sectionServices)
+			pressNew(t, m)
+			typeText(t, m, "wiki-primary")
+			press(t, m, "tab")
+			press(t, m, "tab")
+			typeText(t, m, "https://wiki.example.invalid")
+			press(t, m, "enter")
+			if got := m.screen == screenAdminAuth; got != tc.wantDialog {
+				t.Fatalf("admin dialog open after a vault action = %v, want %v (screen %v, fail %q)",
+					got, tc.wantDialog, m.screen, m.fail)
+			}
+		})
+	}
 }

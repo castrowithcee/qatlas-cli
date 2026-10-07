@@ -672,3 +672,24 @@ func TestVaultSectionUpdateBehaviourNotChangeable(t *testing.T) {
 		})
 	}
 }
+
+// Encrypting the vault approves the saved connections that read it; a configuration that cannot be read
+// approves nothing and says so, the same way 'qatlas vault encrypt' does, and a missing one stays silent.
+func TestApproveOnEncryptWarnsWhenTheConfigurationCannotBeRead(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	path := filepath.Join(dir, "config.yaml")
+	store := newTestStore(t, path)
+	v := vault.New(dir)
+
+	if got := approveOnEncrypt(store, v); got != "" {
+		t.Errorf("approveOnEncrypt() without a configuration = %q, want nothing", got)
+	}
+
+	mustNoError(t, os.MkdirAll(dir, 0o700))
+	mustNoError(t, os.WriteFile(path, []byte("connections: [unterminated"), 0o600))
+	got := approveOnEncrypt(store, v)
+	if !strings.HasPrefix(got, "warning: no connection was approved") ||
+		!strings.Contains(got, "the configuration cannot be read") {
+		t.Errorf("approveOnEncrypt() = %q, want a warning that the configuration cannot be read", got)
+	}
+}

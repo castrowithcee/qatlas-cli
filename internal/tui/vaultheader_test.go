@@ -123,7 +123,7 @@ func TestVaultHeaderAdminAbbreviation(t *testing.T) {
 		t.Fatalf("vaultHeaderText() with a fresh 10m session = %q, want it to contain %q", got, "admin 10m left")
 	}
 
-	m.adminSessionUntil = time.Now().Add(100 * time.Second)
+	m.admin.Grant(100 * time.Second)
 	if got := m.vaultHeaderText(); !strings.Contains(got, "admin 2m left") {
 		t.Fatalf("vaultHeaderText() with 100s left = %q, want it rounded to %q", got, "admin 2m left")
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -467,12 +468,12 @@ func (s *Server) forwardChangeNotice(cand *config.Config, connName string) strin
 	if err != nil {
 		return "approval state not checked: " + s.redact(err.Error())
 	}
-	change, open := approvalOpenChange(report, connName)
+	change, open := manage.OpenChange(report, connName)
 	if !open {
 		return ""
 	}
 	return fmt.Sprintf("stays open: %s; saving does not approve it, approve it with `qatlas vault approve` or in "+
-		"the TUI's Approvals section", approvalStaysOpenReason(change))
+		"the TUI's Approvals section", manage.StaysOpenReason(change))
 }
 
 // payloadTemplates defines the payload credential page. Like the other pages it ships no script and no
