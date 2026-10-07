@@ -10,8 +10,8 @@ updated: 2026-10-07
 # BookStack
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
-chapters, shelves, tags, page comments, page attachments, and gallery images, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, comments, and attachments (`create`),
-changing or moving pages and attachments and changing books, chapters, shelves, and comments (`update`), and deleting pages, books, chapters, shelves, comments, and attachments (`delete`).
+chapters, shelves, tags, page comments, page attachments, and gallery images, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, comments, attachments, and images (`create`),
+changing or moving pages and attachments and changing books, chapters, shelves, comments, and images (`update`), and deleting pages, books, chapters, shelves, comments, attachments, and images (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
 
@@ -357,10 +357,35 @@ image is read once as proof, and only then is the data requested. An image of an
 `invalid-request` without naming the other book, page, or image. A connection without targets reads no proof. These
 three tools are read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
 
+### Changing images
+
+`bookstack.images.upload` takes `page_id`, `type` (`gallery` or `drawio`), `local_path`, and an optional `name` (1 to
+180 characters) and adds one image to the page. The file lies in a directory the connection releases for reading, is
+at most 50 MiB, and is streamed from disk as `multipart/form-data` with an exact length (fields `type`,
+`uploaded_to`, `name`, and the file as `image`). Extension and type are checked before any credential or file is
+used: `png`, `jpg`, `jpeg`, `gif`, and `webp` are accepted, a `drawio` drawing only as `png`.
+
+`bookstack.images.update` takes the `id` and a `name` (1 to 180 characters) and renames the image.
+`bookstack.images.replace` takes the `id` and `local_path` and replaces the file under the same limits as `upload`;
+the name stays and the previous file is gone. The local extension must equal the extension of the existing image
+(`jpg` and `jpeg` count as one), otherwise the call is refused before any change. BookStack accepts a multipart body
+only on `POST`, so the request is `POST /api/image-gallery/{id}` with the form field `_method=PUT`.
+`bookstack.images.delete` takes the `id` and deletes the image: final, without a usage check, and it can leave pages
+with broken image references.
+
+On a connection bound to books, `upload` proves the page by one read; `update`, `replace`, and `delete` read the
+metadata of the existing image and prove its page by one read. A page or image of another book is refused as
+`invalid-request` without naming it, and nothing is changed. A connection without targets reads no proof.
+
+Each call sends exactly one change request without retry; after a timeout, a lost connection, or a 5xx answer the
+result is reported as uncertain. All four tools require confirmation and are part of no profile; `delete` also
+requires an entry in the connection's `tools` list. `upload` creates and is not idempotent, `update` is idempotent,
+`replace` is not.
+
 ## Limits
 
 Reading accepts a response of up to 16 MiB (an inline export 8 MiB, a download 512 MiB; an attachment answer 96 MiB of content, an attachment download 72 MiB, an image download 64 MiB); a larger one fails as `invalid-provider-response`. Writing
-accepts at most 1 MiB of page content (`html` or `markdown`) and an attachment upload of at most 50 MiB. Redirects are never followed: a 3xx answer is a
+accepts at most 1 MiB of page content (`html` or `markdown`) and an attachment or image upload of at most 50 MiB. Redirects are never followed: a 3xx answer is a
 `provider-error`.
 
 ## Deleting

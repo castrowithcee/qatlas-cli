@@ -291,6 +291,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withFilesGroup(attachmentsUpdate), Handler: capability.Handler(invokeAttachmentsUpdate)},
 		capability.Operation{Descriptor: withFilesGroup(attachmentsReplace), Handler: capability.Handler(invokeAttachmentsReplace)},
 		capability.Operation{Descriptor: withFilesGroup(attachmentsDelete), Handler: capability.Handler(invokeAttachmentsDelete)},
+		capability.Operation{Descriptor: withFilesGroup(imagesUpload), Handler: capability.Handler(invokeImagesUpload)},
+		capability.Operation{Descriptor: withFilesGroup(imagesUpdate), Handler: capability.Handler(invokeImagesUpdate)},
+		capability.Operation{Descriptor: withFilesGroup(imagesReplace), Handler: capability.Handler(invokeImagesReplace)},
+		capability.Operation{Descriptor: withFilesGroup(imagesDelete), Handler: capability.Handler(invokeImagesDelete)},
 		capability.Operation{Descriptor: withAdministrationGroup(systemGet), Handler: capability.Handler(invokeSystemGet)},
 	)
 }
