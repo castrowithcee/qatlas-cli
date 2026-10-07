@@ -24,7 +24,7 @@ starts a new connection on the setup profile `read`, which ticks `[read]` and
 `[bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list,
 bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list,
 bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.comments.list, bookstack.comments.get,
-bookstack.system.get]`. A profile is a visible starting
+bookstack.system.get, bookstack.content.export]`. A profile is a visible starting
 selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
 saving, and a saved connection never follows a profile.
 
@@ -263,9 +263,28 @@ pairs), `preview_name`, and `preview_content`. The previews are untrusted HTML, 
 render or run them. `total` is the number BookStack reports and is an estimate. Further provider fields are
 not passed on.
 
+## Export
+
+`bookstack.content.export` returns one page, chapter, or book as text in the answer. Arguments: `type`
+(`page`, `chapter`, or `book`), `id`, and `format` (`markdown`, `plaintext`, or `html`). The request is a single
+`GET /api/{pages|chapters|books}/{id}/export/{format}`; the path is built only from these fixed values. The text
+is untrusted data and limited to 8 MiB: a larger export is refused with a hint to use `bookstack.content.download`.
+The answer has `type`, `id`, `format`, and `content`.
+
+`bookstack.content.download` writes the export to `local_path` instead and accepts the formats `html`, `pdf`,
+`plaintext`, `markdown`, and `zip`. The file is streamed up to 512 MiB within 10 minutes and is part of no
+profile; the connection must release the directory for writing, and an existing file is replaced only with
+confirmation. The answer carries `type`, `id`, `format`, `size`, and `sha256` only, never the content. A ZIP export
+contains the attachments and images of the exported content.
+
+Both tools need the BookStack role permission `content-export` for the token's user in addition to read access.
+On a connection bound to books, a `book` is checked against the books before the secrets are read and before
+any request; a `chapter` or `page` is bound through one proof read of the item (without targets this read is
+skipped).
+
 ## Limits
 
-Reading accepts a response of up to 16 MiB; a larger one fails as `invalid-provider-response`. Writing
+Reading accepts a response of up to 16 MiB (an inline export 8 MiB, a download 512 MiB); a larger one fails as `invalid-provider-response`. Writing
 accepts at most 1 MiB of page content (`html` or `markdown`). Redirects are never followed: a 3xx answer is a
 `provider-error`.
 

@@ -237,7 +237,7 @@ func Register(reg *capability.Registry) error {
 			Description: "lists and reads pages, books, chapters, shelves, tags, and page comments, reads instance information, and searches content; changes nothing in BookStack",
 			Tools: []string{pagesList.ID, pagesGet.ID, contentSearch.ID, booksList.ID, booksGet.ID,
 				chaptersList.ID, chaptersGet.ID, shelvesList.ID, shelvesGet.ID, tagsList.ID, tagsValues.ID, commentsList.ID,
-				commentsGet.ID, systemGet.ID},
+				commentsGet.ID, systemGet.ID, contentExport.ID},
 		}},
 	}, func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor) (provider.Class, error) {
@@ -278,6 +278,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withCommentsGroup(commentsCreate), Handler: capability.Handler(invokeCommentsCreate)},
 		capability.Operation{Descriptor: withCommentsGroup(commentsUpdate), Handler: capability.Handler(invokeCommentsUpdate)},
 		capability.Operation{Descriptor: withCommentsGroup(commentsDelete), Handler: capability.Handler(invokeCommentsDelete)},
+		capability.Operation{Descriptor: withGroup(contentExport), Handler: capability.Handler(invokeContentExport)},
+		capability.Operation{Descriptor: withGroup(contentDownload), Handler: capability.Handler(invokeContentDownload)},
 		capability.Operation{Descriptor: withAdministrationGroup(systemGet), Handler: capability.Handler(invokeSystemGet)},
 	)
 }
