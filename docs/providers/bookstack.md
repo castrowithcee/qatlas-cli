@@ -316,6 +316,30 @@ without a change, when the role is the guest role or when the guest role cannot 
 `external_auth_id` is not supported: Qatlas never binds a role to the groups of an external identity provider,
 so the argument does not exist and no request body contains it.
 
+### Changing and deleting users
+
+`bookstack.users.update` and `bookstack.users.delete` change or remove existing users and need the role
+permission `users-manage`. They require a tool allow list, are part of no profile, need confirmation, and are
+refused on a connection with book targets (before any secret is read). Each sends exactly one change request
+without retry; after a timeout, a 5xx answer, or an unreadable answer the result is reported as uncertain. No tool
+creates or invites users or sets an e-mail address, a password, or an external authentication identifier, and no
+tool creates API tokens: these arguments do not exist, unknown arguments are refused, and no request body contains
+them.
+
+- `users.update` takes `id` and at least one of `name` (1 to 100 characters), `language` (1 to 15 letters, digits,
+  hyphens, or underscores), and `roles` (at most 100 distinct positive role identifiers). A field that is left out
+  stays unchanged; `roles` replaces all roles of the user, so an empty list removes every role. It returns the
+  user like `users.get`.
+- `users.delete` takes `id` and optionally `migrate_ownership_id`, which must differ from `id`. It is final.
+  Without `migrate_ownership_id` the content of the user stays without an owner; with it, the ownership passes to
+  that user. BookStack refuses to delete the only administrator and the guest user. It returns `deleted: true`.
+
+Public access is protected. When `roles` is given, `users.update` determines the guest role (system role `public`;
+a read of the role list, at most 100 roles, and a read of that role, which needs `user-roles-manage` as well) and
+refuses, without a change, when the user is a guest user, when `roles` contains the guest role, or when the guest
+role cannot be determined. `users.delete` does the same check when `migrate_ownership_id` is given and refuses
+to hand the content to a guest user. Without `roles` or `migrate_ownership_id` no role is read.
+
 `bookstack.auditlog.list` needs `settings-manage` and `users-manage`. It contains IP addresses and sign-in events
 of all users, so it is offered only by a connection whose `tools` list names it. It takes `limit`, `offset`, and
 the filters `type` (lowercase letters, digits, and underscores, at most 64 characters), `user_id`,
