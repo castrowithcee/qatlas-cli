@@ -234,9 +234,10 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read content", Recommended: true,
-			Description: "lists and reads pages, books, chapters, shelves, and tags, reads instance information, and searches content; changes nothing in BookStack",
+			Description: "lists and reads pages, books, chapters, shelves, tags, and page comments, reads instance information, and searches content; changes nothing in BookStack",
 			Tools: []string{pagesList.ID, pagesGet.ID, contentSearch.ID, booksList.ID, booksGet.ID,
-				chaptersList.ID, chaptersGet.ID, shelvesList.ID, shelvesGet.ID, tagsList.ID, tagsValues.ID, systemGet.ID},
+				chaptersList.ID, chaptersGet.ID, shelvesList.ID, shelvesGet.ID, tagsList.ID, tagsValues.ID, commentsList.ID,
+				commentsGet.ID, systemGet.ID},
 		}},
 	}, func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor) (provider.Class, error) {
@@ -272,6 +273,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(shelvesDelete), Handler: capability.Handler(invokeShelvesDelete)},
 		capability.Operation{Descriptor: withGroup(tagsList), Handler: capability.Handler(invokeTagsList)},
 		capability.Operation{Descriptor: withGroup(tagsValues), Handler: capability.Handler(invokeTagsValues)},
+		capability.Operation{Descriptor: withCommentsGroup(commentsList), Handler: capability.Handler(invokeCommentsList)},
+		capability.Operation{Descriptor: withCommentsGroup(commentsGet), Handler: capability.Handler(invokeCommentsGet)},
+		capability.Operation{Descriptor: withCommentsGroup(commentsCreate), Handler: capability.Handler(invokeCommentsCreate)},
+		capability.Operation{Descriptor: withCommentsGroup(commentsUpdate), Handler: capability.Handler(invokeCommentsUpdate)},
+		capability.Operation{Descriptor: withCommentsGroup(commentsDelete), Handler: capability.Handler(invokeCommentsDelete)},
 		capability.Operation{Descriptor: withAdministrationGroup(systemGet), Handler: capability.Handler(invokeSystemGet)},
 	)
 }

@@ -304,6 +304,9 @@ func TestEveryToolHasAGroupTheRegistryAccepts(t *testing.T) {
 		if d.ID == systemGet.ID {
 			want = "administration"
 		}
+		if strings.HasPrefix(d.ID, Provider+".comments.") {
+			want = "comments"
+		}
 		if d.Group != want {
 			t.Errorf("%s group = %q", d.ID, d.Group)
 		}

@@ -109,8 +109,8 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Fatal("defaultRegistry() = nil")
 	}
 	got := reg.Provider("bookstack")
-	if len(got) != 24 {
-		t.Fatalf("provider capabilities = %v, want twenty-four BookStack capabilities", got)
+	if len(got) != 29 {
+		t.Fatalf("provider capabilities = %v, want twenty-nine BookStack capabilities", got)
 	}
 	if got[0].ID != "bookstack.books.create" || got[1].ID != "bookstack.books.delete" {
 		t.Errorf("capabilities = %v", got)
