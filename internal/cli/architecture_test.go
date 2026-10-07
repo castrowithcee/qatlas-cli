@@ -115,7 +115,6 @@ const (
 
 var architectureExceptions = []archException{
 	// Rule 1: surface access, internal/tui.
-	{ruleSurfaceAccess, "internal/tui/admin.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/approvals.go", "internal/approval", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/approvals.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/logs.go", "internal/vault", debtSurface},
@@ -142,12 +141,9 @@ var architectureExceptions = []archException{
 	{ruleSurfaceAccess, "internal/tui/vaultheader.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/vaultheader.go", "internal/vaultmigrate", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/vaultheader.go", "internal/vaultproc", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/vaultsettings.go", "internal/approval", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/vaultsettings.go", "internal/vault", debtSurface},
 	// Rule 1: surface access, internal/web.
-	{ruleSurfaceAccess, "internal/web/admin.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/web/connection.go", "internal/approval", debtSurface},
-	{ruleSurfaceAccess, "internal/web/connection.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/web/credential.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/web/credential.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/web/credential.go", "internal/vaultproc", debtSurface},

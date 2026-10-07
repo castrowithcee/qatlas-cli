@@ -928,34 +928,31 @@ func runVaultEncrypt(c *cobra.Command, opts *Options, reg *capability.Registry) 
 // secret only to a connection it approved as it is configured now. A configuration that cannot be read
 // approves nothing; the command says so, and the encryption stands.
 func approveOnEncrypt(c *cobra.Command, opts *Options, reg *capability.Registry, v *vault.Vault) string {
-	path, err := config.Path(opts.Config)
-	var cfg *config.Config
-	if err == nil {
-		cfg, err = config.Load(path, reg)
-	}
-	var missing *config.NotFoundError
+	res := manage.ApproveOnEncrypt(contextOrBackground(c.Context()), v, func() (*config.Config, error) {
+		path, err := config.Path(opts.Config)
+		if err != nil {
+			return nil, err
+		}
+		return config.Load(path, reg)
+	})
 	switch {
-	case errors.As(err, &missing):
-		return ""
-	case err != nil:
+	case res.ConfigErr != nil:
 		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: no connection was approved to read from the vault, "+
-			"because the configuration cannot be read: %s\n", opts.Redactor.Error(err))
+			"because the configuration cannot be read: %s\n", opts.Redactor.Error(res.ConfigErr))
 		return ""
-	}
-	approved, warning, err := approval.Approve(contextOrBackground(c.Context()), cfg, v, nil)
-	if err != nil {
+	case res.ApproveErr != nil:
 		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: no connection was approved to read from the vault: %s\n",
-			opts.Redactor.Error(err))
+			opts.Redactor.Error(res.ApproveErr))
 		return ""
 	}
-	if warning != "" {
-		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
+	if res.Warning != "" {
+		fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", res.Warning)
 	}
-	if len(approved) == 0 {
+	if len(res.Approved) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("; approved %d %s to read from it: %s", len(approved),
-		plural(len(approved), "connection", "connections"), strings.Join(approved, ", "))
+	return fmt.Sprintf("; approved %d %s to read from it: %s", len(res.Approved),
+		plural(len(res.Approved), "connection", "connections"), strings.Join(res.Approved, ", "))
 }
 
 // runVaultApprove lists what changed about every connection the vault has not approved as it is configured

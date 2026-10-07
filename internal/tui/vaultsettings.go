@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -292,26 +292,25 @@ func (m *Model) runVaultEncrypt(passphrase string) tea.Cmd {
 
 // approveOnEncrypt approves every saved connection that reads a secret the vault just encrypted, the same
 // way 'qatlas vault encrypt' does: the passphrase was proven a moment ago. It returns what to add to the
-// outcome; a configuration that cannot be read approves nothing, and the encryption stands.
+// outcome; a configuration that cannot be read approves nothing and says so, and the encryption stands.
 func approveOnEncrypt(store *config.Store, v *vault.Vault) string {
 	if store == nil {
 		return ""
 	}
-	cfg, err := store.Load()
-	if err != nil {
-		return ""
-	}
-	approved, warning, err := approval.Approve(context.Background(), cfg, v, nil)
+	res := manage.ApproveOnEncrypt(context.Background(), v, store.Load)
 	switch {
-	case err != nil:
-		return "warning: no connection was approved to read from the vault: " + err.Error()
-	case warning != "":
-		return "warning: " + warning
-	case len(approved) == 0:
+	case res.ConfigErr != nil:
+		return "warning: no connection was approved to read from the vault, because the configuration " +
+			"cannot be read: " + res.ConfigErr.Error()
+	case res.ApproveErr != nil:
+		return "warning: no connection was approved to read from the vault: " + res.ApproveErr.Error()
+	case res.Warning != "":
+		return "warning: " + res.Warning
+	case len(res.Approved) == 0:
 		return ""
 	}
-	return fmt.Sprintf("approved %d connection(s) to read from it: %s", len(approved),
-		strings.Join(approved, ", "))
+	return fmt.Sprintf("approved %d connection(s) to read from it: %s", len(res.Approved),
+		strings.Join(res.Approved, ", "))
 }
 
 // startVaultChangePassphrase asks for the current passphrase once, verifies it, then chains into asking for

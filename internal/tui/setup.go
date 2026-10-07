@@ -89,8 +89,8 @@ type setup struct {
 	// before is what Pending found just before finishSetupSave ran, captured while m.cfg still held what was
 	// loaded, so setupSaved can tell autoApprove which connections this save newly opened, and, for the new
 	// connection itself, whether it was already open for a reason its own form never showed (see
-	// approvalSnapshot and directApprovable).
-	before approvalBefore
+	// manage.SnapshotApprovals and approval.DirectApprovable).
+	before manage.ApprovalSnapshot
 }
 
 // setupPlan is what the steps decided. secrets holds the typed values of a new keyring credential until
@@ -482,7 +482,7 @@ func (m *Model) finishSetupSave() tea.Cmd {
 	// Captured now, once requireAdmin has run: a locked vault is unlocked by then, so this sees it as it
 	// really is instead of failing closed on a state that no longer holds; m.cfg still holds what was
 	// loaded, exactly what this function's own candidate is built from (see setupCandidate).
-	m.wizard.before = m.approvalSnapshot(m.secrets.Vault(), m.cfg)
+	m.wizard.before = manage.SnapshotApprovals(m.secrets.Vault(), m.cfg)
 	plan := m.wizard.plan
 	if !plan.newCredential || storageType(plan.storage) != config.CredentialTypeVault {
 		return m.saveSetup(nil)

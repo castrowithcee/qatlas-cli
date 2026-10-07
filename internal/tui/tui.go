@@ -16,7 +16,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -497,11 +496,10 @@ type Model struct {
 	vaultOffer *vaultOffer
 	vaultBusy  bool
 	// adminAuth holds the masked admin passphrase dialog while requireAdmin has one open, and nil otherwise.
-	// adminSessionUntil is this window's own admin session idle deadline: the zero value means no session is
-	// active, whether none was ever started or vault.admin_timeout is 0, which never keeps one at all. See
-	// admin.go.
-	adminAuth         *adminAuth
-	adminSessionUntil time.Time
+	// admin is this window's own admin session: inactive until started, and, with vault.admin_timeout: 0,
+	// never kept at all. See admin.go.
+	adminAuth *adminAuth
+	admin     manage.AdminSession
 	// decryptConfirm is the explicit y/n question before the vault's encryption is switched off, holding the
 	// already-verified current passphrase to run the switch with once it is answered y. It is cleared, and
 	// the passphrase dropped, the moment the question is answered either way.
@@ -2141,7 +2139,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			m.screen = screenForm
 			return m.requireAdmin(func() tea.Cmd {
 				if m.credentialType() == config.CredentialTypeVault {
-					before := m.approvalSnapshot(m.secrets.Vault(), m.cfg)
+					before := manage.SnapshotApprovals(m.secrets.Vault(), m.cfg)
 					return m.removeVaultSecret(m.editing, role, before)
 				}
 				return m.removeSecret(m.editing, role)
@@ -2653,7 +2651,7 @@ func (m *Model) save(name string) tea.Cmd {
 	choice := m.fieldValue(storageLabel)
 	// Captured before the change so autoApprove can tell which connections it newly opened, in an encrypted
 	// and unlocked vault only; see approvals.go.
-	before := m.approvalSnapshot(m.secrets.Vault(), m.cfg)
+	before := manage.SnapshotApprovals(m.secrets.Vault(), m.cfg)
 	previous := m.cfg
 	candidate := m.cfg.Clone()
 	if err := m.apply(candidate, name); err != nil {
@@ -2801,7 +2799,7 @@ func (m *Model) delete() tea.Cmd {
 	// Captured before the change; a deletion outside Connections cannot open one (the core refuses deleting
 	// a service, credential, or default still in use), but computing it the same way as save keeps the two
 	// paths in step. See approvals.go.
-	before := m.approvalSnapshot(m.secrets.Vault(), m.cfg)
+	before := manage.SnapshotApprovals(m.secrets.Vault(), m.cfg)
 
 	previous := m.cfg
 	candidate := m.cfg.Clone()

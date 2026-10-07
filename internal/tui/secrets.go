@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
@@ -218,7 +219,7 @@ type writtenMsg struct {
 	// approvalBefore is set only for a vault write or removal: what Pending found open just before it ran, so
 	// handleWritten can approve exactly the connections it newly opened once it succeeds (see autoApprove);
 	// its zero value for a keyring write, which changes no vault credential entry and so opens nothing.
-	approvalBefore approvalBefore
+	approvalBefore manage.ApprovalSnapshot
 }
 
 // refreshSources asks where the secrets of the given credentials resolve from.
@@ -379,7 +380,7 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 				// Captured here, before anything is written: storing this secret may give the credential its
 				// first vault entry, or replace one, either of which can open a connection that reads it (see
 				// autoApprove).
-				before := m.approvalSnapshot(m.secrets.Vault(), m.cfg)
+				before := manage.SnapshotApprovals(m.secrets.Vault(), m.cfg)
 				return m.beginVaultSecret(m.editing, m.secretRole, value, before)
 			}
 			return m.storeSecret(m.editing, m.secretRole, value)
@@ -526,7 +527,7 @@ func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 // beginVaultSecret decides whether the role's secret would be the vault's very first: only then is a
 // passphrase offered, exactly as vault.Vault.Set defines it. Deciding needs nothing but the vault's local
 // files, so it happens right here, never inside the command the write itself runs as.
-func (m *Model) beginVaultSecret(credential, role, value string, before approvalBefore) tea.Cmd {
+func (m *Model) beginVaultSecret(credential, role, value string, before manage.ApprovalSnapshot) tea.Cmd {
 	v := m.secrets.Vault()
 	if v == nil {
 		m.fail = "no vault is configured for this run"
@@ -564,7 +565,7 @@ func (m *Model) beginVaultSecret(credential, role, value string, before approval
 // before this started; handleWritten uses it to approve exactly what this write newly opens (see
 // autoApprove).
 func (m *Model) writeVaultSecret(credential, role, value string, offer vault.PassphraseFunc,
-	before approvalBefore) tea.Cmd {
+	before manage.ApprovalSnapshot) tea.Cmd {
 	m.vaultBusy = true
 	m.writes++
 	m.busy = fmt.Sprintf("storing the secret for %s.%s in the vault", credential, role)
@@ -587,7 +588,7 @@ func (m *Model) writeVaultSecret(credential, role, value string, offer vault.Pas
 
 // removeVaultSecret clears one stored secret from the vault. before is what Pending found open just before
 // this started, threaded through to handleWritten the same way writeVaultSecret's own before is.
-func (m *Model) removeVaultSecret(credential, role string, before approvalBefore) tea.Cmd {
+func (m *Model) removeVaultSecret(credential, role string, before manage.ApprovalSnapshot) tea.Cmd {
 	m.vaultBusy = true
 	m.writes++
 	m.busy = fmt.Sprintf("removing the stored secret for %s.%s from the vault", credential, role)

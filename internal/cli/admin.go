@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -47,15 +48,13 @@ func requireAdmin(opts *Options) error {
 		return err
 	}
 	v := secrets.Vault()
-	if v == nil {
-		// A resolver built directly with secret.NewWith, which only a test does, has no vault to lock.
-		return nil
-	}
-	state, err := v.State()
+	// A resolver built directly with secret.NewWith, which only a test does, has no vault to lock; that and
+	// any vault that is not locked need no passphrase from this terminal.
+	_, locked, err := manage.AdminRequired(v)
 	if err != nil {
 		return classifyUserError(err)
 	}
-	if state != vault.StateLocked {
+	if !locked {
 		return nil
 	}
 
@@ -66,8 +65,8 @@ func requireAdmin(opts *Options) error {
 		}
 		return err
 	}
-	if _, err := v.Unlock(passphrase); err != nil {
-		if errors.Is(err, vault.ErrWrongPassphrase) {
+	if err := manage.VerifyAdmin(v, passphrase); err != nil {
+		if errors.Is(err, manage.ErrWrongPassphrase) {
 			return &UsageError{err}
 		}
 		return classifyUserError(err)

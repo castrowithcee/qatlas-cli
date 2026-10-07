@@ -4,9 +4,8 @@ import (
 	"crypto/subtle"
 	"errors"
 	"net/http"
-	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
 
 // maxAdminFormBytes bounds every mutating request's body, well beyond what a CSRF value and a typed
@@ -24,14 +23,8 @@ var errNoCoupledSession = errors.New("no browser is coupled to this run yet")
 // unreadable state fails closed: it is reported as required, and the error is returned so the caller never
 // treats it as if it had actually read "no passphrase needed". Callers must hold s.mu.
 func (s *Server) adminRequiredLocked() (required bool, err error) {
-	if s.vault == nil {
-		return false, nil
-	}
-	state, err := s.vault.State()
-	if err != nil {
-		return true, err
-	}
-	return state == vault.StateLocked || state == vault.StateUnlocked, nil
+	required, _, err = manage.AdminRequired(s.vault)
+	return required, err
 }
 
 // SessionCoupled reports whether a browser is currently coupled to this run. The terminal admin path uses
@@ -66,24 +59,13 @@ func (s *Server) adminActiveLocked() bool {
 	if !required {
 		return true
 	}
-	if s.adminOnce {
-		return true
-	}
-	return !s.adminUntil.IsZero() && s.now().Before(s.adminUntil)
+	return s.admin.Active()
 }
 
 // grantAdminLocked starts, or renews, this run's admin approval once a passphrase just proved it.
-// vault.admin_timeout of 0 grants exactly the next mutation instead of a session: adminOnce carries that
-// one-shot grant, consumed by withAdminGuard the moment it lets a mutation through. Callers must hold s.mu.
-func (s *Server) grantAdminLocked() {
-	if s.adminTimeout <= 0 {
-		s.adminOnce = true
-		s.adminUntil = time.Time{}
-		return
-	}
-	s.adminOnce = false
-	s.adminUntil = s.now().Add(s.adminTimeout)
-}
+// vault.admin_timeout of 0 grants exactly the next mutation instead of a session, which withAdminGuard
+// spends the moment it lets a mutation through. Callers must hold s.mu.
+func (s *Server) grantAdminLocked() { s.admin.Grant(s.adminTimeout) }
 
 // touchAdminIfActive renews the admin approval's idle deadline on every request the coupled session makes,
 // the same rule internal/tui's touchAdminSessionIfActive applies to every key press of an active window. It
@@ -91,9 +73,7 @@ func (s *Server) grantAdminLocked() {
 func (s *Server) touchAdminIfActive() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.adminTimeout > 0 && !s.adminUntil.IsZero() && s.now().Before(s.adminUntil) {
-		s.adminUntil = s.now().Add(s.adminTimeout)
-	}
+	s.admin.Touch(s.adminTimeout)
 }
 
 // VerifyAndGrantAdmin checks passphrase against this run's vault exactly the way internal/tui's own admin
@@ -111,24 +91,8 @@ func (s *Server) VerifyAndGrantAdmin(passphrase string) error {
 	v := s.vault
 	s.mu.Unlock()
 
-	if v == nil {
-		return errors.New("no vault is configured for this run")
-	}
-	state, err := v.State()
-	if err != nil {
+	if err := manage.VerifyAdmin(v, passphrase); err != nil {
 		return err
-	}
-	var verifyErr error
-	switch state {
-	case vault.StateLocked:
-		_, verifyErr = v.Unlock(passphrase)
-	case vault.StateUnlocked:
-		verifyErr = v.VerifyPassphrase(passphrase)
-	default:
-		return errors.New("this vault holds no passphrase to approve")
-	}
-	if verifyErr != nil {
-		return verifyErr
 	}
 
 	s.mu.Lock()
@@ -192,11 +156,7 @@ func (s *Server) withAdminGuard(next http.HandlerFunc) http.HandlerFunc {
 		s.mu.Lock()
 		active := s.adminActiveLocked()
 		if active {
-			if s.adminOnce {
-				s.adminOnce = false
-			} else if s.adminTimeout > 0 {
-				s.adminUntil = s.now().Add(s.adminTimeout)
-			}
+			s.admin.Consume(s.adminTimeout)
 		}
 		s.mu.Unlock()
 		if !active {

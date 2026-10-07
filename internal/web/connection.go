@@ -11,7 +11,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
 
 // The guided connection setup leads a coupled browser from a provider to a saved connection, over the same
@@ -658,77 +658,37 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, "/connections/"+url.PathEscape(connName)+"?created=1", http.StatusSeeOther)
 }
 
-// approvalNotice approves, in an encrypted and unlocked vault only (vault.StateUnlocked),
-// the one connection connName of cand - the candidate configuration
-// handleCreateConnection just saved - by the very same rule internal/tui's own guided setup and Connections
-// section use, approval.DirectApprovable: a connection saved through this route is always new to the
-// vault's own approvals (its name could not already exist; see buildConnectionCandidate), so this only ever
-// finds it open for a reason outside the form (a stale approval left under the same name by something
-// outside this run, naming a provider, origin, or credential entry the form never showed) and leaves it
-// open then, never approving it.
+// approvalNotice approves, in an encrypted and unlocked vault only, the one connection connName of cand - the
+// candidate configuration handleCreateConnection just saved - by the core's direct-only policy
+// (manage.ApprovalDirectOnly): a connection saved through this route is always new to the vault's own
+// approvals (its name could not already exist; see buildConnectionCandidate), so this only ever finds it
+// open for a reason outside the form (a stale approval left under the same name by something outside this
+// run, naming a provider, origin, or credential entry the form never showed) and leaves it open then, never
+// approving it.
 //
 // Any other vault-credential connection this create happened to newly open - most often every one of them
 // at once, the moment this very save is what first encrypts the vault - is deliberately left alone: unlike
-// internal/tui's own autoApprove, this never sweeps and approves the rest. This route approves only the
-// connection it just saved, never a silent grant of any other (a narrower reading than the TUI's own
-// sweep).
+// internal/tui, this never sweeps and approves the rest.
 //
 // "" means there is nothing to say: no vault, an unencrypted or missing vault (which binds no connection
 // at all), or a connection whose credential is not a vault credential in the first place.
 func (s *Server) approvalNotice(cand *config.Config, connName string) string {
-	v := s.secrets.Vault()
-	if v == nil {
-		return ""
-	}
-	state, err := v.State()
-	if err != nil || state != vault.StateUnlocked {
-		return ""
-	}
-	report, err := approval.Pending(cand, v)
-	if err != nil {
-		return "approval failed: " + s.redact(err.Error())
-	}
-	change, ok := approvalOpenChange(report, connName)
-	if !ok {
-		return ""
-	}
-	if !approval.DirectApprovable(change) {
-		return fmt.Sprintf("stays open: %s; approve it with `qatlas vault approve` or in the TUI's Approvals section",
-			approvalStaysOpenReason(change))
-	}
-	_, warning, err := approval.Approve(context.Background(), cand, v, []string{connName})
+	res := manage.ApproveAfterChange(context.Background(), s.secrets.Vault(), manage.ApprovalSnapshot{}, cand,
+		connName, manage.ApprovalDirectOnly)
 	switch {
-	case err != nil:
-		return "approval failed: " + s.redact(err.Error())
-	case warning != "":
-		return "approval failed: " + s.redact(warning)
-	default:
+	case res.CheckErr != nil:
+		return "approval failed: " + s.redact(res.CheckErr.Error())
+	case res.StayedOpen != "":
+		return fmt.Sprintf("stays open: %s; approve it with `qatlas vault approve` or in the TUI's Approvals section",
+			res.StayReason)
+	case res.ApproveErr != nil:
+		return "approval failed: " + s.redact(res.ApproveErr.Error())
+	case res.Warning != "":
+		return "approval failed: " + s.redact(res.Warning)
+	case len(res.Approved) > 0:
 		return "approved"
 	}
-}
-
-// approvalOpenChange is the Change report holds for name, and whether it held one at all, the same small
-// lookup internal/tui's own openChange makes over its own report.
-func approvalOpenChange(report approval.Report, name string) (approval.Change, bool) {
-	for _, c := range report.Open {
-		if c.Connection == name {
-			return c, true
-		}
-	}
-	return approval.Change{}, false
-}
-
-// approvalStaysOpenReason is the short reason change stays open, the same words internal/tui's own
-// approvalSummary uses for its Approvals list.
-func approvalStaysOpenReason(c approval.Change) string {
-	if c.New {
-		return "new connection, not yet approved"
-	}
-	fields := make([]string, len(c.Fields))
-	for i, f := range c.Fields {
-		fields[i] = f.Field
-	}
-	return strings.Join(fields, ", ") + " changed"
+	return ""
 }
 
 // connectionResultData is what the connection result page renders: a secretfree row of the connection, this

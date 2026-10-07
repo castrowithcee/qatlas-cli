@@ -18,7 +18,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
-	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -394,60 +394,6 @@ func (m *Model) handleApprovalAction(msg approvalActionMsg) tea.Cmd {
 	return cmd
 }
 
-// approvalBefore is what Pending finds about the configuration right now, in an encrypted and unlocked vault
-// only, captured before a managing action changes it. ok is false when there is nothing to compare with at
-// all: no vault, one that exists but is not encrypted (rule 2: it binds no connection, whatever this action
-// does), or one that is locked (nothing here unlocks it merely to compare); autoApprove then runs nothing.
-// ok is true, and report the zero Report, for a vault that does not exist yet: nothing is a candidate before
-// it exists either, the same starting point as a candidate that is simply not open yet, so an action that
-// creates and encrypts the vault in the same breath (see beginVaultSecret, commitSetup) can still tell
-// autoApprove what it newly opened.
-type approvalBefore struct {
-	report approval.Report
-	ok     bool
-}
-
-// approvalSnapshot captures approvalBefore for cfg right now.
-func (m *Model) approvalSnapshot(v *vault.Vault, cfg *config.Config) approvalBefore {
-	if v == nil {
-		return approvalBefore{}
-	}
-	state, err := v.State()
-	if err != nil {
-		return approvalBefore{}
-	}
-	if state == vault.StateAbsent {
-		return approvalBefore{ok: true}
-	}
-	if state != vault.StateUnlocked {
-		return approvalBefore{}
-	}
-	report, err := approval.Pending(cfg, v)
-	if err != nil {
-		return approvalBefore{}
-	}
-	return approvalBefore{report: report, ok: true}
-}
-
-// openSet is the connections report finds open, by name.
-func openSet(report approval.Report) map[string]bool {
-	open := map[string]bool{}
-	for _, c := range report.Open {
-		open[c.Connection] = true
-	}
-	return open
-}
-
-// openChange is the Change report holds for name, and whether it held one at all (name was open).
-func openChange(report approval.Report, name string) (approval.Change, bool) {
-	for _, c := range report.Open {
-		if c.Connection == name {
-			return c, true
-		}
-	}
-	return approval.Change{}, false
-}
-
 // approvalSweepMsg carries the outcome of autoApprove or revokeApproval back into the event loop: both run
 // asynchronously, like every other write this editor sends to the vault (see runVaultActionField,
 // writeVaultSecret), as the automatic side effect of a save or delete that already succeeded on its own.
@@ -455,94 +401,53 @@ func openChange(report approval.Report, name string) (approval.Change, bool) {
 // comments for why.
 type approvalSweepMsg struct{ note string }
 
-// autoApprove approves, in an encrypted and unlocked vault only, exactly the connections a managing action
-// that just succeeded opened: those Pending now finds open that before did not (a candidate that was fully
-// approved, or held no vault entry yet, before this action ran), plus direct, when it names a connection
-// that was not open before either, or was open only for fields directApprovable says its own form shows (a
-// connection saved directly by name in its own form, or a new connection the guided setup just created, is
-// approved unless it was already open for a reason the form never displayed, such as a base_url or provider
-// changed outside it, or its credential replaced under the same name: that stays open, and the status names
-// the Approvals section as the way to review and release it). before.ok is false when there was nothing to
-// compare with (see approvalSnapshot); nothing runs then. A failure to approve never undoes the action that
-// already succeeded; it is reported as a warning appended to m.status once the write lands, and never
-// carries a secret value.
-func (m *Model) autoApprove(before approvalBefore, direct string) tea.Cmd {
-	if !before.ok {
+// autoApprove approves, in an encrypted and unlocked vault only, what the core decides a managing action
+// that just succeeded opened (manage.ApprovalSweepNewlyOpened): the connections newly open compared with
+// before, plus direct, a connection saved directly by name in its own form or created by the guided setup,
+// unless it is open for a reason that form never displayed. That one stays open, and the status names the
+// Approvals section as the way to review and release it. Nothing runs when before has nothing to compare
+// with (see manage.SnapshotApprovals). A failure to approve never undoes the action that already
+// succeeded; it is reported as a warning appended to m.status once the write lands, and never carries a
+// secret value.
+func (m *Model) autoApprove(before manage.ApprovalSnapshot, direct string) tea.Cmd {
+	if !before.Valid() {
 		return nil
 	}
 	v := m.secrets.Vault()
 	if v == nil {
 		return nil
 	}
-	beforeOpen := openSet(before.report)
-	directChange, directWasOpen := openChange(before.report, direct)
 	cfg, redactor := m.cfg, m.redactor
 	m.vaultBusy = true
 	m.writes++
 	m.busy = "checking which connections to approve"
 	return func() tea.Msg {
-		report, err := approval.Pending(cfg, v)
-		if err != nil {
+		res := manage.ApproveAfterChange(context.Background(), v, before, cfg, direct,
+			manage.ApprovalSweepNewlyOpened)
+		if res.CheckErr != nil {
 			return approvalSweepMsg{}
 		}
-		var names []string
-		var stayedOpen string
-		forwardOpen := false
-		for _, c := range report.Open {
-			switch {
-			case c.Connection == direct && !releaseChanged(c) &&
-				(!directWasOpen || approval.DirectApprovable(directChange)):
-				names = append(names, c.Connection)
-			case c.Connection == direct:
-				// Open for a reason the connection's own form never showed: only Approvals (6), or the form
-				// itself once the hidden field is reviewed there, may release it.
-				stayedOpen = c.Connection
-				forwardOpen = releaseChanged(c)
-			case !beforeOpen[c.Connection]:
-				names = append(names, c.Connection)
-			}
-		}
 		note := ""
-		if stayedOpen != "" && forwardOpen {
+		if res.StayedOpen != "" && res.ForwardChanged {
 			// A release of payload secrets is a decision of its own, never approved in passing.
 			note = fmt.Sprintf("; %s stays open: its forward_secrets changed, which only an approval in "+
-				"Approvals (%d) releases", stayedOpen, int(sectionApprovals)+1)
-		} else if stayedOpen != "" {
+				"Approvals (%d) releases", res.StayedOpen, int(sectionApprovals)+1)
+		} else if res.StayedOpen != "" {
 			note = fmt.Sprintf("; %s stays open: its service or credential changed outside this form; "+
-				"review it in Approvals (%d)", stayedOpen, int(sectionApprovals)+1)
+				"review it in Approvals (%d)", res.StayedOpen, int(sectionApprovals)+1)
 		}
-		if len(names) == 0 {
-			return approvalSweepMsg{note: note}
-		}
-		approved, warning, err := approval.Approve(context.Background(), cfg, v, names)
 		switch {
-		case err != nil:
+		case res.ApproveErr != nil:
 			return approvalSweepMsg{note: note + "; warning: no connection was approved to read from the vault: " +
-				redactor.Apply(err.Error())}
-		case warning != "":
-			return approvalSweepMsg{note: note + "; warning: " + warning}
-		case len(approved) > 0:
+				redactor.Apply(res.ApproveErr.Error())}
+		case res.Warning != "":
+			return approvalSweepMsg{note: note + "; warning: " + res.Warning}
+		case len(res.Approved) > 0:
 			return approvalSweepMsg{note: note + fmt.Sprintf("; approved %d connection(s) to read from the vault: %s",
-				len(approved), strings.Join(approved, ", "))}
+				len(res.Approved), strings.Join(res.Approved, ", "))}
 		}
 		return approvalSweepMsg{note: note}
 	}
-}
-
-// releaseChanged reports whether an approved connection's release of payload secrets differs from what was
-// approved. Such a change is a decision of its own: no save approves it in passing, not even the connection's
-// own form, which shows the list but not what each listed credential's fields mean for an approval. A
-// connection that was never approved is new, and a person creating it has chosen its release.
-func releaseChanged(c approval.Change) bool {
-	if c.New {
-		return false
-	}
-	for _, f := range c.Fields {
-		if f.Field == approval.FieldForward {
-			return true
-		}
-	}
-	return false
 }
 
 // revokeApproval removes the approval of a connection just deleted, in an encrypted vault only; an
@@ -604,7 +509,7 @@ func (m *Model) approvalChange(name string) (approval.Change, bool) {
 	if unavailable != "" {
 		return approval.Change{}, false
 	}
-	return openChange(report, name)
+	return manage.OpenChange(report, name)
 }
 
 // loadApprovalOrigin reads where the change of name came from, as a command: reading the log never runs on

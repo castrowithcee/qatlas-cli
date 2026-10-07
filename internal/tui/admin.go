@@ -17,7 +17,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 )
 
 // adminAuth is the masked admin passphrase dialog requireAdmin opens while it is waiting for one, and nil
@@ -59,11 +59,7 @@ type adminVerifiedMsg struct {
 // it, runs nothing: whatever screen opened it is left exactly as it was, with every unsaved field still
 // there.
 func (m *Model) requireAdmin(action func() tea.Cmd) tea.Cmd {
-	v := m.secrets.Vault()
-	if v == nil {
-		return action()
-	}
-	state, err := v.State()
+	required, locked, err := manage.AdminRequired(m.secrets.Vault())
 	if err != nil {
 		// Failing open here would let a managing action through without ever having checked whether the
 		// vault is even encrypted, let alone unlocked: refuse it instead, the same way every other write
@@ -71,14 +67,14 @@ func (m *Model) requireAdmin(action func() tea.Cmd) tea.Cmd {
 		m.fail = m.redactor.Apply(err.Error())
 		return nil
 	}
-	if state == vault.StateAbsent || state == vault.StateUnencrypted {
+	if !required {
 		return action()
 	}
 	if m.adminSessionActive() {
 		m.touchAdminSession()
 		return action()
 	}
-	m.openAdminPrompt(state == vault.StateLocked, m.screen, action)
+	m.openAdminPrompt(locked, m.screen, action)
 	return nil
 }
 
@@ -148,13 +144,7 @@ func (m *Model) verifyAdminPassphrase(passphrase string, locked bool, back scree
 	m.vaultBusy = true
 	m.busy = "checking the vault passphrase"
 	return func() tea.Msg {
-		var err error
-		if locked {
-			_, err = v.Unlock(passphrase)
-		} else {
-			err = v.VerifyPassphrase(passphrase)
-		}
-		return adminVerifiedMsg{err: err, locked: locked, back: back, action: action}
+		return adminVerifiedMsg{err: manage.VerifyAdmin(v, passphrase), locked: locked, back: back, action: action}
 	}
 }
 
@@ -165,7 +155,7 @@ func (m *Model) verifyAdminPassphrase(passphrase string, locked bool, back scree
 func (m *Model) handleAdminVerified(msg adminVerifiedMsg) tea.Cmd {
 	m.vaultBusy, m.busy = false, ""
 	if msg.err != nil {
-		if errors.Is(msg.err, vault.ErrWrongPassphrase) {
+		if errors.Is(msg.err, manage.ErrWrongPassphrase) {
 			m.openAdminPrompt(msg.locked, msg.back, msg.action)
 			m.fail = "wrong passphrase"
 			return nil
@@ -222,36 +212,25 @@ func (m *Model) adminSessionHint() string {
 // on its own, such as the vault form's "change passphrase", "turn off encryption", and "migrate
 // credentials.yaml" (see handleVaultAction and handleVaultPassphraseVerified in vaultsettings.go): each of
 // those is every bit as much a proof of admin as answering requireAdmin's own dialog, and asking twice in the
-// same breath would only be worse for no more security.
-func (m *Model) startAdminSession() { m.touchAdminSession() }
+// same breath would only be worse for no more security. With vault.admin_timeout: 0 the session keeps no
+// deadline, so adminSessionActive is never true and every next managing action asks again.
+func (m *Model) startAdminSession() { m.admin.Grant(m.cfg.VaultAdminTimeout()) }
 
-// touchAdminSession renews this window's idle deadline to vault.admin_timeout from now, or, when it is 0,
-// leaves no deadline to renew at all: adminSessionActive is then never true, so every next managing action
-// asks again, which is what vault.admin_timeout: 0 means.
-func (m *Model) touchAdminSession() {
-	timeout := m.cfg.VaultAdminTimeout()
-	if timeout <= 0 {
-		m.adminSessionUntil = time.Time{}
-		return
-	}
-	m.adminSessionUntil = time.Now().Add(timeout)
-}
+// touchAdminSession renews this window's idle deadline to vault.admin_timeout from now.
+func (m *Model) touchAdminSession() { m.admin.Touch(m.cfg.VaultAdminTimeout()) }
 
 // adminSessionActive reports whether this window's admin session is active right now.
-func (m *Model) adminSessionActive() bool {
-	return !m.adminSessionUntil.IsZero() && time.Now().Before(m.adminSessionUntil)
-}
+func (m *Model) adminSessionActive() bool { return m.admin.Active() }
 
 // touchAdminSessionIfActive renews the session's idle deadline on every key this editor handles, whatever
 // screen it lands on: activity means any key press in this window, not only the managing actions the
 // session gates, so reading around the editor keeps a session alive the same way changing something does.
 // It never starts a session on its own; only requireAdmin, or one of the flows startAdminSession's own
 // comment names, does that.
-func (m *Model) touchAdminSessionIfActive() {
-	if m.adminSessionActive() {
-		m.touchAdminSession()
-	}
-}
+func (m *Model) touchAdminSessionIfActive() { m.touchAdminSession() }
+
+// endAdminSession ends this window's admin session.
+func (m *Model) endAdminSession() { m.admin.End() }
 
 // AdminSessionActive reports whether this window's admin session is active right now: other parts of this
 // editor that need to show or use that state can ask this instead of duplicating the idle-timeout
@@ -261,9 +240,4 @@ func (m *Model) AdminSessionActive() bool { return m.adminSessionActive() }
 // AdminSessionRemaining reports how long this window's admin session stays active, or zero when there is
 // none right now (also true for vault.admin_timeout: 0, which never keeps one at all). Rounding it to
 // minutes for a header belongs to that header, not here.
-func (m *Model) AdminSessionRemaining() time.Duration {
-	if !m.adminSessionActive() {
-		return 0
-	}
-	return time.Until(m.adminSessionUntil)
-}
+func (m *Model) AdminSessionRemaining() time.Duration { return m.admin.Remaining() }

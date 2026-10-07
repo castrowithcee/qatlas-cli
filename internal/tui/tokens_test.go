@@ -279,7 +279,7 @@ func TestTokenValueIsShownOnlyOnRequest(t *testing.T) {
 	}
 
 	pump(t, m, "s")
-	m.adminSessionUntil = time.Now().Add(-time.Minute)
+	m.admin.End()
 	if strings.Contains(screenOf(m), token.Value) {
 		t.Error("the value stays shown after the admin session lapsed")
 	}
