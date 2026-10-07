@@ -36,6 +36,33 @@ const (
 	ClassProviderError   Class = "provider-error"
 )
 
+// Explain says what a person checks next for a failed connection test of the given class. subject names
+// what answered or refused, such as the provider's display name, and leads the sentence where the class is
+// about the provider rather than the network. Every surface shows this one text.
+func Explain(class Class, subject string) string {
+	switch class {
+	case ClassUnreachable:
+		return "the server did not answer; check the base URL and network"
+	case ClassTLS:
+		return "the secure connection failed; check the server certificate and URL"
+	case ClassAuth:
+		return subject + " rejected the credential or it lacks permission"
+	case ClassPermission:
+		return subject + " accepted the credential but refused the operation"
+	case ClassTimeout:
+		return subject + " did not answer before the request deadline"
+	case ClassRateLimited:
+		return subject + " is rate-limiting requests; wait and try again"
+	case ClassInvalidResponse:
+		return subject + " returned an invalid response"
+	case ClassProviderError:
+		return subject + " returned an unusable response; check the root URL and API access"
+	case ClassNotFound:
+		return subject + " did not find the target; check the target and whether the credential may see it"
+	}
+	return "see the class for what to check"
+}
+
 // Cause is the stable, safe diagnosis of a transport failure that happened before a status code existed.
 // It never carries a URL, a target, a header, or a raw operating system message, so it is published with
 // the unreachable class instead of replacing it. An error the typed chain cannot attribute stays

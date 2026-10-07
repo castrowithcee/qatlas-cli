@@ -1525,7 +1525,7 @@ func TestConnectionDescriptionIsEditedThroughTheForm(t *testing.T) {
 	focusField(t, m, "description")
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
 	for _, want := range []string{"description", "what an agent uses this route for",
-		"issues in the test repository", "discovery publishes it", "never carry a secret"} {
+		"customer records", "discovery publishes it", "never carry a secret"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the connection form does not say %q:\n%s", want, screenOf(m))
 		}

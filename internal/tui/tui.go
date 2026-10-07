@@ -228,7 +228,7 @@ const (
 	// descriptionHint names the one consequence that sets this field apart from everything else in the
 	// editor: what is typed here is published by discovery, so it is the one place where free text can
 	// carry a secret out of this machine.
-	descriptionHint = "optional; what an agent uses this route for, e.g. 'issues in the test repository, " +
+	descriptionHint = "optional; what an agent uses this route for, e.g. 'customer records, " +
 		"read and create'. discovery publishes it, so it must never carry a secret or personal data"
 	// providerNoteHint says the same for the note of a provider, and that one note serves every service
 	// of that provider rather than this service alone.
@@ -4421,21 +4421,7 @@ func (m *Model) testLine() string {
 		return "\n" + m.wrapped(okStyle,
 			fmt.Sprintf("[ok] %s: ok - %s accepted the connection", m.testName, providerName))
 	case m.testClass != "":
-		explanation := map[provider.Class]string{
-			provider.ClassUnreachable:     "the server did not answer; check the base URL and network",
-			provider.ClassTLS:             "the secure connection failed; check the server certificate and URL",
-			provider.ClassAuth:            providerName + " rejected the credential or it lacks permission",
-			provider.ClassPermission:      providerName + " accepted the credential but refused the operation",
-			provider.ClassTimeout:         providerName + " did not answer before the request deadline",
-			provider.ClassRateLimited:     providerName + " is rate-limiting requests; wait and try again",
-			provider.ClassInvalidResponse: providerName + " returned an invalid response",
-			provider.ClassProviderError:   providerName + " returned an unusable response; check the root URL and API access",
-			provider.ClassNotFound: providerName + " did not find the target; check the target and whether the " +
-				"credential may see it",
-		}[m.testClass]
-		if providerName == "BookStack" && m.testClass == provider.ClassAuth {
-			explanation = "BookStack rejected the token or its user lacks permission"
-		}
+		explanation := provider.Explain(m.testClass, providerName)
 		return "\n" + m.wrapped(failStyle,
 			fmt.Sprintf("[failed] %s: %s - %s", m.testName, m.testClass, explanation))
 	}

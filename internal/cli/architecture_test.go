@@ -174,7 +174,6 @@ var architectureExceptions = []archException{
 	{ruleProviderNames, "internal/helptopics/helptopics.go", "seatable", debtName},
 	{ruleProviderNames, "internal/selfupdate/selfupdate.go", "GitHub", releaseHost},
 	{ruleProviderNames, "internal/selfupdate/selfupdate.go", "github.", releaseHost},
-	{ruleProviderNames, "internal/tui/tui.go", "BookStack", debtName},
 	// Rule 3: provider dependencies.
 	{ruleProviderDeps, "internal/provider/bookstack/attachments.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/attachments_test.go", "internal/output", debtOutput},

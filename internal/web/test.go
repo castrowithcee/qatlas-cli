@@ -43,7 +43,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), connectionTestTimeout)
 	defer cancel()
 	class, err := s.tester(ctx, name)
-	providerName := name
+	providerName := "the provider"
 	if metadata, found := cfg.ProviderMetadata(cfg.Services[conn.Service].Provider); found {
 		providerName = metadata.Name
 	}
@@ -52,8 +52,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 
 // testResultText turns a Tester's own outcome into the one line the result page shows, redacted exactly
 // the way every other error this package displays is (see s.redact): never a secret, whatever the provider
-// answered with. It reads the same stable provider.Class internal/tui's own testLine does, in its own
-// words, since neither package shares a rendering layer with the other.
+// answered with. The explanation of a failed class is provider.Explain, the same text internal/tui shows.
 func testResultText(class provider.Class, err error, providerName string, redact func(string) string) string {
 	if err != nil {
 		return "Connection test could not run: " + redact(err.Error())
@@ -61,23 +60,6 @@ func testResultText(class provider.Class, err error, providerName string, redact
 	if class == provider.ClassOK {
 		return fmt.Sprintf("Test succeeded: %s accepted the connection.", providerName)
 	}
-	explanation, ok := testClassExplanation[class]
-	if !ok {
-		explanation = "see the class for what to check"
-	}
+	explanation := provider.Explain(class, providerName)
 	return fmt.Sprintf("Test failed (%s): %s", class, explanation)
-}
-
-// testClassExplanation mirrors internal/tui's own testLine explanation map, in fewer words: what a person
-// checks next for each stable outcome a connection test can report.
-var testClassExplanation = map[provider.Class]string{
-	provider.ClassUnreachable:     "the server did not answer; check the base URL and network",
-	provider.ClassTLS:             "the secure connection failed; check the server certificate and URL",
-	provider.ClassAuth:            "the provider rejected the credential or it lacks permission",
-	provider.ClassPermission:      "the provider accepted the credential but refused the operation",
-	provider.ClassTimeout:         "the provider did not answer before the request deadline",
-	provider.ClassRateLimited:     "the provider is rate-limiting requests; wait and try again",
-	provider.ClassInvalidResponse: "the provider returned an invalid response",
-	provider.ClassProviderError:   "the provider returned an unusable response; check the root URL and API access",
-	provider.ClassNotFound:        "the provider did not find the target; check the target and whether the credential may see it",
 }
