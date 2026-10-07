@@ -10,7 +10,7 @@ const (
 	contentGroup = "content"
 	// commentsGroup is the group of the page comment tools.
 	commentsGroup = "comments"
-	// filesGroup is the group of the tools that read, download, and change attachments.
+	// filesGroup is the group of the tools that read, download, and change attachments and images.
 	filesGroup = "files"
 	// administrationGroup is the group of the instance information tools.
 	administrationGroup = "administration"
@@ -20,7 +20,7 @@ const (
 var toolGroups = []config.ToolGroup{
 	{ID: contentGroup, Title: "Content", Description: "Pages, search, books, chapters, and shelves of the knowledge base"},
 	{ID: commentsGroup, Title: "Comments", Description: "Comments and replies on pages"},
-	{ID: filesGroup, Title: "Files", Description: "Attachments of pages"},
+	{ID: filesGroup, Title: "Files", Description: "Attachments and images of pages"},
 	{ID: administrationGroup, Title: "Administration", Description: "Information about the BookStack instance"},
 }
 

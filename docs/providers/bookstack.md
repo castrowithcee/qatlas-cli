@@ -10,7 +10,7 @@ updated: 2026-10-07
 # BookStack
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
-chapters, shelves, tags, page comments, and page attachments, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, comments, and attachments (`create`),
+chapters, shelves, tags, page comments, page attachments, and gallery images, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, comments, and attachments (`create`),
 changing or moving pages and attachments and changing books, chapters, shelves, and comments (`update`), and deleting pages, books, chapters, shelves, comments, and attachments (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
@@ -24,7 +24,7 @@ starts a new connection on the setup profile `read`, which ticks `[read]` and
 `[bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list,
 bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list,
 bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.comments.list, bookstack.comments.get,
-bookstack.attachments.list, bookstack.attachments.get, bookstack.system.get, bookstack.content.export]`. A profile is a visible starting
+bookstack.attachments.list, bookstack.attachments.get, bookstack.images.list, bookstack.images.get, bookstack.system.get, bookstack.content.export]`. A profile is a visible starting
 selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
 saving, and a saved connection never follows a profile.
 
@@ -202,7 +202,7 @@ naming it.
 ## Tool groups
 
 BookStack tools belong to the group `content` (pages, search, books, chapters, shelves, and tags), the group
-`comments` (page comments), the group `files` (page attachments), or the group `administration` (`bookstack.system.get`). Tool lists and pickers
+`comments` (page comments), the group `files` (page attachments and images), or the group `administration` (`bookstack.system.get`). Tool lists and pickers
 show the group so that agents and people can find tools by subject.
 
 ## Comments
@@ -336,9 +336,30 @@ tools require confirmation and are part of no profile. `link` and `upload` creat
 is idempotent; `replace` updates and is not idempotent; `delete` requires an entry in the `tools` list and the
 `delete` permission (see Deleting).
 
+## Images
+
+Gallery images and drawings belong to pages. `bookstack.images.list` takes an optional `page_id` (required on a
+connection bound to books), an optional `type` (`gallery` or `drawio`), `limit`, and `offset`, and lists `id`, `name`,
+`type`, `page_id`, `url`, `created_by`, `updated_by`, `created_at`, and `updated_at`, without any image data. The
+filters sent to BookStack are only an optimization: every row is checked again for page and type.
+
+`bookstack.images.get` takes the `id` and returns the same fields plus `thumbs` (the `gallery` and `display` urls) and
+`content` (the ready-made `html` and `markdown` snippets that embed the image). Names, urls, and snippets are
+untrusted data and a url is never fetched.
+
+`bookstack.images.download` takes the `id` and `local_path` and writes the image data to the local file, streamed up
+to 64 MiB within 10 minutes. The answer carries `id`, `name`, `size`, `sha256`, and `content_type` only, never the
+data. An existing file is replaced only with confirmation. Writing needs the connection's local file release for
+writing. Downloading by an arbitrary image url is not offered.
+
+On a connection bound to books, the image is bound through its page: the metadata is read first and the page of the
+image is read once as proof, and only then is the data requested. An image of another book is refused as
+`invalid-request` without naming the other book, page, or image. A connection without targets reads no proof. These
+three tools are read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
+
 ## Limits
 
-Reading accepts a response of up to 16 MiB (an inline export 8 MiB, a download 512 MiB; an attachment answer 96 MiB of content, an attachment download 72 MiB); a larger one fails as `invalid-provider-response`. Writing
+Reading accepts a response of up to 16 MiB (an inline export 8 MiB, a download 512 MiB; an attachment answer 96 MiB of content, an attachment download 72 MiB, an image download 64 MiB); a larger one fails as `invalid-provider-response`. Writing
 accepts at most 1 MiB of page content (`html` or `markdown`) and an attachment upload of at most 50 MiB. Redirects are never followed: a 3xx answer is a
 `provider-error`.
 
