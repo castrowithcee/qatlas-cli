@@ -53,10 +53,11 @@ var (
 	booksUpdate = capability.Descriptor{
 		ID: Provider + ".books.update", Version: 1, Title: "Update a BookStack book",
 		Description: "Change the name, description, tags, or default page template of one book by identifier. " +
-			"tags replaces all existing tags of the book; default_template_id null removes the template",
+			"tags replaces all existing tags of the book; default_template_id null removes the template; " +
+			"remove_cover true removes the cover image",
 		Tags: []string{"knowledge", "books", "bookstack", "update"}, Provider: Provider,
 		Risk:         bookWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},` + containerProperties + `,"default_template_id":{"type":["integer","null"],"minimum":1}},"required":["id"],"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1},"name":{"type":"string","minLength":1,"maxLength":255},` + containerProperties + `,"default_template_id":{"type":["integer","null"],"minimum":1},"remove_cover":{"type":"boolean"}},"required":["id"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(bookWriteOutput),
 		Arguments: []capability.Argument{
 			{Name: "id", Description: "Book identifier", Required: true},
@@ -65,6 +66,7 @@ var (
 			{Name: "description_html", Description: "New description as HTML, at most 2000 characters; mutually exclusive with description"},
 			{Name: "tags", Description: "Replaces all tags of the book: at most 50 name and value pairs, each at most 255 characters; an empty list removes all tags"},
 			{Name: "default_template_id", Description: "Identifier of a template page; null removes the default template"},
+			removeCoverArgument,
 		},
 		Fields: bookWriteFields,
 	}
@@ -187,6 +189,8 @@ type containerMutation struct {
 	Tags              *[]tagJSON      `json:"tags,omitempty"`
 	Priority          *int64          `json:"priority,omitempty"`
 	DefaultTemplateID json.RawMessage `json:"default_template_id,omitempty"`
+	// Image is the JSON null that removes a cover, set from remove_cover and never taken from arguments.
+	Image json.RawMessage `json:"image,omitempty"`
 }
 
 // templateID returns the template page to bind: zero when none is given or the template is removed.
@@ -203,7 +207,7 @@ func (m containerMutation) templateID() (int64, error) {
 
 func (m containerMutation) empty() bool {
 	return m.Name == "" && m.BookID == 0 && m.Description == "" && m.DescriptionHTML == "" && m.Tags == nil &&
-		m.Priority == nil && len(m.DefaultTemplateID) == 0
+		m.Priority == nil && len(m.DefaultTemplateID) == 0 && len(m.Image) == 0
 }
 
 // validateText applies the name, description, and tag limits that books, chapters, and shelves share.
@@ -244,9 +248,14 @@ func decodeContainer(raw json.RawMessage, op string) (int64, containerMutation, 
 	var input struct {
 		ID int64 `json:"id"`
 		containerMutation
+		RemoveCover bool `json:"remove_cover"`
 	}
 	if json.Unmarshal(raw, &input) != nil {
 		return 0, containerMutation{}, providerError(op, "the validated arguments could not be read")
+	}
+	input.Image = nil
+	if input.RemoveCover {
+		input.Image = json.RawMessage("null")
 	}
 	return input.ID, input.containerMutation, nil
 }

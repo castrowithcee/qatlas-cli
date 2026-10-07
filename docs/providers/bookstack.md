@@ -106,8 +106,8 @@ at most 1900 characters) and `description_html` (at most 2000 characters), `tags
 `chapters.create` and `chapters.update` take the same fields and `priority` (0 or more); `chapters.create`
 requires `book_id` and `name`, `chapters.update` requires only `id`. `books.update` and `chapters.update`
 need at least one field to change. A violation of these limits is refused locally as `invalid-request` before
-any secret is read and before any request. A description cannot be emptied through these tools. Cover
-images and deleting are not available.
+any secret is read and before any request. A description cannot be emptied through these tools. Deleting is
+not available; for cover images see below.
 
 - `tags` replaces all existing tags; an empty list removes them. Omit `tags` to keep them.
 - `default_template_id` is the identifier of a template page. On `update`, `null` removes the default
@@ -149,8 +149,19 @@ never be rendered or run.
 
 Violations of these limits are refused locally before any secret is read and before any request. The result
 shows the changed shelf without its books; read it with `shelves.get`. Both tools require confirmation and are
-part of no profile; `create` is not idempotent. Each change is sent once and never retried. Cover images and
-deleting shelves are not available.
+part of no profile; `create` is not idempotent. Each change is sent once and never retried. Deleting shelves is
+not available.
+
+### Cover images
+
+`bookstack.books.setcover` and `bookstack.shelves.setcover` take `id` and `local_path` and set the cover image
+from a local file (png, jpg, jpeg, gif, or webp, at most 50 MiB, streamed from disk from a directory the
+connection releases for reading). The file type is checked before any secret is read or any file is opened. The
+request is a multipart `POST` with `_method=PUT` and the file in the field `image`. `books.update` and
+`shelves.update` take `remove_cover: true` to remove the cover (sent as `image: null`); it can be combined with
+the other fields and is a valid change on its own, and `false` sends nothing. On a connection bound to books the
+book `id` must be a bound book; the shelf variants are refused on such a connection. All of these require
+confirmation, are not part of any profile, send one request without retry, and `setcover` is not idempotent.
 
 ## Tags and instance information
 
