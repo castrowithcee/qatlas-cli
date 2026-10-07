@@ -307,7 +307,7 @@ func TestEveryToolHasAGroupTheRegistryAccepts(t *testing.T) {
 		if strings.HasPrefix(d.ID, Provider+".comments.") {
 			want = "comments"
 		}
-		if strings.HasPrefix(d.ID, Provider+".attachments.") {
+		if strings.HasPrefix(d.ID, Provider+".attachments.") || strings.HasPrefix(d.ID, Provider+".images.") {
 			want = "files"
 		}
 		if d.Group != want {
