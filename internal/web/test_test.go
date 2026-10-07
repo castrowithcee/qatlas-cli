@@ -144,3 +144,14 @@ func TestConnectionTestButtonRequiresSessionAndCSRF(t *testing.T) {
 		t.Fatalf("without a CSRF value: status = %d, want 403", noCSRF.Code)
 	}
 }
+
+func TestTestResultTextUsesTheSharedExplanation(t *testing.T) {
+	for _, class := range []provider.Class{provider.ClassUnreachable, provider.ClassTLS, provider.ClassAuth,
+		provider.ClassPermission, provider.ClassTimeout, provider.ClassRateLimited,
+		provider.ClassInvalidResponse, provider.ClassProviderError, provider.ClassNotFound} {
+		want := "Test failed (" + string(class) + "): " + provider.Explain(class, "Wiki")
+		if got := testResultText(class, nil, "Wiki", func(s string) string { return s }); got != want {
+			t.Errorf("class %q: got %q, want %q", class, got, want)
+		}
+	}
+}

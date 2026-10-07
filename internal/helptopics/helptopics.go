@@ -99,7 +99,7 @@ const start = `Qatlas reaches the services you already run through named connect
 1. Run 'qatlas tui'. The editor opens on an empty configuration and writes nothing before the first save. ? in the editor shows these help topics.
 2. Press c for the guided setup: choose a provider, its service (the root URL of the instance), a credential (its secrets go to the system keyring, the vault, or environment variables), the scope, and the permissions. The summary saves the connection.
 3. Test it: the summary offers the test right away, and t in the Connections list tests the selected connection again. [ok] means the provider accepted the connection.
-4. Find a tool and run it through the connection:
+4. Find a tool and run it through the connection, for example with a BookStack connection:
 
      qatlas connections bookstack
      qatlas tools bookstack

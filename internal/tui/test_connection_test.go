@@ -50,7 +50,7 @@ func TestConnectionTestClasses(t *testing.T) {
 		provider.ClassOK:              "accepted the connection",
 		provider.ClassUnreachable:     "check the base URL and network",
 		provider.ClassTLS:             "check the server certificate and URL",
-		provider.ClassAuth:            "rejected the token or its user lacks permission",
+		provider.ClassAuth:            "rejected the credential or it lacks permission",
 		provider.ClassPermission:      "accepted the credential but refused the operation",
 		provider.ClassTimeout:         "did not answer before the request deadline",
 		provider.ClassRateLimited:     "wait and try again",
