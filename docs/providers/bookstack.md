@@ -10,7 +10,7 @@ updated: 2026-10-07
 # BookStack
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
-chapters, shelves, tags, and page comments, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, and comments (`create`),
+chapters, shelves, tags, page comments, and page attachments, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, and comments (`create`),
 changing or moving pages and changing books, chapters, shelves, and comments (`update`), and deleting pages, books, chapters, shelves, and comments (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
@@ -24,7 +24,7 @@ starts a new connection on the setup profile `read`, which ticks `[read]` and
 `[bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list,
 bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list,
 bookstack.shelves.get, bookstack.tags.list, bookstack.tags.values, bookstack.comments.list, bookstack.comments.get,
-bookstack.system.get, bookstack.content.export]`. A profile is a visible starting
+bookstack.attachments.list, bookstack.attachments.get, bookstack.system.get, bookstack.content.export]`. A profile is a visible starting
 selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
 saving, and a saved connection never follows a profile.
 
@@ -202,7 +202,7 @@ naming it.
 ## Tool groups
 
 BookStack tools belong to the group `content` (pages, search, books, chapters, shelves, and tags), the group
-`comments` (page comments), or the group `administration` (`bookstack.system.get`). Tool lists and pickers
+`comments` (page comments), the group `files` (page attachments), or the group `administration` (`bookstack.system.get`). Tool lists and pickers
 show the group so that agents and people can find tools by subject.
 
 ## Comments
@@ -282,9 +282,33 @@ On a connection bound to books, a `book` is checked against the books before the
 any request; a `chapter` or `page` is bound through one proof read of the item (without targets this read is
 skipped).
 
+## Attachments
+
+Attachments are read on pages only. `bookstack.attachments.list` takes an optional `page_id` (required on a
+connection bound to books), `limit`, and `offset`, and lists `id`, `name`, `extension`, `page_id`, `external` (true
+for a link), `order`, `created_by`, `updated_by`, `created_at`, and `updated_at`, without any content. The filter
+sent to BookStack is only an optimization: every row is checked again for the page. BookStack before v26.09.1 also
+lists attachments of pages in the recycle bin.
+
+`bookstack.attachments.get` takes the `id` and returns the same fields plus `links` (ready-made html and markdown
+links) and, for a link attachment, its target `url`. The target is untrusted data and is never fetched. BookStack
+returns the content of a file inside the JSON answer as base64; the tool decodes it as a stream and drops it
+without holding it, and the content of the answer is limited to 96 MiB.
+
+`bookstack.attachments.download` takes the `id` and `local_path` and writes the content of a file attachment to
+the local file, decoded as a stream, up to 72 MiB within 10 minutes. A link attachment is refused and leaves no
+file. The answer carries `id`, `name`, `size`, and `sha256` only, never the content. An existing file is replaced
+only with confirmation. Writing needs the connection's local file release for writing.
+
+On a connection bound to books, the page of the attachment is proven to lie in a bound book before anything is
+returned or written: the metadata comes first in the answer of BookStack, the page is read once as proof, and only
+then the first byte of content is decoded; an attachment of another book is refused as `invalid-request` without
+naming the other book, page, or attachment. A connection without targets reads no proof. All three tools are
+read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
+
 ## Limits
 
-Reading accepts a response of up to 16 MiB (an inline export 8 MiB, a download 512 MiB); a larger one fails as `invalid-provider-response`. Writing
+Reading accepts a response of up to 16 MiB (an inline export 8 MiB, a download 512 MiB; an attachment answer 96 MiB of content, an attachment download 72 MiB); a larger one fails as `invalid-provider-response`. Writing
 accepts at most 1 MiB of page content (`html` or `markdown`). Redirects are never followed: a 3xx answer is a
 `provider-error`.
 

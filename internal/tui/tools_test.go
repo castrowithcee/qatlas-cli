@@ -126,7 +126,7 @@ func TestAConnectionWithoutToolsIsSavedWithoutTools(t *testing.T) {
 		t.Fatalf("save failed: %s", m.fail)
 	}
 	if got := savedTools(t, path, reg, "fresh"); !reflect.DeepEqual(got,
-		[]string{"bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list",
+		[]string{"bookstack.attachments.get", "bookstack.attachments.list", "bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list",
 			"bookstack.comments.get", "bookstack.comments.list", "bookstack.content.export", "bookstack.content.search", "bookstack.pages.get", "bookstack.pages.list", "bookstack.shelves.get", "bookstack.shelves.list", "bookstack.system.get", "bookstack.tags.list", "bookstack.tags.values"}) {
 		t.Fatalf("a new connection was saved with tools %#v, want the recommended read tools", got)
 	}
@@ -152,7 +152,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 		t.Fatalf("space on the tool list opened screen %v, want the picker", m.screen)
 	}
 	view := screenOf(m)
-	for _, want := range []string{"0/31 ticked", "Content (25)", "Comments (5)", "Administration (1)"} {
+	for _, want := range []string{"0/34 ticked", "Content (25)", "Comments (5)", "Files (3)", "Administration (1)"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("picker lacks %q:\n%s", want, view)
 		}
@@ -187,7 +187,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	focusField(t, m, toolListLabel)
 	// The grouped picker starts on its all-groups row: the first space ticks everything, the second clears it.
 	press(t, m, " ", " ", " ", "enter")
-	if !strings.Contains(screenOf(m), "none of 31 ticked: no tool is offered") {
+	if !strings.Contains(screenOf(m), "none of 34 ticked: no tool is offered") {
 		t.Fatalf("an empty selection does not say that it closes the route:\n%s", screenOf(m))
 	}
 	pump(t, m, "f2")

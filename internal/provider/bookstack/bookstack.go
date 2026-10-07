@@ -234,10 +234,10 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read content", Recommended: true,
-			Description: "lists and reads pages, books, chapters, shelves, tags, and page comments, reads instance information, and searches content; changes nothing in BookStack",
+			Description: "lists and reads pages, books, chapters, shelves, tags, page comments, and attachments of pages, reads instance information, and searches content; changes nothing in BookStack",
 			Tools: []string{pagesList.ID, pagesGet.ID, contentSearch.ID, booksList.ID, booksGet.ID,
 				chaptersList.ID, chaptersGet.ID, shelvesList.ID, shelvesGet.ID, tagsList.ID, tagsValues.ID, commentsList.ID,
-				commentsGet.ID, systemGet.ID, contentExport.ID},
+				commentsGet.ID, attachmentsList.ID, attachmentsGet.ID, systemGet.ID, contentExport.ID},
 		}},
 	}, func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor) (provider.Class, error) {
@@ -280,6 +280,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withCommentsGroup(commentsDelete), Handler: capability.Handler(invokeCommentsDelete)},
 		capability.Operation{Descriptor: withGroup(contentExport), Handler: capability.Handler(invokeContentExport)},
 		capability.Operation{Descriptor: withGroup(contentDownload), Handler: capability.Handler(invokeContentDownload)},
+		capability.Operation{Descriptor: withFilesGroup(attachmentsList), Handler: capability.Handler(invokeAttachmentsList)},
+		capability.Operation{Descriptor: withFilesGroup(attachmentsGet), Handler: capability.Handler(invokeAttachmentsGet)},
+		capability.Operation{Descriptor: withFilesGroup(attachmentsDownload), Handler: capability.Handler(invokeAttachmentsDownload)},
 		capability.Operation{Descriptor: withAdministrationGroup(systemGet), Handler: capability.Handler(invokeSystemGet)},
 	)
 }
