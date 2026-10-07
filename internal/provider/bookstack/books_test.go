@@ -302,7 +302,8 @@ func TestEveryToolHasAGroupTheRegistryAccepts(t *testing.T) {
 	for _, d := range reg.Provider(Provider) {
 		want := "content"
 		if d.ID == systemGet.ID || d.ID == contentPermissionsGet.ID || d.ID == contentPermissionsUpdate.ID ||
-			strings.HasPrefix(d.ID, Provider+".recyclebin.") {
+			strings.HasPrefix(d.ID, Provider+".recyclebin.") || strings.HasPrefix(d.ID, Provider+".users.") ||
+			strings.HasPrefix(d.ID, Provider+".roles.") || strings.HasPrefix(d.ID, Provider+".auditlog.") {
 			want = "administration"
 		}
 		if strings.HasPrefix(d.ID, Provider+".comments.") {
