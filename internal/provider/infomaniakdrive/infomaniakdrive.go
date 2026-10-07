@@ -67,7 +67,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -149,7 +148,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: "open", Message: "the Infomaniak API token is unusable"}
 	}
 	auth := "Bearer " + value.Secret
@@ -273,8 +272,7 @@ func (c *Client) request(ctx context.Context, op, method, path string, query url
 	if err != nil {
 		failure := provider.Transport(op, "Infomaniak", err)
 		var providerErr *provider.Error
-		if change && errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
-			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
+		if change && errors.As(failure, &providerErr) && providerErr.MayHaveArrived() {
 			providerErr.Message += uncertain
 		}
 		return nil, nil, failure
@@ -388,21 +386,7 @@ func invalidResponse(op, message string) error {
 // reaches Infomaniak: a drive outside the connection's allow-list, or an argument outside its schema's
 // reach. No message ever quotes the refused value.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
-}
-
-// validToken keeps an obviously unusable value out of a request header. The real check is Infomaniak's.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for i := 0; i < len(value); i++ {
-		// A header value may not carry control characters, and an Infomaniak token never does.
-		if value[i] < 0x21 || value[i] > 0x7e {
-			return false
-		}
-	}
-	return true
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // bounded keeps an oversized provider string out of a result without interpreting it.

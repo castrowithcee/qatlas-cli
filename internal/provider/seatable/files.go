@@ -736,8 +736,7 @@ func (t *trackedReader) Read(p []byte) (int, error) {
 func uncertainTransport(op string, err error, hint string) error {
 	failure := provider.Transport(op, "SeaTable", err)
 	var providerErr *provider.Error
-	if errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
-		providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
+	if errors.As(failure, &providerErr) && providerErr.MayHaveArrived() {
 		providerErr.Message += hint
 	}
 	return failure

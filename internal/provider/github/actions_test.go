@@ -358,39 +358,39 @@ func TestActionsOperatorToolsNeedExecuteAndTheirTools(t *testing.T) {
 		{"tools without operators", "github.workflowruns.rerunfailed", "listed", `{"run_id":5000}`, true,
 			&capability.UnsupportedError{}},
 		{"project connection", "github.workflows.dispatch", "project", dispatch, true,
-			&application.InvalidRequestError{}},
-		{"project observer", "github.workflowruns.list", "project", `{}`, false, &application.InvalidRequestError{}},
+			&provider.InvalidRequestError{}},
+		{"project observer", "github.workflowruns.list", "project", `{}`, false, &provider.InvalidRequestError{}},
 		{"a repository outside the targets", "github.workflowruns.list", "operator",
-			`{"repository":"octo-org/other"}`, false, &application.InvalidRequestError{}},
+			`{"repository":"octo-org/other"}`, false, &provider.InvalidRequestError{}},
 		{"unconfirmed dispatch", "github.workflows.dispatch", "operator", dispatch, false,
 			&application.ConfirmationRequiredError{}},
 		{"unconfirmed cancel", "github.workflowruns.cancel", "operator", `{"run_id":5001}`, false,
 			&application.ConfirmationRequiredError{}},
 		{"an owner argument", "github.workflowruns.rerun", "operator", `{"run_id":5000,"owner":"other"}`, true,
-			&application.InvalidRequestError{}},
+			&provider.InvalidRequestError{}},
 		{"a repository argument", "github.workflowruns.list", "operator", `{"repo":"other/repo"}`, false,
-			&application.InvalidRequestError{}},
+			&provider.InvalidRequestError{}},
 		{"a path as workflow", "github.workflows.dispatch", "operator", `{"workflow":"../x.yml","ref":"main"}`, true,
-			&application.InvalidRequestError{}},
+			&provider.InvalidRequestError{}},
 		{"a ref with two dots", "github.workflows.dispatch", "operator", `{"workflow":"release.yml","ref":"a..b"}`,
-			true, &application.InvalidRequestError{}},
+			true, &provider.InvalidRequestError{}},
 		{"a number as input", "github.workflows.dispatch", "operator",
-			`{"workflow":"release.yml","ref":"main","inputs":{"count":3}}`, true, &application.InvalidRequestError{}},
+			`{"workflow":"release.yml","ref":"main","inputs":{"count":3}}`, true, &provider.InvalidRequestError{}},
 		{"an unusable input name", "github.workflows.dispatch", "operator",
-			`{"workflow":"release.yml","ref":"main","inputs":{"a b":"x"}}`, true, &application.InvalidRequestError{}},
+			`{"workflow":"release.yml","ref":"main","inputs":{"a b":"x"}}`, true, &provider.InvalidRequestError{}},
 		{"too many inputs", "github.workflows.dispatch", "operator",
 			`{"workflow":"release.yml","ref":"main","inputs":{` + manyInputs(26) + `}}`, true,
-			&application.InvalidRequestError{}},
+			&provider.InvalidRequestError{}},
 		{"an unknown status", "github.workflowruns.list", "observer", `{"status":"broken"}`, false,
-			&application.InvalidRequestError{}},
+			&provider.InvalidRequestError{}},
 		{"a free created filter", "github.workflowruns.list", "observer", `{"created_from":">=2026-01-01"}`, false,
-			&application.InvalidRequestError{}},
+			&provider.InvalidRequestError{}},
 		{"a reversed time range", "github.workflowruns.list", "observer",
-			`{"created_from":"2026-02-01","created_to":"2026-01-01"}`, false, &application.InvalidRequestError{}},
+			`{"created_from":"2026-02-01","created_to":"2026-01-01"}`, false, &provider.InvalidRequestError{}},
 		{"a log beyond the bound", "github.workflowjobs.log", "observer", `{"job_id":7001,"max_bytes":1048576}`, false,
-			&application.InvalidRequestError{}},
+			&provider.InvalidRequestError{}},
 		{"a foreign cursor", "github.workflowruns.list", "observer", `{"cursor":"AAAAAAAAAAAAAAAAMjoxMA"}`, false,
-			&application.InvalidRequestError{}},
+			&provider.InvalidRequestError{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1074,7 +1074,7 @@ func TestRunLogsDeleteNeedsTheListConfirmationAndIsIdempotent(t *testing.T) {
 	if _, err := invoke(t, core, runLogsDelete.ID, "cleaner", arguments, false); !errors.As(err, &confirm) {
 		t.Errorf("unconfirmed delete = %v, want confirmation-required", err)
 	}
-	var invalid *application.InvalidRequestError
+	var invalid *provider.InvalidRequestError
 	if _, err := invoke(t, core, runLogsDelete.ID, "cleaner", `{"run_id":5000,"repository":"octo-org/other"}`, true); !errors.As(err, &invalid) {
 		t.Errorf("delete outside the targets = %v, want invalid-request", err)
 	}

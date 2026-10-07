@@ -1013,8 +1013,7 @@ func providerError(op, message string) error {
 // server carries the uncertainty hint.
 func transportError(op string, err error, change bool) error {
 	failure := provider.Transport(op, "the server", err)
-	if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-		failure.Cause == provider.CauseUnknown) {
+	if change && failure.MayHaveArrived() {
 		failure.Message += changeUncertain
 	}
 	return failure

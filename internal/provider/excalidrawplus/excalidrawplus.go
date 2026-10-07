@@ -36,7 +36,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -220,8 +219,7 @@ func (c *Client) sendBounded(ctx context.Context, op, method, path string, paylo
 	response, err := c.http.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "Excalidraw+", err)
-		if failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown {
+		if failure.MayHaveArrived() {
 			failure.Message += changeUncertain
 		}
 		return failure
@@ -307,7 +305,7 @@ func invalidResponse(op, message string) error {
 // invalidRequest refuses a request the connection's own configuration decides against. No message quotes
 // the refused value or names the real collection of a scene.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // bounded keeps an oversized provider string out of a result without interpreting it, never splitting a

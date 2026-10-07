@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 // The two target kinds a connection may combine, both optional and independent of each other. An n8n
@@ -75,10 +76,7 @@ func contains(values []string, want string) bool {
 
 // scopeOf reads the bound project and workflow allow-lists of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	return parseScope(values)
 }
 

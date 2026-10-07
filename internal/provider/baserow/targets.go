@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 const (
@@ -109,10 +110,7 @@ func boundScope(resolved *config.Resolved) (scope, error) {
 	if resolved == nil {
 		return scope{}, providerError("open", "no connection was selected")
 	}
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	bound, err := parseScope(values)
 	if err != nil {
 		return scope{}, providerError("open", err.Error())

@@ -343,7 +343,7 @@ func TestResultsAndRefusalsNameTheChosenTarget(t *testing.T) {
 		{"github.projectitems.list", `{"project":"octocat/3"}`, "$.project does not have the required form " +
 			"users/LOGIN/projects/NUMBER or orgs/LOGIN/projects/NUMBER"},
 	} {
-		var invalid *application.InvalidRequestError
+		var invalid *provider.InvalidRequestError
 		if _, err := invoke(t, core, tt.operation, "open", tt.arguments, false); !errors.As(err, &invalid) ||
 			err.Error() != tt.want {
 			t.Errorf("%s with a malformed target = %v, want invalid-request %q", tt.operation, err, tt.want)

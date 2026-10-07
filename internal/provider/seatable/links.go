@@ -438,8 +438,7 @@ func (c *Client) sendOnce(ctx context.Context, op, method, path, token string, b
 	if err != nil {
 		failure := provider.Transport(op, "SeaTable", err)
 		var providerErr *provider.Error
-		if errors.As(failure, &providerErr) && (providerErr.Class == provider.ClassTimeout ||
-			providerErr.Cause == provider.CauseConnectionReset || providerErr.Cause == provider.CauseUnknown) {
+		if errors.As(failure, &providerErr) && providerErr.MayHaveArrived() {
 			providerErr.Message += uncertain
 		}
 		return nil, failure

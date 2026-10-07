@@ -93,11 +93,10 @@ const (
 )
 
 const (
-	debtSurface  = "existing debt: the surface reaches the store directly instead of through the core"
-	debtProvider = "existing debt: provider code uses the application core instead of the provider contract"
-	debtOutput   = "existing debt: provider code uses the shared output package instead of the provider contract"
-	debtName     = "existing debt: help or error text names a provider instead of reading it from the registry"
-	releaseHost  = "permanent: the text names GitHub as the release host, not as a provider"
+	debtSurface = "existing debt: the surface reaches the store directly instead of through the core"
+	debtOutput  = "existing debt: provider code uses the shared output package instead of the provider contract"
+	debtName    = "existing debt: help or error text names a provider instead of reading it from the registry"
+	releaseHost = "permanent: the text names GitHub as the release host, not as a provider"
 )
 
 var architectureExceptions = []archException{
@@ -172,7 +171,6 @@ var architectureExceptions = []archException{
 	{ruleProviderNames, "internal/selfupdate/selfupdate.go", "github.", releaseHost},
 	{ruleProviderNames, "internal/tui/tui.go", "BookStack", debtName},
 	// Rule 3: provider dependencies.
-	{ruleProviderDeps, "internal/provider/baserow/baserow.go", "internal/application", debtProvider},
 	{ruleProviderDeps, "internal/provider/bookstack/attachments.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/attachments_test.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/attachmentswrite.go", "internal/output", debtOutput},
@@ -182,7 +180,6 @@ var architectureExceptions = []archException{
 	{ruleProviderDeps, "internal/provider/bookstack/books_test.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/bookstack.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/bookstack_test.go", "internal/output", debtOutput},
-	{ruleProviderDeps, "internal/provider/bookstack/comments.go", "internal/application", debtProvider},
 	{ruleProviderDeps, "internal/provider/bookstack/comments.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/comments_test.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/contentpermissions.go", "internal/output", debtOutput},
@@ -204,21 +201,9 @@ var architectureExceptions = []archException{
 	{ruleProviderDeps, "internal/provider/bookstack/shelves_test.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/tags.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/tags_test.go", "internal/output", debtOutput},
-	{ruleProviderDeps, "internal/provider/bookstack/targets.go", "internal/application", debtProvider},
 	{ruleProviderDeps, "internal/provider/bookstack/userswrite.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/userswrite_test.go", "internal/output", debtOutput},
 	{ruleProviderDeps, "internal/provider/bookstack/writes.go", "internal/output", debtOutput},
-	{ruleProviderDeps, "internal/provider/excalidrawplus/excalidrawplus.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/github/github.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/infomaniakchat/infomaniakchat.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/infomaniakdrive/infomaniakdrive.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/infomaniakmail/infomaniakmail.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/make/credentialrequests.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/make/make.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/n8n/n8n.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/penpot/penpot.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/seatableaccount/seatableaccount.go", "internal/application", debtProvider},
-	{ruleProviderDeps, "internal/provider/todoist/todoist.go", "internal/application", debtProvider},
 }
 
 func TestArchitecture(t *testing.T) {

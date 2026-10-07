@@ -45,7 +45,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -167,7 +166,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: op, Message: "the Penpot access token is unusable"}
 	}
 	if red != nil {
@@ -280,8 +279,7 @@ func (c *Client) send(ctx context.Context, op, command string, body io.Reader, l
 	response, err := httpClient.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "Penpot", err)
-		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown) {
+		if change && failure.MayHaveArrived() {
 			failure.Message += hint
 		}
 		return nil, failure
@@ -339,20 +337,7 @@ func invalidResponse(op, message string) error {
 	return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 }
 
-func invalidRequest(message string) error { return &application.InvalidRequestError{Message: message} }
-
-// validToken keeps an obviously unusable value out of a request header; the real check is Penpot's.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for i := 0; i < len(value); i++ {
-		if value[i] < 0x21 || value[i] > 0x7e {
-			return false
-		}
-	}
-	return true
-}
+func invalidRequest(message string) error { return &provider.InvalidRequestError{Message: message} }
 
 // boundString keeps an oversized provider string out of a result without interpreting it.
 func boundString(value string, limit int) string {

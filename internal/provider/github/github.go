@@ -155,7 +155,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -1146,7 +1145,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: "open", Message: "the GitHub token is unusable"}
 	}
 	if red != nil {
@@ -1804,8 +1803,7 @@ func (c *Client) do(ctx context.Context, op, method, endpoint string, payload []
 	}
 	if err != nil {
 		failure := provider.Transport(op, "GitHub", err)
-		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown) {
+		if change && failure.MayHaveArrived() {
 			failure.Message += uncertain
 		}
 		return failure
@@ -1954,19 +1952,5 @@ func providerError(op, message string) error {
 }
 
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
-}
-
-// validToken keeps an obviously unusable value out of a request. The real check is GitHub's.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for _, r := range value {
-		// A header value may not carry control characters, and a GitHub token never does.
-		if r < 0x21 || r > 0x7e {
-			return false
-		}
-	}
-	return true
+	return &provider.InvalidRequestError{Message: message}
 }

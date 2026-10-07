@@ -100,7 +100,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -263,7 +262,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: op, Message: "the Make API token is unusable"}
 	}
 	auth := "Token " + value.Secret
@@ -373,8 +372,7 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	response, err := c.http.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "Make", err)
-		if changing && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown) {
+		if changing && failure.MayHaveArrived() {
 			failure.Message += note
 		}
 		return failure
@@ -487,23 +485,7 @@ func invalidResponse(op, message string) error {
 // against, before the matching content is ever returned. No message ever quotes the refused value or names
 // a scenario's or a run's real team or organization.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
-}
-
-// validToken keeps an obviously unusable value out of a request header. The real check is Make's own. Make
-// issues its API tokens as UUIDs (developers.make.com's own authentication guide shows one as an example),
-// but this accepts any printable-ASCII value in a generous range, the same tolerance the n8n and kChat
-// providers give their own credential shape, in case Make changes the format later.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for i := 0; i < len(value); i++ {
-		if value[i] < 0x21 || value[i] > 0x7e {
-			return false
-		}
-	}
-	return true
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // bounded keeps an oversized provider string out of a result without interpreting it.

@@ -96,7 +96,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -299,8 +298,7 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	response, err := c.http.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "n8n", err)
-		if changing && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown) {
+		if changing && failure.MayHaveArrived() {
 			failure.Message += uncertain
 		}
 		return failure
@@ -384,7 +382,7 @@ func invalidResponse(op, message string) error {
 // invalidRequest refuses a request the connection's own configuration, or a live scope check, decides
 // against, before the matching content is ever returned. No message ever quotes the refused value.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // validAPIKey keeps an obviously unusable value out of a request header. The real check is n8n's own. A

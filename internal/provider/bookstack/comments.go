@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/output"
@@ -510,6 +509,6 @@ func clipBytes(s string, n int) (string, bool) {
 }
 
 func isInvalid(err error) bool {
-	var invalid *application.InvalidRequestError
+	var invalid *provider.InvalidRequestError
 	return errors.As(err, &invalid)
 }

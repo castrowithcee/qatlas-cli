@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 // The three target kinds a connection may combine. Team mode: exactly one team, at most one organization,
@@ -59,10 +60,7 @@ func (s scope) allowsOrg(orgID int64) bool { return s.orgID == 0 || orgID == s.o
 
 // scopeOf reads the bound team, organization, and scenario targets of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	return parseScope(values)
 }
 

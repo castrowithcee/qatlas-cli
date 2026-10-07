@@ -50,7 +50,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
@@ -130,7 +129,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, err
 	}
-	if !validToken(value.Secret) {
+	if !provider.ValidHeaderToken(value.Secret) {
 		return nil, &provider.Error{Class: provider.ClassAuth, Op: op, Message: "the kChat personal access token is unusable"}
 	}
 	auth := "Bearer " + value.Secret
@@ -247,8 +246,7 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	response, err := c.http.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "kChat", err)
-		if change && (failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown) {
+		if change && failure.MayHaveArrived() {
 			failure.Message += uncertain
 		}
 		return failure
@@ -426,21 +424,7 @@ func providerError(op, message string) error {
 // outside the connection's boundary, or an argument outside its schema's reach. No message ever quotes the
 // refused value or any message content.
 func invalidRequest(message string) error {
-	return &application.InvalidRequestError{Message: message}
-}
-
-// validToken keeps an obviously unusable value out of a request header. The real check is kChat's.
-func validToken(value string) bool {
-	if len(value) < 8 || len(value) > 4096 {
-		return false
-	}
-	for i := 0; i < len(value); i++ {
-		// A header value may not carry control characters, and a kChat token never does.
-		if value[i] < 0x21 || value[i] > 0x7e {
-			return false
-		}
-	}
-	return true
+	return &provider.InvalidRequestError{Message: message}
 }
 
 // bounded keeps an oversized provider string out of a result without interpreting it.

@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 // The three target kinds a connection may combine: exactly one mailbox, and optionally allow-lists of
@@ -71,10 +72,7 @@ func normalizeFolder(name string) string {
 
 // scopeOf reads the mailbox, folder, and sender targets of one connection.
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	return parseScope(values)
 }
 

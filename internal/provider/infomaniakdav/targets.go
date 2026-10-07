@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
 // The two target kinds a connection combines. Each value is the last path segment of a collection below
@@ -35,10 +36,7 @@ func contains(list []string, id string) bool {
 }
 
 func scopeOf(resolved *config.Resolved) (scope, error) {
-	values := resolved.Targets
-	if len(values) == 0 && strings.TrimSpace(resolved.Target) != "" {
-		values = []string{resolved.Target}
-	}
+	values := provider.TargetsOf(resolved)
 	return parseScope(values)
 }
 

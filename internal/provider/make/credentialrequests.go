@@ -11,9 +11,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -567,7 +567,7 @@ func invokeCredentialRequestsCreate(ctx context.Context, resolved *config.Resolv
 		return nil, err
 	}
 	if err := client.requireTeamMember(ctx, op, input.ProviderUserID); err != nil {
-		var invalid *application.InvalidRequestError
+		var invalid *provider.InvalidRequestError
 		if errors.As(err, &invalid) {
 			return nil, invalidRequest("provider_user_id is not a member of the team of this connection")
 		}

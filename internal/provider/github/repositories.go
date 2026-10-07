@@ -372,8 +372,7 @@ func (c *Client) createRepository(ctx context.Context, owner target, bound bool,
 	defer c.limiter.HoldFor(mutationInterval)
 	if err != nil {
 		failure := provider.Transport(op, "GitHub", err)
-		if failure.Class == provider.ClassTimeout || failure.Cause == provider.CauseConnectionReset ||
-			failure.Cause == provider.CauseUnknown {
+		if failure.MayHaveArrived() {
 			failure.Message += uncertain
 		}
 		return nil, failure

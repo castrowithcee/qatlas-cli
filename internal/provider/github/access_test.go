@@ -124,7 +124,7 @@ func TestProjectAccessRefusalsBeforeIO(t *testing.T) {
 	reads := 0
 	core := accessCore(t, f, &reads)
 
-	invalid := &application.InvalidRequestError{}
+	invalid := &provider.InvalidRequestError{}
 	unsupported := &capability.UnsupportedError{}
 	unconfirmed := &application.ConfirmationRequiredError{}
 	writer := `{"collaborators":[{"user":"octocat","role":"writer"}]}`
