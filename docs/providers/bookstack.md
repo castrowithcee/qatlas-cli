@@ -284,6 +284,38 @@ returns `id`, `display_name`, `description`, `system_name`, `external_auth_id`, 
 `permissions` (names) and the `users` (`id`, `name`) of the role, at most 1000 users; `truncated` is true when the
 users or permissions were cut.
 
+### Changing roles
+
+`bookstack.roles.create`, `bookstack.roles.update`, and `bookstack.roles.delete` need the role permission
+`user-roles-manage`. Role permissions can escalate up to full administrative control of the instance, so these
+tools require a tool allow list, are part of no profile, need confirmation, and are refused on a connection with
+book targets. Each sends exactly one change request without retry; after a timeout, a 5xx answer, or an unreadable
+answer the result is reported as uncertain. `create` and `update` return the role like `roles.get`.
+
+- `roles.create` takes `display_name` (3 to 180 characters, required), `description` (at most 180 characters),
+  `mfa_enforced`, and `permissions`.
+- `roles.update` takes `id` and the same fields; at least one must be given and a field that is left out stays
+  unchanged. `permissions` replaces the whole list, so an empty list removes every permission.
+- `roles.delete` takes `id` and is final: the users of the role lose it, the content permissions of the role are
+  removed, and the API offers no migration of the users to another role. BookStack refuses to delete the
+  registration role; Qatlas also reads the role first and refuses every system role (a role with a system name,
+  such as `admin` or `public`) without a change.
+
+`permissions` accepts only names from a fixed list of the permissions that the role form of BookStack v26.09.1
+offers: `access-api`, `content-export`, `content-import`, `editor-change`, `receive-notifications`,
+`restrictions-manage-all`, `restrictions-manage-own`, `settings-manage`, `templates-manage`, `user-roles-manage`,
+`users-manage`, `revision-view-all`, and the content permissions `book-`, `bookshelf-`, `chapter-`, and `page-`
+(`view`, `update`, `delete`, and `create`, each with `-all` and `-own`, except that `book-` and `bookshelf-` have
+no `create-own`), and `image-`, `attachment-`, and `comment-` (`create-all`, `update-all`, `update-own`,
+`delete-all`, `delete-own`). Unknown or repeated names are refused before any secret is read or request is sent.
+
+The guest role (system role `public`, public access) is never changed. `roles.update` reads the role and
+determines the guest role (a read of the role list, at most 100 roles, and a read of that role) and refuses,
+without a change, when the role is the guest role or when the guest role cannot be determined.
+
+`external_auth_id` is not supported: Qatlas never binds a role to the groups of an external identity provider,
+so the argument does not exist and no request body contains it.
+
 `bookstack.auditlog.list` needs `settings-manage` and `users-manage`. It contains IP addresses and sign-in events
 of all users, so it is offered only by a connection whose `tools` list names it. It takes `limit`, `offset`, and
 the filters `type` (lowercase letters, digits, and underscores, at most 64 characters), `user_id`,
@@ -296,7 +328,7 @@ filters. Entries carry `id`, `type`, `detail`, `user_id`, `user_name`, `loggable
 ## Tool groups
 
 BookStack tools belong to the group `content` (pages, search, books, chapters, shelves, and tags), the group
-`comments` (page comments), the group `files` (page attachments and images), or the group `administration` (`bookstack.system.get`, the content permission tools, the recycle bin tools, and the user, role, and audit log tools). Tool lists and pickers
+`comments` (page comments), the group `files` (page attachments and images), or the group `administration` (`bookstack.system.get`, the content permission tools, the recycle bin tools, and the user, role, and audit log tools, including the role write tools). Tool lists and pickers
 show the group so that agents and people can find tools by subject.
 
 ## Comments
