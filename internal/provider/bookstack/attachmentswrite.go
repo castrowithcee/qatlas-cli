@@ -255,7 +255,7 @@ func invokeAttachmentsUpload(ctx context.Context, resolved *config.Resolved, sec
 	}
 	fields := [][2]string{{"name", in.Name}, {"uploaded_to", strconv.FormatInt(in.PageID, 10)}}
 	var written attachmentWriteJSON
-	if err := client.sendFile(ctx, "upload attachment", "/api/attachments", fields, upload, &written, argNames(attachmentsUpload)); err != nil {
+	if err := client.sendFile(ctx, "upload attachment", "/api/attachments", "file", fields, upload, &written, argNames(attachmentsUpload)); err != nil {
 		return nil, err
 	}
 	return attachmentWriteObject(written), nil
@@ -263,7 +263,7 @@ func invokeAttachmentsUpload(ctx context.Context, resolved *config.Resolved, sec
 
 // sendFile sends the one multipart upload request. The body is framed by hand, so its length is known and
 // the file streams from disk without being held in memory; the transfer has its own long timeout.
-func (c *Client) sendFile(ctx context.Context, op, path string, fields [][2]string, upload *localfile.Upload,
+func (c *Client) sendFile(ctx context.Context, op, path, fileField string, fields [][2]string, upload *localfile.Upload,
 	out any, arguments []string) error {
 	var head bytes.Buffer
 	form := multipart.NewWriter(&head)
@@ -272,7 +272,7 @@ func (c *Client) sendFile(ctx context.Context, op, path string, fields [][2]stri
 			return providerError(op, "the request could not be built")
 		}
 	}
-	if _, err := form.CreateFormFile("file", upload.Name); err != nil {
+	if _, err := form.CreateFormFile(fileField, upload.Name); err != nil {
 		return providerError(op, "the request could not be built")
 	}
 	tail := "\r\n--" + form.Boundary() + "--\r\n"
@@ -414,7 +414,7 @@ func invokeAttachmentsReplace(ctx context.Context, resolved *config.Resolved, se
 	}
 	// BookStack takes a multipart body only on POST; _method makes it the update of the attachment.
 	var written attachmentWriteJSON
-	if err := client.sendFile(ctx, op, "/api/attachments/"+strconv.FormatInt(in.ID, 10),
+	if err := client.sendFile(ctx, op, "/api/attachments/"+strconv.FormatInt(in.ID, 10), "file",
 		[][2]string{{"_method", "PUT"}}, upload, &written, argNames(attachmentsReplace)); err != nil {
 		return nil, err
 	}
