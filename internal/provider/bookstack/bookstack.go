@@ -300,6 +300,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withAdministrationGroup(systemGet), Handler: capability.Handler(invokeSystemGet)},
 		capability.Operation{Descriptor: withAdministrationGroup(contentPermissionsGet), Handler: capability.Handler(invokeContentPermissionsGet)},
 		capability.Operation{Descriptor: withAdministrationGroup(contentPermissionsUpdate), Handler: capability.Handler(invokeContentPermissionsUpdate)},
+		capability.Operation{Descriptor: withAdministrationGroup(recycleBinList), Handler: capability.Handler(invokeRecycleBinList)},
+		capability.Operation{Descriptor: withAdministrationGroup(recycleBinRestore), Handler: capability.Handler(invokeRecycleBinRestore)},
+		capability.Operation{Descriptor: withAdministrationGroup(recycleBinDestroy), Handler: capability.Handler(invokeRecycleBinDestroy)},
 	)
 }
 

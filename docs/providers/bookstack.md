@@ -251,10 +251,26 @@ target book is checked before the secrets are read; the source page and a target
 one read. A foreign page or target is refused as `invalid-request` without a change request and without
 naming it.
 
+## Recycle bin
+
+`bookstack.recyclebin.list` lists the deleted items of the instance (`limit`, `offset`). Each entry carries `id`
+(the deletion identifier), `deleted_by`, `created_at`, `deletable_type` (`page`, `chapter`, `book`, or
+`bookshelf`), `deletable_id`, and of the deleted item only `name`, `slug`, `book_id`, `chapter_id`,
+`parent_type`, `parent_id`, `pages_count`, and `chapters_count` where BookStack reports them. Names are untrusted
+data.
+
+`bookstack.recyclebin.restore` restores one deletion by `deletion_id` and returns `restore_count`.
+`bookstack.recyclebin.destroy` destroys one deletion permanently and returns `delete_count`; this cannot be
+undone. BookStack requires the role permissions `settings-manage` and `restrictions-manage-all` for all three.
+The recycle bin spans the whole instance, so the tools are refused on a connection with book targets. Each
+change sends exactly one request (`PUT` or `DELETE`) without retry; after a timeout or a 5xx answer the result is
+reported as uncertain. The tools are part of no profile, and `destroy` additionally requires a tool allow list
+that names it and the `delete` permission.
+
 ## Tool groups
 
 BookStack tools belong to the group `content` (pages, search, books, chapters, shelves, and tags), the group
-`comments` (page comments), the group `files` (page attachments and images), or the group `administration` (`bookstack.system.get` and the content permission tools). Tool lists and pickers
+`comments` (page comments), the group `files` (page attachments and images), or the group `administration` (`bookstack.system.get`, the content permission tools, and the recycle bin tools). Tool lists and pickers
 show the group so that agents and people can find tools by subject.
 
 ## Comments
