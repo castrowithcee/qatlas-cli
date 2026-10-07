@@ -109,10 +109,10 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Fatal("defaultRegistry() = nil")
 	}
 	got := reg.Provider("bookstack")
-	if len(got) != 14 {
-		t.Fatalf("provider capabilities = %v, want fourteen BookStack capabilities", got)
+	if len(got) != 18 {
+		t.Fatalf("provider capabilities = %v, want eighteen BookStack capabilities", got)
 	}
-	if got[0].ID != "bookstack.books.create" || got[13].ID != "bookstack.pages.update" {
+	if got[0].ID != "bookstack.books.create" || got[17].ID != "bookstack.shelves.update" {
 		t.Errorf("capabilities = %v", got)
 	}
 	telegram, ok := reg.ProviderMetadata("telegram")

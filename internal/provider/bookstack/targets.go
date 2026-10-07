@@ -129,3 +129,18 @@ func (s scope) checkBook(bookID int64) error {
 	}
 	return nil
 }
+
+// requireInstanceScope is the local gate of every instance-wide tool. It admits only a connection without
+// book targets and refuses a bound one, before a secret is resolved and before any request is sent. what
+// names the refused capability in the message, never a configured target.
+func requireInstanceScope(resolved *config.Resolved, what string) error {
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return err
+	}
+	if bound.bound() {
+		return invalidRequest("this connection is bound to books, so it cannot use " + what +
+			": it is instance-wide and only available on a connection without targets")
+	}
+	return nil
+}

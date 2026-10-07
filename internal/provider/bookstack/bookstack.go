@@ -234,9 +234,9 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read content", Recommended: true,
-			Description: "lists and reads pages, books, and chapters and searches content; changes nothing in BookStack",
+			Description: "lists and reads pages, books, chapters, and shelves and searches content; changes nothing in BookStack",
 			Tools: []string{pagesList.ID, pagesGet.ID, contentSearch.ID, booksList.ID, booksGet.ID,
-				chaptersList.ID, chaptersGet.ID},
+				chaptersList.ID, chaptersGet.ID, shelvesList.ID, shelvesGet.ID},
 		}},
 	}, func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor) (provider.Class, error) {
@@ -263,6 +263,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(booksUpdate), Handler: capability.Handler(invokeBooksUpdate)},
 		capability.Operation{Descriptor: withGroup(chaptersCreate), Handler: capability.Handler(invokeChaptersCreate)},
 		capability.Operation{Descriptor: withGroup(chaptersUpdate), Handler: capability.Handler(invokeChaptersUpdate)},
+		capability.Operation{Descriptor: withGroup(shelvesList), Handler: capability.Handler(invokeShelvesList)},
+		capability.Operation{Descriptor: withGroup(shelvesGet), Handler: capability.Handler(invokeShelvesGet)},
+		capability.Operation{Descriptor: withGroup(shelvesCreate), Handler: capability.Handler(invokeShelvesCreate)},
+		capability.Operation{Descriptor: withGroup(shelvesUpdate), Handler: capability.Handler(invokeShelvesUpdate)},
 	)
 }
 

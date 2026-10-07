@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes BookStack page, book, and chapter operations, credentials, connection permissions, and safety boundaries.
+  Describes BookStack page, book, chapter, and shelf operations, credentials, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -10,8 +10,8 @@ updated: 2026-10-07
 # BookStack
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
-and chapters and searching content (`read`), creating pages, books, and chapters (`create`), changing or
-moving pages and changing books and chapters (`update`), and deleting pages (`delete`).
+chapters, and shelves and searching content (`read`), creating pages, books, chapters, and shelves (`create`),
+changing or moving pages and changing books, chapters, and shelves (`update`), and deleting pages (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
 
@@ -22,7 +22,8 @@ for example `[bookstack.pages.get]` for a route that reads a known page but cann
 admits an effect `permissions` excludes. Page content is treated as untrusted data. The terminal editor
 starts a new connection on the setup profile `read`, which ticks `[read]` and
 `[bookstack.pages.list, bookstack.pages.get, bookstack.content.search, bookstack.books.list,
-bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get]`. A profile is a visible starting
+bookstack.books.get, bookstack.chapters.list, bookstack.chapters.get, bookstack.shelves.list,
+bookstack.shelves.get]`. A profile is a visible starting
 selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
 saving, and a saved connection never follows a profile.
 
@@ -123,6 +124,33 @@ request and without naming it. A connection without targets sends no proof read.
 The tools are not part of any profile. All four require confirmation; the creating tools are not idempotent.
 Each change is sent once and never retried; the result shows the changed object without its content tree.
 
+## Shelves
+
+Shelves hold any books and span the whole instance, so the four shelf tools work only on a connection without
+targets. On a connection bound to books, every shelf tool is refused locally as `invalid-request` before the
+secrets are read and before any request, and the message never names a configured book. This includes
+`shelves.list` and `shelves.get`, although they are part of the `read` profile.
+
+`bookstack.shelves.list` takes `limit` and `offset` and pages through the instance in records of at most 500,
+sorted by `id`. `bookstack.shelves.get` takes an `id` and returns the metadata, `description` and
+`description_html`, `tags` (at most 50), and `books` (`id`, `name`, `slug`, in shelf order, at most 2000
+entries; `truncated` is then `true`). Names, descriptions, and tags are untrusted data; `description_html` must
+never be rendered or run.
+
+`bookstack.shelves.create` and `bookstack.shelves.update` take `name` (1 to 255 characters), at most one of
+`description` (at most 1900 characters) and `description_html` (at most 2000 characters), `tags`, and `books`.
+`create` requires `name`, `update` requires `id` and at least one field to change.
+
+- `tags` replaces all existing tags; an empty list removes them. Omit `tags` to keep them.
+- `books` is an ordered list of at most 500 unique positive book identifiers. On `update` it replaces all books
+  on the shelf with exactly this list: an empty list removes every book from the shelf, and omitting `books`
+  leaves the books unchanged. BookStack validates that the books exist and that the token may see them.
+
+Violations of these limits are refused locally before any secret is read and before any request. The result
+shows the changed shelf without its books; read it with `shelves.get`. Both tools require confirmation and are
+part of no profile; `create` is not idempotent. Each change is sent once and never retried. Cover images and
+deleting shelves are not available.
+
 ## Pages
 
 `pages.get` returns `id`, `name`, `slug`, `book_id`, `chapter_id` (0 when there is none), `created_at`,
@@ -157,7 +185,7 @@ naming it.
 
 ## Tool groups
 
-All BookStack tools belong to the group `content`: pages, search, books, and chapters. Tool lists and pickers
+All BookStack tools belong to the group `content`: pages, search, books, chapters, and shelves. Tool lists and pickers
 show the group so that agents and people can find tools by subject.
 
 ## Search

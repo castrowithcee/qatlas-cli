@@ -10,7 +10,7 @@ const contentGroup = "content"
 
 // toolGroups are the subject areas BookStack's tools are sorted into for display.
 var toolGroups = []config.ToolGroup{
-	{ID: contentGroup, Title: "Content", Description: "Pages, search, books, and chapters of the knowledge base"},
+	{ID: contentGroup, Title: "Content", Description: "Pages, search, books, chapters, and shelves of the knowledge base"},
 }
 
 func withGroup(d capability.Descriptor) capability.Descriptor {

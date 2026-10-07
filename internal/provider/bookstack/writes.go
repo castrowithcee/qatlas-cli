@@ -179,24 +179,30 @@ func (m containerMutation) empty() bool {
 		m.Priority == nil && len(m.DefaultTemplateID) == 0
 }
 
-// validate applies the local rules of a write. They need no I/O, so a violation is refused before any secret.
-func (m containerMutation) validate() error {
-	if utf8.RuneCountInString(m.Name) > maxPageNameChars {
+// validateText applies the name, description, and tag limits that books, chapters, and shelves share.
+func validateText(name, description, descriptionHTML string, tags *[]tagJSON) error {
+	if utf8.RuneCountInString(name) > maxPageNameChars {
 		return invalidRequest("name exceeds 255 characters")
 	}
-	if m.Description != "" && m.DescriptionHTML != "" {
+	if description != "" && descriptionHTML != "" {
 		return invalidRequest("description and description_html are mutually exclusive")
 	}
-	if utf8.RuneCountInString(m.Description) > maxDescriptionTextChars {
+	if utf8.RuneCountInString(description) > maxDescriptionTextChars {
 		return invalidRequest("description exceeds 1900 characters")
 	}
-	if utf8.RuneCountInString(m.DescriptionHTML) > maxDescriptionHTMLChars {
+	if utf8.RuneCountInString(descriptionHTML) > maxDescriptionHTMLChars {
 		return invalidRequest("description_html exceeds 2000 characters")
 	}
-	if m.Tags != nil {
-		if err := validateTags(*m.Tags); err != nil {
-			return err
-		}
+	if tags != nil {
+		return validateTags(*tags)
+	}
+	return nil
+}
+
+// validate applies the local rules of a write. They need no I/O, so a violation is refused before any secret.
+func (m containerMutation) validate() error {
+	if err := validateText(m.Name, m.Description, m.DescriptionHTML, m.Tags); err != nil {
+		return err
 	}
 	if m.Priority != nil && *m.Priority < 0 {
 		return invalidRequest("priority must be 0 or more")
