@@ -362,3 +362,42 @@ func shelfWriteObject(shelf shelfJSON) output.Object {
 		{Name: "tags", Value: reduceTags(shelf.Tags)},
 	}}
 }
+
+var shelvesDelete = capability.Descriptor{
+	ID: Provider + ".shelves.delete", Version: 1, Title: "Delete a BookStack shelf",
+	Description: "Delete one shelf by identifier; only the shelf is removed, its books stay. Not available for a " +
+		"connection bound to books, because shelves are instance-wide",
+	Tags: []string{"knowledge", "shelves", "bookstack", "delete"}, Provider: Provider,
+	RequiresToolAllowList: true,
+	Risk:                  bookWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+	InputSchema:           json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
+	OutputSchema:          json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
+	Arguments:             []capability.Argument{{Name: "id", Description: "Shelf identifier", Required: true}},
+}
+
+func invokeShelvesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	id, err := decodeDeleteID(raw, "delete shelf")
+	if err != nil {
+		return nil, err
+	}
+	if err := requireInstanceScope(resolved, shelvesInstanceWide); err != nil {
+		return nil, err
+	}
+	if err := checkShelfID(id); err != nil {
+		return nil, err
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.DeleteShelf(ctx, id); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"deleted": true}, nil
+}
+
+// DeleteShelf sends one delete request.
+func (c *Client) DeleteShelf(ctx context.Context, id int64) error {
+	return c.mutate(ctx, "delete shelf", http.MethodDelete, "/api/shelves/"+strconv.FormatInt(id, 10), nil, nil, argNames(shelvesDelete))
+}

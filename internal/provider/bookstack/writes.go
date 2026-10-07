@@ -69,6 +69,33 @@ var (
 		Fields: bookWriteFields,
 	}
 
+	booksDelete = capability.Descriptor{
+		ID: Provider + ".books.delete", Version: 1, Title: "Delete a BookStack book",
+		Description: "Delete one book by identifier; BookStack moves the book with all its chapters and pages to the " +
+			"recycle bin. Only a BookStack admin can restore it, until the recycle bin is emptied automatically " +
+			"(30 days by default, RECYCLE_BIN_LIFETIME; with 0 the deletion is immediate and final). On a connection " +
+			"bound to this book, the target points at nothing afterwards",
+		Tags: []string{"knowledge", "books", "bookstack", "delete"}, Provider: Provider,
+		RequiresToolAllowList: true,
+		Risk:                  bookWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		InputSchema:           json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer","minimum":1}},"required":["id"],"additionalProperties":false}`),
+		OutputSchema:          json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
+		Arguments:             []capability.Argument{{Name: "id", Description: "Book identifier", Required: true}},
+	}
+
+	chaptersDelete = capability.Descriptor{
+		ID: Provider + ".chapters.delete", Version: 1, Title: "Delete a BookStack chapter",
+		Description: "Delete one chapter by identifier; BookStack moves the chapter with all its pages to the recycle " +
+			"bin. Only a BookStack admin can restore it, until the recycle bin is emptied automatically " +
+			"(30 days by default, RECYCLE_BIN_LIFETIME; with 0 the deletion is immediate and final)",
+		Tags: []string{"knowledge", "chapters", "bookstack", "delete"}, Provider: Provider,
+		RequiresToolAllowList: true,
+		Risk:                  bookWriteRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+		InputSchema:           booksDelete.InputSchema,
+		OutputSchema:          booksDelete.OutputSchema,
+		Arguments:             []capability.Argument{{Name: "id", Description: "Chapter identifier", Required: true}},
+	}
+
 	chaptersCreate = capability.Descriptor{
 		ID: Provider + ".chapters.create", Version: 1, Title: "Create a BookStack chapter",
 		Description: "Create one chapter in a specified book with an optional description, tags, priority, and " +
@@ -277,6 +304,58 @@ func invokeBooksUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	return client.UpdateBook(ctx, id, change)
 }
 
+func decodeDeleteID(raw json.RawMessage, op string) (int64, error) {
+	var input struct {
+		ID int64 `json:"id"`
+	}
+	if json.Unmarshal(raw, &input) != nil {
+		return 0, providerError(op, "the validated arguments could not be read")
+	}
+	return input.ID, nil
+}
+
+func invokeBooksDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	id, err := decodeDeleteID(raw, "delete book")
+	if err != nil {
+		return nil, err
+	}
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if err := bound.checkBook(id); err != nil {
+		return nil, err
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.DeleteBook(ctx, id); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"deleted": true}, nil
+}
+
+func invokeChaptersDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	id, err := decodeDeleteID(raw, "delete chapter")
+	if err != nil {
+		return nil, err
+	}
+	if id <= 0 || len(strconv.FormatInt(id, 10)) > maxIDDigits {
+		return nil, invalidRequest("id must be a positive integer")
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.DeleteChapter(ctx, id); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"deleted": true}, nil
+}
+
 func invokeChaptersCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	_, input, err := decodeContainer(raw, "create chapter")
@@ -424,6 +503,25 @@ func (c *Client) UpdateChapter(ctx context.Context, id int64, input containerMut
 		return output.Object{}, err
 	}
 	return chapterWriteObject(chapter), nil
+}
+
+// DeleteBook sends one delete request; the caller has checked the book against the connection's books.
+func (c *Client) DeleteBook(ctx context.Context, id int64) error {
+	if err := c.scope.checkBook(id); err != nil {
+		return err
+	}
+	return c.mutate(ctx, "delete book", http.MethodDelete, "/api/books/"+strconv.FormatInt(id, 10), nil, nil, argNames(booksDelete))
+}
+
+// DeleteChapter proves the chapter's book first on a bound connection; a foreign chapter ends the call
+// without a delete.
+func (c *Client) DeleteChapter(ctx context.Context, id int64) error {
+	if c.scope.bound() {
+		if _, err := c.chapterBook(ctx, id); err != nil {
+			return err
+		}
+	}
+	return c.mutate(ctx, "delete chapter", http.MethodDelete, "/api/chapters/"+strconv.FormatInt(id, 10), nil, nil, argNames(chaptersDelete))
 }
 
 func bookWriteObject(book bookJSON) output.Object {

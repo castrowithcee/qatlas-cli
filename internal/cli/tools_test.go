@@ -183,7 +183,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// provider none. An unconfigured namespace stays visible with zero. Every row names the provider
 		// first, then its description and the note the configuration keeps, which is empty where there is
 		// none, then the counts of tools, usable connections, and configured connections.
-		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,21,1,1\n",
+		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,24,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
 		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", ",\"\",3,0,0\n",
 		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",28,0,0\n", ",\"\",6,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n", ",\"\",2,0,0\n",
@@ -335,7 +335,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Fatalf("exit=%d stderr=%q", code, stderr)
 		}
 		for _, want := range []string{
-			"connections[1]: wiki\ntools[21]{id,title,effect,requires,confirm,reason}:\n",
+			"connections[1]: wiki\ntools[24]{id,title,effect,requires,confirm,reason}:\n",
 			`  bookstack.pages.create,Create a BookStack page,create,name,true,effect-not-permitted` + "\n",
 			`  bookstack.pages.delete,Delete a BookStack page,delete,id,true,effect-not-permitted` + "\n",
 			`  bookstack.pages.get,Get a BookStack page,read,id,false,""` + "\n",
@@ -383,7 +383,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		args []string
 		want []string
 	}{
-		{"namespace", []string{"bookstack"}, []string{"bookstack.books.create", "bookstack.books.get", "bookstack.books.list", "bookstack.books.update", "bookstack.chapters.create", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.chapters.update", "bookstack.content.search", "bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.shelves.create", "bookstack.shelves.get", "bookstack.shelves.list", "bookstack.shelves.update", "bookstack.system.get", "bookstack.tags.list", "bookstack.tags.values"}},
+		{"namespace", []string{"bookstack"}, []string{"bookstack.books.create", "bookstack.books.delete", "bookstack.books.get", "bookstack.books.list", "bookstack.books.update", "bookstack.chapters.create", "bookstack.chapters.delete", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.chapters.update", "bookstack.content.search", "bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.shelves.create", "bookstack.shelves.delete", "bookstack.shelves.get", "bookstack.shelves.list", "bookstack.shelves.update", "bookstack.system.get", "bookstack.tags.list", "bookstack.tags.values"}},
 		{"namespace telegram", []string{"telegram"}, []string{"telegram.messages.delete", "telegram.messages.edit", "telegram.messages.send"}},
 		{"namespace lexware", []string{"lexware"}, []string{"lexware.invoices.create", "lexware.invoices.get", "lexware.invoices.list"}},
 		{"namespace twentycrm", []string{"twentycrm"}, []string{
@@ -473,7 +473,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		{"namespace nextcloud", []string{"nextcloud"}, []string{
 			"nextcloud.files.create", "nextcloud.files.delete", "nextcloud.files.get", "nextcloud.files.list", "nextcloud.files.stat", "nextcloud.files.update",
 		}},
-		{"query", []string{"--query", "pages"}, []string{"bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.books.get", "bookstack.chapters.get", "bookstack.content.search"}},
+		{"query", []string{"--query", "pages"}, []string{"bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.books.delete", "bookstack.books.get", "bookstack.chapters.delete", "bookstack.chapters.get", "bookstack.content.search"}},
 		{"namespace and query", []string{"bookstack", "--query", "list"}, []string{"bookstack.books.list", "bookstack.chapters.list", "bookstack.pages.list", "bookstack.shelves.list", "bookstack.tags.list", "bookstack.tags.values", "bookstack.chapters.get", "bookstack.shelves.create", "bookstack.shelves.get", "bookstack.shelves.update"}},
 		{"query without a match", []string{"--query", "absent"}, []string{}},
 	}
