@@ -10,7 +10,7 @@ const (
 	contentGroup = "content"
 	// commentsGroup is the group of the page comment tools.
 	commentsGroup = "comments"
-	// filesGroup is the group of the tools that read and download files.
+	// filesGroup is the group of the tools that read, download, and change attachments.
 	filesGroup = "files"
 	// administrationGroup is the group of the instance information tools.
 	administrationGroup = "administration"

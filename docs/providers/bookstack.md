@@ -10,8 +10,8 @@ updated: 2026-10-07
 # BookStack
 
 A connection selects one BookStack instance and one API token. It supports listing and reading pages, books,
-chapters, shelves, tags, page comments, and page attachments, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, and comments (`create`),
-changing or moving pages and changing books, chapters, shelves, and comments (`update`), and deleting pages, books, chapters, shelves, and comments (`delete`).
+chapters, shelves, tags, page comments, and page attachments, reading the instance information, and searching content (`read`), creating pages, books, chapters, shelves, comments, and attachments (`create`),
+changing or moving pages and attachments and changing books, chapters, shelves, and comments (`update`), and deleting pages, books, chapters, shelves, comments, and attachments (`delete`).
 Create requires exactly one `book_id` or `chapter_id`; all mutations require confirmation. A connection can be
 bound to individual books (see Books).
 
@@ -284,7 +284,7 @@ skipped).
 
 ## Attachments
 
-Attachments are read on pages only. `bookstack.attachments.list` takes an optional `page_id` (required on a
+Attachments belong to pages. `bookstack.attachments.list` takes an optional `page_id` (required on a
 connection bound to books), `limit`, and `offset`, and lists `id`, `name`, `extension`, `page_id`, `external` (true
 for a link), `order`, `created_by`, `updated_by`, `created_at`, and `updated_at`, without any content. The filter
 sent to BookStack is only an optimization: every row is checked again for the page. BookStack before v26.09.1 also
@@ -303,13 +303,43 @@ only with confirmation. Writing needs the connection's local file release for wr
 On a connection bound to books, the page of the attachment is proven to lie in a bound book before anything is
 returned or written: the metadata comes first in the answer of BookStack, the page is read once as proof, and only
 then the first byte of content is decoded; an attachment of another book is refused as `invalid-request` without
-naming the other book, page, or attachment. A connection without targets reads no proof. All three tools are
+naming the other book, page, or attachment. A connection without targets reads no proof. These three tools are
 read-only and idempotent; `list` and `get` belong to the setup profile `read`, `download` does not.
+
+### Changing attachments
+
+`bookstack.attachments.link` takes `page_id`, `name` (1 to 255 characters), and `link` and attaches a link to the
+page. The link must be an `http` or `https` URL of 1 to 2000 characters without user information; it is checked
+locally before any credential is used, and Qatlas never requests it. `bookstack.attachments.upload` takes
+`page_id`, `name`, and `local_path` and attaches one local file of at most 50 MiB. The file lies in a directory the
+connection releases for reading and is streamed from disk as `multipart/form-data` with an exact length, never
+held in memory; the size is checked before any credential is used, and the transfer may take 30 minutes.
+
+`bookstack.attachments.update` takes the `id` and at least one of `name`, `link` (for a link attachment only;
+BookStack refuses it for a file), and `page_id` (moves the attachment to that page; BookStack needs the update
+permission on both pages). `bookstack.attachments.replace` takes the `id` and `local_path` and replaces the file of
+a file attachment under the same limits as `upload`; the name stays and the previous file is gone. BookStack
+accepts a multipart body only on `POST`, so the request is `POST /api/attachments/{id}` with the form field
+`_method=PUT`. A link attachment is refused after one metadata read, also on a connection without targets.
+`bookstack.attachments.delete` takes the `id` and deletes the attachment; attachments are not kept in the recycle bin,
+so the deletion is final.
+
+On a connection bound to books, `link` and `upload` prove the page by one read. `update`, `replace`, and `delete`
+find the page of an existing attachment through the attachment listing filtered by `id`, which carries no file
+content, and then prove that page by one read; `update` with `page_id` proves the target page as well. A page or an
+attachment of another book is refused as `invalid-request` without naming it, and nothing is changed. A connection
+without targets reads no proof.
+
+Each call sends exactly one change request without retry; after a timeout, a lost connection, or a 5xx answer the
+result is reported as uncertain, and the attachments of the page should be read before repeating it. All five
+tools require confirmation and are part of no profile. `link` and `upload` create and are not idempotent; `update`
+is idempotent; `replace` updates and is not idempotent; `delete` requires an entry in the `tools` list and the
+`delete` permission (see Deleting).
 
 ## Limits
 
 Reading accepts a response of up to 16 MiB (an inline export 8 MiB, a download 512 MiB; an attachment answer 96 MiB of content, an attachment download 72 MiB); a larger one fails as `invalid-provider-response`. Writing
-accepts at most 1 MiB of page content (`html` or `markdown`). Redirects are never followed: a 3xx answer is a
+accepts at most 1 MiB of page content (`html` or `markdown`) and an attachment upload of at most 50 MiB. Redirects are never followed: a 3xx answer is a
 `provider-error`.
 
 ## Deleting
@@ -326,6 +356,7 @@ list names it and its `permissions` include `delete`; a connection without a `to
 On a connection bound to books, `books.delete` checks `id` against the books before any request, and
 `chapters.delete` proves the chapter's book by one read; deleting a bound book is allowed, but the target then
 points at nothing. `shelves.delete` is instance-wide and refused on a connection with book targets.
+`bookstack.attachments.delete` follows the same rules but is final (see Attachments).
 
 ## Errors
 

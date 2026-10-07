@@ -1677,7 +1677,7 @@ func emptyTargets(metadata config.TargetMetadata) string {
 	if metadata.Required {
 		return "none yet: required, enter adds one"
 	}
-	return "none: the connection reaches whatever its credential reaches"
+	return "whatever its credential reaches"
 }
 
 // connectionProviderChosen narrows the service and credential rows to the provider now selected. A route
