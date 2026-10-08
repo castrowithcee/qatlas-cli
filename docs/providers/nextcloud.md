@@ -4,16 +4,16 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-06
+updated: 2026-10-08
 ---
 
 # Nextcloud
 
 A connection binds one identity to typed targets (see Targets). The Files tools form the tool group `files` and
 work in the bound Files folder: they list and read metadata or up to 4 MiB of file content (`read`), create
-files only when absent (`create`), replace an existing version with an ETag precondition (`update`), and delete
-only files with an ETag precondition (`delete`). There is no recursive folder deletion; parent folders must
-already exist.
+files only when absent (`create`), replace an existing version with an ETag precondition (`update`), delete
+only files with an ETag precondition (`delete`), and organise (see Organising). There is no recursive folder
+deletion.
 
 The instance URL must use `https`, without exception. Qatlas follows no redirect: a 3xx answer to any request
 is a clear failure that did not act on the server, and the app password only ever travels to the configured URL.
@@ -50,9 +50,25 @@ remain the provider-side ceiling. An optional `tools` list narrows a connection 
 example `[nextcloud.files.list, nextcloud.files.stat]` for metadata without file content, and never admits
 an effect `permissions` excludes. File content is carried as base64 and never written to audit records. The
 terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and
-`[nextcloud.files.list, nextcloud.files.stat, nextcloud.files.get]`. A profile is a visible starting
+`[nextcloud.files.list, nextcloud.files.stat, nextcloud.files.get]`; the profile `write` adds
+`nextcloud.folders.create`, `nextcloud.files.move`, and `nextcloud.files.copy`. A profile is a visible starting
 selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
 saving, and a saved connection never follows a profile.
+
+## Organising
+
+`nextcloud.folders.create` (`MKCOL`, effect `create`), `nextcloud.files.move` (`MOVE`, effect `update`; a
+rename is a move within one folder), and `nextcloud.files.copy` (`COPY`, effect `create`) work on files and
+folders inside the bound folder and need `confirm`. A connection without `create` can run neither
+`folders.create` nor `files.copy`; without `update` it cannot run `files.move`. Parent folders must already
+exist (no automatic creation), and an existing destination is never overwritten (`Overwrite: F`). Source and
+destination are paths below the root: the root itself is neither, they must differ, and a folder cannot go
+into itself or a descendant. Qatlas checks this locally before any credential access, and builds the
+`Destination` URL on the configured origin from the validated segments.
+
+Each tool sends exactly one request. A taken destination, an existing folder, or a missing parent is a clear
+failure that names no path. After an unclear outcome (timeout, aborted connection, a 5xx answer) the error says the
+change may have been applied and that source and target, or the folder, must be stat-ed before repeating.
 
 ## Local files
 
