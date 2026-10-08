@@ -106,8 +106,9 @@ var maxPathUploadBytes int64 = 64 << 20
 // Nextcloud: the change may have been applied although no confirmation ever arrived. Qatlas never repeats
 // such a request.
 const (
-	uncertainStored  = "; the file may have been stored, stat the file before repeating"
-	uncertainDeleted = "; the file may have been deleted, stat the file before repeating"
+	uncertainStored        = "; the file may have been stored, stat the file before repeating"
+	uncertainDeleted       = "; the file may have been deleted, stat the file before repeating"
+	uncertainFolderDeleted = "; the folder may have been deleted, stat the folder before repeating"
 )
 
 // pathPattern is the schema form of one path relative to the connection root: one or more segments
@@ -239,6 +240,13 @@ var filesDelete = withArguments(fileMutationDescriptor("delete", capability.Effe
 	capability.Argument{Name: "path", Description: "File relative to the fixed root folder of this connection", Required: true},
 	capability.Argument{Name: "etag", Description: "Entity tag of the version to delete", Required: true})
 
+// Deleting is reachable only through a tools list, so no profile and no permission alone offers it.
+func init() {
+	filesDelete.Version = 2
+	filesDelete.RequiresToolAllowList = true
+	filesDelete.Description += "; Nextcloud moves it to the trash bin when the files_trashbin app is active, otherwise it is deleted for good"
+}
+
 func withArguments(d capability.Descriptor, arguments ...capability.Argument) capability.Descriptor {
 	d.Arguments = arguments
 	return d
@@ -325,6 +333,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(filesUpdate), Handler: folderBound(invokeFilesUpdate)},
 		capability.Operation{Descriptor: grouped(filesDelete), Handler: folderBound(invokeFilesDelete)},
 		capability.Operation{Descriptor: grouped(foldersCreate), Handler: folderBound(invokeFoldersCreate)},
+		capability.Operation{Descriptor: grouped(foldersDelete), Handler: folderBound(invokeFoldersDelete)},
 		capability.Operation{Descriptor: grouped(filesMove), Handler: folderBound(invokeFilesMove)},
 		capability.Operation{Descriptor: grouped(filesCopy), Handler: folderBound(invokeFilesCopy)},
 	)
@@ -494,6 +503,28 @@ func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secre
 	return map[string]any{key: true, "etag": etag, "path": input.Path, "name": rel[len(rel)-1],
 		"size": upload.Size, "sha256": sum, "method": method}, nil
 }
+func invokeFoldersDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input contentArguments
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError("delete folder", "the validated arguments could not be read")
+	}
+	// Refused before the credential is resolved: the root is never deletable and `*` is no version.
+	if rel, err := splitRelative(input.Path); err != nil || len(rel) == 0 {
+		return nil, providerError("delete folder", "a folder path below the connection root is required")
+	}
+	if !validETag(input.ETag) {
+		return nil, providerError("delete folder", "etag is not a usable folder version")
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	if err := client.DeleteFolder(ctx, input.Path, input.ETag); err != nil {
+		return nil, err
+	}
+	return map[string]bool{"deleted": true}, nil
+}
+
 func invokeFilesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
 	client, input, err := openForContent(ctx, resolved, secrets, red, raw)
 	if err != nil {
@@ -1028,6 +1059,32 @@ func (c *Client) DeleteFile(ctx context.Context, path, etag string) error {
 		return providerError("delete file", "folders cannot be deleted by this operation")
 	}
 	response, err := c.webdav(ctx, "delete file", http.MethodDelete, rel, nil, "If-Match", etag, uncertainDeleted)
+	if err != nil {
+		return err
+	}
+	response.Body.Close()
+	return nil
+}
+
+// DeleteFolder deletes a folder with all its content, bound to the ETag the caller read. The root is never
+// deletable, and a path that is no folder is refused before the one DELETE.
+func (c *Client) DeleteFolder(ctx context.Context, path, etag string) error {
+	const op = "delete folder"
+	rel, err := splitRelative(path)
+	if err != nil || len(rel) == 0 {
+		return providerError(op, "a folder path below the connection root is required")
+	}
+	if !validETag(etag) {
+		return providerError(op, "etag is not a usable folder version")
+	}
+	entry, err := c.stat(ctx, op, rel, false)
+	if err != nil {
+		return err
+	}
+	if entry.Type != typeFolder {
+		return providerError(op, "only folders can be deleted by this operation")
+	}
+	response, err := c.webdav(ctx, op, http.MethodDelete, rel, nil, "If-Match", etag, uncertainFolderDeleted)
 	if err != nil {
 		return err
 	}
