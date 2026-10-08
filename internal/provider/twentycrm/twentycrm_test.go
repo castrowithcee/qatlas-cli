@@ -189,8 +189,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 18 {
-		t.Fatalf("operations = %d, want seven company, two object, four record read, two record write, and three removal operations", len(operations))
+	if len(operations) != 21 {
+		t.Fatalf("operations = %d, want seven company, two object, four record read, two record write, three record removal, and three activity link operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -198,7 +198,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 			wantVersion = 2
 		}
 		guarded := descriptor.ID == "twentycrm.companies.delete" || descriptor.ID == "twentycrm.companies.destroy" ||
-			descriptor.ID == "twentycrm.records.delete" || descriptor.ID == "twentycrm.records.destroy"
+			descriptor.ID == "twentycrm.records.delete" || descriptor.ID == "twentycrm.records.destroy" ||
+			descriptor.ID == "twentycrm.activitytargets.delete"
 		if descriptor.RequiresToolAllowList != guarded {
 			t.Errorf("descriptor %s RequiresToolAllowList = %v, want %v", descriptor.ID, descriptor.RequiresToolAllowList, guarded)
 		}
@@ -211,13 +212,14 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 			t.Errorf("descriptor %s examples = %s", descriptor.ID, descriptor.Examples)
 		}
 	}
-	if operations[0].ID != "twentycrm.companies.create" || operations[6].ID != "twentycrm.companies.update" ||
-		operations[7].ID != "twentycrm.objects.get" || operations[8].ID != "twentycrm.objects.list" ||
-		operations[9].ID != "twentycrm.records.create" || operations[10].ID != "twentycrm.records.delete" ||
-		operations[11].ID != "twentycrm.records.destroy" || operations[12].ID != "twentycrm.records.get" ||
-		operations[13].ID != "twentycrm.records.groupby" || operations[14].ID != "twentycrm.records.list" ||
-		operations[15].ID != "twentycrm.records.restore" || operations[16].ID != "twentycrm.records.search" ||
-		operations[17].ID != "twentycrm.records.update" {
+	if operations[0].ID != "twentycrm.activitytargets.create" || operations[2].ID != "twentycrm.activitytargets.list" ||
+		operations[3].ID != "twentycrm.companies.create" || operations[9].ID != "twentycrm.companies.update" ||
+		operations[10].ID != "twentycrm.objects.get" || operations[11].ID != "twentycrm.objects.list" ||
+		operations[12].ID != "twentycrm.records.create" || operations[13].ID != "twentycrm.records.delete" ||
+		operations[14].ID != "twentycrm.records.destroy" || operations[15].ID != "twentycrm.records.get" ||
+		operations[16].ID != "twentycrm.records.groupby" || operations[17].ID != "twentycrm.records.list" ||
+		operations[18].ID != "twentycrm.records.restore" || operations[19].ID != "twentycrm.records.search" ||
+		operations[20].ID != "twentycrm.records.update" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1109,7 +1111,7 @@ func classOf(err error) provider.Class {
 
 // wantSensitivity is the data class a tool must declare: record tools carry their own.
 func wantSensitivity(id string) string {
-	if strings.HasPrefix(id, Provider+".records.") {
+	if strings.HasPrefix(id, Provider+".records.") || strings.HasPrefix(id, Provider+".activitytargets.") {
 		return recordDataSensitivity
 	}
 	return dataSensitivity
