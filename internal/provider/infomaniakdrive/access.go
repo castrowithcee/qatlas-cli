@@ -29,16 +29,10 @@ const (
 	accessManage = "manage"
 )
 
-// Languages of the invitation mail, the fixed enum of the API's lang parameter.
-var accessLanguages = []string{"de", "en", "es", "fr", "it", "nl", "pt"}
-
 // Bounds of the arguments, of the membership check, and of an answer.
 const (
-	maxGrantUsers  = 20
-	maxGrantTeams  = 10
-	maxGrantEmails = 10
-	maxEmailBytes  = 254
-	maxEmailLocal  = 64
+	maxGrantUsers = 20
+	maxGrantTeams = 10
 	// membersPerPage and maxMemberPages bound the membership check: at most this many requests and users are
 	// read, and a target not found by then is refused as unproven rather than guessed at.
 	membersPerPage = 100
@@ -54,11 +48,8 @@ const statusPartial = "partial"
 
 const (
 	accessRightSchema = `{"type":"string","enum":["read","write","manage"]}`
-	accessLangSchema  = `{"type":"string","enum":["de","en","es","fr","it","nl","pt"]}`
 	userIDsSchema     = `{"type":"array","items":` + objectIDSchema + `,"minItems":1,"maxItems":20,"uniqueItems":true}`
 	teamIDsSchema     = `{"type":"array","items":` + objectIDSchema + `,"minItems":1,"maxItems":10,"uniqueItems":true}`
-	emailsSchema      = `{"type":"array","items":{"type":"string","minLength":3,"maxLength":254},` +
-		`"minItems":1,"maxItems":10,"uniqueItems":true}`
 )
 
 var accessEntrySchema = `{"type":"object","properties":{"id":{"type":"integer"},"access":{"type":"string"},` +
@@ -148,31 +139,29 @@ var accessGet = capability.Descriptor{
 
 var accessGrant = capability.Descriptor{
 	ID:      Provider + ".access.grant",
-	Version: 1,
-	Title:   "Grant Infomaniak kDrive access to users, teams, or e-mail addresses",
-	Description: "Give exactly one confirmed access change to up to 20 users, 10 teams, and 10 e-mail addresses at " +
-		"once for a file or folder of a drive this connection may reach; users and teams must belong to the same " +
-		"drive, and an e-mail address is invited and receives a mail from Infomaniak",
-	Tags:                  []string{"infomaniak", "kdrive", "access", "grant", "invite"},
+	Version: 2,
+	Title:   "Grant Infomaniak kDrive access to users or teams",
+	Description: "Give exactly one confirmed access change to up to 20 users and 10 teams at once for a file or " +
+		"folder of a drive this connection may reach; users and teams must belong to the same drive, and no " +
+		"e-mail address is invited",
+	Tags:                  []string{"infomaniak", "kdrive", "access", "grant"},
 	Risk:                  accessChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	Provider:              Provider,
 	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` +
-		objectIDSchema + `,"right":` + accessRightSchema + `,"lang":` + accessLangSchema + `,"user_ids":` +
-		userIDsSchema + `,"team_ids":` + teamIDsSchema + `,"emails":` + emailsSchema +
-		`},"required":["drive_id","file_id","right","lang"],"additionalProperties":false}`),
+		objectIDSchema + `,"right":` + accessRightSchema + `,"user_ids":` +
+		userIDsSchema + `,"team_ids":` + teamIDsSchema +
+		`},"required":["drive_id","file_id","right"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(accessChangeSchema),
 	Arguments: []capability.Argument{mutationDriveArgument, accessFileArgument,
 		{Name: "right", Required: true, Description: "read: only read; write: write and read; manage: also share"},
-		{Name: "lang", Required: true, Description: "Language of the invitation mail: de, en, es, fr, it, nl, or pt"},
 		{Name: "user_ids", Description: "Up to 20 users of the same drive"},
-		{Name: "team_ids", Description: "Up to 10 teams with users in the same drive"},
-		{Name: "emails", Description: "Up to 10 e-mail addresses to invite; each is mailed by Infomaniak, is personal " +
-			"data, and is never quoted in an error; at least one of user_ids, team_ids, and emails is required"},
+		{Name: "team_ids", Description: "Up to 10 teams with users in the same drive; at least one of user_ids and " +
+			"team_ids is required"},
 	},
 	Fields: accessChangeFields,
 	Examples: []capability.Example{{Description: "Give one user of the drive read access to a folder",
-		Arguments: json.RawMessage(`{"drive_id":1,"file_id":42,"right":"read","lang":"en","user_ids":[7]}`)}},
+		Arguments: json.RawMessage(`{"drive_id":1,"file_id":42,"right":"read","user_ids":[7]}`)}},
 }
 
 var accessUpdate = capability.Descriptor{
@@ -267,15 +256,6 @@ func validAccessRight(right string) bool {
 	return right == accessRead || right == accessWrite || right == accessManage
 }
 
-func validAccessLang(lang string) bool {
-	for _, allowed := range accessLanguages {
-		if lang == allowed {
-			return true
-		}
-	}
-	return false
-}
-
 // boundedText cuts a provider string to at most limit bytes on a rune boundary and drops control characters.
 func boundedText(value string, limit int) string {
 	value = strings.Map(func(r rune) rune {
@@ -292,38 +272,6 @@ func boundedText(value string, limit int) string {
 		cut--
 	}
 	return value[:cut]
-}
-
-// validEmail is a deliberately simple syntax check: ASCII only, one @, a bounded local part, and a dotted
-// domain of plain labels. Infomaniak does the real validation. No refusal ever quotes the address.
-func validEmail(address string) bool {
-	if len(address) < 3 || len(address) > maxEmailBytes || strings.Count(address, "@") != 1 {
-		return false
-	}
-	for i := 0; i < len(address); i++ {
-		c := address[i]
-		if c <= 0x20 || c >= 0x7f || strings.IndexByte("()<>[]\\,;:\"", c) >= 0 {
-			return false
-		}
-	}
-	local, domain, _ := strings.Cut(address, "@")
-	if local == "" || len(local) > maxEmailLocal || local[0] == '.' || local[len(local)-1] == '.' ||
-		strings.Contains(local, "..") || !strings.Contains(domain, ".") {
-		return false
-	}
-	labels := strings.Split(domain, ".")
-	for _, label := range labels {
-		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-			return false
-		}
-		for i := 0; i < len(label); i++ {
-			c := label[i]
-			if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
-				return false
-			}
-		}
-	}
-	return len(labels[len(labels)-1]) >= 2
 }
 
 // validIDList accepts identifiers that are valid, unique, and at most limit many.
@@ -469,13 +417,11 @@ func (c *Client) GetAccess(ctx context.Context, driveID, fileID int64) (*AccessL
 }
 
 type accessGrantArguments struct {
-	DriveID int64    `json:"drive_id"`
-	FileID  int64    `json:"file_id"`
-	Right   string   `json:"right"`
-	Lang    string   `json:"lang"`
-	UserIDs []int64  `json:"user_ids"`
-	TeamIDs []int64  `json:"team_ids"`
-	Emails  []string `json:"emails"`
+	DriveID int64   `json:"drive_id"`
+	FileID  int64   `json:"file_id"`
+	Right   string  `json:"right"`
+	UserIDs []int64 `json:"user_ids"`
+	TeamIDs []int64 `json:"team_ids"`
 }
 
 func invokeAccessGrant(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -491,28 +437,14 @@ func invokeAccessGrant(ctx context.Context, resolved *config.Resolved, secrets *
 	if !validAccessRight(input.Right) {
 		return nil, invalidRequest("right must be read, write, or manage")
 	}
-	if !validAccessLang(input.Lang) {
-		return nil, invalidRequest("lang must be de, en, es, fr, it, nl, or pt")
-	}
 	if !validIDList(input.UserIDs, maxGrantUsers) {
 		return nil, invalidRequest("user_ids must be at most 20 different positive integers")
 	}
 	if !validIDList(input.TeamIDs, maxGrantTeams) {
 		return nil, invalidRequest("team_ids must be at most 10 different positive integers")
 	}
-	if len(input.Emails) > maxGrantEmails {
-		return nil, invalidRequest("emails must hold at most 10 addresses")
-	}
-	seen := map[string]bool{}
-	for _, address := range input.Emails {
-		key := strings.ToLower(address)
-		if !validEmail(address) || seen[key] {
-			return nil, invalidRequest("every address in emails must be a different, plain e-mail address")
-		}
-		seen[key] = true
-	}
-	if len(input.UserIDs)+len(input.TeamIDs)+len(input.Emails) == 0 {
-		return nil, invalidRequest("a grant needs at least one of user_ids, team_ids, and emails")
+	if len(input.UserIDs)+len(input.TeamIDs) == 0 {
+		return nil, invalidRequest("a grant needs at least one of user_ids and team_ids")
 	}
 	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
 	if err != nil {
@@ -533,7 +465,7 @@ type feedbackJSON struct {
 func targetText(id json.RawMessage) string {
 	var text string
 	if json.Unmarshal(id, &text) == nil {
-		return boundedText(text, maxEmailBytes)
+		return boundedText(text, maxAccessText)
 	}
 	var number int64
 	if json.Unmarshal(id, &number) == nil {
@@ -543,7 +475,7 @@ func targetText(id json.RawMessage) string {
 }
 
 // GrantAccess sends exactly one multi-access request, once. The body holds only the validated targets and
-// right; the language travels as the API's query parameter.
+// right.
 func (c *Client) GrantAccess(ctx context.Context, driveID, fileID int64, input accessGrantArguments) (*AccessChange, error) {
 	const op = "grant access"
 	body := map[string]any{"right": input.Right}
@@ -553,11 +485,8 @@ func (c *Client) GrantAccess(ctx context.Context, driveID, fileID int64, input a
 	if len(input.TeamIDs) > 0 {
 		body["team_ids"] = input.TeamIDs
 	}
-	if len(input.Emails) > 0 {
-		body["emails"] = input.Emails
-	}
 	env, status, err := c.accessRequest(ctx, op, http.MethodPost, accessPath(driveID, fileID),
-		url.Values{"lang": {input.Lang}}, body)
+		nil, body)
 	if err != nil {
 		return nil, err
 	}
@@ -566,9 +495,8 @@ func (c *Client) GrantAccess(ctx context.Context, driveID, fileID int64, input a
 		return result, nil
 	}
 	var feedback struct {
-		Emails []feedbackJSON `json:"emails"`
-		Users  []feedbackJSON `json:"users"`
-		Teams  []feedbackJSON `json:"teams"`
+		Users []feedbackJSON `json:"users"`
+		Teams []feedbackJSON `json:"teams"`
 	}
 	if json.Unmarshal(env.Data, &feedback) != nil {
 		return nil, invalidResponse(op, "Infomaniak returned an invalid response"+uncertain)
@@ -578,8 +506,7 @@ func (c *Client) GrantAccess(ctx context.Context, driveID, fileID int64, input a
 		kind  string
 		items []feedbackJSON
 		limit int
-	}{{"user", feedback.Users, len(input.UserIDs)}, {"team", feedback.Teams, len(input.TeamIDs)},
-		{"email", feedback.Emails, len(input.Emails)}} {
+	}{{"user", feedback.Users, len(input.UserIDs)}, {"team", feedback.Teams, len(input.TeamIDs)}} {
 		for i, item := range group.items {
 			if i >= group.limit {
 				break

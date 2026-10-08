@@ -9,7 +9,7 @@ import (
 const (
 	hookA       = "00000000-0000-0000-0000-000000000051"
 	hookForeign = "00000000-0000-0000-0000-000000000052"
-	hookURL     = "https://hooks.example.com/secret-path-canary?token=query-canary"
+	hookURL     = "https://user:pw-canary@hooks.example.com/secret-path-canary?token=query-canary"
 )
 
 var webhookTools = []string{webhooksList.ID, webhooksUpdate.ID, webhooksDelete.ID}
@@ -21,7 +21,7 @@ func webhookHandler(status int, answer string) func(call) (*http.Response, error
 			return jsonResponse(status, answer), nil
 		}
 		if c.command() == cmdWebhooks && c.body["team-id"] == teamA {
-			return jsonResponse(200, `[{"id":"`+hookA+`","uri":"https://user:pw-canary@hooks.example.com/secret-path-canary?token=query-canary",`+
+			return jsonResponse(200, `[{"id":"`+hookA+`","uri":"`+hookURL+`",`+
 				`"mtype":"application/json","isActive":true,"errorCode":null,"errorCount":2}]`), nil
 		}
 		return jsonResponse(200, `[]`), nil
@@ -44,7 +44,7 @@ func TestWebhooksListShowsHostOnly(t *testing.T) {
 func TestWebhooksRefuseForeignTeamBeforeSecretAndIO(t *testing.T) {
 	for _, test := range []struct{ tool, args string }{
 		{webhooksList.ID, `{"team_id":"` + teamForeign + `"}`},
-		{webhooksUpdate.ID, `{"team_id":"` + teamForeign + `","webhook_id":"` + hookA + `","url":"https://hooks.example.com/x","mtype":"application/json","is_active":true}`},
+		{webhooksUpdate.ID, `{"team_id":"` + teamForeign + `","webhook_id":"` + hookA + `","mtype":"application/json","is_active":true}`},
 		{webhooksDelete.ID, `{"team_id":"` + teamForeign + `","webhook_id":"` + hookA + `"}`},
 	} {
 		var calls []call
@@ -63,7 +63,7 @@ func TestWebhookChangesSendOneFixedCommand(t *testing.T) {
 		reads                     int
 		answer                    string
 	}{
-		{webhooksUpdate.ID, `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"` + hookURL + `","mtype":"application/json","is_active":false}`,
+		{webhooksUpdate.ID, `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","mtype":"application/json","is_active":false}`,
 			cmdUpdateWebhook, `"updated":true`,
 			map[string]any{"id": hookA, "uri": hookURL, "mtype": "application/json", "is-active": false}, 1, `{"id":"` + hookA + `"}`},
 		{webhooksDelete.ID, `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `"}`, cmdDeleteWebhook, `"deleted":true`,
@@ -90,14 +90,12 @@ func TestWebhookChangesSendOneFixedCommand(t *testing.T) {
 }
 
 func TestWebhookChangesRefuseForeignIDsAndBadInput(t *testing.T) {
-	good := `"url":"https://hooks.example.com/x","mtype":"application/json"`
+	good := `"mtype":"application/json"`
 	for name, test := range map[string]struct{ tool, connection, args string }{
 		"foreign id update": {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookForeign + `",` + good + `,"is_active":true}`},
 		"foreign id delete": {webhooksDelete.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookForeign + `"}`},
-		"http url":          {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"http://hooks.example.com/x","mtype":"application/json","is_active":true}`},
-		"ip url":            {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"https://127.0.0.1/x","mtype":"application/json","is_active":true}`},
-		"userinfo url":      {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"https://u:p@hooks.example.com/","mtype":"application/json","is_active":true}`},
-		"bad mtype":         {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"https://hooks.example.com/x","mtype":"text/plain","is_active":true}`},
+		"bad mtype":         {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","mtype":"text/plain","is_active":true}`},
+		"url argument":      {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"https://other.example.com/x","mtype":"application/json","is_active":true}`},
 		"allow-list delete": {webhooksDelete.ID, "writenarrow", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `"}`},
 	} {
 		var calls []call
@@ -125,7 +123,7 @@ func TestWebhookChangesNeedConfirmAndDeleteNeedsToolAllowList(t *testing.T) {
 
 func TestWebhookChangesSendOnceAndReportUncertainty(t *testing.T) {
 	args := map[string]string{
-		webhooksUpdate.ID: `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"https://hooks.example.com/x","mtype":"application/json","is_active":true}`,
+		webhooksUpdate.ID: `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","mtype":"application/json","is_active":true}`,
 		webhooksDelete.ID: `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `"}`,
 	}
 	for tool, arguments := range args {
@@ -161,5 +159,34 @@ func TestWebhookChangesSendOnceAndReportUncertainty(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "may have taken effect") || len(changes(calls)) != 1 {
 			t.Errorf("%s: err = %v, changes = %d", tool, err, len(changes(calls)))
 		}
+	}
+}
+
+func TestWebhooksUpdateRefusesMissingWebhookBeforeAnyChange(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(c call) (*http.Response, error) { return jsonResponse(200, `[]`), nil })
+	_, err := env.invokeConfirmed(webhooksUpdate.ID, "write",
+		`{"team_id":"`+teamA+`","webhook_id":"`+hookA+`","mtype":"application/json","is_active":true}`)
+	if !isInvalidRequest(err) || len(changes(calls)) != 0 {
+		t.Errorf("err = %v, changes = %d", err, len(changes(calls)))
+	}
+}
+
+// A listed webhook without its stored URL is refused: the update never sends a target it did not read.
+func TestWebhooksUpdateRefusesWebhookWithoutURL(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(c call) (*http.Response, error) {
+		return jsonResponse(200, `[{"id":"`+hookA+`","mtype":"application/json","isActive":true}]`), nil
+	})
+	_, err := env.invokeConfirmed(webhooksUpdate.ID, "write",
+		`{"team_id":"`+teamA+`","webhook_id":"`+hookA+`","mtype":"application/json","is_active":true}`)
+	if err == nil || len(changes(calls)) != 0 {
+		t.Errorf("err = %v, changes = %d", err, len(changes(calls)))
+	}
+}
+
+func TestWebhooksUpdateIsVersionTwo(t *testing.T) {
+	if webhooksUpdate.Version != 2 {
+		t.Errorf("version = %d", webhooksUpdate.Version)
 	}
 }

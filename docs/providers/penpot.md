@@ -105,7 +105,7 @@ connections:
 | `penpot.comments.update` | update | required | `update-comment-thread` or `update-comment` | resolves or reopens a thread, or edits a comment |
 | `penpot.comments.delete` | delete | required, tool allow-list | `delete-comment-thread` or `delete-comment` | deletes a thread or a comment |
 | `penpot.webhooks.list` | read | none | `get-webhooks` | lists the webhooks of one bound team |
-| `penpot.webhooks.update` | update | required | `update-webhook` | replaces URL, payload type, and active state of a webhook |
+| `penpot.webhooks.update` | update | required | `update-webhook` | replaces payload type and active state of a webhook |
 | `penpot.webhooks.delete` | delete | required, tool allow-list | `delete-webhook` | deletes a webhook |
 | `penpot.members.list` | read | none | `get-team-members` | lists the members of one bound team |
 | `penpot.members.setrole` | update | required, tool allow-list | `update-team-member-role` | sets a member's role to admin, editor, or viewer |
@@ -272,19 +272,17 @@ comments of the file before trying again.
 The three webhook tools work on the webhooks of one team and take `team_id`, which must be a bound team (checked before
 the credential is resolved and before any request; the refusal never names the team). Qatlas creates no permanent
 access or data paths to the outside (webhooks, invitations, public links); reading, pausing, revoking, and deleting
-remain, so no tool creates a webhook or invites a person.
+remain, so no tool creates a webhook, changes a webhook's target URL, or invites a person.
 
 - `webhooks.list` takes `team_id` and answers `webhooks` with `id`, `host`, `mtype`, `is_active`, `error_code`, and
   `error_count` (at most 100). **The target URL is never returned, only its host name**, since a URL may carry a
   secret in its path or query. Webhook secrets are not exposed by Penpot's list and are never handled.
-- `webhooks.update` takes `team_id`, `webhook_id`, `url`, `mtype`, and `is_active` (Penpot replaces all three) and
-  answers `updated`, `webhook_id`, and `team_id`. Penpot resets the error counters.
+- `webhooks.update` takes `team_id`, `webhook_id`, `mtype`, and `is_active` and answers `updated`, `webhook_id`, and
+  `team_id`. It has no `url` argument: it reads the stored URL from `get-webhooks` of the bound team and sends it
+  back unchanged, so the target never changes and never leaves the client. Penpot resets the error counters.
 - `webhooks.delete` takes `team_id` and `webhook_id`.
 
-The URL of an update must pass the same check as `media.fromurl` (https, public DNS host name, default port, no user info or
-fragment, at most 2048 characters). It is syntactic only: **Penpot sends a HEAD request to a changed URL
-itself**, so the instance's network controls remain the real boundary. A webhook ID is bound before an update or
-delete: it must appear in `get-webhooks` of the given bound team, else it is refused without naming it. **Webhooks
+A webhook ID is bound before an update or delete: it must appear in `get-webhooks` of the given bound team, else it is refused without naming it. **Webhooks
 belong to the whole team, so a connection with a project allow-list refuses update and delete**; listing is
 still allowed.
 
@@ -385,7 +383,7 @@ instance:
   are the new file IDs, and the temporary object is readable without the token.
 - Webhooks (Penpot 2.18.0, `webhooks.clj`): `get-webhooks` (`team-id`; webhooks with `id`, `uri`, `mtype`, `is-active`,
   `error-code`, `error-count`, `profile-id`), `update-webhook` (`id`, `uri`, `mtype` one of `application/json` and
-  `application/transit+json`, `is-active`, all required; Penpot sends a HEAD request to the URI; resets the error counters), and `delete-webhook`
+  `application/transit+json`, `is-active`, all required; `uri` is always the stored one; resets the error counters), and `delete-webhook`
   (`id`; answers without a body). Edit permission on the team is checked by Penpot. Assumed: the answers of the changes are not read, and a webhook ID is not
   tied to a team by the command itself, which is why the tool proves it through `get-webhooks` first.
 - Teams (Penpot 2.18.0, `teams.clj`, `common/types/team.cljc`): `get-team-members` (`team-id`;

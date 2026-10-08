@@ -28,9 +28,9 @@ permission and an explicit tools list. It reads the share link of a file or fold
 one; deleting a share link is a separate, confirmed tool, and all share link tools,
 the reading ones included, need an explicit tools list. Qatlas creates no permanent access or data paths to the
 outside (webhooks, invitations, public links); reading, pausing, revoking, and deleting remain, so no tool creates or
-changes a share link. It reads the dropbox (upload link) of a folder and
-creates, changes, or deletes it with separate, confirmed tools that likewise all need an explicit tools list. It reads the access of a file or folder and grants, changes, or revokes the access of users, teams, and
-invited e-mail addresses to it; these are separate tools that each need an explicit tools list, and a user or
+changes a share link and no tool invites by e-mail. It reads the dropbox (upload link) of a folder and
+creates, changes, or deletes it with separate, confirmed tools that likewise all need an explicit tools list. It reads the access of a file or folder and grants, changes, or revokes the access of users and teams
+to it; these are separate tools that each need an explicit tools list, and a user or
 team is only named after it is proven to belong to the same drive.
 
 ## Configuration
@@ -119,7 +119,7 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 | `infomaniakdrive.dropbox.update` | changes exactly one dropbox (`PUT /2/drive/{d}/files/{id}/dropbox`) |
 | `infomaniakdrive.dropbox.delete` | deletes exactly one dropbox (`DELETE /2/drive/{d}/files/{id}/dropbox`) |
 | `infomaniakdrive.access.get` | the users, teams, and invited people with access to exactly one file or folder (`GET /2/drive/{d}/files/{id}/access`) |
-| `infomaniakdrive.access.grant` | gives users, teams, and e-mail addresses access in one request (`POST /2/drive/{d}/files/{id}/access`) |
+| `infomaniakdrive.access.grant` | gives existing users and teams of the drive access in one request (`POST /2/drive/{d}/files/{id}/access`) |
 | `infomaniakdrive.access.update` | changes the right of exactly one user or team (`PUT /2/drive/{d}/files/{id}/access/users/{uid}` or `.../teams/{tid}`) |
 | `infomaniakdrive.access.revoke` | removes the access of exactly one user or team (`DELETE /2/drive/{d}/files/{id}/access/users/{uid}` or `.../teams/{tid}`) |
 
@@ -135,7 +135,7 @@ anyone without an account upload into the folder, so all four require the tool a
 need `confirm`; all four are `open_world`. `dropbox.create` is non-idempotent, the others are idempotent. `access.get` is `read` and safe, but it discloses people and
 their rights, so it requires the tool allow-list too. `access.grant` has the effect `create`, `access.update` the
 effect `update`, and `access.revoke` the effect `delete`; all three widen or narrow who reaches a file, so all
-three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` can mail people, so it is not. The provider's default
+three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` is `create` and stays non-idempotent. The provider's default
 permission stays `read`: a connection runs a change only after its permissions name the effect and its tools
 list offers the tool where one is required.
 
@@ -269,9 +269,8 @@ than being refused or silently redirected to a listing.
   list was cut. The class of all four tools is `infomaniak-kdrive-access`, separate from file metadata and from link
   URLs, because who may reach a file is personal data.
 - `access.grant` sends one `POST /2/drive/{d}/files/{id}/access` with `right`, and any of `user_ids` (at most 20),
-  `team_ids` (at most 10), and `emails` (at most 10), at least one of them. `lang` (`de`, `en`, `es`, `fr`, `it`,
-  `nl`, `pt`) is required, because Infomaniak sends the invitation mail in it and Qatlas picks no language. No
-  `message` is offered. `access.update` and `access.revoke` take exactly one of `user_id` and `team_id`. `right` is
+  `team_ids` (at most 10), at least one of them. There is no `emails` or `lang` argument, since no tool
+  invites by e-mail. No `message` is offered. `access.update` and `access.revoke` take exactly one of `user_id` and `team_id`. `right` is
   `read`, `write`, or `manage` (can also share); the API's `none` is not offered, because `access.revoke` removes
   access explicitly. Nothing else of the provider's body exists.
 - `file_id` is a positive integer other than the drive's root `1`, checked before any secret is read or request is
@@ -284,13 +283,10 @@ than being refused or silently redirected to a listing.
   value, and nothing is changed. When the bound ends the search without finding it, or the page count is missing,
   the target counts as unproven and is refused the same way instead of being guessed. Infomaniak lists no teams of
   a drive on their own with the `drive` scope, so a team is provable only through an active user of the drive who
-  belongs to it; a team without such a user is refused. A grant of only e-mail addresses needs no such read. The
+  belongs to it; a team without such a user is refused. The
   check costs one request per page; it is a read and sends nothing.
-- An e-mail address in `emails` makes Infomaniak send an invitation mail to a person outside the drive, so the tool is
-  `open_world`, needs `confirm`, and is never repeated. Each address is checked locally: ASCII, 254 bytes at most, one
-  `@`, a plain dotted domain, no space, control or special character, no duplicate. An address is personal data: no
-  error and no log quotes one, and the result echoes only what Infomaniak reports per target, up to 254 bytes each.
-  The invoke log holds no arguments.
+- The grant tool is `open_world`, needs `confirm`, and is never repeated. The result echoes only what Infomaniak
+  reports per target, up to 256 bytes each. The invoke log holds no arguments.
 - A grant answers `done`, or `partial` when Infomaniak reached some targets and refused others; `granted`, `failed`,
   and `results` (kind, target, whether reached) say which, and Infomaniak's per-target message is never read. An
   update or revoke answers its `status` and the `user_id` or `team_id`. An answer that cannot be read counts as an
@@ -391,7 +387,7 @@ This provider works the same way against a Business kSuite drive and a personal 
 ordinary kDrives reachable through the same REST API and the same API token, and both are listed, browsed,
 and read identically through the tools above. The changes, uploads, downloads, and share links use the same endpoints on both. Whether a plan
 permits a change, for example a folder or file operation or an upload on a restricted my kSuite drive, is Infomaniak's
-decision: a refusal arrives as `permission` (or `provider-error`) and is never worked around, a share link or dropbox included: which rights, expiry, and settings a plan allows is its decision, and a refusal is not retried with other settings, and the same holds for sharing access with users, teams, and invited people, which a plan or the rights of the token's user may refuse as `permission`, and this
+decision: a refusal arrives as `permission` (or `provider-error`) and is never worked around, a share link or dropbox included: which rights, expiry, and settings a plan allows is its decision, and a refusal is not retried with other settings, and the same holds for sharing access with users and teams, which a plan or the rights of the token's user may refuse as `permission`, and this
 provider documents no plan-specific behaviour beyond that. The one documented difference between the two plans is WebDAV
 access, which my kSuite does not guarantee the way a Business kSuite subscription does; this provider does
 not depend on WebDAV at all; it is unaffected either way. A my kSuite account may hold fewer or more
