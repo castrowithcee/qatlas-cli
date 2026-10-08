@@ -544,7 +544,7 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	uploads := append(append([]string{}, install...), uploadsRoot...)
 	uploads = append(uploads, userID)
 	client := &Client{origin: origin, prefix: prefix, uploads: uploads, root: root, auth: header}
-	client.http = newHTTPClient(origin, escapePath(prefix))
+	client.http = provider.NoRedirectClient(defaultTimeout, transport)
 	return client, nil
 }
 
@@ -683,29 +683,6 @@ func (c *Client) requestURL(rel []string) string {
 // transport carries every Nextcloud request. A nil value is Go's default transport; the package's own
 // tests replace it with recorded responses.
 var transport http.RoundTripper
-
-// redirectLeavesMessage is the message of a redirect that would have carried the app password off the
-// configured origin or out of the Files root of the configured identity. It names neither.
-const redirectLeavesMessage = "refused to follow a redirect that leaves the configured Nextcloud instance or root"
-
-// newHTTPClient bounds every request in time and keeps a credential-carrying redirect on the configured
-// origin and inside the Files root of the configured identity.
-func newHTTPClient(origin, prefix string) *http.Client {
-	return &http.Client{
-		Timeout:   defaultTimeout,
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-			if req.URL.Scheme+"://"+req.URL.Host != origin {
-				return &provider.RedirectRefused{Message: redirectLeavesMessage}
-			}
-			escaped := req.URL.EscapedPath()
-			if escaped != prefix && !strings.HasPrefix(escaped, prefix+"/") {
-				return &provider.RedirectRefused{Message: redirectLeavesMessage}
-			}
-			return nil
-		},
-	}
-}
 
 // TestConnection performs the smallest safe authenticated read: one PROPFIND of depth 0 on the fixed root
 // folder. It proves that the instance answers Files WebDAV, that the app password is accepted, and that
@@ -867,7 +844,7 @@ func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
 }
 
 // transferClient is the client for a request that moves file content to or from a local path: the same
-// redirect rules, a longer timeout.
+// client, which never follows a redirect, with a longer timeout.
 func (c *Client) transferClient() *http.Client {
 	client := *c.http
 	client.Timeout = transferTimeout
@@ -1240,9 +1217,18 @@ const messageNotFound = "this Nextcloud connection does not hold this path"
 // messageForeignEntry covers every answer that names a node outside the folder the request addressed.
 const messageForeignEntry = "Nextcloud answered with an entry outside the requested folder"
 
+// messageRedirect answers every 3xx status. Qatlas follows no redirect, so the server did not act on the
+// request; the message names neither the location nor the path.
+const messageRedirect = "Nextcloud answered with a redirect, which Qatlas does not follow"
+
+func isRedirect(status int) bool { return status >= 300 && status < 400 }
+
 // statusError maps an HTTP status to a stable class. The provider body is never read into the message:
 // Nextcloud echoes the request path into it, and the class plus the status is what a caller can act on.
 func statusError(op string, status int) error {
+	if isRedirect(status) {
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: messageRedirect}
+	}
 	switch status {
 	case http.StatusUnauthorized:
 		return &provider.Error{
@@ -1294,19 +1280,15 @@ func statusError(op string, status int) error {
 }
 
 // sentTransportError is transportError for a request that writes a file: whatever ended it, the server may
-// have acted on it. Only a refused redirect, a local decision, leaves the outcome clear.
+// have acted on it.
 func sentTransportError(op string, err error) error {
-	var refused *provider.RedirectRefused
-	if errors.As(err, &refused) {
-		return provider.Transport(op, "Nextcloud", err)
-	}
 	return withUncertainty(provider.Transport(op, "Nextcloud", err))
 }
 
 // sentStatusError is statusError for a request that writes a file: a client error is a clear refusal, any
-// other non-success status leaves the outcome open.
+// other non-success status leaves the outcome open. A redirect is a clear refusal: the server did not act.
 func sentStatusError(op string, status int) error {
-	if status >= 400 && status < 500 {
+	if isRedirect(status) || status >= 400 && status < 500 {
 		return statusError(op, status)
 	}
 	return withUncertainty(statusError(op, status))
