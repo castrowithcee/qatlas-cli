@@ -422,7 +422,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 
 func (c *Client) testConnection(ctx context.Context) provider.Class {
 	var page voucherListJSON
-	if err := c.get(ctx, "test connection", "/v1/voucherlist", listQuery(ListOptions{Size: 1}), &page); err != nil {
+	if err := c.get(ctx, "test connection", "", "/v1/voucherlist", listQuery(ListOptions{Size: 1}), &page); err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {
 			return providerErr.Class
@@ -520,7 +520,7 @@ func (c *Client) ListInvoices(ctx context.Context, options ListOptions) (*ListRe
 	}
 
 	var page voucherListJSON
-	if err := c.get(ctx, op, "/v1/voucherlist", listQuery(options), &page); err != nil {
+	if err := c.get(ctx, op, "", "/v1/voucherlist", listQuery(options), &page); err != nil {
 		return nil, err
 	}
 
@@ -640,7 +640,7 @@ func (c *Client) GetInvoice(ctx context.Context, id string) (*Invoice, error) {
 	}
 
 	var raw invoiceJSON
-	if err := c.get(ctx, op, "/v1/invoices/"+url.PathEscape(id), nil, &raw); err != nil {
+	if err := c.get(ctx, op, resourceInvoice, "/v1/invoices/"+url.PathEscape(id), nil, &raw); err != nil {
 		return nil, err
 	}
 	if !strings.EqualFold(raw.ID, id) {
@@ -736,7 +736,7 @@ func (c *Client) CreateInvoice(ctx context.Context, input createInput) (*createR
 		UpdatedDate string `json:"updatedDate"`
 		Version     int    `json:"version"`
 	}
-	if err := c.post(ctx, op, "/v1/invoices", query, payload, &response); err != nil {
+	if err := c.post(ctx, op, "", "/v1/invoices", query, payload, &response); err != nil {
 		return nil, err
 	}
 	if !validUUID(response.ID) {
@@ -817,7 +817,7 @@ type invoiceJSON struct {
 }
 
 // get performs one bounded read against the fixed gateway and decodes the response into out.
-func (c *Client) get(ctx context.Context, op, path string, query url.Values, out any) error {
+func (c *Client) get(ctx context.Context, op, resource, path string, query url.Values, out any) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "Lexware", err)
 	}
@@ -840,7 +840,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return statusError(op, response.StatusCode)
+		return statusError(op, resource, response.StatusCode)
 	}
 	if failure := provider.ReadJSON(op, "Lexware", response.Body, maxResponseBytes, out); failure != nil {
 		return failure
@@ -848,7 +848,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	return nil
 }
 
-func (c *Client) post(ctx context.Context, op, path string, query url.Values, payload, out any) error {
+func (c *Client) post(ctx context.Context, op, resource, path string, query url.Values, payload, out any) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "Lexware", err)
 	}
@@ -873,7 +873,7 @@ func (c *Client) post(ctx context.Context, op, path string, query url.Values, pa
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return statusError(op, response.StatusCode)
+		return statusError(op, resource, response.StatusCode)
 	}
 	if failure := provider.ReadJSON(op, "Lexware", response.Body, maxResponseBytes, out); failure != nil {
 		return failure
@@ -883,7 +883,10 @@ func (c *Client) post(ctx context.Context, op, path string, query url.Values, pa
 
 // statusError maps an HTTP status to a stable class. The provider message is never copied: Lexware echoes
 // request detail into it, and the class plus the status is what a caller can act on.
-func statusError(op string, status int) error {
+//
+// resource names the single object an operation addresses (a resource* constant) and is empty for lists,
+// creations and the connection test; only a named object can be reported as missing.
+func statusError(op, resource string, status int) error {
 	switch status {
 	case http.StatusUnauthorized:
 		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Lexware rejected the API key"}
@@ -898,8 +901,15 @@ func statusError(op string, status int) error {
 			Message: "the API key is not permitted to perform this operation; check the rights of the API key in Lexware",
 		}
 	case http.StatusNotFound:
+		if resource == "" {
+			return &provider.Error{
+				Class: provider.ClassProviderError, Op: op,
+				Message: "Lexware did not find the requested endpoint or a referenced object (HTTP 404)",
+			}
+		}
 		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op, Message: "Lexware does not hold this invoice",
+			Class: provider.ClassNotFound, Op: op,
+			Message: "Lexware does not hold this " + resource + " or does not show it to this API key",
 		}
 	case http.StatusBadRequest, http.StatusNotAcceptable:
 		return &provider.Error{
@@ -918,6 +928,9 @@ func statusError(op string, status int) error {
 		}
 	}
 }
+
+// Resource kinds of single-object operations, used in the not-found message.
+const resourceInvoice = "invoice"
 
 func providerError(op, message string) error {
 	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message}
