@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes Nextcloud file operations, fixed Files roots, connection permissions, and WebDAV safety boundaries.
+  Describes Nextcloud file operations, typed targets, the Files folder, connection permissions, and WebDAV safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -9,16 +9,43 @@ updated: 2026-10-06
 
 # Nextcloud
 
-A connection binds one identity to one fixed folder in the Files app. It lists and reads metadata or up to
-4 MiB of file content (`read`), creates files only when absent (`create`), replaces an existing version with
-an ETag precondition (`update`), and deletes only files with an ETag precondition (`delete`). It never offers
-recursive folder deletion; parent folders must already exist.
+A connection binds one identity to typed targets (see Targets). The Files tools form the tool group `files` and
+work in the bound Files folder: they list and read metadata or up to 4 MiB of file content (`read`), create
+files only when absent (`create`), replace an existing version with an ETag precondition (`update`), and delete
+only files with an ETag precondition (`delete`). There is no recursive folder deletion; parent folders must
+already exist.
 
 The instance URL must use `https`, without exception. Qatlas follows no redirect: a 3xx answer to any request
 is a clear failure that did not act on the server, and the app password only ever travels to the configured URL.
 
-Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the configured
-root. Connection permissions independently hide and block operations, while the identity's WebDAV rights
+## Targets
+
+The `targets` list holds typed entries; each kind is either its name alone (everything of that kind the
+identity reaches) or `kind/ID`:
+
+- `folder` (the whole Files root) or `folder/PATH`; at most one per connection. Only a `folder` target enables the
+  Files tools; without one they refuse locally, before any credential access or request.
+- `calendar` or `calendar/URI`, `addressbook` (all but the system address book) or `addressbook/URI`,
+  `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric), `notes` or `notes/CATEGORY` (a sub-folder
+  such as `Work/Plans` is allowed).
+- `account`: the account-wide and instance-wide reach of the identity (notifications, activity, search,
+  directory, incoming shares, system tag catalog).
+- `admin`: provisioning reads; only as the sole target of a connection.
+
+The general and the specific form of one kind cannot be combined, and no kind lists more than 100 entries.
+IDs are literal single segments without `%`, `\`, or control characters.
+
+The single field `target` keeps its meaning as the root folder: `Reports`, `Team/Reports`, and `/` (the whole
+Files root) bind exactly as before, and a bare value in the `targets` list is read the same way. A single
+`target` whose first path segment is a kind name (for example `calendar/2026`, or a folder named `talk`) is
+refused, because it could mean a folder or a typed target; write it as `folder/PATH` in `targets`. This
+refusal changes the behaviour of such existing values.
+
+The connection test reads the bound folder, or the Files root of the identity when the connection binds none;
+it reports no metadata.
+
+Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound
+folder. Connection permissions independently hide and block operations, while the identity's WebDAV rights
 remain the provider-side ceiling. An optional `tools` list narrows a connection further to named tools, for
 example `[nextcloud.files.list, nextcloud.files.stat]` for metadata without file content, and never admits
 an effect `permissions` excludes. File content is carried as base64 and never written to audit records. The
