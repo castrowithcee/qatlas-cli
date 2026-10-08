@@ -186,8 +186,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 9 {
-		t.Fatalf("operations = %d, want seven company and two object operations", len(operations))
+	if len(operations) != 11 {
+		t.Fatalf("operations = %d, want seven company, two object, and two record operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -199,7 +199,7 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 			t.Errorf("descriptor %s RequiresToolAllowList = %v, want %v", descriptor.ID, descriptor.RequiresToolAllowList, guarded)
 		}
 		if descriptor.Version != wantVersion || descriptor.Provider != Provider ||
-			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
+			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != wantSensitivity(descriptor.ID) {
 			t.Errorf("descriptor %s = %+v, want a bounded operation requiring an explicit connection",
 				descriptor.ID, descriptor)
 		}
@@ -208,7 +208,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		}
 	}
 	if operations[0].ID != "twentycrm.companies.create" || operations[6].ID != "twentycrm.companies.update" ||
-		operations[7].ID != "twentycrm.objects.get" || operations[8].ID != "twentycrm.objects.list" {
+		operations[7].ID != "twentycrm.objects.get" || operations[8].ID != "twentycrm.objects.list" ||
+		operations[9].ID != "twentycrm.records.get" || operations[10].ID != "twentycrm.records.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1096,4 +1097,12 @@ func classOf(err error) provider.Class {
 		return providerErr.Class
 	}
 	return ""
+}
+
+// wantSensitivity is the data class a tool must declare: record tools carry their own.
+func wantSensitivity(id string) string {
+	if strings.HasPrefix(id, Provider+".records.") {
+		return recordDataSensitivity
+	}
+	return dataSensitivity
 }
