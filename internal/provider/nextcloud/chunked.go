@@ -61,12 +61,12 @@ func (r *recordReader) Read(p []byte) (int, error) {
 //
 // The remaining gap: the manual documents no condition for the MOVE, so a file created or changed between
 // the final stat and the MOVE is overwritten (create) or replaced regardless of its version (update).
-func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upload *localfile.Upload, match string) (string, error) {
+func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upload *localfile.Upload, create bool, match string) (string, error) {
 	id, err := uploadID()
 	if err != nil {
 		return "", providerError(op, "no upload ID could be generated")
 	}
-	if err := c.checkTarget(ctx, op, rel, match); err != nil {
+	if err := c.checkTarget(ctx, op, rel, create, match); err != nil {
 		return "", err
 	}
 	destination := c.requestURL(rel)[len(c.origin):]
@@ -106,7 +106,7 @@ func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upl
 	if _, err := io.Copy(io.Discard, upload); err != nil {
 		return fail(providerError(op, "the local file changed while it was read"))
 	}
-	if err := c.checkTarget(ctx, op, rel, match); err != nil {
+	if err := c.checkTarget(ctx, op, rel, create, match); err != nil {
 		return fail(err)
 	}
 
@@ -168,9 +168,9 @@ func (c *Client) abortUpload(ctx context.Context, folder string) {
 
 // checkTarget stands in for the conditions the manual does not document for the MOVE: a create needs the
 // target to be absent, an update needs the file to carry the given version.
-func (c *Client) checkTarget(ctx context.Context, op string, rel []string, match string) error {
+func (c *Client) checkTarget(ctx context.Context, op string, rel []string, create bool, match string) error {
 	entry, err := c.stat(ctx, op, rel, false)
-	if match == "*" {
+	if create {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) && providerErr.Message == messageNotFound {
 			return nil

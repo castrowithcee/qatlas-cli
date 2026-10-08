@@ -47,7 +47,11 @@ the `MOVE` is not detected. Nextcloud removes an unfinished upload folder after 
 If the outcome of a file write is unclear (timeout, aborted connection, a 5xx answer), the error says the file
 may have been stored and that the file must be stat-ed before repeating. This applies to `content_base64`,
 single, and chunked writes. Qatlas never repeats such a request itself. A refusal by Nextcloud (4xx) is a
-clear failure. `update` keeps its `etag` precondition.
+clear failure.
+
+`update` replaces only an existing file: its `etag` must be the ETag of that version, sent as `If-Match`. `*` or
+another unusable `etag` is refused before any credential access or request, so a connection without the `create`
+permission never creates a file. `create` always sends `If-None-Match: *`.
 
 `nextcloud.files.get` reads one file below the root. With `local_path` it writes the file into a directory
 released for writing (`files.write`), atomically, and reports only path, name, size, SHA-256, and ETag; an
