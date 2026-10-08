@@ -1,8 +1,8 @@
 ---
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, count by
-  field), record write (create, update), and record trash (delete, restore, destroy) operations, object
-  targets, connection permissions, and safety boundaries.
+  field), record write (create, update, batches), record trash (delete, restore, destroy), and note and
+  task link operations, object targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -14,8 +14,9 @@ updated: 2026-10-08
 A connection binds one API key to one managed or self-hosted workspace and, optionally, to a set of its
 objects (see Object targets). It can list and read companies (`read`), create them (`create`), change their
 name or primary domain (`update`), and delete them (`delete`). It can also create records of any reachable
-object and change their fields (see Writing records), and delete, restore, and destroy them (see Deleting and
-restoring).
+object and change their fields, also up to 60 at a time (see Writing records and Batches), delete, restore,
+and destroy them (see Deleting and restoring), and link notes and tasks to records (see Linking notes and
+tasks).
 Mutations require confirmation and only use the generated REST routes of the company or of a reachable
 object. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error, unreadable
 answer) it reports the outcome as uncertain and does not repeat the request.
@@ -34,9 +35,10 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
   on every connection that should not see all of them: tools for further objects make, for example, person
   data reachable on a connection without targets.
 - System objects (messages, calendar events, attachments, workflows, workspace members, and the like) are
-  never reachable and cannot be a target. Qatlas keeps them in a fixed list, so an object a later Twenty
-  version marks as a system object stays reachable on a connection without targets until the list is
-  updated.
+  never reachable and cannot be a target. The two link objects of notes and tasks are system objects too;
+  only the link tools touch them, and no records tool does. Qatlas keeps them in a fixed list, so an object a
+  later Twenty version marks as a system object stays reachable on a connection without targets until the
+  list is updated.
 - `companies.*` need `company` to be reachable: with targets, `object/company` must be bound.
 - Workspace-wide tools work only on a connection without object targets.
 
@@ -145,8 +147,29 @@ every field from the workspace catalog and builds the request body from the chec
 - A 403 means the role of the API key lacks the right to write the object or one of the fields; Twenty's own
   text is never shown.
 
-The setup profile `write` ticks the read tools and these two record tools. It adds no company change and no
-deletion or restore.
+The setup profile `write` ticks the read tools, these two record tools, and the link create tool. It adds no
+company change and no deletion or restore.
+
+## Linking notes and tasks
+
+`activitytargets.list`, `activitytargets.create`, and `activitytargets.delete` (`read`, `create`, `delete`)
+read, set, and remove the links between a note or a task and a record of any reachable object, standard or
+custom. The argument `activity` (`note` or `task`) selects the link object. The agent names the object and the
+record identifier; the field that carries the link comes from the workspace schema of the link object, never
+from an argument. An object that the schema gives no single link relation cannot be linked.
+
+- The note or task and the object must both be reachable through the connection, so with targets both
+  `object/note` (or `object/task`) and the object are bound. A refusal comes before any secret is resolved
+  and names neither object nor identifier.
+- `list` takes either `activity_id` (the links of a note or task) or `object` with `record_id` (the notes or
+  tasks linked to a record), one page with cursor like the record reads. It names only links whose two sides
+  are reachable and counts the others in `omitted`.
+- `create` sends one request with the activity and the one target identifier. Repeating it adds a duplicate
+  link, so an unclear result is reported as uncertain and not repeated. The answer must name the requested link.
+- `delete` removes only the link, never the note, task, or record. It reads the link first and removes it only
+  when both sides are reachable, then sends one request. An unclear result is reported as uncertain and not
+  repeated. A connection offers it only when its `tools` list names it.
+- Identifiers are UUIDs. Links are workspace data of the record data class.
 
 ## Batches
 
@@ -186,8 +209,8 @@ Companies and records of any reachable object share one trash contract:
 
 The record tools are `records.delete`, `records.restore`, and `records.destroy`. Each acts on one record of one
 reachable object, identified by its UUID, and sends one fixed route; no argument switches `delete` to permanent
-deletion or adds a filter, so there is no deletion or restore by filter. A refused
-object is rejected before the secret is read. Qatlas checks that the answer names the requested record. A 403 on
+deletion or adds a filter, so there is no deletion or restore by filter. A refused object is rejected before
+the secret is read. Qatlas checks that the answer names the requested record. A 403 on
 `records.delete` and `records.destroy` points to the right of the role of the key (Delete Records, Destroy
 Records); Twenty's own text is never shown. Qatlas sends each of them once and reports an unclear result as
 uncertain.
@@ -201,6 +224,7 @@ connection's local `permissions` list can only narrow it, and an optional `tools
 excludes. The `companies.*` tools expose conservative core company fields and accept no custom-field
 payloads; custom fields are written through `records.create` and `records.update`. Invocation arguments never
 replace the configured origin. The terminal editor starts a new connection on the setup profile `read`, which
-ticks `[read]` and the two company, two object, and four record read tools; the profile `write` adds the two
-record write tools. A profile is a visible starting selection, not a role: only the ticked `permissions` and
-`tools` are saved, every tick can be changed before saving, and a saved connection never follows a profile.
+ticks `[read]` and the two company, two object, four record read tools, and the link list tool; the profile
+`write` adds the two record write tools and the link create tool. A profile is a visible starting selection,
+not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving,
+and a saved connection never follows a profile.
