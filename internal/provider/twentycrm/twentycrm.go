@@ -219,7 +219,7 @@ func companyMutationDescriptor(action string, effect capability.Effect, idempote
 
 // readTools are the tools of the read profile; the write profile adds the record writes to them.
 var readTools = []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID,
-	recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsGroupBy.ID}
+	recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsGroupBy.ID, activitytargetsList.ID}
 
 // Register adds Twenty metadata, its read-only connection test, and the bounded company operations.
 func Register(reg *capability.Registry) error {
@@ -253,7 +253,7 @@ func Register(reg *capability.Registry) error {
 			ID: "write", Title: "Read and write records",
 			Description: "reads like the read profile and creates records and changes fields of records of the " +
 				"reachable objects; deletes nothing and does not change companies through the company tools",
-			Tools: append(append([]string{}, readTools...), recordsCreate.ID, recordsUpdate.ID),
+			Tools: append(append([]string{}, readTools...), recordsCreate.ID, recordsUpdate.ID, activitytargetsCreate.ID),
 		}},
 		Groups: toolGroups,
 	}, TestConnection); err != nil {
@@ -275,6 +275,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(recordsSearch, recordsGroup), Handler: capability.Handler(invokeRecordsSearch)},
 		capability.Operation{Descriptor: inGroup(recordsCreate, recordsGroup), Handler: capability.Handler(invokeRecordsCreate)},
 		capability.Operation{Descriptor: inGroup(recordsUpdate, recordsGroup), Handler: capability.Handler(invokeRecordsUpdate)},
+		capability.Operation{Descriptor: inGroup(activitytargetsList, activityGroup), Handler: capability.Handler(invokeActivityTargetsList)},
+		capability.Operation{Descriptor: inGroup(activitytargetsCreate, activityGroup), Handler: capability.Handler(invokeActivityTargetsCreate)},
+		capability.Operation{Descriptor: inGroup(activitytargetsDelete, activityGroup), Handler: capability.Handler(invokeActivityTargetsDelete)},
 	)
 }
 
