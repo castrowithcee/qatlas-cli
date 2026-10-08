@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/mail"
 	"net/url"
 	"strconv"
 	"strings"
@@ -26,17 +25,9 @@ const usersInstanceWide = "user management"
 // maxUserFieldLength bounds every string of a listed user, whatever n8n sends.
 const maxUserFieldLength = 256
 
-// maxInviteEmails bounds the number of addresses of one invite call.
-const maxInviteEmails = 10
-
-// maxEmailLength is the practical limit of an email address (RFC 5321 path).
-const maxEmailLength = 254
-
-// userRoles is the fixed allow-list of instance roles a caller may assign or invite with. global:owner is
+// userRoles is the fixed allow-list of instance roles a caller may assign. global:owner is
 // deliberately not on it, and no free-form role name the API would also accept.
 var userRoles = []string{"global:admin", "global:member", "global:chatUser"}
-
-const defaultInviteRole = "global:member"
 
 // userPermissionMessage is the one message of a 403 on a users endpoint. Only the instance owner may use
 // these endpoints, and the API key may lack the user scope or the license; the body is never read.
@@ -123,43 +114,6 @@ var usersGet = capability.Descriptor{
 		Arguments: json.RawMessage(`{"user_id":"123e4567-e89b-12d3-a456-426614174000"}`)}},
 }
 
-var usersInvite = capability.Descriptor{
-	ID: Provider + ".users.invite", Version: 1, Title: "Invite n8n users",
-	Description: "Invite 1 to " + strconv.Itoa(maxInviteEmails) + " users by email with one instance role " +
-		"(default global:member; never global:owner) in one request. n8n reports each address on its own, so " +
-		"some may fail. An invite link, if n8n returns one, is never output. A repeated call is sent again. " +
-		userInstanceNote,
-	Tags: []string{"n8n", "users", "invite", "automation"},
-	Risk: userChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent), Provider: Provider,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"emails":{"type":"array","minItems":1,` +
-		`"maxItems":` + strconv.Itoa(maxInviteEmails) + `,"uniqueItems":true,"items":{"type":"string",` +
-		`"minLength":3,"maxLength":` + strconv.Itoa(maxEmailLength) + `}},"role":` + userRoleSchema + `},` +
-		`"required":["emails"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{"invited":{"type":"array","items":` +
-		`{"type":"object","properties":{"email":{"type":"string"},"id":{"type":"string"},` +
-		`"role":{"type":"string"},"email_sent":{"type":"boolean"},"ok":{"type":"boolean"}},` +
-		`"required":["email","ok"],"additionalProperties":false}},"count":{"type":"integer"},` +
-		`"failed":{"type":"integer"}},"required":["invited","count","failed"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
-		{Name: "emails", Description: "1 to " + strconv.Itoa(maxInviteEmails) + " distinct email addresses",
-			Required: true},
-		{Name: "role", Description: "Instance role, default " + defaultInviteRole + ": " +
-			strings.Join(userRoles, ", ") + "; global:owner is never assigned"},
-	},
-	Fields: []capability.Field{
-		{Name: "invited", Description: "One entry per address, in request order"},
-		{Name: "email", Description: "The address, personal data"},
-		{Name: "id", Description: "Identifier of the invited user; absent when that address failed"},
-		{Name: "role", Description: "Role n8n reports for the user"},
-		{Name: "email_sent", Description: "True when n8n sent the invite email"},
-		{Name: "ok", Description: "False when n8n reported an error for this address; its text is not shown"},
-		{Name: "count", Description: "Number of addresses n8n answered for"},
-		{Name: "failed", Description: "Number of addresses that failed"},
-	},
-	Examples: []capability.Example{{Description: "Invite one member",
-		Arguments: json.RawMessage(`{"emails":["new.user@example.com"],"role":"global:member"}`)}},
-}
-
 var usersSetRole = capability.Descriptor{
 	ID: Provider + ".users.setrole", Version: 1, Title: "Change an n8n user's instance role",
 	Description: "Set the instance role of one existing user (global:admin, global:member, global:chatUser; " +
@@ -240,22 +194,6 @@ type InstanceUsersPage struct {
 	Count   int            `json:"count"`
 }
 
-// InvitedUser is one address of an invite answer. The invite link and the error text are never output.
-type InvitedUser struct {
-	Email     string `json:"email"`
-	ID        string `json:"id,omitempty"`
-	Role      string `json:"role,omitempty"`
-	EmailSent bool   `json:"email_sent,omitempty"`
-	OK        bool   `json:"ok"`
-}
-
-// UsersInvited is what users.invite reports.
-type UsersInvited struct {
-	Invited []InvitedUser `json:"invited"`
-	Count   int           `json:"count"`
-	Failed  int           `json:"failed"`
-}
-
 // UserRoleChanged is what users.setrole reports.
 type UserRoleChanged struct {
 	UserID  string `json:"user_id"`
@@ -311,28 +249,13 @@ func validUserID(id string) error {
 	return nil
 }
 
-// validInviteEmail accepts a bare address only: no display name, no control characters, bounded length.
-func validInviteEmail(email string) bool {
-	if len(email) < 3 || len(email) > maxEmailLength || !utf8.ValidString(email) {
-		return false
-	}
-	for _, r := range email {
-		if r <= 0x20 || r == 0x7f || r == '<' || r == '>' || r == ',' || r == ';' {
-			return false
-		}
-	}
-	parsed, err := mail.ParseAddress(email)
-	return err == nil && parsed.Address == email && strings.Count(email, "@") == 1
-}
-
 type userArguments struct {
-	UserID              string   `json:"user_id"`
-	Role                string   `json:"role"`
-	Emails              []string `json:"emails"`
-	TransferProjectID   string   `json:"transfer_project_id"`
-	DeleteOwnedResource *bool    `json:"delete_owned_resources"`
-	Cursor              string   `json:"cursor"`
-	Limit               int      `json:"limit"`
+	UserID              string `json:"user_id"`
+	Role                string `json:"role"`
+	TransferProjectID   string `json:"transfer_project_id"`
+	DeleteOwnedResource *bool  `json:"delete_owned_resources"`
+	Cursor              string `json:"cursor"`
+	Limit               int    `json:"limit"`
 }
 
 // prepareUser reads the arguments and applies the instance-wide gate, before any secret or request.
@@ -413,78 +336,6 @@ func invokeUsersGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 		return nil, userError(err)
 	}
 	return summarizeInstanceUser(user), nil
-}
-
-func invokeUsersInvite(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	const op = "invite users"
-	input, err := prepareUser(op, resolved, raw)
-	if err != nil {
-		return nil, err
-	}
-	if len(input.Emails) == 0 || len(input.Emails) > maxInviteEmails {
-		return nil, invalidRequest("emails must hold 1 to " + strconv.Itoa(maxInviteEmails) + " addresses")
-	}
-	role := input.Role
-	if role == "" {
-		role = defaultInviteRole
-	}
-	if err := validUserRole(role); err != nil {
-		return nil, err
-	}
-	seen := map[string]bool{}
-	body := make([]map[string]string, 0, len(input.Emails))
-	for _, email := range input.Emails {
-		if !validInviteEmail(email) {
-			return nil, invalidRequest("emails must be plain email addresses of at most " +
-				strconv.Itoa(maxEmailLength) + " characters")
-		}
-		key := strings.ToLower(email)
-		if seen[key] {
-			return nil, invalidRequest("emails must be distinct")
-		}
-		seen[key] = true
-		body = append(body, map[string]string{"email": email, "role": role})
-	}
-	client, err := Open(ctx, resolved, secrets, red)
-	if err != nil {
-		return nil, err
-	}
-	var answer []struct {
-		User *struct {
-			ID        string `json:"id"`
-			Email     string `json:"email"`
-			EmailSent bool   `json:"emailSent"`
-			Role      string `json:"role"`
-		} `json:"user"`
-		Error string `json:"error"`
-	}
-	if err := client.change(ctx, op, http.MethodPost, "/users", nil, body, &answer, maxResponseBytes); err != nil {
-		return nil, userError(err)
-	}
-	result := &UsersInvited{Invited: make([]InvitedUser, 0, len(answer))}
-	for i, entry := range answer {
-		if i >= maxInviteEmails {
-			break
-		}
-		item := InvitedUser{OK: entry.Error == "" && entry.User != nil}
-		if entry.User != nil {
-			item.Email = userText(&entry.User.Email)
-			item.ID = bounded(entry.User.ID)
-			item.Role = bounded(entry.User.Role)
-			item.EmailSent = entry.User.EmailSent
-		}
-		if item.Email == "" && i < len(body) {
-			item.Email = body[i]["email"]
-		}
-		if !item.OK {
-			result.Failed++
-			item.ID, item.EmailSent = "", false
-		}
-		result.Invited = append(result.Invited, item)
-	}
-	result.Count = len(result.Invited)
-	return result, nil
 }
 
 func invokeUsersSetRole(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

@@ -151,7 +151,10 @@ type ProviderMetadata struct {
 	DefaultPermissions   []Permission
 	SupportedPermissions []Permission
 	Tools                []ToolMetadata
-	Profiles             []ToolProfile
+	// RemovedTools lists tool IDs qatlas no longer offers. A tools list may still name one: the entry is
+	// ignored with a warning instead of failing the configuration.
+	RemovedTools []string
+	Profiles     []ToolProfile
 	// Groups, when set, sorts every tool of the provider into exactly one of these groups.
 	Groups      []ToolGroup
 	SecretRoles []SecretRole

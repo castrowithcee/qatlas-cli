@@ -207,7 +207,7 @@ var deletePermissions = []config.Permission{config.PermissionRead, config.Permis
 var linkPermissions = []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate,
 	config.PermissionDelete}
 
-var linkTools = []string{linksGet.ID, linksList.ID, linksCreate.ID, linksUpdate.ID, linksDelete.ID}
+var linkTools = []string{linksGet.ID, linksList.ID, linksDelete.ID}
 
 var dropboxTools = []string{dropboxGet.ID, dropboxCreate.ID, dropboxUpdate.ID, dropboxDelete.ID}
 
@@ -269,8 +269,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!metadata.Target.Multiple || len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 28 {
-		t.Fatalf("tools = %+v, want 28", metadata.Tools)
+	if len(metadata.Tools) != 26 {
+		t.Fatalf("tools = %+v, want 26", metadata.Tools)
 	}
 	if want := []config.Permission{config.PermissionRead}; !reflect.DeepEqual(metadata.DefaultPermissions, want) {
 		t.Fatalf("default permissions = %v, want read only", metadata.DefaultPermissions)

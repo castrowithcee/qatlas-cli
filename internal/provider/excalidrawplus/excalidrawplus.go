@@ -5,8 +5,8 @@
 // scene's metadata, and reads one scene's content, bounded and searchable client-side. The optional manage
 // profile also creates, renames, and moves scenes, patches a scene's elements by element version, and replaces a
 // scene's whole content with a bounded element set, and moves a scene or a collection to the trash. The optional,
-// not recommended people profile lists and reads workspace users, changes a user's name or role, removes a user,
-// and invites one e-mail address; it needs a connection bound to the whole workspace with the * target.
+// not recommended people profile lists and reads workspace users, changes a user's name or role, and removes a user;
+// it needs a connection bound to the whole workspace with the * target.
 //
 // A connection binds one workspace key (the key belongs to exactly one workspace) and a collection
 // allow-list (collection/COLLECTION_ID, repeatable) or the explicit * wildcard. The allow-list is the only
@@ -344,8 +344,9 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Excalidraw+", DefaultBaseURL: defaultOrigin,
+		RemovedTools: []string{"excalidrawplus.invitations.create"},
 		Description: "Whiteboard workspace, collections and scenes with their text content, and workspace users " +
-			"and invitations, through the public workspace API (beta)",
+			"through the public workspace API (beta)",
 		ValidateBaseURL: func(raw string) error {
 			_, err := parseInstance(raw)
 			return err
@@ -396,13 +397,13 @@ func Register(reg *capability.Registry) error {
 			Tools: append(append([]string{}, readTools...), scenesCreate.ID, scenesUpdate.ID, contentPatch.ID,
 				contentReplace.ID, scenesDelete.ID, collectionsDelete.ID),
 		}, {
-			ID: "people", Title: "Manage workspace users and invitations",
+			ID: "people", Title: "Manage workspace users",
 			Description: "lists and reads the users of the workspace with name, e-mail address, role, and teams " +
-				"(personal data), changes a user's name or role, removes a user, and invites one e-mail address; " +
+				"(personal data), changes a user's name or role, and removes a user; " +
 				"works only on a connection with the * target, every change needs its own confirmation, and the " +
 				"change tools are offered only to a connection whose tools list names them. A removed user loses " +
-				"access and workspace data, and an invitation reaches a third party; Qatlas cannot undo either",
-			Tools: []string{usersList.ID, usersGet.ID, usersUpdate.ID, usersRemove.ID, invitationsCreate.ID},
+				"access and workspace data; Qatlas cannot undo it",
+			Tools: []string{usersList.ID, usersGet.ID, usersUpdate.ID, usersRemove.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -423,7 +424,6 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: usersGet, Handler: capability.Handler(invokeUsersGet)},
 		capability.Operation{Descriptor: usersUpdate, Handler: capability.Handler(invokeUsersUpdate)},
 		capability.Operation{Descriptor: usersRemove, Handler: capability.Handler(invokeUsersRemove)},
-		capability.Operation{Descriptor: invitationsCreate, Handler: capability.Handler(invokeInvitationsCreate)},
 	)
 }
 

@@ -23,6 +23,9 @@ read-only profiles read the bound team and its organization.
 Make scenario, once created, cannot be removed again by this provider; deleting one still requires the Make
 UI or a direct API call outside Qatlas.
 
+Qatlas creates no permanent access or data paths to the outside (webhooks, invitations, public links); reading,
+pausing, revoking, and deleting remain. Hence no tool creates a hook or invites a person.
+
 ## Configuration
 
 `base_url` is the Make zone this connection reaches: `https://eu1.make.com`, `https://eu2.make.com`,
@@ -38,7 +41,7 @@ additionally need `scenarios:write`, and its run tool additionally needs `scenar
 (`make.team.get`, `make.team.usage`, `make.team.members`) needs `teams:read`; the `organization` profile
 (`make.organization.get`) needs `organizations:read` and `teams:read`, because the organization is found
 through the bound team; the `hooks-read` profile (`make.hooks.list`, `get`, `ping`, `logs`) needs
-`hooks:read`, as does `make.hooks.url`; the `hooks-manage` profile (`make.hooks.create`, `rename`, `enable`,
+`hooks:read`, as does `make.hooks.url`; the `hooks-manage` profile (`make.hooks.rename`, `enable`,
 `disable`, plus the hooks-read tools) additionally needs `hooks:write`, as does the separately offered
 `make.hooks.delete`; the `hookqueue-read` profile (`make.hookqueue.list`, `get`, `stats`) needs `hooks:read`, and
 the separately offered `make.hookqueue.delete` needs `hooks:write` (with `hooks:read`, which binds the hook); the `connections-read` profile (`make.connections.list`, `get`,
@@ -153,7 +156,6 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.hooks.ping` | read | none | reads one hook's status (`GET /hooks/{id}/ping`: attached, learning, gone); sends no data to the hook |
 | `make.hooks.logs` | read | none | lists one hook's log entries as metadata only (id, status, time, sizes) |
 | `make.hooks.url` | read | none | returns one hook's trigger URL or mailhook address, a secret; offered only when a connection's `tools` list names it, in no profile |
-| `make.hooks.create` | create | required | creates a webhook or mailhook in the bound team (`POST /hooks`); refused on a connection with a scenario allow-list; never returns the trigger URL |
 | `make.hooks.rename` | update | required | renames one hook of the bound team (`PATCH /hooks/{id}`, body `name`) |
 | `make.hooks.enable` / `make.hooks.disable` | update | required | enables or disables one hook (`POST /hooks/{id}/enable` or `/disable`), then re-reads it |
 | `make.hooks.delete` | delete | required | deletes one hook (`DELETE /hooks/{id}`); offered only when a connection's `tools` list names it, in no profile |
@@ -233,15 +235,10 @@ target; plan, license, and payment fields are not offered. The answer must repor
 otherwise the result is uncertain. It needs its own confirmation, sends exactly one request, is never retried, and
 is in the `org-admin` profile.
 
-`make.organization.invite` invites one person (`email`, `name`) with `POST /organizations/{organizationId}/invite`
-(`organizations:write`) and the body `email`, `name`, `usersRoleId` only; no team assignment, no note, no role
-argument. The role is always the predefined organization role `member`, resolved live with
-`GET /users/roles?category=organization&organizationId=` (`user:read`); it is refused, with nothing sent, unless
-exactly one non-custom role matches. The email must be a plain ASCII address of at most 254 characters and is never
-quoted in errors. `make.organization.members` reads the same role list once, then
+`make.organization.members` reads the organization role list once, then
 `GET /users?organizationId=&organizationRoleId=` per role (`user:read`), and returns `user_id`, `name`, `email`,
 `role_id`, and `role_name` (at most 20 roles and 200 members, `truncated` when more may exist). Names and emails are
-personal data and untrusted. Both tools are in `org-admin`; changing roles and removing members are not offered.
+personal data and untrusted. It is in `org-admin`; changing roles and removing members are not offered.
 
 ## Financial data (read only)
 
@@ -363,7 +360,7 @@ Errors keep stable classes and never carry the API token or a raw provider respo
 | Class | Cause |
 | --- | --- |
 | `auth` | Make rejected the API token, including a token created for a different zone than this connection's own |
-| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see "Data stores and data structures"), `team-variables:read` and `team-variables:write` (with `team-variables:read`) for the team variable tools, and `udts:read` for the data structure tools and the structure check of a store create or update, `teams:read` and `teams:write` (with `teams:read`) for the organization-mode team tools, `organizations:write` for `make.organization.update` and `make.organization.invite`, `user:read` for the organization invite and member tools; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
+| `permission` | this API token may not perform the operation; the message names the exact scope(s) needed: `scenarios:read` for a read, `scenarios:write` for create/update/start/stop, or `scenarios:read`, `scenarios:write`, and `scenarios:run` together for a run; `hooks:read` for the hook reads and `hooks:write` (with `hooks:read`) for the hook changes; `connections:read` for the connection reads and `connections:write` for the connection test, rename, delete, create, set-data, and access-list change; `user:read` for the user's team membership check of the access-list change and of a credential request's `provider_user_id`; `credential-requests:read` for the credential request reads and `credential-requests:write` for their create and delete; `datastores:read` and `datastores:write` for the data store and record tools (the single-store read also names `organizations:read`, see "Data stores and data structures"), `team-variables:read` and `team-variables:write` (with `team-variables:read`) for the team variable tools, and `udts:read` for the data structure tools and the structure check of a store create or update, `teams:read` and `teams:write` (with `teams:read`) for the organization-mode team tools, `organizations:write` for `make.organization.update`, `user:read` for the organization member tool; the access-list tools additionally name Make's own right to view or manage the list (locked connections enabled for the organization, entity manage for a change) |
 | `not-found` | Make does not hold the resource or does not show it to this token |
 | `rate-limited` | Make rate-limited the request; Qatlas applies no proactive spacing of its own and instead holds its own limiter for whatever `Retry-After` Make names. A 429 whose body names Make's own `IM310` code is named distinctly as a paused organization or team, not a transient limit: repeating the request will not help until it is reactivated |
 | `timeout` | Make did not answer in time |
@@ -411,22 +408,13 @@ error in the answer it reports that items may have been deleted; the queue shoul
 
 ### Changing hooks
 
-`make.hooks.create`, `rename`, `enable`, `disable`, and `delete` need `hooks:write` (a 403 names it) and
+`make.hooks.rename`, `enable`, `disable`, and `delete` need `hooks:write` (a 403 names it) and
 `hooks:read`, which binds the hook. Each needs its own confirmation, sends exactly one changing request, and
 is never repeated: a 5xx, a dropped connection, or an unreadable answer is reported as uncertain, and the
 current state should be read before trying again. Every tool that names a `hook_id` reads the hook first and
 refuses it, before the changing request, unless its `teamId` is the bound team (and, with a scenario
 allow-list, its scenario is listed). Enable and disable re-read the hook and report an unconfirmed state as
 uncertain; a result outside the bound team after the change is a provider error.
-
-`make.hooks.create` always sends the bound team as `teamId` (Make documents it as a string) together with
-`name`, `typeName`, `method`, `headers`, and `stringify`, all required by Make. Narrower than Make: `type` is
-only `webhook` (`gateway-webhook`) or `mailhook` (`gateway-mailhook`); `include_method`, `include_headers`,
-and `stringify` are booleans for webhooks only; there is no connection, free type name, header, or data
-field. Hooks of those two types need no connection (`__IMTCONN__` belongs to connection-bound types, which
-this tool does not create). On a connection with a scenario allow-list the create is refused, since a new
-hook is assigned to no scenario and the hook tools could never reach it. The answer never carries the
-trigger URL, udid, or address; they are added to the output redactor.
 
 `make.hooks.delete` sends `confirmed=true` only when `confirm_scenarios_affected` is true. Without it, Make
 refuses the deletion of a hook a scenario uses; Qatlas then answers `deleted: false`,

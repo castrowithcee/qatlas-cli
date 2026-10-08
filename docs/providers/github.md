@@ -1776,7 +1776,7 @@ change needs confirmation in its own invoke request, is sent exactly once, and f
 | Tool | Effect | Idempotency | Does |
 | --- | --- | --- | --- |
 | `github.projectteams.list` | read | safe | lists the teams the project is linked to, in name order, in batches |
-| `github.projectcollaborators.update` | update | idempotent | grants users or teams a role, changes it, or removes their direct access; listed only |
+| `github.projectcollaborators.update` | update | idempotent | grants teams and members of the owning organization a role, changes it, or removes the direct access of any user or team; listed only |
 | `github.projects.linkteam` | update | idempotent | links a project of an organization to one of its teams, which GitHub grants read access; listed only |
 | `github.projects.unlinkteam` | update | idempotent | removes that link and the read access it granted; listed only |
 
@@ -1788,8 +1788,13 @@ fine-grained one, the list ends with `permission`, and the message names that sc
 
 `collaborators` names at most 20 entries, each with either `user` (a login) or `team` (the slug of a team of the
 organization that owns the project) and `role`: `none` removes the direct access, `reader` views, `writer`
-edits, and `admin` also manages the project's settings. Collaborators left out stay unchanged. The answer
-repeats the roles GitHub accepted. Every user and team is resolved with the project in one query first: an
+edits, and `admin` also manages the project's settings. Collaborators left out stay unchanged. Qatlas grants no
+access to people outside the owning organization: a role other than `none` for a `user` needs a project of an
+organization and a user who is a member of it, which Qatlas checks live before the change. Only a confirmed
+membership counts; a missing or unreadable membership refuses the whole request with `invalid-request` before
+any change, and the message does not name the login. A token that may not read memberships ends with
+`permission`. `none` is allowed for every user and team, also on a project of a user. The answer repeats the
+roles GitHub accepted. Every user and team is resolved with the project in one query first: an
 unknown login or a team the organization lacks is `not-found` before any change. A team is looked up inside the
 project's organization only, so a team of another organization can never be named.
 
@@ -1805,7 +1810,8 @@ Teams belong to an organization, so Qatlas refuses a team for a `users/LOGIN/pro
 GitHub's API reads neither the collaborators of a project nor their roles, so there is no tool that lists them;
 check them in GitHub itself. Changing collaborators needs the rights of a project administrator and `project`
 on a classic token, or Projects read and write access of the organization on a fine-grained token; resolving a
-team may also need `read:org` on a classic token, or Members read access on a fine-grained one. Inviting people
+team or checking a membership also needs `read:org` on a classic token, or Members read access on a
+fine-grained one. Inviting people
 by email, managing the teams themselves, and the settings of an organization are out of scope.
 
 ## Project automations

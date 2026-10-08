@@ -254,6 +254,42 @@ func TestConnectionToolsRejectUnknownForeignDuplicateAndExcludedTools(t *testing
 	}
 }
 
+// A tool the provider removed stays valid in an older file: it is skipped by every check, named by one warning
+// per entry, and never offered, while the other entries keep working and any other unknown entry stays an error.
+func TestRemovedToolsAreIgnoredWithAWarning(t *testing.T) {
+	cfg, err := Decode(strings.NewReader(withTools(
+		"    tools: [bookstack.pages.publish, bookstack.pages.list, bookstack.pages.publish]\n")), testProviders)
+	if err != nil {
+		t.Fatalf("a removed tool made the configuration invalid: %v", err)
+	}
+	want := []string{`connections.wiki.tools: tool "bookstack.pages.publish" was removed from qatlas and is ignored`,
+		`connections.wiki.tools: tool "bookstack.pages.publish" was removed from qatlas and is ignored`}
+	if got := cfg.ToolWarnings(); !reflect.DeepEqual(got, want) {
+		t.Errorf("ToolWarnings() = %q, want %q", got, want)
+	}
+	if !cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.list", Effect: "read"}) ||
+		cfg.ConnectionAllows("wiki", ToolMetadata{ID: "bookstack.pages.get", Effect: "read"}) {
+		t.Error("the remaining listed tool is not offered exactly")
+	}
+	// The removed entry is skipped even where the permissions exclude its former effect.
+	if _, err := Decode(strings.NewReader(withTools("    permissions: []\n    tools: [bookstack.pages.publish]\n")),
+		testProviders); err != nil {
+		t.Errorf("a removed tool failed the permission check: %v", err)
+	}
+	plain, err := Decode(strings.NewReader(minimal), testProviders)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plain.ToolWarnings(); len(got) != 0 {
+		t.Errorf("ToolWarnings() = %q on a file without a removed tool", got)
+	}
+	_, err = Decode(strings.NewReader(withTools("    tools: [bookstack.pages.publish, bookstack.pages.search]\n")),
+		testProviders)
+	if err == nil || err.Error() != `connections.wiki.tools: entry 2 is not a registered tool of provider "bookstack"` {
+		t.Errorf("another unknown entry: error = %v", err)
+	}
+}
+
 // Two connections of one service and one credential are two policies: neither list leaks into the other.
 func TestConnectionToolsAreEvaluatedPerConnection(t *testing.T) {
 	input := strings.Replace(minimal, "defaults:", `  wiki-reader:

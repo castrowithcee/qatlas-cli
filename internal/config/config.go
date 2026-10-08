@@ -727,8 +727,9 @@ func validateForward(name string, cred Credential, report func(string, ...any)) 
 // validateTools checks the tools allow-list of one connection against the tools its provider registered.
 // Every entry must be a registered tool of that provider, listed once, whose effect the connection's
 // permissions admit: an entry the permissions exclude could never be offered, so it is refused rather than
-// kept as a line that reads like a grant. Only registered IDs are quoted; an unknown entry is named by its
-// position, because free text in a configuration file is where a pasted secret ends up.
+// kept as a line that reads like a grant. An ID the provider lists as removed is skipped, and ToolWarnings
+// names it. Only registered IDs are quoted; an unknown entry is named by its position, because free text in
+// a configuration file is where a pasted secret ends up.
 func (c *Config) validateTools(name, provider string, metadata ProviderMetadata, report func(string, ...any)) {
 	effects := map[string]Permission{}
 	for _, tool := range metadata.Tools {
@@ -748,6 +749,8 @@ func (c *Config) validateTools(name, provider string, metadata ProviderMetadata,
 	for i, tool := range c.Connections[name].Tools {
 		effect, registered := effects[tool]
 		switch {
+		case contains(metadata.RemovedTools, tool):
+			// Ignored, and named by ToolWarnings.
 		case registered && seen[tool]:
 			report("connections.%s.tools: tool %q is listed more than once", name, tool)
 		case registered && !permitted[effect]:
@@ -1136,4 +1139,21 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// ToolWarnings names every tools entry that a provider has removed, one line per entry, sorted by
+// connection. Such an entry stays valid and is ignored, so an older file keeps working.
+func (c *Config) ToolWarnings() []string {
+	var warnings []string
+	for _, name := range sortedKeys(c.Connections) {
+		conn := c.Connections[name]
+		metadata, _ := c.ProviderMetadata(c.Services[conn.Service].Provider)
+		for _, tool := range conn.Tools {
+			if contains(metadata.RemovedTools, tool) {
+				warnings = append(warnings, fmt.Sprintf("connections.%s.tools: tool %q was removed from qatlas "+
+					"and is ignored", name, tool))
+			}
+		}
+	}
+	return warnings
 }

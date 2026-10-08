@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -31,13 +30,13 @@ const (
 	maxRoleText    = 32
 )
 
-// Roles are the closed set the documentation names for a user and for an invitation.
+// Roles are the closed set the documentation names for a user.
 const (
 	roleMember = "member"
 	roleAdmin  = "admin"
 )
 
-// peopleRisk is the contract of a confirmed change to users or invitations. Idempotency stays unknown until it is
+// peopleRisk is the contract of a confirmed change to users. Idempotency stays unknown until it is
 // shown live.
 func peopleRisk(effect capability.Effect) capability.Risk {
 	return capability.Risk{Effect: effect, Idempotency: capability.IdempotencyUnknown,
@@ -160,41 +159,8 @@ var usersRemove = capability.Descriptor{
 	Examples: []capability.Example{{Description: "Remove a user", Arguments: json.RawMessage(`{"user_id":"abc123"}`)}},
 }
 
-const invitationSchema = `{"type":"object","properties":{"id":{"type":"string"},"type":{"type":"string"},` +
-	`"status":{"type":"string"},"email":{"type":"string"},"role":{"type":"string"},"created":{"type":"string"}},` +
-	`"required":["id"],"additionalProperties":false}`
-
-var invitationsCreate = capability.Descriptor{
-	ID:      Provider + ".invitations.create",
-	Version: 1,
-	Title:   "Invite a person to the Excalidraw+ workspace",
-	Description: "Invite exactly one e-mail address to the workspace with the role member or admin; Excalidraw+ " +
-		"sends the invitation to that third party and the invitee joins with that role. Link invitations are not " +
-		"offered, and no invitation link is ever returned. This tool is offered only to a connection whose tools " +
-		"list names it. " + workspaceWide + ". " + peopleNote + "; " + changeNote,
-	Tags:                  []string{"excalidrawplus", "invitations", "create", "whiteboard"},
-	Risk:                  peopleRisk(capability.EffectCreate),
-	Provider:              Provider,
-	RequiresToolAllowList: true,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"email":{"type":"string","minLength":3,` +
-		`"maxLength":254},"role":` + roleSchema + `},"required":["email","role"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(invitationSchema),
-	Arguments: []capability.Argument{
-		{Name: "email", Required: true, Description: "E-mail address of the invitee, plain address without display name"},
-		{Name: "role", Required: true, Description: "Role of the invitee: member or admin"}},
-	Fields: []capability.Field{
-		{Name: "id", Description: "Invitation identifier"},
-		{Name: "type", Description: "Invitation type as Excalidraw+ reports it"},
-		{Name: "status", Description: "Invitation status as Excalidraw+ reports it"},
-		{Name: "email", Description: "Invited e-mail address, personal data"},
-		{Name: "role", Description: "Role of the invitation"},
-		{Name: "created", Description: "Creation time, as Excalidraw+ reports it"}},
-	Examples: []capability.Example{{Description: "Invite a member",
-		Arguments: json.RawMessage(`{"email":"person@example.com","role":"member"}`)}},
-}
-
 // requireWildcard refuses, locally before any secret or request, a connection that is not bound to the whole
-// workspace. The users and invitations of a workspace belong to no collection, so only the * target reaches them.
+// workspace. The users of a workspace belong to no collection, so only the * target reaches them.
 func requireWildcard(resolved *config.Resolved) error {
 	bound, err := boundScope(resolved)
 	if err != nil {
@@ -204,18 +170,6 @@ func requireWildcard(resolved *config.Resolved) error {
 		return invalidRequest("this tool needs a connection with the * target")
 	}
 	return nil
-}
-
-var emailPattern = regexp.MustCompile(`^[A-Za-z0-9_'+\-.]*[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$`)
-
-// validEmail applies the pattern the documentation gives for an invitation and a length ceiling. The
-// documentation's pattern also excludes a leading dot and a double dot, which RE2 cannot express.
-func validEmail(email string) bool {
-	if len(email) > maxEmailLength || strings.HasPrefix(email, ".") || strings.Contains(email, "..") {
-		return false
-	}
-	local, _, _ := strings.Cut(email, "@")
-	return len(local) <= 64 && emailPattern.MatchString(email)
 }
 
 func validRole(role string) bool { return role == roleMember || role == roleAdmin }
@@ -448,61 +402,4 @@ func invokeUsersRemove(ctx context.Context, resolved *config.Resolved, secrets *
 		return nil, err
 	}
 	return &Removed{ID: input.UserID, Removed: true}, nil
-}
-
-type invitationJSON struct {
-	ID      string `json:"id"`
-	Type    string `json:"type"`
-	Status  string `json:"status"`
-	Email   string `json:"email"`
-	Role    string `json:"role"`
-	Created string `json:"created"`
-}
-
-// Invitation is the stable view of a created invitation. A link, redemption data, and usage limits are not
-// passed on.
-type Invitation struct {
-	ID      string `json:"id"`
-	Type    string `json:"type,omitempty"`
-	Status  string `json:"status,omitempty"`
-	Email   string `json:"email,omitempty"`
-	Role    string `json:"role,omitempty"`
-	Created string `json:"created,omitempty"`
-}
-
-type invitationBody struct {
-	Email string `json:"email"`
-	Role  string `json:"role"`
-}
-
-func invokeInvitationsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	var input invitationBody
-	if err := json.Unmarshal(raw, &input); err != nil {
-		return nil, providerError("create invitation", "the validated arguments could not be read")
-	}
-	if err := requireWildcard(resolved); err != nil {
-		return nil, err
-	}
-	if !validEmail(input.Email) {
-		return nil, invalidRequest("email is not a valid e-mail address")
-	}
-	if !validRole(input.Role) {
-		return nil, invalidRequest("role must be member or admin")
-	}
-	client, err := Open(ctx, resolved, secrets, red)
-	if err != nil {
-		return nil, err
-	}
-	const op = "create invitation"
-	var answer invitationJSON
-	if err := client.send(ctx, op, http.MethodPost, "/workspaces/invites", input, &answer); err != nil {
-		return nil, err
-	}
-	if !validID(answer.ID) {
-		return nil, invalidResponse(op, "Excalidraw+ returned an invalid response"+changeUncertain)
-	}
-	return &Invitation{ID: answer.ID, Type: bounded(answer.Type, maxRoleText), Status: bounded(answer.Status, maxRoleText),
-		Email: bounded(answer.Email, maxEmailLength), Role: bounded(answer.Role, maxRoleText),
-		Created: boundedValue(answer.Created)}, nil
 }

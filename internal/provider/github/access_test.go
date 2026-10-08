@@ -151,6 +151,9 @@ func TestProjectAccessRefusalsBeforeIO(t *testing.T) {
 			"more than once"},
 		{"an unknown role", collaboratorsUpdate.ID, "admin", `{"collaborators":[{"user":"octocat","role":"owner"}]}`,
 			true, invalid, ""},
+		{"a role for a user on a user's project", collaboratorsUpdate.ID, "user",
+			`{"collaborators":[{"user":"octocat","role":"none"},{"user":"hubot","role":"reader"}]}`, true, invalid,
+			"belongs to a user"},
 		{"a team of a user's project", collaboratorsUpdate.ID, "user",
 			`{"collaborators":[{"team":"design","role":"reader"}]}`, true, invalid, "teams belong to an organization"},
 		{"a link without a tools list", teamsLink.ID, "unlisted", `{"team":"design"}`, true, unsupported, ""},
@@ -279,9 +282,14 @@ func TestProjectAccessChangesSendOneMutationEach(t *testing.T) {
 				t.Fatalf("result = %s, %v; want %s", result, err, tt.result)
 			}
 			queries, mutations, rest := split(f.recorded()[before:])
-			if len(queries) != 1 || len(mutations) != 1 || len(rest) != 0 {
-				t.Fatalf("requests = %d queries, %d mutations, %v REST; want 1, 1, none", len(queries),
-					len(mutations), rest)
+			// The one user granted a role is checked as a member of the organization with one REST read.
+			checks := 0
+			if tt.operation == collaboratorsUpdate.ID {
+				checks = 1
+			}
+			if len(queries) != 1 || len(mutations) != 1 || len(rest) != min(checks, 1) || rest[http.MethodGet] != checks {
+				t.Fatalf("requests = %d queries, %d mutations, %v REST; want 1, 1, %d membership reads", len(queries),
+					len(mutations), rest, checks)
 			}
 			for _, want := range tt.query {
 				if !strings.Contains(queries[0].document, want) {
@@ -333,6 +341,59 @@ func TestProjectAccessChangesAreResolvedBeforeTheMutation(t *testing.T) {
 			if queries, mutations, _ := split(f.recorded()); len(queries) != 1 || len(mutations) != 0 {
 				t.Errorf("requests = %d queries, %d mutations; want one query and no change", len(queries),
 					len(mutations))
+			}
+		})
+	}
+}
+
+// A role other than none goes only to a member of the organization that owns the project, proven live before
+// the mutation; anything but a 204 refuses the whole change without a mutation, and none needs no proof.
+func TestProjectCollaboratorsNeedOrganizationMembers(t *testing.T) {
+	if collaboratorsUpdate.Version != 2 {
+		t.Errorf("version = %d, want 2", collaboratorsUpdate.Version)
+	}
+	for _, tt := range []struct {
+		name, arguments, connection string
+		member                      map[string]int
+		checks, mutations           int
+		class                       any
+	}{
+		{"a member", `{"collaborators":[{"user":"octocat","role":"writer"}]}`, "admin", nil, 1, 1, nil},
+		{"a team only", `{"collaborators":[{"team":"design","role":"reader"}]}`, "admin", nil, 0, 1, nil},
+		{"none for a non-member", `{"collaborators":[{"user":"outsider","role":"none"}]}`, "admin",
+			map[string]int{"outsider": 404}, 0, 1, nil},
+		{"none on a user's project", `{"collaborators":[{"user":"outsider","role":"none"}]}`, "user", nil, 0, 1, nil},
+		{"a non-member", `{"collaborators":[{"user":"outsider","role":"reader"}]}`, "admin",
+			map[string]int{"outsider": 404}, 1, 0, &provider.InvalidRequestError{}},
+		{"an unproven member behind a redirect", `{"collaborators":[{"user":"outsider","role":"reader"}]}`, "admin",
+			map[string]int{"outsider": 302}, 1, 0, &provider.InvalidRequestError{}},
+		{"a non-empty success that is no 204", `{"collaborators":[{"user":"outsider","role":"reader"}]}`, "admin",
+			map[string]int{"outsider": 200}, 1, 0, &provider.InvalidRequestError{}},
+		{"a token that cannot read memberships", `{"collaborators":[{"user":"outsider","role":"reader"}]}`, "admin",
+			map[string]int{"outsider": 403}, 1, 0, &provider.Error{}},
+		{"a mix with one non-member", `{"collaborators":[{"user":"octocat","role":"writer"},` +
+			`{"team":"design","role":"reader"},{"user":"outsider","role":"admin"}]}`, "admin",
+			map[string]int{"outsider": 404}, 2, 0, &provider.InvalidRequestError{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &fakeGitHub{memberStatus: tt.member}
+			core := accessCore(t, f, nil)
+			_, err := invoke(t, core, collaboratorsUpdate.ID, tt.connection, tt.arguments, true)
+			if tt.class == nil && err != nil || tt.class != nil && fmt.Sprintf("%T", err) != fmt.Sprintf("%T", tt.class) {
+				t.Fatalf("err = %T %v, want %T", err, err, tt.class)
+			}
+			if err != nil && strings.Contains(err.Error(), "outsider") {
+				t.Errorf("err = %v names a login", err)
+			}
+			_, mutations, _ := split(f.recorded())
+			checks := 0
+			for _, request := range f.recorded() {
+				if strings.HasPrefix(request.path, "/api/v3/orgs/octo-org/members/") {
+					checks++
+				}
+			}
+			if checks != tt.checks || len(mutations) != tt.mutations {
+				t.Errorf("checks = %d, mutations = %d; want %d, %d", checks, len(mutations), tt.checks, tt.mutations)
 			}
 		})
 	}

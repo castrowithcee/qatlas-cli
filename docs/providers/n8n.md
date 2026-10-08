@@ -19,7 +19,7 @@ and executions, including a bounded view of a failed execution's error, creates 
 activates and deactivates them, and retries and stops executions. It also lists, creates, renames, and
 deletes projects, see "Projects" below, lists, reads, creates, renames, and deletes data tables and manages their columns and rows, see
 "Data tables", "Data table columns", and "Data table rows" below, and lists, creates, updates, and deletes variables,
-see "Variables" below, manages the instance-wide tags, see "Tags" below, lists, reads, invites, re-roles, and deletes the instance's users, owner-only, see "Users" below, and lists, reads, and tests credentials
+see "Variables" below, manages the instance-wide tags, see "Tags" below, lists, reads, re-roles, and deletes the instance's users, owner-only, see "Users" below, and lists, reads, and tests credentials
 as metadata only, reads credential type schemas, and creates, updates, moves, and deletes credentials, with
 secret values only by reference to a released forward credential, see "Credentials" below. It also generates
 the instance's security audit, see "Security audit" below, and previews, pulls, and pushes source control
@@ -152,7 +152,6 @@ then fails the check closed instead of guessing, and the refusal says so.
 | `n8n.tags.delete` | delete | deletes one tag; only offered by a tools list |
 | `n8n.users.list` | read | lists the instance's users, page by page |
 | `n8n.users.get` | read | reads one user by ID (not by email) |
-| `n8n.users.invite` | create | invites 1 to 10 users by email with one instance role |
 | `n8n.users.setrole` | update | sets one user's instance role |
 | `n8n.users.delete` | delete | deletes one user; only offered by a tools list |
 | `n8n.audit.generate` | read | generates the security audit report, capped |
@@ -211,7 +210,7 @@ The data table, column, row, variable, and tag tools have their own profiles, in
 | `tags-read` | `n8n.tags.list`, `n8n.tags.get` |
 | `tags-manage` | `n8n.tags.list`, `n8n.tags.get`, `n8n.tags.create`, `n8n.tags.update` |
 | `users-read` | `n8n.users.list`, `n8n.users.get` |
-| `users-manage` | `n8n.users.list`, `n8n.users.get`, `n8n.users.invite`, `n8n.users.setrole` |
+| `users-manage` | `n8n.users.list`, `n8n.users.get`, `n8n.users.setrole` |
 | `audit` | `n8n.audit.generate` |
 | `sourcecontrol-read` | `n8n.sourcecontrol.status` |
 | `credentials-read` | `n8n.credentials.list`, `n8n.credentials.get`, `n8n.credentials.schema` |
@@ -466,10 +465,11 @@ The tag tools call `GET /tags` (paged by `limit` and `cursor`), `POST /tags`, `G
 ## Users
 
 The user tools call `GET /users` (paged by `limit` and `cursor`, with `includeRole=true`),
-`GET /users/{id}`, `POST /users`, `PATCH /users/{id}/role`, and `DELETE /users/{id}`. A user has an `id`, an
+`GET /users/{id}`, `PATCH /users/{id}/role`, and `DELETE /users/{id}`. A user has an `id`, an
 `email`, a first and last name, an instance `role`, a pending status, and creation and update times; these are
 personal data (`data_sensitivity` `n8n-users-personal`) and returned capped, as untrusted data. MFA state is
-not returned.
+not returned. Qatlas creates no permanent access or data paths to the outside (webhooks, invitations, public
+links); reading, pausing, revoking, and deleting remain, so no tool invites a user.
 
 - **Owner-only and instance-wide.** n8n offers these endpoints to the instance owner only, so a 403 is
   reported as an owner, license, or API key scope error, without telling which. Every user tool is refused
@@ -478,11 +478,8 @@ not returned.
 - **Read.** `n8n.users.get` takes the user ID only. n8n would also accept an email address there; Qatlas does
   not. `n8n.users.list` does not forward n8n's `projectId` filter.
 - **Roles.** Only `global:admin`, `global:member`, and `global:chatUser` can be assigned, as `role` of
-  `n8n.users.setrole` (sent as `newRoleName`) and of `n8n.users.invite` (default `global:member`).
-  `global:owner` and free-form role names are never sent.
-- **Invite.** `emails` holds 1 to 10 distinct plain addresses (at most 254 characters, no display name) and
-  is sent as one `POST /users` array. n8n answers per address, so some may fail: each entry reports `ok`, and
-  the error text is not shown. An invite link that n8n returns when it sends no email is never output.
+  `n8n.users.setrole` (sent as `newRoleName`). `global:owner` and free-form
+  role names are never sent.
 - **Delete** cannot be undone and is in no profile. It needs exactly one choice for the user's workflows
   and credentials: `transfer_project_id` moves them into that project (`DELETE /users/{id}?transferId=...`),
   or `delete_owned_resources: true` deletes them permanently with the user (the request without
@@ -677,7 +674,7 @@ interprets or executes any of it itself.
 This provider reads, creates, and replaces workflows, and activates, deactivates, retries, and stops them
 and their executions, and lists, creates, renames, and deletes projects, and manages their members, and lists, reads, creates,
 renames, and deletes data tables and manages their columns and rows, and lists, creates, updates, and deletes
-variables, and lists, reads, creates, renames, and deletes tags and lists, reads, invites, re-roles, and deletes users on connections without targets, and lists, reads, and tests
+variables, and lists, reads, creates, renames, and deletes tags and lists, reads, re-roles, and deletes users on connections without targets, and lists, reads, and tests
 credentials as metadata, generates the security audit, previews, pulls, and pushes source control changes on connections without targets, reads credential type schemas, and creates, updates, moves between projects, and deletes credentials, secret values only by reference. It does
 not, and has no tool to, start a workflow (no Public API endpoint exists for that), delete a workflow or an
 execution, stop many executions at once, archive, unarchive, publish, unpublish, or transfer a workflow, move

@@ -3,10 +3,7 @@ package penpot
 import (
 	"context"
 	"encoding/json"
-	"net/mail"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -15,17 +12,13 @@ import (
 )
 
 const (
-	// membersSensitive is the class of the tools that handle the email addresses of members and invitees.
+	// membersSensitive is the class of the tools that handle the email addresses of members.
 	membersSensitive = "penpot-members"
 	maxMembersListed = 200
-	// maxInvitations is Penpot's own limit of invitations in one request.
-	maxInvitations = 25
-	maxEmailLength = 254
 )
 
 const (
-	roleSchema       = `{"type":"string","enum":["admin","editor","viewer"]}`
-	inviteRoleSchema = `{"type":"string","enum":["editor","viewer"]}`
+	roleSchema = `{"type":"string","enum":["admin","editor","viewer"]}`
 )
 
 const membersNote = "Members belong to the whole team, so a connection with a project allow-list refuses every change. " +
@@ -99,30 +92,6 @@ var membersRemove = capability.Descriptor{
 		Arguments: json.RawMessage(`{"team_id":"00000000-0000-0000-0000-000000000001","member_id":"00000000-0000-0000-0000-000000000002"}`)}},
 }
 
-var invitationsCreate = capability.Descriptor{
-	ID: Provider + ".invitations.create", Version: 1, Title: "Invite people to a Penpot team",
-	Description: "Invite up to 25 email addresses to one bound team as editor or viewer. **Penpot sends an email to " +
-		"every address.** Other roles are set afterwards with penpot.members.setrole. Addresses of existing members " +
-		"are skipped by Penpot. " + membersNote,
-	Tags: []string{"penpot", "invitations", "create", "teams", "design"}, Provider: Provider,
-	Risk: capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
-		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: membersSensitive},
-	InputSchema: schemaOf(`"team_id":`+uuidSchema+`,"emails":{"type":"array","minItems":1,"maxItems":25,`+
-		`"items":{"type":"string","minLength":3,"maxLength":254}},"role":`+inviteRoleSchema, `"team_id","emails","role"`),
-	OutputSchema: schemaOf(`"team_id":{"type":"string"},"requested":{"type":"integer"},"invited":{"type":"integer"}`,
-		`"team_id","requested","invited"`),
-	Arguments: []capability.Argument{teamIDArgument,
-		{Name: "emails", Required: true, Description: "1 to 25 plain email addresses; each receives a mail from Penpot"},
-		{Name: "role", Required: true, Description: "Role of the invited people: editor or viewer"}},
-	Fields: []capability.Field{
-		{Name: "team_id", Description: "Identifier of the team"},
-		{Name: "requested", Description: "Number of distinct addresses sent to Penpot"},
-		{Name: "invited", Description: "Number of invitations Penpot created; addresses are never repeated"},
-	},
-	Examples: []capability.Example{{Description: "Invite a colleague as editor",
-		Arguments: json.RawMessage(`{"team_id":"00000000-0000-0000-0000-000000000001","emails":["colleague@example.com"],"role":"editor"}`)}},
-}
-
 // Member is one member of a bound team; the name and photo of the profile are not returned.
 type Member struct {
 	ID       string `json:"id"`
@@ -139,7 +108,7 @@ type MembersResult struct {
 	Truncated bool     `json:"truncated"`
 }
 
-// MemberRoleSet, MemberRemoved, and InvitationsCreated are the answers of the three changes.
+// MemberRoleSet and MemberRemoved are the answers of the two member changes.
 type MemberRoleSet struct {
 	Updated  bool   `json:"updated"`
 	TeamID   string `json:"team_id"`
@@ -153,17 +122,10 @@ type MemberRemoved struct {
 	MemberID string `json:"member_id"`
 }
 
-type InvitationsCreated struct {
-	TeamID    string `json:"team_id"`
-	Requested int    `json:"requested"`
-	Invited   int    `json:"invited"`
-}
-
 type memberArguments struct {
-	TeamID   string   `json:"team_id"`
-	MemberID string   `json:"member_id"`
-	Role     string   `json:"role"`
-	Emails   []string `json:"emails"`
+	TeamID   string `json:"team_id"`
+	MemberID string `json:"member_id"`
+	Role     string `json:"role"`
 }
 
 func readMember(op string, raw json.RawMessage) (memberArguments, error) {
@@ -174,7 +136,7 @@ func readMember(op string, raw json.RawMessage) (memberArguments, error) {
 	return input, nil
 }
 
-// selectTeamForTeamWideChange is selectTeam for a change of the team itself (members, invitations, the team's
+// selectTeamForTeamWideChange is selectTeam for a change of the team itself (members, the team's
 // existence): such a change reaches beyond any project, so a connection narrowed by a project allow-list refuses
 // it. The refusal comes before any secret.
 func selectTeamForTeamWideChange(resolved *config.Resolved, raw string) (string, error) {
@@ -324,74 +286,4 @@ func invokeMembersRemove(ctx context.Context, resolved *config.Resolved, secrets
 		return nil, err
 	}
 	return &MemberRemoved{Removed: true, TeamID: teamID, MemberID: memberID}, nil
-}
-
-// cleanEmails accepts 1 to 25 plain addresses (no display name, no control characters), lower-cased and
-// without duplicates. No error quotes an address.
-func cleanEmails(values []string) ([]string, error) {
-	const reason = "emails must hold 1 to 25 plain email addresses"
-	if len(values) == 0 || len(values) > maxInvitations {
-		return nil, invalidRequest(reason)
-	}
-	seen := make(map[string]bool, len(values))
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.ToLower(strings.TrimSpace(value))
-		if value == "" || len(value) > maxEmailLength || !utf8.ValidString(value) {
-			return nil, invalidRequest(reason)
-		}
-		for _, r := range value {
-			if unicode.IsControl(r) || unicode.IsSpace(r) || r == '<' || r == '>' || r == ',' || r == '"' {
-				return nil, invalidRequest(reason)
-			}
-		}
-		parsed, err := mail.ParseAddress(value)
-		if err != nil || parsed.Name != "" || parsed.Address != value || strings.Count(value, "@") != 1 ||
-			!strings.Contains(value[strings.Index(value, "@"):], ".") {
-			return nil, invalidRequest(reason)
-		}
-		if !seen[value] {
-			seen[value] = true
-			out = append(out, value)
-		}
-	}
-	return out, nil
-}
-
-func invokeInvitationsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	const op = "create invitations"
-	input, err := readMember(op, raw)
-	if err != nil {
-		return nil, err
-	}
-	teamID, err := selectTeamForTeamWideChange(resolved, input.TeamID)
-	if err != nil {
-		return nil, err
-	}
-	if err := checkRole(input.Role, "editor", "viewer"); err != nil {
-		return nil, err
-	}
-	emails, err := cleanEmails(input.Emails)
-	if err != nil {
-		return nil, err
-	}
-	client, err := Open(ctx, resolved, secrets, red)
-	if err != nil {
-		return nil, err
-	}
-	data, err := client.change(ctx, op, cmdCreateInvitation,
-		map[string]any{"team-id": teamID, "emails": emails, "role": input.Role})
-	if err != nil {
-		return nil, err
-	}
-	answer, ok := asObj(data)
-	if !ok || answer["total"] == nil {
-		return nil, invalidResponse(op, "Penpot returned an invalid response"+changeUncertain)
-	}
-	invited := answer.integer("total")
-	if invited < 0 || invited > maxInvitations {
-		invited = 0
-	}
-	return &InvitationsCreated{TeamID: teamID, Requested: len(emails), Invited: int(invited)}, nil
 }
