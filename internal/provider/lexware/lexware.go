@@ -1,11 +1,12 @@
-// Package lexware implements controlled access to outgoing invoices of a Lexware
+// Package lexware implements controlled access to outgoing invoices, contacts, and articles of a Lexware
 // Office organization.
 //
 // The provider talks to one fixed production gateway. It reads a bounded page of invoice metadata and the
-// detail of one invoice selected by its validated identifier, creates an invoice draft, and issues a final
-// invoice only through its own tool, which a connection offers solely when its tools list names it. Contact,
-// address, and line-item content arrives from the provider and is treated as untrusted data: it is
-// normalised into a stable Qatlas shape, passed through the output encoders, and never rendered or stored.
+// detail of one invoice selected by its validated identifier, reads bounded pages and single records of
+// contacts and articles, creates an invoice draft, and issues a final invoice only through its own tool,
+// which a connection offers solely when its tools list names it. Contact, address, article, and line-item
+// content arrives from the provider and is treated as untrusted data: it is normalised into a stable Qatlas
+// shape, passed through the output encoders, and never rendered or stored.
 package lexware
 
 import (
@@ -267,8 +268,10 @@ var invoicesIssue = capability.Descriptor{
 	Arguments:    invoiceArguments, Fields: invoiceFields, Examples: invoiceExamples,
 }
 
-// Register adds Lexware metadata, its read-only connection test, and the supported invoice operations.
+// Register adds Lexware metadata, its read-only connection test, and the supported operations.
 func Register(reg *capability.Registry) error {
+	readTools := []string{invoicesList.ID, invoicesGet.ID, contactsList.ID, contactsGet.ID,
+		articlesList.ID, articlesGet.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
 		Description:        "Online accounting and invoicing service for small businesses",
@@ -283,14 +286,14 @@ func Register(reg *capability.Registry) error {
 			Description: "not used by Lexware; the organization follows from the API key",
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "Read invoices", Recommended: true,
-			Description: "lists and reads invoices; creates nothing in Lexware Office",
-			Tools:       []string{invoicesList.ID, invoicesGet.ID},
+			ID: "read", Title: "Read invoices, contacts and articles", Recommended: true,
+			Description: "lists and reads invoices, contacts and articles; creates nothing in Lexware Office",
+			Tools:       readTools,
 		}, {
 			ID: "write", Title: "Master data and drafts",
-			Description: "lists and reads invoices and creates invoice drafts; issuing an invoice is never " +
-				"part of a profile",
-			Tools: []string{invoicesList.ID, invoicesGet.ID, invoicesCreate.ID},
+			Description: "lists and reads invoices, contacts and articles and creates invoice drafts; " +
+				"issuing an invoice is never part of a profile",
+			Tools: append(append([]string{}, readTools...), invoicesCreate.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -300,6 +303,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: invoicesGet, Handler: capability.Handler(invokeInvoicesGet)},
 		capability.Operation{Descriptor: invoicesCreate, Handler: capability.Handler(invokeInvoicesCreate)},
 		capability.Operation{Descriptor: invoicesIssue, Handler: capability.Handler(invokeInvoicesIssue)},
+		capability.Operation{Descriptor: contactsList, Handler: capability.Handler(invokeContactsList)},
+		capability.Operation{Descriptor: contactsGet, Handler: capability.Handler(invokeContactsGet)},
+		capability.Operation{Descriptor: articlesList, Handler: capability.Handler(invokeArticlesList)},
+		capability.Operation{Descriptor: articlesGet, Handler: capability.Handler(invokeArticlesGet)},
 	)
 }
 
@@ -629,14 +636,8 @@ func (c *Client) ListInvoices(ctx context.Context, options ListOptions) (*ListRe
 // normalize applies the defaults and the bounds of one list request. The application core validates the
 // same rules against the input schema first; this keeps a direct caller inside them as well.
 func (o *ListOptions) normalize() error {
-	if o.Size == 0 {
-		o.Size = defaultPageSize
-	}
-	if o.Size < 1 || o.Size > maxPageSize {
-		return fmt.Errorf("the page size must be between 1 and %d", maxPageSize)
-	}
-	if o.Page < 0 || o.Page > maxPage {
-		return fmt.Errorf("the page must be between 0 and %d", maxPage)
+	if err := normalizePaging(&o.Page, &o.Size); err != nil {
+		return err
 	}
 	if o.Sort != "" && sortProperties[o.Sort] == "" {
 		return errors.New("the sort property is not supported")
@@ -656,6 +657,43 @@ func (o *ListOptions) normalize() error {
 		return errors.New("the voucher number filter is too long")
 	}
 	return nil
+}
+
+// normalizePaging applies the default page size and checks the page bounds every list operation shares.
+func normalizePaging(page, size *int) error {
+	if *size == 0 {
+		*size = defaultPageSize
+	}
+	if *size < 1 || *size > maxPageSize {
+		return fmt.Errorf("the page size must be between 1 and %d", maxPageSize)
+	}
+	if *page < 0 || *page > maxPage {
+		return fmt.Errorf("the page must be between 0 and %d", maxPage)
+	}
+	return nil
+}
+
+// pagingJSON mirrors the page members of a Lexware page object; a list response embeds it.
+type pagingJSON struct {
+	Number        int  `json:"number"`
+	Size          int  `json:"size"`
+	TotalPages    int  `json:"totalPages"`
+	TotalElements int  `json:"totalElements"`
+	Last          bool `json:"last"`
+}
+
+// pagingArguments and pagingFields are the descriptor entries of the shared page members.
+var pagingArguments = []capability.Argument{
+	{Name: "page", Description: "Zero-based page to read, from 0 through 200"},
+	{Name: "size", Description: "Entries per page, from 1 through 100; 25 when omitted"},
+}
+
+var pagingFields = []capability.Field{
+	{Name: "page", Description: "Zero-based index of the returned page"},
+	{Name: "size", Description: "Page size the provider applied"},
+	{Name: "total_pages", Description: "Number of pages the filter produces"},
+	{Name: "total_elements", Description: "Number of entries the filter produces"},
+	{Name: "last_page", Description: "True when this is the last page of the filter"},
 }
 
 // Invoice is the stable Qatlas view of one invoice. Everything a Lexware user typed is untrusted data.
@@ -1027,7 +1065,11 @@ func statusError(op, resource string, status int) error {
 }
 
 // Resource kinds of single-object operations, used in the not-found message.
-const resourceInvoice = "invoice"
+const (
+	resourceInvoice = "invoice"
+	resourceContact = "contact"
+	resourceArticle = "article"
+)
 
 func providerError(op, message string) error {
 	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: message}
