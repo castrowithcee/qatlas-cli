@@ -170,7 +170,7 @@ func TestTrustedKeysMatchAllowedSigners(t *testing.T) {
 		}
 		want = append(want, fields[1]+" "+fields[2])
 	}
-	got := TrustedKeyLines()
+	got := trustedKeyLines
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("compiled keys %q differ from .github/release-allowed-signers %q", got, want)
 	}

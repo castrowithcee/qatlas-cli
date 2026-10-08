@@ -94,7 +94,7 @@ func TestAppendAcrossDayWithEmptyCurrentFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustAppend(t, logger, "op.two")
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil || report.Broken {
 		t.Fatalf("Verify() = %+v, %v; want intact chain", report, err)
 	}

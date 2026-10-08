@@ -618,21 +618,6 @@ func TestMarshalTOONWhitespaceInvariants(t *testing.T) {
 	}
 }
 
-func TestEncodeTOONWritesTheSameBytes(t *testing.T) {
-	value := obj("a", 1, "b", []any{obj("x", 1), obj("x", 2)})
-	want, err := MarshalTOON(value)
-	if err != nil {
-		t.Fatalf("MarshalTOON() = %v", err)
-	}
-	var got bytes.Buffer
-	if err := EncodeTOON(&got, value); err != nil {
-		t.Fatalf("EncodeTOON() = %v", err)
-	}
-	if !bytes.Equal(got.Bytes(), want) {
-		t.Errorf("EncodeTOON() = %q, want %q", got.String(), want)
-	}
-}
-
 func TestMarshalTOONErrors(t *testing.T) {
 	tests := []struct {
 		name  string

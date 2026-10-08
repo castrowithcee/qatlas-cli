@@ -3,7 +3,6 @@ package output
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"reflect"
 	"regexp"
@@ -49,16 +48,6 @@ func MarshalTOON(v any) ([]byte, error) {
 		return nil, err
 	}
 	return []byte(e.b.String()), nil
-}
-
-// EncodeTOON writes v to w as a TOON document. See MarshalTOON for the accepted values.
-func EncodeTOON(w io.Writer, v any) error {
-	out, err := MarshalTOON(v)
-	if err != nil {
-		return err
-	}
-	_, err = w.Write(out)
-	return err
 }
 
 // toonField is one entry of a tabular or keyed header's field list. A leaf field has no children; a field

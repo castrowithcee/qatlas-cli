@@ -41,10 +41,6 @@ type Report struct {
 	Broken bool
 }
 
-// Verify is VerifyWith without a Checker: it checks the chain alone and counts every entry that carries
-// a check value as unchecked.
-func Verify(vaultDir string) (Report, error) { return VerifyWith(vaultDir, nil) }
-
 // VerifyWith walks every day file under vaultDir/logs in date order and checks the hash chain: each entry's
 // sequence number must follow the one before it by exactly one, and its prev_hash must be the SHA-256 of
 // the exact previous line, across day boundaries. The very first entry Verify encounters at all is exempt
