@@ -185,7 +185,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		// none, then the counts of tools, usable connections, and configured connections.
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,68,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", ",\"\",3,0,0\n",
+		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", ",\"\",4,0,0\n",
 		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",26,0,0\n", ",\"\",9,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n", ",\"\",2,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -369,7 +369,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 	t.Run("an empty listing points to --all", func(t *testing.T) {
 		code, stdout, stderr := runTools(t, nil, "tools", "lexware", "--config", cfg)
 		if code != exitOK || stdout != "tools: []\n" ||
-			stderr != "qatlas: no connection offers any of the 3 matching tools; --all lists them with the "+
+			stderr != "qatlas: no connection offers any of the 4 matching tools; --all lists them with the "+
 				"reason, 'qatlas connections' lists the connections\n" {
 			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
@@ -400,10 +400,10 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 	}{
 		{"namespace", []string{"bookstack", "--query", "bookstack"}, []string{"bookstack.attachments.delete", "bookstack.attachments.download", "bookstack.attachments.get", "bookstack.attachments.link", "bookstack.attachments.list", "bookstack.attachments.replace", "bookstack.attachments.update", "bookstack.attachments.upload", "bookstack.auditlog.list", "bookstack.books.create", "bookstack.books.delete", "bookstack.books.get", "bookstack.books.list", "bookstack.books.setcover", "bookstack.books.update", "bookstack.chapters.create", "bookstack.chapters.delete", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.chapters.update", "bookstack.comments.create", "bookstack.comments.delete", "bookstack.comments.get", "bookstack.comments.list", "bookstack.comments.update", "bookstack.content.download", "bookstack.content.export", "bookstack.content.search", "bookstack.contentpermissions.get", "bookstack.contentpermissions.update", "bookstack.images.delete", "bookstack.images.download", "bookstack.images.get", "bookstack.images.list", "bookstack.images.replace", "bookstack.images.update", "bookstack.images.upload", "bookstack.imports.delete", "bookstack.imports.get", "bookstack.imports.list", "bookstack.imports.run", "bookstack.imports.upload", "bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.recyclebin.destroy", "bookstack.recyclebin.list", "bookstack.recyclebin.restore", "bookstack.roles.create", "bookstack.roles.delete", "bookstack.roles.get", "bookstack.roles.list", "bookstack.roles.update", "bookstack.shelves.create", "bookstack.shelves.delete", "bookstack.shelves.get", "bookstack.shelves.list", "bookstack.shelves.setcover", "bookstack.shelves.update", "bookstack.system.get", "bookstack.tags.list", "bookstack.tags.values", "bookstack.users.delete", "bookstack.users.get", "bookstack.users.list", "bookstack.users.update"}},
 		{"namespace telegram", []string{"telegram"}, []string{"telegram.messages.delete", "telegram.messages.edit", "telegram.messages.send"}},
-		{"namespace lexware", []string{"lexware"}, []string{"lexware.invoices.create", "lexware.invoices.get", "lexware.invoices.list"}},
+		{"namespace lexware", []string{"lexware"}, []string{"lexware.invoices.create", "lexware.invoices.get", "lexware.invoices.issue", "lexware.invoices.list"}},
 		{"namespace twentycrm", []string{"twentycrm"}, []string{
 			"twentycrm.companies.create", "twentycrm.companies.delete", "twentycrm.companies.destroy", "twentycrm.companies.get", "twentycrm.companies.list", "twentycrm.companies.restore", "twentycrm.companies.update",
-			"twentycrm.objects.get", "twentycrm.objects.list",
+			"twentycrm.objects.get", "twentycrm.objects.list", "twentycrm.records.get", "twentycrm.records.list",
 		}},
 		{"namespace seatable", []string{"seatable"}, []string{"seatable.base.operations", "seatable.collaborators.list", "seatable.columns.create", "seatable.columns.delete", "seatable.columns.list", "seatable.columns.optionsadd", "seatable.columns.optionsdelete", "seatable.columns.optionsupdate", "seatable.columns.update", "seatable.comments.create", "seatable.comments.delete", "seatable.comments.list", "seatable.files.delete", "seatable.files.get", "seatable.files.upload", "seatable.links.create", "seatable.links.delete", "seatable.links.list", "seatable.links.update", "seatable.rows.activities", "seatable.rows.batchcreate", "seatable.rows.batchdelete", "seatable.rows.batchupdate", "seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.search", "seatable.rows.update", "seatable.snapshots.create", "seatable.tables.create", "seatable.tables.delete", "seatable.tables.duplicate", "seatable.tables.list", "seatable.tables.rename", "seatable.views.create", "seatable.views.delete", "seatable.views.get", "seatable.views.list", "seatable.views.update"}},
 		{"namespace github", []string{"github", "--query", "github"}, []string{

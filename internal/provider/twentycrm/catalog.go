@@ -43,15 +43,19 @@ type catalogObject struct {
 // catalogField is one field of an object. Type is the JSON type of the field (string, number, integer,
 // boolean, object, or array), Format a bounded schema format such as uuid or date-time. Subfields are the
 // parts of a composite field. Required comes from the create shape, Writable from the update shape.
-// Relation names the object a relation field points to, when the document shows it.
+// Relation names the object a relation field points to, when the document shows it. Reference is set for
+// every field that points to another schema, even when that object is not in the catalog. InResponse is set
+// for a field of the SINGULARForResponse schema, the shape of a record read.
 type catalogField struct {
-	Name      string
-	Type      string
-	Format    string
-	Required  bool
-	Writable  bool
-	Subfields []catalogSubfield
-	Relation  string
+	Name       string
+	Type       string
+	Format     string
+	Required   bool
+	Writable   bool
+	Subfields  []catalogSubfield
+	Relation   string
+	Reference  bool
+	InResponse bool
 }
 
 type catalogSubfield struct {
@@ -197,8 +201,10 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 	for _, name := range sorted {
 		prop := names[name]
 		_, writable := update.Properties[name]
+		_, inResponse := response.Properties[name]
 		field := catalogField{
 			Name: name, Type: jsonType(prop.Type), Required: required[name], Writable: writable,
+			InResponse: inResponse,
 		}
 		if formatPattern.MatchString(prop.Format) {
 			field.Format = prop.Format
@@ -208,6 +214,7 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 			ref = prop.Items.Ref
 		}
 		field.Relation = relationTarget(ref)
+		field.Reference = ref != ""
 		subs := make([]string, 0, len(prop.Properties))
 		for sub := range prop.Properties {
 			if fieldNamePattern.MatchString(sub) {

@@ -1,10 +1,11 @@
 // Package lexware implements controlled access to outgoing invoices of a Lexware
 // Office organization.
 //
-// The provider talks to one fixed production gateway and offers exactly two safe reads: a bounded page of
-// invoice metadata and the detail of one invoice selected by its validated identifier. Contact, address,
-// and line-item content arrives from the provider and is treated as untrusted data: it is normalised into
-// a stable Qatlas shape, passed through the output encoders, and never rendered or stored.
+// The provider talks to one fixed production gateway. It reads a bounded page of invoice metadata and the
+// detail of one invoice selected by its validated identifier, creates an invoice draft, and issues a final
+// invoice only through its own tool, which a connection offers solely when its tools list names it. Contact,
+// address, and line-item content arrives from the provider and is treated as untrusted data: it is
+// normalised into a stable Qatlas shape, passed through the output encoders, and never rendered or stored.
 package lexware
 
 import (
@@ -188,34 +189,82 @@ var invoicesGet = capability.Descriptor{
 	}},
 }
 
+// invoiceWriteRisk is shared by both invoice creations: each sends one non-repeatable request to the
+// production organization.
+var invoiceWriteRisk = capability.Risk{
+	Effect:          capability.EffectCreate,
+	Idempotency:     capability.IdempotencyNonIdempotent,
+	Confirmation:    capability.ConfirmationRequired,
+	OpenWorld:       true,
+	DataSensitivity: dataSensitivity,
+}
+
+// invoiceInputSchema is the closed input of a draft and of an issued invoice. It has no finalize member:
+// whether an invoice is final follows from the operation, never from an argument.
+const invoiceInputSchema = `{"type":"object","properties":{` +
+	`"voucher_date":{"type":"string","minLength":1,"maxLength":40},` +
+	`"address":{"type":"object","properties":{"contact_id":{"type":"string","maxLength":36},"name":{"type":"string","maxLength":255},"supplement":{"type":"string","maxLength":255},"street":{"type":"string","maxLength":255},"city":{"type":"string","maxLength":255},"zip":{"type":"string","maxLength":32},"country_code":{"type":"string","minLength":2,"maxLength":2}},"additionalProperties":false},` +
+	`"line_items":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"object","properties":{"type":{"type":"string","enum":["custom","text"]},"name":{"type":"string","minLength":1,"maxLength":255},"description":{"type":"string","maxLength":4096},"quantity":{"type":"number"},"unit_name":{"type":"string","maxLength":64},"currency":{"type":"string","minLength":3,"maxLength":3},"net_amount":{"type":"number"},"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"}},"required":["type","name"],"additionalProperties":false}},` +
+	`"currency":{"type":"string","minLength":3,"maxLength":3},"tax_type":{"type":"string","enum":["net","gross","vatfree"]},` +
+	`"shipping_date":{"type":"string","minLength":1,"maxLength":40},"shipping_end_date":{"type":"string","minLength":1,"maxLength":40},"shipping_type":{"type":"string","enum":["delivery","deliveryperiod","service","serviceperiod","none"]},` +
+	`"title":{"type":"string","maxLength":255},"introduction":{"type":"string","maxLength":4096},"remark":{"type":"string","maxLength":4096}},` +
+	`"required":["voucher_date","address","line_items","currency","tax_type","shipping_type"],"additionalProperties":false}`
+
+// invoiceOutputSchema is the result of both creations: the identifier and the timestamps Lexware reports.
+const invoiceOutputSchema = `{"type":"object","properties":{"id":{"type":"string"},"created_date":{"type":"string"},"updated_date":{"type":"string"},"version":{"type":"integer"}},"required":["id"],"additionalProperties":false}`
+
+var invoiceArguments = []capability.Argument{
+	{Name: "voucher_date", Description: "Invoice date as an RFC 3339 timestamp", Required: true},
+	{Name: "address", Description: "Recipient address object; contact_id references an existing contact as a UUID, otherwise name and country_code are required and supplement, street, zip and city complete it", Required: true},
+	{Name: "line_items", Description: "1 to 100 invoice positions with type custom or text and a name; custom positions add quantity, unit_name, net_amount and tax_rate_percentage, and optionally currency and discount_percentage", Required: true},
+	{Name: "currency", Description: "ISO 4217 currency code of 3 characters", Required: true},
+	{Name: "tax_type", Description: "How amounts are taxed: net, gross or vatfree", Required: true},
+	{Name: "shipping_type", Description: "Kind of delivery: delivery, deliveryperiod, service, serviceperiod or none", Required: true},
+	{Name: "shipping_date", Description: "Delivery or service date as an RFC 3339 timestamp; required unless shipping_type is none"},
+	{Name: "shipping_end_date", Description: "End of the delivery or service period as an RFC 3339 timestamp; required for deliveryperiod and serviceperiod"},
+	{Name: "title", Description: "Invoice title, up to 255 characters"},
+	{Name: "introduction", Description: "Introductory text above the positions, up to 4096 characters"},
+	{Name: "remark", Description: "Closing remark below the positions, up to 4096 characters"},
+}
+
+var invoiceFields = []capability.Field{
+	{Name: "id", Description: "Identifier Lexware assigned to the new invoice"},
+	{Name: "created_date", Description: "Creation timestamp reported by Lexware"},
+	{Name: "updated_date", Description: "Last change timestamp reported by Lexware"},
+	{Name: "version", Description: "Version counter reported by Lexware"},
+}
+
+var invoiceExamples = []capability.Example{{
+	Description: "One service position for an existing contact, delivered on one day",
+	Arguments: json.RawMessage(`{"voucher_date":"2026-09-12T00:00:00+02:00",` +
+		`"address":{"contact_id":"11111111-2222-3333-4444-555555555555"},` +
+		`"line_items":[{"type":"custom","name":"Consulting","quantity":2,"unit_name":"hour",` +
+		`"net_amount":120,"tax_rate_percentage":19}],` +
+		`"currency":"EUR","tax_type":"net","shipping_type":"service",` +
+		`"shipping_date":"2026-09-12T00:00:00+02:00"}`),
+}}
+
 var invoicesCreate = capability.Descriptor{
-	ID: Provider + ".invoices.create", Version: 1, Title: "Create a Lexware invoice",
-	Description: "Create one outgoing invoice as a draft or finalize it immediately; Lexware does not expose invoice update or delete endpoints",
-	Tags:        []string{"lexware", "invoices", "create", "accounting"}, Provider: Provider,
-	Risk: capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
-	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"finalize":{"type":"boolean"},"voucher_date":{"type":"string","minLength":1,"maxLength":40},` +
-		`"address":{"type":"object","properties":{"contact_id":{"type":"string","maxLength":36},"name":{"type":"string","maxLength":255},"supplement":{"type":"string","maxLength":255},"street":{"type":"string","maxLength":255},"city":{"type":"string","maxLength":255},"zip":{"type":"string","maxLength":32},"country_code":{"type":"string","minLength":2,"maxLength":2}},"additionalProperties":false},` +
-		`"line_items":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"object","properties":{"type":{"type":"string","enum":["custom","text"]},"name":{"type":"string","minLength":1,"maxLength":255},"description":{"type":"string","maxLength":4096},"quantity":{"type":"number"},"unit_name":{"type":"string","maxLength":64},"currency":{"type":"string","minLength":3,"maxLength":3},"net_amount":{"type":"number"},"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"}},"required":["type","name"],"additionalProperties":false}},` +
-		`"currency":{"type":"string","minLength":3,"maxLength":3},"tax_type":{"type":"string","enum":["net","gross","vatfree"]},` +
-		`"shipping_date":{"type":"string","minLength":1,"maxLength":40},"shipping_end_date":{"type":"string","minLength":1,"maxLength":40},"shipping_type":{"type":"string","enum":["delivery","deliveryperiod","service","serviceperiod","none"]},` +
-		`"title":{"type":"string","maxLength":255},"introduction":{"type":"string","maxLength":4096},"remark":{"type":"string","maxLength":4096}},` +
-		`"required":["voucher_date","address","line_items","currency","tax_type","shipping_type"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"created_date":{"type":"string"},"updated_date":{"type":"string"},"version":{"type":"integer"},"finalized":{"type":"boolean"}},"required":["id","finalized"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{
-		{Name: "voucher_date", Description: "Invoice date as an ISO 8601 timestamp", Required: true},
-		{Name: "address", Description: "Recipient address object; contact_id references an existing contact, otherwise name, street, zip, city and country_code describe it", Required: true},
-		{Name: "line_items", Description: "1 to 100 invoice positions with type custom or text and a name; custom positions add quantity, unit_name, currency, net_amount, tax_rate_percentage and discount_percentage", Required: true},
-		{Name: "currency", Description: "ISO 4217 currency code of 3 characters", Required: true},
-		{Name: "tax_type", Description: "How amounts are taxed: net, gross or vatfree", Required: true},
-		{Name: "shipping_type", Description: "Kind of delivery: delivery, deliveryperiod, service, serviceperiod or none", Required: true},
-		{Name: "shipping_date", Description: "Delivery or service date as an ISO 8601 timestamp"},
-		{Name: "shipping_end_date", Description: "End of the delivery or service period as an ISO 8601 timestamp"},
-		{Name: "finalize", Description: "True to finalize the invoice immediately instead of keeping a draft"},
-		{Name: "title", Description: "Invoice title, up to 255 characters"},
-		{Name: "introduction", Description: "Introductory text above the positions, up to 4096 characters"},
-		{Name: "remark", Description: "Closing remark below the positions, up to 4096 characters"},
-	},
+	ID: Provider + ".invoices.create", Version: 2, Title: "Create a Lexware invoice draft",
+	Description: "Create one outgoing invoice as a draft without invoice number; a draft can still be " +
+		"changed in Lexware Office. Issuing the invoice is a separate tool",
+	Tags:     []string{"lexware", "invoices", "create", "draft", "accounting"},
+	Provider: Provider, Risk: invoiceWriteRisk,
+	InputSchema:  json.RawMessage(invoiceInputSchema),
+	OutputSchema: json.RawMessage(invoiceOutputSchema),
+	Arguments:    invoiceArguments, Fields: invoiceFields, Examples: invoiceExamples,
+}
+
+var invoicesIssue = capability.Descriptor{
+	ID: Provider + ".invoices.issue", Version: 1, Title: "Issue a Lexware invoice",
+	Description: "Create one outgoing invoice and finalize it immediately: Lexware assigns the invoice " +
+		"number, and the API can neither change nor delete the invoice afterwards. Offered only by a " +
+		"connection whose tools list names it",
+	Tags:     []string{"lexware", "invoices", "issue", "finalize", "accounting"},
+	Provider: Provider, Risk: invoiceWriteRisk, RequiresToolAllowList: true,
+	InputSchema:  json.RawMessage(invoiceInputSchema),
+	OutputSchema: json.RawMessage(invoiceOutputSchema),
+	Arguments:    invoiceArguments, Fields: invoiceFields, Examples: invoiceExamples,
 }
 
 // Register adds Lexware metadata, its read-only connection test, and the supported invoice operations.
@@ -237,6 +286,11 @@ func Register(reg *capability.Registry) error {
 			ID: "read", Title: "Read invoices", Recommended: true,
 			Description: "lists and reads invoices; creates nothing in Lexware Office",
 			Tools:       []string{invoicesList.ID, invoicesGet.ID},
+		}, {
+			ID: "write", Title: "Master data and drafts",
+			Description: "lists and reads invoices and creates invoice drafts; issuing an invoice is never " +
+				"part of a profile",
+			Tools: []string{invoicesList.ID, invoicesGet.ID, invoicesCreate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -245,6 +299,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: invoicesList, Handler: capability.Handler(invokeInvoicesList)},
 		capability.Operation{Descriptor: invoicesGet, Handler: capability.Handler(invokeInvoicesGet)},
 		capability.Operation{Descriptor: invoicesCreate, Handler: capability.Handler(invokeInvoicesCreate)},
+		capability.Operation{Descriptor: invoicesIssue, Handler: capability.Handler(invokeInvoicesIssue)},
 	)
 }
 
@@ -277,7 +332,6 @@ func invokeInvoicesGet(ctx context.Context, resolved *config.Resolved, secrets *
 }
 
 type createInput struct {
-	Finalize    bool   `json:"finalize"`
 	VoucherDate string `json:"voucher_date"`
 	Address     struct {
 		ContactID   string `json:"contact_id,omitempty"`
@@ -310,18 +364,35 @@ type createInput struct {
 }
 
 func invokeInvoicesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeInvoicePost(ctx, resolved, secrets, red, raw, false)
+}
+
+func invokeInvoicesIssue(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeInvoicePost(ctx, resolved, secrets, red, raw, true)
+}
+
+// invokeInvoicePost validates the arguments, including every foreign identifier, before the credential is
+// resolved or any provider I/O happens.
+func invokeInvoicePost(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage, finalize bool) (any, error) {
+	op := "create invoice"
+	if finalize {
+		op = "issue invoice"
+	}
 	var input createInput
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	if decoder.Decode(&input) != nil {
-		return nil, providerError("create invoice", "the validated arguments could not be read")
+		return nil, providerError(op, "the validated arguments could not be read")
 	}
 	if err := input.validate(); err != nil {
-		return nil, providerError("create invoice", err.Error())
+		return nil, providerError(op, err.Error())
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
+	}
+	if finalize {
+		return client.IssueInvoice(ctx, input)
 	}
 	return client.CreateInvoice(ctx, input)
 }
@@ -329,6 +400,9 @@ func invokeInvoicesCreate(ctx context.Context, resolved *config.Resolved, secret
 func (input createInput) validate() error {
 	if _, err := time.Parse(time.RFC3339, input.VoucherDate); err != nil {
 		return errors.New("voucher_date must be an RFC 3339 timestamp")
+	}
+	if input.Address.ContactID != "" && !validUUID(input.Address.ContactID) {
+		return errors.New("address.contact_id must be a UUID")
 	}
 	if input.Address.ContactID == "" && (input.Address.Name == "" || input.Address.CountryCode == "") {
 		return errors.New("address needs contact_id or name and country_code")
@@ -685,11 +759,24 @@ type createResult struct {
 	CreatedDate string `json:"created_date,omitempty"`
 	UpdatedDate string `json:"updated_date,omitempty"`
 	Version     int    `json:"version,omitempty"`
-	Finalized   bool   `json:"finalized"`
 }
 
+// CreateInvoice posts one draft: the request carries no finalize query.
 func (c *Client) CreateInvoice(ctx context.Context, input createInput) (*createResult, error) {
-	const op = "create invoice"
+	return c.postInvoice(ctx, "create invoice", input, false)
+}
+
+// IssueInvoice posts one invoice with the fixed query finalize=true. Lexware then assigns the invoice
+// number, and the API can no longer change or delete the invoice.
+func (c *Client) IssueInvoice(ctx context.Context, input createInput) (*createResult, error) {
+	return c.postInvoice(ctx, "issue invoice", input, true)
+}
+
+func (c *Client) postInvoice(ctx context.Context, op string, input createInput, finalize bool) (*createResult, error) {
+	uncertain := invoiceMayExist
+	if finalize {
+		uncertain = invoiceMayBeIssued
+	}
 	address := map[string]any{"name": input.Address.Name, "supplement": input.Address.Supplement, "street": input.Address.Street, "city": input.Address.City, "zip": input.Address.Zip, "countryCode": input.Address.CountryCode}
 	if input.Address.ContactID != "" {
 		address = map[string]any{"contactId": input.Address.ContactID}
@@ -728,7 +815,7 @@ func (c *Client) CreateInvoice(ctx context.Context, input createInput) (*createR
 		}
 	}
 	query := url.Values{}
-	if input.Finalize {
+	if finalize {
 		query.Set("finalize", "true")
 	}
 	var response struct {
@@ -737,13 +824,13 @@ func (c *Client) CreateInvoice(ctx context.Context, input createInput) (*createR
 		UpdatedDate string `json:"updatedDate"`
 		Version     int    `json:"version"`
 	}
-	if err := c.post(ctx, op, "", "/v1/invoices", query, payload, &response, invoiceMayExist); err != nil {
+	if err := c.post(ctx, op, "", "/v1/invoices", query, payload, &response, uncertain); err != nil {
 		return nil, err
 	}
 	if !validUUID(response.ID) {
-		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invoice without a usable identifier" + invoiceMayExist}
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invoice without a usable identifier" + uncertain}
 	}
-	return &createResult{ID: response.ID, CreatedDate: response.CreatedDate, UpdatedDate: response.UpdatedDate, Version: response.Version, Finalized: input.Finalize}, nil
+	return &createResult{ID: response.ID, CreatedDate: response.CreatedDate, UpdatedDate: response.UpdatedDate, Version: response.Version}, nil
 }
 
 // voucherListJSON mirrors the provider fields the list operation reads.
@@ -820,6 +907,9 @@ type invoiceJSON struct {
 // invoiceMayExist is appended to a failure of an invoice creation whose request may have reached Lexware:
 // the invoice may exist although no usable confirmation arrived. Qatlas never repeats such a request.
 const invoiceMayExist = "; the invoice may have been created, check the voucher list before repeating it"
+
+// invoiceMayBeIssued is the hint of an issuing request: the invoice may already be final and numbered.
+const invoiceMayBeIssued = "; the invoice may have been issued, check the voucher list before repeating it"
 
 // get performs one bounded read against the fixed gateway and decodes the response into out.
 func (c *Client) get(ctx context.Context, op, resource, path string, query url.Values, out any) error {
