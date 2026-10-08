@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Lexware reads of invoices, sales documents, vouchers, contacts and articles, invoice drafts and issuing,
-  permissions, and credentials.
+  Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts and
+  articles, invoice drafts and issuing, permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -19,8 +19,12 @@ of every type and status; without a type or status filter it includes all of the
 `overdue` each stand alone in their filter. Lexware lists at most 10,000 vouchers per filter, so a page beyond
 that limit is refused before any request; narrow the filter instead. It also reads the payment status of one
 voucher and one bookkeeping voucher with its positions; bookkeeping vouchers are their own data class.
-Quotations, order confirmations, credit notes and delivery notes each have their own detail tool by
-identifier, with address, positions, totals, shipping and related vouchers; a delivery note carries no prices.
+Quotations, order confirmations, credit notes, delivery notes, dunnings and down payment invoices each have
+their own detail tool by identifier, with address, positions, totals, shipping and related vouchers; a delivery
+note carries no prices. A dunning names the invoice it refers to; a down payment invoice names its closing
+invoice once one exists. Templates for recurring invoices are listed page by page, sorted by one of a few fixed
+properties, and read by identifier, with interval, next execution, execution status and whether the last
+execution failed; the provider's error text of a failed execution is never shown.
 
 `lexware.invoices.create` creates an invoice as a draft without an invoice number (`create`), always with
 confirmation. Issuing an invoice is the separate tool `lexware.invoices.issue`: Lexware then assigns the
