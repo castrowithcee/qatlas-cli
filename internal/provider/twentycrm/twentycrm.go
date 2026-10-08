@@ -763,17 +763,8 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, lim
 	if response.StatusCode != http.StatusOK {
 		return statusError(op, response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
-	if err != nil || int64(len(body)) > limit {
-		return &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: op,
-			Message: "the Twenty response could not be read within the size limit",
-		}
-	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: op, Message: "Twenty returned an invalid response",
-		}
+	if failure := provider.ReadJSON(op, "Twenty", response.Body, limit, out); failure != nil {
+		return failure
 	}
 	return nil
 }
@@ -814,12 +805,8 @@ func (c *Client) change(ctx context.Context, op, method, path string, payload an
 		}
 		return nil
 	}
-	bodyBytes, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil || len(bodyBytes) > maxResponseBytes {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the Twenty response could not be read within the size limit"}
-	}
-	if json.Unmarshal(bodyBytes, out) != nil {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Twenty returned an invalid response"}
+	if failure := provider.ReadJSON(op, "Twenty", response.Body, maxResponseBytes, out); failure != nil {
+		return failure
 	}
 	return nil
 }

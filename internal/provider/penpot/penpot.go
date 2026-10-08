@@ -40,7 +40,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -286,7 +285,7 @@ func (c *Client) send(ctx context.Context, op, command string, body io.Reader, l
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		failure := c.statusError(op, response)
+		failure := c.responseError(op, response)
 		if change && response.StatusCode >= 500 {
 			failure.Message += hint
 		}
@@ -299,34 +298,19 @@ func (c *Client) send(ctx context.Context, op, command string, body io.Reader, l
 	return data, nil
 }
 
-// statusError maps an HTTP status to a stable class; the provider body is never read into the message.
-func (c *Client) statusError(op string, response *http.Response) *provider.Error {
+// responseError maps an HTTP status to a stable class; the provider body is never read into the message.
+func (c *Client) responseError(op string, response *http.Response) *provider.Error {
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseSize))
-	status := response.StatusCode
-	switch {
-	case status == http.StatusUnauthorized:
-		return &provider.Error{Class: provider.ClassAuth, Op: op,
-			Message: "Penpot rejected the access token; check that it is valid and that the access-tokens flag is enabled on the instance"}
-	case status == http.StatusForbidden:
-		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "Penpot refused this access token; check that the access-tokens flag is enabled on the instance and " +
-				"that the account may read this resource"}
-	case status == http.StatusNotFound:
-		return &provider.Error{Class: provider.ClassNotFound, Op: op,
-			Message: "Penpot does not hold this resource or does not show it to this token"}
-	case status == http.StatusTooManyRequests:
+	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
-		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Penpot rate-limited the operation"}
-	case status == http.StatusServiceUnavailable:
-		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "Penpot is unavailable or in maintenance"}
-	case status == http.StatusGatewayTimeout:
-		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "Penpot did not answer in time"}
-	case status >= 300 && status < 400:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "Penpot answered with a redirect, which Qatlas does not follow for this request"}
 	}
-	return &provider.Error{Class: provider.ClassProviderError, Op: op,
-		Message: "Penpot rejected the operation (HTTP " + strconv.Itoa(status) + ")"}
+	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+		Subject: "Penpot",
+		Auth:    "Penpot rejected the access token; check that it is valid and that the access-tokens flag is enabled on the instance",
+		Permission: "Penpot refused this access token; check that the access-tokens flag is enabled on the instance and " +
+			"that the account may read this resource",
+		NotFound: "Penpot does not hold this resource or does not show it to this token",
+	})
 }
 
 func providerError(op, message string) error {

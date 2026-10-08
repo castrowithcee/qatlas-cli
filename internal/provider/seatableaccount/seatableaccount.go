@@ -14,7 +14,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -151,7 +150,7 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		failure := c.statusError(op, response)
+		failure := c.responseError(op, response)
 		if changing && response.StatusCode >= 500 {
 			failure.Message += note
 		}
@@ -167,32 +166,18 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class; the provider body is never read into the message.
-func (c *Client) statusError(op string, response *http.Response) *provider.Error {
+// responseError maps an HTTP status to a stable class; the provider body is never read into the message.
+func (c *Client) responseError(op string, response *http.Response) *provider.Error {
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseSize))
-	status := response.StatusCode
-	switch {
-	case status == http.StatusUnauthorized:
-		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "SeaTable rejected the account token"}
-	case status == http.StatusForbidden:
-		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this SeaTable account may not perform this operation on the bound base"}
-	case status == http.StatusNotFound:
-		return &provider.Error{Class: provider.ClassNotFound, Op: op,
-			Message: "SeaTable does not hold this resource or does not show it to this account"}
-	case status == http.StatusTooManyRequests:
+	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
-		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "SeaTable rate-limited the operation"}
-	case status == http.StatusServiceUnavailable:
-		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "SeaTable is unavailable or in maintenance"}
-	case status == http.StatusGatewayTimeout:
-		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "SeaTable did not answer in time"}
-	case status >= 300 && status < 400:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "SeaTable answered with a redirect, which Qatlas does not follow for this request"}
 	}
-	return &provider.Error{Class: provider.ClassProviderError, Op: op,
-		Message: fmt.Sprintf("SeaTable rejected the operation (HTTP %d)", status)}
+	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+		Subject:    "SeaTable",
+		Auth:       "SeaTable rejected the account token",
+		Permission: "this SeaTable account may not perform this operation on the bound base",
+		NotFound:   "SeaTable does not hold this resource or does not show it to this account",
+	})
 }
 
 func providerError(op, message string) error {

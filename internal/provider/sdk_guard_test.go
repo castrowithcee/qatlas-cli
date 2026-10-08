@@ -39,6 +39,7 @@ var guardedNames = map[string]bool{
 	"transportError":       true,
 	"validToken":           true,
 	"redirectRefusedError": true,
+	"statusError":          true,
 }
 
 const (
@@ -79,6 +80,17 @@ const (
 	bsTransport = "differs: the constructor takes a parameter for changes"
 	stToken     = "differs: the token check takes a minimum length and a wider character range"
 	tgToken     = "differs: the token check uses another character set"
+	seMap       = "differs: 404 is a provider error, and 503 and a redirect have no case of their own"
+	ncMap       = "differs: 404 is a provider error, and the mapping adds file-specific statuses"
+	tgMap       = "differs: no case for 404, 503, or a redirect"
+	dvMap       = "differs: no case for a redirect, and the 503 text differs"
+	chMap       = "differs: no case for 503, and the redirect text differs"
+	drMap       = "differs: the mapping depends on whether the request changes data, and 429 and 503 have their own texts"
+	exMap       = "differs: the 503 text differs, and the rate-limit hold reads another header"
+	mkMap       = "differs: the mapping depends on the right the operation needs"
+	tdMap       = "differs: the mapping depends on whether the request changes data, and the rate-limit hold differs"
+	ghMap       = "differs: the mapping depends on whether the request changes data and reads the response body"
+	bsMap       = "differs: the mapping depends on the arguments, a forbidden class, and whether the request changes data"
 )
 
 var guardExceptions = []guardException{
@@ -88,35 +100,43 @@ var guardExceptions = []guardException{
 	{"bookstack", "invalidRequest", keepReq},
 	{"bookstack", "providerError", keepName},
 	{"bookstack", "transportError", bsTransport},
+	{"bookstack", "statusError", bsMap},
 	{"excalidrawplus", `"Retry-After"`, exRetry},
 	{"excalidrawplus", "invalidRequest", keepReq},
 	{"excalidrawplus", "invalidResponse", keepResp},
 	{"excalidrawplus", "providerError", keepName},
+	{"excalidrawplus", "statusError", exMap},
 	{"github", `"Retry-After"`, ghRetry},
 	{"github", "capHold", ghCap},
 	{"github", "invalidRequest", keepReq},
 	{"github", "invalidResponse", keepResp},
 	{"github", "providerError", keepName},
 	{"github", "retryAfter", ghRetry},
+	{"github", "statusError", ghMap},
 	{"infomaniakchat", "invalidRequest", keepReq},
 	{"infomaniakchat", "providerError", keepName},
+	{"infomaniakchat", "statusError", chMap},
 	{"infomaniakdav", "http.Client", noRedirect},
 	{"infomaniakdav", "invalidResponse", keepResp},
 	{"infomaniakdav", "newHTTPClient", noRedirect},
 	{"infomaniakdav", "providerError", keepName},
+	{"infomaniakdav", "statusError", dvMap},
 	{"infomaniakdrive", `"Retry-After"`, driveRetry},
 	{"infomaniakdrive", "http.Client", driveClient},
 	{"infomaniakdrive", "invalidRequest", keepReq},
 	{"infomaniakdrive", "invalidResponse", keepResp},
 	{"infomaniakdrive", "providerError", keepName},
 	{"infomaniakdrive", "retryAfter", driveRetry},
+	{"infomaniakdrive", "statusError", drMap},
 	{"infomaniakmail", "invalidRequest", keepReq},
 	{"infomaniakmail", "invalidResponse", keepResp},
 	{"infomaniakmail", "providerError", keepName},
 	{"lexware", "providerError", keepName},
+	{"lexware", "statusError", seMap},
 	{"make", "invalidRequest", keepReq},
 	{"make", "invalidResponse", keepResp},
 	{"make", "providerError", keepName},
+	{"make", "statusError", mkMap},
 	{"n8n", "invalidRequest", keepReq},
 	{"n8n", "invalidResponse", keepResp},
 	{"n8n", "providerError", keepName},
@@ -124,10 +144,12 @@ var guardExceptions = []guardException{
 	{"nextcloud", "invalidResponse", keepResp},
 	{"nextcloud", "newHTTPClient", ncRedirect},
 	{"nextcloud", "providerError", keepName},
+	{"nextcloud", "statusError", ncMap},
 	{"penpot", "invalidRequest", keepReq},
 	{"penpot", "invalidResponse", keepResp},
 	{"penpot", "providerError", keepName},
 	{"seatable", "providerError", keepName},
+	{"seatable", "statusError", seMap},
 	{"seatable", "validToken", stToken},
 	{"seatableaccount", "invalidRequest", keepReq},
 	{"seatableaccount", "invalidResponse", keepResp},
@@ -137,13 +159,16 @@ var guardExceptions = []guardException{
 	{"telegram", "newHTTPClient", tgClient},
 	{"telegram", "providerError", keepName},
 	{"telegram", "validToken", tgToken},
+	{"telegram", "statusError", tgMap},
 	{"todoist", `"Retry-After"`, tdRetry},
 	{"todoist", "capHold", tdCap},
 	{"todoist", "invalidRequest", keepReq},
 	{"todoist", "invalidResponse", keepResp},
 	{"todoist", "providerError", keepName},
 	{"todoist", "retryAfter", tdRetry},
+	{"todoist", "statusError", tdMap},
 	{"twentycrm", "providerError", keepName},
+	{"twentycrm", "statusError", seMap},
 }
 
 func TestProviderHelperGuard(t *testing.T) {
@@ -299,6 +324,7 @@ func TestProviderHelperGuardRules(t *testing.T) {
 	fsys := fstest.MapFS{
 		"alpha/func.go":       {Data: []byte("package alpha\nfunc retryAfter() {}\n")},
 		"alpha/method.go":     {Data: []byte("package alpha\ntype T struct{}\nfunc (T) capHold() {}\n")},
+		"alpha/status.go":     {Data: []byte("package alpha\ntype C struct{}\nfunc (C) statusError() {}\n")},
 		"alpha/type.go":       {Data: []byte("package alpha\ntype validToken struct{}\n")},
 		"beta/client.go":      {Data: []byte("package beta\nimport \"net/http\"\nvar c = &http.Client{}\nvar d = http.Client{}\n")},
 		"beta/header.go":      {Data: []byte("package beta\nvar h = \"Retry-After\"\n")},
@@ -319,6 +345,7 @@ func TestProviderHelperGuardRules(t *testing.T) {
 	want := []string{
 		"alpha/func.go retryAfter",
 		"alpha/method.go capHold",
+		"alpha/status.go statusError",
 		"alpha/type.go validToken",
 		"beta/client.go http.Client",
 		"beta/header.go \"Retry-After\"",
