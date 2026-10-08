@@ -73,7 +73,8 @@ var recordsSearch = capability.Descriptor{
 		`,"conditions":{"type":"array","minItems":1,"maxItems":5,"items":` + conditionSchema +
 		`}},"required":["object","conditions"],"additionalProperties":false}`),
 	OutputSchema: recordsList.OutputSchema,
-	Arguments: append(append([]capability.Argument(nil), recordsList.Arguments...), capability.Argument{
+	// The trash selection belongs to records.list alone; its argument is the last one of the list.
+	Arguments: append(append([]capability.Argument(nil), recordsList.Arguments[:len(recordsList.Arguments)-1]...), capability.Argument{
 		Name: "conditions", Required: true, Description: "1 to 5 AND-linked " + conditionsDescription}),
 	Fields: recordsList.Fields,
 	Examples: []capability.Example{{

@@ -278,6 +278,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(activitytargetsList, activityGroup), Handler: capability.Handler(invokeActivityTargetsList)},
 		capability.Operation{Descriptor: inGroup(activitytargetsCreate, activityGroup), Handler: capability.Handler(invokeActivityTargetsCreate)},
 		capability.Operation{Descriptor: inGroup(activitytargetsDelete, activityGroup), Handler: capability.Handler(invokeActivityTargetsDelete)},
+		capability.Operation{Descriptor: inGroup(recordsDelete, recordsGroup), Handler: capability.Handler(invokeRecordsDelete)},
+		capability.Operation{Descriptor: inGroup(recordsRestore, recordsGroup), Handler: capability.Handler(invokeRecordsRestore)},
+		capability.Operation{Descriptor: inGroup(recordsDestroy, recordsGroup), Handler: capability.Handler(invokeRecordsDestroy)},
 	)
 }
 
