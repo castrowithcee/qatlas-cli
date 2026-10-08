@@ -189,15 +189,16 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 15 {
-		t.Fatalf("operations = %d, want seven company, two object, four record read, and two record write operations", len(operations))
+	if len(operations) != 18 {
+		t.Fatalf("operations = %d, want seven company, two object, four record read, two record write, and three removal operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
 		if descriptor.ID == "twentycrm.companies.delete" {
 			wantVersion = 2
 		}
-		guarded := descriptor.ID == "twentycrm.companies.delete" || descriptor.ID == "twentycrm.companies.destroy"
+		guarded := descriptor.ID == "twentycrm.companies.delete" || descriptor.ID == "twentycrm.companies.destroy" ||
+			descriptor.ID == "twentycrm.records.delete" || descriptor.ID == "twentycrm.records.destroy"
 		if descriptor.RequiresToolAllowList != guarded {
 			t.Errorf("descriptor %s RequiresToolAllowList = %v, want %v", descriptor.ID, descriptor.RequiresToolAllowList, guarded)
 		}
@@ -212,9 +213,11 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 	if operations[0].ID != "twentycrm.companies.create" || operations[6].ID != "twentycrm.companies.update" ||
 		operations[7].ID != "twentycrm.objects.get" || operations[8].ID != "twentycrm.objects.list" ||
-		operations[9].ID != "twentycrm.records.create" || operations[10].ID != "twentycrm.records.get" ||
-		operations[11].ID != "twentycrm.records.groupby" || operations[12].ID != "twentycrm.records.list" ||
-		operations[13].ID != "twentycrm.records.search" || operations[14].ID != "twentycrm.records.update" {
+		operations[9].ID != "twentycrm.records.create" || operations[10].ID != "twentycrm.records.delete" ||
+		operations[11].ID != "twentycrm.records.destroy" || operations[12].ID != "twentycrm.records.get" ||
+		operations[13].ID != "twentycrm.records.groupby" || operations[14].ID != "twentycrm.records.list" ||
+		operations[15].ID != "twentycrm.records.restore" || operations[16].ID != "twentycrm.records.search" ||
+		operations[17].ID != "twentycrm.records.update" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
