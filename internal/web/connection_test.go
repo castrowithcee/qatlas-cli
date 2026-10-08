@@ -611,3 +611,19 @@ func TestGuidedConnectionCredentialChoiceUsesDerivedProvider(t *testing.T) {
 		t.Errorf("a credential no connection places is not offered:\n%s", body)
 	}
 }
+
+// The warning of a saved setup keeps the one "warning: " it already starts with.
+func TestCreatedNoticeKeepsTheWarningsOwnPrefix(t *testing.T) {
+	const warning = "warning: the vault holds the change"
+	tests := []struct{ notice, warning, want string }{
+		{"", "", ""},
+		{"approved", "", "approved"},
+		{"", warning, warning},
+		{"approved", warning, warning + "; approved"},
+	}
+	for _, tt := range tests {
+		if got := createdNotice(tt.notice, tt.warning); got != tt.want {
+			t.Errorf("createdNotice(%q, %q) = %q, want %q", tt.notice, tt.warning, got, tt.want)
+		}
+	}
+}
