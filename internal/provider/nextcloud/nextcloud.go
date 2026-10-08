@@ -99,9 +99,13 @@ const (
 // chunked upload of Nextcloud; see chunked.go.
 var maxPathUploadBytes int64 = 64 << 20
 
-// uncertainFile is appended to the failure of a file write whose request may have reached Nextcloud: the
-// file may have been stored although no confirmation ever arrived. Qatlas never repeats such a request.
-const uncertainFile = "; the file may have been stored, stat the file before repeating"
+// The uncertain hints are appended to the failure of a file mutation whose request may have reached
+// Nextcloud: the change may have been applied although no confirmation ever arrived. Qatlas never repeats
+// such a request.
+const (
+	uncertainStored  = "; the file may have been stored, stat the file before repeating"
+	uncertainDeleted = "; the file may have been deleted, stat the file before repeating"
+)
 
 // pathPattern is the schema form of one path relative to the connection root: one or more segments
 // separated by a single slash, where no segment is empty, "." or "..", and no character is a backslash or
@@ -227,7 +231,7 @@ var filesGet = capability.Descriptor{
 }
 
 var filesCreate = uploadDescriptor(fileMutationDescriptor("create", capability.EffectCreate, `{"type":"object","properties":{"path":`+pathSchema+`,"content_base64":{"type":"string","maxLength":5592408},"`+localfile.LocalPathArgument+`":`+localfile.LocalPathSchema+`},"required":["path"],"additionalProperties":false}`), false)
-var filesUpdate = uploadDescriptor(fileMutationDescriptor("update", capability.EffectUpdate, `{"type":"object","properties":{"path":`+pathSchema+`,"content_base64":{"type":"string","maxLength":5592408},"`+localfile.LocalPathArgument+`":`+localfile.LocalPathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024}},"required":["path","etag"],"additionalProperties":false}`), true)
+var filesUpdate = uploadDescriptor(fileMutationDescriptor("update", capability.EffectUpdate, `{"type":"object","properties":{"path":`+pathSchema+`,"content_base64":{"type":"string","maxLength":5592408},"`+localfile.LocalPathArgument+`":`+localfile.LocalPathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024,"pattern":"[^*\\s\"]","x-form":"the ETag of an existing version, never *"}},"required":["path","etag"],"additionalProperties":false}`), true)
 var filesDelete = withArguments(fileMutationDescriptor("delete", capability.EffectDelete, `{"type":"object","properties":{"path":`+pathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024}},"required":["path","etag"],"additionalProperties":false}`),
 	capability.Argument{Name: "path", Description: "File relative to the fixed root folder of this connection", Required: true},
 	capability.Argument{Name: "etag", Description: "Entity tag of the version to delete", Required: true})
@@ -396,22 +400,26 @@ func invokeFilesGet(ctx context.Context, resolved *config.Resolved, secrets *sec
 }
 
 func invokeFilesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeUpload(ctx, resolved, secrets, red, raw, "create file", "created", "*")
+	return invokeUpload(ctx, resolved, secrets, red, raw, "create file", "created", true)
 }
 
 func invokeFilesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeUpload(ctx, resolved, secrets, red, raw, "update file", "updated", "")
+	return invokeUpload(ctx, resolved, secrets, red, raw, "update file", "updated", false)
 }
 
 // invokeUpload serves create and update. Exactly one content source is accepted, and a local file is
 // opened before the credential is resolved.
-func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage, op, key, match string) (any, error) {
+func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage, op, key string, create bool) (any, error) {
 	var input contentArguments
 	if err := json.Unmarshal(raw, &input); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
-	if match == "" {
+	match := ""
+	if !create {
 		match = input.ETag
+		if !validETag(match) {
+			return nil, providerError(op, "etag is not a usable file version")
+		}
 	}
 	kind, err := localfile.UploadSource(input.LocalPath, input.Content)
 	if err != nil {
@@ -422,7 +430,7 @@ func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secre
 		if err != nil {
 			return nil, err
 		}
-		etag, err := client.PutFile(ctx, op, input.Path, *input.Content, match)
+		etag, err := client.PutFile(ctx, op, input.Path, *input.Content, create, match)
 		if err != nil {
 			return nil, err
 		}
@@ -431,9 +439,6 @@ func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secre
 	rel, err := splitRelative(input.Path)
 	if err != nil || len(rel) == 0 {
 		return nil, providerError(op, "a file path below the connection root is required")
-	}
-	if match != "*" && !validETag(match) {
-		return nil, providerError(op, "etag is not a usable file version")
 	}
 	upload, err := localfile.OpenForUpload(ctx, resolved, *input.LocalPath)
 	if err != nil {
@@ -452,9 +457,9 @@ func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secre
 	var etag string
 	if chunked {
 		method = "chunked"
-		etag, err = client.uploadChunked(ctx, op, rel, upload, match)
+		etag, err = client.uploadChunked(ctx, op, rel, upload, create, match)
 	} else {
-		etag, err = client.putStream(ctx, op, rel, upload, match)
+		etag, err = client.putStream(ctx, op, rel, upload, create, match)
 	}
 	if err != nil {
 		return nil, err
@@ -544,7 +549,7 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	uploads := append(append([]string{}, install...), uploadsRoot...)
 	uploads = append(uploads, userID)
 	client := &Client{origin: origin, prefix: prefix, uploads: uploads, root: root, auth: header}
-	client.http = newHTTPClient(origin, escapePath(prefix))
+	client.http = provider.NoRedirectClient(defaultTimeout, transport)
 	return client, nil
 }
 
@@ -683,29 +688,6 @@ func (c *Client) requestURL(rel []string) string {
 // transport carries every Nextcloud request. A nil value is Go's default transport; the package's own
 // tests replace it with recorded responses.
 var transport http.RoundTripper
-
-// redirectLeavesMessage is the message of a redirect that would have carried the app password off the
-// configured origin or out of the Files root of the configured identity. It names neither.
-const redirectLeavesMessage = "refused to follow a redirect that leaves the configured Nextcloud instance or root"
-
-// newHTTPClient bounds every request in time and keeps a credential-carrying redirect on the configured
-// origin and inside the Files root of the configured identity.
-func newHTTPClient(origin, prefix string) *http.Client {
-	return &http.Client{
-		Timeout:   defaultTimeout,
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-			if req.URL.Scheme+"://"+req.URL.Host != origin {
-				return &provider.RedirectRefused{Message: redirectLeavesMessage}
-			}
-			escaped := req.URL.EscapedPath()
-			if escaped != prefix && !strings.HasPrefix(escaped, prefix+"/") {
-				return &provider.RedirectRefused{Message: redirectLeavesMessage}
-			}
-			return nil
-		},
-	}
-}
 
 // TestConnection performs the smallest safe authenticated read: one PROPFIND of depth 0 on the fixed root
 // folder. It proves that the instance answers Files WebDAV, that the app password is accepted, and that
@@ -854,7 +836,7 @@ func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
 	if err != nil || len(rel) == 0 {
 		return nil, providerError("get file", "a file path below the connection root is required")
 	}
-	response, err := c.webdav(ctx, "get file", http.MethodGet, rel, nil, "", "", false)
+	response, err := c.webdav(ctx, "get file", http.MethodGet, rel, nil, "", "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -867,7 +849,7 @@ func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
 }
 
 // transferClient is the client for a request that moves file content to or from a local path: the same
-// redirect rules, a longer timeout.
+// client, which never follows a redirect, with a longer timeout.
 func (c *Client) transferClient() *http.Client {
 	client := *c.http
 	client.Timeout = transferTimeout
@@ -876,11 +858,7 @@ func (c *Client) transferClient() *http.Client {
 
 // putStream sends one PUT with the local file as its body. The result of a failed request is never
 // retried.
-func (c *Client) putStream(ctx context.Context, op string, rel []string, upload *localfile.Upload, match string) (string, error) {
-	header := "If-Match"
-	if match == "*" {
-		header = "If-None-Match"
-	}
+func (c *Client) putStream(ctx context.Context, op string, rel []string, upload *localfile.Upload, create bool, match string) (string, error) {
 	var body io.Reader = http.NoBody
 	if upload.Size > 0 {
 		body = upload
@@ -891,18 +869,18 @@ func (c *Client) putStream(ctx context.Context, op string, rel []string, upload 
 	}
 	req.ContentLength = upload.Size
 	req.Header.Set("Authorization", c.auth)
-	if match == "*" {
-		req.Header.Set(header, "*")
+	if create {
+		req.Header.Set("If-None-Match", "*")
 	} else {
-		req.Header.Set(header, `"`+strings.Trim(match, `"`)+`"`)
+		req.Header.Set("If-Match", `"`+strings.Trim(match, `"`)+`"`)
 	}
 	response, err := c.transferClient().Do(req)
 	if err != nil {
-		return "", sentTransportError(op, err)
+		return "", sentTransportError(op, err, uncertainStored)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return "", sentStatusError(op, response.StatusCode)
+		return "", sentStatusError(op, response.StatusCode, uncertainStored)
 	}
 	return bounded(strings.Trim(response.Header.Get("ETag"), `"`)), nil
 }
@@ -971,7 +949,7 @@ func (c *Client) DownloadFile(ctx context.Context, path string, download *localf
 		Size: download.Size(), SHA256: sum, ETag: etag}, nil
 }
 
-func (c *Client) PutFile(ctx context.Context, op, path, encoded, match string) (string, error) {
+func (c *Client) PutFile(ctx context.Context, op, path, encoded string, create bool, match string) (string, error) {
 	rel, err := splitRelative(path)
 	if err != nil || len(rel) == 0 {
 		return "", providerError(op, "a file path below the connection root is required")
@@ -980,14 +958,14 @@ func (c *Client) PutFile(ctx context.Context, op, path, encoded, match string) (
 	if err != nil || len(content) > maxFileBytes {
 		return "", providerError(op, "content_base64 is invalid or exceeds the size limit")
 	}
-	if match != "*" && !validETag(match) {
-		return "", providerError(op, "etag is not a usable file version")
+	header := "If-None-Match"
+	if !create {
+		if !validETag(match) {
+			return "", providerError(op, "etag is not a usable file version")
+		}
+		header = "If-Match"
 	}
-	header := "If-Match"
-	if match == "*" {
-		header = "If-None-Match"
-	}
-	response, err := c.webdav(ctx, op, http.MethodPut, rel, strings.NewReader(string(content)), header, match, true)
+	response, err := c.webdav(ctx, op, http.MethodPut, rel, strings.NewReader(string(content)), header, match, uncertainStored)
 	if err != nil {
 		return "", err
 	}
@@ -1010,7 +988,7 @@ func (c *Client) DeleteFile(ctx context.Context, path, etag string) error {
 	if entry.Type != typeFile {
 		return providerError("delete file", "folders cannot be deleted by this operation")
 	}
-	response, err := c.webdav(ctx, "delete file", http.MethodDelete, rel, nil, "If-Match", etag, false)
+	response, err := c.webdav(ctx, "delete file", http.MethodDelete, rel, nil, "If-Match", etag, uncertainDeleted)
 	if err != nil {
 		return err
 	}
@@ -1020,7 +998,7 @@ func (c *Client) DeleteFile(ctx context.Context, path, etag string) error {
 
 func validETag(value string) bool {
 	trimmed := strings.Trim(value, `"`)
-	if trimmed == "" || trimmed == "*" || len(trimmed) > maxValueLength {
+	if strings.TrimSpace(trimmed) == "" || trimmed == "*" || len(trimmed) > maxValueLength {
 		return false
 	}
 	for _, r := range trimmed {
@@ -1031,7 +1009,7 @@ func validETag(value string) bool {
 	return true
 }
 
-func (c *Client) webdav(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value string, sent bool) (*http.Response, error) {
+func (c *Client) webdav(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value, uncertain string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.requestURL(rel), body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
@@ -1044,15 +1022,15 @@ func (c *Client) webdav(ctx context.Context, op, method string, rel []string, bo
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		if sent {
-			return nil, sentTransportError(op, err)
+		if uncertain != "" {
+			return nil, sentTransportError(op, err, uncertain)
 		}
 		return nil, provider.Transport(op, "Nextcloud", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		defer response.Body.Close()
-		if sent {
-			return nil, sentStatusError(op, response.StatusCode)
+		if uncertain != "" {
+			return nil, sentStatusError(op, response.StatusCode, uncertain)
 		}
 		return nil, statusError(op, response.StatusCode)
 	}
@@ -1240,9 +1218,18 @@ const messageNotFound = "this Nextcloud connection does not hold this path"
 // messageForeignEntry covers every answer that names a node outside the folder the request addressed.
 const messageForeignEntry = "Nextcloud answered with an entry outside the requested folder"
 
+// messageRedirect answers every 3xx status. Qatlas follows no redirect, so the server did not act on the
+// request; the message names neither the location nor the path.
+const messageRedirect = "Nextcloud answered with a redirect, which Qatlas does not follow"
+
+func isRedirect(status int) bool { return status >= 300 && status < 400 }
+
 // statusError maps an HTTP status to a stable class. The provider body is never read into the message:
 // Nextcloud echoes the request path into it, and the class plus the status is what a caller can act on.
 func statusError(op string, status int) error {
+	if isRedirect(status) {
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: messageRedirect}
+	}
 	switch status {
 	case http.StatusUnauthorized:
 		return &provider.Error{
@@ -1293,30 +1280,26 @@ func statusError(op string, status int) error {
 	}
 }
 
-// sentTransportError is transportError for a request that writes a file: whatever ended it, the server may
-// have acted on it. Only a refused redirect, a local decision, leaves the outcome clear.
-func sentTransportError(op string, err error) error {
-	var refused *provider.RedirectRefused
-	if errors.As(err, &refused) {
-		return provider.Transport(op, "Nextcloud", err)
-	}
-	return withUncertainty(provider.Transport(op, "Nextcloud", err))
+// sentTransportError is transportError for a request that changes a file: whatever ended it, the server may
+// have acted on it.
+func sentTransportError(op string, err error, hint string) error {
+	return withUncertainty(provider.Transport(op, "Nextcloud", err), hint)
 }
 
-// sentStatusError is statusError for a request that writes a file: a client error is a clear refusal, any
-// other non-success status leaves the outcome open.
-func sentStatusError(op string, status int) error {
-	if status >= 400 && status < 500 {
+// sentStatusError is statusError for a request that changes a file: a client error is a clear refusal, any
+// other non-success status leaves the outcome open. A redirect is a clear refusal: the server did not act.
+func sentStatusError(op string, status int, hint string) error {
+	if isRedirect(status) || status >= 400 && status < 500 {
 		return statusError(op, status)
 	}
-	return withUncertainty(statusError(op, status))
+	return withUncertainty(statusError(op, status), hint)
 }
 
-func withUncertainty(err error) error {
+func withUncertainty(err error, hint string) error {
 	var providerErr *provider.Error
 	if errors.As(err, &providerErr) {
 		changed := *providerErr
-		changed.Message += uncertainFile
+		changed.Message += hint
 		return &changed
 	}
 	return err

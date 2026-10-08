@@ -68,7 +68,6 @@ const (
 	keepResp    = "kept: the package-local invalid-response constructor keeps its own name; renaming it is deferred"
 	keepReq     = "kept: the package-local invalid-request constructor keeps its own name; renaming it is deferred"
 	noRedirect  = "differs: the client refuses every redirect with a provider-specific error"
-	ncRedirect  = "differs: the client follows a redirect only to the same origin and path prefix"
 	tgClient    = "differs: the client returns every redirect response unfollowed and sets no transport; a test builds it directly"
 	driveClient = "differs: the download client follows at most one https redirect"
 	driveRetry  = "differs: the hold is capped at a provider-specific limit"
@@ -140,9 +139,7 @@ var guardExceptions = []guardException{
 	{"n8n", "invalidRequest", keepReq},
 	{"n8n", "invalidResponse", keepResp},
 	{"n8n", "providerError", keepName},
-	{"nextcloud", "http.Client", ncRedirect},
 	{"nextcloud", "invalidResponse", keepResp},
-	{"nextcloud", "newHTTPClient", ncRedirect},
 	{"nextcloud", "providerError", keepName},
 	{"nextcloud", "statusError", ncMap},
 	{"penpot", "invalidRequest", keepReq},
@@ -167,8 +164,8 @@ var guardExceptions = []guardException{
 	{"todoist", "providerError", keepName},
 	{"todoist", "retryAfter", tdRetry},
 	{"todoist", "statusError", tdMap},
+	{"twentycrm", "invalidRequest", keepReq},
 	{"twentycrm", "providerError", keepName},
-	{"twentycrm", "statusError", seMap},
 }
 
 func TestProviderHelperGuard(t *testing.T) {

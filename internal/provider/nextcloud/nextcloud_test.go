@@ -276,10 +276,10 @@ func TestFileContentMutationsUseWebDAVPreconditions(t *testing.T) {
 	})
 	c, _ := client(t)
 	encoded := base64.StdEncoding.EncodeToString([]byte("hello"))
-	if _, err := c.PutFile(context.Background(), "create file", "note.txt", encoded, "*"); err != nil {
+	if _, err := c.PutFile(context.Background(), "create file", "note.txt", encoded, true, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.PutFile(context.Background(), "update file", "note.txt", encoded, "v1"); err != nil {
+	if _, err := c.PutFile(context.Background(), "update file", "note.txt", encoded, false, "v1"); err != nil {
 		t.Fatal(err)
 	}
 	content, err := c.GetFile(context.Background(), "note.txt")
@@ -630,64 +630,6 @@ func TestTheAdapterProducesOnlyPropfind(t *testing.T) {
 				t.Errorf("the adapter produced %q", method)
 			}
 		}
-	}
-}
-
-// A credential-carrying redirect stays on the configured origin and inside the Files root of the
-// configured identity; everything else is refused instead of followed.
-func TestRedirectsStayOnTheOriginAndInsideTheIdentityRoot(t *testing.T) {
-	tests := []struct {
-		name     string
-		location string
-		followed bool
-	}{
-		{"a redirect to another origin", "https://evil.example.invalid" + aliceRoot, false},
-		{"a redirect to plain http", "http://cloud.example.invalid" + aliceRoot, false},
-		{"a redirect to another identity", mainInstance + bobRoot, false},
-		{"a redirect out of the Files root", mainInstance + "/index.php/apps/files", false},
-		{"a redirect inside the identity root", mainInstance + aliceRoot + "/", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			redirected := false
-			calls := serve(t, func(request *http.Request) (*http.Response, error) {
-				if !redirected {
-					redirected = true
-					return &http.Response{
-						StatusCode: http.StatusTemporaryRedirect,
-						Header:     http.Header{"Location": []string{tt.location}},
-						Body:       io.NopCloser(strings.NewReader("")),
-					}, nil
-				}
-				return xmlResponse(http.StatusMultiStatus, reportsListing), nil
-			})
-			c, red := client(t)
-
-			_, err := c.ListFiles(context.Background(), "")
-			if tt.followed {
-				if err != nil {
-					t.Fatalf("ListFiles() = %v, want the same-origin redirect to be followed", err)
-				}
-				if len(*calls) != 2 {
-					t.Errorf("calls = %d, want the redirect to be followed", len(*calls))
-				}
-				return
-			}
-			if err == nil {
-				t.Fatal("the redirect was followed")
-			}
-			if classOf(err) != provider.ClassProviderError {
-				t.Errorf("class = %q, want a refused redirect", classOf(err))
-			}
-			for _, canary := range []string{aliceToken, tt.location} {
-				if strings.Contains(red.Error(err), canary) {
-					t.Errorf("the error carries %q: %v", canary, err)
-				}
-			}
-			if len(*calls) != 1 {
-				t.Errorf("calls = %d, want the credential to travel once", len(*calls))
-			}
-		})
 	}
 }
 

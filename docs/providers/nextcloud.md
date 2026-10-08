@@ -14,6 +14,9 @@ A connection binds one identity to one fixed folder in the Files app. It lists a
 an ETag precondition (`update`), and deletes only files with an ETag precondition (`delete`). It never offers
 recursive folder deletion; parent folders must already exist.
 
+The instance URL must use `https`, without exception. Qatlas follows no redirect: a 3xx answer to any request
+is a clear failure that did not act on the server, and the app password only ever travels to the configured URL.
+
 Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the configured
 root. Connection permissions independently hide and block operations, while the identity's WebDAV rights
 remain the provider-side ceiling. An optional `tools` list narrows a connection further to named tools, for
@@ -41,10 +44,14 @@ stats the target before the first chunk and again before the `MOVE`: `create` re
 `update` requires the given `etag`. A file created or changed in the short time between that last check and
 the `MOVE` is not detected. Nextcloud removes an unfinished upload folder after about 24 hours.
 
-If the outcome of a file write is unclear (timeout, aborted connection, a 5xx answer), the error says the file
-may have been stored and that the file must be stat-ed before repeating. This applies to `content_base64`,
-single, and chunked writes. Qatlas never repeats such a request itself. A refusal by Nextcloud (4xx) is a
-clear failure. `update` keeps its `etag` precondition.
+If the outcome of a file mutation is unclear (timeout, aborted connection, a 5xx answer), the error says the
+change may have been applied (the file may have been stored by `create` or `update`, deleted by `delete`) and
+that the file must be stat-ed before repeating. This applies to `content_base64`, single, and chunked writes.
+Qatlas never repeats such a request itself. A refusal by Nextcloud (4xx) or a redirect is a clear failure.
+
+`update` replaces only an existing file: its `etag` must be the ETag of that version, sent as `If-Match`. `*` or
+another unusable `etag` is refused before any credential access or request, so a connection without the `create`
+permission never creates a file. `create` always sends `If-None-Match: *`.
 
 `nextcloud.files.get` reads one file below the root. With `local_path` it writes the file into a directory
 released for writing (`files.write`), atomically, and reports only path, name, size, SHA-256, and ETag; an

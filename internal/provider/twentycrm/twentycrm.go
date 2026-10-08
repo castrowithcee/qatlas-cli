@@ -54,11 +54,6 @@ const (
 // fails the connection test instead of answering a business call with an incomplete record.
 var requiredCompanyFields = []string{"id", "name", "domainName", "createdAt", "updatedAt"}
 
-// companySchemaNames are the schema components Twenty generates for the company object. The plain and the
-// update shape omit the record system fields, the response shape carries them, so only their union
-// describes the object completely.
-var companySchemaNames = []string{"Company", "CompanyForUpdate", "CompanyForResponse"}
-
 // noRelations keeps every read at the record itself. Twenty returns related records at depth 1, which
 // would silently widen a read beyond the companies this provider is allowed to report.
 const noRelations = "0"
@@ -99,13 +94,14 @@ var companiesList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Twenty CRM companies",
 	Description: "Search one bounded page of companies in the Twenty workspace of a connection, " +
-		"by name or by primary domain",
+		"by name or by primary domain; deleted true lists only the companies in the trash instead",
 	Tags:     []string{"twentycrm", "crm", "companies", "list", "search"},
 	Risk:     twentyReadRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"name_contains":{"type":"string","minLength":1,"maxLength":64,"pattern":"` + searchPattern + `"},` +
 		`"domain_contains":{"type":"string","minLength":1,"maxLength":253,"pattern":"^[A-Za-z0-9.-]+$"},` +
+		`"deleted":{"type":"boolean"},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"sort":{"type":"string","enum":["name","created_at","updated_at"]},` +
 		`"direction":{"type":"string","enum":["asc","desc"]},` +
@@ -120,6 +116,7 @@ var companiesList = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "name_contains", Description: "Return only companies whose name contains this text"},
 		{Name: "domain_contains", Description: "Return only companies whose primary domain contains this text"},
+		{Name: "deleted", Description: "True lists only deleted companies of the trash, which companies.restore can bring back; false when omitted"},
 		{Name: "limit", Description: "Companies per page, from 1 through 100; 25 when omitted"},
 		{Name: "sort", Description: "Sort property: name, created_at, or updated_at; created_at when omitted"},
 		{Name: "direction", Description: "Sort direction asc or desc; desc when omitted"},
@@ -174,10 +171,31 @@ var companiesCreate = companyMutationDescriptor("create", capability.EffectCreat
 var companiesUpdate = companyMutationDescriptor("update", capability.EffectUpdate, capability.IdempotencyIdempotent,
 	`{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"},"name":{"type":"string","minLength":1,"maxLength":255},"domain":{"type":"string","maxLength":253,"pattern":"^[A-Za-z0-9.-]*$"}},"required":["id"],"additionalProperties":false}`,
 	companiesCreate.OutputSchema, companyIDArgument, companyNameArgument, companyDomainArgument)
-var companiesDelete = companyMutationDescriptor("delete", capability.EffectDelete, capability.IdempotencyIdempotent,
-	`{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"}},"required":["id"],"additionalProperties":false}`,
-	json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
-	companyIDArgument)
+
+const companyIDOnlyInput = `{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"}},"required":["id"],"additionalProperties":false}`
+
+var companiesDelete = companyDeleteDescriptor("delete", 2, "Move one company of the workspace of a connection to the Twenty trash. "+
+	"The company stays recoverable with twentycrm.companies.restore and is found with twentycrm.companies.list deleted true. "+
+	"A connection offers this tool only when its tools list names it")
+var companiesDestroy = companyDeleteDescriptor("destroy", 1, "Permanently delete one company of the workspace of a connection. "+
+	"This cannot be undone: the company is not moved to the trash and twentycrm.companies.restore cannot bring it back. "+
+	"A connection offers this tool only when its tools list names it")
+var companiesRestore = withDescription(companyMutationDescriptor("restore", capability.EffectUpdate, capability.IdempotencyIdempotent,
+	companyIDOnlyInput, companiesCreate.OutputSchema, companyIDArgument),
+	"Restore one company of the Twenty trash in the workspace of a connection, as found with twentycrm.companies.list deleted true")
+
+func withDescription(d capability.Descriptor, description string) capability.Descriptor {
+	d.Description = description
+	return d
+}
+
+func companyDeleteDescriptor(action string, version int, description string) capability.Descriptor {
+	d := companyMutationDescriptor(action, capability.EffectDelete, capability.IdempotencyIdempotent, companyIDOnlyInput,
+		json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
+		companyIDArgument)
+	d.Version, d.Description, d.RequiresToolAllowList = version, description, true
+	return d
+}
 
 var (
 	companyIDArgument     = capability.Argument{Name: "id", Description: "Company identifier of 36 characters, as returned by twentycrm.companies.list", Required: true}
@@ -211,28 +229,45 @@ func Register(reg *capability.Registry) error {
 				"its workspace role must grant only the company operations this connection needs",
 		}},
 		Target: config.TargetMetadata{
-			Label:       "target",
-			Description: "not used by Twenty CRM; the workspace follows from the API key",
+			Label:    "object",
+			Multiple: true,
+			Description: "optional objects as an allow-list; without targets the connection reaches every " +
+				"non-system object its API key reaches",
+			Kinds: []config.TargetKind{{
+				Name:        "object",
+				Description: "an object of the workspace whose records this connection may reach",
+				Forms:       []string{"object/NAME"},
+			}},
+			Validate:    validateTarget,
+			ValidateSet: validateSet,
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "Read companies", Recommended: true,
-			Description: "lists and reads companies; changes nothing in Twenty CRM",
-			Tools:       []string{companiesList.ID, companiesGet.ID},
+			ID: "read", Title: "Read companies and objects", Recommended: true,
+			Description: "lists and reads companies and the objects of the workspace; changes nothing in Twenty CRM",
+			Tools:       []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID},
 		}},
+		Groups: toolGroups,
 	}, TestConnection); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
-		capability.Operation{Descriptor: companiesList, Handler: capability.Handler(invokeCompaniesList)},
-		capability.Operation{Descriptor: companiesGet, Handler: capability.Handler(invokeCompaniesGet)},
-		capability.Operation{Descriptor: companiesCreate, Handler: capability.Handler(invokeCompaniesCreate)},
-		capability.Operation{Descriptor: companiesUpdate, Handler: capability.Handler(invokeCompaniesUpdate)},
-		capability.Operation{Descriptor: companiesDelete, Handler: capability.Handler(invokeCompaniesDelete)},
+		capability.Operation{Descriptor: inGroup(companiesList, companiesGroup), Handler: capability.Handler(invokeCompaniesList)},
+		capability.Operation{Descriptor: inGroup(companiesGet, companiesGroup), Handler: capability.Handler(invokeCompaniesGet)},
+		capability.Operation{Descriptor: inGroup(companiesCreate, companiesGroup), Handler: capability.Handler(invokeCompaniesCreate)},
+		capability.Operation{Descriptor: inGroup(companiesUpdate, companiesGroup), Handler: capability.Handler(invokeCompaniesUpdate)},
+		capability.Operation{Descriptor: inGroup(companiesDelete, companiesGroup), Handler: capability.Handler(invokeCompaniesDelete)},
+		capability.Operation{Descriptor: inGroup(companiesDestroy, companiesGroup), Handler: capability.Handler(invokeCompaniesDestroy)},
+		capability.Operation{Descriptor: inGroup(companiesRestore, companiesGroup), Handler: capability.Handler(invokeCompaniesRestore)},
+		capability.Operation{Descriptor: inGroup(objectsList, objectsGroup), Handler: capability.Handler(invokeObjectsList)},
+		capability.Operation{Descriptor: inGroup(objectsGet, objectsGroup), Handler: capability.Handler(invokeObjectsGet)},
 	)
 }
 
 func invokeCompaniesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var options ListOptions
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list companies", "the validated arguments could not be read")
@@ -246,6 +281,9 @@ func invokeCompaniesList(ctx context.Context, resolved *config.Resolved, secrets
 
 func invokeCompaniesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var arguments struct {
 		ID string `json:"id"`
 	}
@@ -266,6 +304,9 @@ type companyMutationInput struct {
 }
 
 func invokeCompaniesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var input companyMutationInput
 	if json.Unmarshal(raw, &input) != nil || input.Name == nil {
 		return nil, providerError("create company", "the validated arguments could not be read")
@@ -278,6 +319,9 @@ func invokeCompaniesCreate(ctx context.Context, resolved *config.Resolved, secre
 }
 
 func invokeCompaniesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var input companyMutationInput
 	if json.Unmarshal(raw, &input) != nil || (input.Name == nil && input.Domain == nil) {
 		return nil, providerError("update company", "name or domain is required")
@@ -290,19 +334,54 @@ func invokeCompaniesUpdate(ctx context.Context, resolved *config.Resolved, secre
 }
 
 func invokeCompaniesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeRemoval(ctx, resolved, secrets, red, raw, "delete company", true)
+}
+
+func invokeCompaniesDestroy(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeRemoval(ctx, resolved, secrets, red, raw, "destroy company", false)
+}
+
+func invokeRemoval(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage, op string, soft bool) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var input companyMutationInput
 	if json.Unmarshal(raw, &input) != nil {
-		return nil, providerError("delete company", "the validated arguments could not be read")
+		return nil, providerError(op, "the validated arguments could not be read")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	if err := client.DeleteCompany(ctx, input.ID); err != nil {
+	if soft {
+		err = client.DeleteCompany(ctx, input.ID)
+	} else {
+		err = client.DestroyCompany(ctx, input.ID)
+	}
+	if err != nil {
 		return nil, err
 	}
 	return map[string]bool{"deleted": true}, nil
 }
+
+func invokeCompaniesRestore(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
+	var input companyMutationInput
+	if json.Unmarshal(raw, &input) != nil {
+		return nil, providerError("restore company", "the validated arguments could not be read")
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.RestoreCompany(ctx, input.ID)
+}
+
+// mutationUncertain is appended to a failure of a change whose request may have reached Twenty. Qatlas
+// sends a change once and never repeats it.
+const mutationUncertain = "; this change may have taken effect, read the company before repeating it"
 
 // Client binds one Twenty API key to the origin of one configured service and to the rate limit that key
 // shares. Two workspaces are two connections with two keys, and neither can reach the other's origin.
@@ -311,6 +390,8 @@ type Client struct {
 	auth    string
 	http    *http.Client
 	limiter *ratelimit.Limiter
+	scope   scope
+	catalog *catalog
 }
 
 // Open resolves the API key of one selected connection and returns a client for its configured origin.
@@ -322,8 +403,9 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 // the transport, so no test ever reaches a productive Twenty workspace.
 func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
-	if resolved == nil {
-		return nil, providerError("open", "no connection was selected")
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
 	}
 	origin, err := originOf(resolved.BaseURL)
 	if err != nil {
@@ -345,7 +427,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{origin: origin, auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
+	return &Client{origin: origin, auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim, scope: bound}, nil
 }
 
 // originOf validates the configured service origin and returns it without a trailing slash. Twenty Cloud
@@ -391,71 +473,88 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
 	const op = "test connection"
 
-	// The smallest authenticated read comes first, because the workspace document is a public route that
-	// answers an unusable key with an empty base schema instead of an authentication failure.
-	query := url.Values{}
-	query.Set("limit", "1")
-	query.Set("depth", noRelations)
-	var page companiesPageJSON
-	if err := c.get(ctx, op, companiesPath, query, maxResponseBytes, &page); err != nil {
-		var providerErr *provider.Error
-		if errors.As(err, &providerErr) {
-			return providerErr.Class, nil
+	if !c.scope.bound() {
+		// The smallest authenticated read comes first, because the workspace document is a public route
+		// that answers an unusable key with an empty base schema instead of an authentication failure.
+		if class, failed := classOfFailure(c.readOne(ctx, op, companiesPath)); failed {
+			return class, nil
 		}
-		return provider.ClassProviderError, nil
 	}
 
-	if err := c.checkWorkspaceSchema(ctx, op); err != nil {
-		var providerErr *provider.Error
-		if !errors.As(err, &providerErr) {
-			return provider.ClassProviderError, nil
+	cat, err := c.workspaceCatalog(ctx, op)
+	if err != nil {
+		class, _ := classOfFailure(err)
+		return class, nil
+	}
+	if len(cat.objects) == 0 && c.scope.bound() {
+		// An unusable key gets an empty base schema, and with it no way to tell a missing object from a
+		// rejected key; the key is the likelier cause.
+		return provider.ClassAuth, nil
+	}
+	if c.scope.bound() {
+		for _, name := range c.scope.objects {
+			object, ok := cat.object(name)
+			if !ok {
+				return "", &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+					Message: "this Twenty workspace does not hold an object bound to this connection"}
+			}
+			if class, failed := classOfFailure(c.readOne(ctx, op, "/rest/"+url.PathEscape(object.Plural))); failed {
+				return class, nil
+			}
 		}
-		// An incompatible workspace is reported with its own explanation, because no stable class can
-		// say which part of the schema is missing.
-		if providerErr.Class == provider.ClassInvalidResponse {
+	}
+	if c.scope.allows(companyObject) {
+		if err := checkCompany(cat, op); err != nil {
+			// An incompatible workspace is reported with its own explanation, because no stable class can
+			// say which part of the schema is missing.
 			return "", err
 		}
-		return providerErr.Class, nil
 	}
 	return provider.ClassOK, nil
 }
 
-// checkWorkspaceSchema reads the API document Twenty generates for this workspace and verifies that the
-// company routes and the required record fields exist. The document itself is never reported.
-func (c *Client) checkWorkspaceSchema(ctx context.Context, op string) error {
-	var document openAPIJSON
-	if err := c.get(ctx, op, schemaPath, nil, maxSchemaBytes, &document); err != nil {
-		return err
+// classOfFailure maps the error of a read to the class a connection test reports. failed is false for a nil
+// error.
+func classOfFailure(err error) (class provider.Class, failed bool) {
+	if err == nil {
+		return "", false
 	}
+	var providerErr *provider.Error
+	if errors.As(err, &providerErr) {
+		return providerErr.Class, true
+	}
+	return provider.ClassProviderError, true
+}
 
-	for _, path := range []string{"/companies", "/companies/{id}"} {
-		if _, ok := document.Paths[path]; !ok {
-			return &provider.Error{
-				Class: provider.ClassInvalidResponse, Op: op,
-				Message: "this Twenty workspace does not expose the company route " + path,
-			}
-		}
-	}
+// readOne reads the smallest page of one object collection to prove the key may read it. The page is
+// decoded and dropped.
+func (c *Client) readOne(ctx context.Context, op, path string) error {
+	query := url.Values{}
+	query.Set("limit", "1")
+	query.Set("depth", noRelations)
+	var page json.RawMessage
+	return c.get(ctx, op, path, query, maxResponseBytes, &page)
+}
 
-	// Twenty generates one schema per request and response shape of an object, all from the same field
-	// set, so the union of the company schemas is the field set of the object.
-	fields := map[string]bool{}
-	found := false
-	for _, name := range companySchemaNames {
-		schema, ok := document.Components.Schemas[name]
-		if !ok {
-			continue
-		}
-		found = true
-		for field := range schema.Properties {
-			fields[field] = true
-		}
-	}
-	if !found {
+// checkCompany verifies that the workspace catalog offers the company routes and the record fields the
+// stable company projection reads. The workspace document itself is never reported.
+func checkCompany(cat *catalog, op string) error {
+	object, ok := cat.object(companyObject)
+	if !ok {
 		return &provider.Error{
 			Class: provider.ClassInvalidResponse, Op: op,
 			Message: "this Twenty workspace does not describe a Company object",
 		}
+	}
+	if "/rest/"+object.Plural != companiesPath {
+		return &provider.Error{
+			Class: provider.ClassInvalidResponse, Op: op,
+			Message: "this Twenty workspace does not expose the company route /companies",
+		}
+	}
+	fields := map[string]bool{}
+	for _, field := range object.Fields {
+		fields[field.Name] = true
 	}
 	missing := make([]string, 0, len(requiredCompanyFields))
 	for _, field := range requiredCompanyFields {
@@ -473,11 +572,21 @@ func (c *Client) checkWorkspaceSchema(ctx context.Context, op string) error {
 	return nil
 }
 
+// requireCompany refuses a company operation on a connection whose object targets leave out the company
+// object. The refusal names no object.
+func (c *Client) requireCompany() error {
+	if !c.scope.allows(companyObject) {
+		return invalidRequest(errObjectUnavailable)
+	}
+	return nil
+}
+
 // ListOptions are the controlled search, sort, and paging arguments of the list operation. Nothing else
 // reaches the provider: the object and route are fixed.
 type ListOptions struct {
 	NameContains   string `json:"name_contains"`
 	DomainContains string `json:"domain_contains"`
+	Deleted        bool   `json:"deleted"`
 	Limit          int    `json:"limit"`
 	Sort           string `json:"sort"`
 	Direction      string `json:"direction"`
@@ -491,6 +600,9 @@ var sortFields = map[string]string{
 	"created_at": "createdAt",
 	"updated_at": "updatedAt",
 }
+
+// deletedFilter is the fixed filter building block that selects only companies in the trash.
+const deletedFilter = "deletedAt[is]:NOT_NULL"
 
 // listQuery builds the complete query of one list request out of the validated options.
 func listQuery(options ListOptions) url.Values {
@@ -508,12 +620,15 @@ func listQuery(options ListOptions) url.Values {
 	}
 	query.Set("order_by", field+"["+order+"]")
 
-	filters := make([]string, 0, 2)
+	filters := make([]string, 0, 3)
 	if options.NameContains != "" {
 		filters = append(filters, `name[ilike]:"%`+options.NameContains+`%"`)
 	}
 	if options.DomainContains != "" {
 		filters = append(filters, `domainName.primaryLinkUrl[ilike]:"%`+options.DomainContains+`%"`)
+	}
+	if options.Deleted {
+		filters = append(filters, deletedFilter)
 	}
 	if len(filters) > 0 {
 		query.Set("filter", strings.Join(filters, ","))
@@ -544,6 +659,9 @@ type Company struct {
 // ListCompanies reads exactly one bounded page of companies.
 func (c *Client) ListCompanies(ctx context.Context, options ListOptions) (*ListResult, error) {
 	const op = "list companies"
+	if err := c.requireCompany(); err != nil {
+		return nil, err
+	}
 	if err := options.normalize(); err != nil {
 		return nil, providerError(op, err.Error())
 	}
@@ -603,6 +721,9 @@ func (o *ListOptions) normalize() error {
 // GetCompany reads exactly the company of a validated identifier and performs no other provider I/O.
 func (c *Client) GetCompany(ctx context.Context, id string) (*Company, error) {
 	const op = "get company"
+	if err := c.requireCompany(); err != nil {
+		return nil, err
+	}
 	if !validUUID(id) {
 		return nil, providerError(op, "the company identifier must be a UUID")
 	}
@@ -652,21 +773,45 @@ func (c *Client) UpdateCompany(ctx context.Context, id string, name, domain *str
 	return c.changeCompany(ctx, "update company", http.MethodPatch, companiesPath+"/"+url.PathEscape(id), companyPayload(name, domain), id)
 }
 
+// DeleteCompany moves one company to the Twenty trash, where it stays recoverable. The soft-delete
+// parameter is part of the fixed path; nothing selects between soft and permanent deletion.
 func (c *Client) DeleteCompany(ctx context.Context, id string) error {
+	return c.removeCompany(ctx, "delete company", id, "?soft_delete=true")
+}
+
+// DestroyCompany deletes one company permanently. Twenty answers soft and permanent deletion alike, so
+// the kind of deletion follows only from the request sent here.
+func (c *Client) DestroyCompany(ctx context.Context, id string) error {
+	return c.removeCompany(ctx, "destroy company", id, "")
+}
+
+func (c *Client) removeCompany(ctx context.Context, op, id, query string) error {
 	if !validUUID(id) {
-		return providerError("delete company", "the company identifier must be a UUID")
+		return providerError(op, "the company identifier must be a UUID")
 	}
-	return c.change(ctx, "delete company", http.MethodDelete, companiesPath+"/"+url.PathEscape(id), nil, nil)
+	_, err := c.changeCompany(ctx, op, http.MethodDelete, companiesPath+"/"+url.PathEscape(id)+query, nil, id)
+	return err
+}
+
+// RestoreCompany brings one company back from the Twenty trash.
+func (c *Client) RestoreCompany(ctx context.Context, id string) (*Company, error) {
+	if !validUUID(id) {
+		return nil, providerError("restore company", "the company identifier must be a UUID")
+	}
+	return c.changeCompany(ctx, "restore company", http.MethodPatch, companiesPath+"/"+url.PathEscape(id)+"/restore", nil, id)
 }
 
 func (c *Client) changeCompany(ctx context.Context, op, method, path string, payload map[string]any, expectedID string) (*Company, error) {
+	if err := c.requireCompany(); err != nil {
+		return nil, err
+	}
 	var response companyMutationJSON
 	if err := c.change(ctx, op, method, path, payload, &response); err != nil {
 		return nil, err
 	}
 	record := response.record()
 	if !validUUID(record.ID) || (expectedID != "" && !strings.EqualFold(record.ID, expectedID)) {
-		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Twenty returned a company without the expected identifier"}
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Twenty returned a company without the expected identifier" + mutationUncertain}
 	}
 	return &Company{ID: record.ID, Name: record.Name, Domain: primaryDomain(record.DomainName), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
 }
@@ -701,9 +846,11 @@ type companyJSON struct {
 // mutations. The operation-specific field names differ, but the company record itself does not.
 type companyMutationJSON struct {
 	Data struct {
-		Company       companyRecordJSON `json:"company"`
-		CreateCompany companyRecordJSON `json:"createCompany"`
-		UpdateCompany companyRecordJSON `json:"updateCompany"`
+		Company        companyRecordJSON `json:"company"`
+		CreateCompany  companyRecordJSON `json:"createCompany"`
+		UpdateCompany  companyRecordJSON `json:"updateCompany"`
+		DeleteCompany  companyRecordJSON `json:"deleteCompany"`
+		RestoreCompany companyRecordJSON `json:"restoreCompany"`
 	} `json:"data"`
 }
 
@@ -714,17 +861,13 @@ func (r companyMutationJSON) record() companyRecordJSON {
 	if r.Data.CreateCompany.ID != "" {
 		return r.Data.CreateCompany
 	}
-	return r.Data.UpdateCompany
-}
-
-// openAPIJSON mirrors the two parts of the generated workspace document the connection test inspects.
-type openAPIJSON struct {
-	Paths      map[string]json.RawMessage `json:"paths"`
-	Components struct {
-		Schemas map[string]struct {
-			Properties map[string]json.RawMessage `json:"properties"`
-		} `json:"schemas"`
-	} `json:"components"`
+	if r.Data.UpdateCompany.ID != "" {
+		return r.Data.UpdateCompany
+	}
+	if r.Data.DeleteCompany.ID != "" {
+		return r.Data.DeleteCompany
+	}
+	return r.Data.RestoreCompany
 }
 
 // primaryDomain reduces the Twenty link field to the one stable string this provider reports. A workspace
@@ -774,7 +917,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, lim
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return statusError(op, response.StatusCode)
+		return c.responseError(op, response)
 	}
 	if failure := provider.ReadJSON(op, "Twenty", response.Body, limit, out); failure != nil {
 		return failure
@@ -805,57 +948,41 @@ func (c *Client) change(ctx context.Context, op, method, path string, payload an
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		return provider.Transport(op, "Twenty", err)
+		failure := provider.Transport(op, "Twenty", err)
+		if failure.MayHaveArrived() {
+			failure.Message += mutationUncertain
+		}
+		return failure
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return statusError(op, response.StatusCode)
-	}
-	if out == nil {
-		read, err := io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes+1))
-		if err != nil || read > maxResponseBytes {
-			return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the Twenty response could not be read within the size limit"}
+		failure := c.responseError(op, response)
+		if response.StatusCode >= 500 {
+			failure.Message += mutationUncertain
 		}
-		return nil
+		return failure
 	}
 	if failure := provider.ReadJSON(op, "Twenty", response.Body, maxResponseBytes, out); failure != nil {
+		failure.Message += mutationUncertain
 		return failure
 	}
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class. The provider message is never copied: Twenty echoes
-// request and record detail into it, and the class plus the status is what a caller can act on.
-func statusError(op string, status int) error {
-	switch status {
-	case http.StatusUnauthorized:
-		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Twenty rejected the API key"}
-	case http.StatusForbidden:
-		return &provider.Error{
-			Class: provider.ClassPermission, Op: op,
-			Message: "the workspace role of this API key may not perform this operation; check the role of " +
-				"the API key in Twenty",
-		}
-	case http.StatusNotFound:
-		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op, Message: "this Twenty workspace does not hold this record",
-		}
-	case http.StatusBadRequest, http.StatusUnprocessableEntity:
-		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op, Message: "Twenty rejected the request as invalid",
-		}
-	case http.StatusTooManyRequests:
-		return &provider.Error{
-			Class: provider.ClassRateLimited, Op: op, Message: "Twenty rate-limited the operation",
-		}
-	case http.StatusGatewayTimeout:
-		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "Twenty did not answer in time"}
-	default:
-		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op,
-			Message: fmt.Sprintf("Twenty rejected the operation (HTTP %d)", status),
-		}
+// responseError maps an HTTP status to a stable class. The provider message is never copied: Twenty echoes
+// request and record detail into it, and the class plus the status is what a caller can act on. A 429
+// holds the rate limit of the key for the time Twenty asks for.
+func (c *Client) responseError(op string, response *http.Response) *provider.Error {
+	if response.StatusCode == http.StatusTooManyRequests {
+		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 	}
+	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+		Subject: "Twenty",
+		Auth:    "Twenty rejected the API key",
+		Permission: "the workspace role of this API key may not perform this operation; check the role of " +
+			"the API key in Twenty",
+		NotFound: "this Twenty workspace does not hold this record or object",
+	})
 }
 
 func providerError(op, message string) error {

@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -449,7 +450,6 @@ func TestProviderStatusesAreNormalized(t *testing.T) {
 		{http.StatusUnauthorized, provider.ClassAuth},
 		{http.StatusPaymentRequired, provider.ClassPermission},
 		{http.StatusForbidden, provider.ClassPermission},
-		{http.StatusNotFound, provider.ClassProviderError},
 		{http.StatusNotAcceptable, provider.ClassProviderError},
 		{http.StatusTooManyRequests, provider.ClassRateLimited},
 		{http.StatusGatewayTimeout, provider.ClassTimeout},
@@ -473,6 +473,56 @@ func TestProviderStatusesAreNormalized(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A 404 names the resource only for a single-object operation and never carries an ID or the body.
+func TestNotFoundIsReportedPerOperation(t *testing.T) {
+	missing := func(*http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusNotFound, `{"message":"`+bodyCanary+`"}`), nil
+	}
+	check := func(t *testing.T, err error, want provider.Class, wantMsg string) {
+		t.Helper()
+		if class := classOf(err); class != want {
+			t.Fatalf("class = %q, want %q (%v)", class, want, err)
+		}
+		if !strings.Contains(err.Error(), wantMsg) {
+			t.Errorf("message = %q, want %q", err, wantMsg)
+		}
+		if strings.Contains(err.Error(), bodyCanary) || strings.Contains(err.Error(), invoiceID) {
+			t.Errorf("message carries body or ID: %v", err)
+		}
+	}
+	const endpoint = "Lexware did not find the requested endpoint or a referenced object (HTTP 404)"
+	t.Run("get", func(t *testing.T) {
+		serve(t, missing)
+		c, _ := client(t)
+		_, err := c.GetInvoice(context.Background(), invoiceID)
+		check(t, err, provider.ClassNotFound, "Lexware does not hold this invoice or does not show it to this API key")
+	})
+	t.Run("list", func(t *testing.T) {
+		serve(t, missing)
+		c, _ := client(t)
+		_, err := c.ListInvoices(context.Background(), ListOptions{})
+		check(t, err, provider.ClassProviderError, endpoint)
+		if strings.Contains(strings.TrimPrefix(err.Error(), "list invoices: "), "invoice") {
+			t.Errorf("message names an invoice: %v", err)
+		}
+	})
+	t.Run("connection test", func(t *testing.T) {
+		serve(t, missing)
+		c, _ := client(t)
+		err := c.get(context.Background(), "test connection", "", "/v1/voucherlist", nil, &voucherListJSON{})
+		check(t, err, provider.ClassProviderError, endpoint)
+	})
+	t.Run("create", func(t *testing.T) {
+		serve(t, missing)
+		c, _ := client(t)
+		err := c.post(context.Background(), "create invoice", "", "/v1/invoices", nil, map[string]string{}, &struct{}{}, "")
+		check(t, err, provider.ClassProviderError, endpoint)
+		if strings.Contains(err.Error(), "invoice or") {
+			t.Errorf("message names an invoice: %v", err)
+		}
+	})
 }
 
 // A failure before a status code exists is classified without copying the transport message.
@@ -849,4 +899,131 @@ func classOf(err error) provider.Class {
 		return providerErr.Class
 	}
 	return ""
+}
+
+func minimalCreateInput() createInput {
+	input := createInput{VoucherDate: "2026-09-12T00:00:00+02:00", Currency: "EUR", TaxType: "net", ShippingDate: "2026-09-12T00:00:00+02:00", ShippingType: "service"}
+	input.Address.ContactID = invoiceID
+	return input
+}
+
+// An invoice creation says when its outcome is uncertain, and only then; reads never do.
+func TestCreateReportsUncertainOutcome(t *testing.T) {
+	reset := &net.OpError{Op: "read", Err: syscall.ECONNRESET}
+	refused := &net.OpError{Op: "dial", Err: syscall.ECONNREFUSED}
+	status := func(code int) func() (*http.Response, error) {
+		return func() (*http.Response, error) { return jsonResponse(code, `{"message":"`+bodyCanary+`"}`), nil }
+	}
+	body := func(code int, text string) func() (*http.Response, error) {
+		return func() (*http.Response, error) { return jsonResponse(code, text), nil }
+	}
+	fail := func(err error) func() (*http.Response, error) {
+		return func() (*http.Response, error) { return nil, err }
+	}
+	tests := []struct {
+		name  string
+		reply func() (*http.Response, error)
+		class provider.Class
+		hint  bool
+	}{
+		{"timeout", fail(&net.DNSError{IsTimeout: true, Err: bodyCanary}), provider.ClassTimeout, true},
+		{"deadline", fail(context.DeadlineExceeded), provider.ClassTimeout, true},
+		{"reset", fail(reset), provider.ClassUnreachable, true},
+		{"unknown", fail(errors.New(bodyCanary)), provider.ClassUnreachable, true},
+		{"dns", fail(&net.DNSError{Err: bodyCanary}), provider.ClassUnreachable, false},
+		{"refused", fail(refused), provider.ClassUnreachable, false},
+		{"tls", fail(&tls.CertificateVerificationError{Err: errors.New(bodyCanary)}), provider.ClassTLS, false},
+		{"500", status(500), provider.ClassProviderError, true},
+		{"502", status(502), provider.ClassProviderError, true},
+		{"503", status(503), provider.ClassProviderError, true},
+		{"504", status(504), provider.ClassTimeout, true},
+		{"599", status(599), provider.ClassProviderError, true},
+		{"html", body(200, "<html>"+bodyCanary+"</html>"), provider.ClassInvalidResponse, true},
+		{"truncated", body(201, `{"id":"`+bodyCanary), provider.ClassInvalidResponse, true},
+		{"oversized", body(201, strings.Repeat("x", maxResponseBytes+1)), provider.ClassInvalidResponse, true},
+		{"no id", body(201, `{"version":1}`), provider.ClassInvalidResponse, true},
+		{"bad id", body(201, `{"id":"`+bodyCanary+`"}`), provider.ClassInvalidResponse, true},
+		{"204", body(204, ""), provider.ClassInvalidResponse, true},
+		{"400", status(400), provider.ClassProviderError, false},
+		{"401", status(401), provider.ClassAuth, false},
+		{"402", status(402), provider.ClassPermission, false},
+		{"403", status(403), provider.ClassPermission, false},
+		{"404", status(404), provider.ClassProviderError, false},
+		{"406", status(406), provider.ClassProviderError, false},
+		{"409", status(409), provider.ClassProviderError, false},
+		{"415", status(415), provider.ClassProviderError, false},
+		{"429", status(429), provider.ClassRateLimited, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requests := 0
+			serve(t, func(*http.Request) (*http.Response, error) { requests++; return tt.reply() })
+			c, _ := client(t)
+			_, err := c.CreateInvoice(context.Background(), minimalCreateInput())
+			if err == nil {
+				t.Fatal("CreateInvoice() succeeded")
+			}
+			if class := classOf(err); class != tt.class {
+				t.Errorf("class = %q, want %q (%v)", class, tt.class, err)
+			}
+			if got := strings.Contains(err.Error(), invoiceMayExist); got != tt.hint {
+				t.Errorf("hint = %v, want %v (%v)", got, tt.hint, err)
+			}
+			if requests != 1 {
+				t.Errorf("requests = %d, want 1", requests)
+			}
+			if strings.Contains(err.Error(), bodyCanary) {
+				t.Errorf("error carries provider content: %v", err)
+			}
+		})
+	}
+
+	t.Run("rate-limit wait", func(t *testing.T) {
+		refuse(t)
+		limited := ratelimit.New(minInterval, time.Now, ratelimit.Sleep)
+		limited.HoldFor(time.Hour)
+		red := &redact.Redactor{}
+		c, err := open(context.Background(), resolvedConnection("lexware-primary", "lexware-key", primaryEnv), resolver(red), red, limited)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_, err = c.CreateInvoice(ctx, minimalCreateInput())
+		if classOf(err) != provider.ClassRateLimited || strings.Contains(err.Error(), "may have been created") {
+			t.Errorf("err = %v", err)
+		}
+	})
+	t.Run("oversized request", func(t *testing.T) {
+		refuse(t)
+		c, _ := client(t)
+		input := minimalCreateInput()
+		input.Title = strings.Repeat("x", maxResponseBytes+1)
+		_, err := c.CreateInvoice(context.Background(), input)
+		if err == nil || strings.Contains(err.Error(), "may have been created") {
+			t.Errorf("err = %v", err)
+		}
+	})
+}
+
+func TestReadsNeverCarryTheCreateHint(t *testing.T) {
+	replies := map[string]func() (*http.Response, error){
+		"timeout": func() (*http.Response, error) { return nil, context.DeadlineExceeded },
+		"reset":   func() (*http.Response, error) { return nil, &net.OpError{Op: "read", Err: syscall.ECONNRESET} },
+		"500":     func() (*http.Response, error) { return jsonResponse(500, "{}"), nil },
+		"html":    func() (*http.Response, error) { return jsonResponse(200, "<html>"), nil },
+	}
+	for name, reply := range replies {
+		t.Run(name, func(t *testing.T) {
+			serve(t, func(*http.Request) (*http.Response, error) { return reply() })
+			c, _ := client(t)
+			_, err := c.GetInvoice(context.Background(), invoiceID)
+			_, err2 := c.ListInvoices(context.Background(), ListOptions{})
+			for _, e := range []error{err, err2} {
+				if e == nil || strings.Contains(e.Error(), "may have been created") {
+					t.Errorf("err = %v", e)
+				}
+			}
+		})
+	}
 }
