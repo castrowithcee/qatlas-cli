@@ -144,6 +144,20 @@ func coreConfig() *config.Config {
 			// "channel" narrows teamA further to chanA alone.
 			"channel": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
 				Permissions: sendPermissions},
+			// "editor" may edit messages of every reachable channel of teamA; "deleter" lists the delete tool,
+			// "nodelete" holds the permission without listing it.
+			"editor": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
+			"deleter": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+				Tools:       []string{messagesDelete.ID}},
+			"editorch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
+			"deleterch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+				Tools:       []string{messagesDelete.ID}},
+			"nodelete": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}},
 		},
 	}
 }
@@ -207,8 +221,41 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 5 {
-		t.Fatalf("tools = %+v, want 5", metadata.Tools)
+	if len(metadata.Tools) != 8 {
+		t.Fatalf("tools = %+v, want 8", metadata.Tools)
+	}
+	profiles := map[string][]string{}
+	for _, profile := range metadata.Profiles {
+		profiles[profile.ID] = profile.Tools
+	}
+	has := func(id, tool string) bool {
+		for _, candidate := range profiles[id] {
+			if candidate == tool {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("read", messagesGet.ID) || !has("messaging", messagesGet.ID) || !has("messaging", messagesUpdate.ID) ||
+		has("read", messagesUpdate.ID) {
+		t.Fatalf("profiles = %+v", profiles)
+	}
+	for id := range profiles {
+		if has(id, messagesDelete.ID) {
+			t.Fatalf("profile %s selects messages.delete", id)
+		}
+	}
+	groups := map[string]bool{}
+	for _, group := range metadata.Groups {
+		groups[group.ID] = true
+	}
+	for _, tool := range metadata.Tools {
+		if tool.Group == "" || !groups[tool.Group] {
+			t.Fatalf("tool %s has no declared group: %+v", tool.ID, tool)
+		}
+		if tool.ID == messagesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
+			t.Fatalf("messages.delete metadata = %+v", tool)
+		}
 	}
 }
 
