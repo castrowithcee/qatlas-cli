@@ -164,8 +164,8 @@ var guardExceptions = []guardException{
 	{"todoist", "providerError", keepName},
 	{"todoist", "retryAfter", tdRetry},
 	{"todoist", "statusError", tdMap},
+	{"twentycrm", "invalidRequest", keepReq},
 	{"twentycrm", "providerError", keepName},
-	{"twentycrm", "statusError", seMap},
 }
 
 func TestProviderHelperGuard(t *testing.T) {

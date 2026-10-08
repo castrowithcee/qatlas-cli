@@ -14,7 +14,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 )
 
-var peopleToolIDs = []string{usersList.ID, usersGet.ID, usersUpdate.ID, usersRemove.ID, invitationsCreate.ID}
+var peopleToolIDs = []string{usersList.ID, usersGet.ID, usersUpdate.ID, usersRemove.ID}
 
 const (
 	linkCanary    = "https://plus.excalidraw.com/join/link-canary-77aa"
@@ -42,7 +42,6 @@ var allPeopleCalls = []struct{ op, args string }{
 	{usersGet.ID, `{"user_id":"u1"}`},
 	{usersUpdate.ID, `{"user_id":"u1","role":"member"}`},
 	{usersRemove.ID, `{"user_id":"u1"}`},
-	{invitationsCreate.ID, `{"email":"a@example.com","role":"member"}`},
 }
 
 func TestPeopleDescriptorsCarryTheFullRisk(t *testing.T) {
@@ -57,8 +56,7 @@ func TestPeopleDescriptorsCarryTheFullRisk(t *testing.T) {
 	for _, c := range []struct {
 		d      capability.Descriptor
 		effect capability.Effect
-	}{{usersUpdate, capability.EffectUpdate}, {usersRemove, capability.EffectDelete},
-		{invitationsCreate, capability.EffectCreate}} {
+	}{{usersUpdate, capability.EffectUpdate}, {usersRemove, capability.EffectDelete}} {
 		d, effect := c.d, c.effect
 		r := d.Risk
 		if r.Effect != effect || r.Idempotency != capability.IdempotencyUnknown ||
@@ -163,7 +161,7 @@ func TestUsersGetReadsOneUser(t *testing.T) {
 	}
 }
 
-func TestUpdateRemoveInviteSendExactlyOneRequest(t *testing.T) {
+func TestUpdateRemoveSendExactlyOneRequest(t *testing.T) {
 	for _, c := range []struct {
 		op, args, method, path, body string
 	}{
@@ -172,8 +170,6 @@ func TestUpdateRemoveInviteSendExactlyOneRequest(t *testing.T) {
 		{usersUpdate.ID, `{"user_id":"u1","role":"member"}`, http.MethodPatch,
 			apiPath + "/workspaces/users/u1", `{"role":"member"}`},
 		{usersRemove.ID, `{"user_id":"u1"}`, http.MethodDelete, apiPath + "/workspaces/users/u1", ``},
-		{invitationsCreate.ID, `{"email":"new.person@example.com","role":"member"}`, http.MethodPost,
-			apiPath + "/workspaces/invites", `{"email":"new.person@example.com","role":"member"}`},
 	} {
 		var calls []call
 		var sent []sentRequest
@@ -225,22 +221,13 @@ func TestPeopleValidationRefusesBeforeIO(t *testing.T) {
 		return jsonResponse(200, `{}`), nil
 	}))
 	for name, c := range map[string]struct{ op, args string }{
-		"role":           {usersUpdate.ID, `{"user_id":"u1","role":"owner"}`},
-		"empty update":   {usersUpdate.ID, `{"user_id":"u1"}`},
-		"name control":   {usersUpdate.ID, `{"user_id":"u1","name":"a\u0000b"}`},
-		"blank name":     {usersUpdate.ID, `{"user_id":"u1","name":"   "}`},
-		"user id":        {usersUpdate.ID, `{"user_id":"u1/../x","role":"member"}`},
-		"remove id":      {usersRemove.ID, `{"user_id":"../u"}`},
-		"extra teams":    {usersUpdate.ID, `{"user_id":"u1","teams":["t"]}`},
-		"invite role":    {invitationsCreate.ID, `{"email":"a@example.com","role":"owner"}`},
-		"invite none":    {invitationsCreate.ID, `{"email":"a@example.com"}`},
-		"invite extra":   {invitationsCreate.ID, `{"email":"a@example.com","role":"member","link":true}`},
-		"invite name":    {invitationsCreate.ID, `{"email":"Ann <a@example.com>","role":"member"}`},
-		"invite list":    {invitationsCreate.ID, `{"email":"a@example.com,b@example.com","role":"member"}`},
-		"invite dots":    {invitationsCreate.ID, `{"email":"a..b@example.com","role":"member"}`},
-		"invite domain":  {invitationsCreate.ID, `{"email":"a@localhost","role":"member"}`},
-		"invite long":    {invitationsCreate.ID, `{"email":"` + strings.Repeat("a", 250) + `@example.com","role":"member"}`},
-		"invite newline": {invitationsCreate.ID, `{"email":"a@example.com\n","role":"member"}`},
+		"role":         {usersUpdate.ID, `{"user_id":"u1","role":"owner"}`},
+		"empty update": {usersUpdate.ID, `{"user_id":"u1"}`},
+		"name control": {usersUpdate.ID, `{"user_id":"u1","name":"a\u0000b"}`},
+		"blank name":   {usersUpdate.ID, `{"user_id":"u1","name":"   "}`},
+		"user id":      {usersUpdate.ID, `{"user_id":"u1/../x","role":"member"}`},
+		"remove id":    {usersRemove.ID, `{"user_id":"../u"}`},
+		"extra teams":  {usersUpdate.ID, `{"user_id":"u1","teams":["t"]}`},
 	} {
 		if _, err := env.invokeConfirmed(c.op, "peopleAll", c.args); err == nil {
 			t.Errorf("%s: accepted", name)
@@ -248,11 +235,6 @@ func TestPeopleValidationRefusesBeforeIO(t *testing.T) {
 	}
 	if len(calls) != 0 || *env.reads != 0 {
 		t.Fatalf("calls = %d, reads = %d, want none", len(calls), *env.reads)
-	}
-	for _, email := range []string{"a@example.com", "first.last+tag@example.org", "o'brien@example.net"} {
-		if !validEmail(email) {
-			t.Errorf("validEmail(%q) = false", email)
-		}
 	}
 }
 

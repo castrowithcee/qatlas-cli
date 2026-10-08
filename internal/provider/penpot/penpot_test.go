@@ -208,11 +208,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		filesPurge.ID:  config.PermissionDelete,
 		mediaUpload.ID: config.PermissionCreate, mediaFromURL.ID: config.PermissionCreate,
 		filesExport.ID: config.PermissionRead, filesImport.ID: config.PermissionCreate,
-		webhooksList.ID: config.PermissionRead, webhooksCreate.ID: config.PermissionCreate,
+		webhooksList.ID:   config.PermissionRead,
 		webhooksUpdate.ID: config.PermissionUpdate, webhooksDelete.ID: config.PermissionDelete,
 		membersList.ID: config.PermissionRead, membersSetRole.ID: config.PermissionUpdate,
-		membersRemove.ID: config.PermissionDelete, invitationsCreate.ID: config.PermissionCreate,
-		teamsCreate.ID: config.PermissionCreate, teamsDelete.ID: config.PermissionDelete}
+		membersRemove.ID: config.PermissionDelete,
+		teamsCreate.ID:   config.PermissionCreate, teamsDelete.ID: config.PermissionDelete}
 	explicit := map[string]bool{commentsDelete.ID: true, projectsDelete.ID: true, snapshotsRestore.ID: true,
 		filesDelete.ID: true, filesPurge.ID: true, webhooksDelete.ID: true, membersSetRole.ID: true,
 		membersRemove.ID: true, teamsCreate.ID: true, teamsDelete.ID: true}

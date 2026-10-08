@@ -69,8 +69,7 @@ func accessArgs(extra string) string {
 
 func grantFeedback() string {
 	return fmt.Sprintf(`{"users":[{"id":%d,"result":true,"message":"","access":null}],`+
-		`"teams":[{"id":%d,"result":true,"message":"","access":null}],`+
-		`"emails":[{"id":%q,"result":true,"message":"","access":null}]}`, memberUser, memberTeam, inviteeEmail)
+		`"teams":[{"id":%d,"result":true,"message":"","access":null}]}`, memberUser, memberTeam)
 }
 
 type accessCase struct {
@@ -78,12 +77,12 @@ type accessCase struct {
 }
 
 func accessCases() []accessCase {
-	grantArgs := accessArgs(fmt.Sprintf(`,"right":"write","lang":"fr","user_ids":[%d],"team_ids":[%d],"emails":[%q]`,
-		memberUser, memberTeam, inviteeEmail))
+	grantArgs := accessArgs(fmt.Sprintf(`,"right":"write","user_ids":[%d],"team_ids":[%d]`,
+		memberUser, memberTeam))
 	return []accessCase{
-		{"grant", accessGrant.ID, grantArgs, http.MethodPost, accessPathOf(childFileID), "lang=fr",
-			fmt.Sprintf(`{"right":"write","user_ids":[%d],"team_ids":[%d],"emails":[%q]}`, memberUser, memberTeam,
-				inviteeEmail), envelopeSuccess(grantFeedback())},
+		{"grant", accessGrant.ID, grantArgs, http.MethodPost, accessPathOf(childFileID), "",
+			fmt.Sprintf(`{"right":"write","user_ids":[%d],"team_ids":[%d]}`, memberUser, memberTeam),
+			envelopeSuccess(grantFeedback())},
 		{"update user", accessUpdate.ID, accessArgs(fmt.Sprintf(`,"user_id":%d,"right":"manage"`, memberUser)),
 			http.MethodPut, fmt.Sprintf("%s/users/%d", accessPathOf(childFileID), memberUser), "", `{"right":"manage"}`,
 			envelopeSuccess(`true`)},
@@ -154,39 +153,43 @@ func TestAccessChangesSendExactlyOneRequestAfterTheChecks(t *testing.T) {
 				out.DriveID != ownDrive || out.FileID != childFileID {
 				t.Fatalf("result = %s, %v", result, err)
 			}
-			if tt.name == "grant" && (out.Granted == nil || *out.Granted != 3 || *out.Failed != 0 || len(out.Results) != 3) {
-				t.Fatalf("result = %s, want three reached targets", result)
+			if tt.name == "grant" && (out.Granted == nil || *out.Granted != 2 || *out.Failed != 0 || len(out.Results) != 2) {
+				t.Fatalf("result = %s, want two reached targets", result)
 			}
 		})
 	}
 }
 
-func TestAccessGrantOfOnlyEmailsSkipsTheMembershipRead(t *testing.T) {
+func TestAccessGrantReportsPartialAndEchoesBoundedTargets(t *testing.T) {
 	var calls []call
 	env := newEnvironment(t, &calls, membership(func(r *http.Request) (*http.Response, error) {
-		return jsonResponse(200, envelopeSuccess(fmt.Sprintf(`{"emails":[{"id":%q,"result":true}]}`, inviteeEmail))), nil
+		return jsonResponse(200, envelopeSuccess(fmt.Sprintf(`{"users":[{"id":%d,"result":false,"message":%q},`+
+			`{"id":%d,"result":true}]}`, memberUser, foreignCanary, memberUser2))), nil
 	}), nil)
-	_, err := env.invokeConfirmed(accessGrant.ID, "access",
-		accessArgs(fmt.Sprintf(`,"right":"read","lang":"de","emails":[%q]`, inviteeEmail)))
-	if err != nil || len(calls) != 2 || calls[1].method != http.MethodPost || strings.Contains(calls[1].body, "user_ids") {
-		t.Fatalf("err = %v, calls = %+v, want the ownership check and the grant", err, calls)
+	result, err := env.invokeConfirmed(accessGrant.ID, "access",
+		accessArgs(fmt.Sprintf(`,"right":"read","user_ids":[%d,%d]`, memberUser, memberUser2)))
+	var out AccessChange
+	if err != nil || json.Unmarshal([]byte(result), &out) != nil || out.Status != statusPartial || *out.Granted != 1 ||
+		*out.Failed != 1 || len(out.Results) != 2 || strings.Contains(result, foreignCanary) {
+		t.Fatalf("result = %s, %v", result, err)
 	}
 }
 
-func TestAccessGrantReportsPartialAndEchoesBoundedTargets(t *testing.T) {
-	long := strings.Repeat("a", 400) + "@" + testDomain
-	var calls []call
-	env := newEnvironment(t, &calls, membership(func(r *http.Request) (*http.Response, error) {
-		return jsonResponse(200, envelopeSuccess(fmt.Sprintf(`{"emails":[{"id":%q,"result":false,"message":%q},`+
-			`{"id":%q,"result":true}]}`, long, foreignCanary, secondEmail))), nil
-	}), nil)
-	result, err := env.invokeConfirmed(accessGrant.ID, "access",
-		accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","emails":[%q,%q]`, inviteeEmail, secondEmail)))
-	var out AccessChange
-	if err != nil || json.Unmarshal([]byte(result), &out) != nil || out.Status != statusPartial || *out.Granted != 1 ||
-		*out.Failed != 1 || len(out.Results) != 2 || len(out.Results[0].Target) > maxEmailBytes ||
-		strings.Contains(result, foreignCanary) {
-		t.Fatalf("result = %s, %v", result, err)
+func TestAccessGrantIsVersionTwoAndRefusesEmailsAndLang(t *testing.T) {
+	if accessGrant.Version != 2 {
+		t.Errorf("version = %d", accessGrant.Version)
+	}
+	for _, extra := range []string{`,"emails":["` + inviteeEmail + `"]`, `,"lang":"en"`} {
+		var calls []call
+		env := newEnvironment(t, &calls, membership(func(r *http.Request) (*http.Response, error) {
+			t.Fatalf("unexpected request to %s", r.URL.Path)
+			return nil, nil
+		}), nil)
+		_, err := env.invokeConfirmed(accessGrant.ID, "access",
+			accessArgs(`,"right":"read","user_ids":[7]`+extra))
+		if err == nil || len(calls) != 0 {
+			t.Errorf("%s: err = %v, calls = %d", extra, err, len(calls))
+		}
 	}
 }
 
@@ -249,40 +252,23 @@ func TestAccessToolsRefuseForeignDrives(t *testing.T) {
 }
 
 func TestAccessToolsValidateArguments(t *testing.T) {
-	long := strings.Repeat("a", 70) + "@" + testDomain
 	cases := []struct{ name, tool, args string }{
 		{"root get", accessGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1}`, ownDrive)},
-		{"root grant", accessGrant.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1,"right":"read","lang":"en","user_ids":[7]}`, ownDrive)},
+		{"root grant", accessGrant.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1,"right":"read","user_ids":[7]}`, ownDrive)},
 		{"root update", accessUpdate.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1,"user_id":7,"right":"read"}`, ownDrive)},
 		{"root revoke", accessRevoke.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1,"user_id":7}`, ownDrive)},
 		{"zero file", accessGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":0}`, ownDrive)},
 		{"string file", accessGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":"5/../9"}`, ownDrive)},
 		{"huge file", accessGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":9999999999999999999}`, ownDrive)},
-		{"grant no target", accessGrant.ID, accessArgs(`,"right":"read","lang":"en"`)},
-		{"grant empty lists", accessGrant.ID, accessArgs(`,"right":"read","lang":"en","user_ids":[],"emails":[]`)},
-		{"grant no right", accessGrant.ID, accessArgs(`,"lang":"en","user_ids":[7]`)},
-		{"grant none right", accessGrant.ID, accessArgs(`,"right":"none","lang":"en","user_ids":[7]`)},
-		{"grant no lang", accessGrant.ID, accessArgs(`,"right":"read","user_ids":[7]`)},
-		{"grant odd lang", accessGrant.ID, accessArgs(`,"right":"read","lang":"xx","user_ids":[7]`)},
-		{"grant duplicate user", accessGrant.ID, accessArgs(`,"right":"read","lang":"en","user_ids":[7,7]`)},
-		{"grant negative user", accessGrant.ID, accessArgs(`,"right":"read","lang":"en","user_ids":[-7]`)},
-		{"grant too many users", accessGrant.ID, accessArgs(`,"right":"read","lang":"en","user_ids":[` +
+		{"grant no target", accessGrant.ID, accessArgs(`,"right":"read"`)},
+		{"grant empty lists", accessGrant.ID, accessArgs(`,"right":"read","user_ids":[],"team_ids":[]`)},
+		{"grant no right", accessGrant.ID, accessArgs(`,"user_ids":[7]`)},
+		{"grant none right", accessGrant.ID, accessArgs(`,"right":"none","user_ids":[7]`)},
+		{"grant duplicate user", accessGrant.ID, accessArgs(`,"right":"read","user_ids":[7,7]`)},
+		{"grant negative user", accessGrant.ID, accessArgs(`,"right":"read","user_ids":[-7]`)},
+		{"grant too many users", accessGrant.ID, accessArgs(`,"right":"read","user_ids":[` +
 			strings.TrimSuffix(strings.Repeat("7,", 21), ",") + `]`)},
-		{"grant message", accessGrant.ID, accessArgs(`,"right":"read","lang":"en","user_ids":[7],"message":"hi"`)},
-		{"grant plain text email", accessGrant.ID, accessArgs(`,"right":"read","lang":"en","emails":["not-an-address"]`)},
-		{"grant two at signs", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","emails":[%q]`,
-			inviteeLocal+"@@"+testDomain))},
-		{"grant spaced email", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","emails":[%q]`,
-			inviteeLocal+" x@"+testDomain))},
-		{"grant control email", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","emails":[%q]`,
-			inviteeLocal+"\n@"+testDomain))},
-		{"grant dotless domain", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","emails":[%q]`,
-			inviteeLocal+"@invalid"))},
-		{"grant long local part", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","emails":[%q]`, long))},
-		{"grant duplicate email", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","emails":[%q,%q]`,
-			inviteeEmail, strings.ToUpper(inviteeEmail)))},
-		{"grant too many emails", accessGrant.ID, accessArgs(`,"right":"read","lang":"en","emails":[` +
-			strings.TrimSuffix(strings.Repeat(fmt.Sprintf(`%q,`, inviteeEmail), 11), ",") + `]`)},
+		{"grant message", accessGrant.ID, accessArgs(`,"right":"read","user_ids":[7],"message":"hi"`)},
 		{"update both targets", accessUpdate.ID, accessArgs(`,"user_id":7,"team_id":3,"right":"read"`)},
 		{"update no target", accessUpdate.ID, accessArgs(`,"right":"read"`)},
 		{"update no right", accessUpdate.ID, accessArgs(`,"user_id":7`)},
@@ -320,13 +306,13 @@ func TestAccessRefusesForeignUsersAndTeams(t *testing.T) {
 		name, tool, args string
 		canary           int64
 	}{
-		{"grant user", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","user_ids":[%d,%d]`,
+		{"grant user", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","user_ids":[%d,%d]`,
 			memberUser, foreignUser+1)), foreignUser + 1},
-		{"grant team", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","team_ids":[%d]`,
+		{"grant team", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","team_ids":[%d]`,
 			foreignTeam+1)), foreignTeam + 1},
-		{"grant locked user", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","user_ids":[%d]`,
+		{"grant locked user", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","user_ids":[%d]`,
 			foreignUser)), foreignUser},
-		{"grant team of a locked user", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","lang":"en","team_ids":[%d]`,
+		{"grant team of a locked user", accessGrant.ID, accessArgs(fmt.Sprintf(`,"right":"read","team_ids":[%d]`,
 			foreignTeam)), foreignTeam},
 		{"update user", accessUpdate.ID, accessArgs(fmt.Sprintf(`,"user_id":%d,"right":"read"`, foreignUser+1)), foreignUser + 1},
 		{"update team", accessUpdate.ID, accessArgs(fmt.Sprintf(`,"team_id":%d,"right":"read"`, foreignTeam+1)), foreignTeam + 1},

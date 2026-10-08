@@ -134,19 +134,42 @@ const companyBody = `{
   }}
 }`
 
-// schemaBody is the workspace document of a compatible workspace: both company routes and, across the
-// generated company schemas, every field the stable projection reads.
+// schemaBody is the workspace document of a compatible workspace, shortened: company, person, a custom
+// object (rocket), and a system object (workspaceMember). Descriptions carry a canary, because no
+// description may reach any output.
 const schemaBody = `{
   "openapi":"3.1.0",
-  "paths":{"/companies":{"get":{}},"/companies/{id}":{"get":{}},"/people":{"get":{}}},
+  "paths":{
+    "/companies":{"post":{"operationId":"createOneCompany"}},
+    "/companies/{id}":{"get":{}},
+    "/people":{"post":{"operationId":"createOnePerson"}},
+    "/rockets":{"post":{"operationId":"createOneRocket"}},
+    "/workspaceMembers":{"post":{"operationId":"createOneWorkspaceMember"}},
+    "/batch/companies":{"post":{"operationId":"createManyCompanies"}}
+  },
   "components":{"schemas":{
-    "Company":{"type":"object","properties":{"name":{},"domainName":{},"riskScore":{}}},
-    "CompanyForUpdate":{"type":"object","properties":{"name":{},"domainName":{}}},
+    "Company":{"type":"object","required":["name"],"properties":{"name":{"type":"string"},
+      "domainName":{"type":"object","properties":{"primaryLinkUrl":{"type":"string"},"primaryLinkLabel":{"type":"string"}}},
+      "riskScore":{"type":"string","description":"` + descriptionCanary + `"}}},
+    "CompanyForUpdate":{"type":"object","properties":{"name":{"type":"string"},"domainName":{"type":"object"}}},
     "CompanyForResponse":{"type":"object","properties":{
-      "id":{},"name":{},"domainName":{},"createdAt":{},"updatedAt":{},"deletedAt":{},"riskScore":{}}},
-    "Person":{"type":"object","properties":{"id":{},"name":{}}}
+      "id":{"type":"string","format":"uuid"},"name":{"type":"string"},"domainName":{"type":"object"},
+      "createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"},
+      "deletedAt":{},"riskScore":{"type":"string"},
+      "people":{"type":"array","items":{"$ref":"#/components/schemas/PersonForResponse"}}}},
+    "Person":{"type":"object","properties":{"name":{"type":"object","properties":{"firstName":{"type":"string"},"lastName":{"type":"string"}}}}},
+    "PersonForUpdate":{"type":"object","properties":{"name":{"type":"object"},"companyId":{"type":"string","format":"uuid"}}},
+    "PersonForResponse":{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"object"},
+      "companyId":{"type":"string","format":"uuid"},"company":{"$ref":"#/components/schemas/CompanyForResponse"},
+      "workspaceMember":{"$ref":"#/components/schemas/WorkspaceMemberForResponse"}}},
+    "Rocket":{"type":"object","required":["name"],"properties":{"name":{"type":"string"},"payload":{"type":["number","null"]}}},
+    "RocketForUpdate":{"type":"object","properties":{"name":{"type":"string"}}},
+    "RocketForResponse":{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},"payload":{"type":"number"}}},
+    "WorkspaceMember":{"type":"object","properties":{"name":{"type":"object"}}}
   }}
 }`
+
+const descriptionCanary = "description-canary-twenty-3c58"
 
 // Register publishes the configuration metadata the TUI needs and exactly two read-only operations.
 func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
@@ -163,8 +186,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 7 {
-		t.Fatalf("operations = %d, want seven company operations", len(operations))
+	if len(operations) != 9 {
+		t.Fatalf("operations = %d, want seven company and two object operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -184,7 +207,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 			t.Errorf("descriptor %s examples = %s", descriptor.ID, descriptor.Examples)
 		}
 	}
-	if operations[0].ID != "twentycrm.companies.create" || operations[6].ID != "twentycrm.companies.update" {
+	if operations[0].ID != "twentycrm.companies.create" || operations[6].ID != "twentycrm.companies.update" ||
+		operations[7].ID != "twentycrm.objects.get" || operations[8].ID != "twentycrm.objects.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -581,7 +605,7 @@ func TestProviderStatusesAreNormalized(t *testing.T) {
 	}{
 		{http.StatusUnauthorized, provider.ClassAuth},
 		{http.StatusForbidden, provider.ClassPermission},
-		{http.StatusNotFound, provider.ClassProviderError},
+		{http.StatusNotFound, provider.ClassNotFound},
 		{http.StatusBadRequest, provider.ClassProviderError},
 		{http.StatusUnprocessableEntity, provider.ClassProviderError},
 		{http.StatusTooManyRequests, provider.ClassRateLimited},
@@ -841,12 +865,12 @@ func TestTestConnectionChecksAccessAndWorkspaceSchema(t *testing.T) {
 	})
 
 	incompatible := map[string]string{
-		"a workspace without the company routes": `{"paths":{"/people":{}},"components":{"schemas":{` +
+		"a workspace without the company routes": `{"paths":{"/people":{"post":{"operationId":"createOnePerson"}}},"components":{"schemas":{` +
 			`"CompanyForResponse":{"properties":{"id":{},"name":{},"domainName":{},"createdAt":{},"updatedAt":{}}}}}}`,
 		"a workspace without a company object": `{"paths":{"/companies":{},"/companies/{id}":{}},` +
 			`"components":{"schemas":{"Person":{"properties":{"id":{}}}}}}`,
-		"a workspace missing a company field": `{"paths":{"/companies":{},"/companies/{id}":{}},` +
-			`"components":{"schemas":{"CompanyForResponse":{"properties":{"id":{},"name":{},"createdAt":{}}}}}}`,
+		"a workspace missing a company field": `{"paths":{"/companies":{"post":{"operationId":"createOneCompany"}}},` +
+			`"components":{"schemas":{"Company":{},"CompanyForResponse":{"properties":{"id":{},"name":{},"createdAt":{}}}}}}`,
 	}
 	for name, document := range incompatible {
 		t.Run(name, func(t *testing.T) {

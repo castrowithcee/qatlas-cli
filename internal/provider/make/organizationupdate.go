@@ -21,7 +21,7 @@ import (
 // PATCH /organizations/{organizationId}, organizations:write, body name (letters, numbers, spaces and
 // ' - . ( ) * + , @ _ /), countryId, timezoneId. The answer is assumed to be {"organization":{"id":...}}.
 // Narrower reading: only these three fields; no plan, license, payment, or language fields (the reference
-// documents no language field). Invitation and member list are in organizationmembers.go.
+// documents no language field). The member list is in organizationmembers.go.
 
 const (
 	maxOrganizationNameLength = 128
