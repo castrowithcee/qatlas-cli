@@ -276,10 +276,10 @@ func TestFileContentMutationsUseWebDAVPreconditions(t *testing.T) {
 	})
 	c, _ := client(t)
 	encoded := base64.StdEncoding.EncodeToString([]byte("hello"))
-	if _, err := c.PutFile(context.Background(), "create file", "note.txt", encoded, "*"); err != nil {
+	if _, err := c.PutFile(context.Background(), "create file", "note.txt", encoded, true, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.PutFile(context.Background(), "update file", "note.txt", encoded, "v1"); err != nil {
+	if _, err := c.PutFile(context.Background(), "update file", "note.txt", encoded, false, "v1"); err != nil {
 		t.Fatal(err)
 	}
 	content, err := c.GetFile(context.Background(), "note.txt")
