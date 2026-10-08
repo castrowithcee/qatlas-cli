@@ -1063,7 +1063,7 @@ func (m *Model) newEntryBlockedFor(s section) string {
 		if len(m.cfg.Services) == 0 {
 			missing = append(missing, "a service")
 		}
-		if len(m.cfg.Credentials) == len(m.forwardChoices()) {
+		if len(m.cfg.Credentials) == len(manage.ForwardChoices(m.cfg)) {
 			missing = append(missing, "a credential")
 		}
 		if len(missing) > 0 {

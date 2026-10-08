@@ -419,7 +419,7 @@ func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config
 		StorageHint: storageHintText,
 		Error:       errText,
 	}
-	if choices := forwardChoices(cfg); len(choices) > 0 {
+	if choices := manage.ForwardChoices(cfg); len(choices) > 0 {
 		data.ForwardChoices = checkedOptions(choices, f.Forward)
 		data.ForwardText = forwardText
 		data.BindingNote = s.forwardBindingNote(cfg, "")
@@ -769,7 +769,7 @@ func (s *Server) renderConnectionResult(w http.ResponseWriter, cfg *config.Confi
 		Permissions: config.FormatPermissions(cfg.ConnectionPermissions(name)), Tools: tools,
 		Notice: notice, CSRF: s.csrfValue(), TesterAvailable: s.tester != nil, TestResult: testResult,
 	}
-	choices := forwardChoices(cfg)
+	choices := manage.ForwardChoices(cfg)
 	for _, listed := range conn.ForwardSecrets {
 		if !slices.Contains(choices, listed) {
 			choices = append(choices, listed)

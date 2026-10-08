@@ -6,8 +6,6 @@
 package tui
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -15,9 +13,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 const (
@@ -159,7 +156,7 @@ func (m *Model) addPayloadField() {
 			return
 		}
 	}
-	if problem := payloadNameProblem(name); problem != "" {
+	if problem := manage.PayloadFieldProblem(name); problem != "" {
 		m.fail = problem
 		return
 	}
@@ -187,24 +184,6 @@ func (m *Model) removePayloadField() {
 	if stored {
 		m.status += "; its stored value is deleted when you save"
 	}
-}
-
-// payloadNameProblem asks the configuration core whether name is a valid field name, so the rule stays the
-// core's. It returns "" for a valid one.
-func payloadNameProblem(name string) string {
-	trial := config.New()
-	_ = trial.SetCredential("trial", config.Credential{
-		Type: config.CredentialTypeVault, Forward: true, Fields: []string{name}})
-	err := trial.Validate()
-	if err == nil {
-		return ""
-	}
-	for _, line := range strings.Split(err.Error(), "\n") {
-		if _, rule, ok := strings.Cut(line, "fields[0]: "); ok {
-			return "the field name is refused: " + rule
-		}
-	}
-	return "the field name is refused"
 }
 
 // savePayload checks the form, offers a passphrase when its first value would create the vault, and commits
@@ -257,16 +236,8 @@ func (m *Model) savePayload() tea.Cmd {
 		values[f.label] = value
 		roles = append(roles, f.label)
 	}
-	var removed []string
-	if m.editing != "" {
-		for _, old := range m.cfg.Credentials[m.editing].Fields {
-			if !slices.Contains(cred.Fields, old) {
-				removed = append(removed, old)
-			}
-		}
-	}
 	commit := func(offer vault.PassphraseFunc) tea.Cmd {
-		return m.commitPayload(candidate, base, name, toVault, roles, values, removed, offer)
+		return m.commitPayload(candidate, base, name, toVault, roles, values, offer)
 	}
 	if !toVault || len(values) == 0 {
 		return commit(nil)
@@ -298,48 +269,21 @@ func (m *Model) savePayload() tea.Cmd {
 // commitPayload runs the commit as a command: the store may take its time, and a vault's first secret does
 // the passphrase work. The values stay in the form until it succeeds, so a failed save can be retried.
 func (m *Model) commitPayload(candidate *config.Config, base config.Revision, name string, toVault bool, roles []string,
-	values map[string]string, removed []string, offer vault.PassphraseFunc) tea.Cmd {
+	values map[string]string, offer vault.PassphraseFunc) tea.Cmd {
 	m.payloadSaving = true
 	m.writes++
 	m.busy = "saving " + name
 	if toVault {
 		m.vaultBusy = true
 	}
-	svc, secrets, previous := m.svc, m.secrets, m.cfg
+	svc, previous, editing := m.svc, m.cfg, m.editing
 	return func() tea.Msg {
-		warning, err := svc.CommitSecrets(candidate, base, name, toVault, roles, values, offer)
-		if err == nil {
-			if logged := svc.RecordConnections(previous, candidate); logged != "" {
-				if warning != "" {
-					warning += "; "
-				}
-				warning += logged
-			}
-		}
-		msg := payloadSavedMsg{cfg: candidate, name: name, vault: toVault, err: err, warning: warning}
-		if err != nil {
-			return msg
-		}
-		for _, field := range removed {
-			var rmErr error
-			if toVault {
-				rmErr = secrets.DeleteVault(name, field)
-			} else {
-				_, rmErr = secrets.Delete(name, field)
-			}
-			if rmErr != nil && !errors.Is(rmErr, secret.ErrNoEntry) {
-				msg.leftover = append(msg.leftover, field)
-				continue
-			}
-			if toVault {
-				if w := svc.SyncVaultProcess(context.Background(), func(ctx context.Context, c *vaultproc.Client) error {
-					return c.Delete(ctx, name, field)
-				}); w != "" && msg.warning == "" {
-					msg.warning = w
-				}
-			}
-		}
-		return msg
+		saved, err := svc.SavePayload(manage.PayloadSave{
+			Previous: previous, Base: base, Candidate: candidate, Name: name, Editing: editing,
+			Roles: roles, Values: values, Offer: offer,
+		})
+		return payloadSavedMsg{cfg: candidate, name: name, vault: toVault, err: err,
+			warning: saved.Warning, leftover: saved.Leftover}
 	}
 }
 
@@ -370,8 +314,7 @@ func (m *Model) handlePayloadSaved(msg payloadSavedMsg) tea.Cmd {
 		m.status += "; " + msg.warning
 	}
 	for _, field := range msg.leftover {
-		m.status += fmt.Sprintf("; warning: the stored value of %s could not be removed, remove it with "+
-			"'qatlas credential delete %s %s'", field, msg.name, field)
+		m.status += "; " + manage.LeftoverNote(msg.name, field)
 	}
 	m.status += m.forwardOpenNote(msg.name)
 	return cmd
@@ -381,16 +324,7 @@ func (m *Model) handlePayloadSaved(msg payloadSavedMsg) tea.Cmd {
 // approval. Saving a payload secret never approves anything: a changed release is a decision of its own,
 // made in Approvals.
 func (m *Model) forwardOpenNote(name string) string {
-	report, unavailable := m.approvalsReport()
-	if unavailable != "" {
-		return ""
-	}
-	var open []string
-	for _, c := range report.Open {
-		if slices.Contains(m.cfg.Connections[c.Connection].ForwardSecrets, name) {
-			open = append(open, c.Connection)
-		}
-	}
+	open := m.svc.ForwardOpen(m.cfg, name)
 	if len(open) == 0 {
 		return ""
 	}
@@ -398,22 +332,11 @@ func (m *Model) forwardOpenNote(name string) string {
 		"them in Approvals (%d)", strings.Join(open, ", "), int(sectionApprovals)+1)
 }
 
-// forwardChoices are the payload secrets a connection may release.
-func (m *Model) forwardChoices() []string {
-	var names []string
-	for _, name := range m.entryNames(sectionCredentials) {
-		if m.cfg.Credentials[name].Forward {
-			names = append(names, name)
-		}
-	}
-	return names
-}
-
 // forwardField is the forward_secrets row of a connection form, ticked with the connection's own list. A
 // listed credential that no longer exists stays visible as a choice, so the core refuses it by name instead
 // of the editor dropping it unseen.
 func (m *Model) forwardField(current []string) field {
-	choices := m.forwardChoices()
+	choices := manage.ForwardChoices(m.cfg)
 	for _, name := range current {
 		if !slices.Contains(choices, name) {
 			choices = append(choices, name)
@@ -429,7 +352,7 @@ func (m *Model) forwardField(current []string) field {
 // wantsForwardRow reports whether a connection form carries the forward row: only while a payload secret
 // exists or the connection lists one, so a configuration without any keeps its form as it was.
 func (m *Model) wantsForwardRow(conn config.Connection) bool {
-	return len(m.forwardChoices()) > 0 || len(conn.ForwardSecrets) > 0
+	return len(manage.ForwardChoices(m.cfg)) > 0 || len(conn.ForwardSecrets) > 0
 }
 
 // forwardBindingNote says when no approval binds the release of a payload secret, so that only the
@@ -437,15 +360,10 @@ func (m *Model) wantsForwardRow(conn config.Connection) bool {
 // of the connection the note is about, "" for the payload secret's own form, where that is not known yet.
 func (m *Model) forwardBindingNote(connCredential string) string {
 	const only = "only the forward_secrets list in this configuration limits which payload secrets a tool may use"
-	v := m.secrets.Vault()
-	if v == nil {
+	switch m.svc.ForwardBinding(m.cfg, connCredential) {
+	case manage.ForwardUnbound:
 		return "no encrypted vault binds this release: " + only
-	}
-	state, err := v.State()
-	if err != nil || (state != vault.StateLocked && state != vault.StateUnlocked) {
-		return "no encrypted vault binds this release: " + only
-	}
-	if connCredential != "" && m.cfg.Credentials[connCredential].Type != config.CredentialTypeVault {
+	case manage.ForwardCredentialOutside:
 		return "this connection's own credential is not in the encrypted vault, so no approval binds this " +
 			"release: " + only
 	}

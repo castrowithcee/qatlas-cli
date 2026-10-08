@@ -9,11 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
-	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
 // A payload credential (forward: true) holds freely named fields whose values a tool may pass on to a third
@@ -70,38 +67,15 @@ type payloadFormData struct {
 	Error           string
 }
 
-// payloadNameProblem asks the configuration core whether name is a valid field name, so the rule stays the
-// core's. It returns "" for a valid one.
-func payloadNameProblem(name string) string {
-	trial := config.New()
-	_ = trial.SetCredential("trial", config.Credential{
-		Type: config.CredentialTypeVault, Forward: true, Fields: []string{name}})
-	err := trial.Validate()
-	if err == nil {
-		return ""
-	}
-	for _, line := range strings.Split(err.Error(), "\n") {
-		if _, rule, ok := strings.Cut(line, "fields[0]: "); ok {
-			return "the field name is refused: " + rule
-		}
-	}
-	return "the field name is refused"
-}
-
 // forwardBindingNote says when no approval binds the release of a payload credential, so that only the
 // forward_secrets list of the configuration limits it, and "" when one does. connCredential is the credential
 // of the connection the note is about, "" when that is not known (the payload credential's own page).
 func (s *Server) forwardBindingNote(cfg *config.Config, connCredential string) string {
 	const only = "only the forward_secrets list in this configuration limits which payload credentials a tool may use"
-	v := s.secrets.Vault()
-	if v == nil {
+	switch s.svc.ForwardBinding(cfg, connCredential) {
+	case manage.ForwardUnbound:
 		return "no encrypted vault binds this release: " + only
-	}
-	state, err := v.State()
-	if err != nil || (state != vault.StateLocked && state != vault.StateUnlocked) {
-		return "no encrypted vault binds this release: " + only
-	}
-	if connCredential != "" && cfg.Credentials[connCredential].Type != config.CredentialTypeVault {
+	case manage.ForwardCredentialOutside:
 		return "this connection's own credential is not in the encrypted vault, so no approval binds this " +
 			"release: " + only
 	}
@@ -112,23 +86,7 @@ func (s *Server) forwardBindingNote(cfg *config.Config, connCredential string) s
 // approval. Saving never approves anything: a changed release is a decision of its own. "" when nothing can be
 // said, for lack of an unlocked vault.
 func (s *Server) forwardOpenNote(cand *config.Config, name string) string {
-	v := s.secrets.Vault()
-	if v == nil {
-		return ""
-	}
-	if state, err := v.State(); err != nil || state != vault.StateUnlocked {
-		return ""
-	}
-	report, err := approval.Pending(cand, v)
-	if err != nil {
-		return ""
-	}
-	var open []string
-	for _, c := range report.Open {
-		if slices.Contains(cand.Connections[c.Connection].ForwardSecrets, name) {
-			open = append(open, c.Connection)
-		}
-	}
+	open := s.svc.ForwardOpen(cand, name)
 	if len(open) == 0 {
 		return ""
 	}
@@ -305,10 +263,8 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 	}
 
 	cred := config.Credential{Type: state.Storage, Forward: true, Description: state.Description}
-	var removed []string
 	for _, f := range existing.Fields {
 		if removeSet[f] {
-			removed = append(removed, f)
 			continue
 		}
 		cred.Fields = append(cred.Fields, f)
@@ -321,7 +277,7 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 			fail(fmt.Sprintf("the field %q exists already", f))
 			return
 		}
-		if problem := payloadNameProblem(f); problem != "" {
+		if problem := manage.PayloadFieldProblem(f); problem != "" {
 			fail(problem)
 			return
 		}
@@ -349,9 +305,14 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 		return
 	}
 
-	toVault := cred.Type == config.CredentialTypeVault
-	warning, err := s.svc.CommitSecrets(candidate, rev, name, toVault, roles, values,
-		vaultOfferFromForm(r))
+	editing := ""
+	if edit {
+		editing = name
+	}
+	saved, err := s.svc.SavePayload(manage.PayloadSave{
+		Previous: cfg, Base: rev, Candidate: candidate, Name: name, Editing: editing,
+		Roles: roles, Values: values, Offer: vaultOfferFromForm(r),
+	})
 	if err != nil {
 		if errors.Is(err, config.ErrConflict) {
 			fail(errConfigChanged)
@@ -360,22 +321,13 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 		fail(s.redact(err.Error()) + "; the configuration was not changed")
 		return
 	}
-	for _, f := range removed {
-		var rmErr error
-		if toVault {
-			rmErr = s.secrets.DeleteVault(name, f)
-		} else {
-			_, rmErr = s.secrets.Delete(name, f)
+	warning := saved.Warning
+	for _, f := range saved.Leftover {
+		if warning != "" {
+			warning += "; "
 		}
-		if rmErr != nil && !errors.Is(rmErr, secret.ErrNoEntry) {
-			warning += fmt.Sprintf("; warning: the stored value of %s could not be removed, remove it with "+
-				"'qatlas credential delete %s %s'", f, name, f)
-		}
+		warning += manage.LeftoverNote(name, f)
 	}
-	if logged := s.svc.RecordConnections(cfg, candidate); logged != "" {
-		warning += "; " + logged
-	}
-	warning = strings.TrimPrefix(warning, "; ")
 	if note := s.forwardOpenNote(candidate, name); note != "" {
 		s.setNotice(note)
 	}
@@ -389,17 +341,6 @@ func (s *Server) savePayload(w http.ResponseWriter, r *http.Request, edit bool) 
 		target += "&warning=" + url.QueryEscape(s.redact(warning))
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
-}
-
-// forwardChoices are the payload credentials a connection may release, in stable order.
-func forwardChoices(cfg *config.Config) []string {
-	var names []string
-	for _, name := range sortedNames(cfg.Credentials) {
-		if cfg.Credentials[name].Forward {
-			names = append(names, name)
-		}
-	}
-	return names
 }
 
 // handleSetForward saves the forward_secrets list of an existing connection. It writes the configuration only
@@ -425,51 +366,32 @@ func (s *Server) handleSetForward(w http.ResponseWriter, r *http.Request) {
 		fail(errConfigChanged)
 		return
 	}
-	changed := conn
-	changed.ForwardSecrets = append([]string(nil), r.PostForm["forward"]...)
-	cand := cfg.Clone()
-	if err := cand.SetConnection(name, changed); err != nil {
-		fail(s.redact(err.Error()))
-		return
-	}
-	if err := cand.Validate(); err != nil {
-		fail(s.redact(err.Error()))
-		return
-	}
-	logged, err := s.svc.SaveConfig(cfg, cand, rev)
+	saved, err := s.svc.SaveForwardRelease(cfg, rev, name, r.PostForm["forward"])
 	if err != nil {
+		var refused *manage.RefusedReleaseError
+		if errors.As(err, &refused) {
+			fail(s.redact(err.Error()))
+			return
+		}
 		fail(s.saveFailure(err))
 		return
 	}
-	s.setNotice(withWarning(s.forwardChangeNotice(cand, name), logged))
+	s.setNotice(withWarning(s.forwardChangeNotice(saved, name), saved.Warning))
 	http.Redirect(w, r, "/connections/"+url.PathEscape(name)+"?forward=1", http.StatusSeeOther)
 }
 
 // forwardChangeNotice says what a saved release list of one connection means for its approval.
-func (s *Server) forwardChangeNotice(cand *config.Config, connName string) string {
-	v := s.secrets.Vault()
-	if v == nil {
-		return ""
-	}
-	state, err := v.State()
-	switch {
-	case err != nil:
-		return ""
-	case state == vault.StateLocked:
+func (s *Server) forwardChangeNotice(saved manage.ReleaseSaved, connName string) string {
+	switch saved.Check {
+	case manage.ReleaseLocked:
 		return "the vault is locked, so whether this connection now waits for approval was not checked"
-	case state != vault.StateUnlocked:
-		return ""
+	case manage.ReleaseCheckFailed:
+		return "approval state not checked: " + s.redact(saved.CheckErr.Error())
+	case manage.ReleaseOpen:
+		return fmt.Sprintf("stays open: %s; saving does not approve it, approve it with `qatlas vault approve` or in "+
+			"the TUI's Approvals section", manage.StaysOpenReason(saved.Change))
 	}
-	report, err := approval.Pending(cand, v)
-	if err != nil {
-		return "approval state not checked: " + s.redact(err.Error())
-	}
-	change, open := manage.OpenChange(report, connName)
-	if !open {
-		return ""
-	}
-	return fmt.Sprintf("stays open: %s; saving does not approve it, approve it with `qatlas vault approve` or in "+
-		"the TUI's Approvals section", manage.StaysOpenReason(change))
+	return ""
 }
 
 // payloadTemplates defines the payload credential page. Like the other pages it ships no script and no
