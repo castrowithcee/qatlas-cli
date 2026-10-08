@@ -449,7 +449,6 @@ func TestProviderStatusesAreNormalized(t *testing.T) {
 		{http.StatusUnauthorized, provider.ClassAuth},
 		{http.StatusPaymentRequired, provider.ClassPermission},
 		{http.StatusForbidden, provider.ClassPermission},
-		{http.StatusNotFound, provider.ClassProviderError},
 		{http.StatusNotAcceptable, provider.ClassProviderError},
 		{http.StatusTooManyRequests, provider.ClassRateLimited},
 		{http.StatusGatewayTimeout, provider.ClassTimeout},
@@ -473,6 +472,56 @@ func TestProviderStatusesAreNormalized(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A 404 names the resource only for a single-object operation and never carries an ID or the body.
+func TestNotFoundIsReportedPerOperation(t *testing.T) {
+	missing := func(*http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusNotFound, `{"message":"`+bodyCanary+`"}`), nil
+	}
+	check := func(t *testing.T, err error, want provider.Class, wantMsg string) {
+		t.Helper()
+		if class := classOf(err); class != want {
+			t.Fatalf("class = %q, want %q (%v)", class, want, err)
+		}
+		if !strings.Contains(err.Error(), wantMsg) {
+			t.Errorf("message = %q, want %q", err, wantMsg)
+		}
+		if strings.Contains(err.Error(), bodyCanary) || strings.Contains(err.Error(), invoiceID) {
+			t.Errorf("message carries body or ID: %v", err)
+		}
+	}
+	const endpoint = "Lexware did not find the requested endpoint or a referenced object (HTTP 404)"
+	t.Run("get", func(t *testing.T) {
+		serve(t, missing)
+		c, _ := client(t)
+		_, err := c.GetInvoice(context.Background(), invoiceID)
+		check(t, err, provider.ClassNotFound, "Lexware does not hold this invoice or does not show it to this API key")
+	})
+	t.Run("list", func(t *testing.T) {
+		serve(t, missing)
+		c, _ := client(t)
+		_, err := c.ListInvoices(context.Background(), ListOptions{})
+		check(t, err, provider.ClassProviderError, endpoint)
+		if strings.Contains(strings.TrimPrefix(err.Error(), "list invoices: "), "invoice") {
+			t.Errorf("message names an invoice: %v", err)
+		}
+	})
+	t.Run("connection test", func(t *testing.T) {
+		serve(t, missing)
+		c, _ := client(t)
+		err := c.get(context.Background(), "test connection", "", "/v1/voucherlist", nil, &voucherListJSON{})
+		check(t, err, provider.ClassProviderError, endpoint)
+	})
+	t.Run("create", func(t *testing.T) {
+		serve(t, missing)
+		c, _ := client(t)
+		err := c.post(context.Background(), "create invoice", "", "/v1/invoices", nil, map[string]string{}, &struct{}{})
+		check(t, err, provider.ClassProviderError, endpoint)
+		if strings.Contains(err.Error(), "invoice or") {
+			t.Errorf("message names an invoice: %v", err)
+		}
+	})
 }
 
 // A failure before a status code exists is classified without copying the transport message.
