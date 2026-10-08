@@ -62,7 +62,7 @@ func TestAppendChainsAcrossDays(t *testing.T) {
 		t.Fatalf("a day with no invoke must not get a file, stat error = %v", err)
 	}
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -118,7 +118,7 @@ func TestVerifyDetectsTamperedLine(t *testing.T) {
 	lines[1] = bytes.Replace(lines[1], []byte(`"op.two"`), []byte(`"op.tampered"`), 1)
 	writeLines(t, path, lines)
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -140,7 +140,7 @@ func TestVerifyDetectsDeletedLine(t *testing.T) {
 	lines := readLines(t, path)
 	writeLines(t, path, append(lines[:1], lines[2:]...))
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -164,7 +164,7 @@ func TestVerifyDetectsMissingMiddleDay(t *testing.T) {
 		t.Fatalf("Remove() error = %v", err)
 	}
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -202,7 +202,7 @@ func TestRetentionCutIsNotReportedAsAGap(t *testing.T) {
 		t.Fatalf("first surviving line of the cut day = %s, want a retention-cut marker", freshLines[0])
 	}
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -241,7 +241,7 @@ func TestVerifyDetectsSeqOneWithWrongGenesisHash(t *testing.T) {
 	lines[0] = tampered
 	writeLines(t, path, lines)
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -267,7 +267,7 @@ func TestVerifyDetectsOldestDayRemovedWithoutRetention(t *testing.T) {
 		t.Fatalf("Remove() error = %v", err)
 	}
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -325,7 +325,7 @@ func TestRetentionCutTwiceStaysIntact(t *testing.T) {
 			marker["seq"])
 	}
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -361,7 +361,7 @@ func TestVerifyDetectsGapAfterADocumentedCut(t *testing.T) {
 		t.Fatalf("Remove() error = %v", err)
 	}
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -392,7 +392,7 @@ func TestAppendConcurrentGoroutines(t *testing.T) {
 		t.Fatalf("Append() error = %v", err)
 	}
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}
@@ -434,7 +434,7 @@ func TestAppendConcurrentProcesses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	report, err := Verify(dir)
+	report, err := VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}

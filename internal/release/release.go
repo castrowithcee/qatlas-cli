@@ -60,9 +60,6 @@ func TrustedKeys() []ssh.PublicKey {
 	return keys
 }
 
-// TrustedKeyLines returns the production key list in authorized_keys format.
-func TrustedKeyLines() []string { return append([]string(nil), trustedKeyLines...) }
-
 // VerifyChecksums checks that signature is a valid SSHSIG over checksums for the release namespace, made
 // by exactly one of keys. Only Ed25519 keys and the hashes sha256 and sha512 are accepted.
 func VerifyChecksums(checksums, signature []byte, keys []ssh.PublicKey) error {

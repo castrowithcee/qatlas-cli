@@ -33,7 +33,7 @@ func TestInvokeWritesTheInvocationLog(t *testing.T) {
 		t.Fatal("Invoke() without the secret succeeded, want missing-secret")
 	}
 
-	report, err := invokelog.Verify(dir)
+	report, err := invokelog.VerifyWith(dir, nil)
 	if err != nil {
 		t.Fatalf("Verify() error = %v", err)
 	}

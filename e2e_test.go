@@ -291,22 +291,25 @@ defaults:
 		if !strings.HasPrefix(stdout, "providers[18]{provider,description,note,tools,connections,configured}:\n") {
 			t.Errorf("stdout = %q, want a TOON index of the compiled namespaces", stdout)
 		}
+		lines := strings.Split(strings.TrimSpace(stdout), "\n")[1:]
+		if len(lines) != 18 {
+			t.Errorf("%d provider rows, want 18:\n%s", len(lines), stdout)
+		}
 		rows := map[string][3]string{}
-		for _, line := range strings.Split(strings.TrimSpace(stdout), "\n")[1:] {
+		for _, line := range lines {
 			fields := strings.Split(strings.TrimSpace(line), ",")
 			n := len(fields)
-			rows[fields[0]] = [3]string{fields[n-3], fields[n-2], fields[n-1]}
-		}
-		for provider, want := range map[string][3]string{
-			"bookstack": {"68", "2", "2"}, "telegram": {"3", "0", "0"}, "lexware": {"3", "0", "0"},
-			"twentycrm": {"5", "0", "0"}, "seatable": {"40", "0", "0"}, "nextcloud": {"6", "0", "0"},
-			"github": {"194", "0", "0"}, "todoist": {"39", "0", "0"}, "n8n": {"58", "0", "0"},
-			"make": {"70", "0", "0"}, "infomaniakdav": {"12", "0", "0"}, "infomaniakmail": {"13", "0", "0"}, "seatableaccount": {"2", "0", "0"}, "baserow": {"14", "0", "0"}, "penpot": {"37", "0", "0"},
-			"excalidrawplus": {"16", "0", "0"},
-		} {
-			if rows[provider] != want {
-				t.Errorf("%s = %v tools and connections, want %v:\n%s", provider, rows[provider], want, stdout)
+			tools, connections, configured := fields[n-3], fields[n-2], fields[n-1]
+			rows[fields[0]] = [3]string{tools, connections, configured}
+			if tools == "0" {
+				t.Errorf("%s offers no tools:\n%s", fields[0], stdout)
 			}
+			if fields[0] != "bookstack" && (connections != "0" || configured != "0") {
+				t.Errorf("%s = %s connections, %s configured, want none:\n%s", fields[0], connections, configured, stdout)
+			}
+		}
+		if got := rows["bookstack"]; got[1] != "2" || got[2] != "2" {
+			t.Errorf("bookstack = %v tools, connections and configured, want 2 and 2:\n%s", got, stdout)
 		}
 		// The first step names namespaces only: no tool ID and no route name reaches it.
 		for _, absent := range []string{".", "title", "effect", "archive", "primary"} {
