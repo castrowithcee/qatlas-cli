@@ -14,6 +14,9 @@ A connection binds one identity to one fixed folder in the Files app. It lists a
 an ETag precondition (`update`), and deletes only files with an ETag precondition (`delete`). It never offers
 recursive folder deletion; parent folders must already exist.
 
+The instance URL must use `https`, without exception. Qatlas follows no redirect: a 3xx answer to any request
+is a clear failure that did not act on the server, and the app password only ever travels to the configured URL.
+
 Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the configured
 root. Connection permissions independently hide and block operations, while the identity's WebDAV rights
 remain the provider-side ceiling. An optional `tools` list narrows a connection further to named tools, for
