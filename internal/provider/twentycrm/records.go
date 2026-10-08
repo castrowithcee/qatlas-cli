@@ -72,12 +72,13 @@ var recordsList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Twenty CRM records",
 	Description: "List one page of the records of one reachable object of the Twenty workspace of a connection, " +
-		"without filters, optionally sorted by one field and limited to chosen fields. " + recordNote,
+		"without filters, optionally sorted by one field and limited to chosen fields, or only the deleted records of " +
+		"the trash. " + recordNote,
 	Tags:     []string{"twentycrm", "crm", "records", "list"},
 	Risk:     recordsRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"object":` + objectNameSchema + `,` + pageProperties +
-		`},"required":["object"],"additionalProperties":false}`),
+		`,"deleted":{"type":"boolean"}},"required":["object"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"records":{"type":"array","items":` + recordSchema + `},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},"required":["records","has_more"],` +
 		`"additionalProperties":false}`),
@@ -88,6 +89,7 @@ var recordsList = capability.Descriptor{
 		{Name: "direction", Description: "Sort direction asc or desc; asc when order_by is set, and not allowed without it"},
 		{Name: "fields", Description: "Field names to read, at most 50, as shown by twentycrm.objects.get; the default selection of Twenty when omitted"},
 		{Name: "cursor", Description: "Opaque next_cursor of a previous page of the same object, sort, and fields; the first page when omitted"},
+		{Name: "deleted", Description: "True lists only the deleted records of the trash, which twentycrm.records.restore can bring back; false when omitted"},
 	},
 	Fields: []capability.Field{
 		{Name: "records", Description: "Records with id, created_at, updated_at, and fields (field name to value), untrusted data"},
@@ -158,6 +160,8 @@ type recordQuery struct {
 	Binding []byte
 	// Conditions are the normalized, schema-unchecked conditions of records.search.
 	Conditions []condition
+	// Deleted selects the trash instead of the live records; records.list only.
+	Deleted bool
 }
 
 // recordMode selects the tool a recordQuery serves.
@@ -179,6 +183,8 @@ type recordArguments struct {
 	Cursor    string   `json:"cursor"`
 	// Conditions are read by records.search only.
 	Conditions []conditionArgument `json:"conditions"`
+	// Deleted is read by records.list only.
+	Deleted bool `json:"deleted"`
 }
 
 const errUnreadableField = "a requested field cannot be read or sorted by on this object"
@@ -249,6 +255,10 @@ func newRecordQuery(resolved *config.Resolved, op string, raw json.RawMessage, m
 	binding := []any{tool, resolved.Name, query.Object, query.OrderBy, query.Direction, query.Fields}
 	if mode == modeSearch {
 		binding = append(binding, conditionKey)
+	}
+	if mode == modeList && args.Deleted {
+		query.Deleted = true
+		binding = append(binding, "deleted")
 	}
 	query.Binding = provider.CursorBinding(binding...)
 	if args.Cursor != "" {
@@ -402,6 +412,8 @@ func (c *Client) ListRecords(ctx context.Context, query *recordQuery) (*RecordLi
 			return nil, err
 		}
 		values.Set("filter", filter)
+	} else if query.Deleted {
+		values.Set("filter", deletedFilter)
 	}
 	if query.OrderBy != "" {
 		if !object.orderable(query.OrderBy) {
