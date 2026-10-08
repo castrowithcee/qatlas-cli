@@ -1633,31 +1633,12 @@ func (m *Model) firstProviderWithService() string {
 
 // providerServices are the services of one provider, in list order.
 func (m *Model) providerServices(provider string) []string {
-	var names []string
-	for _, name := range m.entryNames(sectionServices) {
-		if m.cfg.Services[name].Provider == provider {
-			names = append(names, name)
-		}
-	}
-	return names
+	return manage.ProviderServices(m.cfg, provider)
 }
 
-// providerCredentials are the credentials that can serve one provider: those that belong to it, and those
-// whose provider is still open. A credential just created has no connection yet, so nothing places it
-// anywhere; keeping it selectable is what lets this form be the place that settles it.
+// providerCredentials are the credentials that can serve one provider; see manage.ProviderCredentials.
 func (m *Model) providerCredentials(provider string) []string {
-	var names []string
-	for _, name := range m.entryNames(sectionCredentials) {
-		if m.cfg.Credentials[name].Forward {
-			// A payload secret never serves a connection; the forward row releases it instead.
-			continue
-		}
-		switch belongs := m.credentialProvider(name, m.cfg.Credentials[name]); belongs {
-		case provider, "":
-			names = append(names, name)
-		}
-	}
-	return names
+	return manage.ProviderCredentials(m.cfg, provider)
 }
 
 // targetHint says what the target of one service means, in that provider's own words.
@@ -1812,9 +1793,8 @@ func (m *Model) profileChosen() {
 // applyRecommendedProfile ticks the recommended profile of the form's provider, which is how a new
 // connection starts. A provider without profiles leaves the rows as they are.
 func (m *Model) applyRecommendedProfile() {
-	metadata, _ := m.cfg.ProviderMetadata(m.formProvider())
-	if profile, ok := metadata.RecommendedProfile(); ok {
-		m.applyProfile(profile.ID)
+	if id := manage.ConnectionDefaults(m.cfg, m.formProvider()).ProfileID; id != "" {
+		m.applyProfile(id)
 	}
 	m.syncProfile()
 }
@@ -1917,21 +1897,13 @@ func (m *Model) permittedEffects(metadata config.ProviderMetadata) map[config.Pe
 		return nil
 	}
 	if permissions == nil {
-		permissions = defaultPermissions(metadata)
+		permissions = manage.DefaultPermissions(metadata)
 	}
 	permitted := map[config.Permission]bool{}
 	for _, permission := range permissions {
 		permitted[permission] = true
 	}
 	return permitted
-}
-
-// defaultPermissions are what a connection without a permissions list allows.
-func defaultPermissions(metadata config.ProviderMetadata) []config.Permission {
-	if len(metadata.DefaultPermissions) > 0 {
-		return metadata.DefaultPermissions
-	}
-	return []config.Permission{config.PermissionRead}
 }
 
 // replaceChoices puts a new set of options on one choice row, keeping the current value when it is still
@@ -1959,7 +1931,7 @@ func (m *Model) targetChosen() {
 
 func (m *Model) permissionHint(provider string) string {
 	metadata, _ := m.cfg.ProviderMetadata(provider)
-	permissions := defaultPermissions(metadata)
+	permissions := manage.DefaultPermissions(metadata)
 	defaults := make([]string, len(permissions))
 	for i, permission := range permissions {
 		defaults[i] = string(permission)
@@ -2709,7 +2681,7 @@ func (m *Model) apply(cfg *config.Config, name string) error {
 		if err != nil {
 			return err
 		}
-		target, targets := splitTargets(targetEntries(m.fields))
+		target, targets := manage.SplitTargets(targetEntries(m.fields))
 		var tools []string
 		if list := m.field(toolListLabel); list != nil && m.fieldValue(toolsLabel) == toolsSelected {
 			tools = list.marked()
@@ -3106,18 +3078,6 @@ func pathEntries(fields []field) []string {
 		}
 	}
 	return nil
-}
-
-// splitTargets is how a target list is written: one entry as target, several as targets, and none as
-// neither, so a file that names one target reads as it always did.
-func splitTargets(values []string) (string, []string) {
-	switch len(values) {
-	case 0:
-		return "", nil
-	case 1:
-		return values[0], nil
-	}
-	return "", append([]string(nil), values...)
 }
 
 // targetSummary is the short form of a target list: a single target as it is, and otherwise how many there

@@ -357,11 +357,10 @@ func (m *Model) setupPrefill(step int, page []field) {
 
 // setupTemplateExtras are what the setup has no row for and copies from its template unchanged: the paths
 // and local file lists of the connection.
-func (m *Model) setupTemplateExtras(conn *config.Connection) {
+func (m *Model) setupTemplateExtras() ([]string, config.Files) {
 	source, ok := m.cfg.Connections[m.wizard.template]
 	if !ok {
-		return
+		return nil, config.Files{}
 	}
-	conn.Paths = slices.Clone(source.Paths)
-	conn.Files = config.Files{Read: slices.Clone(source.Files.Read), Write: slices.Clone(source.Files.Write)}
+	return slices.Clone(source.Paths), config.Files{Read: slices.Clone(source.Files.Read), Write: slices.Clone(source.Files.Write)}
 }

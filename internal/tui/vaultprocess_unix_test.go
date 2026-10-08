@@ -19,6 +19,7 @@ import (
 	"filippo.io/age"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
@@ -266,8 +267,8 @@ func TestVaultProcessWarningIsRedactedInTheStatusLine(t *testing.T) {
 }
 
 // The guided setup's own save hands a new vault credential's secrets on to a running vault process too,
-// through commitSetup, the same manage.Service.SyncVaultProcess the role rows use.
-func TestCommitSetupSyncsNewVaultSecretsToARunningProcess(t *testing.T) {
+// through SaveConnectionSetup, the same manage.Service.SyncVaultProcess the role rows use.
+func TestSaveSetupSyncsNewVaultSecretsToARunningProcess(t *testing.T) {
 	const passphrase = "hunter2"
 	dir := filepath.Join(t.TempDir(), "qatlas")
 	path := filepath.Join(dir, "config.yaml")
@@ -279,21 +280,22 @@ func TestCommitSetupSyncsNewVaultSecretsToARunningProcess(t *testing.T) {
 	cfg := newTestConfig(t)
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeVault}))
 
-	plan := setupPlan{
-		credential: "reader", storage: storageVault, roles: []string{"token-id", "token-secret"},
-		secrets: map[string]string{"token-id": "canary-setup-id-1a2b", "token-secret": "canary-setup-secret-3c4d"},
+	built := manage.ConnectionCandidate{
+		Config: cfg, Credential: "reader", NewCredential: true, Storage: config.CredentialTypeVault,
+		Roles: []string{"token-id", "token-secret"},
 	}
-	warning, err := commitSetup(testService(store, secrets, nil), cfg, config.RevisionAbsent, plan, nil)
+	secretValues := map[string]string{"token-id": "canary-setup-id-1a2b", "token-secret": "canary-setup-secret-3c4d"}
+	res, err := testService(store, secrets, nil).SaveConnectionSetup(cfg, built, config.RevisionAbsent, secretValues, nil)
 	if err != nil {
-		t.Fatalf("commitSetup() = %v", err)
+		t.Fatalf("SaveConnectionSetup() = %v", err)
 	}
-	if warning != "" {
-		t.Fatalf("commitSetup() warning = %q, want none with the process reachable", warning)
+	if res.Warning != "" {
+		t.Fatalf("SaveConnectionSetup() warning = %q, want none with the process reachable", res.Warning)
 	}
 
 	ctx := context.Background()
 	probe := probeScope(t, client, dir, passphrase, "reader")
-	for role, want := range plan.secrets {
+	for role, want := range secretValues {
 		if got, found, err := client.Get(ctx, "reader", role, probe); err != nil || !found || got != want {
 			t.Errorf("process Get(%q) = %q, %v, %v, want %q", role, got, found, err, want)
 		}

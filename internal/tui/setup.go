@@ -81,7 +81,9 @@ type setup struct {
 	// candidate and plan are what the permissions step left behind: the configuration to save, and what
 	// has to be written besides it.
 	candidate *config.Config
-	plan      setupPlan
+	// built is the core's candidate behind candidate, the one saving hands back to the core.
+	built manage.ConnectionCandidate
+	plan  setupPlan
 	// base is the revision of the configuration candidate was built from; saving commits against it.
 	base   config.Revision
 	saving bool
@@ -105,7 +107,7 @@ type setupPlan struct {
 
 // setupSavedMsg carries the outcome of the final save back into the event loop. warning is set only when a
 // new vault credential's secrets could not be handed on to a vault process that holds the vault unlocked
-// outside this run (see commitSetup); "" the rest of the time.
+// outside this run (see manage.Service.SaveConnectionSetup); "" the rest of the time.
 type setupSavedMsg struct {
 	cfg     *config.Config
 	name    string
@@ -275,13 +277,13 @@ func (m *Model) setupNext() {
 			w.provider, w.pages, w.template = provider, w.pages[:1], ""
 		}
 	} else {
-		candidate, plan, err := m.setupCandidate(w.step)
+		built, plan, err := m.setupCandidate(w.step)
 		if err != nil {
 			m.status = ""
 			m.fail = m.redactor.Apply(err.Error())
 			return
 		}
-		w.candidate, w.plan, w.base = candidate, plan, m.rev
+		w.built, w.candidate, w.plan, w.base = built, built.Config, plan, m.rev
 	}
 	m.setupShow(w.step + 1)
 }
@@ -327,111 +329,101 @@ func pageValue(page []field, label string) string {
 // setupCandidate applies what the steps up to upto decided to a copy of the configuration and lets the core
 // check it. The configuration it starts from was loaded, so every problem the core reports is one of the
 // steps.
-func (m *Model) setupCandidate(upto int) (*config.Config, setupPlan, error) {
+func (m *Model) setupCandidate(upto int) (manage.ConnectionCandidate, setupPlan, error) {
 	w := m.wizard
-	cfg := m.cfg.Clone()
 	var plan setupPlan
-	var missing string
+	draft := manage.ConnectionDraft{Provider: w.provider}
+	stage := manage.StageService
 
 	page := w.pages[stepService]
 	plan.service = pageValue(page, "service")
 	if plan.service == newService {
 		plan.service, plan.newService = pageValue(page, "name"), true
-		if _, taken := cfg.Services[plan.service]; taken {
-			return nil, plan, fmt.Errorf("a service named %q already exists; choose it in the service row "+
-				"instead of adding it again", plan.service)
-		}
-		if err := cfg.SetService(plan.service, config.Service{
-			Provider: w.provider, BaseURL: pageValue(page, "base url"),
-		}); err != nil {
-			return nil, plan, err
-		}
+		draft.NewService, draft.BaseURL = true, pageValue(page, "base url")
 	}
+	draft.Service = plan.service
 
 	if upto >= stepCredential {
+		stage = manage.StageCredential
 		page := w.pages[stepCredential]
 		plan.credential = pageValue(page, "credential")
 		if plan.credential == newCredential {
 			plan.credential, plan.newCredential = pageValue(page, "name"), true
-			if _, taken := cfg.Credentials[plan.credential]; taken {
-				return nil, plan, fmt.Errorf("a credential named %q already exists; choose it in the "+
-					"credential row instead of adding it again", plan.credential)
-			}
 			plan.storage = pageValue(page, storageLabel)
-			cred := config.Credential{Provider: w.provider, Type: storageType(plan.storage)}
-			if cred.Type == config.CredentialTypeEnv {
-				cred.Values = map[string]string{}
+			draft.Storage = storageType(plan.storage)
+			if draft.Storage == config.CredentialTypeEnv {
+				draft.EnvNames = map[string]string{}
 			} else {
 				plan.secrets = map[string]string{}
 			}
+			// The first empty row is held back, so the core finds its role missing; any later one is handed on
+			// as typed.
+			held := false
 			for _, f := range page {
 				if f.hidden || (f.kind != fieldEnvName && f.kind != fieldMasked) {
 					continue
 				}
 				value := f.value()
 				plan.roles = append(plan.roles, f.label)
-				switch {
-				case value == "" && missing == "" && f.kind == fieldEnvName:
-					missing = fmt.Sprintf("%s names no environment variable; name the variable that holds it",
-						f.label)
-				case value == "" && missing == "":
-					missing = fmt.Sprintf("%s is empty; type its secret, or choose %s", f.label, storageEnv)
-				case f.kind == fieldEnvName:
-					cred.Values[f.label] = value
-				default:
+				if value == "" && !held {
+					held = true
+					continue
+				}
+				if f.kind == fieldEnvName {
+					draft.EnvNames[f.label] = value
+				} else {
 					plan.secrets[f.label] = value
 				}
 			}
-			// Only an env credential names anything in the file; the secrets of a keyring credential
-			// go to a store and never into this configuration.
-			if err := cfg.SetCredential(plan.credential, cred); err != nil {
-				return nil, plan, err
-			}
 		}
+		draft.NewCredential, draft.Credential = plan.newCredential, plan.credential
 	}
 
 	if upto >= stepScope {
+		stage = manage.StageScope
 		page := w.pages[stepScope]
 		plan.connection = pageValue(page, "name")
-		if _, taken := cfg.Connections[plan.connection]; taken {
-			return nil, plan, fmt.Errorf("a connection named %q already exists; choose another name",
-				plan.connection)
-		}
-		target, targets := splitTargets(targetEntries(page))
-		conn := config.Connection{
-			Service: plan.service, Credential: plan.credential,
-			Target: target, Targets: targets, Description: pageValue(page, "description"),
-		}
+		draft.Name, draft.Targets, draft.Description = plan.connection, targetEntries(page), pageValue(page, "description")
 		if upto >= stepPermissions {
+			stage = manage.StageRights
 			page := w.pages[stepPermissions]
-			permissions, err := config.ParsePermissions(pageValue(page, "permissions"))
-			if err != nil {
-				return nil, plan, err
-			}
-			conn.Permissions = permissions
+			draft.Permissions = pageValue(page, "permissions")
 			if pageValue(page, toolsLabel) == toolsSelected {
+				draft.ToolsSelected = true
 				for _, f := range page {
 					if f.kind == fieldToolList {
-						conn.Tools = f.marked()
+						draft.Tools = f.marked()
 					}
 				}
 			}
 		}
 		if w.template != "" {
-			m.setupTemplateExtras(&conn)
-		}
-		if err := cfg.SetConnection(plan.connection, conn); err != nil {
-			return nil, plan, err
+			draft.Paths, draft.Files = m.setupTemplateExtras()
 		}
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return nil, plan, err
+	built, err := manage.BuildConnectionCandidate(m.cfg, draft, stage)
+	if err == nil {
+		err = built.MissingSecret(plan.secrets)
 	}
-	if missing != "" {
-		return nil, plan, errors.New(missing)
+	if err != nil {
+		return manage.ConnectionCandidate{}, plan, setupProblem(err)
 	}
-	return cfg, plan, nil
+	return built, plan, nil
+}
+
+// setupProblem words a problem of the core in the terms of the setup's rows.
+func setupProblem(err error) error {
+	var taken *manage.NameTakenError
+	var missing *manage.RoleMissingError
+	switch {
+	case errors.As(err, &taken) && taken.Kind != manage.KindConnection:
+		return fmt.Errorf("a %s named %q already exists; choose it in the %s row instead of adding it again",
+			taken.Kind, taken.Name, taken.Kind)
+	case errors.As(err, &missing):
+		return fmt.Errorf("%s is empty; type its secret, or choose %s", missing.Role, storageEnv)
+	}
+	return err
 }
 
 // updateSummary handles the last step: saving, and once saved, testing.
@@ -505,32 +497,23 @@ func (m *Model) finishSetupSave() tea.Cmd {
 // offer is asked for a passphrase only when the new credential's secret would be the vault's very first.
 func (m *Model) saveSetup(offer vault.PassphraseFunc) tea.Cmd {
 	w := m.wizard
-	candidate, plan, base := w.candidate, w.plan, w.base
+	candidate, built, plan, base := w.candidate, w.built, w.plan, w.base
 	w.saving = true
 	m.screen = screenSummary
 	m.clearMessages()
 	m.busy = "saving " + plan.connection
 	svc, previous := m.svc, m.cfg
 	return func() tea.Msg {
-		warning, err := commitSetup(svc, candidate, base, plan, offer)
-		if err == nil {
-			if logged := svc.RecordConnections(previous, candidate); logged != "" {
-				if warning != "" {
-					warning += "; "
-				}
-				warning += logged
+		res, err := svc.SaveConnectionSetup(previous, built, base, plan.secrets, offer)
+		warning := res.Warning
+		if err == nil && res.Logged != "" {
+			if warning != "" {
+				warning += "; "
 			}
+			warning += res.Logged
 		}
 		return setupSavedMsg{cfg: candidate, name: plan.connection, err: err, warning: warning}
 	}
-}
-
-// commitSetup stores the secrets of a new credential and then saves the configuration, through
-// manage.Service.CommitSecrets, the commit the browser's new-credential form uses too, so the two never
-// leave a different thing behind on a failure.
-func commitSetup(svc *manage.Service, cfg *config.Config, base config.Revision, plan setupPlan, offer vault.PassphraseFunc) (string, error) {
-	toVault := storageType(plan.storage) == config.CredentialTypeVault
-	return svc.CommitSecrets(cfg, base, plan.credential, toVault, plan.roles, plan.secrets, offer)
 }
 
 // setupSaved applies the outcome of the final save.
@@ -573,12 +556,12 @@ func (m *Model) setupSaved(msg setupSavedMsg) tea.Cmd {
 // reason is shown and the steps can be changed; the next save is a conflict again until they are.
 func (m *Model) setupRebase() {
 	w := m.wizard
-	candidate, plan, err := m.setupCandidate(stepPermissions)
+	built, plan, err := m.setupCandidate(stepPermissions)
 	if err != nil {
 		m.fail += "; the setup no longer fits it: " + m.redactor.Apply(err.Error())
 		return
 	}
-	w.candidate, w.plan, w.base = candidate, plan, m.rev
+	w.built, w.candidate, w.plan, w.base = built, built.Config, plan, m.rev
 	m.fail += ". The summary shows the setup applied to the current file"
 }
 
@@ -671,7 +654,7 @@ func (m *Model) summaryRows() []string {
 
 	permissions := config.FormatPermissions(conn.Permissions)
 	if conn.Permissions == nil {
-		defaults := defaultPermissions(metadata)
+		defaults := manage.DefaultPermissions(metadata)
 		permissions = "default: " + config.FormatPermissions(defaults)
 	}
 	tools := toolsAll

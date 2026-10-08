@@ -573,3 +573,41 @@ func TestGuidedConnectionRejectsFilesWithoutDirection(t *testing.T) {
 	}
 	assertStoreUnchanged(t, store, 0, 0, 0)
 }
+
+// TestGuidedConnectionCredentialChoiceUsesDerivedProvider proves the build page does not offer a credential
+// that names no provider but is already used by a connection of another provider.
+func TestGuidedConnectionCredentialChoiceUsesDerivedProvider(t *testing.T) {
+	s, store, _, _ := newConnectionTestServer(t, nil)
+	cookie, _ := coupleAndApprove(t, s, nil)
+
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatalf("store.Load: %v", err)
+	}
+	if err := cfg.SetService("other-svc", config.Service{Provider: "other", BaseURL: "https://other.example.test"}); err != nil {
+		t.Fatalf("SetService: %v", err)
+	}
+	for _, name := range []string{"used-by-other", "still-open"} {
+		if err := cfg.SetCredential(name, config.Credential{Type: config.CredentialTypeKeyring}); err != nil {
+			t.Fatalf("SetCredential: %v", err)
+		}
+	}
+	if err := cfg.SetConnection("other-conn", config.Connection{Service: "other-svc", Credential: "used-by-other"}); err != nil {
+		t.Fatalf("SetConnection: %v", err)
+	}
+	if err := store.Save(cfg); err != nil {
+		t.Fatalf("store.Save: %v", err)
+	}
+
+	rec := s.request(t, http.MethodGet, "/connections/new?provider=book", s.addr, cookie, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "used-by-other") {
+		t.Errorf("a credential of another provider's connection is offered:\n%s", body)
+	}
+	if !strings.Contains(body, "still-open") {
+		t.Errorf("a credential no connection places is not offered:\n%s", body)
+	}
+}
