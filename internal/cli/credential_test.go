@@ -745,3 +745,58 @@ func TestConfigValidateSecretsProjectsWithoutShortening(t *testing.T) {
 		t.Errorf("stderr = %q, want it to name the unknown flag", stderr)
 	}
 }
+
+const providerRolesConfig = `
+version: 1
+credentials:
+  named:
+    type: keyring
+    provider: bookstack
+  unnamed:
+    type: keyring
+`
+
+// A credential that names its provider takes only that provider's roles; one that names none takes every
+// compiled role.
+func TestCredentialSetAcceptsTheRolesOfTheNamedProvider(t *testing.T) {
+	tests := []struct {
+		name       string
+		credential string
+		role       string
+		wantExit   int
+		wantIn     string
+	}{
+		{"a role of the named provider", "named", "token-id", exitOK, ""},
+		{"a role of another provider", "named", "token", exitUsage, `unknown secret role "token" for named`},
+		{"no provider accepts any role", "unnamed", "token", exitOK, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("QATLAS_CONFIG", "")
+			t.Setenv("QATLAS_CLI_HOME", "")
+			dir := t.TempDir()
+			if err := os.WriteFile(configIn(dir), []byte(providerRolesConfig), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			store := secret.NewMemoryStore()
+			opts := testOptionsIn(t, dir, store)
+
+			code, stdout, stderr := runWithInput(t, opts, canaryStored+"\n",
+				"credential", "set", tt.credential, tt.role, "--config", configIn(dir))
+
+			if code != tt.wantExit {
+				t.Fatalf("exit code = %d, want %d (stderr: %s)", code, tt.wantExit, stderr)
+			}
+			if !strings.Contains(stderr, tt.wantIn) {
+				t.Errorf("stderr = %q, want it to contain %q", stderr, tt.wantIn)
+			}
+			if strings.Contains(stdout+stderr, canaryStored) {
+				t.Errorf("output carries the secret: %q %q", stdout, stderr)
+			}
+			_, err := store.Get(t.Context(), secret.StoreKey(tt.credential, tt.role))
+			if stored := err == nil; stored != (tt.wantExit == exitOK) {
+				t.Errorf("secret stored = %v, want %v", stored, tt.wantExit == exitOK)
+			}
+		})
+	}
+}

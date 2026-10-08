@@ -19,6 +19,7 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/approval"
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
 
@@ -424,30 +425,36 @@ func (m *Model) autoApprove(before manage.ApprovalSnapshot, direct string) tea.C
 	return func() tea.Msg {
 		res := manage.ApproveAfterChange(context.Background(), v, before, cfg, direct,
 			manage.ApprovalSweepNewlyOpened)
-		if res.CheckErr != nil {
-			return approvalSweepMsg{}
-		}
-		note := ""
-		if res.StayedOpen != "" && res.ForwardChanged {
-			// A release of payload secrets is a decision of its own, never approved in passing.
-			note = fmt.Sprintf("; %s stays open: its forward_secrets changed, which only an approval in "+
-				"Approvals (%d) releases", res.StayedOpen, int(sectionApprovals)+1)
-		} else if res.StayedOpen != "" {
-			note = fmt.Sprintf("; %s stays open: its service or credential changed outside this form; "+
-				"review it in Approvals (%d)", res.StayedOpen, int(sectionApprovals)+1)
-		}
-		switch {
-		case res.ApproveErr != nil:
-			return approvalSweepMsg{note: note + "; warning: no connection was approved to read from the vault: " +
-				redactor.Apply(res.ApproveErr.Error())}
-		case res.Warning != "":
-			return approvalSweepMsg{note: note + "; warning: " + res.Warning}
-		case len(res.Approved) > 0:
-			return approvalSweepMsg{note: note + fmt.Sprintf("; approved %d connection(s) to read from the vault: %s",
-				len(res.Approved), strings.Join(res.Approved, ", "))}
-		}
-		return approvalSweepMsg{note: note}
+		return approvalSweepMsg{note: approvalNote(res, redactor)}
 	}
+}
+
+// approvalNote words what an approval after a change did, to join the status the change reported: "" when
+// nothing is worth saying, otherwise a part that starts with "; ". It names no secret value.
+func approvalNote(res manage.ApprovalResult, redactor *redact.Redactor) string {
+	if res.CheckErr != nil {
+		return ""
+	}
+	note := ""
+	if res.StayedOpen != "" && res.ForwardChanged {
+		// A release of payload secrets is a decision of its own, never approved in passing.
+		note = fmt.Sprintf("; %s stays open: its forward_secrets changed, which only an approval in "+
+			"Approvals (%d) releases", res.StayedOpen, int(sectionApprovals)+1)
+	} else if res.StayedOpen != "" {
+		note = fmt.Sprintf("; %s stays open: its service or credential changed outside this form; "+
+			"review it in Approvals (%d)", res.StayedOpen, int(sectionApprovals)+1)
+	}
+	switch {
+	case res.ApproveErr != nil:
+		return note + "; warning: no connection was approved to read from the vault: " +
+			redactor.Apply(res.ApproveErr.Error())
+	case res.Warning != "":
+		return note + "; warning: " + res.Warning
+	case len(res.Approved) > 0:
+		return note + fmt.Sprintf("; approved %d connection(s) to read from the vault: %s",
+			len(res.Approved), strings.Join(res.Approved, ", "))
+	}
+	return note
 }
 
 // revokeApproval removes the approval of a connection just deleted, in an encrypted vault only; an

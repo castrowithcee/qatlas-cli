@@ -15,7 +15,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // Secrets is what the editor needs from the credential resolver: it hands a secret in, it removes one, and
@@ -88,18 +87,16 @@ const (
 // credentials.yaml left over from an earlier version: this editor offers no way to write one any more, so
 // the state is read only, a nudge towards 'qatlas vault migrate' rather than a place a role can be sent to.
 const (
-	stateStored      = "in system keyring"
-	stateStoredVault = "in the vault"
-	stateVaultLocked = "vault locked"
-	// stateVaultElsewhere is the same locked vault while the header shows it unlocked because a vault
-	// process elsewhere holds it open: that process can serve it, this window cannot read the entry itself.
-	stateVaultElsewhere = "locked in this window, unlocked in the vault process"
-	stateOverride       = "environment variable, overrides keyring"
-	statePlaintext      = "unencrypted file"
-	stateEmpty          = "not stored yet"
-	stateLocked         = "keyring locked"
-	stateUnreachable    = "keyring unreachable"
-	stateOff            = "keyring switched off"
+	stateStored         = manage.StateStored
+	stateStoredVault    = manage.StateStoredVault
+	stateVaultLocked    = manage.StateVaultLocked
+	stateVaultElsewhere = manage.StateVaultElsewhere
+	stateOverride       = manage.StateOverride
+	statePlaintext      = manage.StatePlaintext
+	stateEmpty          = manage.StateEmpty
+	stateLocked         = manage.StateKeyringLocked
+	stateUnreachable    = manage.StateUnreachable
+	stateOff            = manage.StateOff
 )
 
 // Where the secrets of a credential are kept. The guided setup and the credential form offer the same row,
@@ -216,10 +213,9 @@ type writtenMsg struct {
 	err         error
 	vault       bool
 	procWarning string
-	// approvalBefore is set only for a vault write or removal: what Pending found open just before it ran, so
-	// handleWritten can approve exactly the connections it newly opened once it succeeds (see autoApprove);
-	// its zero value for a keyring write, which changes no vault credential entry and so opens nothing.
-	approvalBefore manage.ApprovalSnapshot
+	// approval is what approving after a vault write or removal did (see manage.SecretWrite.Approval); its
+	// zero value for a keyring write, which changes no vault credential entry and so opens nothing.
+	approval manage.ApprovalResult
 }
 
 // refreshSources asks where the secrets of the given credentials resolve from.
@@ -304,7 +300,6 @@ func (m *Model) handleWritten(msg writtenMsg) tea.Cmd {
 		m.vaultBusy = false
 	}
 
-	var sweep tea.Cmd
 	if msg.err != nil {
 		text := m.redactor.Apply(m.explain(msg.err, msg.credential, msg.role))
 		if m.fail == "" {
@@ -317,17 +312,18 @@ func (m *Model) handleWritten(msg writtenMsg) tea.Cmd {
 		if msg.procWarning != "" {
 			m.status += "; " + msg.procWarning
 		}
-		if msg.vault {
-			// Storing or removing a vault secret can change the credential entry a connection's fingerprint
-			// is checked against (see vault.Fingerprint), which can open it; approve whatever this write
-			// newly opened, the same way a form save does (see autoApprove).
-			sweep = m.autoApprove(msg.approvalBefore, "")
-		}
+		// Storing or removing a vault secret can change the credential entry a connection's fingerprint
+		// is checked against (see vault.Fingerprint), which can open it; the write approved whatever it
+		// newly opened, the same way a form save does (see autoApprove).
+		m.status += approvalNote(msg.approval, m.redactor)
+	} else if note := approvalNote(msg.approval, m.redactor); note != "" {
+		// An approval is never silent: with a failure already on screen the note joins it.
+		m.fail += note
 	}
 	if msg.vault {
 		// A vault role is never asked about here: its state comes from vaultRoleState, a synchronous local
 		// file check, never from this asynchronous keyring refresh.
-		return sweep
+		return nil
 	}
 	// The rows are refreshed after a failure too: a delete that only cleared one place, or a write that
 	// went nowhere, is exactly when the shown source must no longer be the one from before.
@@ -377,11 +373,7 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 		// session first.
 		return m.requireAdmin(func() tea.Cmd {
 			if m.credentialType() == config.CredentialTypeVault {
-				// Captured here, before anything is written: storing this secret may give the credential its
-				// first vault entry, or replace one, either of which can open a connection that reads it (see
-				// autoApprove).
-				before := manage.SnapshotApprovals(m.secrets.Vault(), m.cfg)
-				return m.beginVaultSecret(m.editing, m.secretRole, value, before)
+				return m.beginVaultSecret(m.editing, m.secretRole, value)
 			}
 			return m.storeSecret(m.editing, m.secretRole, value)
 		})
@@ -392,6 +384,24 @@ func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
+// secretEntry is the credential entry a secret of the form is stored for: the saved one, with the storage
+// and provider the form now shows, since the secret goes to the place the storage row names and its roles
+// are the ones the form offers.
+func (m *Model) secretEntry() config.Credential {
+	entry := m.cfg.Credentials[m.editing]
+	entry.Type, entry.Provider = m.credentialType(), m.formProvider()
+	return entry
+}
+
+// vaultApproval is the policy for approving after a vault secret write or removal: what it newly opens is
+// approved, unless a failure is already on screen, which the write must not hide an approval behind.
+func (m *Model) vaultApproval() manage.ApprovalPolicy {
+	if m.fail != "" {
+		return manage.ApprovalNone
+	}
+	return manage.ApprovalSweepNewlyOpened
+}
+
 // storeSecret hands one secret to the resolver. The write may reach the platform store, so it runs as a
 // command and the editor stays usable while it does.
 func (m *Model) storeSecret(credential, role, value string) tea.Cmd {
@@ -399,12 +409,15 @@ func (m *Model) storeSecret(credential, role, value string) tea.Cmd {
 	m.writes++
 	m.busy = fmt.Sprintf("storing the secret for %s.%s in the %s", credential, role, where)
 
-	secrets := m.secrets
+	svc, cfg, entry := m.svc, m.cfg, m.secretEntry()
 	return func() tea.Msg {
+		_, err := svc.SetSecret(context.Background(), cfg, manage.SecretWrite{
+			Name: credential, Entry: entry, Role: role, Value: value,
+		})
 		return writtenMsg{
 			credential: credential, role: role,
 			done: fmt.Sprintf("Stored %s.%s in the %s", credential, role, where),
-			err:  secrets.Set(credential, role, value),
+			err:  err,
 		}
 	}
 }
@@ -414,13 +427,15 @@ func (m *Model) removeSecret(credential, role string) tea.Cmd {
 	m.writes++
 	m.busy = fmt.Sprintf("removing the stored secret for %s.%s", credential, role)
 
-	secrets := m.secrets
+	svc, cfg, entry := m.svc, m.cfg, m.secretEntry()
 	return func() tea.Msg {
 		msg := writtenMsg{credential: credential, role: role}
-		cleared, err := secrets.Delete(credential, role)
+		out, err := svc.DeleteSecret(context.Background(), cfg, manage.SecretWrite{
+			Name: credential, Entry: entry, Role: role,
+		})
 		msg.err = err
 		if err == nil {
-			msg.done = fmt.Sprintf("Removed %s.%s from the %s", credential, role, joinSources(cleared))
+			msg.done = fmt.Sprintf("Removed %s.%s from the %s", credential, role, joinSources(out.Cleared))
 		}
 		return msg
 	}
@@ -525,21 +540,20 @@ func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 }
 
 // beginVaultSecret decides whether the role's secret would be the vault's very first: only then is a
-// passphrase offered, exactly as vault.Vault.Set defines it. Deciding needs nothing but the vault's local
-// files, so it happens right here, never inside the command the write itself runs as.
-func (m *Model) beginVaultSecret(credential, role, value string, before manage.ApprovalSnapshot) tea.Cmd {
-	v := m.secrets.Vault()
-	if v == nil {
-		m.fail = "no vault is configured for this run"
+// passphrase offered, see manage.NeedsPassphraseOffer. Deciding needs nothing but the vault's local files,
+// so it happens right here, never inside the command the write itself runs as.
+func (m *Model) beginVaultSecret(credential, role, value string) tea.Cmd {
+	offerNeeded, err := manage.NeedsPassphraseOffer(m.secrets.Vault())
+	if errors.Is(err, manage.ErrNoVault) {
+		m.fail = err.Error()
 		return nil
 	}
-	state, err := v.State()
 	if err != nil {
 		m.fail = m.redactor.Apply(err.Error())
 		return nil
 	}
-	if state != vault.StateAbsent {
-		return m.writeVaultSecret(credential, role, value, nil, before)
+	if !offerNeeded {
+		return m.writeVaultSecret(credential, role, value, nil)
 	}
 	m.openVaultOffer(
 		"Set a passphrase for the vault?",
@@ -548,7 +562,7 @@ func (m *Model) beginVaultSecret(credential, role, value string, before manage.A
 		true, true,
 		func(offer vault.PassphraseFunc) tea.Cmd {
 			m.screen = screenForm
-			return m.writeVaultSecret(credential, role, value, offer, before)
+			return m.writeVaultSecret(credential, role, value, offer)
 		},
 		func() tea.Cmd {
 			m.screen = screenForm
@@ -561,49 +575,46 @@ func (m *Model) beginVaultSecret(credential, role, value string, before manage.A
 
 // writeVaultSecret hands one secret to the vault. Like storeSecret it runs as a command, so the scrypt work
 // that turns on encryption for the vault's first secret never runs on the event loop; vaultBusy blocks a
-// second vault write or offer from starting before this one is done. before is what Pending found open just
-// before this started; handleWritten uses it to approve exactly what this write newly opens (see
-// autoApprove).
-func (m *Model) writeVaultSecret(credential, role, value string, offer vault.PassphraseFunc,
-	before manage.ApprovalSnapshot) tea.Cmd {
+// second vault write or offer from starting before this one is done. The write approves what it newly
+// opens (see vaultApproval).
+func (m *Model) writeVaultSecret(credential, role, value string, offer vault.PassphraseFunc) tea.Cmd {
 	m.vaultBusy = true
 	m.writes++
 	m.busy = fmt.Sprintf("storing the secret for %s.%s in the vault", credential, role)
 
-	secrets, svc := m.secrets, m.svc
+	svc, cfg, entry, policy := m.svc, m.cfg, m.secretEntry(), m.vaultApproval()
 	return func() tea.Msg {
-		err := secrets.SetVault(credential, role, value, offer)
-		msg := writtenMsg{credential: credential, role: role, vault: true, err: err, approvalBefore: before}
+		// The vault already holds the change when the process hand-over warns; a vault process that holds
+		// it unlocked outside this run is told too, the same way 'qatlas credential set' already does.
+		out, err := svc.SetSecret(context.Background(), cfg, manage.SecretWrite{
+			Name: credential, Entry: entry, Role: role, Value: value, Offer: offer, Approval: policy,
+		})
+		msg := writtenMsg{credential: credential, role: role, vault: true, err: err}
 		if err == nil {
 			msg.done = fmt.Sprintf("Stored %s.%s in the vault", credential, role)
-			// The vault already holds the change; a vault process that holds it unlocked outside this run
-			// is told too, the same way 'qatlas credential set' already does.
-			msg.procWarning = svc.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
-				return client.Set(ctx, credential, role, value)
-			})
+			msg.procWarning, msg.approval = out.ProcessWarning, out.Approval
 		}
 		return msg
 	}
 }
 
-// removeVaultSecret clears one stored secret from the vault. before is what Pending found open just before
-// this started, threaded through to handleWritten the same way writeVaultSecret's own before is.
-func (m *Model) removeVaultSecret(credential, role string, before manage.ApprovalSnapshot) tea.Cmd {
+// removeVaultSecret clears one stored secret from the vault.
+func (m *Model) removeVaultSecret(credential, role string) tea.Cmd {
 	m.vaultBusy = true
 	m.writes++
 	m.busy = fmt.Sprintf("removing the stored secret for %s.%s from the vault", credential, role)
 
-	secrets, svc := m.secrets, m.svc
+	svc, cfg, entry, policy := m.svc, m.cfg, m.secretEntry(), m.vaultApproval()
 	return func() tea.Msg {
-		err := secrets.DeleteVault(credential, role)
-		msg := writtenMsg{credential: credential, role: role, vault: true, err: err, approvalBefore: before}
+		// The vault process that holds the vault unlocked outside this run is told too, the same way
+		// 'qatlas credential delete' already does.
+		out, err := svc.DeleteSecret(context.Background(), cfg, manage.SecretWrite{
+			Name: credential, Entry: entry, Role: role, Approval: policy,
+		})
+		msg := writtenMsg{credential: credential, role: role, vault: true, err: err}
 		if err == nil {
 			msg.done = fmt.Sprintf("Removed %s.%s from the vault", credential, role)
-			// The vault already dropped the secret; a vault process that holds it unlocked outside this run
-			// is told too, the same way 'qatlas credential delete' already does.
-			msg.procWarning = svc.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
-				return client.Delete(ctx, credential, role)
-			})
+			msg.procWarning, msg.approval = out.ProcessWarning, out.Approval
 		}
 		return msg
 	}
@@ -685,31 +696,21 @@ func (m *Model) guardVaultTypeChange() string {
 		return ""
 	}
 
-	v := m.secrets.Vault()
-	if v == nil {
-		return ""
+	held, err := manage.HeldInVault(m.cfg, m.secrets.Vault(), m.editing)
+	if err != nil {
+		return m.redactor.Apply(err.Error())
 	}
-	if m.vaultLocked() {
+	if held.Locked {
 		return fmt.Sprintf("the vault is encrypted and locked, so whether it still holds a secret of %s "+
 			"cannot be checked; the secrets cannot move to %s until it is unlocked with 'qatlas vault unlock' "+
 			"and saving is tried again", m.editing, vaultTypeChangeDestination(newType))
 	}
-	var held []string
-	for _, role := range m.cfg.SecretRoles() {
-		_, found, _, err := v.Get(m.editing, role, nil)
-		if err != nil {
-			return m.redactor.Apply(err.Error())
-		}
-		if found {
-			held = append(held, role)
-		}
-	}
-	if len(held) == 0 {
+	if len(held.Roles) == 0 {
 		return ""
 	}
 	return fmt.Sprintf("a secret of %s is still stored in the vault (%s); the secrets cannot move to %s "+
 		"until it is removed first with x on the role, or with 'qatlas credential delete'",
-		m.editing, strings.Join(held, ", "), vaultTypeChangeDestination(newType))
+		m.editing, strings.Join(held.Roles, ", "), vaultTypeChangeDestination(newType))
 }
 
 // vaultTypeChangeDestination names the place guardVaultTypeChange's message says the secrets cannot move
@@ -749,11 +750,7 @@ func (m *Model) guardTypeChange() tea.Cmd {
 
 	secrets, credential, roles := m.secrets, m.editing, m.cfg.SecretRoles()
 	return func() tea.Msg {
-		msg := placedMsg{id: id, credential: credential, places: map[string]secret.Placement{}}
-		for _, role := range roles {
-			msg.places[role] = secrets.Stored(credential, role)
-		}
-		return msg
+		return placedMsg{id: id, credential: credential, places: manage.PlacementsOf(secrets, credential, roles)}
 	}
 }
 
@@ -770,26 +767,10 @@ func (m *Model) handlePlaced(msg placedMsg) tea.Cmd {
 		return nil
 	}
 
-	var held, unsure, causes []string
-	seen := map[string]bool{}
-	for _, role := range m.cfg.SecretRoles() {
-		place := msg.places[role]
-		for _, source := range place.Holding {
-			held = append(held, fmt.Sprintf("%s: %s", role, source))
-		}
-		for _, source := range place.Unknown {
-			unsure = append(unsure, fmt.Sprintf("%s: %s", role, source))
-		}
-		// Both roles usually fail for the same reason; saying it twice would only make the message longer.
-		for _, cause := range strings.Split(errorText(place.Err), "\n") {
-			if cause != "" && !seen[cause] {
-				seen[cause] = true
-				causes = append(causes, cause)
-			}
-		}
-	}
+	report := manage.ReportPlacements(msg.places, m.cfg.SecretRoles())
+	held, unsure, causes := report.Held, report.Unsure, report.Causes
 
-	if len(held) == 0 && len(unsure) == 0 {
+	if report.Settled() {
 		return m.save(msg.credential)
 	}
 
@@ -816,13 +797,6 @@ func (m *Model) handlePlaced(msg placedMsg) tea.Cmd {
 	return nil
 }
 
-func errorText(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
-}
-
 // envSource reports whether the named variable carries something. For a credential of type env this is the
 // whole answer: its resolution ends after the variable it names, so no store is asked and nothing blocks.
 func (m *Model) envSource(name string) string {
@@ -838,9 +812,6 @@ func (m *Model) envSource(name string) string {
 
 // storedSource reports where a role of a keyring credential resolves from, out of the last answer the
 // resolver gave. It never asks synchronously: that would block the whole editor on the store.
-//
-// A missing secret is told apart by what the keyring said, because each case has a different way out: an
-// empty keyring wants the secret, a locked one wants unlocking, and a switched-off one wants the switch.
 func (m *Model) storedSource(credential, role string) string {
 	if credential == "" {
 		return sourceUnsaved
@@ -850,25 +821,7 @@ func (m *Model) storedSource(credential, role string) string {
 	if !ok {
 		return sourcePending
 	}
-	switch source {
-	case secret.SourceStore:
-		return stateStored
-	case secret.SourceEnv:
-		return stateOverride
-	case secret.SourcePlaintext:
-		return statePlaintext
-	}
-	switch secret.StoreStage(m.checked[key]) {
-	case secret.StoreEmpty:
-		return stateEmpty
-	case secret.StoreLocked:
-		return stateLocked
-	case secret.StoreUnavailable, secret.StoreTimedOut:
-		return stateUnreachable
-	case secret.StoreOff:
-		return stateOff
-	}
-	return string(source)
+	return manage.RoleState(manage.RoleStateInput{Source: source, Checked: m.checked[key]})
 }
 
 // vaultLocked reports whether the vault is encrypted and locked, the one state a vault write or read must
@@ -885,35 +838,12 @@ func (m *Model) vaultLocked() bool {
 	return err == nil && state == vault.StateLocked
 }
 
-// vaultRoleState reports where a role of a vault credential's secret currently sits. It never asks for a
-// passphrase: an encrypted, locked vault answers "vault locked" instead, since the entry cannot be read
-// without one, and asking would block the whole editor on it.
+// vaultRoleState reports where a role of a vault credential's secret currently sits; see manage.RoleState.
 func (m *Model) vaultRoleState(credential, role string) string {
-	v := m.secrets.Vault()
-	if v == nil {
-		return stateUnreachable
-	}
-	state, err := v.State()
-	if err != nil {
-		return errorText(err)
-	}
-	if state == vault.StateAbsent {
-		return stateEmpty
-	}
-	if state == vault.StateLocked {
-		if m.vaultProcessUnlocked {
-			return stateVaultElsewhere
-		}
-		return stateVaultLocked
-	}
-	_, found, _, err := v.Get(credential, role, nil)
-	if err != nil {
-		return errorText(err)
-	}
-	if found {
-		return stateStoredVault
-	}
-	return stateEmpty
+	return manage.RoleState(manage.RoleStateInput{
+		Type: config.CredentialTypeVault, Credential: credential, Role: role,
+		Vault: m.secrets.Vault(), ProcessUnlocked: m.vaultProcessUnlocked,
+	})
 }
 
 // roleState reports where a role of the credential being edited currently sits, whichever place the form's

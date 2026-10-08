@@ -130,7 +130,6 @@ var architectureExceptions = []archException{
 	{ruleSurfaceAccess, "internal/tui/restart.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/secrets.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/secrets.go", "internal/vault", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/secrets.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/setup.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/setup.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/tokens.go", "internal/approval", debtSurface},
@@ -144,9 +143,7 @@ var architectureExceptions = []archException{
 	{ruleSurfaceAccess, "internal/tui/vaultsettings.go", "internal/vault", debtSurface},
 	// Rule 1: surface access, internal/web.
 	{ruleSurfaceAccess, "internal/web/connection.go", "internal/approval", debtSurface},
-	{ruleSurfaceAccess, "internal/web/credential.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/web/credential.go", "internal/vault", debtSurface},
-	{ruleSurfaceAccess, "internal/web/credential.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/web/payload.go", "internal/approval", debtSurface},
 	{ruleSurfaceAccess, "internal/web/payload.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/web/payload.go", "internal/vault", debtSurface},

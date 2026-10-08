@@ -487,11 +487,7 @@ func (m *Model) finishSetupSave() tea.Cmd {
 	if !plan.newCredential || storageType(plan.storage) != config.CredentialTypeVault {
 		return m.saveSetup(nil)
 	}
-	v := m.secrets.Vault()
-	if v == nil {
-		return m.saveSetup(nil)
-	}
-	if state, err := v.State(); err != nil || state != vault.StateAbsent {
+	if offerNeeded, err := manage.NeedsPassphraseOffer(m.secrets.Vault()); err != nil || !offerNeeded {
 		return m.saveSetup(nil)
 	}
 	m.openVaultOffer(

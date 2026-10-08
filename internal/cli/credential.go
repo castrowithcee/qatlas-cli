@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,9 +12,10 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/connlog"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // maxSecretBytes bounds what a piped secret may be, so a wrong redirection cannot pull a whole file into
@@ -106,7 +106,7 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 	if err := requireAdmin(opts); err != nil {
 		return err
 	}
-	cred, err := storableCredential(opts, reg, name, role)
+	cfg, cred, err := storableCredential(opts, reg, name, role)
 	if err != nil {
 		return err
 	}
@@ -121,29 +121,28 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 	}
 	// The value is registered before anything can fail, so no later message can carry it.
 	opts.Redactor.Add(value)
-	if err := cred.CheckForwardValue(role, value); err != nil {
-		return &UsageError{fmt.Errorf("credential %s: %v", name, err)}
-	}
 
-	switch {
-	case cred.Type == config.CredentialTypeVault:
-		if err := secrets.SetVault(name, role, value, offerVaultPassphrase); err != nil {
-			return classifyUserError(err)
+	out, err := credentialService(opts, secrets).SetSecret(contextOrBackground(c.Context()), cfg, manage.SecretWrite{
+		Name: name, Entry: cred, Role: role, Value: value, Offer: offerVaultPassphrase,
+		Approval: manage.ApprovalNone,
+	})
+	if err != nil {
+		var invalid *manage.ValueError
+		if errors.As(err, &invalid) {
+			return &UsageError{err}
 		}
-		syncVaultProcess(c, opts, secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
-			return client.Set(ctx, name, role, value)
-		})
-	default:
-		if err := secrets.Set(name, role, value); err != nil {
-			if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
-				// The advice is built from the class of the failure, never from what the platform said.
-				return &UsageError{fmt.Errorf("cannot store the secret for %s.%s: %s, then run the command "+
-					"again; or export %s; or, on a machine without a usable keyring, change this credential to "+
-					"type vault in 'qatlas tui' or config.yaml and store it there", name, role,
-					secret.StoreAdvice(secret.StoreStateOf(err), runtime.GOOS), secret.DerivedEnvName(name, role))}
-			}
-			return classifyUserError(err)
+		if cred.Type != config.CredentialTypeVault &&
+			(errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled)) {
+			// The advice is built from the class of the failure, never from what the platform said.
+			return &UsageError{fmt.Errorf("cannot store the secret for %s.%s: %s, then run the command "+
+				"again; or export %s; or, on a machine without a usable keyring, change this credential to "+
+				"type vault in 'qatlas tui' or config.yaml and store it there", name, role,
+				secret.StoreAdvice(secret.StoreStateOf(err), runtime.GOOS), secret.DerivedEnvName(name, role))}
 		}
+		return classifyUserError(err)
+	}
+	if warning := withQatlasPrefix(out.ProcessWarning); warning != "" {
+		fmt.Fprintln(c.ErrOrStderr(), warning)
 	}
 
 	// Overriding is allowed, so a shadowing variable must be named the moment it starts shadowing. A forward
@@ -153,6 +152,14 @@ func setCredential(c *cobra.Command, opts *Options, reg *capability.Registry, na
 			"qatlas: warning: %s is set and overrides what was just stored for %s.%s\n", env, name, role)
 	}
 	return nil
+}
+
+// credentialService is the management service that stores and removes the secrets of 'credential set' and
+// 'credential delete' in secrets. It needs no configuration store: the command loaded the configuration
+// itself. The vault process switch is read when the service is built, so a test lever set before the
+// command runs is honoured.
+func credentialService(opts *Options, secrets *secret.Resolver) *manage.Service {
+	return manage.New(nil, secrets, connlog.SurfaceCLI, opts.Redactor).WithVaultProcessSupport(vaultProcessSupported)
 }
 
 // offerVaultPassphrase is the offer 'credential set' makes for a vault's very first secret: a passphrase
@@ -183,7 +190,7 @@ func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry,
 	if err := requireAdmin(opts); err != nil {
 		return err
 	}
-	cred, err := storableCredential(opts, reg, name, role)
+	cfg, cred, err := storableCredential(opts, reg, name, role)
 	if err != nil {
 		return err
 	}
@@ -192,39 +199,28 @@ func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry,
 		return err
 	}
 
-	if cred.Type == config.CredentialTypeVault {
-		if err := secrets.DeleteVault(name, role); err != nil {
-			if errors.Is(err, secret.ErrNoEntry) {
-				return &UsageError{fmt.Errorf("no stored secret for %s.%s", name, role)}
-			}
-			return classifyUserError(err)
-		}
-		syncVaultProcess(c, opts, secrets.Vault(), func(ctx context.Context, client *vaultproc.Client) error {
-			return client.Delete(ctx, name, role)
-		})
-		if env := secret.DerivedEnvName(name, role); secrets.Lookup(env) {
-			fmt.Fprintf(c.ErrOrStderr(),
-				"qatlas: warning: %s is still set and keeps delivering the secret for %s.%s\n", env, name, role)
-		}
-		return nil
-	}
-
-	if _, err := secrets.Delete(name, role); err != nil {
+	out, err := credentialService(opts, secrets).DeleteSecret(contextOrBackground(c.Context()), cfg, manage.SecretWrite{
+		Name: name, Entry: cred, Role: role, Approval: manage.ApprovalNone,
+	})
+	if err != nil {
 		if errors.Is(err, secret.ErrNoEntry) {
 			return &UsageError{fmt.Errorf("no stored secret for %s.%s", name, role)}
 		}
 		// A delete that could not clear every place says so, including what it did clear. It is never a
 		// silent success.
-		if errors.Is(err, secret.ErrUnavailable) {
+		if cred.Type != config.CredentialTypeVault && errors.Is(err, secret.ErrUnavailable) {
 			err = fmt.Errorf("%w; %s, then run the command again", err,
 				secret.StoreAdvice(secret.StoreStateOf(err), runtime.GOOS))
 		}
 		return classifyUserError(err)
 	}
+	if warning := withQatlasPrefix(out.ProcessWarning); warning != "" {
+		fmt.Fprintln(c.ErrOrStderr(), warning)
+	}
 	// A switched-off store was never consulted, so the delete says nothing about what may sit in it. Left
 	// unsaid, a silent success reads as "the secret is gone everywhere", which is the one thing it does
 	// not mean.
-	if secrets.StoreSkipped() {
+	if cred.Type != config.CredentialTypeVault && secrets.StoreSkipped() {
 		fmt.Fprintf(c.ErrOrStderr(),
 			"qatlas: warning: %s=%s, so the credential store was not touched and may still hold the "+
 				"secret for %s.%s\n", secret.StoreSelector, secret.StoreNone, name, role)
@@ -236,40 +232,24 @@ func deleteCredential(c *cobra.Command, opts *Options, reg *capability.Registry,
 	return nil
 }
 
-// storableCredential verifies that the pair names something that can hold a stored secret at all, keyring
-// or vault, and returns it, so the caller branches on its type without loading the configuration again. A
-// typo would otherwise leave an entry nothing ever reads.
-func storableCredential(opts *Options, reg *capability.Registry, name, role string) (config.Credential, error) {
+// storableCredential loads the configuration and verifies that the pair names something that can hold a
+// stored secret at all, keyring or vault (see manage.CheckSecretTarget). It returns the configuration and
+// the credential, so the caller branches on its type without loading the configuration again.
+func storableCredential(opts *Options, reg *capability.Registry, name, role string) (*config.Config, config.Credential, error) {
 	path, err := config.Path(opts.Config)
 	if err != nil {
-		return config.Credential{}, err
+		return nil, config.Credential{}, err
 	}
 	cfg, err := config.Load(path, reg)
 	if err != nil {
-		return config.Credential{}, classifyUserError(err)
+		return nil, config.Credential{}, classifyUserError(err)
 	}
 
-	cred, ok := cfg.Credentials[name]
-	if !ok {
-		return config.Credential{}, &UsageError{&config.NotThereError{Kind: "credential", Name: name}}
+	cred, err := manage.CheckSecretTarget(cfg, name, role)
+	if err != nil {
+		return nil, config.Credential{}, &UsageError{err}
 	}
-	if cred.Type != config.CredentialTypeKeyring && cred.Type != config.CredentialTypeVault {
-		return config.Credential{}, &UsageError{fmt.Errorf(
-			"credential %q has type %q: its secrets come from the environment variables it names, so there "+
-				"is nothing to store", name, cred.Type)}
-	}
-	if cred.Forward {
-		if !contains(cred.Fields, role) {
-			return config.Credential{}, &UsageError{fmt.Errorf("unknown field %q, the fields of %s are %s",
-				role, name, strings.Join(cred.Fields, ", "))}
-		}
-		return cred, nil
-	}
-	if !contains(cfg.SecretRoles(), role) {
-		return config.Credential{}, &UsageError{fmt.Errorf("unknown secret role %q, known roles are %s",
-			role, strings.Join(cfg.SecretRoles(), ", "))}
-	}
-	return cred, nil
+	return cfg, cred, nil
 }
 
 // readSecret reads the secret from standard input. A terminal is refused: typing a secret there would echo

@@ -11,9 +11,8 @@ import (
 	"os"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
-	"github.com/castrowithcee/qatlas-cli/internal/secret"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // errPassphraseMismatch reports two typed passphrases of the vault's very first secret that did not match.
@@ -200,81 +199,52 @@ func (s *Server) handleCreateCredential(w http.ResponseWriter, r *http.Request) 
 		fail(errConfigChanged)
 		return
 	}
-	if name == "" {
-		fail("a credential name must not be empty")
-		return
-	}
-	if _, taken := cfg.Credentials[name]; taken {
-		fail(fmt.Sprintf("a credential named %q already exists", name))
-		return
-	}
-	if storage != config.CredentialTypeKeyring && storage != config.CredentialTypeVault &&
-		storage != config.CredentialTypeEnv {
-		fail("choose where the secrets are kept")
-		return
-	}
-
-	roles := cfg.SecretRolesOf(provider)
-	cred := config.Credential{Provider: provider, Type: storage}
-	values := map[string]string{}
+	n := manage.NewCredential{Name: name, Provider: provider, Type: storage, Offer: vaultOfferFromForm(r)}
+	roles := manage.AcceptedRoles(cfg, config.Credential{Provider: provider})
 	if storage == config.CredentialTypeEnv {
-		cred.Values = map[string]string{}
+		n.EnvNames = map[string]string{}
 		for _, role := range roles {
-			v := r.PostFormValue("envname_" + role)
-			if v == "" {
-				fail(fmt.Sprintf("%s names no environment variable; name the variable that holds it", role))
-				return
+			if v := r.PostFormValue("envname_" + role); v != "" {
+				n.EnvNames[role] = v
 			}
-			cred.Values[role] = v
 		}
 	} else {
+		n.Secrets = map[string]string{}
 		for _, role := range roles {
 			v := r.PostFormValue("secret_" + role)
-			if v == "" {
-				fail(fmt.Sprintf("%s is empty; type its secret", role))
-				return
+			if v != "" {
+				n.Secrets[role] = v
+				s.registerSecret(v)
 			}
-			values[role] = v
-			s.registerSecret(v)
 		}
 	}
 
-	before := cfg.Clone()
-	if err := cfg.SetCredential(name, cred); err != nil {
-		fail(s.redact(err.Error()))
+	created, err := s.svc.CreateCredential(cfg, rev, n)
+	if err != nil {
+		fail(s.createFailure(err))
 		return
 	}
-	if err := cfg.Validate(); err != nil {
-		fail(s.redact(err.Error()))
-		return
-	}
-
-	var warning string
-	if storage == config.CredentialTypeEnv {
-		warning, err = s.svc.SaveConfig(before, cfg, rev)
-		if err != nil {
-			fail(s.saveFailure(err))
-			return
-		}
-	} else {
-		toVault := storage == config.CredentialTypeVault
-		warning, err = s.svc.CommitSecrets(cfg, rev, name, toVault, roles, values, vaultOfferFromForm(r))
-		if err != nil {
-			fail(s.saveFailure(err))
-			return
-		}
-		if logged := s.svc.RecordConnections(before, cfg); logged != "" {
-			if warning != "" {
-				warning += "; "
-			}
-			warning += logged
-		}
-	}
+	warning := created.Warning
 	target := "/credentials/" + url.PathEscape(name) + "?created=1"
 	if warning != "" {
 		target += "&warning=" + url.QueryEscape(warning)
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// createFailure words a refused or failed creation for the form: input the form can fix is shown in the
+// form's own words, anything else like a failed commit.
+func (s *Server) createFailure(err error) string {
+	var missing *manage.MissingValueError
+	switch {
+	case errors.As(err, &missing) && missing.Env:
+		return fmt.Sprintf("%s names no environment variable; name the variable that holds it", missing.Role)
+	case errors.As(err, &missing):
+		return fmt.Sprintf("%s is empty; type its secret", missing.Role)
+	case manage.IsInputError(err):
+		return err.Error()
+	}
+	return s.saveFailure(err)
 }
 
 // handleCredentialForm shows one existing credential: its provider, its type, and, for each secret role its
@@ -324,7 +294,7 @@ func (s *Server) renderCredential(w http.ResponseWriter, cfg *config.Config, nam
 	data := credentialData{
 		Name: name, Provider: cred.Provider, Type: cred.Type, CSRF: s.csrfValue(), Notice: notice, Error: errText,
 	}
-	for _, role := range cfg.SecretRolesOf(cred.Provider) {
+	for _, role := range manage.OfferedRoles(cfg, name, cred) {
 		data.Roles = append(data.Roles, s.roleRow(cfg, name, cred, role))
 	}
 	if fp, err := s.configFingerprint(); err == nil {
@@ -338,7 +308,7 @@ func (s *Server) renderCredential(w http.ResponseWriter, cfg *config.Config, nam
 
 // roleRow reports where one secret role of an existing credential currently stands, never what it holds.
 func (s *Server) roleRow(cfg *config.Config, name string, cred config.Credential, role string) roleRow {
-	row := roleRow{Role: role, Description: cfg.SecretRoleDescriptionOf(cred.Provider, role)}
+	row := roleRow{Role: role, Description: cfg.SecretRoleDescriptionOf(manage.CredentialProvider(cfg, name, cred), role)}
 	switch cred.Type {
 	case config.CredentialTypeEnv:
 		if v := cred.Values[role]; v != "" {
@@ -348,65 +318,22 @@ func (s *Server) roleRow(cfg *config.Config, name string, cred config.Credential
 		}
 	case config.CredentialTypeVault:
 		row.Replaceable = true
-		row.State = s.vaultRoleState(name, role)
+		row.State = s.roleState(name, cred, role)
 	default:
 		row.Replaceable = true
-		row.State = s.keyringRoleState(name, cred, role)
+		row.State = s.roleState(name, cred, role)
 	}
 	return row
 }
 
-// vaultRoleState reports where a role of a vault credential's secret currently sits, the same way
-// internal/tui's own vaultRoleState does: it never asks for a passphrase, so an encrypted, locked vault
-// answers "vault locked" instead of blocking on one nobody typed here.
-func (s *Server) vaultRoleState(credential, role string) string {
-	v := s.secrets.Vault()
-	if v == nil {
-		return "no vault is configured for this run"
+// roleState reports where a role of an existing keyring or vault credential's secret currently sits. This
+// page does not tell a vault locked here from one unlocked in the vault process.
+func (s *Server) roleState(credential string, cred config.Credential, role string) string {
+	in := manage.RoleStateInput{Type: cred.Type, Credential: credential, Role: role, Vault: s.secrets.Vault()}
+	if cred.Type != config.CredentialTypeVault {
+		in.Source, in.Checked = s.secrets.Status(credential, cred, role)
 	}
-	state, err := v.State()
-	if err != nil {
-		return s.redact(err.Error())
-	}
-	switch state {
-	case vault.StateAbsent:
-		return "not stored yet"
-	case vault.StateLocked:
-		return "vault locked"
-	}
-	_, found, _, err := v.Get(credential, role, nil)
-	if err != nil {
-		return s.redact(err.Error())
-	}
-	if found {
-		return "in the vault"
-	}
-	return "not stored yet"
-}
-
-// keyringRoleState reports where a role of a keyring credential's secret currently sits, the same words
-// internal/tui's own storedSource uses.
-func (s *Server) keyringRoleState(credential string, cred config.Credential, role string) string {
-	source, checked := s.secrets.Status(credential, cred, role)
-	switch source {
-	case secret.SourceStore:
-		return "in system keyring"
-	case secret.SourceEnv:
-		return "environment variable, overrides the keyring"
-	case secret.SourcePlaintext:
-		return "unencrypted file"
-	}
-	switch secret.StoreStage(checked) {
-	case secret.StoreEmpty:
-		return "not stored yet"
-	case secret.StoreLocked:
-		return "keyring locked"
-	case secret.StoreUnavailable, secret.StoreTimedOut:
-		return "keyring unreachable"
-	case secret.StoreOff:
-		return "keyring switched off"
-	}
-	return string(source)
+	return s.redact(manage.RoleState(in))
 }
 
 // handleReplaceRole replaces the stored secret of one role of one existing credential, without touching any
@@ -435,11 +362,16 @@ func (s *Server) handleReplaceRole(w http.ResponseWriter, r *http.Request) {
 	}
 	fail := func(errText string) { s.renderCredential(w, cfg, name, cred, "", errText) }
 
-	if cred.Type != config.CredentialTypeKeyring && cred.Type != config.CredentialTypeVault {
-		fail("this credential's secrets come from the environment variables it names, so there is nothing to replace")
+	if _, err := manage.CheckSecretTarget(cfg, name, role); err != nil {
+		var notStorable *manage.NotStorableError
+		if errors.As(err, &notStorable) {
+			fail("this credential's secrets come from the environment variables it names, so there is nothing to replace")
+		} else {
+			fail(fmt.Sprintf("unknown secret role %q", role))
+		}
 		return
 	}
-	if !contains(cfg.SecretRolesOf(cred.Provider), role) {
+	if !contains(manage.AcceptedRoles(cfg, cred), role) {
 		fail(fmt.Sprintf("unknown secret role %q", role))
 		return
 	}
@@ -453,21 +385,16 @@ func (s *Server) handleReplaceRole(w http.ResponseWriter, r *http.Request) {
 	}
 	s.registerSecret(value)
 
-	var warning string
-	if cred.Type == config.CredentialTypeVault {
-		if err := s.secrets.SetVault(name, role, value, vaultOfferFromForm(r)); err != nil {
-			fail(s.redact(err.Error()))
-			return
-		}
-		warning = s.svc.SyncVaultProcess(context.Background(), func(ctx context.Context, client *vaultproc.Client) error {
-			return client.Set(ctx, name, role, value)
-		})
-	} else {
-		if err := s.secrets.Set(name, role, value); err != nil {
-			fail(s.redact(err.Error()))
-			return
-		}
+	// Replacing a vault secret here approves no connection: nobody gave an approval for it.
+	out, err := s.svc.SetSecret(context.Background(), cfg, manage.SecretWrite{
+		Name: name, Entry: cred, Role: role, Value: value, Offer: vaultOfferFromForm(r),
+		Approval: manage.ApprovalNone,
+	})
+	if err != nil {
+		fail(s.redact(err.Error()))
+		return
 	}
+	warning := out.ProcessWarning
 
 	target := "/credentials/" + url.PathEscape(name) + "?replaced=" + url.QueryEscape(role)
 	if warning != "" {
