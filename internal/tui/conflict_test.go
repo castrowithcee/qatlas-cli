@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -254,17 +255,19 @@ func (f *failingSecrets) Set(credential, role, value string) error {
 	return f.Secrets.Set(credential, role, value)
 }
 
-func TestCommitSetupFailedSecretLeavesNothingBehind(t *testing.T) {
+func TestSaveSetupFailedSecretLeavesNothingBehind(t *testing.T) {
 	_, store, path, secrets, mem := newStoreModel(t)
 	cfg := newTestConfig(t)
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeKeyring}))
-	plan := setupPlan{
-		credential: "reader", storage: storageKeyring, roles: []string{"token-id", "token-secret"},
-		secrets: map[string]string{"token-id": "id-1", "token-secret": "sec-2"},
+	built := manage.ConnectionCandidate{
+		Config: cfg, Credential: "reader", NewCredential: true, Storage: config.CredentialTypeKeyring,
+		Roles: []string{"token-id", "token-secret"},
 	}
-	_, err := commitSetup(testService(store, &failingSecrets{Secrets: secrets}, nil), cfg, config.RevisionAbsent, plan, nil)
+	secretValues := map[string]string{"token-id": "id-1", "token-secret": "sec-2"}
+	_, err := testService(store, &failingSecrets{Secrets: secrets}, nil).SaveConnectionSetup(
+		cfg, built, config.RevisionAbsent, secretValues, nil)
 	if err == nil {
-		t.Fatal("commitSetup() succeeded with a refusing keyring")
+		t.Fatal("SaveConnectionSetup() succeeded with a refusing keyring")
 	}
 	if _, statErr := os.Stat(path); statErr == nil {
 		t.Error("the configuration was written without its secrets")
@@ -272,18 +275,19 @@ func TestCommitSetupFailedSecretLeavesNothingBehind(t *testing.T) {
 	assertNoStoredSecret(t, mem, filepath.Dir(path))
 }
 
-func TestCommitSetupConflictWritesNoSecret(t *testing.T) {
+func TestSaveSetupConflictWritesNoSecret(t *testing.T) {
 	_, store, path, secrets, mem := newStoreModel(t)
 	cfg := newTestConfig(t)
 	mustNoError(t, cfg.SetCredential("reader", config.Credential{Type: config.CredentialTypeKeyring}))
 	foreignWriters[0].write(t, store, "theirs")
-	plan := setupPlan{
-		credential: "reader", storage: storageKeyring, roles: []string{"token-id"},
-		secrets: map[string]string{"token-id": "id-1"},
+	built := manage.ConnectionCandidate{
+		Config: cfg, Credential: "reader", NewCredential: true, Storage: config.CredentialTypeKeyring,
+		Roles: []string{"token-id"},
 	}
-	_, err := commitSetup(testService(store, secrets, nil), cfg, config.RevisionAbsent, plan, nil)
+	_, err := testService(store, secrets, nil).SaveConnectionSetup(
+		cfg, built, config.RevisionAbsent, map[string]string{"token-id": "id-1"}, nil)
 	if !errors.Is(err, config.ErrConflict) {
-		t.Fatalf("commitSetup() = %v, want a conflict", err)
+		t.Fatalf("SaveConnectionSetup() = %v, want a conflict", err)
 	}
 	assertNoStoredSecret(t, mem, filepath.Dir(path))
 	if _, ok := savedConfig(t, path).Services["theirs"]; !ok {

@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -84,120 +85,58 @@ func parseConnectionForm(v url.Values) connectionForm {
 	}
 }
 
-// buildConnectionCandidate turns f into a fully validated copy of cfg: the new or reused service, the new
-// or reused credential (a new one's secret roles are never given a value here, except the plain variable
-// names of an env credential, which are configuration, not a secret), and the new connection itself, with
-// its targets, permissions, and tools exactly as the core would accept them from any other caller. Every
-// check is a call to cfg's own methods; nothing here decides on its own whether a target, a permission, or a
-// tool is allowed.
-func buildConnectionCandidate(cfg *config.Config, f connectionForm) (cand *config.Config, conn config.Connection, newService, newCredential bool, err error) {
-	cand = cfg.Clone()
-	if !contains(cand.Providers(), f.Provider) {
-		return nil, config.Connection{}, false, false, fmt.Errorf("choose a provider first")
+// connectionDraft reads f into the draft the core builds the candidate from. The core checks everything:
+// nothing here decides whether a target, a permission or a tool is allowed. A new credential's secret
+// roles are never given a value here, except the plain variable names of an env credential, which are
+// configuration, not a secret.
+func connectionDraft(cfg *config.Config, f connectionForm) manage.ConnectionDraft {
+	d := manage.ConnectionDraft{
+		Provider:      f.Provider,
+		NewService:    f.Service == "" || f.Service == newServiceChoice,
+		Service:       f.Service,
+		BaseURL:       strings.TrimSpace(f.SvcBaseURL),
+		NewCredential: f.Credential == "" || f.Credential == newCredentialChoice,
+		Credential:    f.Credential,
+		Storage:       f.CredStorage,
+		Name:          strings.TrimSpace(f.ConnName),
+		Description:   f.Description,
+		Forward:       f.Forward,
+		Files:         config.Files{Read: splitDirectoryLines(f.FilesRead), Write: splitDirectoryLines(f.FilesWrite)},
 	}
-
-	serviceName := f.Service
-	newService = serviceName == "" || serviceName == newServiceChoice
-	if newService {
-		serviceName = strings.TrimSpace(f.SvcName)
-		if serviceName == "" {
-			return nil, config.Connection{}, false, false, fmt.Errorf("a service name must not be empty")
-		}
-		if _, taken := cand.Services[serviceName]; taken {
-			return nil, config.Connection{}, false, false, fmt.Errorf(
-				"a service named %q already exists; choose it instead of adding it again", serviceName)
-		}
-		svc := config.Service{Provider: f.Provider, BaseURL: strings.TrimSpace(f.SvcBaseURL)}
-		if err := cand.SetService(serviceName, svc); err != nil {
-			return nil, config.Connection{}, false, false, err
-		}
-	} else if svc, ok := cand.Services[serviceName]; !ok || svc.Provider != f.Provider {
-		return nil, config.Connection{}, false, false,
-			fmt.Errorf("unknown service %q for provider %q", serviceName, f.Provider)
+	if d.NewService {
+		d.Service = strings.TrimSpace(f.SvcName)
 	}
-
-	credName := f.Credential
-	newCredential = credName == "" || credName == newCredentialChoice
-	if newCredential {
-		credName = strings.TrimSpace(f.CredName)
-		if credName == "" {
-			return nil, config.Connection{}, false, false, fmt.Errorf("a credential name must not be empty")
+	if d.NewCredential {
+		d.Credential = strings.TrimSpace(f.CredName)
+		d.EnvNames = map[string]string{}
+		for _, role := range cfg.SecretRolesOf(f.Provider) {
+			d.EnvNames[role] = strings.TrimSpace(f.EnvNames[role])
 		}
-		if _, taken := cand.Credentials[credName]; taken {
-			return nil, config.Connection{}, false, false, fmt.Errorf(
-				"a credential named %q already exists; choose it instead of adding it again", credName)
-		}
-		if f.CredStorage != config.CredentialTypeKeyring && f.CredStorage != config.CredentialTypeVault &&
-			f.CredStorage != config.CredentialTypeEnv {
-			return nil, config.Connection{}, false, false, fmt.Errorf("choose where the new credential's secrets are kept")
-		}
-		cred := config.Credential{Provider: f.Provider, Type: f.CredStorage}
-		if f.CredStorage == config.CredentialTypeEnv {
-			cred.Values = map[string]string{}
-			for _, role := range cand.SecretRolesOf(f.Provider) {
-				cred.Values[role] = strings.TrimSpace(f.EnvNames[role])
-			}
-		}
-		if err := cand.SetCredential(credName, cred); err != nil {
-			return nil, config.Connection{}, false, false, err
-		}
-	} else if cred, ok := cand.Credentials[credName]; !ok || (cred.Provider != "" && cred.Provider != f.Provider) {
-		return nil, config.Connection{}, false, false,
-			fmt.Errorf("unknown credential %q for provider %q", credName, f.Provider)
 	}
-
-	connName := strings.TrimSpace(f.ConnName)
-	if connName == "" {
-		return nil, config.Connection{}, false, false, fmt.Errorf("a connection name must not be empty")
-	}
-	if _, taken := cand.Connections[connName]; taken {
-		return nil, config.Connection{}, false, false,
-			fmt.Errorf("a connection named %q already exists; choose another name", connName)
-	}
-
-	target, targets := splitTargetInput(f.Targets)
-	newConn := config.Connection{
-		Service: serviceName, Credential: credName, Target: target, Targets: targets, Description: f.Description,
-		Files: config.Files{Read: splitDirectoryLines(f.FilesRead), Write: splitDirectoryLines(f.FilesWrite)},
-	}
+	d.Targets = splitTargetInput(f.Targets)
 	if f.PermMode == "custom" {
-		if len(f.Perms) == 0 {
-			newConn.Permissions = []config.Permission{}
-		} else {
-			permissions, err := config.ParsePermissions(strings.Join(f.Perms, ","))
-			if err != nil {
-				return nil, config.Connection{}, false, false, err
-			}
-			if permissions == nil {
-				permissions = []config.Permission{}
-			}
-			newConn.Permissions = permissions
+		// A custom list without any entry allows nothing; it never falls back to the defaults.
+		d.Permissions = strings.Join(f.Perms, ",")
+		if strings.TrimSpace(d.Permissions) == "" {
+			d.Permissions = "none"
 		}
-	}
-	if len(f.Forward) > 0 {
-		newConn.ForwardSecrets = append([]string(nil), f.Forward...)
 	}
 	if f.ToolsMode == "selected" {
-		newConn.Tools = append([]string(nil), f.Tools...)
-		if newConn.Tools == nil {
-			newConn.Tools = []string{}
-		}
+		d.ToolsSelected, d.Tools = true, f.Tools
 	}
+	return d
+}
 
-	if err := cand.SetConnection(connName, newConn); err != nil {
-		return nil, config.Connection{}, false, false, err
-	}
-	if err := cand.Validate(); err != nil {
-		return nil, config.Connection{}, false, false, err
-	}
-	return cand, cand.Connections[connName], newService, newCredential, nil
+// buildConnectionCandidate is the core's candidate for the whole form.
+func buildConnectionCandidate(cfg *config.Config, f connectionForm) (manage.ConnectionCandidate, error) {
+	return manage.BuildConnectionCandidate(cfg, connectionDraft(cfg, f), manage.StageRights)
 }
 
 // splitTargetInput reads the build page's single, comma-separated targets field into the target/targets
-// pair Config.Connection stores: one entry as target, several as targets, and none as neither. A comma-
-// separated field, not the TUI's own add-one-at-a-time list, is this page's own simplification for a form
-// that ships no script to grow a list with.
-func splitTargetInput(raw string) (target string, targets []string) {
+// list the core stores (see manage.SplitTargets). A comma-separated field, not the TUI's own
+// add-one-at-a-time list, is this page's own simplification for a form that ships no script to grow a list
+// with.
+func splitTargetInput(raw string) []string {
 	var values []string
 	for _, part := range strings.Split(raw, ",") {
 		part = strings.TrimSpace(part)
@@ -205,14 +144,7 @@ func splitTargetInput(raw string) (target string, targets []string) {
 			values = append(values, part)
 		}
 	}
-	switch len(values) {
-	case 0:
-		return "", nil
-	case 1:
-		return values[0], nil
-	default:
-		return "", values
-	}
+	return values
 }
 
 // splitDirectoryLines reads a files field, one directory per line, into the list a connection stores; blank
@@ -236,55 +168,26 @@ func splitDirectoryLines(raw string) []string {
 // as a new connection starts in internal/tui's own guided setup. Every tick stays the person's own to change
 // from here.
 func applyConnectionDefaults(cfg *config.Config, f *connectionForm) {
-	metadata, _ := cfg.ProviderMetadata(f.Provider)
+	start := manage.ConnectionDefaults(cfg, f.Provider)
 	if f.ConnName == "" {
-		if _, taken := cfg.Connections[f.Provider]; !taken {
-			f.ConnName = f.Provider
-		}
+		f.ConnName = start.Name
 	}
 	if f.SvcBaseURL == "" {
-		f.SvcBaseURL = metadata.DefaultBaseURL
+		f.SvcBaseURL = start.BaseURL
 	}
 	if f.CredStorage == "" {
-		f.CredStorage = cfg.SecretStore()
+		f.CredStorage = start.Storage
 	}
-	if profile, ok := metadata.RecommendedProfile(); ok {
+	if start.ProfileID != "" {
 		f.PermMode, f.ToolsMode = "custom", "selected"
-		permissions := metadata.ProfilePermissions(profile)
-		f.Perms = make([]string, len(permissions))
-		for i, permission := range permissions {
+		f.Perms = make([]string, len(start.Permissions))
+		for i, permission := range start.Permissions {
 			f.Perms[i] = string(permission)
 		}
-		f.Tools = append([]string(nil), profile.Tools...)
+		f.Tools = start.Tools
 	} else {
 		f.PermMode, f.ToolsMode = "default", "all"
 	}
-}
-
-// providerServices are the configured services of one provider, in stable order.
-func providerServices(cfg *config.Config, provider string) []string {
-	var names []string
-	for _, name := range sortedNames(cfg.Services) {
-		if cfg.Services[name].Provider == provider {
-			names = append(names, name)
-		}
-	}
-	return names
-}
-
-// providerCredentials are the credentials that can serve one provider: those that name it, and those
-// written before Credential.Provider existed, whose provider is still open. Config.Validate accepts a
-// connection over either, so this offers exactly what it would accept.
-func providerCredentials(cfg *config.Config, provider string) []string {
-	var names []string
-	for _, name := range sortedNames(cfg.Credentials) {
-		cred := cfg.Credentials[name]
-		// A payload credential serves no connection; a connection releases it with forward_secrets instead.
-		if p := cred.Provider; !cred.Forward && (p == provider || p == "") {
-			names = append(names, name)
-		}
-	}
-	return names
 }
 
 // optionRow is one choice of a select, radio, or checkbox row, with whatever this page already knows was
@@ -384,8 +287,8 @@ func (s *Server) renderConnectionProvider(w http.ResponseWriter, cfg *config.Con
 // provider is chosen.
 func (s *Server) renderConnectionBuild(w http.ResponseWriter, cfg *config.Config, f connectionForm, errText string) {
 	metadata, _ := cfg.ProviderMetadata(f.Provider)
-	services := append(providerServices(cfg, f.Provider), newServiceChoice)
-	credentials := append(providerCredentials(cfg, f.Provider), newCredentialChoice)
+	services := append(manage.ProviderServices(cfg, f.Provider), newServiceChoice)
+	credentials := append(manage.ProviderCredentials(cfg, f.Provider), newCredentialChoice)
 
 	var roles []roleField
 	for _, role := range cfg.SecretRolesOf(f.Provider) {
@@ -455,8 +358,10 @@ const storageHintText = "system keyring keeps the secrets on this machine, with 
 // only for a new credential, the fields that supply its secrets in the very same request that saves
 // everything (see handleCreateConnection). It is reached only from a successfully built candidate, so
 // nothing here ever has to explain why a choice was refused; that already happened on the build page.
-func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Config, cand *config.Config,
-	conn config.Connection, f connectionForm, newCredential bool, errText string) {
+func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Config, built manage.ConnectionCandidate,
+	f connectionForm, errText string) {
+	cand, newCredential := built.Config, built.NewCredential
+	conn := cand.Connections[built.Name]
 	metadata, _ := cfg.ProviderMetadata(f.Provider)
 	serviceState := "existing, unchanged"
 	if f.Service == "" || f.Service == newServiceChoice {
@@ -471,7 +376,7 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 		storage = cand.Credentials[conn.Credential].Type
 	}
 
-	permissions := "default: " + config.FormatPermissions(defaultConnPermissions(metadata))
+	permissions := "default: " + config.FormatPermissions(manage.DefaultPermissions(metadata))
 	if conn.Permissions != nil {
 		permissions = config.FormatPermissions(conn.Permissions)
 	}
@@ -527,15 +432,6 @@ func (s *Server) renderConnectionReview(w http.ResponseWriter, cfg *config.Confi
 	}
 }
 
-// defaultConnPermissions mirrors internal/tui's own defaultPermissions: what a connection without an
-// explicit permissions list allows.
-func defaultConnPermissions(metadata config.ProviderMetadata) []config.Permission {
-	if len(metadata.DefaultPermissions) > 0 {
-		return metadata.DefaultPermissions
-	}
-	return []config.Permission{config.PermissionRead}
-}
-
 // handleConnectionsNew serves the provider chooser and, once a provider is in the query, the build page.
 func (s *Server) handleConnectionsNew(w http.ResponseWriter, r *http.Request) {
 	if !s.credentialsReady(w) {
@@ -572,21 +468,19 @@ func (s *Server) handleConnectionReview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	f := parseConnectionForm(r.URL.Query())
-	cand, conn, _, newCredential, err := buildConnectionCandidate(cfg, f)
+	cand, err := buildConnectionCandidate(cfg, f)
 	if err != nil {
 		s.renderConnectionBuild(w, cfg, f, s.redact(err.Error()))
 		return
 	}
-	s.renderConnectionReview(w, cfg, cand, conn, f, newCredential, "")
+	s.renderConnectionReview(w, cfg, cand, f, "")
 }
 
 // handleCreateConnection is the guided connection setup's one and only write: it rebuilds and revalidates
 // the candidate exactly as handleConnectionReview does, refuses a configuration that changed since the
-// review page was shown as a conflict, and, only then, saves it: directly with manage.Service.SaveConfig when the
-// connection reuses an existing credential, or through manage.Service.CommitSecrets, the same commit boundary
-// internal/tui's own guided setup uses, when it created a new keyring or vault credential, so a store that
-// turns out to be locked or missing after some roles were written leaves neither a stray secret nor a stray
-// credential.
+// review page was shown as a conflict, and, only then, saves it through manage.Service.SaveConnectionSetup,
+// the same save internal/tui's own guided setup uses, so a store that turns out to be locked or missing
+// after some roles were written leaves neither a stray secret nor a stray credential.
 func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) {
 	if !s.credentialsReady(w) {
 		return
@@ -597,13 +491,13 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	f := parseConnectionForm(r.PostForm)
-	cand, conn, _, newCredential, err := buildConnectionCandidate(cfg, f)
+	cand, err := buildConnectionCandidate(cfg, f)
 	if err != nil {
 		s.renderConnectionBuild(w, cfg, f, s.redact(err.Error()))
 		return
 	}
 	failReview := func(errText string) {
-		s.renderConnectionReview(w, cfg, cand, conn, f, newCredential, errText)
+		s.renderConnectionReview(w, cfg, cand, f, errText)
 	}
 
 	if string(rev) != r.PostFormValue("cfgver") {
@@ -612,42 +506,32 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 
 	connName := f.ConnName
-	credName := conn.Credential
-	storage := cand.Credentials[credName].Type
-
-	if !newCredential || storage == config.CredentialTypeEnv {
-		logged, err := s.svc.SaveConfig(cfg, cand, rev)
-		if err != nil {
-			failReview(s.saveFailure(err))
-			return
+	var values map[string]string
+	if cand.StoresSecrets() {
+		values = make(map[string]string, len(cand.Roles))
+		for _, role := range cand.Roles {
+			v := r.PostFormValue("secret_" + role)
+			values[role] = v
+			if v != "" {
+				s.registerSecret(v)
+			}
 		}
-		s.setNotice(withWarning(s.approvalNotice(cand, connName), logged))
-		http.Redirect(w, r, "/connections/"+url.PathEscape(connName)+"?created=1", http.StatusSeeOther)
-		return
 	}
 
-	roles := cfg.SecretRolesOf(f.Provider)
-	values := make(map[string]string, len(roles))
-	for _, role := range roles {
-		v := r.PostFormValue("secret_" + role)
-		if v == "" {
-			failReview(fmt.Sprintf("%s is empty; type its secret", role))
-			return
-		}
-		values[role] = v
-		s.registerSecret(v)
-	}
-
-	toVault := storage == config.CredentialTypeVault
-	warning, err := s.svc.CommitSecrets(cand, rev, credName, toVault, roles, values, vaultOfferFromForm(r))
+	res, err := s.svc.SaveConnectionSetup(cfg, cand, rev, values, vaultOfferFromForm(r))
 	if err != nil {
+		var missing *manage.RoleMissingError
+		if errors.As(err, &missing) {
+			failReview(missing.Error())
+			return
+		}
 		failReview(s.saveFailure(err))
 		return
 	}
 
-	notice := withWarning(s.approvalNotice(cand, connName), s.svc.RecordConnections(cfg, cand))
-	if warning != "" {
-		warningText := "warning: " + s.redact(warning)
+	notice := withWarning(s.approvalNotice(cand.Config, connName), res.Logged)
+	if res.Warning != "" {
+		warningText := "warning: " + s.redact(res.Warning)
 		if notice != "" {
 			notice = warningText + "; " + notice
 		} else {
