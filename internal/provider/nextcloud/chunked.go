@@ -112,14 +112,14 @@ func (c *Client) uploadChunked(ctx context.Context, op string, rel []string, upl
 
 	response, err = c.chunkRequest(ctx, "MOVE", folder+"/.file", destination, total, nil, 0)
 	if err != nil {
-		return "", withUncertainty(provider.Transport(op, "Nextcloud", err))
+		return "", withUncertainty(provider.Transport(op, "Nextcloud", err), uncertainStored)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		if isRedirect(response.StatusCode) || response.StatusCode >= 400 && response.StatusCode < 500 {
 			return fail(statusError(op, response.StatusCode))
 		}
-		return "", sentStatusError(op, response.StatusCode)
+		return "", sentStatusError(op, response.StatusCode, uncertainStored)
 	}
 	etag := response.Header.Get("ETag")
 	if etag == "" {

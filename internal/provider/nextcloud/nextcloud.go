@@ -99,9 +99,13 @@ const (
 // chunked upload of Nextcloud; see chunked.go.
 var maxPathUploadBytes int64 = 64 << 20
 
-// uncertainFile is appended to the failure of a file write whose request may have reached Nextcloud: the
-// file may have been stored although no confirmation ever arrived. Qatlas never repeats such a request.
-const uncertainFile = "; the file may have been stored, stat the file before repeating"
+// The uncertain hints are appended to the failure of a file mutation whose request may have reached
+// Nextcloud: the change may have been applied although no confirmation ever arrived. Qatlas never repeats
+// such a request.
+const (
+	uncertainStored  = "; the file may have been stored, stat the file before repeating"
+	uncertainDeleted = "; the file may have been deleted, stat the file before repeating"
+)
 
 // pathPattern is the schema form of one path relative to the connection root: one or more segments
 // separated by a single slash, where no segment is empty, "." or "..", and no character is a backslash or
@@ -832,7 +836,7 @@ func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
 	if err != nil || len(rel) == 0 {
 		return nil, providerError("get file", "a file path below the connection root is required")
 	}
-	response, err := c.webdav(ctx, "get file", http.MethodGet, rel, nil, "", "", false)
+	response, err := c.webdav(ctx, "get file", http.MethodGet, rel, nil, "", "", "")
 	if err != nil {
 		return nil, err
 	}
@@ -872,11 +876,11 @@ func (c *Client) putStream(ctx context.Context, op string, rel []string, upload 
 	}
 	response, err := c.transferClient().Do(req)
 	if err != nil {
-		return "", sentTransportError(op, err)
+		return "", sentTransportError(op, err, uncertainStored)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return "", sentStatusError(op, response.StatusCode)
+		return "", sentStatusError(op, response.StatusCode, uncertainStored)
 	}
 	return bounded(strings.Trim(response.Header.Get("ETag"), `"`)), nil
 }
@@ -961,7 +965,7 @@ func (c *Client) PutFile(ctx context.Context, op, path, encoded string, create b
 		}
 		header = "If-Match"
 	}
-	response, err := c.webdav(ctx, op, http.MethodPut, rel, strings.NewReader(string(content)), header, match, true)
+	response, err := c.webdav(ctx, op, http.MethodPut, rel, strings.NewReader(string(content)), header, match, uncertainStored)
 	if err != nil {
 		return "", err
 	}
@@ -984,7 +988,7 @@ func (c *Client) DeleteFile(ctx context.Context, path, etag string) error {
 	if entry.Type != typeFile {
 		return providerError("delete file", "folders cannot be deleted by this operation")
 	}
-	response, err := c.webdav(ctx, "delete file", http.MethodDelete, rel, nil, "If-Match", etag, false)
+	response, err := c.webdav(ctx, "delete file", http.MethodDelete, rel, nil, "If-Match", etag, uncertainDeleted)
 	if err != nil {
 		return err
 	}
@@ -1005,7 +1009,7 @@ func validETag(value string) bool {
 	return true
 }
 
-func (c *Client) webdav(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value string, sent bool) (*http.Response, error) {
+func (c *Client) webdav(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value, uncertain string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.requestURL(rel), body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
@@ -1018,15 +1022,15 @@ func (c *Client) webdav(ctx context.Context, op, method string, rel []string, bo
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		if sent {
-			return nil, sentTransportError(op, err)
+		if uncertain != "" {
+			return nil, sentTransportError(op, err, uncertain)
 		}
 		return nil, provider.Transport(op, "Nextcloud", err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		defer response.Body.Close()
-		if sent {
-			return nil, sentStatusError(op, response.StatusCode)
+		if uncertain != "" {
+			return nil, sentStatusError(op, response.StatusCode, uncertain)
 		}
 		return nil, statusError(op, response.StatusCode)
 	}
@@ -1276,26 +1280,26 @@ func statusError(op string, status int) error {
 	}
 }
 
-// sentTransportError is transportError for a request that writes a file: whatever ended it, the server may
+// sentTransportError is transportError for a request that changes a file: whatever ended it, the server may
 // have acted on it.
-func sentTransportError(op string, err error) error {
-	return withUncertainty(provider.Transport(op, "Nextcloud", err))
+func sentTransportError(op string, err error, hint string) error {
+	return withUncertainty(provider.Transport(op, "Nextcloud", err), hint)
 }
 
-// sentStatusError is statusError for a request that writes a file: a client error is a clear refusal, any
+// sentStatusError is statusError for a request that changes a file: a client error is a clear refusal, any
 // other non-success status leaves the outcome open. A redirect is a clear refusal: the server did not act.
-func sentStatusError(op string, status int) error {
+func sentStatusError(op string, status int, hint string) error {
 	if isRedirect(status) || status >= 400 && status < 500 {
 		return statusError(op, status)
 	}
-	return withUncertainty(statusError(op, status))
+	return withUncertainty(statusError(op, status), hint)
 }
 
-func withUncertainty(err error) error {
+func withUncertainty(err error, hint string) error {
 	var providerErr *provider.Error
 	if errors.As(err, &providerErr) {
 		changed := *providerErr
-		changed.Message += uncertainFile
+		changed.Message += hint
 		return &changed
 	}
 	return err
