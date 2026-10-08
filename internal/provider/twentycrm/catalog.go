@@ -57,12 +57,18 @@ type catalogField struct {
 	Format     string
 	Required   bool
 	Writable   bool
+	Creatable  bool
 	Subfields  []catalogSubfield
 	Relation   string
 	Reference  bool
 	InResponse bool
 	Enumerated bool
 	Enum       []string
+	// CreateShape and UpdateShape are the value shapes of the field in the create schema (SINGULAR) and the
+	// update schema (SINGULARForUpdate); nil when that schema does not hold the field. Only record writes use
+	// them. Creatable is set when the create schema holds the field, Writable when the update schema does.
+	CreateShape *valueShape
+	UpdateShape *valueShape
 }
 
 type catalogSubfield struct {
@@ -107,12 +113,13 @@ type propJSON struct {
 	Format string          `json:"format"`
 	Ref    string          `json:"$ref"`
 	Enum   json.RawMessage `json:"enum"`
-	Items  *struct {
+	// OneOf holds the reference of a many-to-one relation property, which the generated response schema
+	// writes as {"type":"object","oneOf":[{"$ref":...}]}.
+	OneOf []struct {
 		Ref string `json:"$ref"`
-	} `json:"items"`
-	Properties map[string]struct {
-		Type json.RawMessage `json:"type"`
-	} `json:"properties"`
+	} `json:"oneOf"`
+	Items      *propJSON           `json:"items"`
+	Properties map[string]propJSON `json:"properties"`
 }
 
 // fill returns p with every part it lacks taken from the earlier, higher-priority definition.
@@ -128,6 +135,9 @@ func (p propJSON) fill(earlier propJSON) propJSON {
 	}
 	if len(earlier.Enum) > 0 {
 		p.Enum = earlier.Enum
+	}
+	if len(earlier.OneOf) > 0 {
+		p.OneOf = earlier.OneOf
 	}
 	if earlier.Items != nil {
 		p.Items = earlier.Items
@@ -211,11 +221,18 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 	fields := make([]catalogField, 0, len(sorted))
 	for _, name := range sorted {
 		prop := names[name]
-		_, writable := update.Properties[name]
+		updateProp, writable := update.Properties[name]
+		createProp, creatable := plain.Properties[name]
 		_, inResponse := response.Properties[name]
 		field := catalogField{
 			Name: name, Type: jsonType(prop.Type), Required: required[name], Writable: writable,
-			InResponse: inResponse,
+			Creatable: creatable, InResponse: inResponse,
+		}
+		if writable {
+			field.UpdateShape = shapeOf(updateProp, 0)
+		}
+		if creatable {
+			field.CreateShape = shapeOf(createProp, 0)
 		}
 		if formatPattern.MatchString(prop.Format) {
 			field.Format = prop.Format
@@ -223,6 +240,9 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 		field.Enumerated = len(prop.Enum) > 0
 		field.Enum = enumValues(prop.Enum)
 		ref := prop.Ref
+		if ref == "" && len(prop.OneOf) > 0 {
+			ref = prop.OneOf[0].Ref
+		}
 		if ref == "" && prop.Items != nil {
 			ref = prop.Items.Ref
 		}
@@ -253,6 +273,52 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 		}
 	}
 	return fields
+}
+
+// valueShape is the bounded shape of one writable value: its JSON type, format, enum values, the element
+// shape of an array, and the parts of an object. It exists only to check a record write against the schema
+// and never leaves the provider.
+type valueShape struct {
+	Type       string
+	Format     string
+	Enumerated bool
+	Enum       []string
+	Items      *valueShape
+	Props      map[string]*valueShape
+}
+
+// maxShapeDepth bounds the nesting taken from the document: a field, its parts, the elements of an array part,
+// and the parts of those elements.
+const maxShapeDepth = 4
+
+func shapeOf(prop propJSON, depth int) *valueShape {
+	shape := &valueShape{Type: jsonType(prop.Type), Enumerated: len(prop.Enum) > 0, Enum: enumValues(prop.Enum)}
+	if formatPattern.MatchString(prop.Format) {
+		shape.Format = prop.Format
+	}
+	if depth >= maxShapeDepth {
+		return shape
+	}
+	if prop.Items != nil {
+		shape.Items = shapeOf(*prop.Items, depth+1)
+	}
+	if len(prop.Properties) > 0 {
+		names := make([]string, 0, len(prop.Properties))
+		for name := range prop.Properties {
+			if fieldNamePattern.MatchString(name) {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		if len(names) > maxSubfields {
+			names = names[:maxSubfields]
+		}
+		shape.Props = make(map[string]*valueShape, len(names))
+		for _, name := range names {
+			shape.Props[name] = shapeOf(prop.Properties[name], depth+1)
+		}
+	}
+	return shape
 }
 
 // enumValues reads the enum values of a selection field. A list that is too long, holds a value outside the

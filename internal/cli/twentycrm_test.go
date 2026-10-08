@@ -89,14 +89,14 @@ func TestTwentyToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[13]{id,title,effect,requires,confirm,reason}:", "twentycrm.companies.create,Create a Twenty CRM company,create,", "twentycrm.companies.delete,Delete a Twenty CRM company,delete,", "twentycrm.companies.destroy,Destroy a Twenty CRM company,delete,", "twentycrm.companies.get,Get a Twenty CRM company,read,", "twentycrm.companies.list,List Twenty CRM companies,read,", "twentycrm.companies.restore,Restore a Twenty CRM company,update,", "twentycrm.companies.update,Update a Twenty CRM company,update,", "twentycrm.objects.get,Get a Twenty CRM object,read,", "twentycrm.objects.list,List Twenty CRM objects,read,", "twentycrm.records.get,Get a Twenty CRM record,read,", "twentycrm.records.groupby,Count Twenty CRM records by field,read,", "twentycrm.records.list,List Twenty CRM records,read,", "twentycrm.records.search,Search Twenty CRM records,read,",
+		"tools[15]{id,title,effect,requires,confirm,reason}:", "twentycrm.companies.create,Create a Twenty CRM company,create,", "twentycrm.companies.delete,Delete a Twenty CRM company,delete,", "twentycrm.companies.destroy,Destroy a Twenty CRM company,delete,", "twentycrm.companies.get,Get a Twenty CRM company,read,", "twentycrm.companies.list,List Twenty CRM companies,read,", "twentycrm.companies.restore,Restore a Twenty CRM company,update,", "twentycrm.companies.update,Update a Twenty CRM company,update,", "twentycrm.objects.get,Get a Twenty CRM object,read,", "twentycrm.objects.list,List Twenty CRM objects,read,", "twentycrm.records.create,Create a Twenty CRM record,create,", "twentycrm.records.get,Get a Twenty CRM record,read,", "twentycrm.records.groupby,Count Twenty CRM records by field,read,", "twentycrm.records.list,List Twenty CRM records,read,", "twentycrm.records.search,Search Twenty CRM records,read,", "twentycrm.records.update,Update a Twenty CRM record,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--all", "--config", path))); len(got) != 13 {
-		t.Errorf("twentycrm tools = %v, want all seven company, two object, and four record tools", got)
+	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--all", "--config", path))); len(got) != 15 {
+		t.Errorf("twentycrm tools = %v, want all seven company, two object, and six record tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -243,11 +243,13 @@ func TestTwentyMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 13 || searched.Operations[0].ID != "twentycrm.companies.create" ||
+	if len(searched.Operations) != 15 || searched.Operations[0].ID != "twentycrm.companies.create" ||
 		searched.Operations[6].ID != "twentycrm.companies.update" ||
 		searched.Operations[8].ID != "twentycrm.objects.list" ||
-		searched.Operations[11].ID != "twentycrm.records.list" ||
-		searched.Operations[12].ID != "twentycrm.records.search" {
+		searched.Operations[9].ID != "twentycrm.records.create" ||
+		searched.Operations[12].ID != "twentycrm.records.list" ||
+		searched.Operations[13].ID != "twentycrm.records.search" ||
+		searched.Operations[14].ID != "twentycrm.records.update" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
