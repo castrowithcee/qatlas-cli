@@ -217,6 +217,10 @@ func companyMutationDescriptor(action string, effect capability.Effect, idempote
 		InputSchema: json.RawMessage(input), OutputSchema: output, Arguments: arguments}
 }
 
+// readTools are the tools of the read profile; the write profile adds the record writes to them.
+var readTools = []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID,
+	recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsGroupBy.ID}
+
 // Register adds Twenty metadata, its read-only connection test, and the bounded company operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
@@ -244,8 +248,12 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read companies, objects, and records", Recommended: true,
 			Description: "lists and reads companies, the objects of the workspace, and their records, also by structured conditions and counted by field; changes nothing in Twenty CRM",
-			Tools: []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID,
-				recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsGroupBy.ID},
+			Tools:       readTools,
+		}, {
+			ID: "write", Title: "Read and write records",
+			Description: "reads like the read profile and creates records and changes fields of records of the " +
+				"reachable objects; deletes nothing and does not change companies through the company tools",
+			Tools: append(append([]string{}, readTools...), recordsCreate.ID, recordsUpdate.ID),
 		}},
 		Groups: toolGroups,
 	}, TestConnection); err != nil {
@@ -265,6 +273,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(recordsGet, recordsGroup), Handler: capability.Handler(invokeRecordsGet)},
 		capability.Operation{Descriptor: inGroup(recordsGroupBy, recordsGroup), Handler: capability.Handler(invokeRecordsGroupBy)},
 		capability.Operation{Descriptor: inGroup(recordsSearch, recordsGroup), Handler: capability.Handler(invokeRecordsSearch)},
+		capability.Operation{Descriptor: inGroup(recordsCreate, recordsGroup), Handler: capability.Handler(invokeRecordsCreate)},
+		capability.Operation{Descriptor: inGroup(recordsUpdate, recordsGroup), Handler: capability.Handler(invokeRecordsUpdate)},
 	)
 }
 
@@ -931,6 +941,11 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, lim
 }
 
 func (c *Client) change(ctx context.Context, op, method, path string, payload any, out any) error {
+	return c.changeWith(ctx, op, mutationUncertain, method, path, payload, out)
+}
+
+// changeWith sends one change and appends uncertain to every failure whose request may have taken effect.
+func (c *Client) changeWith(ctx context.Context, op, uncertain, method, path string, payload any, out any) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "Twenty", err)
 	}
@@ -955,7 +970,7 @@ func (c *Client) change(ctx context.Context, op, method, path string, payload an
 	if err != nil {
 		failure := provider.Transport(op, "Twenty", err)
 		if failure.MayHaveArrived() {
-			failure.Message += mutationUncertain
+			failure.Message += uncertain
 		}
 		return failure
 	}
@@ -963,12 +978,12 @@ func (c *Client) change(ctx context.Context, op, method, path string, payload an
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		failure := c.responseError(op, response)
 		if response.StatusCode >= 500 {
-			failure.Message += mutationUncertain
+			failure.Message += uncertain
 		}
 		return failure
 	}
 	if failure := provider.ReadJSON(op, "Twenty", response.Body, maxResponseBytes, out); failure != nil {
-		failure.Message += mutationUncertain
+		failure.Message += uncertain
 		return failure
 	}
 	return nil

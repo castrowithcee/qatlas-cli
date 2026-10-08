@@ -189,8 +189,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 13 {
-		t.Fatalf("operations = %d, want seven company, two object, and four record operations", len(operations))
+	if len(operations) != 15 {
+		t.Fatalf("operations = %d, want seven company, two object, four record read, and two record write operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -212,8 +212,9 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 	if operations[0].ID != "twentycrm.companies.create" || operations[6].ID != "twentycrm.companies.update" ||
 		operations[7].ID != "twentycrm.objects.get" || operations[8].ID != "twentycrm.objects.list" ||
-		operations[9].ID != "twentycrm.records.get" || operations[10].ID != "twentycrm.records.groupby" ||
-		operations[11].ID != "twentycrm.records.list" || operations[12].ID != "twentycrm.records.search" {
+		operations[9].ID != "twentycrm.records.create" || operations[10].ID != "twentycrm.records.get" ||
+		operations[11].ID != "twentycrm.records.groupby" || operations[12].ID != "twentycrm.records.list" ||
+		operations[13].ID != "twentycrm.records.search" || operations[14].ID != "twentycrm.records.update" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }

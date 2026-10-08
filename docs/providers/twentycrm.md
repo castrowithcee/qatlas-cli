@@ -1,7 +1,8 @@
 ---
 description: >
-  Describes Twenty CRM company, object catalog, and record read operations (list, get, structured
-  search, count by field), object targets, connection permissions, and safety boundaries.
+  Describes Twenty CRM company, object catalog, record read (list, get, structured search, count by
+  field) and record write (create, update) operations, object targets, connection permissions, and safety
+  boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -12,10 +13,11 @@ updated: 2026-10-08
 
 A connection binds one API key to one managed or self-hosted workspace and, optionally, to a set of its
 objects (see Object targets). It can list and read companies (`read`), create them (`create`), change their
-name or primary domain (`update`), and delete them (`delete`).
-Mutations require confirmation and only use the generated REST company route. Qatlas sends each mutation
-once; after an unclear result (timeout, reset, server error, unreadable answer) it reports the outcome as
-uncertain and does not repeat the request.
+name or primary domain (`update`), and delete them (`delete`). It can also create records of any reachable
+object and change their fields (see Writing records).
+Mutations require confirmation and only use the generated REST routes of the company or of a reachable
+object. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error, unreadable
+answer) it reports the outcome as uncertain and does not repeat the request.
 
 A `domain` value sets the primary link to `https://<domain>` with the domain as its label; an empty value
 clears both. Twenty allows 100 requests per minute for each API key, and Qatlas spaces the requests of one
@@ -110,6 +112,41 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
   with 200 or more groups is refused as possibly incomplete; narrow it with conditions. Group values are
   untrusted workspace data of the same data class as records.
 
+## Writing records
+
+`records.create` and `records.update` (`create`, `update`) write one record of any reachable object. `create`
+posts the given `fields`; `update` patches only the fields named for the record `id` and needs at least one.
+Neither upserts, writes in batches, or deletes. Qatlas takes the object, its route, and the shape of every
+field from the workspace catalog and builds the request body from the checked values only.
+
+- Every field is checked against the schema before the request: a `create` against the create shape of the
+  object, with its required fields, an `update` against the update shape, without required fields. The
+  schema read is the only other request, and a refusal after it sends no write. A refusal names neither
+  field nor value.
+- Supported are text, number, boolean, date (`YYYY-MM-DD`) and date-time (RFC 3339), selection and
+  multi-selection (values of the schema), emails, phones, links, currency (`amountMicros`, `currencyCode`),
+  full name, and address. A composite value may contain only the parts the schema names, each of its type.
+  Null is refused; send an empty value to clear a text.
+- Rich text takes only `{"markdown": ...}`; Twenty derives the block document from it. A read reports it the
+  same way.
+- A relation is set by its identifier field (`<relation>Id`, a UUID) and only when the relation's target is
+  reachable through the connection; otherwise the field is refused without naming the target. Identifier
+  fields that are not a relation to a reachable object are refused as well.
+- Refused fields: system fields (`id`, `createdAt`, `updatedAt`, `deletedAt`, `createdBy`, `updatedBy`,
+  `position`), fields the schema does not offer for the operation, files, actor fields, free JSON, and lists
+  of plain text.
+- At most 100 fields per call, 64 KiB per string, 1 MiB per request. The answer is the written record,
+  read at depth 0 and reduced like a read; it must name the requested record.
+- The values written and returned are record data of their own data class and appear only in a result.
+- Qatlas sends the write once. After an unclear result (timeout, reset, server error, unreadable answer) it
+  reports the outcome as uncertain and does not repeat. For `create` the report warns that repeating adds a
+  duplicate record; search the object first.
+- A 403 means the role of the API key lacks the right to write the object or one of the fields; Twenty's own
+  text is never shown.
+
+The setup profile `write` ticks the read tools and these two record tools. It adds no company change and no
+deletion.
+
 ## Deleting and restoring
 
 - `delete` moves a company to Twenty's trash. It stays recoverable.
@@ -124,9 +161,9 @@ identified by its UUID, and Qatlas checks that the answer names that company.
 The credential provides `api-key`. The key's workspace role remains the provider-side ceiling; the
 connection's local `permissions` list can only narrow it, and an optional `tools` list, for example
 `[twentycrm.companies.get]`, narrows it further to named tools without admitting an effect `permissions`
-excludes. Qatlas exposes conservative core company fields,
-does not accept custom-field payloads, and never lets invocation arguments replace the configured origin. The
-terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and the two company,
-two object, and four record read tools. A profile is a visible starting selection, not a role:
-only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved
-connection never follows a profile.
+excludes. The `companies.*` tools expose conservative core company fields and accept no custom-field
+payloads; custom fields are written through `records.create` and `records.update`. Invocation arguments never
+replace the configured origin. The terminal editor starts a new connection on the setup profile `read`, which
+ticks `[read]` and the two company, two object, and four record read tools; the profile `write` adds the two
+record write tools. A profile is a visible starting selection, not a role: only the ticked `permissions` and
+`tools` are saved, every tick can be changed before saving, and a saved connection never follows a profile.
