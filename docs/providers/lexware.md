@@ -4,14 +4,17 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-09-23
+updated: 2026-10-08
 ---
 
 # Lexware Office
 
 A connection selects the organization associated with one API key at the fixed Lexware gateway. It lists
 open and overdue outgoing invoices and reads invoice details (`read`). It can create an invoice as a draft
-or finalize it immediately (`create`), always with confirmation.
+or finalize it immediately (`create`), always with confirmation. A creation sends exactly one request and is
+never repeated, also not after a rate limit. When its outcome is unclear, such as after a timeout, a dropped
+connection, a server error or an unusable answer, the error says that the invoice may have been created;
+check the voucher list before repeating it.
 
 Lexware's public invoice API does not expose update or delete endpoints. Finalized invoices are no longer
 editable, so Qatlas does not invent uniform CRUD operations. The credential provides `api-key`; local

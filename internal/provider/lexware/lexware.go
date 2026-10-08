@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -736,11 +737,11 @@ func (c *Client) CreateInvoice(ctx context.Context, input createInput) (*createR
 		UpdatedDate string `json:"updatedDate"`
 		Version     int    `json:"version"`
 	}
-	if err := c.post(ctx, op, "", "/v1/invoices", query, payload, &response); err != nil {
+	if err := c.post(ctx, op, "", "/v1/invoices", query, payload, &response, invoiceMayExist); err != nil {
 		return nil, err
 	}
 	if !validUUID(response.ID) {
-		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invoice without a usable identifier"}
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invoice without a usable identifier" + invoiceMayExist}
 	}
 	return &createResult{ID: response.ID, CreatedDate: response.CreatedDate, UpdatedDate: response.UpdatedDate, Version: response.Version, Finalized: input.Finalize}, nil
 }
@@ -816,66 +817,72 @@ type invoiceJSON struct {
 	Remark       string `json:"remark"`
 }
 
+// invoiceMayExist is appended to a failure of an invoice creation whose request may have reached Lexware:
+// the invoice may exist although no usable confirmation arrived. Qatlas never repeats such a request.
+const invoiceMayExist = "; the invoice may have been created, check the voucher list before repeating it"
+
 // get performs one bounded read against the fixed gateway and decodes the response into out.
 func (c *Client) get(ctx context.Context, op, resource, path string, query url.Values, out any) error {
-	if err := c.limiter.Wait(ctx); err != nil {
-		return provider.Waited(op, "Lexware", err)
-	}
-
-	target := gateway + path
-	if encoded := query.Encode(); encoded != "" {
-		target += "?" + encoded
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
-	if err != nil {
-		return providerError(op, "the request could not be built")
-	}
-	req.Header.Set("Authorization", c.auth)
-	req.Header.Set("Accept", "application/json")
-
-	response, err := c.http.Do(req)
-	if err != nil {
-		return provider.Transport(op, "Lexware", err)
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusOK {
-		return statusError(op, resource, response.StatusCode)
-	}
-	if failure := provider.ReadJSON(op, "Lexware", response.Body, maxResponseBytes, out); failure != nil {
-		return failure
-	}
-	return nil
+	return c.send(ctx, op, http.MethodGet, resource, path, query, nil, out, "")
 }
 
-func (c *Client) post(ctx context.Context, op, resource, path string, query url.Values, payload, out any) error {
+// post performs one change against the fixed gateway; uncertain is the hint a mutation appends to a failure
+// after its request may have reached Lexware.
+func (c *Client) post(ctx context.Context, op, resource, path string, query url.Values, payload, out any, uncertain string) error {
+	return c.send(ctx, op, http.MethodPost, resource, path, query, payload, out, uncertain)
+}
+
+// send is the only place that talks to the gateway. It sends exactly one request and never repeats it. A
+// non-empty uncertain marks a change: it is appended to every failure after the request may have been
+// delivered (timeout, reset, unknown transport cause, 5xx, or an unusable 2xx answer) and never to a failure
+// that proves nothing was applied.
+func (c *Client) send(ctx context.Context, op, method, resource, path string, query url.Values, payload, out any, uncertain string) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "Lexware", err)
 	}
-	body, err := json.Marshal(payload)
-	if err != nil || len(body) > maxResponseBytes {
-		return providerError(op, "the request exceeds the size limit")
+	var body io.Reader
+	if payload != nil {
+		data, err := json.Marshal(payload)
+		if err != nil || len(data) > maxResponseBytes {
+			return providerError(op, "the request exceeds the size limit")
+		}
+		body = bytes.NewReader(data)
 	}
 	target := gateway + path
 	if encoded := query.Encode(); encoded != "" {
 		target += "?" + encoded
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return providerError(op, "the request could not be built")
 	}
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
 	response, err := c.http.Do(req)
 	if err != nil {
-		return provider.Transport(op, "Lexware", err)
+		failure := provider.Transport(op, "Lexware", err)
+		if uncertain != "" && failure.MayHaveArrived() {
+			failure.Message += uncertain
+		}
+		return failure
 	}
 	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return statusError(op, resource, response.StatusCode)
+
+	if ok := response.StatusCode == http.StatusOK || (method != http.MethodGet && response.StatusCode >= 200 && response.StatusCode < 300); !ok {
+		failure := statusError(op, resource, response.StatusCode)
+		if uncertain != "" && response.StatusCode >= 500 {
+			failure.(*provider.Error).Message += uncertain
+		}
+		return failure
 	}
 	if failure := provider.ReadJSON(op, "Lexware", response.Body, maxResponseBytes, out); failure != nil {
+		if uncertain != "" {
+			failure.Message += uncertain
+		}
 		return failure
 	}
 	return nil
