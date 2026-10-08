@@ -4,7 +4,8 @@
 // The provider talks to one fixed production gateway. It reads a bounded page of invoice metadata and the
 // detail of one invoice selected by its validated identifier, reads bounded pages and single records of
 // contacts and articles, bounded pages of the voucher list of every type and status, the payment status of
-// one voucher, and one bookkeeping voucher. It creates an invoice draft and issues a final invoice only
+// one voucher, and one bookkeeping voucher, and the organization profile and capped reference lists
+// (countries, payment conditions, posting categories, print layouts). It creates an invoice draft and issues a final invoice only
 // through its own tool, which a connection offers solely when its tools list names it. Contact, address,
 // article, voucher, and line-item content arrives from the provider and is treated as untrusted data: it is
 // normalised into a stable Qatlas shape, passed through the output encoders, and never rendered or stored.
@@ -272,7 +273,8 @@ var invoicesIssue = capability.Descriptor{
 // Register adds Lexware metadata, its read-only connection test, and the supported operations.
 func Register(reg *capability.Registry) error {
 	readTools := []string{invoicesList.ID, invoicesGet.ID, contactsList.ID, contactsGet.ID,
-		articlesList.ID, articlesGet.ID, voucherlistList.ID, paymentsGet.ID, vouchersGet.ID}
+		articlesList.ID, articlesGet.ID, voucherlistList.ID, paymentsGet.ID, vouchersGet.ID,
+		profileGet.ID, countriesList.ID, paymentConditionsList.ID, postingCategoriesList.ID, printLayoutsList.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
 		Description:        "Online accounting and invoicing service for small businesses",
@@ -287,13 +289,13 @@ func Register(reg *capability.Registry) error {
 			Description: "not used by Lexware; the organization follows from the API key",
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "Read invoices, vouchers, contacts and articles", Recommended: true,
-			Description: "lists and reads invoices, vouchers, payment status, contacts and articles; creates " +
+			ID: "read", Title: "Read invoices, vouchers, contacts, articles and reference data", Recommended: true,
+			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile and reference data; creates " +
 				"nothing in Lexware Office",
 			Tools: readTools,
 		}, {
 			ID: "write", Title: "Master data and drafts",
-			Description: "lists and reads invoices, vouchers, payment status, contacts and articles and " +
+			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile and reference data and " +
 				"creates invoice drafts; issuing an invoice is never part of a profile",
 			Tools: append(append([]string{}, readTools...), invoicesCreate.ID),
 		}},
@@ -312,6 +314,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: voucherlistList, Handler: capability.Handler(invokeVoucherlistList)},
 		capability.Operation{Descriptor: paymentsGet, Handler: capability.Handler(invokePaymentsGet)},
 		capability.Operation{Descriptor: vouchersGet, Handler: capability.Handler(invokeVouchersGet)},
+		capability.Operation{Descriptor: profileGet, Handler: capability.Handler(invokeProfileGet)},
+		capability.Operation{Descriptor: countriesList, Handler: capability.Handler(invokeCountriesList)},
+		capability.Operation{Descriptor: paymentConditionsList, Handler: capability.Handler(invokePaymentConditionsList)},
+		capability.Operation{Descriptor: postingCategoriesList, Handler: capability.Handler(invokePostingCategoriesList)},
+		capability.Operation{Descriptor: printLayoutsList, Handler: capability.Handler(invokePrintLayoutsList)},
 	)
 }
 

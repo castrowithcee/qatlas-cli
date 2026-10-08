@@ -160,16 +160,21 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 11 {
-		t.Fatalf("operations = %d, want four invoice, two contact, two article, and three voucher operations", len(operations))
+	if len(operations) != 16 {
+		t.Fatalf("operations = %d, want four invoice, two contact, two article, and three voucher, and five account and reference operations", len(operations))
 	}
 	versions := map[string]int{"lexware.invoices.create": 2, "lexware.invoices.issue": 1,
 		"lexware.invoices.get": 1, "lexware.invoices.list": 1, "lexware.contacts.get": 1,
 		"lexware.contacts.list": 1, "lexware.articles.get": 1, "lexware.articles.list": 1,
-		"lexware.voucherlist.list": 1, "lexware.payments.get": 1, "lexware.vouchers.get": 1}
+		"lexware.voucherlist.list": 1, "lexware.payments.get": 1, "lexware.vouchers.get": 1,
+		"lexware.profile.get": 1, "lexware.countries.list": 1, "lexware.paymentconditions.list": 1,
+		"lexware.postingcategories.list": 1, "lexware.printlayouts.list": 1}
 	sensitivities := map[string]string{"lexware.contacts.get": contactSensitivity,
 		"lexware.contacts.list": contactSensitivity, "lexware.articles.get": articleSensitivity,
-		"lexware.articles.list": articleSensitivity, "lexware.vouchers.get": bookkeepingSensitivity}
+		"lexware.articles.list": articleSensitivity, "lexware.vouchers.get": bookkeepingSensitivity,
+		"lexware.profile.get": accountSensitivity, "lexware.countries.list": referenceSensitivity,
+		"lexware.paymentconditions.list": referenceSensitivity, "lexware.postingcategories.list": referenceSensitivity,
+		"lexware.printlayouts.list": referenceSensitivity}
 	for _, descriptor := range operations {
 		write := descriptor.Risk.Effect == capability.EffectCreate
 		if descriptor.Version != versions[descriptor.ID] || descriptor.Provider != Provider ||
@@ -180,7 +185,7 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 		if len(descriptor.Examples) > 0 && strings.Contains(string(descriptor.Examples[0].Arguments), "key") {
 			t.Errorf("descriptor %s examples = %s", descriptor.ID, descriptor.Examples)
 		}
-		if len(descriptor.Arguments) == 0 || len(descriptor.Fields) == 0 || len(descriptor.Examples) == 0 {
+		if (len(descriptor.Arguments) == 0 && !strings.Contains(string(descriptor.InputSchema), `"properties":{}`)) || len(descriptor.Fields) == 0 || len(descriptor.Examples) == 0 {
 			t.Errorf("descriptor %s lacks arguments, fields, or examples", descriptor.ID)
 		}
 		if write {
@@ -192,7 +197,7 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "lexware.articles.get" || operations[10].ID != "lexware.vouchers.get" {
+	if operations[0].ID != "lexware.articles.get" || operations[15].ID != "lexware.vouchers.get" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 	profiles := map[string]config.ToolProfile{}
@@ -204,9 +209,9 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 			}
 		}
 	}
-	if len(profiles) != 2 || !profiles["read"].Recommended || len(profiles["read"].Tools) != 9 ||
+	if len(profiles) != 2 || !profiles["read"].Recommended || len(profiles["read"].Tools) != 14 ||
 		profiles["write"].Recommended || profiles["write"].Title != "Master data and drafts" ||
-		len(profiles["write"].Tools) != 10 {
+		len(profiles["write"].Tools) != 15 {
 		t.Errorf("profiles = %+v", profiles)
 	}
 }
