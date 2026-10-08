@@ -530,16 +530,20 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 	}
 
 	notice := withWarning(s.approvalNotice(cand.Config, connName), res.Logged)
-	if res.Warning != "" {
-		warningText := "warning: " + s.redact(res.Warning)
-		if notice != "" {
-			notice = warningText + "; " + notice
-		} else {
-			notice = warningText
-		}
-	}
-	s.setNotice(notice)
+	s.setNotice(createdNotice(notice, s.redact(res.Warning)))
 	http.Redirect(w, r, "/connections/"+url.PathEscape(connName)+"?created=1", http.StatusSeeOther)
+}
+
+// createdNotice puts the warning of a saved setup, if any, ahead of the notice. The warning already starts
+// with its own "warning: " (see manage.Service.SyncVaultProcess).
+func createdNotice(notice, warning string) string {
+	switch {
+	case warning == "":
+		return notice
+	case notice == "":
+		return warning
+	}
+	return warning + "; " + notice
 }
 
 // approvalNotice approves, in an encrypted and unlocked vault only, the one connection connName of cand - the
