@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Lexware reads of invoices, contacts and articles, invoice drafts and issuing, permissions, and
-  credentials.
+  Describes Lexware reads of invoices, vouchers, contacts and articles, invoice drafts and issuing,
+  permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -14,7 +14,11 @@ A connection selects the organization associated with one API key at the fixed L
 and overdue outgoing invoices and reads invoice details (`read`). It also finds customers, vendors and
 articles and reads their details (`read`), for example to reference a `contact_id` in an invoice. The `name`
 and `email` filters of the contact list need at least 3 characters and match a literal part of the value:
-Lexware's placeholders `_` and `%` are escaped. Contacts are personal data.
+Lexware's placeholders `_` and `%` are escaped. Contacts are personal data. The voucher list searches vouchers
+of every type and status; without a type or status filter it includes all of them. `any` and the status
+`overdue` each stand alone in their filter. Lexware lists at most 10,000 vouchers per filter, so a page beyond
+that limit is refused before any request; narrow the filter instead. It also reads the payment status of one
+voucher and one bookkeeping voucher with its positions; bookkeeping vouchers are their own data class.
 
 `lexware.invoices.create` creates an invoice as a draft without an invoice number (`create`), always with
 confirmation. Issuing an invoice is the separate tool `lexware.invoices.issue`: Lexware then assigns the
@@ -35,7 +39,6 @@ CRUD operations. The credential provides `api-key`; local connection permissions
 never extend its Lexware contract or organization rights. An optional `tools` list narrows a connection
 further to named tools, for example `[lexware.invoices.get]`, and never admits an effect `permissions`
 excludes. The terminal editor starts a new connection on the recommended setup profile `read`, which ticks
-`[read]` and every list and get tool of invoices, contacts and articles; the profile `write` adds `create` and
-`lexware.invoices.create`. A profile is a visible starting selection, not a role: only the ticked
-`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
-follows a profile.
+`[read]` and every list and get tool; the profile `write` adds `create` and `lexware.invoices.create`. A
+profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
+every tick can be changed before saving, and a saved connection never follows a profile.
