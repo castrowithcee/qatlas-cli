@@ -242,21 +242,24 @@ func Register(reg *capability.Registry) error {
 			ValidateSet: validateSet,
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "Read companies", Recommended: true,
-			Description: "lists and reads companies; changes nothing in Twenty CRM",
-			Tools:       []string{companiesList.ID, companiesGet.ID},
+			ID: "read", Title: "Read companies and objects", Recommended: true,
+			Description: "lists and reads companies and the objects of the workspace; changes nothing in Twenty CRM",
+			Tools:       []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID},
 		}},
+		Groups: toolGroups,
 	}, TestConnection); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
-		capability.Operation{Descriptor: companiesList, Handler: capability.Handler(invokeCompaniesList)},
-		capability.Operation{Descriptor: companiesGet, Handler: capability.Handler(invokeCompaniesGet)},
-		capability.Operation{Descriptor: companiesCreate, Handler: capability.Handler(invokeCompaniesCreate)},
-		capability.Operation{Descriptor: companiesUpdate, Handler: capability.Handler(invokeCompaniesUpdate)},
-		capability.Operation{Descriptor: companiesDelete, Handler: capability.Handler(invokeCompaniesDelete)},
-		capability.Operation{Descriptor: companiesDestroy, Handler: capability.Handler(invokeCompaniesDestroy)},
-		capability.Operation{Descriptor: companiesRestore, Handler: capability.Handler(invokeCompaniesRestore)},
+		capability.Operation{Descriptor: inGroup(companiesList, companiesGroup), Handler: capability.Handler(invokeCompaniesList)},
+		capability.Operation{Descriptor: inGroup(companiesGet, companiesGroup), Handler: capability.Handler(invokeCompaniesGet)},
+		capability.Operation{Descriptor: inGroup(companiesCreate, companiesGroup), Handler: capability.Handler(invokeCompaniesCreate)},
+		capability.Operation{Descriptor: inGroup(companiesUpdate, companiesGroup), Handler: capability.Handler(invokeCompaniesUpdate)},
+		capability.Operation{Descriptor: inGroup(companiesDelete, companiesGroup), Handler: capability.Handler(invokeCompaniesDelete)},
+		capability.Operation{Descriptor: inGroup(companiesDestroy, companiesGroup), Handler: capability.Handler(invokeCompaniesDestroy)},
+		capability.Operation{Descriptor: inGroup(companiesRestore, companiesGroup), Handler: capability.Handler(invokeCompaniesRestore)},
+		capability.Operation{Descriptor: inGroup(objectsList, objectsGroup), Handler: capability.Handler(invokeObjectsList)},
+		capability.Operation{Descriptor: inGroup(objectsGet, objectsGroup), Handler: capability.Handler(invokeObjectsGet)},
 	)
 }
 
