@@ -169,21 +169,34 @@ var companiesGet = capability.Descriptor{
 
 var companiesCreate = companyMutationDescriptor("create", capability.EffectCreate, capability.IdempotencyNonIdempotent,
 	`{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":255},"domain":{"type":"string","maxLength":253,"pattern":"^[A-Za-z0-9.-]*$"}},"required":["name"],"additionalProperties":false}`,
-	json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},"domain":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name"],"additionalProperties":false}`))
+	json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},"domain":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","name"],"additionalProperties":false}`),
+	withRequired(companyNameArgument), companyDomainArgument)
 var companiesUpdate = companyMutationDescriptor("update", capability.EffectUpdate, capability.IdempotencyIdempotent,
 	`{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"},"name":{"type":"string","minLength":1,"maxLength":255},"domain":{"type":"string","maxLength":253,"pattern":"^[A-Za-z0-9.-]*$"}},"required":["id"],"additionalProperties":false}`,
-	companiesCreate.OutputSchema)
+	companiesCreate.OutputSchema, companyIDArgument, companyNameArgument, companyDomainArgument)
 var companiesDelete = companyMutationDescriptor("delete", capability.EffectDelete, capability.IdempotencyIdempotent,
 	`{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"}},"required":["id"],"additionalProperties":false}`,
-	json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`))
+	json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
+	companyIDArgument)
 
-func companyMutationDescriptor(action string, effect capability.Effect, idempotency capability.Idempotency, input string, output json.RawMessage) capability.Descriptor {
+var (
+	companyIDArgument     = capability.Argument{Name: "id", Description: "Company identifier of 36 characters, as returned by twentycrm.companies.list", Required: true}
+	companyNameArgument   = capability.Argument{Name: "name", Description: "Name of the company, 1 to 255 characters"}
+	companyDomainArgument = capability.Argument{Name: "domain", Description: "Primary domain of the company, up to 253 characters"}
+)
+
+func withRequired(a capability.Argument) capability.Argument {
+	a.Required = true
+	return a
+}
+
+func companyMutationDescriptor(action string, effect capability.Effect, idempotency capability.Idempotency, input string, output json.RawMessage, arguments ...capability.Argument) capability.Descriptor {
 	return capability.Descriptor{ID: Provider + ".companies." + action, Version: 1,
 		Title:       strings.ToUpper(action[:1]) + action[1:] + " a Twenty CRM company",
 		Description: strings.ToUpper(action[:1]) + action[1:] + " one company in the workspace of a connection",
 		Tags:        []string{"twentycrm", "crm", "companies", action}, Provider: Provider,
 		Risk:        capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
-		InputSchema: json.RawMessage(input), OutputSchema: output}
+		InputSchema: json.RawMessage(input), OutputSchema: output, Arguments: arguments}
 }
 
 // Register adds Twenty metadata, its read-only connection test, and the bounded company operations.

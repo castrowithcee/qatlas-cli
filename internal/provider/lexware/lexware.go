@@ -201,6 +201,20 @@ var invoicesCreate = capability.Descriptor{
 		`"title":{"type":"string","maxLength":255},"introduction":{"type":"string","maxLength":4096},"remark":{"type":"string","maxLength":4096}},` +
 		`"required":["voucher_date","address","line_items","currency","tax_type","shipping_type"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},"created_date":{"type":"string"},"updated_date":{"type":"string"},"version":{"type":"integer"},"finalized":{"type":"boolean"}},"required":["id","finalized"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		{Name: "voucher_date", Description: "Invoice date as an ISO 8601 timestamp", Required: true},
+		{Name: "address", Description: "Recipient address object; contact_id references an existing contact, otherwise name, street, zip, city and country_code describe it", Required: true},
+		{Name: "line_items", Description: "1 to 100 invoice positions with type custom or text and a name; custom positions add quantity, unit_name, currency, net_amount, tax_rate_percentage and discount_percentage", Required: true},
+		{Name: "currency", Description: "ISO 4217 currency code of 3 characters", Required: true},
+		{Name: "tax_type", Description: "How amounts are taxed: net, gross or vatfree", Required: true},
+		{Name: "shipping_type", Description: "Kind of delivery: delivery, deliveryperiod, service, serviceperiod or none", Required: true},
+		{Name: "shipping_date", Description: "Delivery or service date as an ISO 8601 timestamp"},
+		{Name: "shipping_end_date", Description: "End of the delivery or service period as an ISO 8601 timestamp"},
+		{Name: "finalize", Description: "True to finalize the invoice immediately instead of keeping a draft"},
+		{Name: "title", Description: "Invoice title, up to 255 characters"},
+		{Name: "introduction", Description: "Introductory text above the positions, up to 4096 characters"},
+		{Name: "remark", Description: "Closing remark below the positions, up to 4096 characters"},
+	},
 }
 
 // Register adds Lexware metadata, its read-only connection test, and the supported invoice operations.
