@@ -124,9 +124,7 @@ var architectureExceptions = []archException{
 	{ruleSurfaceAccess, "internal/tui/migrate.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/migrate.go", "internal/vaultmigrate", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/migrate.go", "internal/vaultproc", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/payload.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/payload.go", "internal/vault", debtSurface},
-	{ruleSurfaceAccess, "internal/tui/payload.go", "internal/vaultproc", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/restart.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/secrets.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/tui/secrets.go", "internal/vault", debtSurface},
@@ -144,9 +142,6 @@ var architectureExceptions = []archException{
 	// Rule 1: surface access, internal/web.
 	{ruleSurfaceAccess, "internal/web/connection.go", "internal/approval", debtSurface},
 	{ruleSurfaceAccess, "internal/web/credential.go", "internal/vault", debtSurface},
-	{ruleSurfaceAccess, "internal/web/payload.go", "internal/approval", debtSurface},
-	{ruleSurfaceAccess, "internal/web/payload.go", "internal/secret", debtSurface},
-	{ruleSurfaceAccess, "internal/web/payload.go", "internal/vault", debtSurface},
 	{ruleSurfaceAccess, "internal/web/server.go", "internal/secret", debtSurface},
 	{ruleSurfaceAccess, "internal/web/server.go", "internal/vault", debtSurface},
 	// Rule 4: store handles.
