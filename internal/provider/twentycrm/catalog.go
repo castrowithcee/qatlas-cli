@@ -18,6 +18,8 @@ const (
 	maxCatalogObjects = 512
 	maxObjectFields   = 512
 	maxSubfields      = 64
+	// Bounds of the enum values taken from the document, which exist only to validate a filter value.
+	maxEnumValues = 100
 )
 
 var (
@@ -26,6 +28,7 @@ var (
 	// fieldNamePattern is the shape of a field or subfield name taken from the document.
 	fieldNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
 	formatPattern    = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
+	enumValuePattern = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
 )
 
 // catalog holds the objects of one workspace by singular name.
@@ -45,7 +48,9 @@ type catalogObject struct {
 // parts of a composite field. Required comes from the create shape, Writable from the update shape.
 // Relation names the object a relation field points to, when the document shows it. Reference is set for
 // every field that points to another schema, even when that object is not in the catalog. InResponse is set
-// for a field of the SINGULARForResponse schema, the shape of a record read.
+// for a field of the SINGULARForResponse schema, the shape of a record read. Enumerated is set when the
+// document lists enum values (a selection field), Enum holds them when they are few and plain enough to
+// validate a filter value against. Enum never leaves the provider: no output shows it.
 type catalogField struct {
 	Name       string
 	Type       string
@@ -56,6 +61,8 @@ type catalogField struct {
 	Relation   string
 	Reference  bool
 	InResponse bool
+	Enumerated bool
+	Enum       []string
 }
 
 type catalogSubfield struct {
@@ -99,6 +106,7 @@ type propJSON struct {
 	Type   json.RawMessage `json:"type"`
 	Format string          `json:"format"`
 	Ref    string          `json:"$ref"`
+	Enum   json.RawMessage `json:"enum"`
 	Items  *struct {
 		Ref string `json:"$ref"`
 	} `json:"items"`
@@ -117,6 +125,9 @@ func (p propJSON) fill(earlier propJSON) propJSON {
 	}
 	if earlier.Ref != "" {
 		p.Ref = earlier.Ref
+	}
+	if len(earlier.Enum) > 0 {
+		p.Enum = earlier.Enum
 	}
 	if earlier.Items != nil {
 		p.Items = earlier.Items
@@ -209,6 +220,8 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 		if formatPattern.MatchString(prop.Format) {
 			field.Format = prop.Format
 		}
+		field.Enumerated = len(prop.Enum) > 0
+		field.Enum = enumValues(prop.Enum)
 		ref := prop.Ref
 		if ref == "" && prop.Items != nil {
 			ref = prop.Items.Ref
@@ -240,6 +253,21 @@ func (cat *catalog) fieldsOf(document *openAPIJSON, pascal string) []catalogFiel
 		}
 	}
 	return fields
+}
+
+// enumValues reads the enum values of a selection field. A list that is too long, holds a value outside the
+// plain identifier alphabet, or is not a list of strings yields none, so the field cannot be filtered.
+func enumValues(raw json.RawMessage) []string {
+	var values []string
+	if len(raw) == 0 || json.Unmarshal(raw, &values) != nil || len(values) == 0 || len(values) > maxEnumValues {
+		return nil
+	}
+	for _, value := range values {
+		if !enumValuePattern.MatchString(value) {
+			return nil
+		}
+	}
+	return values
 }
 
 // relationTarget reads the object a schema reference points to: #/components/schemas/PersonForResponse is person.

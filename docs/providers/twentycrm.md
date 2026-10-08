@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Twenty CRM company, object catalog, and record read operations, object targets, connection
-  permissions, and safety boundaries.
+  Describes Twenty CRM company, object catalog, and record read operations (list, get, structured
+  search, count by field), object targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -48,7 +48,8 @@ flags leave Qatlas; descriptions and options of the document never do.
 
 `records.list` and `records.get` (`read`) read the records of any reachable object, standard or custom, by its
 singular API name. Qatlas takes the REST path of an object only from the workspace catalog, never from an
-argument. A list returns one page without filters, 1 to 100 records, with an opaque `next_cursor`.
+argument. A list returns one page without filters (see Filtering and counting records for conditions), 1 to 100
+records, with an opaque `next_cursor`.
 `order_by` sorts by one field, or by `field.subfield` of a composite field, in direction `asc` or `desc`.
 Relation, array, and rich-text fields cannot be sorted by.
 
@@ -70,6 +71,45 @@ Relation, array, and rich-text fields cannot be sorted by.
 - The role of the API key is the ceiling: Twenty returns only the objects and fields the role grants, and
   Qatlas adds no right. Soft-deleted records are not read.
 
+## Filtering and counting records
+
+`records.search` and `records.groupby` (`read`) take no filter expression. The agent gives structured
+conditions and Qatlas builds Twenty's filter from checked parts only: Twenty's grammar has no escaping, so no
+value may carry a quote, bracket, colon, comma, backslash, parenthesis, or percent sign.
+
+- `records.search` reads a page like `records.list` (page size, sort, `fields`, cursor) for 1 to 5 AND-linked
+  conditions `{field, operator, value}`. The cursor is also bound to the normalized conditions, whose order
+  and repeats do not matter.
+- `records.groupby` counts the records per value of 1 or 2 different fields, optionally limited by the same
+  conditions, and returns groups with `values` (field name to value) and `count`.
+- A condition field is a top-level field of the object's response shape or `field.subfield` of a composite
+  field, only when the schema names the subfield. Relation fields, `deletedAt`, rich text, arrays and
+  multi-selections, and subfields that hold identifiers are not filterable. Soft-deleted records are never
+  searched.
+- A relation identifier (`<relation>Id`) is accepted only when the relation field names a target object that
+  the connection reaches; otherwise the condition could probe objects outside the targets.
+- The operator list follows the field kind, which Qatlas derives from the schema (enum values make a
+  selection, a format makes an identifier or date, otherwise the JSON type decides):
+
+  | Kind | Operators |
+  | --- | --- |
+  | text | `eq`, `neq`, `in`, `ilike` (contains), `startsWith`, `endsWith`, `is` |
+  | selection | `eq`, `neq`, `in`, `is`; the value must be an enum value of the schema |
+  | number, date, date-time | `eq`, `neq`, `in`, `gt`, `gte`, `lt`, `lte`, `is` |
+  | boolean | `eq`, `is` |
+  | identifier, relation identifier | `eq`, `neq`, `in`, `is` |
+
+- `is` takes `NULL` or `NOT_NULL`; `in` takes a list of at most 20 values of one type. Dates are
+  `YYYY-MM-DD`, date-times `YYYY-MM-DDTHH:MM:SSZ`, numbers plain decimals. Text is at most 64 characters of
+  letters, digits, spaces, and `. _ + @ & -`.
+- A refused field, operator, or value is refused after the schema was read and before any record is read,
+  and the refusal names neither field nor value. The enum values of the schema serve only this check and
+  never appear in a result, including `objects.get`.
+- `records.groupby` groups by selections, booleans, dates (by day, UTC), and relation identifiers, not by text,
+  numbers, composite subfields, or the record `id`. Twenty cuts a longer group list silently, so an answer
+  with 200 or more groups is refused as possibly incomplete; narrow it with conditions. Group values are
+  untrusted workspace data of the same data class as records.
+
 ## Deleting and restoring
 
 - `delete` moves a company to Twenty's trash. It stays recoverable.
@@ -87,6 +127,6 @@ connection's local `permissions` list can only narrow it, and an optional `tools
 excludes. Qatlas exposes conservative core company fields,
 does not accept custom-field payloads, and never lets invocation arguments replace the configured origin. The
 terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and the two company,
-two object, and two record read tools. A profile is a visible starting selection, not a role:
+two object, and four record read tools. A profile is a visible starting selection, not a role:
 only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved
 connection never follows a profile.

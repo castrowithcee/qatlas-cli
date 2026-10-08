@@ -58,6 +58,15 @@ var recordsRisk = capability.Risk{
 	OpenWorld: true, DataSensitivity: recordDataSensitivity,
 }
 
+// pageProperties are the page, sort, selection, and cursor properties records.list and records.search share.
+var pageProperties = `"limit":{"type":"integer","minimum":1,"maximum":100},` +
+	`"order_by":{"type":"string","minLength":1,"maxLength":129,"pattern":"` +
+	`^[A-Za-z_][A-Za-z0-9_]{0,63}(\\.[A-Za-z_][A-Za-z0-9_]{0,63})?$"},` +
+	`"direction":{"type":"string","enum":["asc","desc"]},` +
+	`"fields":` + fieldsSchema + `,` +
+	`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxBoundCursorLen) +
+	`,"pattern":"^[A-Za-z0-9_-]+$"}`
+
 var recordsList = capability.Descriptor{
 	ID:      Provider + ".records.list",
 	Version: 1,
@@ -67,14 +76,8 @@ var recordsList = capability.Descriptor{
 	Tags:     []string{"twentycrm", "crm", "records", "list"},
 	Risk:     recordsRisk,
 	Provider: Provider,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"object":` + objectNameSchema + `,` +
-		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
-		`"order_by":{"type":"string","minLength":1,"maxLength":129,"pattern":"` +
-		`^[A-Za-z_][A-Za-z0-9_]{0,63}(\\.[A-Za-z_][A-Za-z0-9_]{0,63})?$"},` +
-		`"direction":{"type":"string","enum":["asc","desc"]},` +
-		`"fields":` + fieldsSchema + `,` +
-		`"cursor":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxBoundCursorLen) +
-		`,"pattern":"^[A-Za-z0-9_-]+$"}},"required":["object"],"additionalProperties":false}`),
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"object":` + objectNameSchema + `,` + pageProperties +
+		`},"required":["object"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"records":{"type":"array","items":` + recordSchema + `},` +
 		`"next_cursor":{"type":"string"},"has_more":{"type":"boolean"}},"required":["records","has_more"],` +
 		`"additionalProperties":false}`),
@@ -153,7 +156,18 @@ type recordQuery struct {
 	// After is the Twenty cursor a bound cursor continued after.
 	After   string
 	Binding []byte
+	// Conditions are the normalized, schema-unchecked conditions of records.search.
+	Conditions []condition
 }
+
+// recordMode selects the tool a recordQuery serves.
+type recordMode int
+
+const (
+	modeGet recordMode = iota
+	modeList
+	modeSearch
+)
 
 type recordArguments struct {
 	Object    string   `json:"object"`
@@ -163,13 +177,15 @@ type recordArguments struct {
 	Direction string   `json:"direction"`
 	Fields    []string `json:"fields"`
 	Cursor    string   `json:"cursor"`
+	// Conditions are read by records.search only.
+	Conditions []conditionArgument `json:"conditions"`
 }
 
 const errUnreadableField = "a requested field cannot be read or sorted by on this object"
 
 // newRecordQuery checks the object against the connection's targets and the arguments against their
 // bounds, before any secret is resolved and before any request is sent.
-func newRecordQuery(resolved *config.Resolved, op string, raw json.RawMessage, list bool) (*recordQuery, error) {
+func newRecordQuery(resolved *config.Resolved, op string, raw json.RawMessage, mode recordMode) (*recordQuery, error) {
 	var args recordArguments
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
@@ -194,7 +210,7 @@ func newRecordQuery(resolved *config.Resolved, op string, raw json.RawMessage, l
 		}
 		sort.Strings(query.Fields)
 	}
-	if !list {
+	if mode == modeGet {
 		if !validUUID(args.ID) {
 			return nil, invalidRequest("id must be a record identifier in UUID form")
 		}
@@ -220,8 +236,21 @@ func newRecordQuery(resolved *config.Resolved, op string, raw json.RawMessage, l
 	if query.Direction != "" && query.Direction != "asc" && query.Direction != "desc" {
 		return nil, invalidRequest("direction must be asc or desc")
 	}
-	query.Binding = provider.CursorBinding("records.list", resolved.Name, query.Object, query.OrderBy,
-		query.Direction, query.Fields)
+	tool := "records.list"
+	var conditionKey string
+	if mode == modeSearch {
+		conditions, err := normalizeConditions(args.Conditions, 1)
+		if err != nil {
+			return nil, err
+		}
+		query.Conditions = conditions
+		tool, conditionKey = "records.search", conditionKeys(conditions)
+	}
+	binding := []any{tool, resolved.Name, query.Object, query.OrderBy, query.Direction, query.Fields}
+	if mode == modeSearch {
+		binding = append(binding, conditionKey)
+	}
+	query.Binding = provider.CursorBinding(binding...)
 	if args.Cursor != "" {
 		after, ok := provider.DecodeCursor(query.Binding, args.Cursor, maxBoundCursorLen)
 		if !ok || len(after) > maxCursorLength || !safeCursor(after) {
@@ -234,7 +263,7 @@ func newRecordQuery(resolved *config.Resolved, op string, raw json.RawMessage, l
 
 func invokeRecordsList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	query, err := newRecordQuery(resolved, "list records", raw, true)
+	query, err := newRecordQuery(resolved, "list records", raw, modeList)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +276,7 @@ func invokeRecordsList(ctx context.Context, resolved *config.Resolved, secrets *
 
 func invokeRecordsGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	query, err := newRecordQuery(resolved, "get record", raw, false)
+	query, err := newRecordQuery(resolved, "get record", raw, modeGet)
 	if err != nil {
 		return nil, err
 	}
@@ -350,10 +379,14 @@ func isRichText(field catalogField) bool {
 }
 
 // ListRecords reads exactly one page of records of one reachable object. The route comes from the workspace
-// catalog, the fields and the sort are checked against the response shape of the schema before the data
-// request, and no filter, depth, or relation is ever sent.
+// catalog, the fields, the sort, and the conditions are checked against the response shape of the schema
+// before the data request, and the only filter ever sent is the one built from checked conditions. No depth
+// above 0 or relation is ever sent.
 func (c *Client) ListRecords(ctx context.Context, query *recordQuery) (*RecordList, error) {
-	const op = "list records"
+	op := "list records"
+	if len(query.Conditions) > 0 {
+		op = "search records"
+	}
 	object, err := c.recordObject(ctx, op, query.Object)
 	if err != nil {
 		return nil, err
@@ -363,6 +396,13 @@ func (c *Client) ListRecords(ctx context.Context, query *recordQuery) (*RecordLi
 		return nil, err
 	}
 	values.Set("limit", strconv.Itoa(query.Limit))
+	if len(query.Conditions) > 0 {
+		filter, err := object.filter(c.scope, query.Conditions)
+		if err != nil {
+			return nil, err
+		}
+		values.Set("filter", filter)
+	}
 	if query.OrderBy != "" {
 		if !object.orderable(query.OrderBy) {
 			return nil, invalidRequest(errUnreadableField)
