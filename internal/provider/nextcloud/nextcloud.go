@@ -8,8 +8,8 @@
 // the root the connection is bound to. The tools of this package are the Files tools; the other target
 // kinds are parsed and bound in targets.go.
 //
-// The adapter produces only explicit Files WebDAV requests (PROPFIND, GET, PUT, DELETE, and the chunked
-// upload methods) and never reaches another app of the instance. Names, DAV
+// The adapter produces only explicit Files WebDAV requests (PROPFIND, GET, PUT, DELETE, MKCOL, MOVE, COPY, and
+// the chunked upload methods) and never reaches another app of the instance. Names, DAV
 // properties, and the whole multi-status document arrive from the provider and are treated as untrusted
 // data: they are normalised into a stable metadata envelope, passed through the output encoders, and
 // never rendered or stored.
@@ -309,6 +309,10 @@ func Register(reg *capability.Registry) error {
 			ID: "read", Title: "Read files", Recommended: true,
 			Description: "lists folders, reads file metadata and content; changes nothing below the root folder",
 			Tools:       []string{filesList.ID, filesStat.ID, filesGet.ID},
+		}, {
+			ID: "write", Title: "Read and organise files",
+			Description: "lists folders, reads files, creates folders, and moves, renames, or copies files and folders without overwriting",
+			Tools:       []string{filesList.ID, filesStat.ID, filesGet.ID, foldersCreate.ID, filesMove.ID, filesCopy.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -320,6 +324,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(filesCreate), Handler: folderBound(invokeFilesCreate)},
 		capability.Operation{Descriptor: grouped(filesUpdate), Handler: folderBound(invokeFilesUpdate)},
 		capability.Operation{Descriptor: grouped(filesDelete), Handler: folderBound(invokeFilesDelete)},
+		capability.Operation{Descriptor: grouped(foldersCreate), Handler: folderBound(invokeFoldersCreate)},
+		capability.Operation{Descriptor: grouped(filesMove), Handler: folderBound(invokeFilesMove)},
+		capability.Operation{Descriptor: grouped(filesCopy), Handler: folderBound(invokeFilesCopy)},
 	)
 }
 
@@ -1042,11 +1049,19 @@ func validETag(value string) bool {
 }
 
 func (c *Client) webdav(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value, uncertain string) (*http.Response, error) {
+	return c.webdavWith(ctx, op, method, rel, body, condition, value, uncertain, nil)
+}
+
+// webdavWith is webdav with fixed extra request headers, which the calling operation builds itself.
+func (c *Client) webdavWith(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value, uncertain string, extra http.Header) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.requestURL(rel), body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
 	}
 	req.Header.Set("Authorization", c.auth)
+	for name, values := range extra {
+		req.Header[name] = values
+	}
 	if condition == "If-None-Match" {
 		req.Header.Set(condition, "*")
 	} else if condition != "" {
