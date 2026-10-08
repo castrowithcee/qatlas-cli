@@ -243,9 +243,9 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read companies, objects, and records", Recommended: true,
-			Description: "lists and reads companies, the objects of the workspace, and their records; changes nothing in Twenty CRM",
+			Description: "lists and reads companies, the objects of the workspace, and their records, also by structured conditions and counted by field; changes nothing in Twenty CRM",
 			Tools: []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID,
-				recordsList.ID, recordsGet.ID},
+				recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsGroupBy.ID},
 		}},
 		Groups: toolGroups,
 	}, TestConnection); err != nil {
@@ -263,6 +263,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(objectsGet, objectsGroup), Handler: capability.Handler(invokeObjectsGet)},
 		capability.Operation{Descriptor: inGroup(recordsList, recordsGroup), Handler: capability.Handler(invokeRecordsList)},
 		capability.Operation{Descriptor: inGroup(recordsGet, recordsGroup), Handler: capability.Handler(invokeRecordsGet)},
+		capability.Operation{Descriptor: inGroup(recordsGroupBy, recordsGroup), Handler: capability.Handler(invokeRecordsGroupBy)},
+		capability.Operation{Descriptor: inGroup(recordsSearch, recordsGroup), Handler: capability.Handler(invokeRecordsSearch)},
 	)
 }
 

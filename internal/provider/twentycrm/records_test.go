@@ -379,7 +379,7 @@ func TestRecordToolsDeclareTheirOwnSensitivityAndJoinTheReadProfile(t *testing.T
 	if err := Register(reg); err != nil {
 		t.Fatal(err)
 	}
-	for _, d := range []capability.Descriptor{recordsList, recordsGet} {
+	for _, d := range []capability.Descriptor{recordsList, recordsGet, recordsSearch, recordsGroupBy} {
 		if d.Risk.DataSensitivity != "twentycrm-record-data" || d.Risk.Effect != capability.EffectRead ||
 			d.Risk.Confirmation != capability.ConfirmationNone || d.Group != "" && d.Group != recordsGroup {
 			t.Errorf("%s risk = %+v", d.ID, d.Risk)
@@ -387,7 +387,8 @@ func TestRecordToolsDeclareTheirOwnSensitivityAndJoinTheReadProfile(t *testing.T
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
 	tools := strings.Join(metadata.Profiles[0].Tools, " ")
-	if !strings.Contains(tools, recordsList.ID) || !strings.Contains(tools, recordsGet.ID) {
+	if !strings.Contains(tools, recordsList.ID) || !strings.Contains(tools, recordsGet.ID) ||
+		!strings.Contains(tools, recordsSearch.ID) || !strings.Contains(tools, recordsGroupBy.ID) {
 		t.Errorf("read profile = %v", metadata.Profiles[0].Tools)
 	}
 }
