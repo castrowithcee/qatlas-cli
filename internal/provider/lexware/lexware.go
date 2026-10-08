@@ -1,12 +1,13 @@
-// Package lexware implements controlled access to outgoing invoices, contacts, and articles of a Lexware
-// Office organization.
+// Package lexware implements controlled access to vouchers, outgoing invoices, contacts, and articles of a
+// Lexware Office organization.
 //
 // The provider talks to one fixed production gateway. It reads a bounded page of invoice metadata and the
 // detail of one invoice selected by its validated identifier, reads bounded pages and single records of
-// contacts and articles, creates an invoice draft, and issues a final invoice only through its own tool,
-// which a connection offers solely when its tools list names it. Contact, address, article, and line-item
-// content arrives from the provider and is treated as untrusted data: it is normalised into a stable Qatlas
-// shape, passed through the output encoders, and never rendered or stored.
+// contacts and articles, bounded pages of the voucher list of every type and status, the payment status of
+// one voucher, and one bookkeeping voucher. It creates an invoice draft and issues a final invoice only
+// through its own tool, which a connection offers solely when its tools list names it. Contact, address,
+// article, voucher, and line-item content arrives from the provider and is treated as untrusted data: it is
+// normalised into a stable Qatlas shape, passed through the output encoders, and never rendered or stored.
 package lexware
 
 import (
@@ -271,7 +272,7 @@ var invoicesIssue = capability.Descriptor{
 // Register adds Lexware metadata, its read-only connection test, and the supported operations.
 func Register(reg *capability.Registry) error {
 	readTools := []string{invoicesList.ID, invoicesGet.ID, contactsList.ID, contactsGet.ID,
-		articlesList.ID, articlesGet.ID}
+		articlesList.ID, articlesGet.ID, voucherlistList.ID, paymentsGet.ID, vouchersGet.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
 		Description:        "Online accounting and invoicing service for small businesses",
@@ -286,13 +287,14 @@ func Register(reg *capability.Registry) error {
 			Description: "not used by Lexware; the organization follows from the API key",
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "Read invoices, contacts and articles", Recommended: true,
-			Description: "lists and reads invoices, contacts and articles; creates nothing in Lexware Office",
-			Tools:       readTools,
+			ID: "read", Title: "Read invoices, vouchers, contacts and articles", Recommended: true,
+			Description: "lists and reads invoices, vouchers, payment status, contacts and articles; creates " +
+				"nothing in Lexware Office",
+			Tools: readTools,
 		}, {
 			ID: "write", Title: "Master data and drafts",
-			Description: "lists and reads invoices, contacts and articles and creates invoice drafts; " +
-				"issuing an invoice is never part of a profile",
+			Description: "lists and reads invoices, vouchers, payment status, contacts and articles and " +
+				"creates invoice drafts; issuing an invoice is never part of a profile",
 			Tools: append(append([]string{}, readTools...), invoicesCreate.ID),
 		}},
 	}, TestConnection); err != nil {
@@ -307,6 +309,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: contactsGet, Handler: capability.Handler(invokeContactsGet)},
 		capability.Operation{Descriptor: articlesList, Handler: capability.Handler(invokeArticlesList)},
 		capability.Operation{Descriptor: articlesGet, Handler: capability.Handler(invokeArticlesGet)},
+		capability.Operation{Descriptor: voucherlistList, Handler: capability.Handler(invokeVoucherlistList)},
+		capability.Operation{Descriptor: paymentsGet, Handler: capability.Handler(invokePaymentsGet)},
+		capability.Operation{Descriptor: vouchersGet, Handler: capability.Handler(invokeVouchersGet)},
 	)
 }
 
@@ -545,26 +550,54 @@ func listQuery(options ListOptions) url.Values {
 	query.Set("page", strconv.Itoa(options.Page))
 	query.Set("size", strconv.Itoa(options.Size))
 
-	property := sortProperties[options.Sort]
+	setSort(query, options.Sort, options.Direction)
+	setFilter(query, "voucherNumber", options.VoucherNumber)
+	setFilter(query, "voucherDateFrom", options.VoucherDateFrom)
+	setFilter(query, "voucherDateTo", options.VoucherDateTo)
+	return query
+}
+
+// setSort sets the sort parameter from a stable Qatlas sort name and direction; voucher_date, descending
+// is the default.
+func setSort(query url.Values, sort, direction string) {
+	property := sortProperties[sort]
 	if property == "" {
 		property = sortProperties["voucher_date"]
 	}
-	direction := "DESC"
-	if options.Direction == "asc" {
-		direction = "ASC"
+	order := "DESC"
+	if direction == "asc" {
+		order = "ASC"
 	}
-	query.Set("sort", property+","+direction)
+	query.Set("sort", property+","+order)
+}
 
-	if options.VoucherNumber != "" {
-		query.Set("voucherNumber", options.VoucherNumber)
+// setFilter sets one optional filter parameter only when it has a value.
+func setFilter(query url.Values, key, value string) {
+	if value != "" {
+		query.Set(key, value)
 	}
-	if options.VoucherDateFrom != "" {
-		query.Set("voucherDateFrom", options.VoucherDateFrom)
+}
+
+// validateListFilters checks the sort and filter members every voucher list shares.
+func validateListFilters(sort, direction, number string, dates ...string) error {
+	if sort != "" && sortProperties[sort] == "" {
+		return errors.New("the sort property is not supported")
 	}
-	if options.VoucherDateTo != "" {
-		query.Set("voucherDateTo", options.VoucherDateTo)
+	if direction != "" && direction != "asc" && direction != "desc" {
+		return errors.New("the sort direction must be asc or desc")
 	}
-	return query
+	for _, date := range dates {
+		if date == "" {
+			continue
+		}
+		if _, err := time.Parse(time.DateOnly, date); err != nil {
+			return errors.New("a voucher date filter must use the format YYYY-MM-DD")
+		}
+	}
+	if len(number) > 64 {
+		return errors.New("the voucher number filter is too long")
+	}
+	return nil
 }
 
 // ListResult is the normalised page of invoice metadata.
@@ -639,24 +672,7 @@ func (o *ListOptions) normalize() error {
 	if err := normalizePaging(&o.Page, &o.Size); err != nil {
 		return err
 	}
-	if o.Sort != "" && sortProperties[o.Sort] == "" {
-		return errors.New("the sort property is not supported")
-	}
-	if o.Direction != "" && o.Direction != "asc" && o.Direction != "desc" {
-		return errors.New("the sort direction must be asc or desc")
-	}
-	for _, date := range []string{o.VoucherDateFrom, o.VoucherDateTo} {
-		if date == "" {
-			continue
-		}
-		if _, err := time.Parse(time.DateOnly, date); err != nil {
-			return errors.New("a voucher date filter must use the format YYYY-MM-DD")
-		}
-	}
-	if len(o.VoucherNumber) > 64 {
-		return errors.New("the voucher number filter is too long")
-	}
-	return nil
+	return validateListFilters(o.Sort, o.Direction, o.VoucherNumber, o.VoucherDateFrom, o.VoucherDateTo)
 }
 
 // normalizePaging applies the default page size and checks the page bounds every list operation shares.
@@ -1069,6 +1085,8 @@ const (
 	resourceInvoice = "invoice"
 	resourceContact = "contact"
 	resourceArticle = "article"
+	resourcePayment = "payment status"
+	resourceVoucher = "voucher"
 )
 
 func providerError(op, message string) error {
