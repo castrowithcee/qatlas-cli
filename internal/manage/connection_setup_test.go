@@ -98,8 +98,8 @@ func TestBuildConnectionCandidateRights(t *testing.T) {
 			d.Tools = []string{"docs.write"}
 		}, permsNil: true, toolsNil: true},
 		{name: "files", edit: func(d *ConnectionDraft) {
-			d.Files = config.Files{Read: []string{"/srv/docs"}}
-		}, permsNil: true, toolsNil: true, wantFilesRd: []string{"/srv/docs"}},
+			d.Files = config.Files{Read: []string{"~/docs"}}
+		}, permsNil: true, toolsNil: true, wantFilesRd: []string{"~/docs"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
