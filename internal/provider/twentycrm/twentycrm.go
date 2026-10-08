@@ -226,7 +226,7 @@ func Register(reg *capability.Registry) error {
 		SecretRoles: []config.SecretRole{{
 			Name: roleAPIKey,
 			Description: "Twenty API key: the value shown once when you create a key under API & Webhooks; " +
-				"its workspace role must grant only the company operations this connection needs",
+				"its workspace role must grant only the objects, fields, and operations this connection needs",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "object",
@@ -242,9 +242,10 @@ func Register(reg *capability.Registry) error {
 			ValidateSet: validateSet,
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "Read companies and objects", Recommended: true,
-			Description: "lists and reads companies and the objects of the workspace; changes nothing in Twenty CRM",
-			Tools:       []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID},
+			ID: "read", Title: "Read companies, objects, and records", Recommended: true,
+			Description: "lists and reads companies, the objects of the workspace, and their records; changes nothing in Twenty CRM",
+			Tools: []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID,
+				recordsList.ID, recordsGet.ID},
 		}},
 		Groups: toolGroups,
 	}, TestConnection); err != nil {
@@ -260,6 +261,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(companiesRestore, companiesGroup), Handler: capability.Handler(invokeCompaniesRestore)},
 		capability.Operation{Descriptor: inGroup(objectsList, objectsGroup), Handler: capability.Handler(invokeObjectsList)},
 		capability.Operation{Descriptor: inGroup(objectsGet, objectsGroup), Handler: capability.Handler(invokeObjectsGet)},
+		capability.Operation{Descriptor: inGroup(recordsList, recordsGroup), Handler: capability.Handler(invokeRecordsList)},
+		capability.Operation{Descriptor: inGroup(recordsGet, recordsGroup), Handler: capability.Handler(invokeRecordsGet)},
 	)
 }
 
