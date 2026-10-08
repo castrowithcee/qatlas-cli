@@ -223,7 +223,7 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	nextcloudFields := m.buildFields("files-reports")
 	if nextcloudFields[4].value() != "Reports" ||
 		!strings.Contains(nextcloudFields[4].hint, "required for Nextcloud") ||
-		!strings.Contains(nextcloudFields[4].hint, "Files of this identity") {
+		!strings.Contains(nextcloudFields[4].hint, "whole Files root") {
 		t.Fatalf("Nextcloud target field = value %q, hint %q",
 			nextcloudFields[4].value(), nextcloudFields[4].hint)
 	}

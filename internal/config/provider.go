@@ -79,6 +79,10 @@ type TargetMetadata struct {
 	Kinds           []TargetKind
 	Validate        func(string) error
 	ValidateSet     func([]string) error
+	// ValidateSingle, when set, checks the value of the single target field instead of Validate, so a
+	// provider with a targets list can keep the old meaning of that field and refuse values the list
+	// would read differently. It may not quote the value either.
+	ValidateSingle func(string) error
 }
 
 // TargetKind is one kind of target, such as a repository or a project. Forms lists the accepted spellings

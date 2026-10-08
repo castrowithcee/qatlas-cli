@@ -210,7 +210,7 @@ func classOf(err error) provider.Class {
 
 // Register publishes the configuration metadata the TUI needs and exactly two read-only operations. The
 // identity is two credential roles, and the fixed root folder is a required target.
-func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
+func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
 		t.Fatalf("Register() = %v", err)
@@ -227,9 +227,17 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	if !strings.Contains(metadata.SecretRoles[1].Description, "app password") {
 		t.Errorf("app password role = %q, want the revocable app password named", metadata.SecretRoles[1].Description)
 	}
-	if !metadata.Target.Required || metadata.Target.Label != "root folder" ||
-		!strings.Contains(metadata.Target.Description, "Files of this identity") {
-		t.Fatalf("target metadata = %+v, want a required root folder", metadata.Target)
+	if !metadata.Target.Required || !metadata.Target.Multiple || len(metadata.Target.Kinds) != 8 ||
+		metadata.Target.Validate == nil || metadata.Target.ValidateSet == nil || metadata.Target.ValidateSingle == nil {
+		t.Fatalf("target metadata = %+v, want required, multiple, typed targets", metadata.Target)
+	}
+	for _, kind := range metadata.Target.Kinds {
+		if kind.Description == "" || len(kind.Forms) == 0 {
+			t.Errorf("target kind %+v needs a description and forms", kind)
+		}
+	}
+	if len(metadata.Groups) != 1 || metadata.Groups[0].ID != "files" {
+		t.Fatalf("groups = %+v, want the files group", metadata.Groups)
 	}
 
 	descriptors := reg.Provider(Provider)
@@ -238,6 +246,9 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
+		if descriptor.Group != "files" {
+			t.Errorf("descriptor %s group = %q, want files", descriptor.ID, descriptor.Group)
+		}
 		if !descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
 			t.Errorf("descriptor %s risk = %+v", descriptor.ID, descriptor.Risk)
 		}

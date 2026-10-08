@@ -608,8 +608,12 @@ func (c *Config) Validate() error {
 				if seenTargets[target] {
 					report("connections.%s.%s: a target is listed more than once", name, path)
 				}
-				if metadata.Target.Validate != nil {
-					if err := metadata.Target.Validate(target); err != nil {
+				validate := metadata.Target.Validate
+				if !usesTargetList && metadata.Target.ValidateSingle != nil {
+					validate = metadata.Target.ValidateSingle
+				}
+				if validate != nil {
+					if err := validate(target); err != nil {
 						report("connections.%s.%s: %v", name, path, err)
 						formsValid = false
 					}
