@@ -89,7 +89,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -312,7 +311,7 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 		return errConflict
 	}
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		failure := c.statusError(op, response)
+		failure := c.responseError(op, response)
 		if changing && response.StatusCode >= 500 {
 			failure.Message += uncertain
 		}
@@ -339,36 +338,21 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class. The provider body is never read into the message. It
+// responseError maps an HTTP status to a stable class. The provider body is never read into the message. It
 // returns the concrete type, not the error interface, so (*Client).do can still append the uncertain
 // suffix to its message for a change request that a 5xx may nonetheless have carried out.
-func (c *Client) statusError(op string, response *http.Response) *provider.Error {
-	status := response.StatusCode
+func (c *Client) responseError(op string, response *http.Response) *provider.Error {
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
-	switch {
-	case status == http.StatusUnauthorized:
-		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "n8n rejected the API key"}
-	case status == http.StatusForbidden:
-		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this n8n API key may not perform this operation; check its scopes under Settings, n8n API"}
-	case status == http.StatusNotFound:
-		return &provider.Error{Class: provider.ClassNotFound, Op: op,
-			Message: "n8n does not hold this resource, does not show it to this API key, or this instance's " +
-				"Public API version does not have this endpoint"}
-	case status == http.StatusTooManyRequests:
+	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
-		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "n8n rate-limited the operation"}
-	case status == http.StatusServiceUnavailable:
-		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "n8n is unavailable or in maintenance"}
-	case status == http.StatusGatewayTimeout:
-		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "n8n did not answer in time"}
-	case status >= 300 && status < 400:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "n8n answered with a redirect, which Qatlas does not follow for this request"}
-	default:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: fmt.Sprintf("n8n rejected the operation (HTTP %d)", status)}
 	}
+	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+		Subject:    "n8n",
+		Auth:       "n8n rejected the API key",
+		Permission: "this n8n API key may not perform this operation; check its scopes under Settings, n8n API",
+		NotFound: "n8n does not hold this resource, does not show it to this API key, or this instance's " +
+			"Public API version does not have this endpoint",
+	})
 }
 
 func providerError(op, message string) error {

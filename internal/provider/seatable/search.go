@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -479,17 +478,8 @@ func (c *Client) post(ctx context.Context, op, path, token string, body []byte, 
 	if response.StatusCode != http.StatusOK {
 		return statusError(op, response.StatusCode)
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil || len(data) > maxResponseBytes {
-		return &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: op,
-			Message: "the SeaTable response could not be read within the size limit",
-		}
-	}
-	if err := json.Unmarshal(data, out); err != nil {
-		return &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: op, Message: "SeaTable returned an invalid response",
-		}
+	if failure := provider.ReadJSON(op, "SeaTable", response.Body, maxResponseBytes, out); failure != nil {
+		return failure
 	}
 	return nil
 }

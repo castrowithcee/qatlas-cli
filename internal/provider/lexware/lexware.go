@@ -13,7 +13,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -829,17 +828,8 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	if response.StatusCode != http.StatusOK {
 		return statusError(op, response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil || len(body) > maxResponseBytes {
-		return &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: op,
-			Message: "the Lexware response could not be read within the size limit",
-		}
-	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invalid response",
-		}
+	if failure := provider.ReadJSON(op, "Lexware", response.Body, maxResponseBytes, out); failure != nil {
+		return failure
 	}
 	return nil
 }
@@ -871,12 +861,8 @@ func (c *Client) post(ctx context.Context, op, path string, query url.Values, pa
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return statusError(op, response.StatusCode)
 	}
-	answer, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
-	if err != nil || len(answer) > maxResponseBytes {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the Lexware response could not be read within the size limit"}
-	}
-	if json.Unmarshal(answer, out) != nil {
-		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invalid response"}
+	if failure := provider.ReadJSON(op, "Lexware", response.Body, maxResponseBytes, out); failure != nil {
+		return failure
 	}
 	return nil
 }

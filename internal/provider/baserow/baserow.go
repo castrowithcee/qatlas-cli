@@ -32,7 +32,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -144,51 +143,33 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		return c.statusError(op, response)
+		return c.responseError(op, response)
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseSize+1))
-	if err != nil || len(data) > maxResponseSize {
-		return invalidResponse(op, "the Baserow response could not be read within the size limit")
-	}
-	if err := json.Unmarshal(data, out); err != nil {
-		return invalidResponse(op, "Baserow returned an invalid response")
+	if failure := provider.ReadJSON(op, "Baserow", response.Body, maxResponseSize, out); failure != nil {
+		return failure
 	}
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class; the provider body is never read into the message.
-func (c *Client) statusError(op string, response *http.Response) *provider.Error {
-	return c.statusErrorFor(op, response, "read")
+// responseError maps an HTTP status to a stable class; the provider body is never read into the message.
+func (c *Client) responseError(op string, response *http.Response) *provider.Error {
+	return c.responseErrorFor(op, response, "read")
 }
 
-// statusErrorFor is statusError for an operation that needs the given token right: read, create, update, or
+// responseErrorFor is responseError for an operation that needs the given token right: read, create, update, or
 // delete. A forbidden answer names that right, never the provider's text.
-func (c *Client) statusErrorFor(op string, response *http.Response, right string) *provider.Error {
+func (c *Client) responseErrorFor(op string, response *http.Response, right string) *provider.Error {
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseSize))
-	status := response.StatusCode
-	switch {
-	case status == http.StatusUnauthorized:
-		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Baserow rejected the database token"}
-	case status == http.StatusForbidden:
-		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this database token may not " + right + " this resource; check its " + right +
-				" right for the table"}
-	case status == http.StatusNotFound:
-		return &provider.Error{Class: provider.ClassNotFound, Op: op,
-			Message: "Baserow does not hold this resource or does not show it to this token"}
-	case status == http.StatusTooManyRequests:
+	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
-		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Baserow rate-limited the operation"}
-	case status == http.StatusServiceUnavailable:
-		return &provider.Error{Class: provider.ClassUnreachable, Op: op, Message: "Baserow is unavailable or in maintenance"}
-	case status == http.StatusGatewayTimeout:
-		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "Baserow did not answer in time"}
-	case status >= 300 && status < 400:
-		return &provider.Error{Class: provider.ClassProviderError, Op: op,
-			Message: "Baserow answered with a redirect, which Qatlas does not follow for this request"}
 	}
-	return &provider.Error{Class: provider.ClassProviderError, Op: op,
-		Message: "Baserow rejected the operation (HTTP " + strconv.Itoa(status) + ")"}
+	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+		Subject: "Baserow",
+		Auth:    "Baserow rejected the database token",
+		Permission: "this database token may not " + right + " this resource; check its " + right +
+			" right for the table",
+		NotFound: "Baserow does not hold this resource or does not show it to this token",
+	})
 }
 
 func providerError(op, message string) error {

@@ -171,12 +171,8 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, out
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		return c.statusError(op, response)
 	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, int64(maxBytes)+1))
-	if err != nil || len(data) > maxBytes {
-		return invalidResponse(op, "the Excalidraw+ response could not be read within the size limit")
-	}
-	if err := json.Unmarshal(data, out); err != nil {
-		return invalidResponse(op, "Excalidraw+ returned an invalid response")
+	if failure := provider.ReadJSON(op, "Excalidraw+", response.Body, int64(maxBytes), out); failure != nil {
+		return failure
 	}
 	return nil
 }

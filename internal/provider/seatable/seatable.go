@@ -1519,17 +1519,8 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, tok
 	if response.StatusCode != http.StatusOK {
 		return statusError(op, response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
-	if err != nil || int64(len(body)) > limit {
-		return &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: op,
-			Message: "the SeaTable response could not be read within the size limit",
-		}
-	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: op, Message: "SeaTable returned an invalid response",
-		}
+	if failure := provider.ReadJSON(op, "SeaTable", response.Body, limit, out); failure != nil {
+		return failure
 	}
 	return nil
 }

@@ -377,7 +377,7 @@ func (c *Client) send(ctx context.Context, hc *http.Client, op, method, path str
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode > 299 {
-		failure := c.statusErrorFor(op, response, right)
+		failure := c.responseErrorFor(op, response, right)
 		if response.StatusCode >= 500 {
 			failure.Message += uncertain
 		}
