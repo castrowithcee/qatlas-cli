@@ -1,8 +1,8 @@
 ---
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, count by
-  field) and record write (create, update) operations, object targets, connection permissions, and safety
-  boundaries.
+  field), record write (create, update), and record trash (delete, restore, destroy) operations, object
+  targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -14,7 +14,8 @@ updated: 2026-10-08
 A connection binds one API key to one managed or self-hosted workspace and, optionally, to a set of its
 objects (see Object targets). It can list and read companies (`read`), create them (`create`), change their
 name or primary domain (`update`), and delete them (`delete`). It can also create records of any reachable
-object and change their fields (see Writing records).
+object and change their fields (see Writing records), and delete, restore, and destroy them (see Deleting and
+restoring).
 Mutations require confirmation and only use the generated REST routes of the company or of a reachable
 object. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error, unreadable
 answer) it reports the outcome as uncertain and does not repeat the request.
@@ -71,7 +72,7 @@ Relation, array, and rich-text fields cannot be sorted by.
   notes). They appear only in a result, never in errors, logs, or audit entries, and carry their own data
   class. Set `object/` targets to keep a connection away from objects whose records it does not need.
 - The role of the API key is the ceiling: Twenty returns only the objects and fields the role grants, and
-  Qatlas adds no right. Soft-deleted records are not read.
+  Qatlas adds no right. Soft-deleted records are read only by `records.list` with `deleted`.
 
 ## Filtering and counting records
 
@@ -116,7 +117,7 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
 
 `records.create` and `records.update` (`create`, `update`) write one record of any reachable object. `create`
 posts the given `fields`; `update` patches only the fields named for the record `id` and needs at least one.
-Neither upserts, writes in batches, or deletes. Qatlas takes the object, its route, and the shape of every
+Neither upserts or writes in batches. Qatlas takes the object, its route, and the shape of every
 field from the workspace catalog and builds the request body from the checked values only.
 
 - Every field is checked against the schema before the request: a `create` against the create shape of the
@@ -145,18 +146,30 @@ field from the workspace catalog and builds the request body from the checked va
   text is never shown.
 
 The setup profile `write` ticks the read tools and these two record tools. It adds no company change and no
-deletion.
+deletion or restore.
 
 ## Deleting and restoring
 
-- `delete` moves a company to Twenty's trash. It stays recoverable.
-- `restore` brings a company back from the trash.
-- `destroy` deletes a company permanently. It cannot be undone, and `restore` cannot bring the company back.
-- `list` with `deleted` set to `true` lists only the companies in the trash.
+Companies and records of any reachable object share one trash contract:
 
-`delete` and `destroy` are offered only by a connection whose `tools` list names them; `permissions` alone
-does not admit them. No argument switches `delete` to permanent deletion. Each operation acts on one company
-identified by its UUID, and Qatlas checks that the answer names that company.
+- `delete` moves one company or record to Twenty's trash. It stays recoverable.
+- `restore` brings one company or record back from the trash.
+- `destroy` deletes one company or record permanently. It cannot be undone, and `restore` cannot bring it
+  back. Twenty's answer does not tell soft from permanent deletion, so the result only confirms that Twenty
+  accepted the request.
+- `list` with `deleted` set to `true` lists only what is in the trash; this holds for `companies.list` and
+  `records.list`, not for `records.search`.
+
+The record tools are `records.delete`, `records.restore`, and `records.destroy`. Each acts on one record of one
+reachable object, identified by its UUID, and sends one fixed route; no argument switches `delete` to permanent
+deletion or adds a filter, so there is no deletion or restore by filter or by list of identifiers. A refused
+object is rejected before the secret is read. Qatlas checks that the answer names the requested record. A 403 on
+`records.delete` and `records.destroy` points to the right of the role of the key (Delete Records, Destroy
+Records); Twenty's own text is never shown. Qatlas sends each of them once and reports an unclear result as
+uncertain.
+
+`delete` and `destroy`, for companies and records, are offered only by a connection whose `tools` list names
+them; `permissions` alone does not admit them. No profile ticks them or `records.restore`.
 
 The credential provides `api-key`. The key's workspace role remains the provider-side ceiling; the
 connection's local `permissions` list can only narrow it, and an optional `tools` list, for example

@@ -4,9 +4,10 @@
 // The provider talks to one fixed production gateway. It reads a bounded page of invoice metadata and the
 // detail of one invoice selected by its validated identifier, reads bounded pages and single records of
 // contacts and articles, bounded pages of the voucher list of every type and status, the payment status of
-// one voucher, and one bookkeeping voucher, and the organization profile and capped reference lists
-// (countries, payment conditions, posting categories, print layouts). It creates an invoice draft and issues a final invoice only
-// through its own tool, which a connection offers solely when its tools list names it. Contact, address,
+// one voucher, one bookkeeping voucher, the detail of one quotation, order confirmation, credit note,
+// or delivery note, the organization profile, and capped reference lists (countries, payment conditions,
+// posting categories, print layouts). It creates an invoice draft and issues a final invoice only through
+// its own tool, which a connection offers solely when its tools list names it. Contact, address,
 // article, voucher, and line-item content arrives from the provider and is treated as untrusted data: it is
 // normalised into a stable Qatlas shape, passed through the output encoders, and never rendered or stored.
 package lexware
@@ -274,6 +275,7 @@ var invoicesIssue = capability.Descriptor{
 func Register(reg *capability.Registry) error {
 	readTools := []string{invoicesList.ID, invoicesGet.ID, contactsList.ID, contactsGet.ID,
 		articlesList.ID, articlesGet.ID, voucherlistList.ID, paymentsGet.ID, vouchersGet.ID,
+		quotationsGet.ID, orderConfirmationsGet.ID, creditNotesGet.ID, deliveryNotesGet.ID,
 		profileGet.ID, countriesList.ID, paymentConditionsList.ID, postingCategoriesList.ID, printLayoutsList.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
@@ -314,6 +316,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: voucherlistList, Handler: capability.Handler(invokeVoucherlistList)},
 		capability.Operation{Descriptor: paymentsGet, Handler: capability.Handler(invokePaymentsGet)},
 		capability.Operation{Descriptor: vouchersGet, Handler: capability.Handler(invokeVouchersGet)},
+		capability.Operation{Descriptor: quotationsGet, Handler: salesVoucherHandler(quotationKind)},
+		capability.Operation{Descriptor: orderConfirmationsGet, Handler: salesVoucherHandler(orderConfirmationKind)},
+		capability.Operation{Descriptor: creditNotesGet, Handler: salesVoucherHandler(creditNoteKind)},
+		capability.Operation{Descriptor: deliveryNotesGet, Handler: salesVoucherHandler(deliveryNoteKind)},
 		capability.Operation{Descriptor: profileGet, Handler: capability.Handler(invokeProfileGet)},
 		capability.Operation{Descriptor: countriesList, Handler: capability.Handler(invokeCountriesList)},
 		capability.Operation{Descriptor: paymentConditionsList, Handler: capability.Handler(invokePaymentConditionsList)},
@@ -786,33 +792,16 @@ func (c *Client) GetInvoice(ctx context.Context, id string) (*Invoice, error) {
 		}
 	}
 
-	invoice := &Invoice{
-		ID: raw.ID, VoucherNumber: raw.VoucherNumber, VoucherStatus: raw.VoucherStatus,
-		Overdue: raw.VoucherStatus == "overdue", VoucherDate: raw.VoucherDate, DueDate: raw.DueDate,
-		CreatedDate: raw.CreatedDate, UpdatedDate: raw.UpdatedDate, Archived: raw.Archived,
-		Language: raw.Language, Title: raw.Title, Introduction: raw.Introduction, Remark: raw.Remark,
-		TaxType: raw.TaxConditions.TaxType, Currency: raw.TotalPrice.Currency,
-		TotalNetAmount: raw.TotalPrice.TotalNetAmount, TotalGrossAmount: raw.TotalPrice.TotalGrossAmount,
-		TotalTaxAmount: raw.TotalPrice.TotalTaxAmount,
-		LineItems:      make([]LineItem, 0, len(raw.LineItems)),
-	}
-	contact := Contact{
-		ID: raw.Address.ContactID, Name: raw.Address.Name, Supplement: raw.Address.Supplement,
-		Street: raw.Address.Street, Zip: raw.Address.Zip, City: raw.Address.City,
-		CountryCode: raw.Address.CountryCode,
-	}
-	if contact != (Contact{}) {
-		invoice.Contact = &contact
-	}
-	for _, item := range raw.LineItems {
-		invoice.LineItems = append(invoice.LineItems, LineItem{
-			Type: item.Type, Name: item.Name, Description: item.Description, Quantity: item.Quantity,
-			UnitName: item.UnitName, UnitNetAmount: item.UnitPrice.NetAmount,
-			UnitGrossAmount: item.UnitPrice.GrossAmount, TaxRatePercentage: item.UnitPrice.TaxRatePercentage,
-			DiscountPercentage: item.DiscountPercentage, Amount: item.LineItemAmount,
-		})
-	}
-	return invoice, nil
+	voucher := raw.normalize()
+	return &Invoice{
+		ID: voucher.ID, VoucherNumber: voucher.VoucherNumber, VoucherStatus: voucher.VoucherStatus,
+		Overdue: voucher.VoucherStatus == "overdue", VoucherDate: voucher.VoucherDate, DueDate: raw.DueDate,
+		CreatedDate: voucher.CreatedDate, UpdatedDate: voucher.UpdatedDate, Archived: voucher.Archived,
+		Language: voucher.Language, Title: voucher.Title, Introduction: voucher.Introduction,
+		Remark: voucher.Remark, TaxType: voucher.TaxType, Currency: voucher.Currency,
+		TotalNetAmount: voucher.TotalNetAmount, TotalGrossAmount: voucher.TotalGrossAmount,
+		TotalTaxAmount: voucher.TotalTaxAmount, Contact: voucher.Contact, LineItems: voucher.LineItems,
+	}, nil
 }
 
 type createResult struct {
@@ -916,18 +905,23 @@ type voucherListJSON struct {
 	Last          bool `json:"last"`
 }
 
-// invoiceJSON mirrors the provider fields the get operation reads.
+// invoiceJSON mirrors the provider fields of a sales voucher the get operations read. Invoices, quotations,
+// order confirmations, credit notes, and delivery notes share this structure; a member a type does not
+// carry stays empty.
 type invoiceJSON struct {
-	ID            string `json:"id"`
-	CreatedDate   string `json:"createdDate"`
-	UpdatedDate   string `json:"updatedDate"`
-	Language      string `json:"language"`
-	Archived      bool   `json:"archived"`
-	VoucherStatus string `json:"voucherStatus"`
-	VoucherNumber string `json:"voucherNumber"`
-	VoucherDate   string `json:"voucherDate"`
-	DueDate       string `json:"dueDate"`
-	Address       struct {
+	ID             string `json:"id"`
+	CreatedDate    string `json:"createdDate"`
+	UpdatedDate    string `json:"updatedDate"`
+	Version        int    `json:"version"`
+	Language       string `json:"language"`
+	Archived       bool   `json:"archived"`
+	VoucherStatus  string `json:"voucherStatus"`
+	VoucherNumber  string `json:"voucherNumber"`
+	VoucherDate    string `json:"voucherDate"`
+	DueDate        string `json:"dueDate"`
+	ExpirationDate string `json:"expirationDate"`
+	DeliveryTerms  string `json:"deliveryTerms"`
+	Address        struct {
 		ContactID   string `json:"contactId"`
 		Name        string `json:"name"`
 		Supplement  string `json:"supplement"`
@@ -960,9 +954,57 @@ type invoiceJSON struct {
 	TaxConditions struct {
 		TaxType string `json:"taxType"`
 	} `json:"taxConditions"`
+	ShippingConditions struct {
+		ShippingType    string `json:"shippingType"`
+		ShippingDate    string `json:"shippingDate"`
+		ShippingEndDate string `json:"shippingEndDate"`
+	} `json:"shippingConditions"`
+	RelatedVouchers []struct {
+		ID            string `json:"id"`
+		VoucherNumber string `json:"voucherNumber"`
+		VoucherType   string `json:"voucherType"`
+	} `json:"relatedVouchers"`
 	Title        string `json:"title"`
 	Introduction string `json:"introduction"`
 	Remark       string `json:"remark"`
+}
+
+// normalize is the shared mapper of every sales voucher type: it flattens the provider shape into the stable
+// Qatlas view. GetInvoice derives its unchanged output from it.
+func (raw *invoiceJSON) normalize() *SalesVoucher {
+	voucher := &SalesVoucher{
+		ID: raw.ID, VoucherNumber: raw.VoucherNumber, VoucherStatus: raw.VoucherStatus,
+		VoucherDate: raw.VoucherDate, ExpirationDate: raw.ExpirationDate, DeliveryTerms: raw.DeliveryTerms,
+		CreatedDate: raw.CreatedDate, UpdatedDate: raw.UpdatedDate, Version: raw.Version,
+		Archived: raw.Archived, Language: raw.Language, Title: raw.Title, Introduction: raw.Introduction,
+		Remark: raw.Remark, TaxType: raw.TaxConditions.TaxType, Currency: raw.TotalPrice.Currency,
+		TotalNetAmount: raw.TotalPrice.TotalNetAmount, TotalGrossAmount: raw.TotalPrice.TotalGrossAmount,
+		TotalTaxAmount: raw.TotalPrice.TotalTaxAmount,
+		LineItems:      make([]LineItem, 0, len(raw.LineItems)),
+	}
+	contact := Contact{
+		ID: raw.Address.ContactID, Name: raw.Address.Name, Supplement: raw.Address.Supplement,
+		Street: raw.Address.Street, Zip: raw.Address.Zip, City: raw.Address.City,
+		CountryCode: raw.Address.CountryCode,
+	}
+	if contact != (Contact{}) {
+		voucher.Contact = &contact
+	}
+	if shipping := Shipping(raw.ShippingConditions); shipping != (Shipping{}) {
+		voucher.Shipping = &shipping
+	}
+	for _, related := range raw.RelatedVouchers {
+		voucher.RelatedVouchers = append(voucher.RelatedVouchers, RelatedVoucher(related))
+	}
+	for _, item := range raw.LineItems {
+		voucher.LineItems = append(voucher.LineItems, LineItem{
+			Type: item.Type, Name: item.Name, Description: item.Description, Quantity: item.Quantity,
+			UnitName: item.UnitName, UnitNetAmount: item.UnitPrice.NetAmount,
+			UnitGrossAmount: item.UnitPrice.GrossAmount, TaxRatePercentage: item.UnitPrice.TaxRatePercentage,
+			DiscountPercentage: item.DiscountPercentage, Amount: item.LineItemAmount,
+		})
+	}
+	return voucher
 }
 
 // invoiceMayExist is appended to a failure of an invoice creation whose request may have reached Lexware:

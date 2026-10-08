@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Lexware reads of invoices, vouchers, contacts, articles, organization profile and reference data, invoice drafts and issuing,
-  permissions, and credentials.
+  Describes Lexware reads of invoices, sales documents, vouchers, contacts, articles, the organization
+  profile and reference data, invoice drafts and issuing, permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -19,14 +19,14 @@ of every type and status; without a type or status filter it includes all of the
 `overdue` each stand alone in their filter. Lexware lists at most 10,000 vouchers per filter, so a page beyond
 that limit is refused before any request; narrow the filter instead. It also reads the payment status of one
 voucher and one bookkeeping voucher with its positions; bookkeeping vouchers are their own data class.
+Quotations, order confirmations, credit notes and delivery notes each have their own detail tool by
+identifier, with address, positions, totals, shipping and related vouchers; a delivery note carries no prices.
 
-`lexware.profile.get` reads the organization, contract features and tax settings of the API key's organization
-(data class `lexware-account-data`); the name, email and identifiers of the key creator are never returned.
-`lexware.countries.list`, `lexware.paymentconditions.list`, `lexware.postingcategories.list` and
-`lexware.printlayouts.list` read fixed reference lists (data class `lexware-reference-data`); only the posting
-categories accept a local `type` filter. Countries are capped at 500 entries, the other lists at 200; a longer
-answer is cut and marked `truncated`. Print layouts need the contract scope `INVOICING_PRO`; without it Lexware
-refuses the call and the error names a missing contract scope.
+`lexware.profile.get` reads the organization, its contract features and tax settings as their own data class;
+the name, email and identifiers of the key creator are never returned. Countries, payment conditions, posting
+categories and print layouts are fixed reference lists; a list longer than its cap is cut and marked
+`truncated`. Print layouts need the Lexware contract scope `INVOICING_PRO`; without it the call fails as a
+missing contract scope.
 
 `lexware.invoices.create` creates an invoice as a draft without an invoice number (`create`), always with
 confirmation. Issuing an invoice is the separate tool `lexware.invoices.issue`: Lexware then assigns the
