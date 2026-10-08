@@ -3,10 +3,13 @@
 // A Nextcloud installation holds many identities, and every identity owns its own file tree below
 // /remote.php/dav/files/{user-id}/. That cardinality is the configuration: a service is one instance with
 // an optional installation path, a credential is one user ID together with one revocable app password,
-// and a connection binds them to one fixed root folder. An invoke request can name neither the instance,
-// nor the identity, nor the root; it may only address a path below the root the connection is bound to.
+// and a connection binds them to typed targets, among them at most one fixed root folder. An invoke
+// request can name neither the instance, nor the identity, nor the root; it may only address a path below
+// the root the connection is bound to. The tools of this package are the Files tools; the other target
+// kinds are parsed and bound in targets.go.
 //
-// The adapter produces only explicit Files WebDAV requests and never reaches another app of the instance. Names, DAV
+// The adapter produces only explicit Files WebDAV requests (PROPFIND, GET, PUT, DELETE, and the chunked
+// upload methods) and never reaches another app of the instance. Names, DAV
 // properties, and the whole multi-status document arrive from the provider and are treated as untrusted
 // data: they are normalised into a stable metadata envelope, passed through the output encoders, and
 // never rendered or stored.
@@ -56,8 +59,8 @@ var filesRoot = []string{"remote.php", "dav", "files"}
 // uploadsRoot are the fixed path segments of the upload area for chunked uploads; the user ID follows them.
 var uploadsRoot = []string{"remote.php", "dav", "uploads"}
 
-// methodPropfind is the only HTTP method this adapter ever produces. A read of metadata needs nothing
-// else, and a server can therefore not receive a writing or content-delivering request through it.
+// methodPropfind is the HTTP method of every metadata read. The file operations add only their own fixed
+// methods (GET, PUT, DELETE, and the chunked upload methods); no method comes from a request.
 const methodPropfind = "PROPFIND"
 
 // The two depths this adapter uses: the node itself, and the node plus its immediate children. A larger
@@ -289,11 +292,18 @@ func Register(reg *capability.Registry) error {
 				"sessions, create a new app password; it is revocable on its own and is what Nextcloud " +
 				"expects from a WebDAV client, especially with two-factor or external authentication",
 		}},
+		Groups: toolGroups,
 		Target: config.TargetMetadata{
-			Label:    "root folder",
+			Label:    "targets",
 			Required: true,
-			Description: "fixed folder below the Files of this identity that this connection may access, " +
-				"for example Reports or Team/Reports; a single / binds the whole Files root",
+			Multiple: true,
+			Description: "what this connection may reach: a Files folder as folder/PATH (folder alone is the " +
+				"whole Files root), and calendar, addressbook, talk, deck, notes, account, or admin targets; a " +
+				"single target field holds only a root folder such as Reports or Team/Reports, or / for the whole Files root",
+			Kinds:          targetKinds,
+			Validate:       validateTarget,
+			ValidateSet:    validateTargetSet,
+			ValidateSingle: validateSingleTarget,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read files", Recommended: true,
@@ -304,13 +314,19 @@ func Register(reg *capability.Registry) error {
 		return err
 	}
 	return reg.Register(Provider,
-		capability.Operation{Descriptor: filesList, Handler: capability.Handler(invokeFilesList)},
-		capability.Operation{Descriptor: filesStat, Handler: capability.Handler(invokeFilesStat)},
-		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
-		capability.Operation{Descriptor: filesCreate, Handler: capability.Handler(invokeFilesCreate)},
-		capability.Operation{Descriptor: filesUpdate, Handler: capability.Handler(invokeFilesUpdate)},
-		capability.Operation{Descriptor: filesDelete, Handler: capability.Handler(invokeFilesDelete)},
+		capability.Operation{Descriptor: grouped(filesList), Handler: folderBound(invokeFilesList)},
+		capability.Operation{Descriptor: grouped(filesStat), Handler: folderBound(invokeFilesStat)},
+		capability.Operation{Descriptor: grouped(filesGet), Handler: folderBound(invokeFilesGet)},
+		capability.Operation{Descriptor: grouped(filesCreate), Handler: folderBound(invokeFilesCreate)},
+		capability.Operation{Descriptor: grouped(filesUpdate), Handler: folderBound(invokeFilesUpdate)},
+		capability.Operation{Descriptor: grouped(filesDelete), Handler: folderBound(invokeFilesDelete)},
 	)
+}
+
+// grouped sorts a Files tool into the files group.
+func grouped(d capability.Descriptor) capability.Descriptor {
+	d.Group = groupFiles
+	return d
 }
 
 // arguments are the only inputs either operation accepts. The instance, the identity, and the root folder
@@ -500,6 +516,13 @@ type Client struct {
 
 // Open resolves the identity of one selected connection and returns a client bound to its root folder.
 func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor) (*Client, error) {
+	return open(ctx, resolved, secrets, red, true)
+}
+
+// open resolves the identity. A client for the Files tools needs a folder target and refuses without one
+// before any credential access; the connection test may run without it and then addresses the Files root
+// of the identity.
+func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, needFolder bool) (*Client, error) {
 	const op = "open"
 	if resolved == nil {
 		return nil, providerError(op, "no connection was selected")
@@ -508,10 +531,15 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if err != nil {
 		return nil, providerError(op, err.Error())
 	}
-	root, err := parseRoot(resolved.Target)
+	bound, err := scopeOf(resolved)
 	if err != nil {
 		return nil, providerError(op, err.Error())
 	}
+	if needFolder && !bound.hasFolder {
+		_, err := requireFolder(resolved)
+		return nil, err
+	}
+	root := bound.folder
 	if secrets == nil {
 		return nil, providerError(op, "no credential resolver was configured")
 	}
@@ -690,11 +718,12 @@ func (c *Client) requestURL(rel []string) string {
 var transport http.RoundTripper
 
 // TestConnection performs the smallest safe authenticated read: one PROPFIND of depth 0 on the fixed root
-// folder. It proves that the instance answers Files WebDAV, that the app password is accepted, and that
-// the identity may read the folder the connection is bound to. Nothing is written and no content is read.
+// folder, or on the Files root of the identity when the connection binds no folder. It proves that the
+// instance answers Files WebDAV, that the app password is accepted, and, with a folder, that the identity
+// may read it. Nothing is written, no content is read, and no metadata is reported.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := open(ctx, resolved, secrets, red, false)
 	if err != nil {
 		var providerErr *provider.Error
 		if errors.As(err, &providerErr) {
@@ -717,6 +746,9 @@ func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
 		// A missing root is reported with its own explanation, because no stable class can say that the
 		// instance and the credential are fine while the configured folder is not there.
 		if providerErr.Class == provider.ClassProviderError && providerErr.Message == messageNotFound {
+			if len(c.root) == 0 {
+				return "", errors.New("this Nextcloud identity has no Files root at this instance")
+			}
 			return "", errors.New(
 				"this Nextcloud identity does not hold the root folder this connection is bound to")
 		}

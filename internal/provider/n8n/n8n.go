@@ -13,7 +13,7 @@
 // deleted (datacolumns.go); their rows are listed, inserted, updated, upserted, and deleted by a
 // structured filter, never cleared (datarows.go). Variables are listed, created, updated, and deleted, project-bound and global
 // ones kept apart (variables.go). Tags are managed instance-wide (tags.go). Instance users are listed,
-// read, invited, re-roled, and deleted instance-wide, owner-only, with the fate of their resources chosen
+// read, re-roled, and deleted instance-wide, owner-only, with the fate of their resources chosen
 // explicitly (users.go). Credentials are listed and read
 // as metadata only, never a stored value, tested, and their type schemas read (credentials.go); they are
 // created, updated, moved between projects, and deleted (credentialchanges.go), secret values only by a
@@ -423,6 +423,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "n8n", DefaultPermissions: []config.Permission{config.PermissionRead},
+		RemovedTools: []string{"n8n.users.invite"},
 		Description: "Workflow automation platform, self-hosted or n8n Cloud, read and confirmed changes " +
 			"of workflows, executions, and projects through its Public API",
 		SecretRoles: []config.SecretRole{{
@@ -561,11 +562,11 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{usersList.ID, usersGet.ID},
 		}, {
 			ID: "users-manage", Title: "Manage users",
-			Description: "lists, reads, invites, and changes the instance role of users (never global:owner); " +
+			Description: "lists, reads, and changes the instance role of users (never global:owner); " +
 				"owner-only and only on a connection without project and workflow targets; every change needs " +
 				"its own confirmation. Deleting a user is never part of a profile: n8n.users.delete is offered " +
 				"only by a connection whose tools list names it",
-			Tools: []string{usersList.ID, usersGet.ID, usersInvite.ID, usersSetRole.ID},
+			Tools: []string{usersList.ID, usersGet.ID, usersSetRole.ID},
 		}, {
 			ID: "audit", Title: "Generate a security audit",
 			Description: "generates n8n's security audit report (credentials, database, nodes, filesystem, " +
@@ -639,7 +640,6 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: tagsDelete, Handler: capability.Handler(invokeTagsDelete)},
 		capability.Operation{Descriptor: usersList, Handler: capability.Handler(invokeUsersList)},
 		capability.Operation{Descriptor: usersGet, Handler: capability.Handler(invokeUsersGet)},
-		capability.Operation{Descriptor: usersInvite, Handler: capability.Handler(invokeUsersInvite)},
 		capability.Operation{Descriptor: usersSetRole, Handler: capability.Handler(invokeUsersSetRole)},
 		capability.Operation{Descriptor: usersDelete, Handler: capability.Handler(invokeUsersDelete)},
 		capability.Operation{Descriptor: auditGenerate, Handler: capability.Handler(invokeAuditGenerate)},

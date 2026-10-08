@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -75,11 +77,12 @@ var teamsList = capability.Descriptor{
 
 var collaboratorsUpdate = capability.Descriptor{
 	ID:      Provider + ".projectcollaborators.update",
-	Version: 1,
+	Version: 2,
 	Title:   "Change the collaborators of a GitHub project",
-	Description: "Grant users or teams a role on one GitHub project a connection allows, change it, " +
-		"or remove their direct access; this changes who may read, edit, or manage the project. Offered only " +
-		"by a connection whose tools list names it",
+	Description: "Grant teams of the owning organization and its members a role on one organization project " +
+		"a connection allows, change it, or remove the direct access of any user or team; this changes who may " +
+		"read, edit, or manage the project. Membership is checked live before the change. Offered only by a " +
+		"connection whose tools list names it",
 	Tags:                  []string{"github", "projects", "collaborators", "access", "update"},
 	Risk:                  changeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider:              Provider,
@@ -89,8 +92,9 @@ var collaboratorsUpdate = capability.Descriptor{
 	OutputSchema: json.RawMessage(collaboratorsOutput),
 	Arguments: []capability.Argument{{Name: "collaborators", Description: "At most 20 entries, each naming " +
 		"either user (a login) or team (the slug of a team of the project's organization) and role: none " +
-		"removes the direct access, reader views, writer edits, admin also manages the project's settings; " +
-		"collaborators left out stay unchanged", Required: true}},
+		"removes the direct access of any user or team, reader views, writer edits, admin also manages the " +
+		"project's settings, and a role other than none needs a team or a member of the project's " +
+		"organization; collaborators left out stay unchanged", Required: true}},
 	Fields: []capability.Field{
 		{Name: "collaborators", Description: "The roles GitHub confirmed, one entry per requested collaborator"},
 		{Name: "updated", Description: "True once GitHub applied every role"},
@@ -278,6 +282,21 @@ func checkTeamOwner(project target) error {
 	return nil
 }
 
+// checkUserRoles refuses a role other than none for a user on a project of a user: Qatlas grants no access to
+// people outside the owning organization. Removing access stays allowed.
+func (list Collaborators) checkUserRoles(project target) error {
+	if project.scope == "orgs" {
+		return nil
+	}
+	for _, entry := range list.Collaborators {
+		if entry.User != "" && entry.Role != "none" {
+			return invalidRequest("only teams and members of the owning organization may be granted a role, and " +
+				project.argument() + " belongs to a user; role none removes access")
+		}
+	}
+	return nil
+}
+
 const (
 	collaboratorsMutation = `mutation($project:ID!,$collaborators:[ProjectV2Collaborator!]!){` +
 		`update:updateProjectV2Collaborators(input:{projectId:$project,collaborators:$collaborators}){` +
@@ -373,6 +392,9 @@ func (c *Client) UpdateCollaborators(ctx context.Context, list Collaborators) (*
 			return nil, err
 		}
 	}
+	if err := list.checkUserRoles(c.target); err != nil {
+		return nil, err
+	}
 	var request planningRequest
 	for _, entry := range list.Collaborators {
 		if entry.Team != "" {
@@ -383,6 +405,9 @@ func (c *Client) UpdateCollaborators(ctx context.Context, list Collaborators) (*
 	}
 	info, nodes, err := c.resolve(ctx, op, request)
 	if err != nil {
+		return nil, err
+	}
+	if err := c.requireMembers(ctx, list); err != nil {
 		return nil, err
 	}
 	inputs := make([]map[string]any, len(list.Collaborators))
@@ -406,6 +431,37 @@ func (c *Client) UpdateCollaborators(ctx context.Context, list Collaborators) (*
 		return nil, invalidResponse(op, true)
 	}
 	return &ChangedCollaborators{Collaborators: list.Collaborators, Updated: true}, nil
+}
+
+// requireMembers checks live that every user granted a role is a member of the organization that owns the
+// project. Only a 204 counts: a 404, a redirect, which GitHub answers when the token cannot see the
+// membership, and every other answer leave the membership unproven. Each check is sent once, and one
+// unproven user refuses the whole change before the mutation.
+func (c *Client) requireMembers(ctx context.Context, list Collaborators) error {
+	const op = "check organization membership"
+	for _, entry := range list.Collaborators {
+		if entry.User == "" || entry.Role == "none" {
+			continue
+		}
+		var status int
+		err := c.do(ctx, op, http.MethodGet, c.endpoints.rest+"/orgs/"+url.PathEscape(c.target.owner)+"/members/"+
+			url.PathEscape(entry.User), nil, nil, false, nil, &status)
+		var providerErr *provider.Error
+		switch {
+		case err == nil && status == http.StatusNoContent:
+			continue
+		case errors.As(err, &providerErr) && providerErr.Class == provider.ClassPermission:
+			providerErr.Message += "; reading memberships needs read:org on a classic token, or Members: read of " +
+				"the organization on a fine-grained one"
+			return err
+		case errors.As(err, &providerErr) && providerErr.Class != provider.ClassNotFound &&
+			providerErr.Class != provider.ClassProviderError:
+			return err
+		}
+		return invalidRequest("only teams and members of the owning organization may be granted a role, and " +
+			"every user named with a role other than none must be a confirmed member of orgs/" + c.target.owner)
+	}
+	return nil
 }
 
 // LinkTeam links the bound project of an organization to one of its teams, or unlinks it. The project and
@@ -482,6 +538,9 @@ func invokeCollaboratorsUpdate(ctx context.Context, resolved *config.Resolved, s
 		if err := checkTeamOwner(bound); err != nil {
 			return nil, err
 		}
+	}
+	if err := list.checkUserRoles(bound); err != nil {
+		return nil, err
 	}
 	client, err := openAt(ctx, resolved, secrets, red, bound)
 	if err != nil {

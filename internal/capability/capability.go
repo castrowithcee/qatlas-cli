@@ -259,6 +259,7 @@ func cloneMetadata(metadata config.ProviderMetadata) config.ProviderMetadata {
 	metadata.DefaultPermissions = append([]config.Permission(nil), metadata.DefaultPermissions...)
 	metadata.SupportedPermissions = append([]config.Permission(nil), metadata.SupportedPermissions...)
 	metadata.Tools = append([]config.ToolMetadata(nil), metadata.Tools...)
+	metadata.RemovedTools = append([]string(nil), metadata.RemovedTools...)
 	metadata.Profiles = append([]config.ToolProfile(nil), metadata.Profiles...)
 	metadata.Groups = append([]config.ToolGroup(nil), metadata.Groups...)
 	for i := range metadata.Profiles {

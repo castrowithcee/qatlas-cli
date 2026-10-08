@@ -144,8 +144,9 @@ const invoiceBody = `{
   "title":"Rechnung","introduction":"Ihre bestellten Positionen","remark":"Vielen Dank"
 }`
 
-// Register publishes the configuration metadata the TUI needs and exactly two read-only operations.
-func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
+// Register publishes the configuration metadata the TUI needs, two reads, a draft creation, and the
+// allow-list-only issue operation.
+func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 	reg := capability.NewRegistry()
 	if err := Register(reg); err != nil {
 		t.Fatalf("Register() = %v", err)
@@ -159,11 +160,14 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 3 {
-		t.Fatalf("operations = %d, want three invoice operations", len(operations))
+	if len(operations) != 4 {
+		t.Fatalf("operations = %d, want four invoice operations", len(operations))
 	}
+	versions := map[string]int{"lexware.invoices.create": 2, "lexware.invoices.issue": 1,
+		"lexware.invoices.get": 1, "lexware.invoices.list": 1}
 	for _, descriptor := range operations {
-		if descriptor.Version != 1 || descriptor.Provider != Provider ||
+		write := descriptor.Risk.Effect == capability.EffectCreate
+		if descriptor.Version != versions[descriptor.ID] || descriptor.Provider != Provider ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
 			t.Errorf("descriptor %s = %+v, want a bounded operation",
 				descriptor.ID, descriptor)
@@ -171,27 +175,40 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		if len(descriptor.Examples) > 0 && strings.Contains(string(descriptor.Examples[0].Arguments), "key") {
 			t.Errorf("descriptor %s examples = %s", descriptor.ID, descriptor.Examples)
 		}
+		if len(descriptor.Arguments) == 0 || len(descriptor.Fields) == 0 || len(descriptor.Examples) == 0 {
+			t.Errorf("descriptor %s lacks arguments, fields, or examples", descriptor.ID)
+		}
+		if write {
+			wantRisk := capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
+				Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity}
+			if descriptor.Risk != wantRisk || strings.Contains(string(descriptor.InputSchema), "finalize") ||
+				descriptor.RequiresToolAllowList != (descriptor.ID == "lexware.invoices.issue") {
+				t.Errorf("descriptor %s = %+v", descriptor.ID, descriptor)
+			}
+		}
 	}
-	if operations[0].ID != "lexware.invoices.create" || operations[2].ID != "lexware.invoices.list" {
+	if operations[0].ID != "lexware.invoices.create" || operations[3].ID != "lexware.invoices.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
+	}
+	profiles := map[string]config.ToolProfile{}
+	for _, profile := range metadata.Profiles {
+		profiles[profile.ID] = profile
+		for _, id := range profile.Tools {
+			if id == invoicesIssue.ID {
+				t.Errorf("profile %s selects the issue tool", profile.ID)
+			}
+		}
+	}
+	if len(profiles) != 2 || !profiles["read"].Recommended || len(profiles["read"].Tools) != 2 ||
+		profiles["write"].Recommended || profiles["write"].Title != "Master data and drafts" ||
+		len(profiles["write"].Tools) != 3 {
+		t.Errorf("profiles = %+v", profiles)
 	}
 }
 
-func TestCreateInvoicePostsAnExplicitPayloadAndFinalizeFlag(t *testing.T) {
-	serve(t, func(request *http.Request) (*http.Response, error) {
-		if request.Method != http.MethodPost || request.URL.Path != "/v1/invoices" || request.URL.Query().Get("finalize") != "true" {
-			t.Errorf("request = %s %s", request.Method, request.URL.String())
-		}
-		var payload map[string]json.RawMessage
-		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
-			t.Error(err)
-		}
-		if _, ok := payload["lineItems"]; !ok {
-			t.Error("lineItems missing")
-		}
-		return jsonResponse(http.StatusCreated, `{"id":"`+invoiceID+`","version":1}`), nil
-	})
-	input := createInput{Finalize: true, VoucherDate: "2026-09-12T00:00:00+02:00", Currency: "EUR", TaxType: "net", ShippingDate: "2026-09-12T00:00:00+02:00", ShippingType: "service"}
+// invoiceInput is a valid input for the position-free paths a request test needs.
+func invoiceInput() createInput {
+	input := createInput{VoucherDate: "2026-09-12T00:00:00+02:00", Currency: "EUR", TaxType: "net", ShippingDate: "2026-09-12T00:00:00+02:00", ShippingType: "service"}
 	input.Address.ContactID = invoiceID
 	input.LineItems = append(input.LineItems, struct {
 		Type        string      `json:"type"`
@@ -204,13 +221,141 @@ func TestCreateInvoicePostsAnExplicitPayloadAndFinalizeFlag(t *testing.T) {
 		TaxRate     json.Number `json:"tax_rate_percentage,omitempty"`
 		Discount    json.Number `json:"discount_percentage,omitempty"`
 	}{Type: "text", Name: "Note"})
+	return input
+}
+
+func TestCreateInvoicePostsADraftWithoutFinalizeQuery(t *testing.T) {
+	requests := 0
+	serve(t, func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.Method != http.MethodPost || request.URL.Path != "/v1/invoices" || request.URL.RawQuery != "" {
+			t.Errorf("request = %s %s", request.Method, request.URL.String())
+		}
+		var payload map[string]json.RawMessage
+		if err := json.NewDecoder(request.Body).Decode(&payload); err != nil {
+			t.Error(err)
+		}
+		if _, ok := payload["lineItems"]; !ok {
+			t.Error("lineItems missing")
+		}
+		return jsonResponse(http.StatusCreated, `{"id":"`+invoiceID+`","version":1}`), nil
+	})
 	c, _ := client(t)
-	got, err := c.CreateInvoice(context.Background(), input)
+	got, err := c.CreateInvoice(context.Background(), invoiceInput())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.ID != invoiceID || !got.Finalized {
-		t.Fatalf("result = %+v", got)
+	if got.ID != invoiceID || requests != 1 {
+		t.Fatalf("result = %+v, requests = %d", got, requests)
+	}
+}
+
+func TestIssueInvoicePostsWithExactlyTheFinalizeQuery(t *testing.T) {
+	requests := 0
+	serve(t, func(request *http.Request) (*http.Response, error) {
+		requests++
+		if request.Method != http.MethodPost || request.URL.Path != "/v1/invoices" || request.URL.RawQuery != "finalize=true" {
+			t.Errorf("request = %s %s", request.Method, request.URL.String())
+		}
+		return jsonResponse(http.StatusCreated, `{"id":"`+invoiceID+`","version":1}`), nil
+	})
+	c, _ := client(t)
+	got, err := c.IssueInvoice(context.Background(), invoiceInput())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != invoiceID || requests != 1 {
+		t.Fatalf("result = %+v, requests = %d", got, requests)
+	}
+}
+
+func invoiceArgs(extra string) json.RawMessage {
+	return json.RawMessage(`{"voucher_date":"2026-09-12T00:00:00+02:00","address":{"contact_id":"` + invoiceID + `"},` +
+		`"line_items":[{"type":"text","name":"Note"}],"currency":"EUR","tax_type":"net","shipping_type":"none"` + extra + `}`)
+}
+
+// issueConfig is coreConfig with a connection that may create but names no tool, and one that names both.
+func issueConfig() *config.Config {
+	cfg := coreConfig()
+	cfg.Connections["lexware-creator"] = config.Connection{Service: "lexware", Credential: "primary-key",
+		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}}
+	cfg.Connections["lexware-issuer"] = config.Connection{Service: "lexware", Credential: "primary-key",
+		Permissions: []config.Permission{config.PermissionCreate},
+		Tools:       []string{"lexware.invoices.create", "lexware.invoices.issue"}}
+	return cfg
+}
+
+func TestIssueIsOfferedOnlyThroughAnExplicitToolEntry(t *testing.T) {
+	stubLimiter(t, primaryKey)
+	var queries []string
+	serve(t, func(request *http.Request) (*http.Response, error) {
+		queries = append(queries, request.URL.RawQuery)
+		return jsonResponse(http.StatusCreated, `{"id":"`+invoiceID+`","version":1}`), nil
+	})
+	red := &redact.Redactor{}
+	core := application.New(registry(t), issueConfig(), resolver(red), red)
+	invoke := func(operation, connection string, args json.RawMessage, confirm bool) error {
+		_, err := core.Invoke(context.Background(), application.InvokeRequest{
+			Operation: operation, Connection: connection, Arguments: args, Confirmed: confirm})
+		return err
+	}
+
+	for _, connection := range []string{"lexware-creator", "lexware-primary"} {
+		if err := invoke("lexware.invoices.issue", connection, invoiceArgs(""), true); err == nil {
+			t.Errorf("%s offered lexware.invoices.issue without a tools entry", connection)
+		}
+	}
+	if len(queries) != 0 {
+		t.Fatalf("requests before the offer = %v, want none", queries)
+	}
+	if err := invoke("lexware.invoices.create", "lexware-creator", invoiceArgs(""), true); err != nil {
+		t.Fatalf("create on a permission connection = %v", err)
+	}
+	if err := invoke("lexware.invoices.issue", "lexware-issuer", invoiceArgs(""), true); err != nil {
+		t.Fatalf("issue on a connection that names it = %v", err)
+	}
+	if len(queries) != 2 || queries[0] != "" || queries[1] != "finalize=true" {
+		t.Errorf("queries = %q, want a draft and an issue request", queries)
+	}
+}
+
+func TestInvoiceCreationsAreRefusedBeforeIO(t *testing.T) {
+	refuse(t)
+	red := &redact.Redactor{}
+	core := application.New(registry(t), issueConfig(), resolver(red), red)
+	tests := []struct {
+		name, operation, connection string
+		args                        json.RawMessage
+		confirm                     bool
+	}{
+		{"create without confirm", "lexware.invoices.create", "lexware-creator", invoiceArgs(""), false},
+		{"issue without confirm", "lexware.invoices.issue", "lexware-issuer", invoiceArgs(""), false},
+		{"finalize in create", "lexware.invoices.create", "lexware-creator", invoiceArgs(`,"finalize":true`), true},
+		{"finalize false in create", "lexware.invoices.create", "lexware-creator", invoiceArgs(`,"finalize":false`), true},
+		{"finalize in issue", "lexware.invoices.issue", "lexware-issuer", invoiceArgs(`,"finalize":true`), true},
+		{"contact id that is no UUID", "lexware.invoices.create", "lexware-creator",
+			json.RawMessage(strings.Replace(string(invoiceArgs("")), invoiceID, "../v1/contacts/"+bodyCanary, 1)), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := core.Invoke(context.Background(), application.InvokeRequest{
+				Operation: tt.operation, Connection: tt.connection, Arguments: tt.args, Confirmed: tt.confirm})
+			if err == nil {
+				t.Fatal("the core accepted the request")
+			}
+			if strings.Contains(err.Error(), bodyCanary) {
+				t.Errorf("error repeats the rejected value: %v", err)
+			}
+			if strings.Contains(tt.name, "finalize") && string(application.ErrorCode(err)) != "invalid-request" {
+				t.Errorf("code = %q, want invalid-request", application.ErrorCode(err))
+			}
+		})
+	}
+	var confirmation *application.ConfirmationRequiredError
+	_, err := core.Invoke(context.Background(), application.InvokeRequest{
+		Operation: "lexware.invoices.issue", Connection: "lexware-issuer", Arguments: invoiceArgs("")})
+	if !errors.As(err, &confirmation) {
+		t.Errorf("issue without confirm = %v, want a confirmation-required error", err)
 	}
 }
 
@@ -954,28 +1099,38 @@ func TestCreateReportsUncertainOutcome(t *testing.T) {
 		{"415", status(415), provider.ClassProviderError, false},
 		{"429", status(429), provider.ClassRateLimited, false},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			requests := 0
-			serve(t, func(*http.Request) (*http.Response, error) { requests++; return tt.reply() })
-			c, _ := client(t)
-			_, err := c.CreateInvoice(context.Background(), minimalCreateInput())
-			if err == nil {
-				t.Fatal("CreateInvoice() succeeded")
-			}
-			if class := classOf(err); class != tt.class {
-				t.Errorf("class = %q, want %q (%v)", class, tt.class, err)
-			}
-			if got := strings.Contains(err.Error(), invoiceMayExist); got != tt.hint {
-				t.Errorf("hint = %v, want %v (%v)", got, tt.hint, err)
-			}
-			if requests != 1 {
-				t.Errorf("requests = %d, want 1", requests)
-			}
-			if strings.Contains(err.Error(), bodyCanary) {
-				t.Errorf("error carries provider content: %v", err)
-			}
-		})
+	modes := []struct {
+		name string
+		call func(*Client, context.Context, createInput) (*createResult, error)
+		hint string
+	}{
+		{"create", (*Client).CreateInvoice, invoiceMayExist},
+		{"issue", (*Client).IssueInvoice, invoiceMayBeIssued},
+	}
+	for _, mode := range modes {
+		for _, tt := range tests {
+			t.Run(mode.name+" "+tt.name, func(t *testing.T) {
+				requests := 0
+				serve(t, func(*http.Request) (*http.Response, error) { requests++; return tt.reply() })
+				c, _ := client(t)
+				_, err := mode.call(c, context.Background(), minimalCreateInput())
+				if err == nil {
+					t.Fatal("CreateInvoice() succeeded")
+				}
+				if class := classOf(err); class != tt.class {
+					t.Errorf("class = %q, want %q (%v)", class, tt.class, err)
+				}
+				if got := strings.Contains(err.Error(), mode.hint); got != tt.hint {
+					t.Errorf("hint = %v, want %v (%v)", got, tt.hint, err)
+				}
+				if requests != 1 {
+					t.Errorf("requests = %d, want 1", requests)
+				}
+				if strings.Contains(err.Error(), bodyCanary) {
+					t.Errorf("error carries provider content: %v", err)
+				}
+			})
+		}
 	}
 
 	t.Run("rate-limit wait", func(t *testing.T) {

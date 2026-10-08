@@ -38,6 +38,7 @@ var testProviders ProviderCatalog = testProviderCatalog{
 			{ID: "bookstack.pages.get", Effect: PermissionRead},
 			{ID: "bookstack.pages.list", Effect: PermissionRead},
 		},
+		RemovedTools: []string{"bookstack.pages.publish"},
 	},
 	"lexware": {
 		ID: "lexware", Name: "Lexware Office", DefaultBaseURL: "https://api.lexware.io",
@@ -457,5 +458,31 @@ defaults: {}
 			!strings.Contains(err.Error(), "services.main.base_url: must not be empty") {
 			t.Errorf("provider %s without base_url error = %v", provider, err)
 		}
+	}
+}
+
+// ValidateSingle checks only the single target field; the targets list keeps using Validate.
+func TestValidateSingleChecksOnlyTheSingleTargetField(t *testing.T) {
+	metadata := testProviders.(testProviderCatalog)["github"]
+	metadata.Target.ValidateSingle = func(string) error { return errors.New("single refused") }
+	catalog := testProviderCatalog{"github": metadata}
+	const document = `version: 1
+services:
+  main: {provider: github, base_url: https://api.github.com}
+credentials:
+  reader: {type: keyring}
+connections:
+  route:
+    service: main
+    credential: reader
+    FIELD
+defaults: {}
+`
+	if _, err := Decode(strings.NewReader(strings.Replace(document, "FIELD", "target: repos/o/r", 1)), catalog); err == nil ||
+		!strings.Contains(err.Error(), "connections.route.target: single refused") {
+		t.Errorf("single field error = %v", err)
+	}
+	if _, err := Decode(strings.NewReader(strings.Replace(document, "FIELD", "targets: [repos/o/r]", 1)), catalog); err != nil {
+		t.Errorf("targets list = %v", err)
 	}
 }
