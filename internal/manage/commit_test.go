@@ -1,6 +1,7 @@
 package manage
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -24,6 +25,12 @@ func (s *commitRecordingSecrets) SetVault(string, string, string, vault.Passphra
 	return nil
 }
 func (s *commitRecordingSecrets) DeleteVault(string, string) error { return nil }
+func (s *commitRecordingSecrets) StoreValue(context.Context, string, string) (string, secret.StoreState) {
+	return "", secret.StoreEmpty
+}
+func (s *commitRecordingSecrets) SetVaultUndoable(string, string, string, vault.PassphraseFunc) (func() error, error) {
+	return func() error { return nil }, nil
+}
 
 // A field value of a payload secret under four characters is refused before anything is written or saved.
 func TestCommitRefusesShortForwardValues(t *testing.T) {

@@ -21,16 +21,29 @@ type fakeSecrets struct {
 	entries   map[string]string
 	setErr    map[string]error
 	deleteErr map[string]error
-	vault     *vault.Vault
-	sets      []string
+	readErr   map[string]error
+	// failRestore makes a write of a role fail once it ran before, which is how a restore differs from the first write.
+	failRestore map[string]bool
+	written     map[string]bool
+	vault       *vault.Vault
+	sets        []string
 }
 
 func newFakeSecrets() *fakeSecrets {
-	return &fakeSecrets{entries: map[string]string{}, setErr: map[string]error{}, deleteErr: map[string]error{}}
+	return &fakeSecrets{entries: map[string]string{}, setErr: map[string]error{}, deleteErr: map[string]error{}, readErr: map[string]error{}}
 }
 
 func (f *fakeSecrets) put(credential, role, value string) error {
 	f.sets = append(f.sets, credential+"."+role)
+	if f.failRestore[role] {
+		if f.written[role] {
+			return errors.New("restore refused")
+		}
+		if f.written == nil {
+			f.written = map[string]bool{}
+		}
+		f.written[role] = true
+	}
 	if err := f.setErr[role]; err != nil {
 		return err
 	}
@@ -57,6 +70,27 @@ func (f *fakeSecrets) SetVault(credential, role, value string, _ vault.Passphras
 	return f.put(credential, role, value)
 }
 func (f *fakeSecrets) DeleteVault(credential, role string) error { return f.remove(credential, role) }
+func (f *fakeSecrets) StoreValue(_ context.Context, credential, role string) (string, secret.StoreState) {
+	if err := f.readErr[role]; err != nil {
+		return "", secret.StoreUnavailable
+	}
+	if value, ok := f.entries[credential+"."+role]; ok {
+		return value, secret.StoreHolds
+	}
+	return "", secret.StoreEmpty
+}
+func (f *fakeSecrets) SetVaultUndoable(credential, role, value string, _ vault.PassphraseFunc) (func() error, error) {
+	old, had := f.entries[credential+"."+role]
+	if err := f.put(credential, role, value); err != nil {
+		return nil, err
+	}
+	return func() error {
+		if had {
+			return f.put(credential, role, old)
+		}
+		return f.remove(credential, role)
+	}, nil
+}
 
 // fixture is a service over a configuration file that holds one keyring credential "base".
 type fixture struct {

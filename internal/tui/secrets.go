@@ -43,6 +43,8 @@ type Secrets interface {
 	// StoreValue is what planning a migration needs to resolve a switched keyring credential's role the way
 	// the keyring-then-plaintext cascade always did: see vaultmigrate.KeyringStore, which this satisfies too.
 	StoreValue(ctx context.Context, credential, role string) (string, secret.StoreState)
+	// SetVaultUndoable is SetVault that also returns what puts the vault back as it was (see manage.Secrets).
+	SetVaultUndoable(credential, role, value string, offer vault.PassphraseFunc) (func() error, error)
 }
 
 // ErrNoResolver reports an editor that was started without a credential resolver. The configuration stays
@@ -62,6 +64,9 @@ func (noSecrets) Vault() *vault.Vault                                         { 
 func (noSecrets) SetVault(string, string, string, vault.PassphraseFunc) error { return ErrNoResolver }
 func (noSecrets) DeleteVault(string, string) error                            { return ErrNoResolver }
 func (noSecrets) Plaintext() *secret.File                                     { return nil }
+func (noSecrets) SetVaultUndoable(string, string, string, vault.PassphraseFunc) (func() error, error) {
+	return nil, ErrNoResolver
+}
 func (noSecrets) StoreValue(context.Context, string, string) (string, secret.StoreState) {
 	return "", secret.StoreUnavailable
 }

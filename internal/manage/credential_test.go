@@ -462,6 +462,9 @@ func (s *vaultSecrets) Vault() *vault.Vault { return s.v }
 func (s *vaultSecrets) SetVault(credential, role, value string, offer vault.PassphraseFunc) error {
 	return s.v.Set(credential, role, value, offer)
 }
+func (s *vaultSecrets) SetVaultUndoable(credential, role, value string, offer vault.PassphraseFunc) (func() error, error) {
+	return s.v.SetUndoable(credential, role, value, offer)
+}
 func (s *vaultSecrets) DeleteVault(credential, role string) error {
 	_, err := s.v.Delete(credential, role, nil)
 	return err
