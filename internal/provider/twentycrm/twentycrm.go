@@ -54,11 +54,6 @@ const (
 // fails the connection test instead of answering a business call with an incomplete record.
 var requiredCompanyFields = []string{"id", "name", "domainName", "createdAt", "updatedAt"}
 
-// companySchemaNames are the schema components Twenty generates for the company object. The plain and the
-// update shape omit the record system fields, the response shape carries them, so only their union
-// describes the object completely.
-var companySchemaNames = []string{"Company", "CompanyForUpdate", "CompanyForResponse"}
-
 // noRelations keeps every read at the record itself. Twenty returns related records at depth 1, which
 // would silently widen a read beyond the companies this provider is allowed to report.
 const noRelations = "0"
@@ -234,8 +229,17 @@ func Register(reg *capability.Registry) error {
 				"its workspace role must grant only the company operations this connection needs",
 		}},
 		Target: config.TargetMetadata{
-			Label:       "target",
-			Description: "not used by Twenty CRM; the workspace follows from the API key",
+			Label:    "object",
+			Multiple: true,
+			Description: "optional objects as an allow-list; without targets the connection reaches every " +
+				"non-system object its API key reaches",
+			Kinds: []config.TargetKind{{
+				Name:        "object",
+				Description: "an object of the workspace whose records this connection may reach",
+				Forms:       []string{"object/NAME"},
+			}},
+			Validate:    validateTarget,
+			ValidateSet: validateSet,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read companies", Recommended: true,
@@ -258,6 +262,9 @@ func Register(reg *capability.Registry) error {
 
 func invokeCompaniesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var options ListOptions
 	if err := json.Unmarshal(raw, &options); err != nil {
 		return nil, providerError("list companies", "the validated arguments could not be read")
@@ -271,6 +278,9 @@ func invokeCompaniesList(ctx context.Context, resolved *config.Resolved, secrets
 
 func invokeCompaniesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var arguments struct {
 		ID string `json:"id"`
 	}
@@ -291,6 +301,9 @@ type companyMutationInput struct {
 }
 
 func invokeCompaniesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var input companyMutationInput
 	if json.Unmarshal(raw, &input) != nil || input.Name == nil {
 		return nil, providerError("create company", "the validated arguments could not be read")
@@ -303,6 +316,9 @@ func invokeCompaniesCreate(ctx context.Context, resolved *config.Resolved, secre
 }
 
 func invokeCompaniesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var input companyMutationInput
 	if json.Unmarshal(raw, &input) != nil || (input.Name == nil && input.Domain == nil) {
 		return nil, providerError("update company", "name or domain is required")
@@ -323,6 +339,9 @@ func invokeCompaniesDestroy(ctx context.Context, resolved *config.Resolved, secr
 }
 
 func invokeRemoval(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage, op string, soft bool) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var input companyMutationInput
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
@@ -343,6 +362,9 @@ func invokeRemoval(ctx context.Context, resolved *config.Resolved, secrets *secr
 }
 
 func invokeCompaniesRestore(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	if err := selectObject(resolved, companyObject); err != nil {
+		return nil, err
+	}
 	var input companyMutationInput
 	if json.Unmarshal(raw, &input) != nil {
 		return nil, providerError("restore company", "the validated arguments could not be read")
@@ -365,6 +387,8 @@ type Client struct {
 	auth    string
 	http    *http.Client
 	limiter *ratelimit.Limiter
+	scope   scope
+	catalog *catalog
 }
 
 // Open resolves the API key of one selected connection and returns a client for its configured origin.
@@ -376,8 +400,9 @@ func Open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 // the transport, so no test ever reaches a productive Twenty workspace.
 func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	lim *ratelimit.Limiter) (*Client, error) {
-	if resolved == nil {
-		return nil, providerError("open", "no connection was selected")
+	bound, err := boundScope(resolved)
+	if err != nil {
+		return nil, err
 	}
 	origin, err := originOf(resolved.BaseURL)
 	if err != nil {
@@ -399,7 +424,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{origin: origin, auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
+	return &Client{origin: origin, auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim, scope: bound}, nil
 }
 
 // originOf validates the configured service origin and returns it without a trailing slash. Twenty Cloud
@@ -445,71 +470,88 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
 	const op = "test connection"
 
-	// The smallest authenticated read comes first, because the workspace document is a public route that
-	// answers an unusable key with an empty base schema instead of an authentication failure.
-	query := url.Values{}
-	query.Set("limit", "1")
-	query.Set("depth", noRelations)
-	var page companiesPageJSON
-	if err := c.get(ctx, op, companiesPath, query, maxResponseBytes, &page); err != nil {
-		var providerErr *provider.Error
-		if errors.As(err, &providerErr) {
-			return providerErr.Class, nil
+	if !c.scope.bound() {
+		// The smallest authenticated read comes first, because the workspace document is a public route
+		// that answers an unusable key with an empty base schema instead of an authentication failure.
+		if class, failed := classOfFailure(c.readOne(ctx, op, companiesPath)); failed {
+			return class, nil
 		}
-		return provider.ClassProviderError, nil
 	}
 
-	if err := c.checkWorkspaceSchema(ctx, op); err != nil {
-		var providerErr *provider.Error
-		if !errors.As(err, &providerErr) {
-			return provider.ClassProviderError, nil
+	cat, err := c.workspaceCatalog(ctx, op)
+	if err != nil {
+		class, _ := classOfFailure(err)
+		return class, nil
+	}
+	if len(cat.objects) == 0 && c.scope.bound() {
+		// An unusable key gets an empty base schema, and with it no way to tell a missing object from a
+		// rejected key; the key is the likelier cause.
+		return provider.ClassAuth, nil
+	}
+	if c.scope.bound() {
+		for _, name := range c.scope.objects {
+			object, ok := cat.object(name)
+			if !ok {
+				return "", &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+					Message: "this Twenty workspace does not hold an object bound to this connection"}
+			}
+			if class, failed := classOfFailure(c.readOne(ctx, op, "/rest/"+url.PathEscape(object.Plural))); failed {
+				return class, nil
+			}
 		}
-		// An incompatible workspace is reported with its own explanation, because no stable class can
-		// say which part of the schema is missing.
-		if providerErr.Class == provider.ClassInvalidResponse {
+	}
+	if c.scope.allows(companyObject) {
+		if err := checkCompany(cat, op); err != nil {
+			// An incompatible workspace is reported with its own explanation, because no stable class can
+			// say which part of the schema is missing.
 			return "", err
 		}
-		return providerErr.Class, nil
 	}
 	return provider.ClassOK, nil
 }
 
-// checkWorkspaceSchema reads the API document Twenty generates for this workspace and verifies that the
-// company routes and the required record fields exist. The document itself is never reported.
-func (c *Client) checkWorkspaceSchema(ctx context.Context, op string) error {
-	var document openAPIJSON
-	if err := c.get(ctx, op, schemaPath, nil, maxSchemaBytes, &document); err != nil {
-		return err
+// classOfFailure maps the error of a read to the class a connection test reports. failed is false for a nil
+// error.
+func classOfFailure(err error) (class provider.Class, failed bool) {
+	if err == nil {
+		return "", false
 	}
+	var providerErr *provider.Error
+	if errors.As(err, &providerErr) {
+		return providerErr.Class, true
+	}
+	return provider.ClassProviderError, true
+}
 
-	for _, path := range []string{"/companies", "/companies/{id}"} {
-		if _, ok := document.Paths[path]; !ok {
-			return &provider.Error{
-				Class: provider.ClassInvalidResponse, Op: op,
-				Message: "this Twenty workspace does not expose the company route " + path,
-			}
-		}
-	}
+// readOne reads the smallest page of one object collection to prove the key may read it. The page is
+// decoded and dropped.
+func (c *Client) readOne(ctx context.Context, op, path string) error {
+	query := url.Values{}
+	query.Set("limit", "1")
+	query.Set("depth", noRelations)
+	var page json.RawMessage
+	return c.get(ctx, op, path, query, maxResponseBytes, &page)
+}
 
-	// Twenty generates one schema per request and response shape of an object, all from the same field
-	// set, so the union of the company schemas is the field set of the object.
-	fields := map[string]bool{}
-	found := false
-	for _, name := range companySchemaNames {
-		schema, ok := document.Components.Schemas[name]
-		if !ok {
-			continue
-		}
-		found = true
-		for field := range schema.Properties {
-			fields[field] = true
-		}
-	}
-	if !found {
+// checkCompany verifies that the workspace catalog offers the company routes and the record fields the
+// stable company projection reads. The workspace document itself is never reported.
+func checkCompany(cat *catalog, op string) error {
+	object, ok := cat.object(companyObject)
+	if !ok {
 		return &provider.Error{
 			Class: provider.ClassInvalidResponse, Op: op,
 			Message: "this Twenty workspace does not describe a Company object",
 		}
+	}
+	if "/rest/"+object.Plural != companiesPath {
+		return &provider.Error{
+			Class: provider.ClassInvalidResponse, Op: op,
+			Message: "this Twenty workspace does not expose the company route /companies",
+		}
+	}
+	fields := map[string]bool{}
+	for _, field := range object.Fields {
+		fields[field.Name] = true
 	}
 	missing := make([]string, 0, len(requiredCompanyFields))
 	for _, field := range requiredCompanyFields {
@@ -523,6 +565,15 @@ func (c *Client) checkWorkspaceSchema(ctx context.Context, op string) error {
 			Message: "this Twenty workspace is missing the company fields " + strings.Join(missing, ", ") +
 				", which Qatlas reads",
 		}
+	}
+	return nil
+}
+
+// requireCompany refuses a company operation on a connection whose object targets leave out the company
+// object. The refusal names no object.
+func (c *Client) requireCompany() error {
+	if !c.scope.allows(companyObject) {
+		return invalidRequest(errObjectUnavailable)
 	}
 	return nil
 }
@@ -605,6 +656,9 @@ type Company struct {
 // ListCompanies reads exactly one bounded page of companies.
 func (c *Client) ListCompanies(ctx context.Context, options ListOptions) (*ListResult, error) {
 	const op = "list companies"
+	if err := c.requireCompany(); err != nil {
+		return nil, err
+	}
 	if err := options.normalize(); err != nil {
 		return nil, providerError(op, err.Error())
 	}
@@ -664,6 +718,9 @@ func (o *ListOptions) normalize() error {
 // GetCompany reads exactly the company of a validated identifier and performs no other provider I/O.
 func (c *Client) GetCompany(ctx context.Context, id string) (*Company, error) {
 	const op = "get company"
+	if err := c.requireCompany(); err != nil {
+		return nil, err
+	}
 	if !validUUID(id) {
 		return nil, providerError(op, "the company identifier must be a UUID")
 	}
@@ -742,6 +799,9 @@ func (c *Client) RestoreCompany(ctx context.Context, id string) (*Company, error
 }
 
 func (c *Client) changeCompany(ctx context.Context, op, method, path string, payload map[string]any, expectedID string) (*Company, error) {
+	if err := c.requireCompany(); err != nil {
+		return nil, err
+	}
 	var response companyMutationJSON
 	if err := c.change(ctx, op, method, path, payload, &response); err != nil {
 		return nil, err
@@ -807,16 +867,6 @@ func (r companyMutationJSON) record() companyRecordJSON {
 	return r.Data.RestoreCompany
 }
 
-// openAPIJSON mirrors the two parts of the generated workspace document the connection test inspects.
-type openAPIJSON struct {
-	Paths      map[string]json.RawMessage `json:"paths"`
-	Components struct {
-		Schemas map[string]struct {
-			Properties map[string]json.RawMessage `json:"properties"`
-		} `json:"schemas"`
-	} `json:"components"`
-}
-
 // primaryDomain reduces the Twenty link field to the one stable string this provider reports. A workspace
 // that carries the field as plain text is read as that text.
 func primaryDomain(raw json.RawMessage) string {
@@ -864,7 +914,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, lim
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return statusError(op, response.StatusCode)
+		return c.responseError(op, response)
 	}
 	if failure := provider.ReadJSON(op, "Twenty", response.Body, limit, out); failure != nil {
 		return failure
@@ -903,10 +953,9 @@ func (c *Client) change(ctx context.Context, op, method, path string, payload an
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		failure := statusError(op, response.StatusCode)
-		var providerErr *provider.Error
-		if response.StatusCode >= 500 && errors.As(failure, &providerErr) {
-			providerErr.Message += mutationUncertain
+		failure := c.responseError(op, response)
+		if response.StatusCode >= 500 {
+			failure.Message += mutationUncertain
 		}
 		return failure
 	}
@@ -917,38 +966,20 @@ func (c *Client) change(ctx context.Context, op, method, path string, payload an
 	return nil
 }
 
-// statusError maps an HTTP status to a stable class. The provider message is never copied: Twenty echoes
-// request and record detail into it, and the class plus the status is what a caller can act on.
-func statusError(op string, status int) error {
-	switch status {
-	case http.StatusUnauthorized:
-		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Twenty rejected the API key"}
-	case http.StatusForbidden:
-		return &provider.Error{
-			Class: provider.ClassPermission, Op: op,
-			Message: "the workspace role of this API key may not perform this operation; check the role of " +
-				"the API key in Twenty",
-		}
-	case http.StatusNotFound:
-		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op, Message: "this Twenty workspace does not hold this record",
-		}
-	case http.StatusBadRequest, http.StatusUnprocessableEntity:
-		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op, Message: "Twenty rejected the request as invalid",
-		}
-	case http.StatusTooManyRequests:
-		return &provider.Error{
-			Class: provider.ClassRateLimited, Op: op, Message: "Twenty rate-limited the operation",
-		}
-	case http.StatusGatewayTimeout:
-		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "Twenty did not answer in time"}
-	default:
-		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op,
-			Message: fmt.Sprintf("Twenty rejected the operation (HTTP %d)", status),
-		}
+// responseError maps an HTTP status to a stable class. The provider message is never copied: Twenty echoes
+// request and record detail into it, and the class plus the status is what a caller can act on. A 429
+// holds the rate limit of the key for the time Twenty asks for.
+func (c *Client) responseError(op string, response *http.Response) *provider.Error {
+	if response.StatusCode == http.StatusTooManyRequests {
+		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 	}
+	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
+		Subject: "Twenty",
+		Auth:    "Twenty rejected the API key",
+		Permission: "the workspace role of this API key may not perform this operation; check the role of " +
+			"the API key in Twenty",
+		NotFound: "this Twenty workspace does not hold this record or object",
+	})
 }
 
 func providerError(op, message string) error {
