@@ -163,11 +163,19 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 5 {
-		t.Fatalf("operations = %d, want five company operations", len(operations))
+	if len(operations) != 7 {
+		t.Fatalf("operations = %d, want seven company operations", len(operations))
 	}
 	for _, descriptor := range operations {
-		if descriptor.Version != 1 || descriptor.Provider != Provider ||
+		wantVersion := 1
+		if descriptor.ID == "twentycrm.companies.delete" {
+			wantVersion = 2
+		}
+		guarded := descriptor.ID == "twentycrm.companies.delete" || descriptor.ID == "twentycrm.companies.destroy"
+		if descriptor.RequiresToolAllowList != guarded {
+			t.Errorf("descriptor %s RequiresToolAllowList = %v, want %v", descriptor.ID, descriptor.RequiresToolAllowList, guarded)
+		}
+		if descriptor.Version != wantVersion || descriptor.Provider != Provider ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
 			t.Errorf("descriptor %s = %+v, want a bounded operation requiring an explicit connection",
 				descriptor.ID, descriptor)
@@ -176,7 +184,7 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 			t.Errorf("descriptor %s examples = %s", descriptor.ID, descriptor.Examples)
 		}
 	}
-	if operations[0].ID != "twentycrm.companies.create" || operations[4].ID != "twentycrm.companies.update" {
+	if operations[0].ID != "twentycrm.companies.create" || operations[6].ID != "twentycrm.companies.update" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -184,9 +192,12 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 func TestCompanyMutationsUseTheCompanyRESTRoute(t *testing.T) {
 	methods := []string{}
 	serve(t, func(request *http.Request) (*http.Response, error) {
-		methods = append(methods, request.Method+" "+request.URL.Path)
-		if request.Method == http.MethodDelete {
-			return jsonResponse(http.StatusNoContent, ``), nil
+		methods = append(methods, request.Method+" "+request.URL.RequestURI())
+		switch {
+		case request.Method == http.MethodDelete:
+			return jsonResponse(http.StatusOK, deleteBody(companyID)), nil
+		case strings.HasSuffix(request.URL.Path, "/restore"):
+			return jsonResponse(http.StatusOK, strings.Replace(companyBody, `"company"`, `"restoreCompany"`, 1)), nil
 		}
 		return jsonResponse(http.StatusOK, companyBody), nil
 	})
@@ -202,9 +213,136 @@ func TestCompanyMutationsUseTheCompanyRESTRoute(t *testing.T) {
 	if err := c.DeleteCompany(context.Background(), companyID); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"POST /rest/companies", "PATCH /rest/companies/" + companyID, "DELETE /rest/companies/" + companyID}
+	if err := c.DestroyCompany(context.Background(), companyID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.RestoreCompany(context.Background(), companyID); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"POST /rest/companies", "PATCH /rest/companies/" + companyID,
+		"DELETE /rest/companies/" + companyID + "?soft_delete=true",
+		"DELETE /rest/companies/" + companyID,
+		"PATCH /rest/companies/" + companyID + "/restore",
+	}
 	if !reflect.DeepEqual(methods, want) {
 		t.Fatalf("requests = %v, want %v", methods, want)
+	}
+}
+
+func deleteBody(id string) string {
+	return `{"data":{"deleteCompany":{"id":"` + id + `"}}}`
+}
+
+// A removal or restore answer for another company, or without an identifier, is an invalid response.
+func TestRemovalAndRestoreCheckTheAnsweredIdentifier(t *testing.T) {
+	for _, body := range []string{deleteBody(otherID), `{"data":{"deleteCompany":{}}}`, `{}`} {
+		serve(t, func(*http.Request) (*http.Response, error) { return jsonResponse(http.StatusOK, body), nil })
+		c, _ := client(t)
+		calls := map[string]func() error{
+			"delete":  func() error { return c.DeleteCompany(context.Background(), companyID) },
+			"destroy": func() error { return c.DestroyCompany(context.Background(), companyID) },
+			"restore": func() error {
+				_, err := c.RestoreCompany(context.Background(), companyID)
+				return err
+			},
+		}
+		for name, call := range calls {
+			if got := classOf(call()); got != provider.ClassInvalidResponse {
+				t.Errorf("%s with %s = %q, want invalid-response", name, body, got)
+			}
+		}
+	}
+}
+
+// An unclear destroy result is reported as uncertain and the change is never repeated.
+func TestDestroyReportsAnOpenResultWithoutRepeating(t *testing.T) {
+	calls := 0
+	serve(t, func(*http.Request) (*http.Response, error) {
+		calls++
+		return jsonResponse(http.StatusInternalServerError, `{"error":"`+bodyCanary+`"}`), nil
+	})
+	c, _ := client(t)
+	err := c.DestroyCompany(context.Background(), companyID)
+	if err == nil || !strings.Contains(err.Error(), "may have taken effect") || strings.Contains(err.Error(), bodyCanary) {
+		t.Fatalf("DestroyCompany() = %v, want an uncertain outcome without provider text", err)
+	}
+	if calls != 1 {
+		t.Fatalf("requests = %d, want exactly one", calls)
+	}
+}
+
+// The mutation path only ever carries a validated identifier.
+func TestRemovalAndRestoreRefuseAnUnusableIdentifierBeforeIO(t *testing.T) {
+	refuse(t)
+	c, _ := client(t)
+	for _, id := range []string{"", "../x", "not-a-uuid"} {
+		if c.DeleteCompany(context.Background(), id) == nil || c.DestroyCompany(context.Background(), id) == nil {
+			t.Errorf("id %q was accepted", id)
+		}
+		if _, err := c.RestoreCompany(context.Background(), id); err == nil {
+			t.Errorf("restore accepted %q", id)
+		}
+	}
+}
+
+// The deleted flag adds exactly the fixed trash filter, alone and combined with a search.
+func TestListDeletedAddsOnlyTheFixedFilter(t *testing.T) {
+	tests := []struct {
+		options ListOptions
+		want    string
+	}{
+		{ListOptions{Deleted: true}, `deletedAt[is]:NOT_NULL`},
+		{ListOptions{Deleted: true, NameContains: "Bike"}, `name[ilike]:"%Bike%",deletedAt[is]:NOT_NULL`},
+		{ListOptions{NameContains: "Bike"}, `name[ilike]:"%Bike%"`},
+		{ListOptions{}, ``},
+	}
+	for _, tt := range tests {
+		var got url.Values
+		serve(t, func(request *http.Request) (*http.Response, error) {
+			got = request.URL.Query()
+			return jsonResponse(http.StatusOK, listBody), nil
+		})
+		c, _ := client(t)
+		if _, err := c.ListCompanies(context.Background(), tt.options); err != nil {
+			t.Fatal(err)
+		}
+		if got.Get("filter") != tt.want {
+			t.Errorf("%+v filter = %q, want %q", tt.options, got.Get("filter"), tt.want)
+		}
+	}
+}
+
+// Neither deleting tool is offered by a connection without a tools list; a tools list that names them
+// offers them.
+func TestDeletingToolsNeedTheToolAllowList(t *testing.T) {
+	serve(t, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusOK, deleteBody(companyID)), nil
+	})
+	stubLimiter(t, cloudKey)
+	cfg := coreConfig()
+	all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+	bare := cfg.Connections["crm"]
+	bare.Permissions = all
+	cfg.Connections["crm"] = bare
+	listed := bare
+	listed.Tools = []string{"twentycrm.companies.delete", "twentycrm.companies.destroy"}
+	cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
+		Permissions: all, Tools: listed.Tools}
+	stubLimiter(t, internalKey)
+
+	red := &redact.Redactor{}
+	core := application.New(registry(t), cfg, resolver(red), red)
+	for _, operation := range []string{"twentycrm.companies.delete", "twentycrm.companies.destroy"} {
+		request := application.InvokeRequest{Operation: operation, Connection: "crm",
+			Arguments: json.RawMessage(`{"id":"` + companyID + `"}`), Confirmed: true}
+		if _, err := core.Invoke(context.Background(), request); err == nil {
+			t.Errorf("%s was offered without a tools list", operation)
+		}
+		request.Connection = "crm-internal"
+		if _, err := core.Invoke(context.Background(), request); err != nil {
+			t.Errorf("%s with a tools list = %v", operation, err)
+		}
 	}
 }
 
