@@ -38,8 +38,8 @@ func runObjectsTool(t *testing.T, handler capability.Handler, args string, targe
 	if marshalErr != nil {
 		t.Fatal(marshalErr)
 	}
-	if strings.Contains(string(out), descriptionCanary) {
-		t.Errorf("a description reached the output: %s", out)
+	if strings.Contains(string(out), descriptionCanary) || strings.Contains(string(out), enumCanary) {
+		t.Errorf("a description or enum value reached the output: %s", out)
 	}
 	return out, nil
 }
@@ -168,7 +168,7 @@ func TestToolGroupsCoverEveryTool(t *testing.T) {
 	for _, tool := range metadata.Tools {
 		got[tool.ID] = tool.Group
 	}
-	if len(got) != 11 {
+	if len(got) != 13 {
 		t.Fatalf("tools = %v", got)
 	}
 	for id, group := range got {

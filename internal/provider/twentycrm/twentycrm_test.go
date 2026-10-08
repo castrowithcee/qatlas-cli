@@ -155,7 +155,7 @@ const schemaBody = `{
     "CompanyForResponse":{"type":"object","properties":{
       "id":{"type":"string","format":"uuid"},"name":{"type":"string"},"domainName":{"type":"object"},
       "createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"},
-      "deletedAt":{},"riskScore":{"type":"string"},
+      "deletedAt":{},"riskScore":{"type":"string","enum":["` + enumCanary + `"]},
       "people":{"type":"array","items":{"$ref":"#/components/schemas/PersonForResponse"}}}},
     "Person":{"type":"object","properties":{"name":{"type":"object","properties":{"firstName":{"type":"string"},"lastName":{"type":"string"}}}}},
     "PersonForUpdate":{"type":"object","properties":{"name":{"type":"object"},"companyId":{"type":"string","format":"uuid"}}},
@@ -170,6 +170,9 @@ const schemaBody = `{
 }`
 
 const descriptionCanary = "description-canary-twenty-3c58"
+
+// enumCanary is an enum value of the workspace document, which no output may show.
+const enumCanary = "ENUM_CANARY_TWENTY_8E21"
 
 // Register publishes the configuration metadata the TUI needs and exactly two read-only operations.
 func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
@@ -186,8 +189,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 11 {
-		t.Fatalf("operations = %d, want seven company, two object, and two record operations", len(operations))
+	if len(operations) != 13 {
+		t.Fatalf("operations = %d, want seven company, two object, and four record operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -209,7 +212,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 	if operations[0].ID != "twentycrm.companies.create" || operations[6].ID != "twentycrm.companies.update" ||
 		operations[7].ID != "twentycrm.objects.get" || operations[8].ID != "twentycrm.objects.list" ||
-		operations[9].ID != "twentycrm.records.get" || operations[10].ID != "twentycrm.records.list" {
+		operations[9].ID != "twentycrm.records.get" || operations[10].ID != "twentycrm.records.groupby" ||
+		operations[11].ID != "twentycrm.records.list" || operations[12].ID != "twentycrm.records.search" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
