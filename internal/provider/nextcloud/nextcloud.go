@@ -236,15 +236,17 @@ var filesGet = capability.Descriptor{
 
 var filesCreate = uploadDescriptor(fileMutationDescriptor("create", capability.EffectCreate, `{"type":"object","properties":{"path":`+pathSchema+`,"content_base64":{"type":"string","maxLength":5592408},"`+localfile.LocalPathArgument+`":`+localfile.LocalPathSchema+`},"required":["path"],"additionalProperties":false}`), false)
 var filesUpdate = uploadDescriptor(fileMutationDescriptor("update", capability.EffectUpdate, `{"type":"object","properties":{"path":`+pathSchema+`,"content_base64":{"type":"string","maxLength":5592408},"`+localfile.LocalPathArgument+`":`+localfile.LocalPathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024,"pattern":"[^*\\s\"]","x-form":"the ETag of an existing version, never *"}},"required":["path","etag"],"additionalProperties":false}`), true)
-var filesDelete = withArguments(fileMutationDescriptor("delete", capability.EffectDelete, `{"type":"object","properties":{"path":`+pathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024}},"required":["path","etag"],"additionalProperties":false}`),
+var filesDelete = allowListOnly(withArguments(fileMutationDescriptor("delete", capability.EffectDelete, `{"type":"object","properties":{"path":`+pathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024}},"required":["path","etag"],"additionalProperties":false}`),
 	capability.Argument{Name: "path", Description: "File relative to the fixed root folder of this connection", Required: true},
-	capability.Argument{Name: "etag", Description: "Entity tag of the version to delete", Required: true})
+	capability.Argument{Name: "etag", Description: "Entity tag of the version to delete", Required: true}))
 
-// Deleting is reachable only through a tools list, so no profile and no permission alone offers it.
-func init() {
-	filesDelete.Version = 2
-	filesDelete.RequiresToolAllowList = true
-	filesDelete.Description += "; Nextcloud moves it to the trash bin when the files_trashbin app is active, otherwise it is deleted for good"
+// allowListOnly marks the file delete as reachable only through a tools list, so no profile and no
+// permission alone offers it.
+func allowListOnly(d capability.Descriptor) capability.Descriptor {
+	d.Version = 2
+	d.RequiresToolAllowList = true
+	d.Description += "; Nextcloud moves it to the trash bin when the files_trashbin app is active, otherwise it is deleted for good"
+	return d
 }
 
 func withArguments(d capability.Descriptor, arguments ...capability.Argument) capability.Descriptor {
@@ -503,6 +505,7 @@ func invokeUpload(ctx context.Context, resolved *config.Resolved, secrets *secre
 	return map[string]any{key: true, "etag": etag, "path": input.Path, "name": rel[len(rel)-1],
 		"size": upload.Size, "sha256": sum, "method": method}, nil
 }
+
 func invokeFoldersDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var input contentArguments
 	if err := json.Unmarshal(raw, &input); err != nil {

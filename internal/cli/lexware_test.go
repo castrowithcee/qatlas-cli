@@ -86,14 +86,14 @@ func TestLexwareToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[11]{id,title,effect,requires,confirm,reason}:", "lexware.articles.get,Get a Lexware article,read,", "lexware.articles.list,List Lexware articles,read,", "lexware.contacts.get,Get a Lexware contact,read,", "lexware.contacts.list,List Lexware contacts,read,", "lexware.invoices.create,Create a Lexware invoice draft,create,", "lexware.invoices.issue,Issue a Lexware invoice,create,", "lexware.invoices.get,Get a Lexware invoice,read,", "lexware.invoices.list,List open Lexware invoices,read,", "lexware.payments.get,Get the payment status of a Lexware voucher,read,", "lexware.voucherlist.list,List Lexware vouchers,read,", "lexware.vouchers.get,Get a Lexware bookkeeping voucher,read,",
+		"tools[15]{id,title,effect,requires,confirm,reason}:", "lexware.articles.get,Get a Lexware article,read,", "lexware.articles.list,List Lexware articles,read,", "lexware.contacts.get,Get a Lexware contact,read,", "lexware.contacts.list,List Lexware contacts,read,", "lexware.invoices.create,Create a Lexware invoice draft,create,", "lexware.invoices.issue,Issue a Lexware invoice,create,", "lexware.invoices.get,Get a Lexware invoice,read,", "lexware.invoices.list,List open Lexware invoices,read,", "lexware.payments.get,Get the payment status of a Lexware voucher,read,", "lexware.voucherlist.list,List Lexware vouchers,read,", "lexware.vouchers.get,Get a Lexware bookkeeping voucher,read,", "lexware.quotations.get,Get a Lexware quotation,read,", "lexware.orderconfirmations.get,Get a Lexware order confirmation,read,", "lexware.creditnotes.get,Get a Lexware credit note,read,", "lexware.deliverynotes.get,Get a Lexware delivery note,read,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runLexwareJSON(t, "", "tools", "lexware", "--all", "--config", path))); len(got) != 11 {
-		t.Errorf("lexware tools = %v, want all eleven tools", got)
+	if got := toolIDs(t, string(runLexwareJSON(t, "", "tools", "lexware", "--all", "--config", path))); len(got) != 15 {
+		t.Errorf("lexware tools = %v, want all fifteen tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -229,8 +229,8 @@ func TestLexwareMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 11 || searched.Operations[0].ID != "lexware.articles.get" ||
-		searched.Operations[10].ID != "lexware.vouchers.get" {
+	if len(searched.Operations) != 15 || searched.Operations[0].ID != "lexware.articles.get" ||
+		searched.Operations[14].ID != "lexware.vouchers.get" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
