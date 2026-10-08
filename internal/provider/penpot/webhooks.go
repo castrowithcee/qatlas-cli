@@ -58,22 +58,6 @@ var webhooksList = capability.Descriptor{
 		Arguments: json.RawMessage(`{"team_id":"00000000-0000-0000-0000-000000000001"}`)}},
 }
 
-var webhooksCreate = capability.Descriptor{
-	ID: Provider + ".webhooks.create", Version: 1, Title: "Create a Penpot webhook",
-	Description: "Create a webhook in one bound team. Penpot allows at most 8 per team. " + webhookNote,
-	Tags:        []string{"penpot", "webhooks", "create", "design"}, Provider: Provider,
-	Risk:         manageRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	InputSchema:  schemaOf(`"team_id":`+uuidSchema+`,"url":`+uriSchema+`,"mtype":`+mtypeSchema, `"team_id","url","mtype"`),
-	OutputSchema: schemaOf(`"webhook_id":{"type":"string"},"team_id":{"type":"string"}`, `"webhook_id","team_id"`),
-	Arguments:    []capability.Argument{teamIDArgument, webhookURLArgument, webhookMtypeArgument},
-	Fields: []capability.Field{
-		{Name: "webhook_id", Description: "Identifier of the new webhook"},
-		{Name: "team_id", Description: "Identifier of the team"},
-	},
-	Examples: []capability.Example{{Description: "Create a webhook",
-		Arguments: json.RawMessage(`{"team_id":"00000000-0000-0000-0000-000000000001","url":"https://hooks.example.com/penpot","mtype":"application/json"}`)}},
-}
-
 var webhooksUpdate = capability.Descriptor{
 	ID: Provider + ".webhooks.update", Version: 1, Title: "Update a Penpot webhook",
 	Description: "Replace the target URL, payload type, and active state of one webhook of a bound team; the webhook " +
@@ -131,12 +115,7 @@ type WebhooksResult struct {
 	Truncated bool      `json:"truncated"`
 }
 
-// WebhookCreated, WebhookUpdated, and WebhookDeleted are the answers of the three changes; IDs only.
-type WebhookCreated struct {
-	WebhookID string `json:"webhook_id"`
-	TeamID    string `json:"team_id"`
-}
-
+// WebhookUpdated and WebhookDeleted are the answers of the two changes; IDs only.
 type WebhookUpdated struct {
 	Updated   bool   `json:"updated"`
 	WebhookID string `json:"webhook_id"`
@@ -257,38 +236,6 @@ func invokeWebhooksList(ctx context.Context, resolved *config.Resolved, secrets 
 		return nil, err
 	}
 	return &WebhooksResult{TeamID: teamID, Webhooks: hooks, Count: len(hooks), Truncated: truncated}, nil
-}
-
-func invokeWebhooksCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	const op = "create webhook"
-	input, err := readWebhook(op, raw)
-	if err != nil {
-		return nil, err
-	}
-	teamID, err := selectTeamForWebhookChange(resolved, input.TeamID)
-	if err != nil {
-		return nil, err
-	}
-	if err := checkMediaURL(input.URL); err != nil {
-		return nil, err
-	}
-	if err := checkMtype(input.Mtype); err != nil {
-		return nil, err
-	}
-	client, err := Open(ctx, resolved, secrets, red)
-	if err != nil {
-		return nil, err
-	}
-	data, err := client.change(ctx, op, cmdCreateWebhook, map[string]any{"team-id": teamID, "uri": input.URL, "mtype": input.Mtype})
-	if err != nil {
-		return nil, err
-	}
-	answer, ok := asObj(data)
-	if !ok || answer.id("id") == "" {
-		return nil, invalidResponse(op, "Penpot returned an invalid response"+changeUncertain)
-	}
-	return &WebhookCreated{WebhookID: answer.id("id"), TeamID: teamID}, nil
 }
 
 func invokeWebhooksUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

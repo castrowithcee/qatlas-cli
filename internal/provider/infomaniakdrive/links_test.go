@@ -51,12 +51,6 @@ type linkCase struct {
 
 func linkCases() []linkCase {
 	return []linkCase{
-		{"create", linksCreate.ID, linkArgs(fmt.Sprintf(`,"right":"password","password":%q,"valid_until":%q,`+
-			`"can_download":true,"can_edit":false`, passwordCanary, expiryText)), http.MethodPost,
-			fmt.Sprintf(`{"can_download":true,"can_edit":false,"password":%q,"right":"password","valid_until":%d}`,
-				passwordCanary, expiryUnix), envelopeSuccess(linkJSONOf(childFileID, "password", linkURL))},
-		{"update", linksUpdate.ID, linkArgs(`,"can_download":false`), http.MethodPut, `{"can_download":false}`,
-			envelopeSuccess(`true`)},
 		{"delete", linksDelete.ID, linkArgs(""), http.MethodDelete, "", envelopeSuccess(`true`)},
 	}
 }
@@ -67,9 +61,8 @@ func TestLinkDescriptors(t *testing.T) {
 		effect  capability.Effect
 		confirm bool
 	}{linksGet.ID: {capability.EffectRead, false}, linksList.ID: {capability.EffectRead, false},
-		linksCreate.ID: {capability.EffectCreate, true}, linksUpdate.ID: {capability.EffectUpdate, true},
 		linksDelete.ID: {capability.EffectDelete, true}}
-	for _, d := range []capability.Descriptor{linksGet, linksList, linksCreate, linksUpdate, linksDelete} {
+	for _, d := range []capability.Descriptor{linksGet, linksList, linksDelete} {
 		w := want[d.ID]
 		r := d.Risk
 		if r.Effect != w.effect || !d.RequiresToolAllowList || r.OpenWorld != true ||
@@ -85,7 +78,7 @@ func TestLinkDescriptors(t *testing.T) {
 		for _, id := range profile.Tools {
 			// A link URL is access for whoever holds it, so no profile hands out even the reading tools.
 			switch id {
-			case linksGet.ID, linksList.ID, linksCreate.ID, linksUpdate.ID, linksDelete.ID:
+			case linksGet.ID, linksList.ID, linksDelete.ID:
 				t.Errorf("profile %s contains %s", profile.ID, id)
 			}
 		}
@@ -119,11 +112,7 @@ func TestLinkChangesSendExactlyOneRequest(t *testing.T) {
 				out.DriveID != ownDrive || out.FileID != childFileID {
 				t.Fatalf("result = %s, %v", result, err)
 			}
-			if tt.name == "create" && (out.Link == nil || out.Link.URL != linkURL || out.Link.Right != "password" ||
-				out.Link.ValidUntil != expiryText) {
-				t.Fatalf("result = %s, want the created link", result)
-			}
-			if tt.name != "create" && out.Link != nil {
+			if out.Link != nil {
 				t.Fatalf("result = %s, want no link", result)
 			}
 			if strings.Contains(result, passwordCanary) {
@@ -205,31 +194,14 @@ func TestLinkToolsRefuseForeignDrives(t *testing.T) {
 
 func TestLinkToolsValidateArguments(t *testing.T) {
 	fixLinkClock(t)
-	short := fmt.Sprintf(`"password":%q`, "abc")
 	valid := fmt.Sprintf(`"password":%q`, "valid-length-value")
-	control := fmt.Sprintf(`"password":%q`, "abcdefgh\x07ij")
 	cases := []struct{ name, tool, args string }{
 		{"root get", linksGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1}`, ownDrive)},
-		{"root create", linksCreate.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1,"right":"inherit"}`, ownDrive)},
-		{"root update", linksUpdate.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1,"can_edit":true}`, ownDrive)},
 		{"root delete", linksDelete.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1}`, ownDrive)},
 		{"zero id", linksDelete.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":0}`, ownDrive)},
 		{"negative id", linksGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":-4}`, ownDrive)},
 		{"string id", linksGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":"5/../9"}`, ownDrive)},
 		{"huge id", linksGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":9999999999999999999}`, ownDrive)},
-		{"missing right", linksCreate.ID, linkArgs("")},
-		{"unknown right", linksCreate.ID, linkArgs(`,"right":"everyone"`)},
-		{"password without right", linksCreate.ID, linkArgs(`,"right":"public",` + valid)},
-		{"password right without password", linksCreate.ID, linkArgs(`,"right":"password"`)},
-		{"short password", linksCreate.ID, linkArgs(`,"right":"password",` + short)},
-		{"control password", linksCreate.ID, linkArgs(`,"right":"password",` + control)},
-		{"update password alone", linksUpdate.ID, linkArgs(`,` + valid)},
-		{"update empty", linksUpdate.ID, linkArgs("")},
-		{"past expiry", linksCreate.ID, linkArgs(`,"right":"inherit","valid_until":"2025-06-01T00:00:00Z"`)},
-		{"far expiry", linksCreate.ID, linkArgs(`,"right":"inherit","valid_until":"2040-06-01T00:00:00Z"`)},
-		{"bad expiry", linksCreate.ID, linkArgs(`,"right":"inherit","valid_until":"tomorrow at noon please"`)},
-		{"null expiry", linksUpdate.ID, linkArgs(`,"valid_until":null`)},
-		{"extra field", linksCreate.ID, linkArgs(`,"right":"inherit","method":"DELETE"`)},
 		{"extra on get", linksGet.ID, linkArgs(`,` + valid)},
 		{"limit low", linksList.ID, fmt.Sprintf(`{"drive_id":%d,"limit":1}`, ownDrive)},
 	}
@@ -308,100 +280,6 @@ func TestLinkChangeErrorsAndUncertainOutcomesAreNeverRepeated(t *testing.T) {
 			}
 		})
 	}
-}
-
-// A created link whose answer cannot be read, names another file, or has an unknown right is an unclear
-// outcome: the link may exist.
-func TestLinkCreateWithUnusableAnswerReportsUncertainty(t *testing.T) {
-	fixLinkClock(t)
-	answers := map[string]string{
-		"flag":       envelopeSuccess(`true`),
-		"other file": envelopeSuccess(linkJSONOf(childFileID+1, "inherit", linkURL)),
-		"odd right":  envelopeSuccess(linkJSONOf(childFileID, "everyone", linkURL)),
-	}
-	for name, answer := range answers {
-		t.Run(name, func(t *testing.T) {
-			var calls []call
-			env := newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(*http.Request) (*http.Response, error) {
-				return jsonResponse(200, answer), nil
-			}), nil)
-			_, err := env.invokeConfirmed(linksCreate.ID, "links", linkArgs(`,"right":"inherit"`))
-			if classOf(err) != provider.ClassInvalidResponse || !strings.Contains(err.Error(), "may have been applied") ||
-				len(calls) != 2 {
-				t.Fatalf("err = %v, calls = %d", err, len(calls))
-			}
-		})
-	}
-}
-
-// The password is registered before the first request, and nothing it reaches shows it: not the result, which
-// a provider answer that echoes it must not change, and not an error.
-func TestLinkPasswordNeverAppearsAnywhere(t *testing.T) {
-	fixLinkClock(t)
-	args := linkArgs(fmt.Sprintf(`,"right":"password","password":%q`, passwordCanary))
-	t.Run("registered before the first request", func(t *testing.T) {
-		var calls []call
-		var env *environment
-		env = newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(*http.Request) (*http.Response, error) {
-			return jsonResponse(200, envelopeSuccess(linkJSONOf(childFileID, "password", linkURL))), nil
-		}), nil)
-		first := true
-		previous := transport
-		transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			if first {
-				first = false
-				if env.red.Apply(passwordCanary) == passwordCanary {
-					t.Error("the password was not registered before the first request")
-				}
-			}
-			return previous.RoundTrip(r)
-		})
-		t.Cleanup(func() { transport = previous })
-		if _, err := env.invokeConfirmed(linksCreate.ID, "links", args); err != nil {
-			t.Fatalf("invoke() = %v", err)
-		}
-	})
-	t.Run("provider echo is dropped", func(t *testing.T) {
-		var calls []call
-		echoed := strings.Replace(linkJSONOf(childFileID, "password", linkURL), `"right"`,
-			fmt.Sprintf(`"password":%q,"right"`, passwordCanary), 1)
-		env := newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(*http.Request) (*http.Response, error) {
-			return jsonResponse(200, envelopeSuccess(echoed)), nil
-		}), nil)
-		result, err := env.invokeConfirmed(linksCreate.ID, "links", args)
-		if err != nil || strings.Contains(result, passwordCanary) {
-			t.Fatalf("result = %s, %v", result, err)
-		}
-		// A password inside the URL is masked by the redactor itself.
-		calls = nil
-		env = newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(*http.Request) (*http.Response, error) {
-			return jsonResponse(200, envelopeSuccess(linkJSONOf(childFileID, "password", linkURL+"?p="+passwordCanary))), nil
-		}), nil)
-		result, err = env.invokeConfirmed(linksCreate.ID, "links", args)
-		if err != nil || strings.Contains(result, passwordCanary) {
-			t.Fatalf("result = %s, %v", result, err)
-		}
-	})
-	t.Run("refusals and failures", func(t *testing.T) {
-		var calls []call
-		env := newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(*http.Request) (*http.Response, error) {
-			return jsonResponse(500, passwordCanary), nil
-		}), nil)
-		for _, input := range []string{
-			args,
-			linkArgs(fmt.Sprintf(`,"right":"public","password":%q`, passwordCanary)),
-			fmt.Sprintf(`{"drive_id":%d,"file_id":1,"right":"password","password":%q}`, ownDrive, passwordCanary),
-			fmt.Sprintf(`{"drive_id":%d,"file_id":%d,"right":"password","password":%q}`, foreignDrive, childFileID, passwordCanary),
-		} {
-			_, err := env.invokeConfirmed(linksCreate.ID, "links", input)
-			if err == nil || strings.Contains(err.Error(), passwordCanary) || strings.Contains(env.red.Error(err), passwordCanary) {
-				t.Fatalf("err = %v", err)
-			}
-		}
-		if _, err := env.invoke(linksCreate.ID, "links", args); err == nil || strings.Contains(err.Error(), passwordCanary) {
-			t.Fatalf("err = %v", err)
-		}
-	})
 }
 
 func TestLinksGetReadsOneLinkAndDropsUnsafeValues(t *testing.T) {

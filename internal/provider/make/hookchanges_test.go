@@ -38,8 +38,6 @@ func newHookChangeEnv(t *testing.T, teamID, scenarioID int64) *hookChangeEnv {
 		switch {
 		case r.Method == http.MethodGet:
 			return jsonResponse(200, `{"hook":`+hook(teamID, "Hook")+`}`), nil
-		case r.Method == http.MethodPost && r.URL.Path == apiPath+"/hooks":
-			return jsonResponse(200, `{"hook":`+hookJSONOf(99, ownTeam, 0, "Created "+canaryUDID)+`}`), nil
 		case r.Method == http.MethodPatch:
 			return jsonResponse(200, `{"hook":`+hook(ownTeam, "Renamed "+canaryHookURL)+`}`), nil
 		case strings.HasSuffix(r.URL.Path, "/enable"):
@@ -76,10 +74,6 @@ func TestHookChangesSendDocumentedRequests(t *testing.T) {
 	cases := []struct {
 		op, conn, args, method, path, body string
 	}{
-		{hooksCreate.ID, "open", `{"name":"Orders","type":"webhook","include_headers":true}`, "POST", "/hooks",
-			`{"headers":true,"method":false,"name":"Orders","stringify":false,"teamId":"1001","typeName":"gateway-webhook"}`},
-		{hooksCreate.ID, "open", `{"name":"Mail","type":"mailhook"}`, "POST", "/hooks",
-			`{"headers":false,"method":false,"name":"Mail","stringify":false,"teamId":"1001","typeName":"gateway-mailhook"}`},
 		{hooksRename.ID, "open", `{"hook_id":` + id + `,"name":"New"}`, "PATCH", "/hooks/" + id, `{"name":"New"}`},
 		{hooksEnable.ID, "open", `{"hook_id":` + id + `}`, "POST", "/hooks/" + id + "/enable", ``},
 		{hooksDisable.ID, "open", `{"hook_id":` + id + `}`, "POST", "/hooks/" + id + "/disable", ``},
@@ -115,7 +109,6 @@ func mustJSON(v any) []byte { out, _ := json.Marshal(v); return out }
 func TestHookChangesRequireConfirmationAndSendNothingWithout(t *testing.T) {
 	id := strconv.FormatInt(hookID, 10)
 	for _, c := range []struct{ op, conn, args string }{
-		{hooksCreate.ID, "open", `{"name":"A","type":"webhook"}`},
 		{hooksRename.ID, "open", `{"hook_id":` + id + `,"name":"A"}`},
 		{hooksEnable.ID, "open", `{"hook_id":` + id + `}`},
 		{hooksDisable.ID, "open", `{"hook_id":` + id + `}`},
@@ -151,47 +144,6 @@ func TestHookMutationsRefuseForeignTeamBeforeTheMutation(t *testing.T) {
 	if _, err := h.confirmed(hooksEnable.ID, "scenario", `{"hook_id":`+id+`}`); !isInvalidRequest(err) ||
 		len(h.changing()) != 0 {
 		t.Fatalf("allow-list err = %v", err)
-	}
-}
-
-func TestHooksCreateIsClosedAndNeverLeaksTheTrigger(t *testing.T) {
-	h := newHookChangeEnv(t, ownTeam, ownScenario)
-	result, err := h.confirmed(hooksCreate.ID, "open", `{"name":"A","type":"webhook"}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, secret := range []string{canaryUDID, canaryHookURL, "hook.example.com"} {
-		if strings.Contains(result, secret) {
-			t.Fatalf("create leaked %q: %s", secret, result)
-		}
-	}
-	// Local refusals send no request and read no secret.
-	for _, c := range []struct{ conn, args string }{
-		{"scenario", `{"name":"A","type":"webhook"}`},
-		{"open", `{"name":"","type":"webhook"}`},
-		{"open", `{"name":"` + strings.Repeat("a", 129) + `","type":"webhook"}`},
-		{"open", `{"name":"a\nb","type":"webhook"}`},
-		{"open", `{"name":"A","type":"gateway-webhook"}`},
-		{"open", `{"name":"A","type":"mailhook","stringify":true}`},
-		{"open", `{"name":"A","type":"webhook","typeName":"x"}`},
-		{"open", `{"name":"A","type":"webhook","connection_id":1}`},
-		{"open", `{"name":"A","type":"webhook","headers":{"x":"y"}}`},
-	} {
-		g := newHookChangeEnv(t, ownTeam, ownScenario)
-		if _, err := g.confirmed(hooksCreate.ID, c.conn, c.args); err == nil || len(g.calls) != 0 || *g.reads != 0 {
-			t.Fatalf("%s accepted or sent: err = %v, calls = %d", c.args, err, len(g.calls))
-		}
-	}
-}
-
-func TestHooksCreateReportsAForeignTeamResultAsProviderError(t *testing.T) {
-	var calls []call
-	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
-		return jsonResponse(200, `{"hook":`+hookJSONOf(99, foreignTeam, 0, "X")+`}`), nil
-	})
-	_, err := env.confirmed(hooksCreate.ID, "open", `{"name":"A","type":"webhook"}`)
-	if classOf(err) != provider.ClassProviderError || len(calls) != 1 {
-		t.Fatalf("err = %v, calls = %d", err, len(calls))
 	}
 }
 
@@ -244,7 +196,6 @@ func TestHookChangesAreNeverRetriedAndNameTheScope(t *testing.T) {
 	id := strconv.FormatInt(hookID, 10)
 	for _, status := range []int{500, 403} {
 		for _, c := range []struct{ op, conn, args string }{
-			{hooksCreate.ID, "open", `{"name":"A","type":"webhook"}`},
 			{hooksRename.ID, "open", `{"hook_id":` + id + `,"name":"A"}`},
 			{hooksEnable.ID, "open", `{"hook_id":` + id + `}`},
 			{hooksDelete.ID, "hookdelete", `{"hook_id":` + id + `}`},
@@ -312,7 +263,7 @@ func TestHooksManageProfileHasNoDelete(t *testing.T) {
 			continue
 		}
 		have := strings.Join(profile.Tools, ",")
-		for _, want := range []string{hooksCreate.ID, hooksRename.ID, hooksEnable.ID, hooksDisable.ID} {
+		for _, want := range []string{hooksRename.ID, hooksEnable.ID, hooksDisable.ID} {
 			if !strings.Contains(have, want) {
 				t.Fatalf("hooks-manage lacks %s", want)
 			}

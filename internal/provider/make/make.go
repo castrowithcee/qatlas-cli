@@ -597,6 +597,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Make", DefaultPermissions: []config.Permission{config.PermissionRead},
+		RemovedTools: []string{"make.hooks.create", "make.organization.invite"},
 		Description: "Visual automation platform, scenarios and their run history read, created, changed, " +
 			"started, stopped, and run through its zone-scoped REST API",
 		ValidateBaseURL: func(raw string) error {
@@ -610,7 +611,7 @@ func Register(reg *capability.Registry) error {
 				"update, start, and stop tools, plus scenarios:run for its run tool, plus teams:read for the team " +
 				"profile and organizations:read for the organization profile, plus connections:read for the " +
 				"connections-read profile and connections:write for its test tool, plus hooks:read for the " +
-				"hooks-read and hookqueue-read profiles and hooks:write for the hooks-manage profile's create, " +
+				"hooks-read and hookqueue-read profiles and hooks:write for the hooks-manage profile's " +
 				"rename, enable, and disable tools and the separately offered hook and queue delete tools, plus " +
 				"credential-requests:read for the credentialrequests-read profile and credential-requests:write " +
 				"for its manage profile's create tool and the separately offered request delete tool, plus " +
@@ -625,7 +626,7 @@ func Register(reg *capability.Registry) error {
 				"teams:read for the org-admin profile's list and teams:write for its create and update tools and " +
 				"the separately offered team delete tool, plus organization-variables:read for the organizationvariables-read " +
 				"profile and organization-variables:read with organization-variables:write for the " +
-				"organizationvariables-manage profile and the separately offered organization variable delete tool, plus organizations:write for the org-admin profile's organization update and invite and user:read for its invite and member list, and organizations:read for the org-billing-read profile's subscription, usage, and invoice reads. A token belongs to one " +
+				"organizationvariables-manage profile and the separately offered organization variable delete tool, plus organizations:write for the org-admin profile's organization update and user:read for its member list, and organizations:read for the org-billing-read profile's subscription, usage, and invoice reads. A token belongs to one " +
 				"zone only, so a token of a different zone than the connection's own is rejected as invalid, " +
 				"and it reaches every team its owner belongs to, which is why this connection's own team " +
 				"target decides what is exposed",
@@ -635,7 +636,7 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Description: "either organization mode, exactly one organization/ORG_ID target and no team or scenario " +
-				"target, which offers only the organization tools (make.teams.*, make.organizationvariables.*, make.organization.update, make.organization.invite, make.organization.members) and refuses every team tool; or " +
+				"target, which offers only the organization tools (make.teams.*, make.organizationvariables.*, make.organization.update, make.organization.members) and refuses every team tool; or " +
 				"team mode: exactly one team/TEAM_ID target this connection is bound to, plus an optional " +
 				"organization/ORG_ID target and an optional, repeatable allow-list of scenario/SCENARIO_ID " +
 				"targets of that team; without a scenario target, every scenario of the bound team the token " +
@@ -696,10 +697,10 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{hooksList.ID, hooksGet.ID, hooksPing.ID, hooksLogs.ID},
 		}, {
 			ID: "hooks-manage", Title: "Manage the bound team's hooks",
-			Description: "reads what hooks-read reads, creates a webhook or mailhook, renames, enables, and " +
+			Description: "reads what hooks-read reads, renames, enables, and " +
 				"disables hooks of the bound team; every change needs its own confirmation, never returns a " +
 				"trigger URL, and needs the hooks:read and hooks:write scopes. Deleting a hook is in no profile",
-			Tools: []string{hooksList.ID, hooksGet.ID, hooksPing.ID, hooksLogs.ID, hooksCreate.ID, hooksRename.ID,
+			Tools: []string{hooksList.ID, hooksGet.ID, hooksPing.ID, hooksLogs.ID, hooksRename.ID,
 				hooksEnable.ID, hooksDisable.ID},
 		}, {
 			ID: "hookqueue-read", Title: "Read the queue of the bound team's hooks",
@@ -816,8 +817,8 @@ func Register(reg *capability.Registry) error {
 			Description: "for a connection bound to an organization: lists the organization's teams, creates a " +
 				"team in it, and renames a team or changes its operations limit after binding it to the " +
 				"organization; every change needs its own confirmation, is never retried, and needs the " +
-				"teams:read and teams:write scopes; also changes the organization's name, country, or time zone (organizations:write), invites a person as member, and lists the members with their organization role (user:read). Deleting a team is in no profile",
-			Tools: []string{teamsList.ID, teamsCreate.ID, teamsUpdate.ID, organizationUpdate.ID, organizationInvite.ID, organizationMembers.ID},
+				"teams:read and teams:write scopes; also changes the organization's name, country, or time zone (organizations:write), and lists the members with their organization role (user:read). Deleting a team is in no profile",
+			Tools: []string{teamsList.ID, teamsCreate.ID, teamsUpdate.ID, organizationUpdate.ID, organizationMembers.ID},
 		}, {
 			ID: "org-billing-read", Title: "Read subscription, usage, and invoices of the bound organization",
 			Description: "for a connection bound to an organization: reads the subscription (plan, next billing " +
@@ -849,7 +850,6 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: hooksPing, Handler: capability.Handler(invokeHooksPing)},
 		capability.Operation{Descriptor: hooksLogs, Handler: capability.Handler(invokeHooksLogs)},
 		capability.Operation{Descriptor: hooksURL, Handler: capability.Handler(invokeHooksURL)},
-		capability.Operation{Descriptor: hooksCreate, Handler: capability.Handler(invokeHooksCreate)},
 		capability.Operation{Descriptor: hooksRename, Handler: capability.Handler(invokeHooksRename)},
 		capability.Operation{Descriptor: hooksEnable, Handler: capability.Handler(invokeHooksEnable)},
 		capability.Operation{Descriptor: hooksDisable, Handler: capability.Handler(invokeHooksDisable)},
@@ -896,7 +896,6 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: teamsUpdate, Handler: capability.Handler(invokeTeamsUpdate)},
 		capability.Operation{Descriptor: teamsDelete, Handler: capability.Handler(invokeTeamsDelete)},
 		capability.Operation{Descriptor: organizationUpdate, Handler: capability.Handler(invokeOrganizationUpdate)},
-		capability.Operation{Descriptor: organizationInvite, Handler: capability.Handler(invokeOrganizationInvite)},
 		capability.Operation{Descriptor: organizationMembers, Handler: capability.Handler(invokeOrganizationMembers)},
 		capability.Operation{Descriptor: organizationSubscription, Handler: capability.Handler(invokeOrganizationSubscription)},
 		capability.Operation{Descriptor: organizationUsage, Handler: capability.Handler(invokeOrganizationUsage)},

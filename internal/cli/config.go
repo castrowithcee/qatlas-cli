@@ -69,7 +69,7 @@ func newConfigCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 					fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
 				}
 			}
-			for _, warning := range append(cfg.PathWarnings(), cfg.FilesWarnings()...) {
+			for _, warning := range append(append(cfg.PathWarnings(), cfg.FilesWarnings()...), cfg.ToolWarnings()...) {
 				fmt.Fprintf(c.ErrOrStderr(), "qatlas: warning: %s\n", warning)
 			}
 			if legacyPath := filepath.Join(filepath.Dir(path), secret.FileName); fileExists(legacyPath) {

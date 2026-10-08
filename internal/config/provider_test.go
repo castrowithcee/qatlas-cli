@@ -38,6 +38,7 @@ var testProviders ProviderCatalog = testProviderCatalog{
 			{ID: "bookstack.pages.get", Effect: PermissionRead},
 			{ID: "bookstack.pages.list", Effect: PermissionRead},
 		},
+		RemovedTools: []string{"bookstack.pages.publish"},
 	},
 	"lexware": {
 		ID: "lexware", Name: "Lexware Office", DefaultBaseURL: "https://api.lexware.io",

@@ -15,12 +15,11 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// The five tools of this file change the webhooks and mailhooks of the bound team: create, rename, enable,
+// The four tools of this file change the webhooks and mailhooks of the bound team: rename, enable,
 // disable, and delete. Every hook that is named is read first and bound back to the bound team through
 // fetchHook, before the one changing request; no tool returns a trigger URL, udid, or mailhook address.
 // API (hooks:write, checked 2026-10-04 against developers.make.com's published API reference, not a live
-// account): POST /hooks (body name, teamId, typeName, method, headers, stringify all required), PATCH
-// /hooks/{hookId} (body name), POST /hooks/{hookId}/enable and /disable (answer {"success":true}), and
+// account): PATCH /hooks/{hookId} (body name), POST /hooks/{hookId}/enable and /disable (answer {"success":true}), and
 // DELETE /hooks/{hookId} (answer {"hook":id}; query confirmed=true confirms the deletion of a hook a
 // scenario includes, otherwise Make answers an error and deletes nothing).
 
@@ -31,8 +30,6 @@ const (
 	maxAffectedScenarios = 20
 	// maxAffectedNameLength bounds one reported scenario name.
 	maxAffectedNameLength = 128
-	hookTypeWebhook       = "gateway-webhook"
-	hookTypeMailhook      = "gateway-mailhook"
 )
 
 var hookNameSchema = `{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxHookNameLength) + `}`
@@ -43,33 +40,6 @@ var hookNameArgument = capability.Argument{Name: "name", Required: true,
 var hookChangeInput = func(extraProps, required string) json.RawMessage {
 	return json.RawMessage(`{"type":"object","properties":{"hook_id":` + hookIDSchema + extraProps + `},` +
 		`"required":["hook_id"` + required + `],"additionalProperties":false}`)
-}
-
-var hooksCreate = capability.Descriptor{
-	ID: Provider + ".hooks.create", Version: 1, Title: "Create a Make hook",
-	Description: "Create one webhook or mailhook in the bound team. Always creates in the connection's own " +
-		"bound team, only the two fixed hook types, and no connection, headers, or data are accepted; a " +
-		"repeated call creates a second hook. Refused on a connection with a scenario allow-list, since a " +
-		"new hook is assigned to no scenario. The trigger URL or address is not returned",
-	Tags: []string{"make", "hooks", "create", "automation"}, Risk: makeChangeRisk(capability.EffectCreate,
-		capability.IdempotencyNonIdempotent), Provider: Provider,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"name":` + hookNameSchema + `,` +
-		`"type":{"type":"string","enum":["webhook","mailhook"]},"include_method":{"type":"boolean"},` +
-		`"include_headers":{"type":"boolean"},"stringify":{"type":"boolean"}},` +
-		`"required":["name","type"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(hookSummarySchema),
-	Arguments: []capability.Argument{hookNameArgument,
-		{Name: "type", Required: true, Description: "webhook (Make type gateway-webhook) or mailhook " +
-			"(gateway-mailhook)"},
-		{Name: "include_method", Description: "Webhook only: add the HTTP method to the received data; false " +
-			"when omitted"},
-		{Name: "include_headers", Description: "Webhook only: add the request headers to the received data; " +
-			"false when omitted"},
-		{Name: "stringify", Description: "Webhook only: return JSON payloads as strings; false when omitted"},
-	},
-	Fields: hookSummaryFields,
-	Examples: []capability.Example{{Description: "Create a webhook",
-		Arguments: json.RawMessage(`{"name":"Orders","type":"webhook"}`)}},
 }
 
 var hooksRename = capability.Descriptor{
@@ -167,82 +137,6 @@ func (c *Client) verifyHookAfterChange(op string, id int64, h *hookJSON) (*hookJ
 			"the change already took effect")
 	}
 	return h, nil
-}
-
-type hooksCreateArguments struct {
-	Name           string `json:"name"`
-	Type           string `json:"type"`
-	IncludeMethod  bool   `json:"include_method"`
-	IncludeHeaders bool   `json:"include_headers"`
-	Stringify      bool   `json:"stringify"`
-}
-
-func invokeHooksCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	const op = "create hook"
-	var input hooksCreateArguments
-	if err := json.Unmarshal(raw, &input); err != nil {
-		return nil, providerError(op, "the validated arguments could not be read")
-	}
-	bound, err := boundScope(resolved)
-	if err != nil {
-		return nil, err
-	}
-	if len(bound.scenarios) > 0 {
-		return nil, invalidRequest("this connection restricts hooks by a scenario allow-list, so it cannot " +
-			"create one: a new hook is assigned to no scenario and could never be reached")
-	}
-	if err := validHookName(input.Name); err != nil {
-		return nil, err
-	}
-	var typeName string
-	switch input.Type {
-	case "webhook":
-		typeName = hookTypeWebhook
-	case "mailhook":
-		typeName = hookTypeMailhook
-		if input.IncludeMethod || input.IncludeHeaders || input.Stringify {
-			return nil, invalidRequest("include_method, include_headers, and stringify apply to webhooks only")
-		}
-	default:
-		return nil, invalidRequest("type must be webhook or mailhook")
-	}
-	client, err := Open(ctx, resolved, secrets, red)
-	if err != nil {
-		return nil, err
-	}
-	hook, err := client.createHook(ctx, input.Name, typeName, input)
-	if err != nil {
-		return nil, err
-	}
-	if red != nil {
-		red.Add(hook.URL, hook.UDID)
-	}
-	return hookSummaryOf(*hook), nil
-}
-
-// createHook sends the one changing POST /hooks request, teamId always the connection's own bound team
-// (Make documents it as a string), and verifies the hook it reports.
-func (c *Client) createHook(ctx context.Context, name, typeName string, in hooksCreateArguments) (*hookJSON, error) {
-	const op = "create hook"
-	body := map[string]any{
-		"name": name, "teamId": strconv.FormatInt(c.scope.teamID, 10), "typeName": typeName,
-		"method": in.IncludeMethod, "headers": in.IncludeHeaders, "stringify": in.Stringify,
-	}
-	var wrapper struct {
-		Hook hookJSON `json:"hook"`
-	}
-	if err := c.change(ctx, op, http.MethodPost, "/hooks", nil, body, &wrapper, needHooksWrite, uncertain); err != nil {
-		return nil, err
-	}
-	if wrapper.Hook.ID <= 0 {
-		return nil, invalidResponse(op, "Make did not report the created hook"+uncertain)
-	}
-	if !c.scope.allowsTeam(wrapper.Hook.TeamID) {
-		return nil, providerError(op, "Make did not keep the result inside this connection's targets; "+
-			"the change already took effect")
-	}
-	return &wrapper.Hook, nil
 }
 
 type hookRenameArguments struct {

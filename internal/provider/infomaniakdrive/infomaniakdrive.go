@@ -4,15 +4,14 @@
 // writing, and, only on a connection that holds the matching permission, creates a folder, renames, moves,
 // copies, or uploads one file or folder inside one drive, restores a trash entry, and, only for a tool the
 // connection lists explicitly, moves one file or folder to the trash, deletes one trash entry for good,
-// empties the trash, creates, changes, or deletes the share link of one file or folder, or grants, changes, or
+// empties the trash, deletes the share link of one file or folder, or grants, changes, or
 // revokes the access of users, teams, and invited e-mail addresses to one file or folder. Each of these
 // changes needs an explicit confirmation and is never repeated after an unclear outcome; every request of it
 // is sent once. The trash is read by its own tool, and the share links are read by two more, which a
 // connection must list explicitly: one link of a file or folder, and the files of a drive that have one. A
 // share link is an access path to the content for whoever holds its URL, so its URL has its own data
-// sensitivity class and is returned only as an https string, and the password of a protected link is
-// registered with the redactor before any request, is only ever sent to Infomaniak, and is never returned,
-// even when a provider answer carries one. The access of a file or folder is read by one tool and changed by
+// sensitivity class and is returned only as an https string, and no link password is ever returned, even
+// when a provider answer carries one. The access of a file or folder is read by one tool and changed by
 // three: the read and every change need an explicit tools list, because who may reach a file is personal data
 // and a change widens or narrows that reach. Before a change names a user or a team, it is proven to belong to
 // the same drive by reading the drive's users, and a foreign or unprovable one is refused without being named;
@@ -35,7 +34,7 @@
 // defensively. Every drive and file identifier an agent argument names is a plain positive integer used only
 // as a path segment of the fixed Infomaniak REST paths below: no argument ever becomes a URL or an HTTP
 // method, and the only provider request bodies are the name or conflict choice of a change, the validated
-// settings of a share link, the validated targets and right of an access change, and the content of an
+// targets and right of an access change, and the content of an
 // upload. A connection binds an account and drives, never
 // single files, so a file, folder, or destination identifier is bound by the drive it is used in: a change is
 // refused locally against the allow-list and then, before the change request, against the live account of the
@@ -429,10 +428,11 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 }
 
 // Register adds Infomaniak kDrive metadata, its read-only connection test, its read operations, and its
-// confirmed changes, share link and access changes included.
+// confirmed changes, share link deletion and access changes included.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kDrive", DefaultBaseURL: apiRoot,
+		RemovedTools:       []string{"infomaniakdrive.links.create", "infomaniakdrive.links.update"},
 		Description:        "Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		SecretRoles: []config.SecretRole{{
@@ -505,8 +505,6 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: trashEmpty, Handler: capability.Handler(invokeTrashEmpty)},
 		capability.Operation{Descriptor: linksGet, Handler: capability.Handler(invokeLinksGet)},
 		capability.Operation{Descriptor: linksList, Handler: capability.Handler(invokeLinksList)},
-		capability.Operation{Descriptor: linksCreate, Handler: capability.Handler(invokeLinksCreate)},
-		capability.Operation{Descriptor: linksUpdate, Handler: capability.Handler(invokeLinksUpdate)},
 		capability.Operation{Descriptor: linksDelete, Handler: capability.Handler(invokeLinksDelete)},
 		capability.Operation{Descriptor: dropboxGet, Handler: capability.Handler(invokeDropboxGet)},
 		capability.Operation{Descriptor: dropboxCreate, Handler: capability.Handler(invokeDropboxCreate)},

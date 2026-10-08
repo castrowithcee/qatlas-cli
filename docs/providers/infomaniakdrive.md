@@ -3,8 +3,8 @@ description: >
   Describes the Infomaniak kDrive provider: API token setup, the account and drive allow-list, the drive,
   folder, metadata, and content reads, the download to a local path, the confirmed folder creation, rename,
   move, copy, and file upload or replacement, the trash reads and the confirmed trash, restore, and permanent
-  deletion, the share link reads and the confirmed creation, change, and deletion of share links with their
-  password and URL handling, the dropbox (upload link) read and the confirmed creation, change, and deletion
+  deletion, the share link reads and the confirmed deletion of share links with their
+  URL handling, the dropbox (upload link) read and the confirmed creation, change, and deletion
   of dropboxes, the access read and the confirmed granting, changing, and revoking of user,
   team, and invitation access with their membership check and personal data handling, pagination and cursor
   contracts, the Business kSuite versus personal my kSuite compatibility cases, redirect handling on downloads,
@@ -25,8 +25,10 @@ copies one file or folder inside one drive, uploads one file or replaces the con
 trash entry, each only after an explicit confirmation. It reads the trash too. Moving a file or folder to the
 trash, deleting a trash entry for good, and emptying the trash are separate tools that need the `delete`
 permission and an explicit tools list. It reads the share link of a file or folder and lists the files that have
-one; creating, changing, and deleting a share link are separate, confirmed tools, and all share link tools,
-the reading ones included, need an explicit tools list. It reads the dropbox (upload link) of a folder and
+one; deleting a share link is a separate, confirmed tool, and all share link tools,
+the reading ones included, need an explicit tools list. Qatlas creates no permanent access or data paths to the
+outside (webhooks, invitations, public links); reading, pausing, revoking, and deleting remain, so no tool creates or
+changes a share link. It reads the dropbox (upload link) of a folder and
 creates, changes, or deletes it with separate, confirmed tools that likewise all need an explicit tools list. It reads the access of a file or folder and grants, changes, or revokes the access of users, teams, and
 invited e-mail addresses to it; these are separate tools that each need an explicit tools list, and a user or
 team is only named after it is proven to belong to the same drive.
@@ -111,8 +113,6 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 | `infomaniakdrive.trash.empty` | deletes every entry of the trash of one drive for good (`DELETE /2/drive/{d}/trash`) |
 | `infomaniakdrive.links.get` | the share link of exactly one file or folder (`GET /2/drive/{d}/files/{id}/link`) |
 | `infomaniakdrive.links.list` | the files and folders of one drive that have a share link, cursor-paginated (`GET /3/drive/{d}/files/links`) |
-| `infomaniakdrive.links.create` | creates exactly one share link for a file or folder (`POST /2/drive/{d}/files/{id}/link`) |
-| `infomaniakdrive.links.update` | changes exactly one share link (`PUT /2/drive/{d}/files/{id}/link`) |
 | `infomaniakdrive.links.delete` | deletes exactly one share link (`DELETE /2/drive/{d}/files/{id}/link`) |
 | `infomaniakdrive.dropbox.get` | the dropbox of exactly one folder (`GET /2/drive/{d}/files/{id}/dropbox`) |
 | `infomaniakdrive.dropbox.create` | creates exactly one dropbox for a folder (`POST /2/drive/{d}/files/{id}/dropbox`) |
@@ -127,16 +127,15 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 are `read`, safe, and need no confirmation. `folders.create` and `files.copy` have the effect `create`; `files.rename`, `files.move`, and
 `files.upload` have the effect `update`. `trash.restore` has the effect `update`. `files.trash`, `trash.delete`, and `trash.empty` have the effect
 `delete`, and each of them requires the tool allow-list: no permission alone offers it, a connection must name
-the tool in its `tools` list. `links.create` has the effect `create`, `links.update` the effect `update`, and
-`links.delete` the effect `delete`; a share link is access for whoever holds its URL, so all three require the
-tool allow-list as well, whichever right the link has. `links.get` and `links.list` are `read` and safe, but
-their URLs are that same access, so they require the tool allow-list too. `dropbox.get` is `read` and safe, `dropbox.create` has the
+the tool in its `tools` list. `links.delete` has the effect `delete`; a share link is access for whoever holds its
+URL, so it requires the tool allow-list as well, whichever right the link has. `links.get` and `links.list` are
+`read` and safe, but their URLs are that same access, so they require the tool allow-list too. `dropbox.get` is `read` and safe, `dropbox.create` has the
 effect `create`, `dropbox.update` the effect `update`, and `dropbox.delete` the effect `delete`; a dropbox URL lets
 anyone without an account upload into the folder, so all four require the tool allow-list and the three changes
 need `confirm`; all four are `open_world`. `dropbox.create` is non-idempotent, the others are idempotent. `access.get` is `read` and safe, but it discloses people and
 their rights, so it requires the tool allow-list too. `access.grant` has the effect `create`, `access.update` the
 effect `update`, and `access.revoke` the effect `delete`; all three widen or narrow who reaches a file, so all
-three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.update`, `links.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` can mail people, so it is not. The provider's default
+three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` can mail people, so it is not. The provider's default
 permission stays `read`: a connection runs a change only after its permissions name the effect and its tools
 list offers the tool where one is required.
 
@@ -209,28 +208,16 @@ than being refused or silently redirected to a listing.
 ### Share links
 
 - A share link makes a file or folder reachable by its URL. `right` decides who may open it: `inherit` only
-  users of the drive (the narrowest, and the one to pick without a reason for more), `password` anyone with the
-  URL and a password, `public` anyone holding the URL with no further check. `links.create` requires an explicit
-  `right` and never defaults it. Creating or changing a link needs `confirm` for every right, `public` included, and a
+  users of the drive (the narrowest), `password` anyone with the URL and a password, `public` anyone holding the
+  URL with no further check. Deleting a link needs `confirm` for every right, `public` included, and a
   connection must list the tool by name besides holding the permission.
 - `file_id` is a positive integer other than the drive's root `1`, validated, like `drive_id`, before any
   secret is read or request is sent; the drive goes through the allow-list check and the live ownership check
   first, and a refusal names no foreign value. Qatlas does not offer a link for the root: whether Infomaniak
   allows one is not documented, so the narrower reading applies.
-- `links.create` and `links.update` accept only these settings: `right`, `password`, `valid_until`, and the
-  flags `can_download`, `can_edit`, `can_comment`, `can_see_info`, and `can_see_stats`. Only a given setting is
-  sent; no other field, URL, method, or body of the provider exists. `can_request_access` is read but never
-  set. `valid_until` is an RFC 3339 time in the future and at most ten years ahead, sent as a timestamp; an
-  expiry cannot be removed again. When `can_comment` is not set, Infomaniak lets it follow `can_edit`.
-- `links.create` for a file that already has a link is refused by Infomaniak as a `conflict`; use
-  `links.update`. `links.update` needs at least one setting, takes a `password` only together with `right`
-  `password`, and answers only its `status`. `links.delete` removes the link; the file stays.
-- The password has 8 to 128 characters, no control character, and is allowed only with `right` `password`,
-  where it is required. It is registered with Qatlas's redactor before any request is sent, including the
-  ownership check, and is only ever the request body to Infomaniak. It is never part of a result, an error,
-  the invocation log, or any diagnostic, and no password a provider answer might carry is read at all. A
-  refusal of the password argument never quotes it.
-- The link URL is its own sensitivity class, `infomaniak-kdrive-share-links`, which all five link tools carry
+- `links.delete` removes the link; the file stays.
+- No link password is ever read from a provider answer or returned.
+- The link URL is its own sensitivity class, `infomaniak-kdrive-share-links`, which all three link tools carry
   instead of the file class: the URL is an access capability, not metadata. It is returned only as a string up to
   1024 characters, only when it is an absolute `https` URL without credentials; any other value from Infomaniak is
   dropped and the link is returned without `url`. The other link fields (`right`, `valid_until`, the flags,
@@ -240,9 +227,8 @@ than being refused or silently redirected to a listing.
   `limit` (5 to 1000, default 10) and an opaque `cursor`, answered as for `files.list`. Each entry is the usual entry
   plus its `link`. `links.get` answers `not-found` for a file without a link.
 - A change sends exactly one request after the ownership check and is never repeated. After a timeout, a
-  dropped connection, a 5xx answer, or an unreadable answer, and also when a created link comes back unreadable,
-  the error says the change may have been applied; read the link before trying again. `asynchronous` is a
-  `pending` change. A 403, for example because the drive's plan does not allow share links or a right, is
+  dropped connection, a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the link before trying again. `asynchronous` is a
+  `pending` change. A 403, for example because the drive's plan does not allow share links, is
   reported as `permission`.
 
 ### Dropbox
@@ -423,6 +409,6 @@ would force a kDrive-only connection to also declare secret roles it never uses.
 later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
 creation or removal of users or teams of the drive, no invitation to the drive itself, no handling of access
 requests, no synchronisation with the rights of the parent, no resending of an invitation, no access `message`,
-no `none` right, no `can_request_access` or removal of an expiry on a link, no removal of a dropbox setting, no dropbox invitation (`/dropbox/invite`) and no listing or search of dropboxes, no link statistics, no trashed
+no `none` right, no removal of a dropbox setting, no dropbox invitation (`/dropbox/invite`) and no listing or search of dropboxes, no link statistics, no trashed
 folder browsing, no restore outside the drive, no copy to another drive, no `version` conflict mode, no search,
 no activity or version history, and no account, settings, or quota administration.

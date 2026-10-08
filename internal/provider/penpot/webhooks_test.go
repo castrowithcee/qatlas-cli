@@ -12,7 +12,7 @@ const (
 	hookURL     = "https://hooks.example.com/secret-path-canary?token=query-canary"
 )
 
-var webhookTools = []string{webhooksList.ID, webhooksCreate.ID, webhooksUpdate.ID, webhooksDelete.ID}
+var webhookTools = []string{webhooksList.ID, webhooksUpdate.ID, webhooksDelete.ID}
 
 // webhookHandler lists one webhook (hookA) for teamA and answers every change with the given status and body.
 func webhookHandler(status int, answer string) func(call) (*http.Response, error) {
@@ -44,7 +44,6 @@ func TestWebhooksListShowsHostOnly(t *testing.T) {
 func TestWebhooksRefuseForeignTeamBeforeSecretAndIO(t *testing.T) {
 	for _, test := range []struct{ tool, args string }{
 		{webhooksList.ID, `{"team_id":"` + teamForeign + `"}`},
-		{webhooksCreate.ID, `{"team_id":"` + teamForeign + `","url":"https://hooks.example.com/x","mtype":"application/json"}`},
 		{webhooksUpdate.ID, `{"team_id":"` + teamForeign + `","webhook_id":"` + hookA + `","url":"https://hooks.example.com/x","mtype":"application/json","is_active":true}`},
 		{webhooksDelete.ID, `{"team_id":"` + teamForeign + `","webhook_id":"` + hookA + `"}`},
 	} {
@@ -64,8 +63,6 @@ func TestWebhookChangesSendOneFixedCommand(t *testing.T) {
 		reads                     int
 		answer                    string
 	}{
-		{webhooksCreate.ID, `{"team_id":"` + teamA + `","url":"` + hookURL + `","mtype":"application/transit+json"}`, cmdCreateWebhook, hookA,
-			map[string]any{"team-id": teamA, "uri": hookURL, "mtype": "application/transit+json"}, 0, `{"id":"` + hookA + `","uri":"` + hookURL + `"}`},
 		{webhooksUpdate.ID, `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"` + hookURL + `","mtype":"application/json","is_active":false}`,
 			cmdUpdateWebhook, `"updated":true`,
 			map[string]any{"id": hookA, "uri": hookURL, "mtype": "application/json", "is-active": false}, 1, `{"id":"` + hookA + `"}`},
@@ -97,11 +94,10 @@ func TestWebhookChangesRefuseForeignIDsAndBadInput(t *testing.T) {
 	for name, test := range map[string]struct{ tool, connection, args string }{
 		"foreign id update": {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookForeign + `",` + good + `,"is_active":true}`},
 		"foreign id delete": {webhooksDelete.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookForeign + `"}`},
-		"http url":          {webhooksCreate.ID, "write", `{"team_id":"` + teamA + `","url":"http://hooks.example.com/x","mtype":"application/json"}`},
-		"ip url":            {webhooksCreate.ID, "write", `{"team_id":"` + teamA + `","url":"https://127.0.0.1/x","mtype":"application/json"}`},
+		"http url":          {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"http://hooks.example.com/x","mtype":"application/json","is_active":true}`},
+		"ip url":            {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"https://127.0.0.1/x","mtype":"application/json","is_active":true}`},
 		"userinfo url":      {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"https://u:p@hooks.example.com/","mtype":"application/json","is_active":true}`},
-		"bad mtype":         {webhooksCreate.ID, "write", `{"team_id":"` + teamA + `","url":"https://hooks.example.com/x","mtype":"text/plain"}`},
-		"allow-list create": {webhooksCreate.ID, "writenarrow", `{"team_id":"` + teamA + `",` + good + `}`},
+		"bad mtype":         {webhooksUpdate.ID, "write", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"https://hooks.example.com/x","mtype":"text/plain","is_active":true}`},
 		"allow-list delete": {webhooksDelete.ID, "writenarrow", `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `"}`},
 	} {
 		var calls []call
@@ -129,7 +125,6 @@ func TestWebhookChangesNeedConfirmAndDeleteNeedsToolAllowList(t *testing.T) {
 
 func TestWebhookChangesSendOnceAndReportUncertainty(t *testing.T) {
 	args := map[string]string{
-		webhooksCreate.ID: `{"team_id":"` + teamA + `","url":"https://hooks.example.com/x","mtype":"application/json"}`,
 		webhooksUpdate.ID: `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `","url":"https://hooks.example.com/x","mtype":"application/json","is_active":true}`,
 		webhooksDelete.ID: `{"team_id":"` + teamA + `","webhook_id":"` + hookA + `"}`,
 	}
@@ -139,7 +134,7 @@ func TestWebhookChangesSendOnceAndReportUncertainty(t *testing.T) {
 			body      string
 			uncertain bool
 		}{{500, bodyCanary, true}, {502, bodyCanary, true}, {403, bodyCanary, false}, {429, bodyCanary, false},
-			{200, `not json`, tool == webhooksCreate.ID}} {
+			{200, `not json`, false}} {
 			var calls []call
 			env := newEnvironment(t, &calls, webhookHandler(test.status, test.body))
 			_, err := env.invokeConfirmed(tool, "write", arguments)
