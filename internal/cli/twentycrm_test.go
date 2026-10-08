@@ -89,14 +89,14 @@ func TestTwentyToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[5]{id,title,effect,requires,confirm,reason}:", "twentycrm.companies.create,Create a Twenty CRM company,create,", "twentycrm.companies.delete,Delete a Twenty CRM company,delete,", "twentycrm.companies.get,Get a Twenty CRM company,read,", "twentycrm.companies.list,List Twenty CRM companies,read,", "twentycrm.companies.update,Update a Twenty CRM company,update,",
+		"tools[7]{id,title,effect,requires,confirm,reason}:", "twentycrm.companies.create,Create a Twenty CRM company,create,", "twentycrm.companies.delete,Delete a Twenty CRM company,delete,", "twentycrm.companies.destroy,Destroy a Twenty CRM company,delete,", "twentycrm.companies.get,Get a Twenty CRM company,read,", "twentycrm.companies.list,List Twenty CRM companies,read,", "twentycrm.companies.restore,Restore a Twenty CRM company,update,", "twentycrm.companies.update,Update a Twenty CRM company,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--all", "--config", path))); len(got) != 5 {
-		t.Errorf("twentycrm tools = %v, want all five company tools", got)
+	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--all", "--config", path))); len(got) != 7 {
+		t.Errorf("twentycrm tools = %v, want all seven company tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -243,8 +243,8 @@ func TestTwentyMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 5 || searched.Operations[0].ID != "twentycrm.companies.create" ||
-		searched.Operations[4].ID != "twentycrm.companies.update" {
+	if len(searched.Operations) != 7 || searched.Operations[0].ID != "twentycrm.companies.create" ||
+		searched.Operations[6].ID != "twentycrm.companies.update" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 

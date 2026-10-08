@@ -99,13 +99,14 @@ var companiesList = capability.Descriptor{
 	Version: 1,
 	Title:   "List Twenty CRM companies",
 	Description: "Search one bounded page of companies in the Twenty workspace of a connection, " +
-		"by name or by primary domain",
+		"by name or by primary domain; deleted true lists only the companies in the trash instead",
 	Tags:     []string{"twentycrm", "crm", "companies", "list", "search"},
 	Risk:     twentyReadRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"name_contains":{"type":"string","minLength":1,"maxLength":64,"pattern":"` + searchPattern + `"},` +
 		`"domain_contains":{"type":"string","minLength":1,"maxLength":253,"pattern":"^[A-Za-z0-9.-]+$"},` +
+		`"deleted":{"type":"boolean"},` +
 		`"limit":{"type":"integer","minimum":1,"maximum":100},` +
 		`"sort":{"type":"string","enum":["name","created_at","updated_at"]},` +
 		`"direction":{"type":"string","enum":["asc","desc"]},` +
@@ -120,6 +121,7 @@ var companiesList = capability.Descriptor{
 	Arguments: []capability.Argument{
 		{Name: "name_contains", Description: "Return only companies whose name contains this text"},
 		{Name: "domain_contains", Description: "Return only companies whose primary domain contains this text"},
+		{Name: "deleted", Description: "True lists only deleted companies of the trash, which companies.restore can bring back; false when omitted"},
 		{Name: "limit", Description: "Companies per page, from 1 through 100; 25 when omitted"},
 		{Name: "sort", Description: "Sort property: name, created_at, or updated_at; created_at when omitted"},
 		{Name: "direction", Description: "Sort direction asc or desc; desc when omitted"},
@@ -174,10 +176,31 @@ var companiesCreate = companyMutationDescriptor("create", capability.EffectCreat
 var companiesUpdate = companyMutationDescriptor("update", capability.EffectUpdate, capability.IdempotencyIdempotent,
 	`{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"},"name":{"type":"string","minLength":1,"maxLength":255},"domain":{"type":"string","maxLength":253,"pattern":"^[A-Za-z0-9.-]*$"}},"required":["id"],"additionalProperties":false}`,
 	companiesCreate.OutputSchema, companyIDArgument, companyNameArgument, companyDomainArgument)
-var companiesDelete = companyMutationDescriptor("delete", capability.EffectDelete, capability.IdempotencyIdempotent,
-	`{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"}},"required":["id"],"additionalProperties":false}`,
-	json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
-	companyIDArgument)
+
+const companyIDOnlyInput = `{"type":"object","properties":{"id":{"type":"string","minLength":36,"maxLength":36,"pattern":"^[0-9a-fA-F-]{36}$"}},"required":["id"],"additionalProperties":false}`
+
+var companiesDelete = companyDeleteDescriptor("delete", 2, "Move one company of the workspace of a connection to the Twenty trash. "+
+	"The company stays recoverable with twentycrm.companies.restore and is found with twentycrm.companies.list deleted true. "+
+	"A connection offers this tool only when its tools list names it")
+var companiesDestroy = companyDeleteDescriptor("destroy", 1, "Permanently delete one company of the workspace of a connection. "+
+	"This cannot be undone: the company is not moved to the trash and twentycrm.companies.restore cannot bring it back. "+
+	"A connection offers this tool only when its tools list names it")
+var companiesRestore = withDescription(companyMutationDescriptor("restore", capability.EffectUpdate, capability.IdempotencyIdempotent,
+	companyIDOnlyInput, companiesCreate.OutputSchema, companyIDArgument),
+	"Restore one company of the Twenty trash in the workspace of a connection, as found with twentycrm.companies.list deleted true")
+
+func withDescription(d capability.Descriptor, description string) capability.Descriptor {
+	d.Description = description
+	return d
+}
+
+func companyDeleteDescriptor(action string, version int, description string) capability.Descriptor {
+	d := companyMutationDescriptor(action, capability.EffectDelete, capability.IdempotencyIdempotent, companyIDOnlyInput,
+		json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`),
+		companyIDArgument)
+	d.Version, d.Description, d.RequiresToolAllowList = version, description, true
+	return d
+}
 
 var (
 	companyIDArgument     = capability.Argument{Name: "id", Description: "Company identifier of 36 characters, as returned by twentycrm.companies.list", Required: true}
@@ -228,6 +251,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: companiesCreate, Handler: capability.Handler(invokeCompaniesCreate)},
 		capability.Operation{Descriptor: companiesUpdate, Handler: capability.Handler(invokeCompaniesUpdate)},
 		capability.Operation{Descriptor: companiesDelete, Handler: capability.Handler(invokeCompaniesDelete)},
+		capability.Operation{Descriptor: companiesDestroy, Handler: capability.Handler(invokeCompaniesDestroy)},
+		capability.Operation{Descriptor: companiesRestore, Handler: capability.Handler(invokeCompaniesRestore)},
 	)
 }
 
@@ -290,19 +315,48 @@ func invokeCompaniesUpdate(ctx context.Context, resolved *config.Resolved, secre
 }
 
 func invokeCompaniesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeRemoval(ctx, resolved, secrets, red, raw, "delete company", true)
+}
+
+func invokeCompaniesDestroy(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeRemoval(ctx, resolved, secrets, red, raw, "destroy company", false)
+}
+
+func invokeRemoval(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage, op string, soft bool) (any, error) {
 	var input companyMutationInput
 	if json.Unmarshal(raw, &input) != nil {
-		return nil, providerError("delete company", "the validated arguments could not be read")
+		return nil, providerError(op, "the validated arguments could not be read")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	if err := client.DeleteCompany(ctx, input.ID); err != nil {
+	if soft {
+		err = client.DeleteCompany(ctx, input.ID)
+	} else {
+		err = client.DestroyCompany(ctx, input.ID)
+	}
+	if err != nil {
 		return nil, err
 	}
 	return map[string]bool{"deleted": true}, nil
 }
+
+func invokeCompaniesRestore(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input companyMutationInput
+	if json.Unmarshal(raw, &input) != nil {
+		return nil, providerError("restore company", "the validated arguments could not be read")
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.RestoreCompany(ctx, input.ID)
+}
+
+// mutationUncertain is appended to a failure of a change whose request may have reached Twenty. Qatlas
+// sends a change once and never repeats it.
+const mutationUncertain = "; this change may have taken effect, read the company before repeating it"
 
 // Client binds one Twenty API key to the origin of one configured service and to the rate limit that key
 // shares. Two workspaces are two connections with two keys, and neither can reach the other's origin.
@@ -478,6 +532,7 @@ func (c *Client) checkWorkspaceSchema(ctx context.Context, op string) error {
 type ListOptions struct {
 	NameContains   string `json:"name_contains"`
 	DomainContains string `json:"domain_contains"`
+	Deleted        bool   `json:"deleted"`
 	Limit          int    `json:"limit"`
 	Sort           string `json:"sort"`
 	Direction      string `json:"direction"`
@@ -491,6 +546,9 @@ var sortFields = map[string]string{
 	"created_at": "createdAt",
 	"updated_at": "updatedAt",
 }
+
+// deletedFilter is the fixed filter building block that selects only companies in the trash.
+const deletedFilter = "deletedAt[is]:NOT_NULL"
 
 // listQuery builds the complete query of one list request out of the validated options.
 func listQuery(options ListOptions) url.Values {
@@ -508,12 +566,15 @@ func listQuery(options ListOptions) url.Values {
 	}
 	query.Set("order_by", field+"["+order+"]")
 
-	filters := make([]string, 0, 2)
+	filters := make([]string, 0, 3)
 	if options.NameContains != "" {
 		filters = append(filters, `name[ilike]:"%`+options.NameContains+`%"`)
 	}
 	if options.DomainContains != "" {
 		filters = append(filters, `domainName.primaryLinkUrl[ilike]:"%`+options.DomainContains+`%"`)
+	}
+	if options.Deleted {
+		filters = append(filters, deletedFilter)
 	}
 	if len(filters) > 0 {
 		query.Set("filter", strings.Join(filters, ","))
@@ -652,11 +713,32 @@ func (c *Client) UpdateCompany(ctx context.Context, id string, name, domain *str
 	return c.changeCompany(ctx, "update company", http.MethodPatch, companiesPath+"/"+url.PathEscape(id), companyPayload(name, domain), id)
 }
 
+// DeleteCompany moves one company to the Twenty trash, where it stays recoverable. The soft-delete
+// parameter is part of the fixed path; nothing selects between soft and permanent deletion.
 func (c *Client) DeleteCompany(ctx context.Context, id string) error {
+	return c.removeCompany(ctx, "delete company", id, "?soft_delete=true")
+}
+
+// DestroyCompany deletes one company permanently. Twenty answers soft and permanent deletion alike, so
+// the kind of deletion follows only from the request sent here.
+func (c *Client) DestroyCompany(ctx context.Context, id string) error {
+	return c.removeCompany(ctx, "destroy company", id, "")
+}
+
+func (c *Client) removeCompany(ctx context.Context, op, id, query string) error {
 	if !validUUID(id) {
-		return providerError("delete company", "the company identifier must be a UUID")
+		return providerError(op, "the company identifier must be a UUID")
 	}
-	return c.change(ctx, "delete company", http.MethodDelete, companiesPath+"/"+url.PathEscape(id), nil, nil)
+	_, err := c.changeCompany(ctx, op, http.MethodDelete, companiesPath+"/"+url.PathEscape(id)+query, nil, id)
+	return err
+}
+
+// RestoreCompany brings one company back from the Twenty trash.
+func (c *Client) RestoreCompany(ctx context.Context, id string) (*Company, error) {
+	if !validUUID(id) {
+		return nil, providerError("restore company", "the company identifier must be a UUID")
+	}
+	return c.changeCompany(ctx, "restore company", http.MethodPatch, companiesPath+"/"+url.PathEscape(id)+"/restore", nil, id)
 }
 
 func (c *Client) changeCompany(ctx context.Context, op, method, path string, payload map[string]any, expectedID string) (*Company, error) {
@@ -666,7 +748,7 @@ func (c *Client) changeCompany(ctx context.Context, op, method, path string, pay
 	}
 	record := response.record()
 	if !validUUID(record.ID) || (expectedID != "" && !strings.EqualFold(record.ID, expectedID)) {
-		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Twenty returned a company without the expected identifier"}
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Twenty returned a company without the expected identifier" + mutationUncertain}
 	}
 	return &Company{ID: record.ID, Name: record.Name, Domain: primaryDomain(record.DomainName), CreatedAt: record.CreatedAt, UpdatedAt: record.UpdatedAt}, nil
 }
@@ -701,9 +783,11 @@ type companyJSON struct {
 // mutations. The operation-specific field names differ, but the company record itself does not.
 type companyMutationJSON struct {
 	Data struct {
-		Company       companyRecordJSON `json:"company"`
-		CreateCompany companyRecordJSON `json:"createCompany"`
-		UpdateCompany companyRecordJSON `json:"updateCompany"`
+		Company        companyRecordJSON `json:"company"`
+		CreateCompany  companyRecordJSON `json:"createCompany"`
+		UpdateCompany  companyRecordJSON `json:"updateCompany"`
+		DeleteCompany  companyRecordJSON `json:"deleteCompany"`
+		RestoreCompany companyRecordJSON `json:"restoreCompany"`
 	} `json:"data"`
 }
 
@@ -714,7 +798,13 @@ func (r companyMutationJSON) record() companyRecordJSON {
 	if r.Data.CreateCompany.ID != "" {
 		return r.Data.CreateCompany
 	}
-	return r.Data.UpdateCompany
+	if r.Data.UpdateCompany.ID != "" {
+		return r.Data.UpdateCompany
+	}
+	if r.Data.DeleteCompany.ID != "" {
+		return r.Data.DeleteCompany
+	}
+	return r.Data.RestoreCompany
 }
 
 // openAPIJSON mirrors the two parts of the generated workspace document the connection test inspects.
@@ -805,20 +895,23 @@ func (c *Client) change(ctx context.Context, op, method, path string, payload an
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		return provider.Transport(op, "Twenty", err)
+		failure := provider.Transport(op, "Twenty", err)
+		if failure.MayHaveArrived() {
+			failure.Message += mutationUncertain
+		}
+		return failure
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return statusError(op, response.StatusCode)
-	}
-	if out == nil {
-		read, err := io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes+1))
-		if err != nil || read > maxResponseBytes {
-			return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "the Twenty response could not be read within the size limit"}
+		failure := statusError(op, response.StatusCode)
+		var providerErr *provider.Error
+		if response.StatusCode >= 500 && errors.As(failure, &providerErr) {
+			providerErr.Message += mutationUncertain
 		}
-		return nil
+		return failure
 	}
 	if failure := provider.ReadJSON(op, "Twenty", response.Body, maxResponseBytes, out); failure != nil {
+		failure.Message += mutationUncertain
 		return failure
 	}
 	return nil
