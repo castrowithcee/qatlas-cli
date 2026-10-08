@@ -182,7 +182,7 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	// neither needs a target.
 	twentyFields := m.buildFields("crm")
 	if strings.Contains(twentyFields[4].hint, "required") ||
-		!strings.Contains(twentyFields[4].hint, "not used by Twenty CRM") {
+		!strings.Contains(twentyFields[4].hint, "optional objects") {
 		t.Fatalf("Twenty target hint = %q, want an optional target", twentyFields[4].hint)
 	}
 	for name, want := range map[string]string{

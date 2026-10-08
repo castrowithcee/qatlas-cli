@@ -186,7 +186,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,68,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
 		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", ",\"\",3,0,0\n",
-		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",28,0,0\n", ",\"\",6,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n", ",\"\",2,0,0\n",
+		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",26,0,0\n", ",\"\",6,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",5,0,0\n", ",\"\",2,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -403,6 +403,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		{"namespace lexware", []string{"lexware"}, []string{"lexware.invoices.create", "lexware.invoices.get", "lexware.invoices.list"}},
 		{"namespace twentycrm", []string{"twentycrm"}, []string{
 			"twentycrm.companies.create", "twentycrm.companies.delete", "twentycrm.companies.destroy", "twentycrm.companies.get", "twentycrm.companies.list", "twentycrm.companies.restore", "twentycrm.companies.update",
+			"twentycrm.objects.get", "twentycrm.objects.list",
 		}},
 		{"namespace seatable", []string{"seatable"}, []string{"seatable.base.operations", "seatable.collaborators.list", "seatable.columns.create", "seatable.columns.delete", "seatable.columns.list", "seatable.columns.optionsadd", "seatable.columns.optionsdelete", "seatable.columns.optionsupdate", "seatable.columns.update", "seatable.comments.create", "seatable.comments.delete", "seatable.comments.list", "seatable.files.delete", "seatable.files.get", "seatable.files.upload", "seatable.links.create", "seatable.links.delete", "seatable.links.list", "seatable.links.update", "seatable.rows.activities", "seatable.rows.batchcreate", "seatable.rows.batchdelete", "seatable.rows.batchupdate", "seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.search", "seatable.rows.update", "seatable.snapshots.create", "seatable.tables.create", "seatable.tables.delete", "seatable.tables.duplicate", "seatable.tables.list", "seatable.tables.rename", "seatable.views.create", "seatable.views.delete", "seatable.views.get", "seatable.views.list", "seatable.views.update"}},
 		{"namespace github", []string{"github", "--query", "github"}, []string{

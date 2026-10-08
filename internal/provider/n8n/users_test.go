@@ -31,10 +31,6 @@ func userServer(t *testing.T, mutations *[]string) func(*http.Request) (*http.Re
 			return jsonResponse(200, `{"data":[`+userBody+`],"nextCursor":"next"}`), nil
 		case r.Method == http.MethodGet && r.URL.Path == apiPath+"/users/"+ownUser:
 			return jsonResponse(200, userBody), nil
-		case r.Method == http.MethodPost && r.URL.Path == apiPath+"/users":
-			return jsonResponse(201, `[{"user":{"id":"N1","email":"n@example.com","emailSent":false,`+
-				`"role":"global:member","inviteAcceptUrl":"https://secret.invalid/INVITETOKEN"}},`+
-				`{"user":{"id":"","email":"b@example.com","emailSent":false,"role":""},"error":"PROVIDERTEXT"}]`), nil
 		case r.URL.Path == apiPath+"/users/"+ownUser, r.URL.Path == apiPath+"/users/"+ownUser+"/role":
 			return jsonResponse(204, ``), nil
 		}
@@ -60,11 +56,6 @@ func TestUserToolsSendTheDocumentedRequests(t *testing.T) {
 		calls[1].path != apiPath+"/users/"+ownUser || calls[1].query.Get("includeRole") != "true" {
 		t.Fatalf("get: %s, %v, %+v", result, err, calls)
 	}
-	result, err = env.confirmed(usersInvite.ID, "pdelete-open", `{"emails":["n@example.com","b@example.com"]}`)
-	if err != nil || strings.Contains(result, "INVITETOKEN") || strings.Contains(result, "PROVIDERTEXT") ||
-		!strings.Contains(result, `"failed":1`) || !strings.Contains(result, `"ok":false`) {
-		t.Fatalf("invite: %s, %v", result, err)
-	}
 	for _, s := range []struct{ operation, arguments string }{
 		{usersSetRole.ID, fmt.Sprintf(`{"user_id":%q,"role":"global:admin"}`, ownUser)},
 		{usersDelete.ID, fmt.Sprintf(`{"user_id":%q,"transfer_project_id":"PROJ_1"}`, ownUser)},
@@ -75,8 +66,6 @@ func TestUserToolsSendTheDocumentedRequests(t *testing.T) {
 		}
 	}
 	want := []string{
-		fmt.Sprintf(`POST %s/users? [{"email":"n@example.com","role":"global:member"},`+
-			`{"email":"b@example.com","role":"global:member"}]`, apiPath),
 		fmt.Sprintf(`PATCH %s/users/%s/role? {"newRoleName":"global:admin"}`, apiPath, ownUser),
 		fmt.Sprintf(`DELETE %s/users/%s?transferId=PROJ_1 `, apiPath, ownUser),
 		fmt.Sprintf(`DELETE %s/users/%s? `, apiPath, ownUser),
@@ -90,7 +79,6 @@ func userArgs() map[string]string {
 	return map[string]string{
 		usersList.ID:    `{}`,
 		usersGet.ID:     fmt.Sprintf(`{"user_id":%q}`, ownUser),
-		usersInvite.ID:  `{"emails":["n@example.com"]}`,
 		usersSetRole.ID: fmt.Sprintf(`{"user_id":%q,"role":"global:member"}`, ownUser),
 		usersDelete.ID:  fmt.Sprintf(`{"user_id":%q,"delete_owned_resources":true}`, ownUser),
 	}
@@ -122,14 +110,6 @@ func TestUserArgumentsAreValidatedBeforeAnyRequest(t *testing.T) {
 		{usersSetRole.ID, `{"user_id":` + id + `,"role":"global:owner"}`},
 		{usersSetRole.ID, `{"user_id":` + id + `,"role":"custom:role"}`},
 		{usersSetRole.ID, `{"user_id":"../x","role":"global:member"}`},
-		{usersInvite.ID, `{"emails":["n@example.com"],"role":"global:owner"}`},
-		{usersInvite.ID, `{"emails":[]}`},
-		{usersInvite.ID, `{"emails":["not-an-email"]}`},
-		{usersInvite.ID, `{"emails":["Ann <a@example.com>"]}`},
-		{usersInvite.ID, `{"emails":["a@example.com","A@example.com"]}`},
-		{usersInvite.ID, `{"emails":["` + strings.Repeat("a", 250) + `@example.com"]}`},
-		{usersInvite.ID, `{"emails":["a1@example.com","a2@example.com","a3@example.com","a4@example.com","a5@example.com","a6@example.com",` +
-			`"a7@example.com","a8@example.com","a9@example.com","a10@example.com","a11@example.com"]}`},
 		{usersDelete.ID, `{"user_id":` + id + `}`},
 		{usersDelete.ID, `{"user_id":` + id + `,"transfer_project_id":"P1","delete_owned_resources":true}`},
 		{usersDelete.ID, `{"user_id":` + id + `,"delete_owned_resources":false}`},
@@ -145,7 +125,7 @@ func TestUserArgumentsAreValidatedBeforeAnyRequest(t *testing.T) {
 }
 
 func TestUserChangesRequireConfirmation(t *testing.T) {
-	for _, operation := range []string{usersInvite.ID, usersSetRole.ID, usersDelete.ID} {
+	for _, operation := range []string{usersSetRole.ID, usersDelete.ID} {
 		var calls []call
 		env := newEnvironment(t, &calls, noRequest(t))
 		_, err := env.invoke(operation, "pdelete-open", userArgs()[operation])
@@ -158,8 +138,7 @@ func TestUserChangesRequireConfirmation(t *testing.T) {
 func TestUserDeleteIsOnlyOfferedByAToolsListAndProfilesAreOwn(t *testing.T) {
 	r := usersDelete.Risk
 	if !usersDelete.RequiresToolAllowList || r.Effect != "delete" || r.Confirmation != "required" ||
-		r.DataSensitivity != "n8n-users-personal" || usersInvite.RequiresToolAllowList ||
-		usersSetRole.RequiresToolAllowList || usersList.Risk.Confirmation != "none" ||
+		r.DataSensitivity != "n8n-users-personal" || usersSetRole.RequiresToolAllowList || usersList.Risk.Confirmation != "none" ||
 		!strings.Contains(usersDelete.Description, "permanently") ||
 		!strings.Contains(usersDelete.Description, "transfer_project_id") {
 		t.Fatalf("descriptor = %+v", usersDelete)
@@ -177,7 +156,7 @@ func TestUserDeleteIsOnlyOfferedByAToolsListAndProfilesAreOwn(t *testing.T) {
 			}
 		}
 	}
-	if len(got["users-read"]) != 2 || len(got["users-manage"]) != 4 {
+	if len(got["users-read"]) != 2 || len(got["users-manage"]) != 3 {
 		t.Fatalf("profiles = %v", got)
 	}
 	var calls []call
@@ -207,10 +186,8 @@ func TestUserChangesAreNeverRetriedOnAnUnclearOutcome(t *testing.T) {
 		name, operation string
 		respond         func() (*http.Response, error)
 	}{
-		{"invite 5xx", usersInvite.ID, func() (*http.Response, error) { return jsonResponse(500, `{}`), nil }},
 		{"role transport", usersSetRole.ID, func() (*http.Response, error) { return nil, errUnclearTransport{} }},
 		{"delete 502", usersDelete.ID, func() (*http.Response, error) { return jsonResponse(502, `{}`), nil }},
-		{"invite unreadable", usersInvite.ID, func() (*http.Response, error) { return jsonResponse(201, `not json`), nil }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []call

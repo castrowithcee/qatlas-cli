@@ -138,7 +138,7 @@ func isInvalidRequest(err error) bool {
 func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	metadata, ok := registry(t).ProviderMetadata(Provider)
 	if !ok || metadata.Name != "Excalidraw+" || metadata.DefaultBaseURL != baseURL || len(metadata.SecretRoles) != 1 ||
-		metadata.SecretRoles[0].Name != roleAPIKey || !metadata.Target.Required || len(metadata.Tools) != 16 {
+		metadata.SecretRoles[0].Name != roleAPIKey || !metadata.Target.Required || len(metadata.Tools) != 15 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
 	recommended, ok := metadata.RecommendedProfile()

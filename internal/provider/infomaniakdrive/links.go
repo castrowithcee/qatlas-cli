@@ -108,22 +108,6 @@ func linkChangeRisk(effect capability.Effect, idempotency capability.Idempotency
 var linkFileArgument = capability.Argument{Name: "file_id", Required: true,
 	Description: "File or folder of the same drive; never the drive's root"}
 
-var linkSettingArguments = []capability.Argument{
-	{Name: "password", Description: "Password of a link with right password, 8 to 128 characters; never " +
-		"returned, logged, or shown; refused for any other right"},
-	{Name: "valid_until", Description: "Time the link expires, RFC 3339, in the future and within ten years; " +
-		"a link without it never expires"},
-	{Name: "can_download", Description: "Allow holders of the link to download"},
-	{Name: "can_edit", Description: "Allow holders of the link to edit the content; comments follow it unless can_comment is set"},
-	{Name: "can_comment", Description: "Allow holders of the link to comment"},
-	{Name: "can_see_info", Description: "Allow holders of the link to see information about the content"},
-	{Name: "can_see_stats", Description: "Allow holders of the link to see statistics"},
-}
-
-const linkSettingProperties = `"password":` + linkPasswordSchema + `,"valid_until":` + linkExpirySchema +
-	`,"can_download":` + linkFlagSchema + `,"can_edit":` + linkFlagSchema + `,"can_comment":` + linkFlagSchema +
-	`,"can_see_info":` + linkFlagSchema + `,"can_see_stats":` + linkFlagSchema
-
 var linksGet = capability.Descriptor{
 	ID:      Provider + ".links.get",
 	Version: 1,
@@ -175,51 +159,6 @@ var linksList = capability.Descriptor{
 	),
 	Examples: []capability.Example{{Description: "List the files with a share link in one drive",
 		Arguments: json.RawMessage(`{"drive_id":1}`)}},
-}
-
-var linksCreate = capability.Descriptor{
-	ID:      Provider + ".links.create",
-	Version: 1,
-	Title:   "Create an Infomaniak kDrive share link",
-	Description: "Create exactly one confirmed share link for a file or folder of a drive this connection may " +
-		"reach; right public or password makes the content reachable from outside the drive; the password is " +
-		"never returned, and a file that already has a link is refused",
-	Tags:                  []string{"infomaniak", "kdrive", "links", "share", "create"},
-	Risk:                  linkChangeRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
-	Provider:              Provider,
-	RequiresToolAllowList: true,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` +
-		objectIDSchema + `,"right":` + linkRightSchema + `,` + linkSettingProperties +
-		`},"required":["drive_id","file_id","right"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(linkResultSchema),
-	Arguments: append([]capability.Argument{mutationDriveArgument, linkFileArgument,
-		{Name: "right", Required: true, Description: "inherit: only users of the drive; password: anyone with the " +
-			"URL and the password; public: anyone holding the URL, no further check"}}, linkSettingArguments...),
-	Fields: linkResultFields,
-	Examples: []capability.Example{{Description: "Create a link that only users of the drive can open",
-		Arguments: json.RawMessage(`{"drive_id":1,"file_id":43,"right":"inherit"}`)}},
-}
-
-var linksUpdate = capability.Descriptor{
-	ID:      Provider + ".links.update",
-	Version: 1,
-	Title:   "Change an Infomaniak kDrive share link",
-	Description: "Change exactly one confirmed share link of a file or folder of a drive this connection may " +
-		"reach; only the given settings change, an expiry cannot be removed, and the password is never returned",
-	Tags:                  []string{"infomaniak", "kdrive", "links", "share", "update"},
-	Risk:                  linkChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
-	Provider:              Provider,
-	RequiresToolAllowList: true,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"drive_id":` + idSchema + `,"file_id":` +
-		objectIDSchema + `,"right":` + linkRightSchema + `,` + linkSettingProperties +
-		`},"required":["drive_id","file_id"],"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(linkResultSchema),
-	Arguments: append([]capability.Argument{mutationDriveArgument, linkFileArgument,
-		{Name: "right", Description: "New right, see links.create; password is then required"}},
-		linkSettingArguments...),
-	Fields: linkResultFields,
-	Examples: []capability.Example{{Description: "Stop holders of a link from downloading",
-		Arguments: json.RawMessage(`{"drive_id":1,"file_id":43,"can_download":false}`)}},
 }
 
 var linksDelete = capability.Descriptor{
@@ -341,19 +280,6 @@ func linkOf(raw shareLinkJSON) (*Link, bool) {
 
 const linkFileReason = "file_id must be a positive integer other than the drive's root"
 
-type linkArguments struct {
-	DriveID     int64  `json:"drive_id"`
-	FileID      int64  `json:"file_id"`
-	Right       string `json:"right"`
-	Password    string `json:"password"`
-	ValidUntil  string `json:"valid_until"`
-	CanDownload *bool  `json:"can_download"`
-	CanEdit     *bool  `json:"can_edit"`
-	CanComment  *bool  `json:"can_comment"`
-	CanSeeInfo  *bool  `json:"can_see_info"`
-	CanSeeStats *bool  `json:"can_see_stats"`
-}
-
 // validLinkPassword accepts printable text of the bounded length; the value is never quoted in a refusal.
 func validLinkPassword(password string) bool {
 	if len(password) < minLinkPassword || len(password) > maxLinkPassword || !utf8.ValidString(password) {
@@ -365,50 +291,6 @@ func validLinkPassword(password string) bool {
 		}
 	}
 	return true
-}
-
-// linkBody checks the settings of a create or an update and returns the one body they allow: only the
-// documented fields, only when given. No value is ever quoted in a refusal.
-func linkBody(input linkArguments, create bool) (map[string]any, error) {
-	body := map[string]any{}
-	switch {
-	case create && input.Right == "":
-		return nil, invalidRequest("right is required")
-	case input.Right != "" && !validRight(input.Right):
-		return nil, invalidRequest("right must be inherit, password, or public")
-	}
-	if input.Right != "" {
-		body["right"] = input.Right
-	}
-	switch {
-	case input.Right == rightPassword && input.Password == "":
-		return nil, invalidRequest("a link with right password needs a password")
-	case input.Password != "" && input.Right != rightPassword:
-		return nil, invalidRequest("a password is only allowed together with right password")
-	case input.Password != "" && !validLinkPassword(input.Password):
-		return nil, invalidRequest("password must be 8 to 128 characters without a control character")
-	}
-	if input.Password != "" {
-		body["password"] = input.Password
-	}
-	if input.ValidUntil != "" {
-		at, err := time.Parse(time.RFC3339, input.ValidUntil)
-		now := linkNow()
-		if err != nil || !at.After(now) || at.After(now.Add(maxLinkHorizon)) {
-			return nil, invalidRequest("valid_until must be an RFC 3339 time in the future, at most ten years ahead")
-		}
-		body["valid_until"] = at.Unix()
-	}
-	for name, flag := range map[string]*bool{"can_download": input.CanDownload, "can_edit": input.CanEdit,
-		"can_comment": input.CanComment, "can_see_info": input.CanSeeInfo, "can_see_stats": input.CanSeeStats} {
-		if flag != nil {
-			body[name] = *flag
-		}
-	}
-	if len(body) == 0 {
-		return nil, invalidRequest("an update needs at least one setting to change")
-	}
-	return body, nil
 }
 
 func invokeLinksGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -498,75 +380,6 @@ func (c *Client) ListLinks(ctx context.Context, driveID int64, cursor string, li
 	}
 	return &LinkPage{DriveID: driveID, Entries: entries, Cursor: meta.Cursor, HasMore: meta.HasMore,
 		Count: len(entries)}, nil
-}
-
-func invokeLinksCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeLinkChange(ctx, resolved, secrets, red, raw, "create share link", true)
-}
-
-func invokeLinksUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeLinkChange(ctx, resolved, secrets, red, raw, "update share link", false)
-}
-
-// invokeLinkChange runs the local checks of a create or an update in order: the password joins the redactor
-// first, so no later step can show it, then the identifiers and settings, then the drive checks, and only
-// then the one request.
-func invokeLinkChange(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
-	red *redact.Redactor, raw json.RawMessage, op string, create bool) (any, error) {
-	var input linkArguments
-	if err := json.Unmarshal(raw, &input); err != nil {
-		return nil, providerError(op, "the validated arguments could not be read")
-	}
-	if red != nil && input.Password != "" {
-		red.Add(input.Password)
-	}
-	if !validObjectID(input.FileID) || input.FileID == rootFileID {
-		return nil, invalidRequest(linkFileReason)
-	}
-	body, err := linkBody(input, create)
-	if err != nil {
-		return nil, err
-	}
-	client, err := prepare(ctx, resolved, secrets, red, op, input.DriveID)
-	if err != nil {
-		return nil, err
-	}
-	if create {
-		return client.CreateLink(ctx, input.DriveID, input.FileID, body)
-	}
-	return client.UpdateLink(ctx, input.DriveID, input.FileID, body)
-}
-
-// CreateLink creates exactly one share link, once. body holds the settings linkBody validated.
-func (c *Client) CreateLink(ctx context.Context, driveID, fileID int64, body map[string]any) (*LinkResult, error) {
-	const op = "create share link"
-	env, status, err := c.linkRequest(ctx, op, http.MethodPost, linkPath(driveID, fileID), body)
-	if err != nil {
-		return nil, err
-	}
-	result := &LinkResult{DriveID: driveID, FileID: fileID, Status: status}
-	var raw shareLinkJSON
-	if json.Unmarshal(env.Data, &raw) == nil {
-		if link, ok := linkOf(raw); ok && raw.FileID == fileID {
-			result.Link = link
-		}
-	}
-	if result.Link == nil && status == statusDone {
-		return nil, invalidResponse(op, "Infomaniak returned an invalid response"+uncertain)
-	}
-	return result, nil
-}
-
-// UpdateLink changes exactly one share link, once. Infomaniak answers a bare flag, so no link is returned.
-func (c *Client) UpdateLink(ctx context.Context, driveID, fileID int64, body map[string]any) (*LinkResult, error) {
-	const op = "update share link"
-	_, status, err := c.linkRequest(ctx, op, http.MethodPut, linkPath(driveID, fileID), body)
-	if err != nil {
-		return nil, err
-	}
-	return &LinkResult{DriveID: driveID, FileID: fileID, Status: status}, nil
 }
 
 func invokeLinksDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

@@ -19,7 +19,7 @@ const (
 	inviteeCanary = "invitee@example.com"
 )
 
-var teamTools = []string{membersList.ID, membersSetRole.ID, membersRemove.ID, invitationsCreate.ID, teamsCreate.ID, teamsDelete.ID}
+var teamTools = []string{membersList.ID, membersSetRole.ID, membersRemove.ID, teamsCreate.ID, teamsDelete.ID}
 
 func membersBody() string {
 	return `[{"id":"` + memberOwner + `","team-id":"` + teamA + `","email":"` + ownerEmail + `","name":"` + memberCanary +
@@ -43,12 +43,11 @@ func teamHandler(status int, answer string) func(call) (*http.Response, error) {
 
 func teamArgs() map[string]string {
 	return map[string]string{
-		membersList.ID:       `{"team_id":"` + teamA + `"}`,
-		membersSetRole.ID:    `{"team_id":"` + teamA + `","member_id":"` + memberEditor + `","role":"viewer"}`,
-		membersRemove.ID:     `{"team_id":"` + teamA + `","member_id":"` + memberEditor + `"}`,
-		invitationsCreate.ID: `{"team_id":"` + teamA + `","emails":["` + inviteeCanary + `"],"role":"editor"}`,
-		teamsCreate.ID:       `{"name":"Customer C"}`,
-		teamsDelete.ID:       `{"team_id":"` + teamA + `"}`,
+		membersList.ID:    `{"team_id":"` + teamA + `"}`,
+		membersSetRole.ID: `{"team_id":"` + teamA + `","member_id":"` + memberEditor + `","role":"viewer"}`,
+		membersRemove.ID:  `{"team_id":"` + teamA + `","member_id":"` + memberEditor + `"}`,
+		teamsCreate.ID:    `{"name":"Customer C"}`,
+		teamsDelete.ID:    `{"team_id":"` + teamA + `"}`,
 	}
 }
 
@@ -72,11 +71,10 @@ func TestMembersListReducesToRoleAndEmail(t *testing.T) {
 
 func TestTeamToolsRefuseForeignTeamBeforeSecretAndIO(t *testing.T) {
 	args := map[string]string{
-		membersList.ID:       `{"team_id":"` + teamForeign + `"}`,
-		membersSetRole.ID:    `{"team_id":"` + teamForeign + `","member_id":"` + memberEditor + `","role":"viewer"}`,
-		membersRemove.ID:     `{"team_id":"` + teamForeign + `","member_id":"` + memberEditor + `"}`,
-		invitationsCreate.ID: `{"team_id":"` + teamForeign + `","emails":["a@example.com"],"role":"editor"}`,
-		teamsDelete.ID:       `{"team_id":"` + teamForeign + `"}`,
+		membersList.ID:    `{"team_id":"` + teamForeign + `"}`,
+		membersSetRole.ID: `{"team_id":"` + teamForeign + `","member_id":"` + memberEditor + `","role":"viewer"}`,
+		membersRemove.ID:  `{"team_id":"` + teamForeign + `","member_id":"` + memberEditor + `"}`,
+		teamsDelete.ID:    `{"team_id":"` + teamForeign + `"}`,
 	}
 	for tool, arguments := range args {
 		var calls []call
@@ -98,8 +96,6 @@ func TestTeamChangesSendOneFixedCommand(t *testing.T) {
 			map[string]any{"team-id": teamA, "member-id": memberEditor, "role": "viewer"}, `null`},
 		{membersRemove.ID, cmdDeleteMember, `"removed":true`,
 			map[string]any{"team-id": teamA, "member-id": memberEditor}, `null`},
-		{invitationsCreate.ID, cmdCreateInvitation, `"invited":1`,
-			map[string]any{"team-id": teamA, "role": "editor"}, `{"total":1,"invitations":[{"email":"` + inviteeCanary + `"}]}`},
 		{teamsCreate.ID, cmdCreateTeam, newTeamID, map[string]any{"name": "Customer C"}, `{"id":"` + newTeamID + `","name":"Customer C"}`},
 		{teamsDelete.ID, cmdDeleteTeam, `"deleted":true`, map[string]any{"id": teamA}, `null`},
 	} {
@@ -120,12 +116,6 @@ func TestTeamChangesSendOneFixedCommand(t *testing.T) {
 				t.Errorf("%s: body[%s] = %v, want %v", test.tool, key, sent[0].body[key], want)
 			}
 		}
-		if test.tool == invitationsCreate.ID {
-			emails, _ := sent[0].body["emails"].([]any)
-			if len(emails) != 1 || emails[0] != inviteeCanary {
-				t.Errorf("emails = %v", sent[0].body["emails"])
-			}
-		}
 	}
 }
 
@@ -144,7 +134,7 @@ func TestTeamChangesNeedConfirmAndToolAllowList(t *testing.T) {
 		}
 	}
 	for descriptor, required := range map[*capability.Descriptor]bool{&membersSetRole: true, &membersRemove: true,
-		&teamsDelete: true, &teamsCreate: true, &invitationsCreate: false, &membersList: false} {
+		&teamsDelete: true, &teamsCreate: true, &membersList: false} {
 		if descriptor.RequiresToolAllowList != required {
 			t.Errorf("%s: RequiresToolAllowList = %t, want %t", descriptor.ID, descriptor.RequiresToolAllowList, required)
 		}
@@ -187,7 +177,7 @@ func TestTeamsCreateNeedsToolListEntryAndChangesNoTargets(t *testing.T) {
 }
 
 func TestTeamChangesRefuseProjectAllowList(t *testing.T) {
-	for _, tool := range []string{membersSetRole.ID, membersRemove.ID, invitationsCreate.ID, teamsCreate.ID, teamsDelete.ID} {
+	for _, tool := range []string{membersSetRole.ID, membersRemove.ID, teamsCreate.ID, teamsDelete.ID} {
 		var calls []call
 		env := newEnvironment(t, &calls, teamHandler(200, `{}`))
 		_, err := env.invokeConfirmed(tool, "writenarrow", teamArgs()[tool])
@@ -203,21 +193,10 @@ func TestTeamChangesRefuseProjectAllowList(t *testing.T) {
 }
 
 func TestTeamChangesRefuseBadInput(t *testing.T) {
-	many := `"a1@example.com"`
-	for i := 2; i <= 26; i++ {
-		many += `,"a` + strings.Repeat("b", i) + `@example.com"`
-	}
 	for name, test := range map[string]struct{ tool, args string }{
 		"owner role":        {membersSetRole.ID, `{"team_id":"` + teamA + `","member_id":"` + memberEditor + `","role":"owner"}`},
 		"bad member":        {membersSetRole.ID, `{"team_id":"` + teamA + `","member_id":"x","role":"viewer"}`},
 		"remove bad member": {membersRemove.ID, `{"team_id":"` + teamA + `","member_id":"x"}`},
-		"invite admin":      {invitationsCreate.ID, `{"team_id":"` + teamA + `","emails":["a@example.com"],"role":"admin"}`},
-		"invite owner":      {invitationsCreate.ID, `{"team_id":"` + teamA + `","emails":["a@example.com"],"role":"owner"}`},
-		"no emails":         {invitationsCreate.ID, `{"team_id":"` + teamA + `","emails":[],"role":"editor"}`},
-		"bad email":         {invitationsCreate.ID, `{"team_id":"` + teamA + `","emails":["not-an-email-canary"],"role":"editor"}`},
-		"display name":      {invitationsCreate.ID, `{"team_id":"` + teamA + `","emails":["Bob <b@example.com>"],"role":"editor"}`},
-		"two addresses":     {invitationsCreate.ID, `{"team_id":"` + teamA + `","emails":["a@example.com,b@example.com"],"role":"editor"}`},
-		"too many emails":   {invitationsCreate.ID, `{"team_id":"` + teamA + `","emails":[` + many + `],"role":"editor"}`},
 		"slash in name":     {teamsCreate.ID, `{"name":"a/b"}`},
 		"dot in name":       {teamsCreate.ID, `{"name":"a.b"}`},
 		"blank name":        {teamsCreate.ID, `{"name":"   "}`},
@@ -232,19 +211,12 @@ func TestTeamChangesRefuseBadInput(t *testing.T) {
 	}
 }
 
-func TestInvitationEmailsAreCleaned(t *testing.T) {
-	got, err := cleanEmails([]string{" Alice@example.com ", "alice@example.com", "bob@example.org"})
-	if err != nil || len(got) != 2 || got[0] != "alice@example.com" || got[1] != "bob@example.org" {
-		t.Fatalf("cleanEmails = %v, %v", got, err)
-	}
-}
-
 func TestTeamChangesSendOnceAndReportUncertainty(t *testing.T) {
 	for tool, arguments := range teamArgs() {
 		if tool == membersList.ID {
 			continue
 		}
-		reads := tool == invitationsCreate.ID || tool == teamsCreate.ID
+		reads := tool == teamsCreate.ID
 		for _, test := range []struct {
 			status    int
 			body      string
@@ -281,7 +253,7 @@ func TestTeamChangesSendOnceAndReportUncertainty(t *testing.T) {
 }
 
 func TestTeamToolsHaveCompleteRisk(t *testing.T) {
-	for _, d := range []capability.Descriptor{membersList, membersSetRole, membersRemove, invitationsCreate, teamsCreate, teamsDelete} {
+	for _, d := range []capability.Descriptor{membersList, membersSetRole, membersRemove, teamsCreate, teamsDelete} {
 		r := d.Risk
 		if r.DataSensitivity == "" || !r.OpenWorld {
 			t.Errorf("%s: risk = %+v", d.ID, r)
@@ -290,11 +262,10 @@ func TestTeamToolsHaveCompleteRisk(t *testing.T) {
 			t.Errorf("%s: confirmation does not match the effect: %+v", d.ID, r)
 		}
 	}
-	if invitationsCreate.Risk.Idempotency != capability.IdempotencyNonIdempotent ||
-		teamsCreate.Risk.Idempotency != capability.IdempotencyNonIdempotent {
-		t.Error("invitations.create and teams.create must be non-idempotent")
+	if teamsCreate.Risk.Idempotency != capability.IdempotencyNonIdempotent {
+		t.Error("teams.create must be non-idempotent")
 	}
-	if invitationsCreate.Risk.DataSensitivity != membersSensitive || membersList.Risk.DataSensitivity != membersSensitive {
+	if membersList.Risk.DataSensitivity != membersSensitive {
 		t.Error("the tools that handle email addresses need the members class")
 	}
 }
