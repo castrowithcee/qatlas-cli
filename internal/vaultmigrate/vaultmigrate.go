@@ -16,7 +16,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // Entry is one (credential, role, value) triple decided to move into the vault.
@@ -201,23 +200,6 @@ func SwitchCredentials(store *config.Store, cfg *config.Config, base config.Revi
 		}
 		return save(cfg)
 	})
-}
-
-// ProcessClientOf returns the client of the vault process that would hold v unlocked, checked against v's
-// own recipient: the same few lines 'qatlas vault status' and 'qatlas credential set' already build for
-// themselves, exposed here so a caller outside internal/cli, such as the TUI's own migrate action, can
-// reach one too without a copy of its own. It is nil-safe only in the sense that a v without a recipient, an
-// unencrypted vault, reports vault.ErrNotEncrypted rather than a client that could never work.
-func ProcessClientOf(v *vault.Vault) (*vaultproc.Client, error) {
-	recipient, err := v.Recipient()
-	if err != nil {
-		return nil, err
-	}
-	path, err := vaultproc.SocketPath(v.Dir())
-	if err != nil {
-		return nil, err
-	}
-	return vaultproc.NewClient(path, recipient), nil
 }
 
 // BackupConfig writes a byte-for-byte copy of the file at path to path+".bak", atomically and at mode 0600,

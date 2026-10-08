@@ -26,7 +26,6 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -278,7 +277,7 @@ func logChecker(ctx context.Context, v *vault.Vault) (invokelog.Checker, string,
 	case !vaultproc.Supported:
 		return nil, locked, nothing
 	}
-	client, err := vaultmigrate.ProcessClientOf(v)
+	client, err := vaultproc.ProcessClientOf(v)
 	if err != nil {
 		return nil, locked, nothing
 	}

@@ -1,12 +1,10 @@
-package vaultmigrate
+package vaultproc
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // MaxHandover bounds what a vault process reads from its handover, a vault's key and its secrets.
@@ -44,14 +42,14 @@ func startDeadline(ctx context.Context) time.Time {
 // awaitProcess waits until client reaches a vault process, at the latest until deadline, once StartProcess
 // started one. Whichever process listens, the one just started or one that won a race with it, it has to
 // answer the check every client makes before it counts as started.
-func awaitProcess(ctx context.Context, client *vaultproc.Client, deadline time.Time) (vaultproc.Status, error) {
+func awaitProcess(ctx context.Context, client *Client, deadline time.Time) (Status, error) {
 	for {
 		status, err := client.Status(ctx)
 		if err == nil {
 			return status, nil
 		}
-		if !errors.Is(err, vaultproc.ErrNotRunning) || time.Now().After(deadline) {
-			return vaultproc.Status{}, fmt.Errorf("the vault process does not answer: %w", err)
+		if !errors.Is(err, ErrNotRunning) || time.Now().After(deadline) {
+			return Status{}, fmt.Errorf("the vault process does not answer: %w", err)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

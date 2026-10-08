@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-package vaultmigrate
+package vaultproc
 
 import (
 	"context"
@@ -94,13 +94,13 @@ func TestSuccessorContract(t *testing.T) {
 	// the word ready alone.
 	dir := t.TempDir()
 	program := successorScript(t, dir, "echo ready >&4\nexec sleep 60")
-	pid, end, err := StartSuccessor(context.Background(), program, "/home/a/.qatlas/cli/config.yaml", snap)
+	pid, end, err := StartSuccessorProcess(context.Background(), program, "/home/a/.qatlas/cli/config.yaml", snap)
 	if err != nil {
-		t.Fatalf("StartSuccessor() = %v", err)
+		t.Fatalf("StartSuccessorProcess() = %v", err)
 	}
 	t.Cleanup(end)
 	if pid != scriptPID(t, dir) {
-		t.Fatalf("StartSuccessor() = pid %d, want the script's", pid)
+		t.Fatalf("StartSuccessorProcess() = pid %d, want the script's", pid)
 	}
 	if args, _ := os.ReadFile(filepath.Join(dir, "args")); strings.TrimSpace(string(args)) !=
 		"vault serve --config /home/a/.qatlas/cli/config.yaml --successor" {
@@ -113,7 +113,7 @@ func TestSuccessorContract(t *testing.T) {
 	awaitGone(t, pid)
 }
 
-// A successor that reports anything but ready, or nothing in time, is ended before StartSuccessor returns.
+// A successor that reports anything but ready, or nothing in time, is ended before StartSuccessorProcess returns.
 func TestStartSuccessorEndsASuccessorThatDoesNotStart(t *testing.T) {
 	for name, tc := range map[string]struct {
 		body    string
@@ -130,16 +130,16 @@ func TestStartSuccessorEndsASuccessorThatDoesNotStart(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), tc.timeout)
 			defer cancel()
 			locksAt := time.Now().Add(time.Hour)
-			_, end, err := StartSuccessor(ctx, program, "/nowhere/config.yaml", vault.Snapshot{Identity: "x", LocksAt: &locksAt})
+			_, end, err := StartSuccessorProcess(ctx, program, "/nowhere/config.yaml", vault.Snapshot{Identity: "x", LocksAt: &locksAt})
 			if err == nil || end != nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("StartSuccessor() = %v, want an error containing %q and no successor", err, tc.want)
+				t.Fatalf("StartSuccessorProcess() = %v, want an error containing %q and no successor", err, tc.want)
 			}
 			awaitGone(t, scriptPID(t, dir))
 		})
 	}
 
-	if _, _, err := StartSuccessor(context.Background(), filepath.Join(t.TempDir(), "missing"), "/nowhere/config.yaml",
+	if _, _, err := StartSuccessorProcess(context.Background(), filepath.Join(t.TempDir(), "missing"), "/nowhere/config.yaml",
 		vault.Snapshot{}); err == nil || errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("StartSuccessor() of a missing program = %v, want a start error", err)
+		t.Fatalf("StartSuccessorProcess() of a missing program = %v, want a start error", err)
 	}
 }

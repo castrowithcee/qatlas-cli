@@ -1,6 +1,6 @@
 //go:build windows
 
-package vaultmigrate
+package vaultproc
 
 import (
 	"bufio"
@@ -20,7 +20,6 @@ import (
 	"golang.org/x/sys/windows"
 
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // StartProcess starts 'qatlas vault serve' for the vault at configPath, detached from this process and its
@@ -43,14 +42,14 @@ import (
 //
 // No Windows vault process is ever started as a successor: an update does not hand the vault over here.
 func StartProcess(ctx context.Context, configPath string, snap vault.Snapshot,
-	client *vaultproc.Client) (vaultproc.Status, error) {
+	client *Client) (Status, error) {
 	program, err := os.Executable()
 	if err != nil {
-		return vaultproc.Status{}, fmt.Errorf("cannot find this program to start the vault process: %w", err)
+		return Status{}, fmt.Errorf("cannot find this program to start the vault process: %w", err)
 	}
 	deadline := startDeadline(ctx)
 	if err := startServe(program, serveArgs(configPath, false), snap, deadline); err != nil {
-		return vaultproc.Status{}, err
+		return Status{}, err
 	}
 	return awaitProcess(ctx, client, deadline)
 }

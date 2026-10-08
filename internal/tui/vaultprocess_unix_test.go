@@ -4,7 +4,7 @@
 // unlocked outside this run, exactly the way the CLI already does (see manage.Service.SyncVaultProcess
 // and LockVaultProcess); these tests exercise that against a real vaultproc.Server,
 // the way internal/cli/vaultsync_unix_test.go already does for the CLI, so the process seam behind
-// vaultmigrate.SyncChange and vaultmigrate.LockProcess is proven, not just its callers' plumbing.
+// vaultproc.SyncChange and vaultproc.LockProcess is proven, not just its callers' plumbing.
 package tui
 
 import (
@@ -21,7 +21,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -52,7 +51,7 @@ func serveVaultProcess(t *testing.T, dir, passphrase string) (*vaultproc.Server,
 	if err != nil {
 		t.Fatalf("ParseX25519Identity() = %v", err)
 	}
-	client, err := vaultmigrate.ProcessClientOf(v)
+	client, err := vaultproc.ProcessClientOf(v)
 	if err != nil {
 		t.Fatalf("ProcessClientOf() = %v", err)
 	}

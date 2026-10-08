@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -25,13 +24,13 @@ const socketCheckInterval = 10 * time.Second
 var stopSignals = []os.Signal{syscall.SIGTERM, syscall.SIGHUP, syscall.SIGINT}
 
 // serveStreams returns the handover and the report a vault process inherits from StartProcess, on
-// vaultmigrate.HandoverFD and vaultmigrate.ReportFD, or false when either is not a pipe: 'qatlas vault
+// vaultproc.HandoverFD and vaultproc.ReportFD, or false when either is not a pipe: 'qatlas vault
 // serve' run by hand.
 func serveStreams() (handover, report *os.File, ok bool) {
-	if !inheritedPipe(vaultmigrate.HandoverFD) || !inheritedPipe(vaultmigrate.ReportFD) {
+	if !inheritedPipe(vaultproc.HandoverFD) || !inheritedPipe(vaultproc.ReportFD) {
 		return nil, nil, false
 	}
-	return os.NewFile(vaultmigrate.HandoverFD, "vault-handover"), os.NewFile(vaultmigrate.ReportFD, "vault-report"), true
+	return os.NewFile(vaultproc.HandoverFD, "vault-handover"), os.NewFile(vaultproc.ReportFD, "vault-report"), true
 }
 
 // allowHandover lets server hand the vault in vaultDir over to a successor started from a verified release
@@ -39,7 +38,7 @@ func serveStreams() (handover, report *os.File, ok bool) {
 func allowHandover(server *vaultproc.Server, vaultDir, configPath string) {
 	server.AllowHandover(vaultDir, releaseKeys(), func(ctx context.Context, program string, next vault.Snapshot) (
 		int, func(), error) {
-		return vaultmigrate.StartSuccessor(ctx, program, configPath, next)
+		return vaultproc.StartSuccessorProcess(ctx, program, configPath, next)
 	})
 }
 

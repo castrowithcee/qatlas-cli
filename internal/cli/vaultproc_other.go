@@ -9,7 +9,7 @@ import (
 
 // vaultProcessPlatform reports whether this platform runs a vault process. Here it does not yet: 'qatlas
 // vault unlock', and the TUI's own 'ctrl+l', unlock the vault for their own process only (see
-// vaultmigrate.StartProcess, which reports vaultproc.ErrUnsupported here too).
+// vaultproc.StartProcess, which reports vaultproc.ErrUnsupported here too).
 const vaultProcessPlatform = false
 
 func runVaultServe(*Options, *capability.Registry, bool) error { return vaultproc.ErrUnsupported }

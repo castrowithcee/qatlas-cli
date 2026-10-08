@@ -20,7 +20,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -407,7 +406,7 @@ func Sync(ctx context.Context, v *vault.Vault) string {
 	if err != nil {
 		return ""
 	}
-	err = vaultmigrate.SyncChange(ctx, v, func(ctx context.Context, client *vaultproc.Client) error {
+	err = vaultproc.SyncChange(ctx, v, func(ctx context.Context, client *vaultproc.Client) error {
 		return client.Bind(ctx, bindings)
 	})
 	if err == nil {

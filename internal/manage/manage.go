@@ -19,7 +19,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -207,7 +206,7 @@ func (s *Service) rollback(credential string, toVault bool, roles []string, caus
 }
 
 // SyncVaultProcess hands one change already written to the vault on to the vault process that holds it
-// unlocked outside this run (see vaultmigrate.SyncChange). An unsupported platform, no vault, an
+// unlocked outside this run (see vaultproc.SyncChange). An unsupported platform, no vault, an
 // unencrypted vault or no process running needs nothing said and returns "". Any other failure returns the
 // redacted warning, which starts with "warning: " and carries no secret value; the vault already holds the
 // change and keeps it. The surface adds its own prefix and decides where the text goes.
@@ -216,7 +215,7 @@ func (s *Service) SyncVaultProcess(ctx context.Context, change func(context.Cont
 	if !s.processOK || v == nil {
 		return ""
 	}
-	if err := vaultmigrate.SyncChange(ctx, v, change); err != nil {
+	if err := vaultproc.SyncChange(ctx, v, change); err != nil {
 		return s.redact(fmt.Sprintf("warning: the vault holds the change, but the vault process that holds it "+
 			"unlocked could not take it and still answers with what it held before: %s; %s",
 			err, secret.VaultProcessRemedy(err)))
@@ -225,7 +224,7 @@ func (s *Service) SyncVaultProcess(ctx context.Context, change func(context.Cont
 }
 
 // LockVaultProcess locks the vault process that holds the vault unlocked, ahead of a change after which it
-// would serve what the vault no longer holds (see vaultmigrate.LockProcess); the change goes ahead either
+// would serve what the vault no longer holds (see vaultproc.LockProcess); the change goes ahead either
 // way. why says what it was locked for, in the words of a sentence part such as "before the vault was
 // decrypted", or "" to leave it out; next is what to do once it is locked. The result is "" when there was
 // nothing to lock, "the vault process was locked[ why]; next" when it was, and the redacted warning
@@ -238,7 +237,7 @@ func (s *Service) LockVaultProcess(ctx context.Context, why, next string) string
 	if why != "" {
 		why = " " + why
 	}
-	locked, err := vaultmigrate.LockProcess(ctx, v)
+	locked, err := vaultproc.LockProcess(ctx, v)
 	switch {
 	case err != nil:
 		return s.redact(fmt.Sprintf("warning: the vault process could not be locked%s: %s; it keeps the "+

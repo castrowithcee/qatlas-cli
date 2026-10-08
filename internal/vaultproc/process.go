@@ -1,4 +1,4 @@
-package vaultmigrate
+package vaultproc
 
 import (
 	"context"
@@ -6,11 +6,10 @@ import (
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // SuccessorFlag is the hidden flag of 'qatlas vault serve' that starts it as the successor of a running
-// vault process, part of the successor contract; see StartSuccessor and HandoverFD.
+// vault process, part of the successor contract; see StartSuccessorProcess and HandoverFD.
 const SuccessorFlag = "--successor"
 
 // SyncChange hands a change already written to the vault on to the vault process client of v, once one is
@@ -26,9 +25,9 @@ const SuccessorFlag = "--successor"
 // not encrypted, or none is currently running to take the change at all. Any other failure is returned for
 // the caller to turn into its own warning, together with secret.VaultProcessRemedy(err), since the vault
 // itself already holds the change either way. The caller still checks first whether this platform runs a
-// vault process at all (see vaultproc.Supported and the CLI's own vaultProcessSupported test seam), since
+// vault process at all (see Supported and the CLI's own vaultProcessSupported test seam), since
 // that is a policy this package leaves entirely to its callers.
-func SyncChange(ctx context.Context, v *vault.Vault, change func(context.Context, *vaultproc.Client) error) error {
+func SyncChange(ctx context.Context, v *vault.Vault, change func(context.Context, *Client) error) error {
 	if v == nil {
 		return nil
 	}
@@ -48,7 +47,7 @@ func SyncChange(ctx context.Context, v *vault.Vault, change func(context.Context
 			err = client.Bind(ctx, bindings)
 		}
 	}
-	if err == nil || errors.Is(err, vaultproc.ErrNotRunning) {
+	if err == nil || errors.Is(err, ErrNotRunning) {
 		return nil
 	}
 	return err
@@ -75,7 +74,7 @@ func LockProcess(ctx context.Context, v *vault.Vault) (locked bool, err error) {
 		return false, nil
 	}
 	if err := client.Lock(ctx); err != nil {
-		if errors.Is(err, vaultproc.ErrNotRunning) {
+		if errors.Is(err, ErrNotRunning) {
 			return false, nil
 		}
 		return false, err
@@ -88,11 +87,28 @@ func LockProcess(ctx context.Context, v *vault.Vault) (locked bool, err error) {
 // it does right after answering. It mirrors the CLI's own awaitLocked (internal/cli/vault.go), kept here as
 // its own small copy: both are a handful of lines around client.Status, not worth exporting either just for
 // the other to share.
-func awaitProcessLocked(ctx context.Context, client *vaultproc.Client) {
+func awaitProcessLocked(ctx context.Context, client *Client) {
 	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
-		if _, err := client.Status(ctx); errors.Is(err, vaultproc.ErrNotRunning) {
+		if _, err := client.Status(ctx); errors.Is(err, ErrNotRunning) {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+// ProcessClientOf returns the client of the vault process that would hold v unlocked, checked against v's
+// own recipient: the same few lines 'qatlas vault status' and 'qatlas credential set' already build for
+// themselves, exposed here so a caller outside internal/cli, such as the TUI's own migrate action, can
+// reach one too without a copy of its own. It is nil-safe only in the sense that a v without a recipient, an
+// unencrypted vault, reports vault.ErrNotEncrypted rather than a client that could never work.
+func ProcessClientOf(v *vault.Vault) (*Client, error) {
+	recipient, err := v.Recipient()
+	if err != nil {
+		return nil, err
+	}
+	path, err := SocketPath(v.Dir())
+	if err != nil {
+		return nil, err
+	}
+	return NewClient(path, recipient), nil
 }
