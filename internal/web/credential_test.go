@@ -414,3 +414,44 @@ func extractHiddenValue(t *testing.T, body, name string) string {
 	}
 	return rest[:j]
 }
+
+// A credential written without a provider still lists every secret role, and its roles can be replaced.
+func TestCredentialWithoutProviderShowsAndReplacesRoles(t *testing.T) {
+	s, store, mem, _ := newCredentialTestServer(t, nil)
+	cookie, csrf := coupleAndApprove(t, s, nil)
+
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatalf("store.Load: %v", err)
+	}
+	if err := cfg.SetCredential("legacy", config.Credential{Type: config.CredentialTypeKeyring}); err != nil {
+		t.Fatalf("SetCredential: %v", err)
+	}
+	if err := store.Save(cfg); err != nil {
+		t.Fatalf("store.Save: %v", err)
+	}
+
+	page := s.request(t, http.MethodGet, "/credentials/legacy", s.addr, cookie, nil)
+	if page.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", page.Code)
+	}
+	body := page.Body.String()
+	for _, role := range []string{"token-id", "token-secret"} {
+		if !strings.Contains(body, role) {
+			t.Errorf("the page does not list the role %q", role)
+		}
+	}
+	if !strings.Contains(body, manage.StateEmpty) {
+		t.Errorf("the page does not say %q for an unset role", manage.StateEmpty)
+	}
+
+	rec := s.postForm(t, "/credentials/legacy/role", s.addr, cookie, "http://"+s.addr, csrf, url.Values{
+		"role": {"token-id"}, "value": {canarySecretValue}, "cfgver": {extractHiddenValue(t, body, "cfgver")},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303, body: %s", rec.Code, rec.Body.String())
+	}
+	if got, err := mem.Get(t.Context(), secret.StoreKey("legacy", "token-id")); err != nil || got != canarySecretValue {
+		t.Fatalf("token-id = %q, %v, want %q", got, err, canarySecretValue)
+	}
+}

@@ -189,11 +189,7 @@ func (s *Server) renderPayload(w http.ResponseWriter, cfg *config.Config, data p
 		data.Action = "/credentials/" + url.PathEscape(data.Name) + "/payload"
 		cred := cfg.Credentials[data.Name]
 		for i := range data.Rows {
-			if cred.Type == config.CredentialTypeVault {
-				data.Rows[i].State = s.vaultRoleState(data.Name, data.Rows[i].Name)
-			} else {
-				data.Rows[i].State = s.keyringRoleState(data.Name, cred, data.Rows[i].Name)
-			}
+			data.Rows[i].State = s.roleState(data.Name, cred, data.Rows[i].Name)
 		}
 	}
 	for i := len(data.NewRows); i < payloadNewRows; i++ {

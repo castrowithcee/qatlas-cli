@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/manage"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
 )
@@ -1326,5 +1327,30 @@ func TestQuittingDropsAWaitingTypeChange(t *testing.T) {
 	}
 	if got := saved.Credentials["reader"].Type; got != config.CredentialTypeKeyring {
 		t.Errorf("type = %q, want nothing written after ctrl+c", got)
+	}
+}
+
+// An approval a vault write made is never silent: with a failure already on screen when the write is
+// answered, the note joins that failure instead of being dropped.
+func TestVaultWriteApprovalNoteJoinsAFailureOnScreen(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "qatlas")
+	m, err := buildModel(newTestStore(t, filepath.Join(dir, "config.yaml")), nil, nil, nil)
+	if err != nil {
+		t.Fatalf("New() = %v", err)
+	}
+	m.writes, m.vaultBusy = 1, true
+	m.fail = "an earlier write failed"
+
+	m.handleWritten(writtenMsg{
+		credential: "reader", role: "token-id", vault: true, done: "Stored reader.token-id in the vault",
+		approval: manage.ApprovalResult{Approved: []string{"wiki"}},
+	})
+
+	want := "an earlier write failed; approved 1 connection(s) to read from the vault: wiki"
+	if m.fail != want {
+		t.Errorf("fail = %q, want %q", m.fail, want)
+	}
+	if m.status != "" {
+		t.Errorf("status = %q, want the failure to stay the only message", m.status)
 	}
 }

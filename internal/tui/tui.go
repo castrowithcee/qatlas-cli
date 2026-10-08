@@ -606,6 +606,7 @@ func New(svc *manage.Service, store *config.Store, tester Tester, secrets Secret
 	}
 	if secrets == nil {
 		secrets = noSecrets{}
+		svc = svc.WithSecrets(secrets)
 	}
 	// Without a working directory a new path simply starts without a suggestion.
 	startDir, _ := os.Getwd()
@@ -2139,8 +2140,7 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			m.screen = screenForm
 			return m.requireAdmin(func() tea.Cmd {
 				if m.credentialType() == config.CredentialTypeVault {
-					before := manage.SnapshotApprovals(m.secrets.Vault(), m.cfg)
-					return m.removeVaultSecret(m.editing, role, before)
+					return m.removeVaultSecret(m.editing, role)
 				}
 				return m.removeSecret(m.editing, role)
 			})
@@ -2393,39 +2393,15 @@ func (m *Model) openEntry(name, source string) tea.Cmd {
 	return nil
 }
 
-// credentialProvider is the provider a credential belongs to. It is the one the credential names, or,
-// while it names none, the one every connection using it agrees on: a connection binds this credential to
-// a service, and that service has a provider, so the answer is already in the configuration. A credential
-// no connection uses, or one two providers disagree about, has none.
+// credentialProvider is the provider a credential belongs to for display; see manage.CredentialProvider.
 func (m *Model) credentialProvider(name string, cred config.Credential) string {
-	if cred.Provider != "" {
-		return cred.Provider
-	}
-	derived := ""
-	for _, connection := range m.cfg.Connections {
-		if connection.Credential != name {
-			continue
-		}
-		provider := m.cfg.Services[connection.Service].Provider
-		if provider == "" {
-			continue
-		}
-		if derived != "" && derived != provider {
-			return ""
-		}
-		derived = provider
-	}
-	return derived
+	return manage.CredentialProvider(m.cfg, name, cred)
 }
 
-// credentialRoles are the secret roles a credential actually uses. A credential that names its provider
-// uses exactly that provider's roles; one written before this field, or by hand without it, still has to
-// be editable, so it keeps offering every compiled role.
+// credentialRoles are the secret roles offered for a credential that belongs to provider; with none, every
+// compiled role, so a credential written without one stays editable. See manage.OfferedRoles.
 func (m *Model) credentialRoles(provider string) []string {
-	if provider == "" {
-		return m.cfg.SecretRoles()
-	}
-	return m.cfg.SecretRolesOf(provider)
+	return manage.OfferedRoles(m.cfg, "", config.Credential{Provider: provider})
 }
 
 // credentialProviders offers the compiled providers, plus the empty choice while this credential names

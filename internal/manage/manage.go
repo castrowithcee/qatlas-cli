@@ -79,6 +79,14 @@ func (s *Service) WithVaultProcessSupport(supported bool) *Service {
 	return &c
 }
 
+// WithSecrets returns a copy of s that stores and removes secrets through secrets, for a caller that was
+// built without any and supplies a stand-in whose operations say why they cannot.
+func (s *Service) WithSecrets(secrets Secrets) *Service {
+	c := *s
+	c.secrets = secrets
+	return &c
+}
+
 // Load returns the configuration as the file holds it, with the revision the next SaveConfig or
 // CommitSecrets must be based on. The errors are those of config.Store.LoadVersioned, including
 // *config.NotFoundError for a file that does not exist.
