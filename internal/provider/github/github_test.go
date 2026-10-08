@@ -79,6 +79,9 @@ type fakeGitHub struct {
 	ownerProjects []int
 	// views replaces the views of project 7 when it is set.
 	views string
+	// memberStatus is the status the organization membership route answers for a login of octo-org; a login
+	// it lacks is a member (204).
+	memberStatus map[string]int
 	// noTeams refuses the team list like GitHub does for a token without read:org.
 	noTeams bool
 	// orgTeamsForbidden refuses the organization team and team member routes like GitHub does for a token
@@ -212,6 +215,12 @@ func (f *fakeGitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				`"is_enabled":%t}`, it.id, it.id, it.name, description, color, it.enabled))
 		}
 		fmt.Fprint(w, "["+strings.Join(items, ",")+"]")
+	case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v3/orgs/octo-org/members/"):
+		status := http.StatusNoContent
+		if set, ok := f.memberStatus[strings.TrimPrefix(r.URL.Path, "/api/v3/orgs/octo-org/members/")]; ok {
+			status = set
+		}
+		w.WriteHeader(status)
 	case r.Method == http.MethodGet && r.URL.Path == "/api/v3/orgs/octo-org/teams":
 		if f.orgTeamsForbidden {
 			w.WriteHeader(http.StatusForbidden)
