@@ -208,7 +208,7 @@ func classOf(err error) provider.Class {
 	return ""
 }
 
-// Register publishes the configuration metadata the TUI needs and exactly two read-only operations. The
+// Register publishes the configuration metadata the TUI needs and the bounded Files operations. The
 // identity is two credential roles, and the fixed root folder is a required target.
 func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	reg := capability.NewRegistry()
@@ -241,8 +241,8 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 6 || descriptors[0].ID != "nextcloud.files.create" ||
-		descriptors[5].ID != "nextcloud.files.update" {
+	if len(descriptors) != 9 || descriptors[0].ID != "nextcloud.files.copy" ||
+		descriptors[8].ID != "nextcloud.folders.create" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {

@@ -160,15 +160,19 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 4 {
-		t.Fatalf("operations = %d, want four invoice operations", len(operations))
+	if len(operations) != 8 {
+		t.Fatalf("operations = %d, want four invoice, two contact, and two article operations", len(operations))
 	}
 	versions := map[string]int{"lexware.invoices.create": 2, "lexware.invoices.issue": 1,
-		"lexware.invoices.get": 1, "lexware.invoices.list": 1}
+		"lexware.invoices.get": 1, "lexware.invoices.list": 1, "lexware.contacts.get": 1,
+		"lexware.contacts.list": 1, "lexware.articles.get": 1, "lexware.articles.list": 1}
+	sensitivities := map[string]string{"lexware.contacts.get": contactSensitivity,
+		"lexware.contacts.list": contactSensitivity, "lexware.articles.get": articleSensitivity,
+		"lexware.articles.list": articleSensitivity}
 	for _, descriptor := range operations {
 		write := descriptor.Risk.Effect == capability.EffectCreate
 		if descriptor.Version != versions[descriptor.ID] || descriptor.Provider != Provider ||
-			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
+			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != cmpSensitivity(sensitivities, descriptor.ID) {
 			t.Errorf("descriptor %s = %+v, want a bounded operation",
 				descriptor.ID, descriptor)
 		}
@@ -187,7 +191,7 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "lexware.invoices.create" || operations[3].ID != "lexware.invoices.list" {
+	if operations[0].ID != "lexware.articles.get" || operations[7].ID != "lexware.invoices.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 	profiles := map[string]config.ToolProfile{}
@@ -199,11 +203,20 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 			}
 		}
 	}
-	if len(profiles) != 2 || !profiles["read"].Recommended || len(profiles["read"].Tools) != 2 ||
+	if len(profiles) != 2 || !profiles["read"].Recommended || len(profiles["read"].Tools) != 6 ||
 		profiles["write"].Recommended || profiles["write"].Title != "Master data and drafts" ||
-		len(profiles["write"].Tools) != 3 {
+		len(profiles["write"].Tools) != 7 {
 		t.Errorf("profiles = %+v", profiles)
 	}
+}
+
+// cmpSensitivity is the data class a descriptor must carry: the contact and article classes, otherwise the
+// invoice class.
+func cmpSensitivity(special map[string]string, id string) string {
+	if class, ok := special[id]; ok {
+		return class
+	}
+	return dataSensitivity
 }
 
 // invoiceInput is a valid input for the position-free paths a request test needs.
