@@ -229,3 +229,37 @@ func TestGuidedConnectionUnencryptedVaultShowsNoApprovalNotice(t *testing.T) {
 		t.Fatalf("the plain creation notice is missing:\n%s", body)
 	}
 }
+
+// A name typed with blanks around it is saved trimmed, and the approval and the redirect after saving use
+// that saved name, not the typed one.
+func TestGuidedConnectionUsesTheTrimmedNameAfterSaving(t *testing.T) {
+	s, store, v := newApprovalWebFixture(t)
+	cookie, csrf := coupleAndApprove(t, s, v)
+
+	form := createBookConnForm(t, s, cookie)
+	form.Set("connname", "  book-conn ")
+	rec := s.postForm(t, "/connections/new/review", s.addr, cookie, "http://"+s.addr, csrf, form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303, body: %s", rec.Code, rec.Body.String())
+	}
+	if location := rec.Header().Get("Location"); location != "/connections/book-conn?created=1" {
+		t.Fatalf("redirect location = %q, want the saved name", location)
+	}
+
+	cfg, err := store.Load()
+	if err != nil {
+		t.Fatalf("store.Load: %v", err)
+	}
+	if _, ok := cfg.Connections["book-conn"]; !ok {
+		t.Fatalf("connections = %v, want book-conn saved trimmed", cfg.Connections)
+	}
+	report, err := approval.Pending(cfg, v)
+	if err != nil {
+		t.Fatalf("approval.Pending: %v", err)
+	}
+	for _, c := range report.Open {
+		if c.Connection == "book-conn" {
+			t.Fatal("book-conn is still open; the approval looked for the untrimmed name")
+		}
+	}
+}
