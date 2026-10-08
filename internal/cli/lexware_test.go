@@ -86,14 +86,14 @@ func TestLexwareToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[3]{id,title,effect,requires,confirm,reason}:", "lexware.invoices.create,Create a Lexware invoice,create,", "lexware.invoices.get,Get a Lexware invoice,read,", "lexware.invoices.list,List open Lexware invoices,read,",
+		"tools[4]{id,title,effect,requires,confirm,reason}:", "lexware.invoices.create,Create a Lexware invoice draft,create,", "lexware.invoices.issue,Issue a Lexware invoice,create,", "lexware.invoices.get,Get a Lexware invoice,read,", "lexware.invoices.list,List open Lexware invoices,read,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runLexwareJSON(t, "", "tools", "lexware", "--all", "--config", path))); len(got) != 3 {
-		t.Errorf("lexware tools = %v, want all three invoice tools", got)
+	if got := toolIDs(t, string(runLexwareJSON(t, "", "tools", "lexware", "--all", "--config", path))); len(got) != 4 {
+		t.Errorf("lexware tools = %v, want all four invoice tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -229,8 +229,8 @@ func TestLexwareMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 3 || searched.Operations[0].ID != "lexware.invoices.create" ||
-		searched.Operations[2].ID != "lexware.invoices.list" {
+	if len(searched.Operations) != 4 || searched.Operations[0].ID != "lexware.invoices.create" ||
+		searched.Operations[3].ID != "lexware.invoices.list" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
