@@ -61,9 +61,19 @@ func roleOf(doc *document, name, role string) (string, bool) {
 // While the vault is encrypted and locked, Set never needs the passphrase: it writes a pending entry,
 // encrypted to the vault's public recipient, which is merged in on the next unlock.
 func (v *Vault) Set(name, role, value string, offer PassphraseFunc) error {
+	_, err := v.SetUndoable(name, role, value, offer)
+	return err
+}
+
+// SetUndoable is Set that also returns undo, which puts the vault back as this call found it: the role gets
+// its previous value again, or is removed when it had none, and a pending entry this call queued is removed
+// again. Undoing needs no passphrase: an encrypted, locked vault is only ever touched by removing the
+// pending file this call wrote, and a vault this call created is unlocked in this process. undo is nil when
+// err is not.
+func (v *Vault) SetUndoable(name, role, value string, offer PassphraseFunc) (undo func() error, err error) {
 	state, err := v.State()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	switch state {
 	case StateAbsent:
@@ -71,24 +81,66 @@ func (v *Vault) Set(name, role, value string, offer PassphraseFunc) error {
 		if offer != nil {
 			passphrase, err = offer(createPrompt)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
-		return v.create(passphrase, name, role, value)
+		if err := v.create(passphrase, name, role, value); err != nil {
+			return nil, err
+		}
+		return func() error {
+			_, err := v.Delete(name, role, nil)
+			return err
+		}, nil
 	case StateUnencrypted:
 		doc, err := loadPlainDocument(v.plainPath())
 		if err != nil {
-			return err
+			return nil, err
 		}
+		old, had := roleOf(doc, name, role)
 		doc.setRole(name, role, value, time.Now().UTC())
-		return v.writePlain(doc)
+		if err := v.writePlain(doc); err != nil {
+			return nil, err
+		}
+		return func() error {
+			doc, err := loadPlainDocument(v.plainPath())
+			if err != nil {
+				return err
+			}
+			restoreRole(doc, name, role, old, had)
+			return v.writePlain(doc)
+		}, nil
 	case StateLocked:
-		return v.addPending(name, role, value)
+		path, err := v.addPending(name, role, value)
+		if err != nil {
+			return nil, err
+		}
+		return func() error {
+			if err := os.Remove(path); err != nil && !isNotExist(err) {
+				return err
+			}
+			return nil
+		}, nil
 	case StateUnlocked:
+		old, had := roleOf(v.doc, name, role)
 		v.doc.setRole(name, role, value, time.Now().UTC())
-		return v.writeEncrypted(v.doc)
+		if err := v.writeEncrypted(v.doc); err != nil {
+			return nil, err
+		}
+		return func() error {
+			restoreRole(v.doc, name, role, old, had)
+			return v.writeEncrypted(v.doc)
+		}, nil
 	}
-	return fmt.Errorf("vault: unreachable state %q", state)
+	return nil, fmt.Errorf("vault: unreachable state %q", state)
+}
+
+// restoreRole sets a role back to the value it had, or removes it when it had none.
+func restoreRole(doc *document, name, role, old string, had bool) {
+	if had {
+		doc.setRole(name, role, old, time.Now().UTC())
+		return
+	}
+	doc.deleteRole(name, role)
 }
 
 // Delete removes one credential role from the vault and reports whether it was there. Deleting from an

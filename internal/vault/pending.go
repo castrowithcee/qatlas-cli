@@ -41,22 +41,22 @@ func (v *Vault) pendingFiles() ([]string, error) {
 
 // addPending writes one role's secret as a pending entry, encrypted to the vault's public recipient alone,
 // so it needs no passphrase. It is how Set stores a new or changed secret while the vault is locked.
-func (v *Vault) addPending(name, role, value string) error {
+func (v *Vault) addPending(name, role, value string) (path string, err error) {
 	recipientPEM, err := readFile(v.recipientPath())
 	if err != nil {
-		return fmt.Errorf("cannot read %s: %w", v.recipientPath(), err)
+		return "", fmt.Errorf("cannot read %s: %w", v.recipientPath(), err)
 	}
 	payload := pendingPayload{Name: name, Roles: map[string]string{role: value}, Modified: time.Now().UTC()}
 	plain, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("cannot encode the pending entry for %s: %w", name, err)
+		return "", fmt.Errorf("cannot encode the pending entry for %s: %w", name, err)
 	}
 	data, err := encryptToRecipient(string(plain), recipientPEM)
 	if err != nil {
-		return err
+		return "", err
 	}
-	path := filepath.Join(v.pendingPath(), newID()+".age")
-	return writeFile(path, data)
+	path = filepath.Join(v.pendingPath(), newID()+".age")
+	return path, writeFile(path, data)
 }
 
 // mergePending decrypts and applies every pending file to doc, in file name order, and returns how many

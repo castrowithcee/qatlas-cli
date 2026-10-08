@@ -22,15 +22,20 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
-// Secrets is what committing a batch of new secrets needs from a resolver: enough to write them to the
-// system keyring or the vault, and to remove again whatever a partial commit already wrote. A caller's
-// *secret.Resolver satisfies it, and so does every fake its tests inject in its place.
+// Secrets is what committing a batch of secrets needs from a resolver: enough to write them to the system
+// keyring or the vault, to read what they would overwrite, and to put that back or remove what a partial
+// commit already wrote. A caller's *secret.Resolver satisfies it, and so does every fake its tests inject in
+// its place.
 type Secrets interface {
 	Set(credential, role, value string) error
 	Delete(credential, role string) ([]secret.Source, error)
 	Vault() *vault.Vault
 	SetVault(credential, role, value string, offer vault.PassphraseFunc) error
 	DeleteVault(credential, role string) error
+	// StoreValue reads one role from the system keyring only, for the previous value a rollback restores.
+	StoreValue(ctx context.Context, credential, role string) (string, secret.StoreState)
+	// SetVaultUndoable is SetVault that also returns what puts the vault back as it was, without a passphrase.
+	SetVaultUndoable(credential, role, value string, offer vault.PassphraseFunc) (func() error, error)
 }
 
 // Service performs the shared write completion for one surface. It never hands out its store, vault or
@@ -69,6 +74,12 @@ func (o vaultOnly) SetVault(string, string, string, vault.PassphraseFunc) error 
 	return errNoSecretStore
 }
 func (o vaultOnly) DeleteVault(string, string) error { return errNoSecretStore }
+func (o vaultOnly) StoreValue(context.Context, string, string) (string, secret.StoreState) {
+	return "", secret.StoreUnavailable
+}
+func (o vaultOnly) SetVaultUndoable(string, string, string, vault.PassphraseFunc) (func() error, error) {
+	return nil, errNoSecretStore
+}
 
 // WithVaultProcessSupport returns a copy of s that treats the vault process as supported or not, in place
 // of vaultproc.Supported. A caller with its own switch, such as a test lever, passes it here.
@@ -123,7 +134,10 @@ func (s *Service) SaveConfig(before, after *config.Config, base config.Revision)
 //
 // base is the revision cfg was derived from (see Load). The commit is one config.Store.Transact: if the
 // file no longer has base, nothing is written, no secret and no configuration, and the error is a
-// *config.ConflictError. Only secrets this call wrote are ever rolled back. A role missing from values is
+// *config.ConflictError. Only secrets this call wrote are ever rolled back: a role that held a value before
+// gets it back, one that held none is removed. In the keyring the previous values are read before the first
+// write, and one that cannot be read, other than by being absent, fails the commit with nothing written. The
+// vault hands out the undo of each write itself, which needs no passphrase. A role missing from values is
 // skipped. offer is asked for a passphrase only when a vault secret here would be the vault's very first.
 //
 // Once the configuration is saved, a vault credential's secrets are handed on to a vault process that holds
@@ -141,29 +155,45 @@ func (s *Service) CommitSecrets(cfg *config.Config, base config.Revision, creden
 		}
 	}
 	var written []string
+	var undos []undoStep
 	// The revision is checked before the first secret is written and the lock is held until the configuration
 	// is saved, so a conflict is found before any secret of another change could be overwritten, and a
 	// rollback never races a second writer that uses the same credential name.
 	err = s.store.Transact(base, func(save func(*config.Config) error) error {
+		previous := map[string]previousSecret{}
+		if !toVault {
+			for _, role := range roles {
+				if _, ok := values[role]; !ok {
+					continue
+				}
+				prev, err := s.previousKeyringSecret(credential, role)
+				if err != nil {
+					return fmt.Errorf("reading the stored secret of %s.%s before replacing it: %w", credential, role, err)
+				}
+				previous[role] = prev
+			}
+		}
 		for _, role := range roles {
 			value, ok := values[role]
 			if !ok {
 				continue
 			}
+			var undo func() error
 			var writeErr error
 			if toVault {
-				writeErr = s.secrets.SetVault(credential, role, value, offer)
+				undo, writeErr = s.secrets.SetVaultUndoable(credential, role, value, offer)
 			} else {
 				writeErr = s.secrets.Set(credential, role, value)
+				undo = s.keyringUndo(credential, role, previous[role])
 			}
 			if writeErr != nil {
-				return s.rollback(credential, toVault, written,
-					fmt.Errorf("storing the secret for %s.%s: %w", credential, role, writeErr))
+				return rollback(credential, undos, fmt.Errorf("storing the secret for %s.%s: %w", credential, role, writeErr))
 			}
+			undos = append(undos, undoStep{role: role, undo: undo, removal: !toVault && !previous[role].had})
 			written = append(written, role)
 		}
 		if err := save(cfg); err != nil {
-			return s.rollback(credential, toVault, written, err)
+			return rollback(credential, undos, err)
 		}
 		return nil
 	})
@@ -183,24 +213,79 @@ func (s *Service) CommitSecrets(cfg *config.Config, base config.Revision, creden
 	}), nil
 }
 
-// rollback removes the secrets a failed commit wrote and says which ones, if any, could not be removed
-// again, so nothing is silently left behind.
-func (s *Service) rollback(credential string, toVault bool, roles []string, cause error) error {
-	var left []string
-	for _, role := range roles {
-		var err error
-		if toVault {
-			err = s.secrets.DeleteVault(credential, role)
-		} else {
-			_, err = s.secrets.Delete(credential, role)
+// previousSecret is what one keyring role held before a commit.
+type previousSecret struct {
+	value string
+	had   bool
+}
+
+// previousKeyringSecret reads the value role holds for credential in the system keyring. An absent entry is
+// a result; an unreadable keyring is an error without the value.
+func (s *Service) previousKeyringSecret(credential, role string) (previousSecret, error) {
+	value, state := s.secrets.StoreValue(context.Background(), credential, role)
+	switch state {
+	case secret.StoreHolds:
+		return previousSecret{value: value, had: true}, nil
+	case secret.StoreEmpty:
+		return previousSecret{}, nil
+	}
+	// The sentinel is kept, so a surface still tells an unusable keyring from any other failure.
+	cause := secret.ErrUnavailable
+	switch state {
+	case secret.StoreOff:
+		cause = secret.ErrDisabled
+	case secret.StoreTimedOut:
+		cause = secret.ErrTimedOut
+	case secret.StoreLocked:
+		cause = secret.ErrLocked
+	}
+	return previousSecret{}, cause
+}
+
+// keyringUndo returns what puts one keyring role back as prev says: its value again, or removed.
+func (s *Service) keyringUndo(credential, role string, prev previousSecret) func() error {
+	if prev.had {
+		return func() error { return s.secrets.Set(credential, role, prev.value) }
+	}
+	return func() error {
+		_, err := s.secrets.Delete(credential, role)
+		if errors.Is(err, secret.ErrNoEntry) {
+			return nil
 		}
-		if err != nil && !errors.Is(err, secret.ErrNoEntry) {
-			left = append(left, role)
+		return err
+	}
+}
+
+// undoStep puts one written role back as it was. removal is true where that means removing a keyring entry
+// that did not exist before.
+type undoStep struct {
+	role    string
+	undo    func() error
+	removal bool
+}
+
+// rollback runs the undo of every role a failed commit wrote and says which ones, if any, could not be put
+// back, so nothing is silently left behind.
+func rollback(credential string, steps []undoStep, cause error) error {
+	var notRemoved, notRestored []string
+	for _, step := range steps {
+		if step.undo == nil || step.undo() == nil {
+			continue
+		}
+		if step.removal {
+			notRemoved = append(notRemoved, step.role)
+		} else {
+			notRestored = append(notRestored, step.role)
 		}
 	}
-	if len(left) > 0 {
-		return fmt.Errorf("%w; the secrets already stored for %s (%s) could not be removed again, remove "+
-			"them with 'qatlas credential delete %s <role>'", cause, credential, strings.Join(left, ", "), credential)
+	if len(notRestored) > 0 {
+		cause = fmt.Errorf("%w; the secrets of %s (%s) could not be put back as they were before, check what "+
+			"they hold now", cause, credential, strings.Join(notRestored, ", "))
+	}
+	if len(notRemoved) > 0 {
+		cause = fmt.Errorf("%w; the secrets already stored for %s (%s) could not be removed again, remove "+
+			"them with 'qatlas credential delete %s <role>'", cause, credential, strings.Join(notRemoved, ", "),
+			credential)
 	}
 	return cause
 }

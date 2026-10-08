@@ -312,6 +312,11 @@ func (b vaultBlockingSecrets) SetVault(credential, role, value string, offer vau
 	return b.Resolver.SetVault(credential, role, value, offer)
 }
 
+func (b vaultBlockingSecrets) SetVaultUndoable(credential, role, value string, offer vault.PassphraseFunc) (func() error, error) {
+	<-b.gate
+	return b.Resolver.SetVaultUndoable(credential, role, value, offer)
+}
+
 // The scrypt cost of a vault write, or of the offer that may lead to one, never blocks the event loop, and
 // a second s or x on a vault role while one is in flight is refused rather than started.
 func TestVaultWriteIsAsyncAndNotDoubleTriggered(t *testing.T) {

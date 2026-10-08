@@ -956,11 +956,18 @@ func (r *Resolver) Set(credential, role, value string) error {
 // credential, including while the vault is encrypted and locked, needs no passphrase: it either writes the
 // entry directly or queues it as a pending entry merged in on the next unlock.
 func (r *Resolver) SetVault(credential, role, value string, offer vault.PassphraseFunc) error {
+	_, err := r.SetVaultUndoable(credential, role, value, offer)
+	return err
+}
+
+// SetVaultUndoable is SetVault that also returns the undo of vault.Vault.SetUndoable, which needs no
+// passphrase.
+func (r *Resolver) SetVaultUndoable(credential, role, value string, offer vault.PassphraseFunc) (func() error, error) {
 	if r.vault == nil {
-		return ErrUnavailable
+		return nil, ErrUnavailable
 	}
 	r.register(value)
-	return r.vault.Set(credential, role, value, offer)
+	return r.vault.SetUndoable(credential, role, value, offer)
 }
 
 // DeleteVault removes one credential role from the vault. Like a vault read, it needs the passphrase when
