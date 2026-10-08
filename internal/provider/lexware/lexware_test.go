@@ -160,13 +160,15 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 11 {
-		t.Fatalf("operations = %d, want four invoice, two contact, two article, and three voucher operations", len(operations))
+	if len(operations) != 15 {
+		t.Fatalf("operations = %d, want four invoice, two contact, two article, three voucher, and four sales voucher operations", len(operations))
 	}
 	versions := map[string]int{"lexware.invoices.create": 2, "lexware.invoices.issue": 1,
 		"lexware.invoices.get": 1, "lexware.invoices.list": 1, "lexware.contacts.get": 1,
 		"lexware.contacts.list": 1, "lexware.articles.get": 1, "lexware.articles.list": 1,
-		"lexware.voucherlist.list": 1, "lexware.payments.get": 1, "lexware.vouchers.get": 1}
+		"lexware.voucherlist.list": 1, "lexware.payments.get": 1, "lexware.vouchers.get": 1,
+		"lexware.quotations.get": 1, "lexware.orderconfirmations.get": 1, "lexware.creditnotes.get": 1,
+		"lexware.deliverynotes.get": 1}
 	sensitivities := map[string]string{"lexware.contacts.get": contactSensitivity,
 		"lexware.contacts.list": contactSensitivity, "lexware.articles.get": articleSensitivity,
 		"lexware.articles.list": articleSensitivity, "lexware.vouchers.get": bookkeepingSensitivity}
@@ -192,7 +194,7 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "lexware.articles.get" || operations[10].ID != "lexware.vouchers.get" {
+	if operations[0].ID != "lexware.articles.get" || operations[14].ID != "lexware.vouchers.get" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 	profiles := map[string]config.ToolProfile{}
@@ -204,9 +206,9 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 			}
 		}
 	}
-	if len(profiles) != 2 || !profiles["read"].Recommended || len(profiles["read"].Tools) != 9 ||
+	if len(profiles) != 2 || !profiles["read"].Recommended || len(profiles["read"].Tools) != 13 ||
 		profiles["write"].Recommended || profiles["write"].Title != "Master data and drafts" ||
-		len(profiles["write"].Tools) != 10 {
+		len(profiles["write"].Tools) != 14 {
 		t.Errorf("profiles = %+v", profiles)
 	}
 }
