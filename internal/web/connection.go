@@ -505,7 +505,7 @@ func (s *Server) handleCreateConnection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	connName := f.ConnName
+	connName := cand.Name
 	var values map[string]string
 	if cand.StoresSecrets() {
 		values = make(map[string]string, len(cand.Roles))
