@@ -244,6 +244,10 @@ func TestProviderConformanceChecksDetectViolations(t *testing.T) {
 		{"an argument outside the input schema", func(d *capability.Descriptor) {
 			d.Arguments = append(d.Arguments, capability.Argument{Name: "color"})
 		}, "argument"},
+		{"an input property without an argument entry", func(d *capability.Descriptor) {
+			d.InputSchema = json.RawMessage(`{"type":"object","properties":{"name":{"type":"string","minLength":1,` +
+				`"pattern":"^[a-z]+$"},"extra":{"type":"string"}},"required":["name"],"additionalProperties":false}`)
+		}, "no argument entry"},
 		{"a required argument listed as optional", func(d *capability.Descriptor) { d.Arguments[0].Required = false },
 			"argument"},
 	}
@@ -446,6 +450,15 @@ func descriptorViolations(d capability.Descriptor) []string {
 		} else if argument.Required != required[argument.Name] {
 			fail("argument %q is required=%t, the input schema says %t", argument.Name, argument.Required,
 				required[argument.Name])
+		}
+	}
+	described := map[string]bool{}
+	for _, argument := range d.Arguments {
+		described[argument.Name] = true
+	}
+	for name := range input.Properties {
+		if !described[name] {
+			fail("input property %q has no argument entry", name)
 		}
 	}
 	for _, argument := range d.Arguments {
@@ -914,6 +927,11 @@ func conformantRead() capability.Descriptor {
 			`{"type":"string","enum":["x"]}},"limit":{"type":"integer","minimum":1,"maximum":10}},` +
 			`"required":["id","tags","limit"],"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"object"}`),
+		Arguments: []capability.Argument{
+			{Name: "id", Description: "Item identifier", Required: true},
+			{Name: "tags", Description: "Tags to read", Required: true},
+			{Name: "limit", Description: "Maximum number of results", Required: true},
+		},
 	}
 }
 

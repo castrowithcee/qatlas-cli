@@ -228,7 +228,14 @@ var filesGet = capability.Descriptor{
 
 var filesCreate = uploadDescriptor(fileMutationDescriptor("create", capability.EffectCreate, `{"type":"object","properties":{"path":`+pathSchema+`,"content_base64":{"type":"string","maxLength":5592408},"`+localfile.LocalPathArgument+`":`+localfile.LocalPathSchema+`},"required":["path"],"additionalProperties":false}`), false)
 var filesUpdate = uploadDescriptor(fileMutationDescriptor("update", capability.EffectUpdate, `{"type":"object","properties":{"path":`+pathSchema+`,"content_base64":{"type":"string","maxLength":5592408},"`+localfile.LocalPathArgument+`":`+localfile.LocalPathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024}},"required":["path","etag"],"additionalProperties":false}`), true)
-var filesDelete = fileMutationDescriptor("delete", capability.EffectDelete, `{"type":"object","properties":{"path":`+pathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024}},"required":["path","etag"],"additionalProperties":false}`)
+var filesDelete = withArguments(fileMutationDescriptor("delete", capability.EffectDelete, `{"type":"object","properties":{"path":`+pathSchema+`,"etag":{"type":"string","minLength":1,"maxLength":1024}},"required":["path","etag"],"additionalProperties":false}`),
+	capability.Argument{Name: "path", Description: "File relative to the fixed root folder of this connection", Required: true},
+	capability.Argument{Name: "etag", Description: "Entity tag of the version to delete", Required: true})
+
+func withArguments(d capability.Descriptor, arguments ...capability.Argument) capability.Descriptor {
+	d.Arguments = arguments
+	return d
+}
 
 func fileMutationDescriptor(action string, effect capability.Effect, input string) capability.Descriptor {
 	return capability.Descriptor{ID: Provider + ".files." + action, Version: 1,

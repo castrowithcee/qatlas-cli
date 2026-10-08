@@ -259,21 +259,31 @@ var rowsGet = capability.Descriptor{
 
 var rowsCreate = rowMutationDescriptor("create", capability.EffectCreate, capability.IdempotencyNonIdempotent,
 	`{"type":"object","properties":{"table":`+tableSelectionSchema+`,"values":{"type":"object"}},"required":["values"],"additionalProperties":false}`,
-	`{"type":"object","properties":{"created":{"type":"boolean"}},"required":["created"],"additionalProperties":false}`)
+	`{"type":"object","properties":{"created":{"type":"boolean"}},"required":["created"],"additionalProperties":false}`,
+	rowTableArgument, rowValuesArgument)
 var rowsUpdate = rowMutationDescriptor("update", capability.EffectUpdate, capability.IdempotencyIdempotent,
 	`{"type":"object","properties":{"table":`+tableSelectionSchema+`,"row_id":{"type":"string","minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"},"values":{"type":"object"}},"required":["row_id","values"],"additionalProperties":false}`,
-	`{"type":"object","properties":{"updated":{"type":"boolean"}},"required":["updated"],"additionalProperties":false}`)
+	`{"type":"object","properties":{"updated":{"type":"boolean"}},"required":["updated"],"additionalProperties":false}`,
+	rowTableArgument, rowIDArgument, rowValuesArgument)
 var rowsDelete = rowMutationDescriptor("delete", capability.EffectDelete, capability.IdempotencyIdempotent,
 	`{"type":"object","properties":{"table":`+tableSelectionSchema+`,"row_id":{"type":"string","minLength":22,"maxLength":22,"pattern":"^[A-Za-z0-9_-]{22}$"}},"required":["row_id"],"additionalProperties":false}`,
-	`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`)
+	`{"type":"object","properties":{"deleted":{"type":"boolean"}},"required":["deleted"],"additionalProperties":false}`,
+	rowTableArgument, rowIDArgument)
 
-func rowMutationDescriptor(action string, effect capability.Effect, idempotency capability.Idempotency, input, output string) capability.Descriptor {
+var (
+	rowTableArgument  = capability.Argument{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"}
+	rowIDArgument     = capability.Argument{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.rows.list", Required: true}
+	rowValuesArgument = capability.Argument{Name: "values", Description: "Object of column name to value; link columns are refused", Required: true}
+)
+
+func rowMutationDescriptor(action string, effect capability.Effect, idempotency capability.Idempotency, input, output string, arguments ...capability.Argument) capability.Descriptor {
 	return capability.Descriptor{ID: Provider + ".rows." + action, Version: 1,
 		Title:       strings.ToUpper(action[:1]) + action[1:] + " a SeaTable row",
 		Description: strings.ToUpper(action[:1]) + action[1:] + " one row in a table allowed by an explicit SeaTable connection",
 		Tags:        []string{"seatable", "base", "rows", action, "table"}, Provider: Provider,
 		Risk:        capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
-		InputSchema: json.RawMessage(input), OutputSchema: json.RawMessage(output)}
+		InputSchema: json.RawMessage(input), OutputSchema: json.RawMessage(output),
+		Arguments: arguments}
 }
 
 // Register adds SeaTable metadata, its read-only connection test, schema discovery, and bounded row

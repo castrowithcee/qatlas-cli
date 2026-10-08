@@ -670,7 +670,9 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 			{Name: "address.country_code", Type: "string", Limits: "len 2"},
 			{Name: "tax_type", Type: "string", Required: true, Form: "net|gross|vatfree"},
 		} {
-			if got := rows[want.Name]; got != want {
+			got := rows[want.Name]
+			got.Description = ""
+			if got != want {
 				t.Errorf("argument %s = %+v, want %+v", want.Name, got, want)
 			}
 		}
