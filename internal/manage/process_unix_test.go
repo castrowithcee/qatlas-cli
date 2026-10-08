@@ -17,7 +17,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/connlog"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -59,7 +58,7 @@ func serveVault(t *testing.T, dir string, refuse bool) *vaultproc.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := vaultmigrate.ProcessClientOf(v)
+	client, err := vaultproc.ProcessClientOf(v)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -18,7 +18,6 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -304,15 +303,15 @@ func (m *Model) handleVaultUnlocked(msg vaultUnlockedMsg) tea.Cmd {
 type vaultProcessStartedMsg struct{ err error }
 
 // startVaultProcessFn is what startVaultProcess calls to actually hand the vault to a new vault process
-// once none answers yet: vaultmigrate.StartProcess for a real run, which starts a second copy of the running
+// once none answers yet: vaultproc.StartProcess for a real run, which starts a second copy of the running
 // program. A test replaces it with one that starts an in-process vaultproc.Server instead, the same way
 // package cli keeps 'vault unlock' itself from starting a second copy of its own test binary (see
 // runAsQatlasEnv there); everything around this seam, checking whether a process already answers and
 // building the snapshot, still runs for real.
-var startVaultProcessFn = vaultmigrate.StartProcess
+var startVaultProcessFn = vaultproc.StartProcess
 
 // startVaultProcess hands the just-unlocked vault to a vault process on Linux, macOS, and Windows, exactly the way 'qatlas
-// vault unlock' does (see vaultmigrate.StartProcess, the shared core both run): nil where this platform
+// vault unlock' does (see vaultproc.StartProcess, the shared core both run): nil where this platform
 // runs no vault process at all, so the caller never has to ask vaultproc.Supported itself. A process already
 // running elsewhere, or none running yet because this platform never starts one, stays silent; any other
 // failure becomes a warning with secret.VaultProcessRemedy, never with a secret value, the same rule
@@ -331,7 +330,7 @@ func (m *Model) startVaultProcess() tea.Cmd {
 	}
 	m.busy = "starting the vault process"
 	return func() tea.Msg {
-		client, err := vaultmigrate.ProcessClientOf(v)
+		client, err := vaultproc.ProcessClientOf(v)
 		if err != nil {
 			return vaultProcessStartedMsg{err: err}
 		}
@@ -384,7 +383,7 @@ func (m *Model) vaultLockConfirmView() string {
 type vaultLockedMsg struct{ err error }
 
 // beginVaultLock runs the three things 'ctrl+l' answered "y" does: locks the vault process that
-// holds it unlocked outside this run, the same way 'qatlas vault lock' does (see vaultmigrate.LockProcess,
+// holds it unlocked outside this run, the same way 'qatlas vault lock' does (see vaultproc.LockProcess,
 // the shared core both run); forgets the key and document this process itself holds, the closest the vault
 // API comes to undoing Unlock (see vault.Vault.Forget); and, once the command returns, ends this window's
 // admin session (see handleVaultLocked), since managing without an unlocked vault is not possible anyway.
@@ -398,7 +397,7 @@ func (m *Model) beginVaultLock() tea.Cmd {
 	m.vaultBusy = true
 	m.busy = "locking the vault"
 	return func() tea.Msg {
-		_, err := vaultmigrate.LockProcess(context.Background(), v)
+		_, err := vaultproc.LockProcess(context.Background(), v)
 		v.Forget()
 		return vaultLockedMsg{err: err}
 	}
@@ -439,7 +438,7 @@ func (m *Model) checkVaultProcess() tea.Cmd {
 		return nil
 	}
 	return func() tea.Msg {
-		client, err := vaultmigrate.ProcessClientOf(v)
+		client, err := vaultproc.ProcessClientOf(v)
 		if err != nil {
 			return vaultProcessCheckMsg{}
 		}

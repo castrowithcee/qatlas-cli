@@ -230,7 +230,7 @@ func (f *handoverFixture) replaceWithRelease() {
 }
 
 // start is the server's StartSuccessor: it starts the program it is given as a helper process, the way
-// vaultmigrate.StartSuccessor starts 'qatlas vault serve --successor', and ends it on any failure.
+// StartSuccessorProcess starts 'qatlas vault serve --successor', and ends it on any failure.
 func (f *handoverFixture) start(ctx context.Context, program string, snap vault.Snapshot) (int, func(), error) {
 	f.starts.Add(1)
 	if program != f.program {

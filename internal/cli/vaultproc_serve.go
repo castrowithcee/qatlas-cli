@@ -16,7 +16,6 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -24,12 +23,12 @@ import (
 const vaultProcessPlatform = true
 
 // runVaultServe is 'qatlas vault serve', the vault process itself. It is started by 'qatlas vault unlock',
-// or by the TUI's own 'ctrl+l' (see vaultmigrate.StartProcess, which both run to start it), with the
+// or by the TUI's own 'ctrl+l' (see vaultproc.StartProcess, which both run to start it), with the
 // handover and the report it inherits (see serveStreams); run any other way, it refuses before it reads
 // anything.
 //
 // As a successor, started by a running vault process from the program an update installed (see
-// vaultmigrate.StartSuccessor), it listens beside the vault socket, at vaultproc.NextPath, reports ready, and
+// vaultproc.StartSuccessorProcess), it listens beside the vault socket, at vaultproc.NextPath, reports ready, and
 // waits until that process moved its socket onto the vault socket; it keeps the time that process would have
 // locked at. Only a platform that hands the vault over on an update starts one (see vaultHandoverPlatform);
 // elsewhere a successor refuses to start.
@@ -101,7 +100,7 @@ func runVaultServe(opts *Options, reg *capability.Registry, successor bool) erro
 	}
 	listener, err := vaultproc.Listen(listenAt)
 	if errors.Is(err, vaultproc.ErrRunning) && !successor {
-		answer(vaultmigrate.ReportRunning)
+		answer(vaultproc.ReportRunning)
 		return err
 	}
 	if err != nil {
@@ -138,7 +137,7 @@ func runVaultServe(opts *Options, reg *capability.Registry, successor bool) erro
 		}
 	}()
 
-	answer(vaultmigrate.ReportReady)
+	answer(vaultproc.ReportReady)
 	// A successor serves only once its socket is the vault socket; one that never gets there locks at once.
 	if successor && vaultproc.AwaitHandover(ctx, listener, socket, vaultproc.HandoverTimeout) != nil {
 		_ = server.Close()
@@ -151,13 +150,13 @@ func runVaultServe(opts *Options, reg *capability.Registry, successor bool) erro
 // readHandover reads the vault's key and secrets from the pipe 'qatlas vault unlock' writes them to, and
 // closes it. The bytes read are overwritten once decoded; an error never quotes them.
 func readHandover(f *os.File) (vault.Snapshot, error) {
-	data, err := io.ReadAll(io.LimitReader(f, vaultmigrate.MaxHandover+1))
+	data, err := io.ReadAll(io.LimitReader(f, vaultproc.MaxHandover+1))
 	_ = f.Close()
 	defer clear(data)
 	if err != nil {
 		return vault.Snapshot{}, errors.New("cannot read the vault handed over")
 	}
-	if len(data) > vaultmigrate.MaxHandover {
+	if len(data) > vaultproc.MaxHandover {
 		return vault.Snapshot{}, errors.New("the vault handed over is too large")
 	}
 	var snap vault.Snapshot

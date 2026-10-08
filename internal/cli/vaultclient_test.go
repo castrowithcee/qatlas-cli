@@ -11,7 +11,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -47,7 +46,7 @@ func trustTestReleaseKey() {
 const vaultClientEnv = "QATLAS_CLI_TEST_VAULT_CLIENT"
 
 func runVaultClient(mode string) int {
-	client, err := vaultmigrate.ProcessClientOf(vault.New(os.Getenv(vaultClientEnv + "_DIR")))
+	client, err := vaultproc.ProcessClientOf(vault.New(os.Getenv(vaultClientEnv + "_DIR")))
 	if err != nil {
 		fmt.Println("error", err)
 		return 1

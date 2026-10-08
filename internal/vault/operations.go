@@ -159,7 +159,7 @@ func (v *Vault) Unlock(passphrase string) (merged int, err error) {
 // Forget drops the identity and document this process holds in memory for an encrypted vault it unlocked,
 // so a later read in this process asks for the passphrase again; it does nothing to a vault that is not
 // unlocked here. It touches no file: a vault process outside this one, if it still holds the key, is
-// unaffected and is locked separately (see vaultmigrate.LockProcess). This is as close as the vault API
+// unaffected and is locked separately (see vaultproc.LockProcess). This is as close as the vault API
 // comes to undoing Unlock, since neither the key nor the decrypted document was ever written to disk to
 // begin with.
 func (v *Vault) Forget() {

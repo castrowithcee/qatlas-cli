@@ -17,7 +17,7 @@ var ErrNotUnlocked = errors.New("the vault is not unlocked in this process")
 // invocations: the vault's own key and the decrypted secrets, keyed by credential name and then by role.
 //
 // Its JSON is what a vault process reads from its handover pipe, and a vault process of one release hands it
-// to its successor of the next (see vaultmigrate.StartSuccessor): the field names below are a contract
+// to its successor of the next (see vaultproc.StartSuccessorProcess): the field names below are a contract
 // between consecutive releases, and a change keeps what an older release writes readable.
 type Snapshot struct {
 	// Identity is the vault's private key as age text. It is as secret as the secrets it decrypts.

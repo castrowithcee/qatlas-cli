@@ -1,6 +1,6 @@
 //go:build linux || darwin
 
-package vaultmigrate
+package vaultproc
 
 import (
 	"bufio"
@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
 // HandoverFD and ReportFD are the descriptors a vault process inherits from whatever started it with
@@ -26,11 +25,11 @@ import (
 // as a matching pair of unexported constants in two packages that would have to be edited together.
 //
 // They are also the successor contract: a vault process of one release starts the vault process of the next
-// release, its successor, with StartSuccessor, which an update installed. What one release starts the other
+// release, its successor, with StartSuccessorProcess, which an update installed. What one release starts the other
 // with therefore stays as it is, or changes only so that a release still understands what its predecessor
 // sends: the arguments 'vault serve --config <path>' followed by SuccessorFlag (see serveArgs), these two
 // descriptors, the JSON of vault.Snapshot on HandoverFD, locks_at included, and ReportReady on ReportFD once
-// the successor listens at vaultproc.NextPath of the vault socket, anything else being the reason it did not
+// the successor listens at NextPath of the vault socket, anything else being the reason it did not
 // start.
 const (
 	HandoverFD = 3
@@ -50,28 +49,28 @@ const (
 // that started it. Neither the key nor any secret ever appears in its arguments or its environment: they
 // travel through the pipe alone, which the process closes once it has read them.
 func StartProcess(ctx context.Context, configPath string, snap vault.Snapshot,
-	client *vaultproc.Client) (vaultproc.Status, error) {
+	client *Client) (Status, error) {
 	program, err := os.Executable()
 	if err != nil {
-		return vaultproc.Status{}, fmt.Errorf("cannot find this program to start the vault process: %w", err)
+		return Status{}, fmt.Errorf("cannot find this program to start the vault process: %w", err)
 	}
 	deadline := startDeadline(ctx)
 	if _, _, _, err := startServe(program, serveArgs(configPath, false), snap, deadline); err != nil {
-		return vaultproc.Status{}, err
+		return Status{}, err
 	}
 	return awaitProcess(ctx, client, deadline)
 }
 
-// StartSuccessor starts 'qatlas vault serve' as the successor of the running vault process, this one, from
+// StartSuccessorProcess starts 'qatlas vault serve' as the successor of the running vault process, this one, from
 // program, the file an update installed at the path this process was started from and that the process
 // checked against the release, for the vault at configPath, and hands it snap as StartProcess does. It returns
-// once the successor reported that it listens at vaultproc.NextPath of the vault socket, with its process id
+// once the successor reported that it listens at NextPath of the vault socket, with its process id
 // and a function that ends it; moving its socket onto the vault socket is the caller's. Any failure ends the
-// successor before it returns. It is a vaultproc.StartSuccessor.
+// successor before it returns. It is a StartSuccessor.
 //
 // The successor is started by the path itself, so the path the kernel records for it is the path clients
 // run qatlas from. What it is started with is the successor contract; see HandoverFD.
-func StartSuccessor(ctx context.Context, program, configPath string, snap vault.Snapshot) (int, func(), error) {
+func StartSuccessorProcess(ctx context.Context, program, configPath string, snap vault.Snapshot) (int, func(), error) {
 	process, done, report, err := startServe(program, serveArgs(configPath, true), snap, startDeadline(ctx))
 	if err == nil && report != ReportReady {
 		// Only a process this one started listens beside the vault socket, never one that found another

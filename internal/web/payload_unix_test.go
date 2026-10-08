@@ -12,7 +12,6 @@ import (
 	"filippo.io/age"
 
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -41,7 +40,7 @@ func serveVaultProcess(t *testing.T, dir, passphrase string) (*vaultproc.Server,
 	if err != nil {
 		t.Fatalf("ParseX25519Identity() = %v", err)
 	}
-	client, err := vaultmigrate.ProcessClientOf(v)
+	client, err := vaultproc.ProcessClientOf(v)
 	if err != nil {
 		t.Fatalf("ProcessClientOf() = %v", err)
 	}

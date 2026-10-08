@@ -10,7 +10,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/output"
 	"github.com/castrowithcee/qatlas-cli/internal/selfupdate"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -143,7 +142,7 @@ func (r *vaultReplacement) before(ctx context.Context, release selfupdate.Releas
 		why = "because Windows locks the vault process instead of handing it over, before qatlas was replaced"
 	} else if !release.Signed {
 		why = "because the release is not signed, before qatlas was replaced"
-	} else if client, err := vaultmigrate.ProcessClientOf(v); err == nil {
+	} else if client, err := vaultproc.ProcessClientOf(v); err == nil {
 		behaviour, handover, err := client.PrepareHandover(contextOrBackground(ctx), vaultproc.ReleaseFiles{
 			Checksums: release.Checksums, Signature: release.Signature, Archive: release.Archive,
 			ArchiveName: release.ArchiveName,

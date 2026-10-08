@@ -27,7 +27,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/release"
 	"github.com/castrowithcee/qatlas-cli/internal/release/releasetest"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -115,10 +114,10 @@ func startVaultServe(t *testing.T, program, configPath string, snap vault.Snapsh
 	data, _ := json.Marshal(snap)
 	_, _ = handoverWrite.Write(data)
 	_ = handoverWrite.Close()
-	_ = reportRead.SetReadDeadline(time.Now().Add(vaultmigrate.StartTimeout))
+	_ = reportRead.SetReadDeadline(time.Now().Add(vaultproc.StartTimeout))
 	report, _ := bufio.NewReader(reportRead).ReadString('\n')
 	_ = reportRead.Close()
-	if strings.TrimSpace(report) != vaultmigrate.ReportReady {
+	if strings.TrimSpace(report) != vaultproc.ReportReady {
 		t.Fatalf("the vault process reported %q", report)
 	}
 	return cmd, ended

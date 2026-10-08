@@ -15,7 +15,6 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/invokelog"
 	"github.com/castrowithcee/qatlas-cli/internal/vault"
-	"github.com/castrowithcee/qatlas-cli/internal/vaultmigrate"
 	"github.com/castrowithcee/qatlas-cli/internal/vaultproc"
 )
 
@@ -62,7 +61,7 @@ func (w SigningWriter) Append(f invokelog.Fields) error {
 	if w.ProcessSupported {
 		// A vault whose process cannot even be addressed has none to ask, the same rule a credential read
 		// follows (see secret.Resolver).
-		if client, err := vaultmigrate.ProcessClientOf(w.Vault); err == nil {
+		if client, err := vaultproc.ProcessClientOf(w.Vault); err == nil {
 			ctx, cancel := context.WithTimeout(context.Background(), vaultproc.DefaultRequestTimeout)
 			err = client.Log(ctx, f)
 			cancel()

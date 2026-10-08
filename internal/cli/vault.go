@@ -157,8 +157,8 @@ func newVaultCommand(opts *Options, reg *capability.Registry) *cobra.Command {
 		},
 	}
 	// The flag a vault process starts its successor with; its name is part of the successor contract (see
-	// vaultmigrate.SuccessorFlag), so it stays.
-	successorFlag := strings.TrimPrefix(vaultmigrate.SuccessorFlag, "--")
+	// vaultproc.SuccessorFlag), so it stays.
+	successorFlag := strings.TrimPrefix(vaultproc.SuccessorFlag, "--")
 	serve.Flags().BoolVar(&successor, successorFlag, false, "take the vault over from the running vault process")
 	_ = serve.Flags().MarkHidden(successorFlag)
 
@@ -573,7 +573,7 @@ func vaultAccessCheck(ctx context.Context, opts *Options) func(*config.Resolved)
 
 // vaultProcessClient returns the client of the vault process that serves v, checked against v's recipient.
 func vaultProcessClient(v *vault.Vault) (*vaultproc.Client, error) {
-	return vaultmigrate.ProcessClientOf(v)
+	return vaultproc.ProcessClientOf(v)
 }
 
 func contextOrBackground(ctx context.Context) context.Context {
@@ -669,7 +669,7 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 	if err != nil {
 		return err
 	}
-	status, err := vaultmigrate.StartProcess(ctx, configPath, snap, client)
+	status, err := vaultproc.StartProcess(ctx, configPath, snap, client)
 	if err != nil {
 		return fmt.Errorf("%s, but the vault stays locked for later invocations: %w", mergedText, err)
 	}
