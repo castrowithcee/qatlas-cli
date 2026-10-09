@@ -187,6 +187,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupInteractions, Title: "Interactions",
 		Description: "Send and stop polls, set and remove reactions, show chat actions, and send locations, " +
 			"venues, contacts, and dice in the bound chats"},
+	{ID: groupTopics, Title: "Topics", Description: "Create, rename, close, and reopen forum topics of the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -280,6 +281,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: venuesSend, Handler: capability.Handler(invokeVenuesSend)},
 		capability.Operation{Descriptor: contactsSend, Handler: capability.Handler(invokeContactsSend)},
 		capability.Operation{Descriptor: diceSend, Handler: capability.Handler(invokeDiceSend)},
+		capability.Operation{Descriptor: topicsCreate, Handler: capability.Handler(invokeTopicsCreate)},
+		capability.Operation{Descriptor: topicsEdit, Handler: capability.Handler(invokeTopicsEdit)},
+		capability.Operation{Descriptor: topicsClose, Handler: capability.Handler(invokeTopicsClose)},
+		capability.Operation{Descriptor: topicsReopen, Handler: capability.Handler(invokeTopicsReopen)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 		capability.Operation{Descriptor: botGet, Handler: capability.Handler(invokeBotGet)},
 		capability.Operation{Descriptor: webhookGet, Handler: capability.Handler(invokeWebhookGet)},
