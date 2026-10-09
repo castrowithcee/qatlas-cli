@@ -156,6 +156,18 @@ func coreConfig() *config.Config {
 			"deleterch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
 				Tools:       []string{messagesDelete.ID}},
+			"reactor": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+			"reactorch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+			"unreact": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+				Tools:       []string{reactionsRemove.ID}},
+			"unreactch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+				Tools:       []string{reactionsRemove.ID}},
+			"nounreact": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}},
 			"nodelete": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}},
 		},
@@ -221,8 +233,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 8 {
-		t.Fatalf("tools = %+v, want 8", metadata.Tools)
+	if len(metadata.Tools) != 11 {
+		t.Fatalf("tools = %+v, want 11", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -237,12 +249,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		return false
 	}
 	if !has("read", messagesGet.ID) || !has("messaging", messagesGet.ID) || !has("messaging", messagesUpdate.ID) ||
-		has("read", messagesUpdate.ID) {
+		has("read", messagesUpdate.ID) || !has("read", reactionsList.ID) || !has("messaging", reactionsList.ID) ||
+		!has("messaging", reactionsAdd.ID) || has("read", reactionsAdd.ID) {
 		t.Fatalf("profiles = %+v", profiles)
 	}
 	for id := range profiles {
-		if has(id, messagesDelete.ID) {
-			t.Fatalf("profile %s selects messages.delete", id)
+		if has(id, messagesDelete.ID) || has(id, reactionsRemove.ID) {
+			t.Fatalf("profile %s selects a delete tool", id)
 		}
 	}
 	groups := map[string]bool{}
@@ -255,6 +268,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 		if tool.ID == messagesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
 			t.Fatalf("messages.delete metadata = %+v", tool)
+		}
+		if tool.ID == reactionsRemove.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
+			t.Fatalf("reactions.remove metadata = %+v", tool)
 		}
 	}
 }
