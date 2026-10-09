@@ -65,7 +65,7 @@ func TestStoragePreselectsTheConfiguredDefault(t *testing.T) {
 					typeText(t, m, "wiki")
 					press(t, m, "tab")
 					typeText(t, m, "https://wiki.example.invalid")
-					press(t, m, "enter")
+					press(t, m, "f2")
 				},
 			}
 			for _, step := range steps {
@@ -116,7 +116,7 @@ func TestVaultOfferSetsAPassphrase(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "enter")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	if m.screen != screenSecret {
 		t.Fatalf("s did not open the masked prompt: screen %v", m.screen)
 	}
@@ -187,7 +187,7 @@ func TestVaultOfferMismatchStaysOpen(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "enter")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, secretValue)
 	pump(t, m, "enter")
 	if m.screen != screenVaultOffer {
@@ -238,7 +238,7 @@ func TestVaultOfferSkippedLeavesTheVaultUnencrypted(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "enter")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, secretValue)
 	pump(t, m, "enter")
 	if m.screen != screenVaultOffer {
@@ -282,7 +282,7 @@ func TestVaultOfferCancelledWritesNothing(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "enter")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, "canary-cancelled-offer")
 	pump(t, m, "enter")
 	if m.screen != screenVaultOffer {
@@ -336,7 +336,7 @@ func TestVaultWriteIsAsyncAndNotDoubleTriggered(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "enter")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, "canary-async-4f10")
 	_, cmd := m.Update(keyMsg("enter"))
 	if cmd == nil {
@@ -368,7 +368,7 @@ func TestVaultWriteIsAsyncAndNotDoubleTriggered(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "enter")
 	focusRole(t, m, "token-secret")
-	press(t, m, "s")
+	press(t, m, "enter")
 	if m.screen == screenSecret {
 		t.Fatal("a second vault write started while the first was still in flight")
 	}
@@ -389,7 +389,7 @@ func TestVaultWriteIsAsyncAndNotDoubleTriggered(t *testing.T) {
 
 	// Now that it is free, the guard lets the next write through.
 	focusRole(t, m, "token-secret")
-	press(t, m, "s")
+	press(t, m, "enter")
 	if m.screen != screenSecret {
 		t.Fatalf("the guard still blocks after the write finished: screen %v", m.screen)
 	}

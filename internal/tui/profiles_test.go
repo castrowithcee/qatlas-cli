@@ -305,7 +305,7 @@ func TestGuidedSetupStartsOnTheRecommendedProfile(t *testing.T) {
 			t.Fatalf("summary lacks %q:\n%s", want, screenOf(m))
 		}
 	}
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}

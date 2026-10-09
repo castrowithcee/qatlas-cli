@@ -66,7 +66,7 @@ func setSecret(t *testing.T, m *Model, role, value string) {
 	t.Helper()
 	chooseStorage(t, m)
 	focusRole(t, m, role)
-	press(t, m, "s")
+	press(t, m, "enter")
 	if m.screen != screenSecret {
 		t.Fatalf("s did not open the prompt: screen %v, error %q", m.screen, m.fail)
 	}
@@ -288,7 +288,7 @@ func TestVaultCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 
 	// s on a vault credential's role stores it in the vault.
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	if m.screen != screenSecret {
 		t.Fatalf("s did not open the prompt: screen %v, error %q", m.screen, m.fail)
 	}
@@ -405,7 +405,7 @@ func TestTypeChangeIsRefusedWhileASecretIsStored(t *testing.T) {
 	selectChoice(t, m, storageEnv)
 	focusRole(t, m, "token-id")
 	typeText(t, m, "WIKI_ID")
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 
 	if m.fail != "" {
 		t.Fatalf("the type change still fails: %q", m.fail)
@@ -438,7 +438,7 @@ func TestTypedSecretIsMaskedAndLeavesTheModel(t *testing.T) {
 	addKeyringCredential(t, m, "reader")
 	editEntry(t, m, "reader")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, canary)
 
 	view := screenOf(m)
@@ -477,7 +477,7 @@ func TestCancellingThePromptStoresNothing(t *testing.T) {
 	addKeyringCredential(t, m, "reader")
 	editEntry(t, m, "reader")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, canary)
 	press(t, m, "esc")
 
@@ -570,14 +570,14 @@ func TestKeyringRowsTellEveryStateApart(t *testing.T) {
 		{"overridden by the environment", map[string]string{env: canary + "-env"}, store,
 			secret.SourceEnv, stateOverride, []string{env + " is set and wins over the system keyring"}},
 		{"empty", nil, func(*secret.MemoryStore) {}, secret.SourceMissing, stateEmpty,
-			[]string{"press s to store it in " + secret.StoreLabel(platform)}},
+			[]string{"press enter to store it in " + secret.StoreLabel(platform)}},
 		{"locked", nil, func(mem *secret.MemoryStore) {
 			mem.Fail(fmt.Errorf("%w: %w", secret.ErrUnavailable, secret.ErrLocked))
 		}, secret.SourceMissing, stateLocked,
-			[]string{secret.StoreAdvice(secret.StoreLocked, platform) + ", then press s", env}},
+			[]string{secret.StoreAdvice(secret.StoreLocked, platform) + ", then press enter", env}},
 		{"unreachable", nil, func(mem *secret.MemoryStore) { mem.Fail(secret.ErrUnavailable) },
 			secret.SourceMissing, stateUnreachable,
-			[]string{secret.StoreAdvice(secret.StoreUnavailable, platform) + ", then press s", env}},
+			[]string{secret.StoreAdvice(secret.StoreUnavailable, platform) + ", then press enter", env}},
 		{"switched off", nil, func(mem *secret.MemoryStore) { mem.Fail(secret.ErrDisabled) },
 			secret.SourceMissing, stateOff,
 			[]string{secret.StoreAdvice(secret.StoreOff, platform), secret.StoreSelector, env}},
@@ -626,7 +626,7 @@ func TestSecretsNeedASavedCredential(t *testing.T) {
 	pressNew(t, m)
 	typeText(t, m, "reader")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 
 	if m.screen == screenSecret {
 		t.Fatal("the prompt opened for a credential that does not exist yet")
@@ -715,7 +715,7 @@ func TestSlowStoreDoesNotBlockTheEditor(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	press(t, m, "enter")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, "canary-slow-4b7d")
 	_, cmd := m.Update(keyMsg("enter"))
 	if cmd == nil {
@@ -895,7 +895,7 @@ func attemptTypeChange(t *testing.T, m *Model) {
 	typeText(t, m, "WIKI_ID")
 	focusRole(t, m, "token-secret")
 	typeText(t, m, "WIKI_SECRET")
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 }
 
 // D1 and D2: the guard must ask what lies somewhere, not what the cascade would deliver. Each case here
@@ -1066,7 +1066,7 @@ func TestEveryWriteOutcomeReachesTheUser(t *testing.T) {
 	start := func(role string) chan tea.Msg {
 		t.Helper()
 		focusRole(t, m, role)
-		press(t, m, "s")
+		press(t, m, "enter")
 		typeText(t, m, "canary-"+role)
 		_, cmd := m.Update(keyMsg("enter"))
 		if cmd == nil {
@@ -1138,7 +1138,7 @@ func TestAWaitingTypeChangeSurvivesADisplayRefresh(t *testing.T) {
 	selectChoice(t, m, storageEnv)
 	focusRole(t, m, "token-id")
 	typeText(t, m, "WIKI_ID")
-	_, guard := m.Update(keyMsg("enter"))
+	_, guard := m.Update(keyMsg("f2"))
 	if guard == nil {
 		t.Fatal("the type change asked nothing")
 	}
@@ -1308,7 +1308,7 @@ func TestQuittingDropsAWaitingTypeChange(t *testing.T) {
 	selectChoice(t, m, storageEnv)
 	focusRole(t, m, "token-id")
 	typeText(t, m, "WIKI_ID")
-	_, guard := m.Update(keyMsg("enter"))
+	_, guard := m.Update(keyMsg("f2"))
 	if guard == nil {
 		t.Fatal("the type change asked nothing")
 	}

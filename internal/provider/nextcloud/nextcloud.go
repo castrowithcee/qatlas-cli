@@ -9,7 +9,8 @@
 // kinds are parsed and bound in targets.go.
 //
 // The adapter produces only explicit Files WebDAV requests (PROPFIND, GET, PUT, DELETE, MKCOL, MOVE, COPY, and
-// the chunked upload methods) and never reaches another app of the instance. Names, DAV
+// the chunked upload methods) and fixed read-only OCS Sharing requests (ocs.go, shares.go); it reaches no
+// other app of the instance. Names, DAV
 // properties, and the whole multi-status document arrive from the provider and are treated as untrusted
 // data: they are normalised into a stable metadata envelope, passed through the output encoders, and
 // never rendered or stored.
@@ -318,11 +319,12 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read files", Recommended: true,
 			Description: "lists folders, reads file metadata and content; changes nothing below the root folder",
-			Tools:       []string{filesList.ID, filesStat.ID, filesGet.ID},
+			Tools:       []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID},
 		}, {
 			ID: "write", Title: "Read and organise files",
 			Description: "lists folders, reads files, creates folders, and moves, renames, or copies files and folders without overwriting",
-			Tools:       []string{filesList.ID, filesStat.ID, filesGet.ID, foldersCreate.ID, filesMove.ID, filesCopy.ID},
+			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
+				foldersCreate.ID, filesMove.ID, filesCopy.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -338,12 +340,17 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(foldersDelete), Handler: folderBound(invokeFoldersDelete)},
 		capability.Operation{Descriptor: grouped(filesMove), Handler: folderBound(invokeFilesMove)},
 		capability.Operation{Descriptor: grouped(filesCopy), Handler: folderBound(invokeFilesCopy)},
+		capability.Operation{Descriptor: inGroup(sharesList, groupShares), Handler: folderBound(invokeSharesList)},
+		capability.Operation{Descriptor: inGroup(sharesGet, groupShares), Handler: folderBound(invokeSharesGet)},
+		capability.Operation{Descriptor: inGroup(shareesSearch, groupShares), Handler: accountBound(invokeShareesSearch)},
 	)
 }
 
 // grouped sorts a Files tool into the files group.
-func grouped(d capability.Descriptor) capability.Descriptor {
-	d.Group = groupFiles
+func grouped(d capability.Descriptor) capability.Descriptor { return inGroup(d, groupFiles) }
+
+func inGroup(d capability.Descriptor, group string) capability.Descriptor {
+	d.Group = group
 	return d
 }
 
@@ -549,6 +556,10 @@ type Client struct {
 	// uploads are the decoded segments of the upload area of the same identity, below which chunked
 	// uploads create their one folder.
 	uploads []string
+	// install are the decoded segments of the optional installation path, below which the OCS API lives.
+	install []string
+	// user is the identity, which tells an own share from an incoming one.
+	user string
 	// root are the decoded segments of the fixed root folder below the Files root of that identity.
 	root []string
 	auth string
@@ -617,7 +628,8 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	prefix = append(prefix, userID)
 	uploads := append(append([]string{}, install...), uploadsRoot...)
 	uploads = append(uploads, userID)
-	client := &Client{origin: origin, prefix: prefix, uploads: uploads, root: root, auth: header}
+	client := &Client{origin: origin, prefix: prefix, uploads: uploads, install: install, user: userID, root: root,
+		auth: header}
 	client.http = provider.NoRedirectClient(defaultTimeout, transport)
 	return client, nil
 }
