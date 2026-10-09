@@ -170,6 +170,9 @@ func coreConfig() *config.Config {
 				Tools:       []string{reactionsRemove.ID}},
 			"nounreact": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}},
+			// "creator" may create channels in teamA; "channel" holds the same rights but a channel allow-list.
+			"creator": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
 			"nodelete": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}},
 		},
@@ -235,8 +238,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 15 {
-		t.Fatalf("tools = %+v, want 15", metadata.Tools)
+	if len(metadata.Tools) != 19 {
+		t.Fatalf("tools = %+v, want 19", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -259,6 +262,12 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		if !has("read", id) || !has("messaging", id) {
 			t.Fatalf("profiles = %+v, want %s in read and messaging", profiles, id)
 		}
+	}
+	if !has("read", channelsGet.ID) || !has("read", channelsBrowse.ID) || has("read", channelsCreate.ID) ||
+		has("messaging", channelsUpdate.ID) || !has("channel-admin", channelsCreate.ID) ||
+		!has("channel-admin", channelsUpdate.ID) || !has("channel-admin", channelsGet.ID) ||
+		!has("channel-admin", channelsBrowse.ID) {
+		t.Fatalf("profiles = %+v, want the channel tools in read and channel-admin only as specified", profiles)
 	}
 	for id := range profiles {
 		if has(id, messagesDelete.ID) || has(id, reactionsRemove.ID) {

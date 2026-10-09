@@ -186,7 +186,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,68,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
 		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", "  lexware,Online accounting and invoicing service for small businesses,\"\",28,0,0\n",
-		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",26,0,0\n", ",\"\",13,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",15,0,0\n", ",\"\",2,0,0\n",
+		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",26,0,0\n", ",\"\",13,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",19,0,0\n", ",\"\",2,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
