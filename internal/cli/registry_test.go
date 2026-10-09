@@ -121,13 +121,15 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Errorf("Telegram metadata = %+v, %v", telegram, ok)
 	}
 	operations := reg.Provider("telegram")
-	if len(operations) != 17 || operations[0].ID != "telegram.bot.get" ||
+	if len(operations) != 20 || operations[0].ID != "telegram.bot.get" ||
 		operations[1].ID != "telegram.chats.administrators" || operations[4].ID != "telegram.chats.membercount" ||
-		operations[5].ID != "telegram.files.download" || operations[6].ID != "telegram.files.get" ||
-		operations[8].ID != "telegram.messages.deletemany" || operations[11].ID != "telegram.messages.send" ||
-		operations[12].ID != "telegram.pins.pin" || operations[14].ID != "telegram.pins.unpinall" ||
-		operations[15].ID != "telegram.updates.list" || operations[16].ID != "telegram.webhook.get" {
-		t.Errorf("Telegram operations = %v, want the explicit message, pin, update, chat, bot, and file operations",
+		operations[5].ID != "telegram.documents.send" || operations[6].ID != "telegram.files.download" ||
+		operations[7].ID != "telegram.files.get" || operations[8].ID != "telegram.mediagroups.send" ||
+		operations[10].ID != "telegram.messages.deletemany" || operations[13].ID != "telegram.messages.send" ||
+		operations[14].ID != "telegram.photos.send" || operations[15].ID != "telegram.pins.pin" ||
+		operations[17].ID != "telegram.pins.unpinall" || operations[18].ID != "telegram.updates.list" ||
+		operations[19].ID != "telegram.webhook.get" {
+		t.Errorf("Telegram operations = %v, want the explicit message, pin, update, chat, bot, file, and media operations",
 			operations)
 	}
 }
