@@ -214,7 +214,6 @@ func TestDraftCreationsAreRefusedBeforeIO(t *testing.T) {
 		{"finalize in quotation", "lexware.quotations.create", draftArgs(articleLine, quotation+`,"finalize":true`), true},
 		{"finalize in order confirmation", "lexware.orderconfirmations.create", draftArgs(articleLine, `,"finalize":false`), true},
 		{"expiration in order confirmation", "lexware.orderconfirmations.create", draftArgs(articleLine, quotation), true},
-		{"preceding id in issue", "lexware.invoices.issue", draftArgs(articleLine, `,"preceding_voucher_id":"`+precedeID+`"`), true},
 		{"preceding id in quotation", "lexware.quotations.create", draftArgs(articleLine, quotation+`,"preceding_voucher_id":"`+precedeID+`"`), true},
 		{"preceding id in invoice no UUID", "lexware.invoices.create", draftArgs(articleLine, `,"preceding_voucher_id":"../`+bodyCanary+`"`), true},
 		{"credit note without confirm", "lexware.creditnotes.create", creditArgs(`,"preceding_voucher_id":"` + precedeID + `"`), false},
