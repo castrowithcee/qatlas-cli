@@ -28,7 +28,7 @@ func groupOf(id string) string {
 	switch parts[1] {
 	case "teams", "channels", "messages", "reactions", "files", "users":
 		return parts[1]
-	case "channelmembers":
+	case "channelmembers", "archivedchannels":
 		return "channels"
 	case "direct", "groupmessages":
 		return "messages"
