@@ -11,6 +11,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/seatable"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/seatableaccount"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/telegram"
 )
 
@@ -188,33 +189,55 @@ func TestAChangedTargetListAsksBeforeLeaving(t *testing.T) {
 
 }
 
-// Telegram takes exactly one chat: a second one is refused where it is added, and no chat is refused where
-// the connection is saved.
-func TestARequiredSingleTargetIsKeptToOne(t *testing.T) {
+// Telegram needs at least one target and takes several chats; no target is refused where the connection is
+// saved.
+func TestTelegramTakesSeveralChats(t *testing.T) {
 	reg := targetsRegistry(t, telegram.Register)
 	m, path := toolsModel(t, reg, nil)
 	openSectionByName(t, m, sectionConnections)
 	pressNew(t, m)
 	typeText(t, m, "chat")
-	if hint := m.field(targetsLabel).hint; !strings.Contains(hint, "one chat ID at most") ||
-		!strings.Contains(hint, "an empty list cannot be saved") {
-		t.Fatalf("hint = %q, want the Telegram rules", hint)
-	}
-	openTargetList(t, m)
-	addTarget(t, m, "-1001")
-	press(t, m, "a")
-	if m.targetEdit >= 0 || !strings.Contains(m.fail, "one chat ID only") {
-		t.Fatalf("a second chat was offered: editing %d, error %q", m.targetEdit, m.fail)
-	}
-	press(t, m, "d", "y", "f2")
+	press(t, m, "f2")
 	if !strings.Contains(m.fail, "requires chat ID") {
 		t.Fatalf("a connection without a chat was saved: error %q", m.fail)
 	}
 	openTargetList(t, m)
 	addTarget(t, m, "-1001")
+	addTarget(t, m, "@news")
 	press(t, m, "f2")
-	if saved := savedConnection(t, path, reg, "chat"); saved.Target != "-1001" || saved.Targets != nil {
-		t.Fatalf("saved %q / %v, want the one chat", saved.Target, saved.Targets)
+	if saved := savedConnection(t, path, reg, "chat"); !reflect.DeepEqual(saved.Targets,
+		[]string{"-1001", "@news"}) {
+		t.Fatalf("saved %q / %v, want both chats", saved.Target, saved.Targets)
+	}
+}
+
+// A SeaTable account connection takes exactly one base: a second one is refused where it is added, and no base
+// is refused where the connection is saved.
+func TestARequiredSingleTargetIsKeptToOne(t *testing.T) {
+	reg := targetsRegistry(t, seatableaccount.Register)
+	m, path := toolsModel(t, reg, nil)
+	openSectionByName(t, m, sectionConnections)
+	pressNew(t, m)
+	typeText(t, m, "account")
+	if hint := m.field(targetsLabel).hint; !strings.Contains(hint, "one base at most") ||
+		!strings.Contains(hint, "an empty list cannot be saved") {
+		t.Fatalf("hint = %q, want the single-base rules", hint)
+	}
+	openTargetList(t, m)
+	addTarget(t, m, "1/Sales")
+	press(t, m, "a")
+	if m.targetEdit >= 0 || !strings.Contains(m.fail, "one base only") {
+		t.Fatalf("a second base was offered: editing %d, error %q", m.targetEdit, m.fail)
+	}
+	press(t, m, "d", "y", "f2")
+	if !strings.Contains(m.fail, "requires base") {
+		t.Fatalf("a connection without a base was saved: error %q", m.fail)
+	}
+	openTargetList(t, m)
+	addTarget(t, m, "1/Sales")
+	press(t, m, "f2")
+	if saved := savedConnection(t, path, reg, "account"); saved.Target != "1/Sales" || saved.Targets != nil {
+		t.Fatalf("saved %q / %v, want the one base", saved.Target, saved.Targets)
 	}
 }
 
