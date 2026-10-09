@@ -33,13 +33,13 @@ var notesRoot = []string{"index.php", "apps", "notes", "api", "v1"}
 
 // Bounds of the Notes reads.
 const (
-	maxNoteList       = 200
-	defaultNoteList   = 50
-	maxNoteContent    = 256 << 10
-	maxCursorLength   = 256
-	maxAttachmentPath = 1024
-	maxAttachmentSegs = 32
-	maxNoteIDLength   = 18
+	maxNoteList         = 200
+	defaultNoteList     = 50
+	maxNoteContent      = 256 << 10
+	maxNoteCursorLength = 256
+	maxAttachmentPath   = 1024
+	maxAttachmentSegs   = 32
+	maxNoteIDLength     = 18
 )
 
 const (
@@ -244,10 +244,10 @@ func notesBound(handler capability.Handler) capability.Handler {
 	}
 }
 
-// covers reports whether a category lies in what the connection binds: any category for the whole kind,
+// coversCategory reports whether a category lies in what the connection binds: any category for the whole kind,
 // otherwise a listed category or one below it. The comparison is exact and case-sensitive, and a category
 // whose remainder below a listed one is not a plain path stays outside.
-func (s selection) covers(category string) bool {
+func (s selection) coversCategory(category string) bool {
 	if s.all {
 		return true
 	}
@@ -311,7 +311,7 @@ func validNoteID(id string) bool {
 }
 
 func validCursor(cursor string) bool {
-	if cursor == "" || len(cursor) > maxCursorLength {
+	if cursor == "" || len(cursor) > maxNoteCursorLength {
 		return false
 	}
 	for i := 0; i < len(cursor); i++ {
@@ -373,7 +373,7 @@ func invokeNotesList(ctx context.Context, resolved *config.Resolved, secrets *se
 		return nil, providerError(op, "the chunk cursor is unusable")
 	}
 	if input.Category != "" {
-		if err := checkCategory(input.Category); err != nil || !sel.covers(input.Category) {
+		if err := checkCategory(input.Category); err != nil || !sel.coversCategory(input.Category) {
 			// The refusal does not say which categories the connection binds.
 			return nil, &provider.Error{Class: provider.ClassPermission, Op: op,
 				Message: "this connection does not hold this category"}
@@ -567,7 +567,7 @@ func (c *Client) ListNotes(ctx context.Context, sel selection, filter string, si
 		if listed.Category != nil {
 			item.Category = *listed.Category
 		}
-		if !sel.covers(item.Category) || filter != "" && !inCategory(item.Category, filter) {
+		if !sel.coversCategory(item.Category) || filter != "" && !inCategory(item.Category, filter) {
 			continue
 		}
 		if !validNoteID(item.ID.String()) {
@@ -606,7 +606,7 @@ func (c *Client) fetchNote(ctx context.Context, op string, sel selection, id str
 	if err := json.Unmarshal(body, &note); err != nil || note.ID.String() != id {
 		return nil, invalidResponse(op, "the Nextcloud note could not be read")
 	}
-	if !sel.covers(note.Category) {
+	if !sel.coversCategory(note.Category) {
 		return nil, noteNotFound(op)
 	}
 	return &note, nil
