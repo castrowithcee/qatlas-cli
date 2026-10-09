@@ -301,6 +301,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(metaObjectsUpdate, metadataGroup), Handler: capability.Handler(invokeMetaObjectsUpdate)},
 		capability.Operation{Descriptor: inGroup(metaFieldsCreate, metadataGroup), Handler: capability.Handler(invokeMetaFieldsCreate)},
 		capability.Operation{Descriptor: inGroup(metaFieldsUpdate, metadataGroup), Handler: capability.Handler(invokeMetaFieldsUpdate)},
+		capability.Operation{Descriptor: inGroup(metaObjectsDelete, metadataGroup), Handler: capability.Handler(invokeMetaObjectsDelete)},
+		capability.Operation{Descriptor: inGroup(metaFieldsDelete, metadataGroup), Handler: capability.Handler(invokeMetaFieldsDelete)},
 		capability.Operation{Descriptor: inGroup(workflowVersionsActivate, workflowsGroup), Handler: capability.Handler(invokeWorkflowVersionsActivate)},
 		capability.Operation{Descriptor: inGroup(workflowVersionsDeactivate, workflowsGroup), Handler: capability.Handler(invokeWorkflowVersionsDeactivate)},
 		capability.Operation{Descriptor: inGroup(workflowRunsStop, workflowsGroup), Handler: capability.Handler(invokeWorkflowRunsStop)},

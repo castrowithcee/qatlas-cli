@@ -162,19 +162,19 @@ are replaced as a whole. All need "Roles", so use a key of its own; no profile t
 `metaobjects.list`, `metaobjects.get`, and `metafields.get` (`read`) are workspace-wide and read Twenty's
 metadata API for all objects and fields; default values, settings, and relation details are never read.
 
-`metaobjects.create`, `metaobjects.update`, `metafields.create`, and `metafields.update` (`create`, `update`)
-change the schema for every user and integration of the workspace. All seven tools need the Twenty right
-"Data model", which also allows deleting the schema: use a connection with an API key of its own. The
-writers are offered only by a connection whose `tools` list names them; no profile ticks any of them.
+`metaobjects.create`, `metaobjects.update`, `metafields.create`, `metafields.update` (`create`, `update`),
+`metaobjects.delete`, and `metafields.delete` (`delete`) change the schema for every user and integration of
+the workspace. All nine tools need the Twenty right "Data model": use a connection with an API key of its own.
+The writers are offered only by a connection whose `tools` list names them; no profile ticks them.
 
 - Created are custom objects and non-relational fields; relation types are refused. A field is created on a
   custom object only; its options are required for selections and refused for other types.
-- An update never changes API names or types; a read before the write refuses system and relation fields and
-  limits standard objects and fields to label changes.
+- An update reads first, refuses system and relation fields, and limits standard ones to label changes.
+- A delete is final: all records of an object or all values of a field are lost. Only deactivated custom
+  objects and non-relational custom fields are accepted.
 - Options are replaced as a whole: a left-out option clears its value in all records. Deactivating hides an
   object or field from everyone.
-- A new custom object is reachable at once without targets; with object targets only after it is entered
-  there, which Qatlas never does.
+- A new custom object is reachable at once without targets, with targets only once entered there.
 
 ## Writing records
 
