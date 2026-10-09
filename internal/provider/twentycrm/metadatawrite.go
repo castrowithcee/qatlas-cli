@@ -395,17 +395,21 @@ func (c *Client) metaChange(ctx context.Context, op, uncertain, method, path, ke
 	payload map[string]any) (json.RawMessage, error) {
 	var body json.RawMessage
 	if err := c.changeWith(ctx, op, uncertain, method, path, payload, &body); err != nil {
-		var failure *provider.Error
-		if errors.As(err, &failure) && failure.Class == provider.ClassPermission {
-			failure.Message = errMetaPermission
-		}
-		return nil, err
+		return nil, mapMetaPermission(err)
 	}
 	entity, err := unwrapMeta(op, body, key)
 	if err != nil {
 		return nil, uncertainly(err, uncertain)
 	}
 	return entity, nil
+}
+
+func mapMetaPermission(err error) error {
+	var failure *provider.Error
+	if errors.As(err, &failure) && failure.Class == provider.ClassPermission {
+		failure.Message = errMetaPermission
+	}
+	return err
 }
 
 func uncertainly(err error, uncertain string) error {
