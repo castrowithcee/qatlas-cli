@@ -130,10 +130,8 @@ func invokeChannelsList(ctx context.Context, resolved *config.Resolved, secrets 
 // array with no pagination of its own. A channel kChat reports under a team other than the one requested is
 // dropped, a defence in depth against a team_id whose channels reach further than the request named.
 func (c *Client) ListChannels(ctx context.Context, teamID string, page, limit int) (*ChannelsPage, error) {
-	const op = "list channels"
-	var channels []channelJSON
-	path := "/api/v4/users/me/teams/" + url.PathEscape(teamID) + "/channels"
-	if err := c.do(ctx, op, http.MethodGet, path, nil, nil, &channels, false); err != nil {
+	channels, err := c.teamChannels(ctx, "list channels", teamID)
+	if err != nil {
 		return nil, err
 	}
 	entries := make([]ChannelEntry, 0, len(channels))
@@ -146,6 +144,37 @@ func (c *Client) ListChannels(ctx context.Context, teamID string, page, limit in
 	}
 	window, pages, total := windowOf(entries, page, limit)
 	return &ChannelsPage{TeamID: teamID, Channels: window, Page: page, Pages: pages, Total: total, Count: len(window)}, nil
+}
+
+// teamChannels reads the channels of one team the token is a member of with exactly one request.
+func (c *Client) teamChannels(ctx context.Context, op, teamID string) ([]channelJSON, error) {
+	var channels []channelJSON
+	path := "/api/v4/users/me/teams/" + url.PathEscape(teamID) + "/channels"
+	if err := c.do(ctx, op, http.MethodGet, path, nil, nil, &channels, false); err != nil {
+		return nil, err
+	}
+	return channels, nil
+}
+
+// reachableChannels reads, with one request, the channels of one bound team that this connection may
+// reach: live, in that team, inside the channel allow-list, and neither deleted nor a direct or group
+// channel. The result maps the channel ID to its resource. It is the filter for every search and any other
+// tool that must not return content from channels outside the connection's boundary.
+func (c *Client) reachableChannels(ctx context.Context, op, teamID string) (map[string]*channelJSON, error) {
+	channels, err := c.teamChannels(ctx, op, teamID)
+	if err != nil {
+		return nil, err
+	}
+	reachable := make(map[string]*channelJSON, len(channels))
+	for i := range channels {
+		ch := &channels[i]
+		if !validMattermostID(ch.ID) || ch.TeamID != teamID || ch.DeleteAt != 0 || ch.Type == "D" || ch.Type == "G" ||
+			!c.scope.allowsChannel(ch.ID) {
+			continue
+		}
+		reachable[ch.ID] = ch
+	}
+	return reachable, nil
 }
 
 // channelDetailSchema is the answer of channels.get.

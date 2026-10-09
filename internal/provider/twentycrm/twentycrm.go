@@ -221,7 +221,8 @@ func companyMutationDescriptor(action string, effect capability.Effect, idempote
 // readTools are the tools of the read profile; the write profile adds the record writes to them.
 var readTools = []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID,
 	recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsSearchAll.ID, recordsGroupBy.ID, activitytargetsList.ID,
-	workflowsList.ID, workflowsGet.ID, workflowRunsList.ID, webhooksList.ID, webhooksGet.ID}
+	workflowsList.ID, workflowsGet.ID, workflowRunsList.ID, webhooksList.ID, webhooksGet.ID, membersList.ID,
+	membersGet.ID}
 
 // Register adds Twenty metadata, its read-only connection test, and the bounded company operations.
 func Register(reg *capability.Registry) error {
@@ -249,7 +250,7 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read companies, objects, and records", Recommended: true,
-			Description: "lists and reads companies, the objects of the workspace, their records, also by structured conditions and counted by field, and the workflows and runs of the workspace; changes nothing in Twenty CRM",
+			Description: "lists and reads companies, the objects of the workspace, their records, also by structured conditions and counted by field, the workflows and runs of the workspace, and its members; changes nothing in Twenty CRM",
 			Tools:       readTools,
 		}, {
 			ID: "write", Title: "Read and write records",
@@ -284,6 +285,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(workflowsList, workflowsGroup), Handler: capability.Handler(invokeWorkflowsList)},
 		capability.Operation{Descriptor: inGroup(workflowsGet, workflowsGroup), Handler: capability.Handler(invokeWorkflowsGet)},
 		capability.Operation{Descriptor: inGroup(workflowRunsList, workflowsGroup), Handler: capability.Handler(invokeWorkflowRunsList)},
+		capability.Operation{Descriptor: inGroup(membersList, membersGroup), Handler: capability.Handler(invokeMembersList)},
+		capability.Operation{Descriptor: inGroup(membersGet, membersGroup), Handler: capability.Handler(invokeMembersGet)},
+		capability.Operation{Descriptor: inGroup(rolesList, membersGroup), Handler: capability.Handler(invokeRolesList)},
 		capability.Operation{Descriptor: inGroup(recordsDelete, recordsGroup), Handler: capability.Handler(invokeRecordsDelete)},
 		capability.Operation{Descriptor: inGroup(recordsRestore, recordsGroup), Handler: capability.Handler(invokeRecordsRestore)},
 		capability.Operation{Descriptor: inGroup(recordsDestroy, recordsGroup), Handler: capability.Handler(invokeRecordsDestroy)},
