@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes Telegram message, update, file, and media operations, fixed chat targets, connection
+  Describes Telegram message, update, file, media, and sticker operations, fixed chat targets, connection
   permissions, and safety boundaries.
 type: knowledge
 edit: shared
@@ -47,7 +47,7 @@ before the credential is read when the target is missing. Methods that accept on
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
 to `pins`, the member tools to `members`, the update tool to `updates`, the chat tools to `chats`, the invite
 link tools to `invitelinks`, the bot and webhook tools to `bot`, the file tools to `files`, the media tools to
-`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`. A group
+`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`, the sticker tools to `stickers`. A group
 never changes a tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
 fragment, with no exception for local addresses, and redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
@@ -236,6 +236,24 @@ never accepted. Its size is not known locally; Telegram enforces the limits for 
 
 The result is `message_id`, `date`, and a `file_ref` of the sent file, for an album one such entry per message
 under `messages`. Each tool sends exactly one request and reports an unclear outcome instead of repeating it.
+
+## Stickers
+
+`telegram.stickers.send` (`create`) sends one sticker to a bound chat, from exactly one of a `local_path` or a
+`file_ref`; a URL is never a source. A `local_path` must end in `.webp`, `.tgs`, or `.webm` (checked before
+anything else), lie in a directory the connection releases for reading (`files`), and be at most 512 KB; it is
+sent under a neutral name, with an optional `emoji`. A `file_ref` is accepted when it is bound to the selected
+chat or to `bot`, the binding of every sticker the read tools return; any other binding, token, or kind is
+refused before the credential is read, and `emoji` is refused with it. The options `reply_to_message_id`,
+`message_thread_id`, `disable_notification`, and `protect_content` carry over; there is no reply markup and no
+business or paid option. The result is `message_id` and `date`. One request is sent, and an unclear outcome is
+reported instead of repeated.
+
+`telegram.stickersets.get` (name of 1 through 64 letters, digits, or underscores), `telegram.stickers.customemoji`
+(1 through 200 identifiers of digits), and `telegram.topics.iconstickers` (`read`) read public catalog data and
+run on every connection without a `bot` target. They return only a fixed set of fields per sticker, at most 200
+stickers, with texts shortened; a sticker carries a `file_ref` only on a connection that binds the `bot`
+target, signed with the binding `bot`. The stickers tools are in no setup profile.
 
 ## Setup profiles
 
