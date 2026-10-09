@@ -33,7 +33,7 @@ var messagesSend = capability.Descriptor{
 	ID:          Provider + ".messages.send",
 	Version:     1,
 	Title:       "Send a Telegram message",
-	Description: "Send one plain-text message to the fixed target of an explicit Telegram connection",
+	Description: "Send one plain-text message to a bound chat of an explicit Telegram connection",
 	Tags:        []string{"telegram", "messages", "send"},
 	Risk: capability.Risk{
 		Effect:          capability.EffectCreate,
@@ -45,20 +45,21 @@ var messagesSend = capability.Descriptor{
 	Provider: Provider,
 	Group:    groupMessages,
 	InputSchema: json.RawMessage(
-		`{"type":"object","properties":{"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["text"],"additionalProperties":false}`,
+		`{"type":"object","properties":{"chat":{"type":"string","minLength":1,"maxLength":128},"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["text"],"additionalProperties":false}`,
 	),
 	OutputSchema: json.RawMessage(
 		`{"type":"object","properties":{"message_id":{"type":"integer"},"date":{"type":"integer"}},"required":["message_id","date"],"additionalProperties":false}`,
 	),
-	Arguments: []capability.Argument{{
-		Name: "text", Description: "Plain-text message, from 1 through 4096 characters", Required: true,
-	}},
+	Arguments: []capability.Argument{
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
+		{Name: "text", Description: "Plain-text message, from 1 through 4096 characters", Required: true},
+	},
 	Fields: []capability.Field{
 		{Name: "message_id", Description: "Telegram message identifier"},
 		{Name: "date", Description: "Telegram send time as Unix time"},
 	},
 	Examples: []capability.Example{{
-		Description: "Send one plain-text notification to the connection's fixed target",
+		Description: "Send one plain-text notification to the connection's chat",
 		Arguments:   json.RawMessage(`{"text":"Deployment finished"}`),
 	}},
 }
@@ -67,7 +68,7 @@ var messagesEdit = capability.Descriptor{
 	ID:          Provider + ".messages.edit",
 	Version:     1,
 	Title:       "Edit a Telegram message",
-	Description: "Replace the plain text of one message in the fixed target of an explicit Telegram connection",
+	Description: "Replace the plain text of one message in a bound chat of an explicit Telegram connection",
 	Tags:        []string{"telegram", "messages", "edit"},
 	Risk: capability.Risk{
 		Effect: capability.EffectUpdate, Idempotency: capability.IdempotencyUnknown,
@@ -76,18 +77,20 @@ var messagesEdit = capability.Descriptor{
 	Provider: Provider,
 	Group:    groupMessages,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"chat":{"type":"string","minLength":1,"maxLength":128},` +
 		`"message_id":{"type":"integer","minimum":1},` +
 		`"text":{"type":"string","minLength":1,"maxLength":4096}},` +
 		`"required":["message_id","text"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer"}},` +
 		`"required":["message_id"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "message_id", Description: "Identifier of the message in the fixed target", Required: true},
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
+		{Name: "message_id", Description: "Identifier of the message in the chat", Required: true},
 		{Name: "text", Description: "Replacement plain text, from 1 through 4096 characters", Required: true},
 	},
 	Fields: []capability.Field{{Name: "message_id", Description: "Edited Telegram message identifier"}},
 	Examples: []capability.Example{{
-		Description: "Replace the text of a message sent to this connection's target",
+		Description: "Replace the text of a message sent to this connection's chat",
 		Arguments:   json.RawMessage(`{"message_id":91,"text":"Deployment completed"}`),
 	}},
 }
@@ -96,7 +99,7 @@ var messagesDelete = capability.Descriptor{
 	ID:          Provider + ".messages.delete",
 	Version:     1,
 	Title:       "Delete a Telegram message",
-	Description: "Delete one message from the fixed target of an explicit Telegram connection",
+	Description: "Delete one message from a bound chat of an explicit Telegram connection",
 	Tags:        []string{"telegram", "messages", "delete"},
 	Risk: capability.Risk{
 		Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,
@@ -104,22 +107,24 @@ var messagesDelete = capability.Descriptor{
 	},
 	Provider: Provider, RequiresToolAllowList: true,
 	Group: groupMessages,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer","minimum":1}},` +
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"chat":{"type":"string","minLength":1,"maxLength":128},"message_id":{"type":"integer","minimum":1}},` +
 		`"required":["message_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
 		`"required":["deleted"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{{
-		Name: "message_id", Description: "Identifier of the message in the fixed target", Required: true,
-	}},
+	Arguments: []capability.Argument{
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
+		{Name: "message_id", Description: "Identifier of the message in the chat", Required: true},
+	},
 	Fields: []capability.Field{{Name: "deleted", Description: "True when Telegram accepted the deletion"}},
 	Examples: []capability.Example{{
-		Description: "Delete a message from this connection's target",
+		Description: "Delete a message from this connection's chat",
 		Arguments:   json.RawMessage(`{"message_id":91}`),
 	}},
 }
 
 var toolGroups = []config.ToolGroup{
-	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the configured chat"},
+	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -141,18 +146,21 @@ func Register(reg *capability.Registry) error {
 			Description: "Telegram bot token issued by BotFather",
 		}},
 		Target: config.TargetMetadata{
-			Label: "chat ID", Description: "fixed Telegram chat ID or @channel username", Required: true,
+			Label: "chat ID", Required: true, Multiple: true, Kinds: targetKinds,
+			Description: "one or more chat IDs or @channel usernames, plus optionally bot and business/CONNECTION_ID; " +
+				"chat tools address only the bound chats",
+			Validate: validateConfiguredTarget,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "send", Title: "Send messages", Recommended: true,
-			Description: "sends new messages to the configured chat; earlier messages stay as they are",
+			Description: "sends new messages to the bound chats; earlier messages stay as they are",
 			// Telegram offers no read tool, so the safe start is the narrowest change there is.
-			MutationReason: "a message goes only to the one chat fixed in the connection and every send needs " +
+			MutationReason: "a message goes only to a chat bound in the connection and every send needs " +
 				"confirmation in its own request; nothing already in the chat can be edited or deleted",
 			Tools: []string{messagesSend.ID},
 		}, {
 			ID: "messaging", Title: "Send, edit, and delete messages",
-			Description: "also edits messages and deletes messages in the configured chat: as admin also those of " +
+			Description: "also edits messages and deletes messages in the bound chats: as admin also those of " +
 				"others, in private chats also incoming ones",
 			Tools: []string{messagesSend.ID, messagesEdit.ID, messagesDelete.ID},
 		}},
@@ -169,6 +177,7 @@ func Register(reg *capability.Registry) error {
 func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
+		Chat string `json:"chat"`
 		Text string `json:"text"`
 	}
 	if err := json.Unmarshal(raw, &arguments); err != nil {
@@ -176,7 +185,7 @@ func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets 
 			Class: provider.ClassProviderError, Op: "send message", Message: "the validated arguments could not be read",
 		}
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
 	if err != nil {
 		return nil, err
 	}
@@ -186,13 +195,14 @@ func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets 
 func invokeMessagesEdit(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
+		Chat      string `json:"chat"`
 		MessageID int64  `json:"message_id"`
 		Text      string `json:"text"`
 	}
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("edit message", "the validated arguments could not be read")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
 	if err != nil {
 		return nil, err
 	}
@@ -202,19 +212,43 @@ func invokeMessagesEdit(ctx context.Context, resolved *config.Resolved, secrets 
 func invokeMessagesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
-		MessageID int64 `json:"message_id"`
+		Chat      string `json:"chat"`
+		MessageID int64  `json:"message_id"`
 	}
 	if err := json.Unmarshal(raw, &arguments); err != nil {
 		return nil, providerError("delete message", "the validated arguments could not be read")
 	}
-	client, err := Open(ctx, resolved, secrets, red)
+	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
 	if err != nil {
 		return nil, err
 	}
 	return client.DeleteMessage(ctx, arguments.MessageID)
 }
 
-// Client binds one bot token to the fixed target of one resolved connection.
+// openChat selects the chat from the bound chat targets before any credential is resolved.
+func openChat(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	requested string) (*Client, error) {
+	return openChatWithHTTP(ctx, resolved, secrets, red, requested, newHTTPClient())
+}
+
+func openChatWithHTTP(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	requested string, httpClient *http.Client) (*Client, error) {
+	if resolved == nil {
+		return nil, providerError("open", "no connection was selected")
+	}
+	chat, err := selectChat(resolved, requested)
+	if err != nil {
+		return nil, err
+	}
+	client, err := openWithHTTP(ctx, resolved, secrets, red, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	client.target = chat
+	return client, nil
+}
+
+// Client binds one bot token to one resolved connection; target is the chat its chat tools address.
 type Client struct {
 	base   *url.URL
 	token  string
@@ -236,7 +270,8 @@ func openWithHTTP(ctx context.Context, resolved *config.Resolved, secrets *secre
 	if err != nil {
 		return nil, providerError("open", err.Error())
 	}
-	if err := validateTarget(resolved.Target); err != nil {
+	set, err := targetsOf(resolved)
+	if err != nil {
 		return nil, providerError("open", "the configured Telegram target is unusable")
 	}
 	if secrets == nil {
@@ -255,7 +290,11 @@ func openWithHTTP(ctx context.Context, resolved *config.Resolved, secrets *secre
 	if httpClient == nil {
 		httpClient = newHTTPClient()
 	}
-	return &Client{base: base, token: value.Secret, target: resolved.Target, http: httpClient}, nil
+	client := &Client{base: base, token: value.Secret, http: httpClient}
+	if len(set.chats) == 1 {
+		client.target = set.chats[0]
+	}
+	return client, nil
 }
 
 func newHTTPClient() *http.Client {
@@ -293,6 +332,9 @@ func (c *Client) testConnection(ctx context.Context) provider.Class {
 // SendMessage performs exactly one sendMessage request. The target comes only from the Client's resolved
 // connection and no retry is attempted after any transport or provider result.
 func (c *Client) SendMessage(ctx context.Context, text string) (map[string]any, error) {
+	if c.target == "" {
+		return nil, providerError("send message", "no chat was selected")
+	}
 	if count := utf8.RuneCountInString(text); !utf8.ValidString(text) || count < 1 || count > maxMessageLength {
 		return nil, providerError("send message", "the plain-text message is outside the supported length")
 	}
@@ -313,8 +355,11 @@ func (c *Client) SendMessage(ctx context.Context, text string) (map[string]any, 
 	return map[string]any{"message_id": result.MessageID, "date": result.Date}, nil
 }
 
-// EditMessage replaces one message's plain text in the fixed target without retrying an ambiguous result.
+// EditMessage replaces one message's plain text in the chosen chat without retrying an ambiguous result.
 func (c *Client) EditMessage(ctx context.Context, messageID int64, text string) (map[string]any, error) {
+	if c.target == "" {
+		return nil, providerError("edit message", "no chat was selected")
+	}
 	if messageID < 1 {
 		return nil, providerError("edit message", "the message identifier must be positive")
 	}
@@ -338,8 +383,11 @@ func (c *Client) EditMessage(ctx context.Context, messageID int64, text string) 
 	return map[string]any{"message_id": result.MessageID}, nil
 }
 
-// DeleteMessage removes one message from the fixed target without retrying an ambiguous result.
+// DeleteMessage removes one message from the chosen chat without retrying an ambiguous result.
 func (c *Client) DeleteMessage(ctx context.Context, messageID int64) (map[string]any, error) {
+	if c.target == "" {
+		return nil, providerError("delete message", "no chat was selected")
+	}
 	if messageID < 1 {
 		return nil, providerError("delete message", "the message identifier must be positive")
 	}

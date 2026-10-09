@@ -160,6 +160,47 @@ defaults:
 	}
 }
 
+func TestConfigValidateTelegramTargetLists(t *testing.T) {
+	const head = `version: 1
+services:
+  telegram-main:
+    provider: telegram
+    base_url: https://api.telegram.org
+credentials:
+  notifier:
+    type: env
+    values:
+      bot-token: TELEGRAM_BOT_TOKEN
+connections:
+  alerts:
+    service: telegram-main
+    credential: notifier
+`
+	for _, tt := range []struct {
+		name, targets string
+		want          int
+	}{
+		{"several chats", "    targets: [\"-1001\", \"@alerts_channel\", \"42\"]\n", exitOK},
+		{"chats, bot and business", "    targets: [\"-1001\", bot, \"business/abc-DEF_12=\"]\n", exitOK},
+		{"bot only", "    targets: [bot]\n", exitOK},
+		{"single target", "    target: \"-1001\"\n", exitOK},
+		{"duplicate", "    targets: [\"-1001\", \"-1001\"]\n", exitUsage},
+		{"target and targets", "    target: \"-1001\"\n    targets: [\"-1002\"]\n", exitUsage},
+		{"empty business", "    targets: [\"-1001\", \"business/\"]\n", exitUsage},
+		{"business with space", "    targets: [\"-1001\", \"business/a b\"]\n", exitUsage},
+		{"empty entry", "    targets: [\"-1001\", \"\"]\n", exitUsage},
+		{"at sign alone", "    targets: [\"@\"]\n", exitUsage},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := Run([]string{"config", "validate", "--config", writeConfig(t, head+tt.targets+"defaults: {}\n")}, &stdout, &stderr)
+			if code != tt.want {
+				t.Fatalf("exit = %d, stdout = %q, stderr = %q", code, stdout.String(), stderr.String())
+			}
+		})
+	}
+}
+
 // A connection that offers no tool is valid but useless to an agent, so validate still succeeds and names it
 // on stderr, with the reason, in name order.
 func TestConfigValidateWarnsAboutAConnectionThatOffersNoTool(t *testing.T) {
