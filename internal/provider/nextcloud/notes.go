@@ -516,8 +516,8 @@ type rawListNote struct {
 }
 
 func (n rawNote) view() Note {
-	title, cutTitle := cutText(n.Title, maxValueLength)
-	category, cutCategory := cutText(n.Category, maxValueLength)
+	title, cutTitle := cutNoteText(n.Title, maxValueLength)
+	category, cutCategory := cutNoteText(n.Category, maxValueLength)
 	note := Note{ID: n.ID.String(), Title: title, Category: category, Favorite: n.Favorite, Readonly: n.Readonly,
 		ETag: bounded(n.ETag), Truncated: cutTitle || cutCategory}
 	if seconds, err := n.Modified.Int64(); err == nil && seconds > 0 {
@@ -526,8 +526,8 @@ func (n rawNote) view() Note {
 	return note
 }
 
-// cutText cuts a string at a character boundary and says whether it did.
-func cutText(value string, limit int) (string, bool) {
+// cutNoteText cuts a string at a character boundary and says whether it did.
+func cutNoteText(value string, limit int) (string, bool) {
 	if len(value) <= limit {
 		return value, false
 	}
@@ -618,7 +618,7 @@ func (c *Client) GetNote(ctx context.Context, sel selection, id string) (*NoteCo
 	if err != nil {
 		return nil, err
 	}
-	content, cut := cutText(note.Content, maxNoteContent)
+	content, cut := cutNoteText(note.Content, maxNoteContent)
 	return &NoteContent{Note: note.view(), Content: content, ContentSize: len(note.Content), ContentTruncated: cut}, nil
 }
 
@@ -658,7 +658,7 @@ func (c *Client) DownloadNoteAttachment(ctx context.Context, sel selection, id, 
 		return nil, err
 	}
 	sum, _ := download.SHA256()
-	name, _ := cutText(path[strings.LastIndexByte(path, '/')+1:], maxValueLength)
+	name, _ := cutNoteText(path[strings.LastIndexByte(path, '/')+1:], maxValueLength)
 	return &NoteAttachmentDownload{ID: id, Path: path, Name: name,
 		ContentType: bounded(header.Get("Content-Type")), Size: download.Size(), SHA256: sum}, nil
 }
@@ -677,7 +677,7 @@ func (c *Client) GetNotesSettings(ctx context.Context) (*NotesSettings, error) {
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, invalidResponse(op, "the Nextcloud notes settings could not be read")
 	}
-	path, cutPath := cutText(raw.NotesPath, maxValueLength)
-	suffix, cutSuffix := cutText(raw.FileSuffix, maxValueLength)
+	path, cutPath := cutNoteText(raw.NotesPath, maxValueLength)
+	suffix, cutSuffix := cutNoteText(raw.FileSuffix, maxValueLength)
 	return &NotesSettings{NotesPath: path, FileSuffix: suffix, Truncated: cutPath || cutSuffix}, nil
 }

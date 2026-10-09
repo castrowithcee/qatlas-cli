@@ -31,28 +31,49 @@ const (
 )
 
 const (
-	kindPhoto    = "photo"
-	kindDocument = "document"
+	kindPhoto     = "photo"
+	kindDocument  = "document"
+	kindVideo     = "video"
+	kindAnimation = "animation"
+	kindVideoNote = "videonote"
 )
+
+// kindSpecs holds the fixed Bot API method, upload field, and display noun of every single-file kind.
+var kindSpecs = map[string]struct{ method, field, noun, example string }{
+	kindPhoto:     {"sendPhoto", "photo", "photo", ".jpg"},
+	kindDocument:  {"sendDocument", "document", "document", ".pdf"},
+	kindVideo:     {"sendVideo", "video", "video", ".mp4"},
+	kindAnimation: {"sendAnimation", "animation", "animation", ".mp4"},
+	kindVideoNote: {"sendVideoNote", "video_note", "video note", ".mp4"},
+}
 
 var mediaRisk = capability.Risk{
 	Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 	Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
 }
 
-const mediaOptionSchema = `"caption":{"type":"string","minLength":1,"maxLength":1024},` +
-	`"parse_mode":{"type":"string","enum":["HTML","MarkdownV2"]},` +
-	`"reply_to_message_id":{"type":"integer","minimum":1},"message_thread_id":{"type":"integer","minimum":1},` +
+const captionOptionSchema = `"caption":{"type":"string","minLength":1,"maxLength":1024},` +
+	`"parse_mode":{"type":"string","enum":["HTML","MarkdownV2"]},`
+
+const mediaOptionSchema = captionOptionSchema + sendOptionSchema
+
+// sendOptionSchema holds the options every media send has, also one without a caption.
+const sendOptionSchema = `"reply_to_message_id":{"type":"integer","minimum":1},"message_thread_id":{"type":"integer","minimum":1},` +
 	`"disable_notification":{"type":"boolean"},"protect_content":{"type":"boolean"}`
 
 const sourceProperties = `"` + localfile.LocalPathArgument + `":` + localfile.LocalPathSchema + `,` +
 	`"file_ref":` + fileRefSchema
 
 func mediaArguments(captionText string) []capability.Argument {
-	return []capability.Argument{
+	return append([]capability.Argument{
 		chatArgument,
 		{Name: "caption", Description: captionText + ", from 1 through 1024 characters"},
 		parseModeArgument,
+	}, sendArguments()...)
+}
+
+func sendArguments() []capability.Argument {
+	return []capability.Argument{
 		{Name: "reply_to_message_id", Description: "Message of the same chat to reply to"},
 		{Name: "message_thread_id", Description: "Forum topic to send into"},
 		{Name: "disable_notification", Description: "Send silently"},
@@ -70,18 +91,24 @@ const sentSchema = `{"type":"object","properties":{"message_id":{"type":"integer
 	`"file_ref":{"type":"string"}},"required":["message_id","date"],"additionalProperties":false}`
 
 func singleDescriptor(kind, title, limit string) capability.Descriptor {
+	noun := kindSpecs[kind].noun
+	// A video note has no caption in the Bot API.
+	options, optionSchema := mediaArguments("Caption of the "+noun), mediaOptionSchema
+	if kind == kindVideoNote {
+		options, optionSchema = append([]capability.Argument{chatArgument}, sendArguments()...), sendOptionSchema
+	}
 	arguments := append([]capability.Argument{
 		localfile.UploadPathArgument(),
 		{Name: "file_ref", Description: "Signed file reference (media.file_ref) of a file received in the same bound " +
 			"chat or returned by an earlier send to it; instead of " + localfile.LocalPathArgument},
-	}, mediaArguments("Caption of the "+kind)...)
-	arguments[0].Description = "Local " + kind + " to send, absolute or starting with ~/, inside a directory the " +
+	}, options...)
+	arguments[0].Description = "Local " + noun + " to send, absolute or starting with ~/, inside a directory the " +
 		"connection releases for reading, up to " + limit + "; instead of file_ref"
 	return capability.Descriptor{
 		ID:      Provider + "." + kind + "s.send",
 		Version: 1,
 		Title:   title,
-		Description: "Send one " + kind + " up to " + limit + " to a bound chat of an explicit Telegram connection, from " +
+		Description: "Send one " + noun + " up to " + limit + " to a bound chat of an explicit Telegram connection, from " +
 			"local_path in a directory the connection releases for reading or from a signed file_ref. A local file is " +
 			"sent under a neutral name without its path. An unclear outcome is never repeated",
 		Tags:         []string{"telegram", kind + "s", "send", "files"},
@@ -89,13 +116,13 @@ func singleDescriptor(kind, title, limit string) capability.Descriptor {
 		Provider:     Provider,
 		Group:        groupMedia,
 		LocalFiles:   config.LocalFilesRead,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` + sourceProperties + `,` + mediaOptionSchema + `},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` + sourceProperties + `,` + optionSchema + `},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(sentSchema),
 		Arguments:    arguments,
 		Fields:       sentFields,
 		Examples: []capability.Example{{
-			Description: "Send a local " + kind + " to this connection's chat",
-			Arguments:   json.RawMessage(`{"local_path":"~/reports/file` + map[string]string{kindPhoto: ".jpg", kindDocument: ".pdf"}[kind] + `"}`),
+			Description: "Send a local " + noun + " to this connection's chat",
+			Arguments:   json.RawMessage(`{"local_path":"~/reports/file` + kindSpecs[kind].example + `"}`),
 		}},
 	}
 }
@@ -104,34 +131,46 @@ var photosSend = singleDescriptor(kindPhoto, "Send a Telegram photo", "10 MB")
 
 var documentsSend = singleDescriptor(kindDocument, "Send a Telegram document", "50 MB")
 
+var videosSend = singleDescriptor(kindVideo, "Send a Telegram video", "50 MB")
+
+var animationsSend = singleDescriptor(kindAnimation, "Send a Telegram animation", "50 MB")
+
+var videoNotesSend = singleDescriptor(kindVideoNote, "Send a Telegram video note", "50 MB")
+
 var mediaGroupsSend = capability.Descriptor{
 	ID:      Provider + ".mediagroups.send",
 	Version: 1,
 	Title:   "Send a Telegram album",
-	Description: "Send an album of 2 through 10 photos or of 2 through 10 documents, not mixed, to a bound chat of an " +
-		"explicit Telegram connection, each item from a local file in a directory the connection releases for reading " +
-		"or from a signed file_ref. The files of one album together stay below 50 MB. An unclear outcome is never repeated",
+	Description: "Send an album of 2 through 10 photos and videos, which may be mixed, or of 2 through 10 documents, " +
+		"which are not mixed with anything, to a bound chat of an explicit Telegram connection, each item from a " +
+		"local file in a directory the connection releases for reading or from a signed file_ref. The files of one " +
+		"album together stay below 50 MB. An unclear outcome is never repeated",
 	Tags:       []string{"telegram", "mediagroups", "send", "files"},
 	Risk:       mediaRisk,
 	Provider:   Provider,
 	Group:      groupMedia,
 	LocalFiles: config.LocalFilesRead,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` +
-		`"type":{"type":"string","enum":["photo","document"]},` +
+		`"type":{"type":"string","enum":["photo","video","document"]},` +
 		`"items":{"type":"array","minItems":2,"maxItems":10,"items":{"type":"object","properties":{` +
-		sourceProperties + `},"additionalProperties":false}},` + mediaOptionSchema +
+		`"type":{"type":"string","enum":["photo","video"]},` + sourceProperties + `},"additionalProperties":false}},` + mediaOptionSchema +
 		`},"required":["type","items"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"messages":{"type":"array","items":` + sentSchema +
 		`}},"required":["messages"],"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{
-		{Name: "type", Description: "photo or document; all items of an album have the same type", Required: true},
-		{Name: "items", Description: "From 2 through 10 items, each with exactly one of local_path and file_ref; " +
-			"photos up to 10 MB each, documents up to 50 MB each", Required: true},
+		{Name: "type", Description: "photo, video, or document; the type of every item without its own type. " +
+			"Documents are never mixed with photos or videos", Required: true},
+		{Name: "items", Description: "From 2 through 10 items, each with exactly one of local_path and file_ref and, " +
+			"in a photo or video album, an optional type photo or video; photos up to 10 MB each, videos and " +
+			"documents up to 50 MB each", Required: true},
 	}, mediaArguments("Caption of the album, shown on its first item")...),
 	Fields: []capability.Field{{Name: "messages", Description: "One entry per sent message with message_id, date, and file_ref"}},
 	Examples: []capability.Example{{
 		Description: "Send two local photos as one album",
 		Arguments:   json.RawMessage(`{"type":"photo","items":[{"local_path":"~/shots/a.jpg"},{"local_path":"~/shots/b.jpg"}]}`),
+	}, {
+		Description: "Send a photo and a video as one album",
+		Arguments:   json.RawMessage(`{"type":"photo","items":[{"local_path":"~/shots/a.jpg"},{"type":"video","local_path":"~/shots/b.mp4"}]}`),
 	}},
 }
 
@@ -165,6 +204,7 @@ type mediaSource struct {
 
 // mediaItem is one file ready to send: a verified Telegram file identifier, or the content of a local file.
 type mediaItem struct {
+	kind   string
 	fileID string
 	name   string
 	data   []byte
@@ -172,6 +212,7 @@ type mediaItem struct {
 
 // preparedSource is a source that passed every check that needs neither the credential nor the network.
 type preparedSource struct {
+	kind   string
 	ref    parsedRef
 	hasRef bool
 	local  *localfile.Upload
@@ -179,7 +220,7 @@ type preparedSource struct {
 
 // prepareSources validates each source and opens each local file, so a foreign reference, a path outside the
 // release, or an oversized file is refused before the credential is resolved. The caller closes the uploads.
-func prepareSources(ctx context.Context, resolved *config.Resolved, op, chat, kind string,
+func prepareSources(ctx context.Context, resolved *config.Resolved, op, chat string, kinds []string,
 	sources []mediaSource) ([]preparedSource, error) {
 	prepared := make([]preparedSource, 0, len(sources))
 	closeAll := func() {
@@ -189,12 +230,13 @@ func prepareSources(ctx context.Context, resolved *config.Resolved, op, chat, ki
 			}
 		}
 	}
-	limit := int64(maxUploadBytes)
-	if kind == kindPhoto {
-		limit = maxPhotoBytes
-	}
 	var total int64
-	for _, source := range sources {
+	for i, source := range sources {
+		kind := kinds[i]
+		limit := int64(maxUploadBytes)
+		if kind == kindPhoto {
+			limit = maxPhotoBytes
+		}
 		hasPath, hasRef := source.LocalPath != nil, source.FileRef != ""
 		if hasPath == hasRef {
 			closeAll()
@@ -210,7 +252,7 @@ func prepareSources(ctx context.Context, resolved *config.Resolved, op, chat, ki
 				closeAll()
 				return nil, err
 			}
-			prepared = append(prepared, preparedSource{ref: parsed, hasRef: true})
+			prepared = append(prepared, preparedSource{kind: kind, ref: parsed, hasRef: true})
 			continue
 		}
 		upload, err := localfile.OpenForUpload(ctx, resolved, *source.LocalPath)
@@ -218,7 +260,7 @@ func prepareSources(ctx context.Context, resolved *config.Resolved, op, chat, ki
 			closeAll()
 			return nil, err
 		}
-		prepared = append(prepared, preparedSource{local: upload})
+		prepared = append(prepared, preparedSource{kind: kind, local: upload})
 		total += upload.Size
 		if upload.Size > limit || total > maxUploadBytes {
 			closeAll()
@@ -237,14 +279,14 @@ func (c *Client) load(op string, prepared []preparedSource) ([]mediaItem, error)
 			if err != nil {
 				return nil, err
 			}
-			items[i] = mediaItem{fileID: id}
+			items[i] = mediaItem{kind: p.kind, fileID: id}
 			continue
 		}
 		data, err := io.ReadAll(p.local)
 		if err != nil {
 			return nil, err
 		}
-		items[i] = mediaItem{name: neutralName(i, len(prepared), p.local.Name), data: data}
+		items[i] = mediaItem{kind: p.kind, name: neutralName(i, len(prepared), p.local.Name), data: data}
 	}
 	return items, nil
 }
@@ -278,9 +320,24 @@ func invokeDocumentsSend(ctx context.Context, resolved *config.Resolved, secrets
 	return invokeSingleSend(ctx, resolved, secrets, red, raw, newHTTPClient(), kindDocument)
 }
 
+func invokeVideosSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeSingleSend(ctx, resolved, secrets, red, raw, newHTTPClient(), kindVideo)
+}
+
+func invokeAnimationsSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeSingleSend(ctx, resolved, secrets, red, raw, newHTTPClient(), kindAnimation)
+}
+
+func invokeVideoNotesSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeSingleSend(ctx, resolved, secrets, red, raw, newHTTPClient(), kindVideoNote)
+}
+
 func invokeSingleSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage, httpClient *http.Client, kind string) (any, error) {
-	op := "send " + kind
+	op := "send " + kindSpecs[kind].noun
 	var arguments struct {
 		Chat string `json:"chat"`
 		mediaSource
@@ -292,6 +349,9 @@ func invokeSingleSend(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := arguments.mediaOptions.validate(op); err != nil {
 		return nil, err
 	}
+	if kind == kindVideoNote && (arguments.Caption != "" || arguments.ParseMode != "") {
+		return nil, providerError(op, "a video note has no caption")
+	}
 	if resolved == nil {
 		return nil, providerError(op, "no connection was selected")
 	}
@@ -299,7 +359,7 @@ func invokeSingleSend(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err != nil {
 		return nil, err
 	}
-	prepared, err := prepareSources(ctx, resolved, op, chat, kind, []mediaSource{arguments.mediaSource})
+	prepared, err := prepareSources(ctx, resolved, op, chat, []string{kind}, []mediaSource{arguments.mediaSource})
 	if err != nil {
 		return nil, err
 	}
@@ -332,19 +392,24 @@ func invokeMediaGroupsSendWith(ctx context.Context, resolved *config.Resolved, s
 	red *redact.Redactor, raw json.RawMessage, httpClient *http.Client) (any, error) {
 	const op = "send album"
 	var arguments struct {
-		Chat  string        `json:"chat"`
-		Type  string        `json:"type"`
-		Items []mediaSource `json:"items"`
+		Chat  string      `json:"chat"`
+		Type  string      `json:"type"`
+		Items []albumItem `json:"items"`
 		mediaOptions
 	}
 	if err := decodeStrict(raw, &arguments); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
-	if arguments.Type != kindPhoto && arguments.Type != kindDocument {
-		return nil, providerError(op, "the album type must be photo or document")
-	}
 	if len(arguments.Items) < minAlbumItems || len(arguments.Items) > maxAlbumItems {
 		return nil, providerError(op, "an album has from 2 through 10 items")
+	}
+	kinds, err := albumKinds(op, arguments.Type, arguments.Items)
+	if err != nil {
+		return nil, err
+	}
+	sources := make([]mediaSource, len(arguments.Items))
+	for i, item := range arguments.Items {
+		sources[i] = item.mediaSource
 	}
 	if err := arguments.mediaOptions.validate(op); err != nil {
 		return nil, err
@@ -356,7 +421,7 @@ func invokeMediaGroupsSendWith(ctx context.Context, resolved *config.Resolved, s
 	if err != nil {
 		return nil, err
 	}
-	prepared, err := prepareSources(ctx, resolved, op, chat, arguments.Type, arguments.Items)
+	prepared, err := prepareSources(ctx, resolved, op, chat, kinds, sources)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +434,41 @@ func invokeMediaGroupsSendWith(ctx context.Context, resolved *config.Resolved, s
 	if err != nil {
 		return nil, err
 	}
-	return client.sendAlbum(ctx, arguments.Type, items, arguments.mediaOptions)
+	return client.sendAlbum(ctx, items, arguments.mediaOptions)
+}
+
+// albumItem is one album entry; a photo or video album lets an item override the album type with the other of
+// the two, a document album never mixes.
+type albumItem struct {
+	mediaSource
+	Type string `json:"type"`
+}
+
+func albumKinds(op, albumType string, items []albumItem) ([]string, error) {
+	kinds := make([]string, len(items))
+	switch albumType {
+	case kindDocument:
+		for i, item := range items {
+			if item.Type != "" {
+				return nil, providerError(op, "documents are not mixed with photos or videos")
+			}
+			kinds[i] = kindDocument
+		}
+	case kindPhoto, kindVideo:
+		for i, item := range items {
+			kinds[i] = albumType
+			switch item.Type {
+			case "":
+			case kindPhoto, kindVideo:
+				kinds[i] = item.Type
+			default:
+				return nil, providerError(op, "an item of a photo or video album must be a photo or a video")
+			}
+		}
+	default:
+		return nil, providerError(op, "the album type must be photo, video, or document")
+	}
+	return kinds, nil
 }
 
 // withUploadTimeout returns a copy of the client whose requests may take as long as an upload needs.
@@ -381,20 +480,23 @@ func (c *Client) withUploadTimeout() *Client {
 	return &copied
 }
 
-// sendSingle performs exactly one sendPhoto or sendDocument request.
+// sendSingle performs exactly one request of the fixed method of the kind.
 func (c *Client) sendSingle(ctx context.Context, kind string, item mediaItem, o mediaOptions) (map[string]any, error) {
-	op := "send " + kind
+	kindSpec, known := kindSpecs[kind]
+	op := "send " + kindSpec.noun
+	if !known || (kind == kindVideoNote && (o.Caption != "" || o.ParseMode != "")) {
+		return nil, providerError(op, "the media kind is not supported")
+	}
 	if c.target == "" {
 		return nil, providerError(op, "no chat was selected")
 	}
-	method := map[string]string{kindPhoto: "sendPhoto", kindDocument: "sendDocument"}[kind]
-	s := spec{op: op, method: method, limit: defaultResponseBytes}
+	s := spec{op: op, method: kindSpec.method, limit: defaultResponseBytes}
 	var (
 		raw json.RawMessage
 		err error
 	)
 	if item.fileID != "" {
-		body := map[string]any{"chat_id": c.target, kind: item.fileID}
+		body := map[string]any{"chat_id": c.target, kindSpec.field: item.fileID}
 		if o.Caption != "" {
 			body["caption"] = o.Caption
 			if o.ParseMode != "" {
@@ -423,7 +525,7 @@ func (c *Client) sendSingle(ctx context.Context, kind string, item mediaItem, o 
 			}
 		}
 		raw, err = c.withUploadTimeout().callMultipart(ctx, s, fields,
-			[]filePart{{field: kind, name: item.name, data: item.data}})
+			[]filePart{{field: kindSpec.field, name: item.name, data: item.data}})
 	}
 	if err != nil {
 		return nil, err
@@ -464,19 +566,32 @@ type inputMedia struct {
 
 // sendAlbum performs exactly one sendMediaGroup request. The caption goes on the first item only, where
 // Telegram shows it for the whole album.
-func (c *Client) sendAlbum(ctx context.Context, kind string, items []mediaItem, o mediaOptions) (map[string]any, error) {
+func (c *Client) sendAlbum(ctx context.Context, items []mediaItem, o mediaOptions) (map[string]any, error) {
 	const op = "send album"
 	if c.target == "" {
 		return nil, providerError(op, "no chat was selected")
 	}
-	if len(items) < minAlbumItems || len(items) > maxAlbumItems || (kind != kindPhoto && kind != kindDocument) {
-		return nil, providerError(op, "an album has from 2 through 10 photos or documents")
+	if len(items) < minAlbumItems || len(items) > maxAlbumItems {
+		return nil, providerError(op, "an album has from 2 through 10 items")
+	}
+	documents := 0
+	for _, item := range items {
+		switch item.kind {
+		case kindDocument:
+			documents++
+		case kindPhoto, kindVideo:
+		default:
+			return nil, providerError(op, "an album has only photos, videos, or documents")
+		}
+	}
+	if documents != 0 && documents != len(items) {
+		return nil, providerError(op, "documents are not mixed with photos or videos")
 	}
 	s := spec{op: op, method: "sendMediaGroup", limit: maxAlbumResponseBytes}
 	media := make([]inputMedia, len(items))
 	var files []filePart
 	for i, item := range items {
-		media[i] = inputMedia{Type: kind}
+		media[i] = inputMedia{Type: item.kind}
 		if i == 0 {
 			media[i].Caption, media[i].ParseMode = o.Caption, o.ParseMode
 		}
@@ -523,7 +638,7 @@ func (c *Client) sendAlbum(ctx context.Context, kind string, items []mediaItem, 
 	}
 	out := make([]map[string]any, 0, len(messages))
 	for _, message := range messages {
-		sent, ok := c.parseSent(message, kind)
+		sent, ok := c.parseSent(message, items[len(out)].kind)
 		if !ok {
 			return nil, withUncertainty(spec{}, invalidResponse(op))
 		}
@@ -532,17 +647,20 @@ func (c *Client) sendAlbum(ctx context.Context, kind string, items []mediaItem, 
 	return map[string]any{"messages": out}, nil
 }
 
+type fileIDField struct {
+	FileID string `json:"file_id"`
+}
+
 // parseSent reads the allow-listed fields of one sent message; the file_ref is signed for the target chat.
 func (c *Client) parseSent(raw json.RawMessage, kind string) (map[string]any, bool) {
 	var message struct {
-		MessageID int64 `json:"message_id"`
-		Date      int64 `json:"date"`
-		Photo     []struct {
-			FileID string `json:"file_id"`
-		} `json:"photo"`
-		Document *struct {
-			FileID string `json:"file_id"`
-		} `json:"document"`
+		MessageID int64         `json:"message_id"`
+		Date      int64         `json:"date"`
+		Photo     []fileIDField `json:"photo"`
+		Document  *fileIDField  `json:"document"`
+		Video     *fileIDField  `json:"video"`
+		Animation *fileIDField  `json:"animation"`
+		VideoNote *fileIDField  `json:"video_note"`
 	}
 	if json.Unmarshal(raw, &message) != nil || message.MessageID <= 0 || message.Date <= 0 {
 		return nil, false
@@ -554,6 +672,12 @@ func (c *Client) parseSent(raw json.RawMessage, kind string) (map[string]any, bo
 		fileID = message.Photo[len(message.Photo)-1].FileID
 	case kind == kindDocument && message.Document != nil:
 		fileID = message.Document.FileID
+	case kind == kindVideo && message.Video != nil:
+		fileID = message.Video.FileID
+	case kind == kindAnimation && message.Animation != nil:
+		fileID = message.Animation.FileID
+	case kind == kindVideoNote && message.VideoNote != nil:
+		fileID = message.VideoNote.FileID
 	}
 	out := map[string]any{"message_id": message.MessageID, "date": message.Date}
 	if ref := signRef(c.token, refFile, c.target, fileID); ref != "" {

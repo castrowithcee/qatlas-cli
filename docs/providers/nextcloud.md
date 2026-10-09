@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads and management, Deck, Talk, and note reads, typed targets,
-  connection permissions, and safety boundaries.
+  Describes Nextcloud file operations, file comments, share reads and management, Deck, Talk, and note reads,
+  typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -49,8 +49,8 @@ identity reaches) or `kind/ID`:
 - `folder` (the whole Files root) or `folder/PATH`; at most one per connection. Only a `folder` target enables the
   Files tools; without one they refuse locally, before any credential access or request.
 - `calendar` or `calendar/URI`, `addressbook` (all but the system address book) or `addressbook/URI`,
-  `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric).
-- `notes` or `notes/CATEGORY` (that category and everything below it, such as `Work/Plans`; see Notes).
+  `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric), `notes` or `notes/CATEGORY` (a sub-folder
+  such as `Work/Plans` is allowed).
 - `account`: the account-wide and instance-wide reach of the identity (notifications, activity, search,
   directory, incoming shares, system tag catalog and its administration).
 - `admin`: provisioning reads; only as the sole target of a connection.
@@ -223,15 +223,10 @@ are in none.
 
 ## Notes
 
-The tool group `notes` reads the Notes app; the setup profile `notes-read` holds exactly its tools. Without a
-`notes` target the tools refuse locally, before any credential access or request. Notes are personal data, and
-everything the tools return is untrusted. A `notes/CATEGORY` target binds the notes whose category equals
-`CATEGORY` or lies below it, compared exactly. The category filter of the Notes API misses sub-categories, so
-the list is read unfiltered and every foreign note is dropped locally, never shown or counted; a chunk may
-therefore be empty while a next cursor is present. A foreign note, or an attachment of one, reads like a
-missing note, and no attachment request is sent. An attachment is addressed relative to its note and cannot
-leave it; it is returned inline or written with `local_path` as `files.get` does. The account-wide Notes
-settings need any `notes` target.
+The group `notes` (profile `notes-read`) needs a `notes` target. `notes/CATEGORY` binds that category and all below
+it. The Notes API filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally,
+never shown or counted; a chunk may be empty while a next cursor is present. A foreign note or its attachment reads
+like a missing note. Attachments stay relative to their note; `local_path` follows `files.get`.
 
 ## System tags
 
@@ -264,6 +259,16 @@ color. `update` and `delete` read the tag once first and treat an invisible tag 
 name is a clear error on `create`; on `update` Nextcloud reports it inside the answer, so a refused change
 cannot be told apart from a missing right. An unclear outcome is reported as possibly applied, to be checked
 with `systemtags.list`, and never repeated.
+
+## File comments
+
+The `nextcloud.comments.*` tools read and write the comments of one file below the bound root and need a `folder`
+target; folders are refused. The file ID comes only from a stat of the path, and a comment ID is only ever used
+below that file. Comment text and author names are untrusted data, and long text is cut and marked. Writing needs
+`confirm`, sends exactly one request after the stat, and is open-world because a mention notifies that user;
+Nextcloud lets an identity change or delete only its own comments. An unclear outcome is reported as possibly
+applied and never repeated. `comments.list` is in the `read` and `write` profiles, `create` and `update` in none,
+and `delete` is reachable only through a tools list.
 
 ## Local files
 
