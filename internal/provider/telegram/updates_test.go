@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -284,4 +285,80 @@ func flipLast(s string) string {
 		b[len(b)-1] = 'A'
 	}
 	return string(b)
+}
+
+const confirmReply = `[{"update_id":99,"message":{"message_id":1,"chat":{"id":-100},"text":"NEXTUPDATETEXT"}}]`
+
+func TestUpdatesConfirmSendsOneOffsetRequestAndDropsTheNextUpdate(t *testing.T) {
+	var calls []recorded
+	client, _ := multiClient(t, testToken, fakeTelegram(&calls, confirmReply, "0"), "bot")
+	got, err := client.ConfirmUpdates(context.Background(), 41)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 || calls[0].method != "getUpdates" || calls[0].body != `{"offset":42,"limit":1,"timeout":0}` {
+		t.Fatalf("calls = %+v", calls)
+	}
+	encoded, _ := json.Marshal(got)
+	if string(encoded) != `{"confirmed_through":41}` {
+		t.Errorf("result = %s", encoded)
+	}
+}
+
+func TestUpdatesConfirmRefusesBeforeAnyIO(t *testing.T) {
+	resolver := secret.NewWith(func(string) string { t.Error("credential read"); return "" }, nil, nil, &redact.Redactor{})
+	for _, targets := range [][]string{{"-100"}, {"-100", "business/x"}} {
+		if _, err := invokeUpdatesConfirm(context.Background(), resolvedWith(targets...), resolver, &redact.Redactor{},
+			json.RawMessage(`{"update_id":5}`)); err == nil {
+			t.Errorf("targets %v accepted", targets)
+		}
+	}
+	for _, bad := range []string{`{}`, `{"update_id":0}`, `{"update_id":-1}`, `{"update_id":9007199254740992}`,
+		`{"update_id":9223372036854775807}`, `{"update_id":"5"}`} {
+		if _, err := invokeUpdatesConfirm(context.Background(), resolvedWith("bot"), resolver, &redact.Redactor{},
+			json.RawMessage(bad)); err == nil {
+			t.Errorf("%s accepted", bad)
+		}
+	}
+}
+
+func TestUpdatesConfirmDoesNotRetryAndReportsUncertainty(t *testing.T) {
+	cases := map[string]func() (*http.Response, error){
+		"timeout":  func() (*http.Response, error) { return nil, &timeoutError{} },
+		"5xx":      func() (*http.Response, error) { return response(502, `{"ok":false,"description":"SECRETDESC"}`), nil },
+		"garbage":  func() (*http.Response, error) { return response(200, `not json`), nil },
+		"no array": func() (*http.Response, error) { return response(200, `{"ok":true,"result":{"a":1}}`), nil },
+	}
+	for name, reply := range cases {
+		calls := 0
+		client, _ := multiClient(t, testToken, roundTripFunc(func(*http.Request) (*http.Response, error) {
+			calls++
+			return reply()
+		}), "bot")
+		_, err := client.ConfirmUpdates(context.Background(), 7)
+		if err == nil || calls != 1 || !strings.Contains(err.Error(), "may have taken effect") ||
+			strings.Contains(err.Error(), "SECRETDESC") {
+			t.Errorf("%s: err = %v calls = %d", name, err, calls)
+		}
+	}
+}
+
+func TestUpdatesConfirmDescriptor(t *testing.T) {
+	d := updatesConfirm
+	if d.Group != groupUpdates || !d.RequiresToolAllowList || d.Risk.Effect != capability.EffectDelete ||
+		d.Risk.Idempotency != capability.IdempotencyIdempotent || d.Risk.Confirmation != capability.ConfirmationRequired {
+		t.Errorf("descriptor = %+v", d.Risk)
+	}
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	metadata, _ := reg.ProviderMetadata(Provider)
+	for _, profile := range metadata.Profiles {
+		for _, tool := range profile.Tools {
+			if tool == d.ID {
+				t.Errorf("profile %s contains %s", profile.ID, d.ID)
+			}
+		}
+	}
 }
