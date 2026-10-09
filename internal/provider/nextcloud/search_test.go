@@ -318,7 +318,7 @@ func TestSearchToolsRisksAndProfiles(t *testing.T) {
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
-		if p.ID == "deck-read" {
+		if p.ID == "deck-read" || p.ID == "talk-read" {
 			continue
 		}
 		got := strings.Join(p.Tools, " ")

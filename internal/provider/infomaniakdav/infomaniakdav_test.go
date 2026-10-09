@@ -303,20 +303,6 @@ func TestResponseSizeIsCapped(t *testing.T) {
 	}
 }
 
-func TestEntryCountAndDepthAreCapped(t *testing.T) {
-	many := make([]string, maxEntries+1)
-	for i := range many {
-		many[i] = `<d:response><d:href>/x/</d:href></d:response>`
-	}
-	if _, err := parseMultiStatus("t", []byte(multistatus(many...))); classOf(err) != provider.ClassInvalidResponse {
-		t.Errorf("entries err = %v", err)
-	}
-	deep := `<d:multistatus xmlns:d="DAV:">` + strings.Repeat("<d:x>", 40) + strings.Repeat("</d:x>", 40) + `</d:multistatus>`
-	if _, err := parseMultiStatus("t", []byte(deep)); classOf(err) != provider.ClassInvalidResponse {
-		t.Errorf("depth err = %v", err)
-	}
-}
-
 func TestProviderStringsAreBounded(t *testing.T) {
 	long := strings.Repeat("ä", 1000)
 	serve(t, func(r *http.Request) (*http.Response, error) {

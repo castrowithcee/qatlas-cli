@@ -33,11 +33,11 @@ reply, topic, silent, and protect do not apply to edits. An edit without `inline
 keyboard. `telegram.messages.editreplymarkup` changes only the keyboard of a message: it sets
 `inline_keyboard` or, when that is omitted or empty, removes the keyboard.
 
-The chat tools take an optional `chat` argument. It must equal a bound chat target exactly: an `@username`
-never matches a numeric ID, and `bot` or `business/<id>` is no chat. Without `chat`, the tool uses the one
-bound chat and refuses when the connection binds none or several. A chat that is not bound is refused before
-the credential is read and before any request, without naming it. A chat ID from an invocation argument or a
-Telegram response never becomes a target on its own.
+The chat tools take an optional `chat` argument, the forward and copy tools also `from_chat`. It must equal a
+bound chat target exactly: an `@username` never matches a numeric ID, and `bot` or `business/<id>` is no chat.
+Without `chat`, the tool uses the one bound chat and refuses when the connection binds none or several. A chat
+that is not bound is refused before the credential is read and before any request, without naming it. A chat
+ID from an invocation argument or a Telegram response never becomes a target on its own.
 
 `bot` unlocks only bot-wide tools and `business/<id>` only the tools of that one business connection; both
 combine with chats, and a connection with only `bot` has no chat. A tool that needs one of them is refused
@@ -47,7 +47,7 @@ before the credential is read when the target is missing. Methods that accept on
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
 to `pins`, the member tools to `members`, the update tool to `updates`, the chat tools to `chats`, the invite
 link tools to `invitelinks`, the bot and webhook tools to `bot`, the file tools to `files`, the media tools to
-`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`. A group
+`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`, the sticker tools to `stickers`. A group
 never changes a tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
 fragment, with no exception for local addresses, and redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
@@ -68,6 +68,17 @@ requires a `tools` list. Its reach is that of `telegram.messages.delete`. Repeat
 Telegram skips missing or undeletable identifiers without any notice, so success reports only that Telegram
 accepted the request, not which messages are gone.
 
+`telegram.messages.forward` and `telegram.messages.copy` (`create`) move messages between two bound chats of the
+connection. `from_chat` names the source and `chat` the target; both follow the rule for `chat` above and may be
+the same chat. The source is one `message_id`, which uses `forwardMessage` or `copyMessage`, or `message_ids`, from
+2 through 100 distinct positive identifiers in strictly ascending order, which uses `forwardMessages` or
+`copyMessages`; exactly one of the two is required, and another order is refused rather than sorted. `copy`
+leaves out the link to the original. Its optional `caption` (1 through 1024 characters, with `parse_mode`)
+replaces the original caption of a single message and is refused with `message_ids`, since `copyMessages` has
+none. `message_thread_id`, `disable_notification`, and `protect_content` apply as for `telegram.messages.send`.
+The result is `message_id` for one source and `message_ids` for a list, nothing else. Telegram skips sources it
+cannot find or transfer without notice, so `message_ids` can be shorter than the request.
+
 `telegram.pins.pin` pins one message by `message_id`; `disable_notification` pins silently.
 `telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
 `telegram.pins.unpinall` unpins every pinned message of the chat and, like `telegram.messages.delete`,
@@ -81,8 +92,11 @@ positive Unix time) limits the ban, and `revoke_messages` also deletes all messa
 never removed; it invites nobody. `telegram.members.restrict` (`update`) requires a `tools` list and sets the
 complete `permissions` object of a user in a supergroup: every ChatPermissions boolean is required and sent
 explicitly, a missing or unknown field is refused before any request, and Telegram's permission dependencies
-are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. All three
-results are a single boolean. Promoting members, banning sender chats, and join requests are not offered.
+are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. All
+three results are a single boolean. `telegram.senderchats.ban` (`delete`) bans a channel as a sender by
+`sender_chat_id` and requires a `tools` list; `telegram.senderchats.unban` (`update`) lifts it. The channel
+identifier is only the object of the call, never the target. Promoting members and join requests are not
+offered.
 
 ## Polls, reactions, and chat actions
 
@@ -94,8 +108,12 @@ limits fix is checked locally before the credential is read. The result is `mess
 `telegram.messages.delete`, requires a `tools` list; it reports only `stopped`, never counts or voters.
 `telegram.reactions.set` (`update`, idempotent) sets at most one reaction of the bot from Telegram's
 fixed emoji list or a numeric `custom_emoji_id`; an empty `reactions` list removes it. Paid reactions are
-not offered. `telegram.chatactions.send` (`create`, idempotent) shows one of Telegram's fixed actions for
-about five seconds.
+not offered. `telegram.reactions.remove` (`delete`, idempotent) removes the reactions of one user (`user_id`)
+or one chat (`actor_chat_id`) from one message; `telegram.reactions.removeall` removes up to 10000 recent
+reactions of that user or chat across the whole chat. Exactly one actor is required, the chat is a group or
+supergroup in which the bot may delete messages, and both tools require a `tools` list. The actor chat is only
+an object, never the target. `telegram.chatactions.send` (`create`, idempotent) shows one of Telegram's fixed
+actions for about five seconds.
 
 ## Locations, venues, contacts, and dice
 
@@ -245,7 +263,8 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
-`telegram.members.restrict`, `telegram.chats.deletephoto`, the interaction tools including locations, venues,
-contacts, and dice, and the invite link tools are in no profile. A profile is a visible starting selection,
-not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
-saved connection never follows a profile.
+`telegram.members.restrict`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
+`telegram.chats.deletephoto`, `telegram.messages.forward`, `telegram.messages.copy`, the interaction tools
+including locations, venues, contacts, and dice, and the invite link tools are in no profile. A profile is a
+visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
+changed before saving, and a saved connection never follows a profile.
