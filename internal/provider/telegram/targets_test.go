@@ -181,6 +181,7 @@ func TestInvokeFunctionsRefuseBeforeSecretResolution(t *testing.T) {
 	resolver := secret.NewWith(func(string) string { resolutions++; return testToken }, nil, nil, nil)
 	invokes := map[string]func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, json.RawMessage) (any, error){
 		"send": invokeMessagesSend, "edit": invokeMessagesEdit, "delete": invokeMessagesDelete,
+		"edit_reply_markup": invokeMessagesEditReplyMarkup,
 	}
 	for name, invoke := range invokes {
 		for _, resolved := range []*config.Resolved{
@@ -201,7 +202,7 @@ func TestInvokeFunctionsRefuseBeforeSecretResolution(t *testing.T) {
 }
 
 func TestChatArgumentIsDeclared(t *testing.T) {
-	for _, d := range []capability.Descriptor{messagesSend, messagesEdit, messagesDelete} {
+	for _, d := range []capability.Descriptor{messagesSend, messagesEdit, messagesEditReplyMarkup, messagesDelete} {
 		found := false
 		for _, a := range d.Arguments {
 			found = found || (a.Name == "chat" && !a.Required)
