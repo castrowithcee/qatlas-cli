@@ -257,8 +257,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 33 {
-		t.Fatalf("tools = %+v, want 33", metadata.Tools)
+	if len(metadata.Tools) != 36 {
+		t.Fatalf("tools = %+v, want 36", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -274,7 +274,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	}
 	if !has("read", messagesGet.ID) || !has("messaging", messagesGet.ID) || !has("messaging", messagesUpdate.ID) ||
 		has("read", messagesUpdate.ID) || !has("read", reactionsList.ID) || !has("messaging", reactionsList.ID) ||
-		!has("messaging", reactionsAdd.ID) || has("read", reactionsAdd.ID) {
+		!has("messaging", reactionsAdd.ID) || has("read", reactionsAdd.ID) || !has("read", pinsList.ID) ||
+		!has("messaging", pinsList.ID) || !has("messaging", messagesPin.ID) || !has("messaging", messagesUnpin.ID) ||
+		has("read", messagesPin.ID) || has("read", messagesUnpin.ID) {
 		t.Fatalf("profiles = %+v", profiles)
 	}
 	for _, id := range []string{usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID} {
@@ -312,7 +314,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		if tool.Group == "" || !groups[tool.Group] {
 			t.Fatalf("tool %s has no declared group: %+v", tool.ID, tool)
 		}
-		if (tool.ID == directList.ID || tool.ID == directOpen.ID || tool.ID == groupMessagesOpen.ID) &&
+		if (tool.ID == directList.ID || tool.ID == directOpen.ID || tool.ID == groupMessagesOpen.ID ||
+			tool.ID == pinsList.ID) &&
 			tool.Group != "messages" {
 			t.Fatalf("tool %s group = %q, want messages", tool.ID, tool.Group)
 		}
