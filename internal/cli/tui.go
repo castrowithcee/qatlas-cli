@@ -300,7 +300,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			}
 			store := config.NewStore(path, reg)
 			svc := manage.New(store, secrets, connlog.SurfaceTUI, opts.Redactor)
-			return classifyUserError(tui.Run(svc, store, connectionTester(store, opts, reg), secrets, opts.Redactor,
+			return classifyUserError(tui.Run(svc, store, connectionTester(store, opts, reg), targetSuggester(store, opts, reg), secrets, opts.Redactor,
 				tuiUpdater(opts, buildVersion), tuiRestart(), os.Stdin, os.Stdout))
 		},
 	}
@@ -345,6 +345,26 @@ func connectionTester(store *config.Store, opts *Options, reg *capability.Regist
 			return "", err
 		}
 		return reg.TestConnection(ctx, resolved, secrets, opts.Redactor)
+	}
+}
+
+// targetSuggester binds the editor to the registry's optional target suggestion, the way connectionTester
+// binds the test. The editor stays free of any provider.
+func targetSuggester(store *config.Store, opts *Options, reg *capability.Registry) tui.TargetSuggester {
+	return func(ctx context.Context, connection string) (string, error) {
+		cfg, err := store.Load()
+		if err != nil {
+			return "", err
+		}
+		resolved, err := cfg.Resolve(connection, "")
+		if err != nil {
+			return "", err
+		}
+		secrets, err := opts.resolver()
+		if err != nil {
+			return "", err
+		}
+		return reg.SuggestTarget(ctx, resolved, secrets, opts.Redactor)
 	}
 }
 
