@@ -203,33 +203,55 @@ var invoiceWriteRisk = capability.Risk{
 	DataSensitivity: dataSensitivity,
 }
 
-// invoiceInputSchema is the closed input of a draft and of an issued invoice. It has no finalize member:
-// whether an invoice is final follows from the operation, never from an argument.
-const invoiceInputSchema = `{"type":"object","properties":{` +
-	`"voucher_date":{"type":"string","minLength":1,"maxLength":40},` +
+// voucherProperties are the closed members every sales voucher draft shares. None of the draft inputs
+// has a finalize member: whether an invoice is final follows from the operation, never from an argument.
+const voucherProperties = `"voucher_date":{"type":"string","minLength":1,"maxLength":40},` +
 	`"address":{"type":"object","properties":{"contact_id":{"type":"string","maxLength":36},"name":{"type":"string","maxLength":255},"supplement":{"type":"string","maxLength":255},"street":{"type":"string","maxLength":255},"city":{"type":"string","maxLength":255},"zip":{"type":"string","maxLength":32},"country_code":{"type":"string","minLength":2,"maxLength":2}},"additionalProperties":false},` +
-	`"line_items":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"object","properties":{"type":{"type":"string","enum":["custom","text"]},"name":{"type":"string","minLength":1,"maxLength":255},"description":{"type":"string","maxLength":4096},"quantity":{"type":"number"},"unit_name":{"type":"string","maxLength":64},"currency":{"type":"string","minLength":3,"maxLength":3},"net_amount":{"type":"number"},"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"}},"required":["type","name"],"additionalProperties":false}},` +
+	`"line_items":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"object","properties":{"type":{"type":"string","enum":["custom","text","service","material"]},"id":{"type":"string","maxLength":36},"name":{"type":"string","minLength":1,"maxLength":255},"description":{"type":"string","maxLength":4096},"quantity":{"type":"number"},"unit_name":{"type":"string","maxLength":64},"currency":{"type":"string","minLength":3,"maxLength":3},"net_amount":{"type":"number"},"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"}},"required":["type","name"],"additionalProperties":false}},` +
 	`"currency":{"type":"string","minLength":3,"maxLength":3},"tax_type":{"type":"string","enum":["net","gross","vatfree"]},` +
 	`"shipping_date":{"type":"string","minLength":1,"maxLength":40},"shipping_end_date":{"type":"string","minLength":1,"maxLength":40},"shipping_type":{"type":"string","enum":["delivery","deliveryperiod","service","serviceperiod","none"]},` +
-	`"title":{"type":"string","maxLength":255},"introduction":{"type":"string","maxLength":4096},"remark":{"type":"string","maxLength":4096}},` +
-	`"required":["voucher_date","address","line_items","currency","tax_type","shipping_type"],"additionalProperties":false}`
+	`"title":{"type":"string","maxLength":255},"introduction":{"type":"string","maxLength":4096},"remark":{"type":"string","maxLength":4096},` +
+	`"payment_conditions":{"type":"object","properties":{"label":{"type":"string","minLength":1,"maxLength":255},"duration_days":{"type":"integer","minimum":0,"maximum":3650},"discount_percentage":{"type":"number","minimum":0,"maximum":100},"discount_range_days":{"type":"integer","minimum":0,"maximum":3650}},"required":["label","duration_days"],"additionalProperties":false},` +
+	`"print_layout_id":{"type":"string","maxLength":36}`
+
+const voucherRequired = `"voucher_date","address","line_items","currency","tax_type","shipping_type"`
+
+const invoiceInputSchema = `{"type":"object","properties":{` + voucherProperties + `},"required":[` + voucherRequired + `],"additionalProperties":false}`
+
+const quotationInputSchema = `{"type":"object","properties":{` + voucherProperties +
+	`,"expiration_date":{"type":"string","minLength":1,"maxLength":40}},"required":[` + voucherRequired +
+	`,"expiration_date"],"additionalProperties":false}`
+
+const orderConfirmationInputSchema = `{"type":"object","properties":{` + voucherProperties +
+	`,"preceding_voucher_id":{"type":"string","maxLength":36}},"required":[` + voucherRequired + `],"additionalProperties":false}`
 
 // invoiceOutputSchema is the result of both creations: the identifier and the timestamps Lexware reports.
 const invoiceOutputSchema = `{"type":"object","properties":{"id":{"type":"string"},"created_date":{"type":"string"},"updated_date":{"type":"string"},"version":{"type":"integer"}},"required":["id"],"additionalProperties":false}`
 
-var invoiceArguments = []capability.Argument{
-	{Name: "voucher_date", Description: "Invoice date as an RFC 3339 timestamp", Required: true},
+var voucherArguments = []capability.Argument{
+	{Name: "voucher_date", Description: "Voucher date as an RFC 3339 timestamp", Required: true},
 	{Name: "address", Description: "Recipient address object; contact_id references an existing contact as a UUID, otherwise name and country_code are required and supplement, street, zip and city complete it", Required: true},
-	{Name: "line_items", Description: "1 to 100 invoice positions with type custom or text and a name; custom positions add quantity, unit_name, net_amount and tax_rate_percentage, and optionally currency and discount_percentage", Required: true},
+	{Name: "line_items", Description: "1 to 100 positions with type custom, text, service or material and a name; custom positions add quantity, unit_name, net_amount and tax_rate_percentage, and optionally currency and discount_percentage; service and material positions reference an article by its id (UUID) and carry the same members as custom", Required: true},
 	{Name: "currency", Description: "ISO 4217 currency code of 3 characters", Required: true},
 	{Name: "tax_type", Description: "How amounts are taxed: net, gross or vatfree", Required: true},
 	{Name: "shipping_type", Description: "Kind of delivery: delivery, deliveryperiod, service, serviceperiod or none", Required: true},
 	{Name: "shipping_date", Description: "Delivery or service date as an RFC 3339 timestamp; required unless shipping_type is none"},
 	{Name: "shipping_end_date", Description: "End of the delivery or service period as an RFC 3339 timestamp; required for deliveryperiod and serviceperiod"},
-	{Name: "title", Description: "Invoice title, up to 255 characters"},
+	{Name: "title", Description: "Voucher title, up to 255 characters"},
 	{Name: "introduction", Description: "Introductory text above the positions, up to 4096 characters"},
 	{Name: "remark", Description: "Closing remark below the positions, up to 4096 characters"},
+	{Name: "payment_conditions", Description: "Payment terms object: label and duration_days, optionally discount_percentage and discount_range_days"},
+	{Name: "print_layout_id", Description: "Print layout as a UUID, as returned by lexware.printlayouts.list"},
 }
+
+var invoiceArguments = voucherArguments
+
+var quotationArguments = append([]capability.Argument{
+	{Name: "expiration_date", Description: "Date until the quotation is valid, as an RFC 3339 timestamp", Required: true},
+}, voucherArguments...)
+
+var orderConfirmationArguments = append(append([]capability.Argument{}, voucherArguments...),
+	capability.Argument{Name: "preceding_voucher_id", Description: "Quotation to follow up, as a UUID; the order confirmation is then created as its successor"})
 
 var invoiceFields = []capability.Field{
 	{Name: "id", Description: "Identifier Lexware assigned to the new invoice"},
@@ -271,6 +293,51 @@ var invoicesIssue = capability.Descriptor{
 	Arguments:    invoiceArguments, Fields: invoiceFields, Examples: invoiceExamples,
 }
 
+var quotationsCreate = capability.Descriptor{
+	ID: Provider + ".quotations.create", Version: 1, Title: "Create a Lexware quotation draft",
+	Description: "Create one quotation as a draft; a draft can still be changed in Lexware Office. " +
+		"Finalizing is not part of this tool",
+	Tags:     []string{"lexware", "quotations", "create", "draft", "accounting"},
+	Provider: Provider, Risk: invoiceWriteRisk,
+	InputSchema:  json.RawMessage(quotationInputSchema),
+	OutputSchema: json.RawMessage(invoiceOutputSchema),
+	Arguments:    quotationArguments, Fields: voucherFields("quotation"),
+	Examples: []capability.Example{{
+		Description: "One article position for an existing contact, valid for 30 days",
+		Arguments: json.RawMessage(`{"voucher_date":"2026-09-12T00:00:00+02:00","expiration_date":"2026-10-12T00:00:00+02:00",` +
+			`"address":{"contact_id":"11111111-2222-3333-4444-555555555555"},` +
+			`"line_items":[{"type":"service","id":"66666666-7777-8888-9999-000000000000","name":"Consulting","quantity":2,` +
+			`"unit_name":"hour","net_amount":120,"tax_rate_percentage":19}],` +
+			`"currency":"EUR","tax_type":"net","shipping_type":"none"}`),
+	}},
+}
+
+var orderConfirmationsCreate = capability.Descriptor{
+	ID: Provider + ".orderconfirmations.create", Version: 1, Title: "Create a Lexware order confirmation draft",
+	Description: "Create one order confirmation as a draft, optionally as the successor of a quotation; a " +
+		"draft can still be changed in Lexware Office. Finalizing is not part of this tool",
+	Tags:     []string{"lexware", "orderconfirmations", "create", "draft", "accounting"},
+	Provider: Provider, Risk: invoiceWriteRisk,
+	InputSchema:  json.RawMessage(orderConfirmationInputSchema),
+	OutputSchema: json.RawMessage(invoiceOutputSchema),
+	Arguments:    orderConfirmationArguments, Fields: voucherFields("order confirmation"),
+	Examples: []capability.Example{{
+		Description: "Follow up a quotation with one custom position",
+		Arguments: json.RawMessage(`{"voucher_date":"2026-09-12T00:00:00+02:00","preceding_voucher_id":"11111111-2222-3333-4444-555555555555",` +
+			`"address":{"contact_id":"11111111-2222-3333-4444-555555555555"},` +
+			`"line_items":[{"type":"custom","name":"Consulting","quantity":2,"unit_name":"hour",` +
+			`"net_amount":120,"tax_rate_percentage":19}],` +
+			`"currency":"EUR","tax_type":"net","shipping_type":"none"}`),
+	}},
+}
+
+// voucherFields describes the result of a draft creation for the named voucher type.
+func voucherFields(noun string) []capability.Field {
+	fields := append([]capability.Field{}, invoiceFields...)
+	fields[0].Description = "Identifier Lexware assigned to the new " + noun
+	return fields
+}
+
 // Register adds Lexware metadata, its read-only connection test, and the supported operations.
 func Register(reg *capability.Registry) error {
 	readTools := []string{invoicesList.ID, invoicesGet.ID, contactsList.ID, contactsGet.ID,
@@ -306,8 +373,9 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "write", Title: "Master data and drafts",
 			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile and reference data and " +
-				"creates invoice drafts and creates and changes articles and contacts; issuing an invoice is never part of a profile",
-			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, articlesCreate.ID, articlesUpdate.ID,
+				"creates invoice, quotation and order confirmation drafts and creates and changes articles and contacts; issuing an invoice is never part of a profile",
+			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, quotationsCreate.ID,
+				orderConfirmationsCreate.ID, articlesCreate.ID, articlesUpdate.ID,
 				contactsCreate.ID, contactsUpdate.ID),
 		}},
 	}, TestConnection); err != nil {
@@ -321,6 +389,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: invoicesGet, Handler: capability.Handler(invokeInvoicesGet)},
 		capability.Operation{Descriptor: invoicesCreate, Handler: capability.Handler(invokeInvoicesCreate)},
 		capability.Operation{Descriptor: invoicesIssue, Handler: capability.Handler(invokeInvoicesIssue)},
+		capability.Operation{Descriptor: quotationsCreate, Handler: capability.Handler(invokeQuotationsCreate)},
+		capability.Operation{Descriptor: orderConfirmationsCreate, Handler: capability.Handler(invokeOrderConfirmationsCreate)},
 		capability.Operation{Descriptor: contactsList, Handler: capability.Handler(invokeContactsList)},
 		capability.Operation{Descriptor: contactsGet, Handler: capability.Handler(invokeContactsGet)},
 		capability.Operation{Descriptor: articlesList, Handler: capability.Handler(invokeArticlesList)},
@@ -391,6 +461,7 @@ type createInput struct {
 	} `json:"address"`
 	LineItems []struct {
 		Type        string      `json:"type"`
+		ID          string      `json:"id,omitempty"`
 		Name        string      `json:"name"`
 		Description string      `json:"description,omitempty"`
 		Quantity    json.Number `json:"quantity,omitempty"`
@@ -408,43 +479,55 @@ type createInput struct {
 	Title           string `json:"title,omitempty"`
 	Introduction    string `json:"introduction,omitempty"`
 	Remark          string `json:"remark,omitempty"`
+	PaymentTerms    *struct {
+		Label         string      `json:"label"`
+		DurationDays  int         `json:"duration_days"`
+		Discount      json.Number `json:"discount_percentage,omitempty"`
+		DiscountRange *int        `json:"discount_range_days,omitempty"`
+	} `json:"payment_conditions,omitempty"`
+	PrintLayoutID string `json:"print_layout_id,omitempty"`
+	// ExpirationDate belongs to quotations and PrecedingVoucherID to order confirmations; the schema of the
+	// other tools does not admit them.
+	ExpirationDate     string `json:"expiration_date,omitempty"`
+	PrecedingVoucherID string `json:"preceding_voucher_id,omitempty"`
 }
 
 func invokeInvoicesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeInvoicePost(ctx, resolved, secrets, red, raw, false)
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, invoiceDraft(false))
 }
 
 func invokeInvoicesIssue(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
-	return invokeInvoicePost(ctx, resolved, secrets, red, raw, true)
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, invoiceDraft(true))
 }
 
-// invokeInvoicePost validates the arguments, including every foreign identifier, before the credential is
+func invokeQuotationsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, quotationDraft)
+}
+
+func invokeOrderConfirmationsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, orderConfirmationDraft)
+}
+
+// invokeDraftPost validates the arguments, including every foreign identifier, before the credential is
 // resolved or any provider I/O happens.
-func invokeInvoicePost(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage, finalize bool) (any, error) {
-	op := "create invoice"
-	if finalize {
-		op = "issue invoice"
-	}
+func invokeDraftPost(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage, kind draftKind) (any, error) {
 	var input createInput
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	if decoder.Decode(&input) != nil {
-		return nil, providerError(op, "the validated arguments could not be read")
+		return nil, providerError(kind.op, "the validated arguments could not be read")
 	}
-	if err := input.validate(); err != nil {
-		return nil, providerError(op, err.Error())
+	if err := input.validate(kind); err != nil {
+		return nil, providerError(kind.op, err.Error())
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	if finalize {
-		return client.IssueInvoice(ctx, input)
-	}
-	return client.CreateInvoice(ctx, input)
+	return client.postDraft(ctx, kind, input)
 }
 
-func (input createInput) validate() error {
+func (input createInput) validate(kind draftKind) error {
 	if _, err := time.Parse(time.RFC3339, input.VoucherDate); err != nil {
 		return errors.New("voucher_date must be an RFC 3339 timestamp")
 	}
@@ -458,9 +541,27 @@ func (input createInput) validate() error {
 		return errors.New("at least one line item is required")
 	}
 	for _, item := range input.LineItems {
-		if item.Type == "custom" && (item.Quantity == "" || item.UnitName == "" || item.NetAmount == "" || item.TaxRate == "") {
-			return errors.New("a custom line item needs quantity, unit_name, net_amount, and tax_rate_percentage")
+		if item.Type != "text" && (item.Quantity == "" || item.UnitName == "" || item.NetAmount == "" || item.TaxRate == "") {
+			return errors.New("a custom, service, or material line item needs quantity, unit_name, net_amount, and tax_rate_percentage")
 		}
+		article := item.Type == "service" || item.Type == "material"
+		if article && !validUUID(item.ID) {
+			return errors.New("a service or material line item needs an id that is a UUID")
+		}
+		if !article && item.ID != "" {
+			return errors.New("only a service or material line item takes an id")
+		}
+	}
+	if input.PrintLayoutID != "" && !validUUID(input.PrintLayoutID) {
+		return errors.New("print_layout_id must be a UUID")
+	}
+	if kind.expiration {
+		if _, err := time.Parse(time.RFC3339, input.ExpirationDate); err != nil {
+			return errors.New("expiration_date must be an RFC 3339 timestamp")
+		}
+	}
+	if input.PrecedingVoucherID != "" && !validUUID(input.PrecedingVoucherID) {
+		return errors.New("preceding_voucher_id must be a UUID")
 	}
 	if input.ShippingType != "none" {
 		if _, err := time.Parse(time.RFC3339, input.ShippingDate); err != nil {
@@ -843,22 +944,57 @@ type createResult struct {
 	Version     int    `json:"version,omitempty"`
 }
 
+// draftKind fixes one creatable voucher type: its endpoint, names, and failure hint. The type is never an
+// argument; every tool has its own fixed path.
+type draftKind struct {
+	op, path, mayExist string
+	finalize           bool // invoices only, set by the issue tool and never by an argument
+	expiration         bool // quotations only
+	follow             bool // order confirmations only
+}
+
+func invoiceDraft(finalize bool) draftKind {
+	kind := draftKind{op: "create invoice", path: "/v1/invoices", mayExist: invoiceMayExist}
+	if finalize {
+		kind.op, kind.mayExist, kind.finalize = "issue invoice", invoiceMayBeIssued, true
+	}
+	return kind
+}
+
+var (
+	quotationDraft = draftKind{op: "create quotation", path: "/v1/quotations", expiration: true,
+		mayExist: "; the quotation may have been created, check the voucher list before repeating it"}
+	orderConfirmationDraft = draftKind{op: "create order confirmation", path: "/v1/order-confirmations", follow: true,
+		mayExist: "; the order confirmation may have been created, check the voucher list before repeating it"}
+)
+
+// precedingMessage is the fixed text of an HTTP 406 on a follow-up: Lexware refuses a predecessor that
+// cannot be followed up, for example a quotation with optional positions.
+const precedingMessage = "Lexware rejected the follow-up voucher; the preceding voucher cannot be followed up by an order confirmation, or the data is invalid"
+
 // CreateInvoice posts one draft: the request carries no finalize query.
 func (c *Client) CreateInvoice(ctx context.Context, input createInput) (*createResult, error) {
-	return c.postInvoice(ctx, "create invoice", input, false)
+	return c.postDraft(ctx, invoiceDraft(false), input)
 }
 
 // IssueInvoice posts one invoice with the fixed query finalize=true. Lexware then assigns the invoice
 // number, and the API can no longer change or delete the invoice.
 func (c *Client) IssueInvoice(ctx context.Context, input createInput) (*createResult, error) {
-	return c.postInvoice(ctx, "issue invoice", input, true)
+	return c.postDraft(ctx, invoiceDraft(true), input)
 }
 
-func (c *Client) postInvoice(ctx context.Context, op string, input createInput, finalize bool) (*createResult, error) {
-	uncertain := invoiceMayExist
-	if finalize {
-		uncertain = invoiceMayBeIssued
-	}
+// CreateQuotation posts one quotation draft.
+func (c *Client) CreateQuotation(ctx context.Context, input createInput) (*createResult, error) {
+	return c.postDraft(ctx, quotationDraft, input)
+}
+
+// CreateOrderConfirmation posts one order confirmation draft, optionally as the successor of a quotation.
+func (c *Client) CreateOrderConfirmation(ctx context.Context, input createInput) (*createResult, error) {
+	return c.postDraft(ctx, orderConfirmationDraft, input)
+}
+
+// draftPayload builds the request body from the closed input members only.
+func draftPayload(kind draftKind, input createInput) map[string]any {
 	address := map[string]any{"name": input.Address.Name, "supplement": input.Address.Supplement, "street": input.Address.Street, "city": input.Address.City, "zip": input.Address.Zip, "countryCode": input.Address.CountryCode}
 	if input.Address.ContactID != "" {
 		address = map[string]any{"contactId": input.Address.ContactID}
@@ -866,10 +1002,13 @@ func (c *Client) postInvoice(ctx context.Context, op string, input createInput, 
 	items := make([]map[string]any, 0, len(input.LineItems))
 	for _, item := range input.LineItems {
 		value := map[string]any{"type": item.Type, "name": item.Name}
+		if item.ID != "" {
+			value["id"] = item.ID
+		}
 		if item.Description != "" {
 			value["description"] = item.Description
 		}
-		if item.Type == "custom" {
+		if item.Type != "text" {
 			currency := item.Currency
 			if currency == "" {
 				currency = input.Currency
@@ -890,15 +1029,36 @@ func (c *Client) postInvoice(ctx context.Context, op string, input createInput, 
 	if input.ShippingEndDate != "" {
 		shipping["shippingEndDate"] = input.ShippingEndDate
 	}
-	payload := map[string]any{"voucherDate": input.VoucherDate, "address": address, "lineItems": items, "totalPrice": map[string]string{"currency": input.Currency}, "taxConditions": map[string]string{"taxType": input.TaxType}, "shippingConditions": shipping, "title": input.Title, "introduction": input.Introduction, "remark": input.Remark}
-	for _, field := range []struct{ name, value string }{{"title", input.Title}, {"introduction", input.Introduction}, {"remark", input.Remark}} {
-		if field.value == "" {
-			delete(payload, field.name)
+	payload := map[string]any{"voucherDate": input.VoucherDate, "address": address, "lineItems": items, "totalPrice": map[string]string{"currency": input.Currency}, "taxConditions": map[string]string{"taxType": input.TaxType}, "shippingConditions": shipping}
+	for _, field := range []struct{ name, value string }{{"title", input.Title}, {"introduction", input.Introduction}, {"remark", input.Remark}, {"printLayoutId", input.PrintLayoutID}} {
+		if field.value != "" {
+			payload[field.name] = field.value
 		}
 	}
+	if terms := input.PaymentTerms; terms != nil {
+		value := map[string]any{"paymentTermLabel": terms.Label, "paymentTermDuration": terms.DurationDays}
+		if terms.Discount != "" {
+			discount := map[string]any{"discountPercentage": terms.Discount}
+			if terms.DiscountRange != nil {
+				discount["discountRange"] = *terms.DiscountRange
+			}
+			value["paymentDiscountConditions"] = discount
+		}
+		payload["paymentConditions"] = value
+	}
+	if kind.expiration {
+		payload["expirationDate"] = input.ExpirationDate
+	}
+	return payload
+}
+
+func (c *Client) postDraft(ctx context.Context, kind draftKind, input createInput) (*createResult, error) {
 	query := url.Values{}
-	if finalize {
+	if kind.finalize {
 		query.Set("finalize", "true")
+	}
+	if kind.follow && input.PrecedingVoucherID != "" {
+		query.Set("precedingSalesVoucherId", input.PrecedingVoucherID)
 	}
 	var response struct {
 		ID          string `json:"id"`
@@ -906,11 +1066,15 @@ func (c *Client) postInvoice(ctx context.Context, op string, input createInput, 
 		UpdatedDate string `json:"updatedDate"`
 		Version     int    `json:"version"`
 	}
-	if err := c.post(ctx, op, "", "/v1/invoices", query, payload, &response, uncertain); err != nil {
+	if err := c.post(ctx, kind.op, "", kind.path, query, draftPayload(kind, input), &response, kind.mayExist); err != nil {
+		var failure *provider.Error
+		if kind.follow && input.PrecedingVoucherID != "" && errors.As(err, &failure) && failure.Message == validationMessage {
+			failure.Message = precedingMessage
+		}
 		return nil, err
 	}
 	if !validUUID(response.ID) {
-		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Lexware returned an invoice without a usable identifier" + uncertain}
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: kind.op, Message: "Lexware returned a voucher without a usable identifier" + kind.mayExist}
 	}
 	return &createResult{ID: response.ID, CreatedDate: response.CreatedDate, UpdatedDate: response.UpdatedDate, Version: response.Version}, nil
 }

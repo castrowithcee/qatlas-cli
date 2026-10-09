@@ -1,8 +1,8 @@
 ---
 description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
-  articles, the organization profile and reference data, voucher document downloads, invoice drafts and
-  issuing, contact and article writes, permissions, and credentials.
+  articles, the organization profile and reference data, voucher document downloads, invoice, quotation and
+  order confirmation drafts, invoice issuing, contact and article writes, permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -55,6 +55,16 @@ invoice number, and its API can neither change nor delete the invoice afterwards
 `lexware.invoices.issue` only when its `tools` list names it, in addition to `create` in `permissions`; no
 profile ticks it.
 
+`lexware.quotations.create` (with a required `expiration_date`) and `lexware.orderconfirmations.create` create a
+quotation and an order confirmation as drafts (`create`), always with confirmation, and share the voucher
+structure of `lexware.invoices.create`. Neither finalizes, and there is no issue tool for them. An order
+confirmation may follow up a quotation through `preceding_voucher_id`; Lexware refuses a quotation that cannot be
+followed up, for example one with optional positions, and the error says so without the provider's text. Besides
+`custom` and `text`, positions may have the type `service` or `material` and then reference an article by its
+`id`; they carry quantity, unit and price like `custom`. All three tools accept the optional `payment_conditions`
+(label, duration, optional discount) and `print_layout_id`. Every identifier is checked as a UUID before any
+request.
+
 Breaking change: `lexware.invoices.create` version 2 no longer accepts `finalize` and rejects it as an unknown
 argument; its result no longer carries `finalized`. A connection that finalized invoices through `create`
 needs `lexware.invoices.issue` in its `tools` list instead.
@@ -85,7 +95,7 @@ never extend its Lexware contract or organization rights. An optional `tools` li
 further to named tools, for example `[lexware.invoices.get]`, and never admits an effect `permissions`
 excludes. The terminal editor starts a new connection on the recommended setup profile `read`, which ticks
 `[read]` and every list and get tool; the profile `write` adds the permissions `create` and `update` and the
-tools `lexware.invoices.create`, `lexware.articles.create`, `lexware.articles.update`,
-`lexware.contacts.create` and `lexware.contacts.update`. A profile is a visible starting selection, not a
-role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved
-connection never follows a profile.
+tools `lexware.invoices.create`, `lexware.quotations.create`, `lexware.orderconfirmations.create`,
+`lexware.articles.create`, `lexware.articles.update`, `lexware.contacts.create` and `lexware.contacts.update`.
+A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
+every tick can be changed before saving, and a saved connection never follows a profile.
