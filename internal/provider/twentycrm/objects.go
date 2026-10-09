@@ -22,6 +22,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: recordsGroup, Title: "Records", Description: "Records of the reachable objects of the workspace"},
 	{ID: activityGroup, Title: "Notes and tasks", Description: "Links of notes and tasks to records"},
 	{ID: workflowsGroup, Title: "Workflows", Description: "Workflows of the workspace, their versions and runs"},
+	{ID: webhooksGroup, Title: "Webhooks", Description: "Where the workspace reports events"},
 	{ID: membersGroup, Title: "Members and roles", Description: "Members and roles of the workspace"},
 }
 
