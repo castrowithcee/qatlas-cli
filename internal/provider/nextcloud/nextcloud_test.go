@@ -241,9 +241,10 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 16 || descriptors[0].ID != "nextcloud.files.copy" ||
-		descriptors[9].ID != "nextcloud.folders.delete" || descriptors[12].ID != "nextcloud.shares.list" ||
-		descriptors[13].ID != "nextcloud.trash.delete" || descriptors[15].ID != "nextcloud.trash.restore" {
+	if len(descriptors) != 19 || descriptors[0].ID != "nextcloud.favorites.list" ||
+		descriptors[4].ID != "nextcloud.files.favorite" || descriptors[8].ID != "nextcloud.files.search" ||
+		descriptors[12].ID != "nextcloud.folders.delete" || descriptors[15].ID != "nextcloud.shares.list" ||
+		descriptors[16].ID != "nextcloud.trash.delete" || descriptors[18].ID != "nextcloud.trash.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
