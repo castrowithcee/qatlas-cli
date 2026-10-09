@@ -122,7 +122,7 @@ func TestVaultRoleWriteAndRemoveSyncTheVaultProcess(t *testing.T) {
 	pump(t, m, "enter")
 	focusRole(t, m, "token-id")
 
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, canary)
 	pump(t, m, "enter")
 	if m.screen != screenAdminAuth {
@@ -173,7 +173,7 @@ func TestVaultRoleWriteIsSilentWithoutARunningVaultProcess(t *testing.T) {
 	pump(t, m, "enter")
 	focusRole(t, m, "token-id")
 
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, "canary-no-process-9a1b")
 	pump(t, m, "enter")
 	if m.fail != "" {
@@ -210,7 +210,7 @@ func TestVaultRoleWriteWarnsWhenTheVaultProcessRefuses(t *testing.T) {
 	focusRole(t, m, "token-id")
 
 	const canary = "canary-refused-3d4e"
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, canary)
 	pump(t, m, "enter")
 	if m.screen != screenAdminAuth {
@@ -253,7 +253,7 @@ func TestVaultProcessWarningIsRedactedInTheStatusLine(t *testing.T) {
 	openSectionByName(t, m, sectionCredentials)
 	pump(t, m, "enter")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, "canary-redacted-5f6a")
 	pump(t, m, "enter")
 	typeText(t, m, passphrase)

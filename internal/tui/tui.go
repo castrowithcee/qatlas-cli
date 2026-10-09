@@ -36,6 +36,17 @@ import (
 // provider knowledge of its own; the caller supplies this function.
 type Tester func(ctx context.Context, connection string) (provider.Class, error)
 
+// TargetSuggester reads the target a provider offers for a connection that has none, or "" for none. The
+// editor only shows it as a prefilled form value; it never saves it. Like Tester, it keeps the editor free
+// of provider knowledge.
+type TargetSuggester func(ctx context.Context, connection string) (string, error)
+
+// suggestDoneMsg carries a target suggestion back into the event loop.
+type suggestDoneMsg struct {
+	name   string
+	target string
+}
+
 // testDoneMsg carries the outcome of a connection test back into the event loop.
 type testDoneMsg struct {
 	id    int
@@ -178,8 +189,8 @@ type field struct {
 	// hint says in one line what this field expects. It stays general: every rule belongs to the
 	// configuration core, and the editor must not grow schema knowledge of its own.
 	hint string
-	// detail is the full text of a hint that is shown shortened under the focused row; empty when the hint
-	// is already complete. F1 opens it (see openFieldHelp).
+	// detail is the full text of a hint whose hint field holds a shortened form; empty when the hint is
+	// already complete. The form always shows the full text.
 	detail string
 	// readOnly marks the name of an existing entry. Renaming would silently break every reference to it,
 	// so an entry is changed in place or deleted and created again. A read-only field takes no editing
@@ -526,18 +537,23 @@ type Model struct {
 	testID     int
 	cancelTest context.CancelFunc
 
+	// suggester may be nil. suggested holds, for this process only, the target a successful test of an
+	// unbound connection offered; the connection form prefills it without saving.
+	suggester     TargetSuggester
+	suggested     map[string]string
+	cancelSuggest context.CancelFunc
+
 	// wizard is the guided setup while it runs, and nil otherwise.
 	wizard *setup
 
+	// window, while a form is being fitted to the terminal, is the first and last row index drawn; nil
+	// draws every row. hintCap is then how many lines the hint of the focused row may take; 0 means all
+	// of them (see fittedEditorView).
+	window  *[2]int
+	hintCap int
 	// helpTopic is the topic the help screen shows, scrolled to helpOffset; helpFrom is the screen it
 	// returns to.
-	helpTopic int
-	// hintCap, while a form is being fitted to the terminal, is how many lines its hint may take (see
-	// fittedEditorView); 0 outside of that.
-	hintCap int
-	// helpDetail, while set, is the text of the help screen instead of a topic: the whole hint of the form
-	// row that F1 was pressed on.
-	helpDetail string
+	helpTopic  int
 	helpOffset int
 	helpFrom   screen
 
@@ -654,7 +670,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer m.keepScrollPosition()
 	switch msg := msg.(type) {
 	case testDoneMsg:
-		m.finishTest(msg)
+		return m, m.finishTest(msg)
+	case suggestDoneMsg:
+		m.finishSuggest(msg)
 		return m, nil
 	case sourcesMsg:
 		return m, m.handleSources(msg)
@@ -1122,7 +1140,7 @@ func (m *Model) leaveScreen() tea.Cmd {
 		m.screen = m.leaveFrom
 		return nil
 	case screenHelp:
-		m.screen, m.helpDetail = m.helpFrom, ""
+		m.screen = m.helpFrom
 		return nil
 	case screenUpdate:
 		m.screen = m.updateFrom
@@ -1328,12 +1346,8 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if key.String() == "f1" {
-		m.openFieldHelp()
-		return nil
-	}
 	if key.String() == "f2" {
-		// F2 saves, or goes on to the next setup step, from any row, since enter on a choice row opens it.
+		// F2 saves, or goes on to the next setup step, from any row; enter never saves.
 		if m.wizard != nil {
 			m.setupNext()
 			return nil
@@ -1342,8 +1356,7 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	}
 	switch m.fields[m.focus].kind {
 	case fieldProvider, fieldChoice, fieldMultiChoice, fieldToolList:
-		// Every choice row opens its values on enter, space, and /, the way a provider row opens its table,
-		// rather than saving past it or going on to the next setup step.
+		// Every choice row opens its values on enter, space, and /, the way a provider row opens its table.
 		switch key.String() {
 		case "enter", " ", "/":
 			if m.fields[m.focus].kind == fieldProvider {
@@ -1376,6 +1389,11 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		case "enter", " ":
 			return m.runVaultActionField(m.fields[m.focus].action)
 		}
+	case fieldSecret:
+		// enter opens the masked prompt of a role row.
+		if key.String() == "enter" {
+			return m.secretRowKey(m.fields[m.focus].label, key)
+		}
 	}
 	if m.isPayloadForm() && m.payloadKey(key) {
 		return nil
@@ -1384,9 +1402,6 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		switch key.String() {
 		case "esc":
 			return m.requestLeave()
-		case "enter":
-			m.setupNext()
-			return nil
 		case "f3":
 			m.setupBack()
 			return nil
@@ -1405,7 +1420,11 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		m.moveFocus(-1)
 		return nil
 	case "enter":
-		return m.submit()
+		// A text row goes on to the next row; on the last one enter does nothing.
+		if m.hasNextField() {
+			m.moveFocus(1)
+		}
+		return nil
 	}
 
 	current := &m.fields[m.focus]
@@ -2188,11 +2207,11 @@ func connectionTestError(err error) string {
 	}
 	switch missing.Type {
 	case config.CredentialTypeKeyring:
-		return fmt.Sprintf("credential %q is missing %s; open Credentials, edit it, select %s, and press s "+
+		return fmt.Sprintf("credential %q is missing %s; open Credentials, edit it, select %s, and press enter "+
 			"to store it in the system keyring; the row says what to do if the keyring is locked or "+
 			"unreachable", missing.Credential, missing.Role, missing.Role)
 	case config.CredentialTypeVault:
-		return fmt.Sprintf("credential %q is missing %s; open Credentials, edit it, select %s, and press s "+
+		return fmt.Sprintf("credential %q is missing %s; open Credentials, edit it, select %s, and press enter "+
 			"to store it in the vault", missing.Credential, missing.Role, missing.Role)
 	}
 	return fmt.Sprintf("credential %q is missing %s; open Credentials and set the environment variable "+
@@ -2201,9 +2220,9 @@ func connectionTestError(err error) string {
 
 // finishTest accepts a result only while it is still the current one, so a cancelled test cannot report
 // back later.
-func (m *Model) finishTest(done testDoneMsg) {
+func (m *Model) finishTest(done testDoneMsg) tea.Cmd {
 	if !m.testing || done.id != m.testID {
-		return
+		return nil
 	}
 	m.testing = false
 	m.testID++
@@ -2214,14 +2233,63 @@ func (m *Model) finishTest(done testDoneMsg) {
 	if done.err != "" {
 		// Redaction happens before anything reaches the model, including an unexpected provider error.
 		m.fail = "Connection test could not run: " + m.redactor.Apply(done.err)
-		return
+		return nil
 	}
 	m.testClass = done.class
+	if done.class == provider.ClassOK {
+		return m.suggestTarget(m.testName)
+	}
+	return nil
+}
+
+// suggestTarget asks, after a successful test, for the target of a connection that has none. It runs like
+// the test, off the event loop; a failure only means there is no suggestion.
+func (m *Model) suggestTarget(name string) tea.Cmd {
+	if m.suggester == nil || len(m.cfg.Connections[name].TargetValues()) > 0 {
+		return nil
+	}
+	if m.cancelSuggest != nil {
+		m.cancelSuggest()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelSuggest = cancel
+	suggester := m.suggester
+	return func() tea.Msg {
+		target, err := suggester(ctx, name)
+		if err != nil {
+			target = ""
+		}
+		return suggestDoneMsg{name: name, target: strings.TrimSpace(target)}
+	}
+}
+
+// finishSuggest remembers a suggestion for a connection that is still unbound and says so on the status
+// line. Nothing is saved.
+func (m *Model) finishSuggest(done suggestDoneMsg) {
+	if m.quitting || done.target == "" || len(m.cfg.Connections[done.name].TargetValues()) > 0 {
+		return
+	}
+	if m.suggested == nil {
+		m.suggested = map[string]string{}
+	}
+	m.suggested[done.name] = done.target
+	m.status = "Suggested target " + done.target + "; edit the connection to bind it"
+}
+
+// suggestedTarget is the remembered suggestion of a connection that is still unbound.
+func (m *Model) suggestedTarget(name string) string {
+	if len(m.cfg.Connections[name].TargetValues()) > 0 {
+		return ""
+	}
+	return m.suggested[name]
 }
 
 // quit ends the editor. A running test is cancelled first, so its context never outlives the editor.
 func (m *Model) quit() tea.Cmd {
 	m.stopTest()
+	if m.cancelSuggest != nil {
+		m.cancelSuggest()
+	}
 	m.quitting = true
 	return tea.Quit
 }
@@ -2359,6 +2427,14 @@ func (m *Model) openEntry(name, source string) tea.Cmd {
 	m.focus = m.firstEditable()
 	m.applyFocus()
 	m.pristine = m.formState()
+	if m.section == sectionConnections && name != "" && source == "" {
+		// Set after pristine: the offered target counts as an unsaved edit the person adopts by saving.
+		if target := m.suggestedTarget(name); target != "" {
+			if f := m.field(targetsLabel); f != nil && len(f.entries) == 0 {
+				f.entries = []string{target}
+			}
+		}
+	}
 	if m.section == sectionCredentials && !m.isPayloadForm() && m.credentialType() == config.CredentialTypeKeyring {
 		return m.refreshSources(m.editedQuery())
 	}
@@ -2567,7 +2643,7 @@ func (m *Model) submit() tea.Cmd {
 	m.trimFields()
 	if m.section == sectionVault {
 		// The vault form has no name field, and its action rows already ran on their own enter, never
-		// deferred to here; F2 and enter on a text row save only the two timeouts (see vaultsettings.go).
+		// deferred to here; F2 saves only the two timeouts (see vaultsettings.go).
 		return m.requireAdmin(m.saveVault)
 	}
 	if m.section == sectionTokens {
@@ -2637,7 +2713,7 @@ func (m *Model) save(name string) tea.Cmd {
 		if credType == config.CredentialTypeVault {
 			where = placeVault
 		}
-		m.status = "Credential saved. Add the required provider secrets below: press s on each role to " +
+		m.status = "Credential saved. Add the required provider secrets below: press enter on each role to " +
 			"store it in " + where + "."
 		m.addWarning(logged)
 		return tea.Batch(cmd, m.autoApprove(before, direct))
@@ -2792,6 +2868,16 @@ func (m *Model) field(label string) *field {
 	return nil
 }
 
+// hasNextField reports whether a row that takes focus follows the focused one.
+func (m *Model) hasNextField() bool {
+	for _, f := range m.fields[m.focus+1:] {
+		if !f.readOnly && !f.hidden {
+			return true
+		}
+	}
+	return false
+}
+
 // moveFocus steps to the next field that can be edited. A read-only field is stepped over rather than
 // stopped on: stopping there would show a cursor on a field that swallows every key, which is the
 // contradiction this is here to remove. The field stays drawn and readable, it just cannot be entered.
@@ -2934,7 +3020,7 @@ const shortDescriptionLimit = 80
 
 // shortDescription is the part of a provider's description that fits a form: its first clause, or, where
 // that is still long, what stands before its first colon, or else its first words. A cut text ends in an
-// ellipsis; the whole text stays one key away (see openFieldHelp).
+// ellipsis.
 func shortDescription(text string) string {
 	ellipsis := ""
 	if i := strings.Index(text, ";"); i >= 0 {
@@ -3231,19 +3317,22 @@ func (m *Model) editorView() string {
 		} else {
 			b.WriteString(titleStyle.Render(what) + "\n\n")
 		}
-		moreHelp := false
 		for i, f := range m.fields {
 			if f.hidden {
+				continue
+			}
+			if m.window != nil && (i < m.window[0] || i > m.window[1]) {
+				if i == m.window[0]-1 || i == m.window[1]+1 {
+					b.WriteString(hintStyle.Render("  …") + "\n")
+				}
 				continue
 			}
 			b.WriteString(m.formRow(i == m.focus, f.label, m.renderField(f, i == m.focus)) + "\n")
 			// A read-only field can never be the one focused, so its hint would never show; it explains
 			// itself in its own value instead (see renderField), the way a read-only tool list already does.
 			if i == m.focus && !f.readOnly {
-				if hint := m.fieldHint(f); hint != "" {
-					shown, cut := m.limitedHint(hint)
-					b.WriteString(shown + "\n")
-					moreHelp = cut || m.fieldDetail(f) != hint
+				if hint := m.fieldDetail(f); hint != "" {
+					b.WriteString(m.limitedHint(hint) + "\n")
 				}
 			}
 			// A warning is not the hint of the field, and its cause (a validation problem, a wildcard target,
@@ -3258,18 +3347,18 @@ func (m *Model) editorView() string {
 		if m.section == sectionTokens && m.wizard == nil {
 			b.WriteString(m.tokenFormNotes())
 		}
-		keys := "tab move · " + formKeys
+		keys := "enter next · tab move · " + formKeys
 		switch m.fields[m.focus].kind {
 		case fieldChoice:
-			keys = "enter choose · left/right switch · tab move · " + choiceFormKeys
+			keys = "enter choose · left/right switch · tab move · " + formKeys
 		case fieldMultiChoice, fieldToolList:
-			keys = "enter tick · tab move · " + choiceFormKeys
+			keys = "enter open · tab move · " + formKeys
 		case fieldProvider:
-			keys = "enter choose provider in the table · tab move · " + choiceFormKeys
+			keys = "enter choose provider in the table · tab move · " + formKeys
 		case fieldTargets, fieldPaths:
-			keys = "enter edit list · right/left expand/collapse · tab move · " + choiceFormKeys
+			keys = "enter edit list · right/left expand/collapse · tab move · " + formKeys
 		case fieldVaultAction:
-			keys = "enter run · tab move · " + choiceFormKeys
+			keys = "enter run · tab move · " + formKeys
 		}
 		if m.isPayloadForm() {
 			if payloadKeys := m.payloadKeys(); payloadKeys != "" {
@@ -3278,21 +3367,17 @@ func (m *Model) editorView() string {
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
-				keys = "enter save credential first · tab move · " + leaveKeys
+				keys = "F2 save credential first · tab move · " + leaveKeys
 			} else {
-				keys = m.secretKeys() + " · " + keys
+				keys = m.secretKeys() + " · tab move · " + formKeys
 			}
 		}
 		if m.wizard != nil {
-			keys = strings.Replace(keys, formKeys, setupKeys(m.wizard.step, "enter"), 1)
-			keys = strings.Replace(keys, choiceFormKeys, setupKeys(m.wizard.step, "F2"), 1)
+			keys = strings.Replace(keys, formKeys, setupKeys(m.wizard.step), 1)
 		}
 		if m.section == sectionTokens && m.wizard == nil {
 			// A token is created, not saved: it goes to the vault, never into the configuration.
 			keys = strings.ReplaceAll(keys, " save", " create")
-		}
-		if moreHelp {
-			keys = fieldHelpKey + " more · " + keys
 		}
 		b.WriteString(m.hint(keys))
 	case screenSecret:
@@ -3388,14 +3473,11 @@ func (m *Model) editorView() string {
 	return b.String()
 }
 
-// formKeys ends the key line of every form: how it is saved and, in leaveKeys, the way out of it, which
-// asks before unsaved input is lost. On a choice row enter opens the values, so choiceFormKeys names F2,
-// which saves from every row.
+// formKeys ends the key line of every form: F2 saves from every row and, in leaveKeys, esc is the way out
+// of it, which asks before unsaved input is lost.
 const (
-	fieldHelpKey   = "F1"
-	leaveKeys      = "esc leave"
-	formKeys       = "enter save · " + leaveKeys
-	choiceFormKeys = "F2 save · " + leaveKeys
+	leaveKeys = "esc leave"
+	formKeys  = "F2 save · " + leaveKeys
 )
 
 // leaveView is the leave question. It names what would be lost and where the user was going, and offers
@@ -4202,34 +4284,48 @@ func (m *Model) indented(text string) string {
 	return m.indentedWith(hintStyle, text)
 }
 
-// The hint of the focused row takes at most maxHintLines lines, and fewer where the form would not fit the
-// terminal otherwise, but never fewer than minHintLines. A form must stay operable on the usual terminal
-// sizes whatever a provider writes or a list has grown to; what does not fit stays one key away (see
-// openFieldHelp).
-const (
-	maxHintLines = 6
-	minHintLines = 2
-)
-
-// fittedEditorView is editorView with the hint of the focused row cut only as far as the terminal needs. The
-// resize notice is for a terminal too small for the form itself, not for a form made large by a long hint.
+// fittedEditorView is editorView, and for a form taller than the terminal, only as many rows around the
+// focused one as fit. The hint of the focused row stands whole, so rows farther away give way first; only a
+// hint longer than the terminal itself is cut, as far as needed, so the form stays operable.
 func (m *Model) fittedEditorView() string {
-	defer func() { m.hintCap = 0 }()
-	if m.screen == screenForm {
-		for lines := maxHintLines; lines > minHintLines; lines-- {
-			m.hintCap = lines
-			if view := m.editorView(); m.viewFits(view) {
+	view := m.editorView()
+	if m.screen != screenForm || m.viewFits(view) {
+		return view
+	}
+	defer func() { m.window, m.hintCap = nil, 0 }()
+	lo, hi := 0, len(m.fields)-1
+	for lo < m.focus || hi > m.focus {
+		if lo < m.focus {
+			lo++
+		}
+		m.window = &[2]int{lo, hi}
+		if view = m.editorView(); m.viewFits(view) {
+			return view
+		}
+		if hi > m.focus {
+			hi--
+			m.window = &[2]int{lo, hi}
+			if view = m.editorView(); m.viewFits(view) {
 				return view
 			}
+		}
+	}
+	lines := strings.Count(view, "\n") + 1
+	for m.hintCap = lines; m.hintCap > minHintLines; m.hintCap-- {
+		if view = m.editorView(); m.viewFits(view) {
+			return view
 		}
 	}
 	m.hintCap = minHintLines
 	return m.editorView()
 }
 
-// limitedHint is indented, cut to maxHintLines; cut reports that text was left out, which the last line
-// then says with an ellipsis.
-func (m *Model) limitedHint(text string) (shown string, cut bool) {
+// minHintLines is the fewest lines a cut hint keeps.
+const minHintLines = 2
+
+// limitedHint is the hint of the focused row, wrapped into the workspace and, while hintCap is set, cut to
+// that many lines, the last one ending in an ellipsis.
+func (m *Model) limitedHint(text string) string {
 	indent, width := m.fit("    ")
 	var pieces []string
 	for _, line := range strings.Split(text, "\n") {
@@ -4241,12 +4337,7 @@ func (m *Model) limitedHint(text string) (shown string, cut bool) {
 			pieces = append(pieces, strings.TrimRight(piece, " "))
 		}
 	}
-	limit := maxHintLines
-	if m.hintCap > 0 {
-		limit = m.hintCap
-	}
-	if len(pieces) > limit {
-		cut = true
+	if limit := m.hintCap; limit > 0 && len(pieces) > limit {
 		pieces = pieces[:limit]
 		last := []rune(strings.TrimRight(pieces[limit-1], " ,;"))
 		for len(last) > 0 && lipgloss.Width(string(last)+"…") > width {
@@ -4257,7 +4348,7 @@ func (m *Model) limitedHint(text string) (shown string, cut bool) {
 	for i, piece := range pieces {
 		pieces[i] = indent + hintStyle.Render(piece)
 	}
-	return strings.Join(pieces, "\n"), cut
+	return strings.Join(pieces, "\n")
 }
 
 func (m *Model) indentedWith(style lipgloss.Style, text string) string {
@@ -4276,7 +4367,7 @@ func (m *Model) fieldHint(f field) string { return m.fieldHintText(f, false) }
 // fieldDetail is the whole hint of a row, which fieldHint may show shortened. The text is the same for
 // every terminal size.
 func (m *Model) fieldDetail(f field) string {
-	if f.detail != "" {
+	if f.detail != "" && f.kind != fieldSecret {
 		return f.detail
 	}
 	return m.fieldHintText(f, true)
@@ -4295,7 +4386,7 @@ func (m *Model) fieldHintText(f field, full bool) string {
 			}
 			if f.roleLead {
 				parts = append(parts,
-					"save this credential with enter first; you will stay here to add both secrets")
+					"save this credential with F2 first; you will stay here to add both secrets")
 			}
 			return strings.Join(parts, "; ")
 		}
@@ -4669,14 +4760,15 @@ func keyHintGroup(group string) string {
 // Run starts the editor on the given terminal streams. The updater may be nil, in which case the editor does
 // not look for a newer release. The restart may be nil, in which case an installed release waits for a
 // restart by hand.
-func Run(svc *manage.Service, store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor,
-	updater Updater, restart *Restart, in, out *os.File) error {
+func Run(svc *manage.Service, store *config.Store, tester Tester, suggester TargetSuggester, secrets Secrets,
+	redactor *redact.Redactor, updater Updater, restart *Restart, in, out *os.File) error {
 	// Read before anything else, so that no child of the editor inherits the handoff.
 	predecessor := takeHandoff()
 	model, err := New(svc, store, tester, secrets, redactor)
 	if err != nil {
 		return err
 	}
+	model.suggester = suggester
 	model.updater = updater
 	model.restart = restart
 	if predecessor != nil {

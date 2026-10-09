@@ -104,7 +104,7 @@ var messagesDelete = capability.Descriptor{
 		Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,
 		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
 	},
-	Provider: Provider,
+	Provider: Provider, RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer","minimum":1}},` +
 		`"required":["message_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
@@ -141,8 +141,9 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{messagesSend.ID},
 		}, {
 			ID: "messaging", Title: "Send, edit, and delete messages",
-			Description: "also edits and deletes messages the bot sent to the configured chat",
-			Tools:       []string{messagesSend.ID, messagesEdit.ID, messagesDelete.ID},
+			Description: "also edits messages and deletes messages in the configured chat: as admin also those of " +
+				"others, in private chats also incoming ones",
+			Tools: []string{messagesSend.ID, messagesEdit.ID, messagesDelete.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err

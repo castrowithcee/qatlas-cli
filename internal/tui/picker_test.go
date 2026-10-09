@@ -323,7 +323,7 @@ func TestF2SavesFromAChoiceRow(t *testing.T) {
 	pressNew(t, m)
 	typeText(t, m, "fresh")
 	focusField(t, m, "permissions")
-	if view := screenOf(m); !strings.Contains(view, "enter tick · tab move · F2 save") {
+	if view := screenOf(m); !strings.Contains(view, "enter open · tab move · F2 save") {
 		t.Errorf("the key line of a multiselect row does not name its keys:\n%s", view)
 	}
 	pump(t, m, "f2")

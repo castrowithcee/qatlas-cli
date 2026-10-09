@@ -118,8 +118,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"Credential Manager. It needs no setup and no exported variable. The vault is a directory beside\n" +
 			"the configuration, unencrypted or encrypted to a passphrase, for a machine without a usable\n" +
 			"keyring; storing its very first secret, here or with 'qatlas credential set', offers one, typed\n" +
-			"masked and twice, and leaving it empty keeps the vault unencrypted. On a role row, s stores the\n" +
-			"secret in the place the secrets row names; x removes it. On Linux, macOS, and Windows, storing or removing\n" +
+			"masked and twice, and leaving it empty keeps the vault unencrypted. On a role row, enter opens a\n" +
+			"masked prompt that stores the secret in the place the secrets row names; x removes it. On Linux, macOS, and Windows, storing or removing\n" +
 			"a vault secret here, or through the guided setup's own save, is handed on to a vault process that\n" +
 			"holds the vault unlocked outside this run, exactly the way 'qatlas credential set' and 'qatlas\n" +
 			"credential delete' already do; elsewhere, or when no such process runs, there is nothing to tell.\n" +
@@ -241,8 +241,9 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"directory and up/down switch between several; only directories are suggested, and with nothing\n" +
 			"typed the directory the TUI was started in. A path that does not exist yet is taken as typed,\n" +
 			"and qatlas config validate warns about it.\n\n" +
-			"enter on a text row saves the form, or goes on to the next step of the guided setup; F2 does\n" +
-			"the same from every row, choice rows included. The summary of the guided setup saves with enter.\n\n" +
+			"enter on a text row goes on to the next row, and on the last one does nothing; it never saves.\n" +
+			"F2 saves the form from every row, or goes on to the next step of the guided setup; the summary of\n" +
+			"the guided setup saves with F2 too. The hint under the focused row stands in full, wrapped.\n\n" +
 			"A connection's tools row decides between every tool its permissions allow, which is how a\n" +
 			"connection without a tools list behaves, and only selected tools. In the second mode the tool\n" +
 			"list opens the tools the chosen provider registers, with their effect, to tick. Nothing ticked\n" +
@@ -294,7 +295,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			}
 			store := config.NewStore(path, reg)
 			svc := manage.New(store, secrets, connlog.SurfaceTUI, opts.Redactor)
-			return classifyUserError(tui.Run(svc, store, connectionTester(store, opts, reg), secrets, opts.Redactor,
+			return classifyUserError(tui.Run(svc, store, connectionTester(store, opts, reg), targetSuggester(store, opts, reg), secrets, opts.Redactor,
 				tuiUpdater(opts, buildVersion), tuiRestart(), os.Stdin, os.Stdout))
 		},
 	}
@@ -339,6 +340,26 @@ func connectionTester(store *config.Store, opts *Options, reg *capability.Regist
 			return "", err
 		}
 		return reg.TestConnection(ctx, resolved, secrets, opts.Redactor)
+	}
+}
+
+// targetSuggester binds the editor to the registry's optional target suggestion, the way connectionTester
+// binds the test. The editor stays free of any provider.
+func targetSuggester(store *config.Store, opts *Options, reg *capability.Registry) tui.TargetSuggester {
+	return func(ctx context.Context, connection string) (string, error) {
+		cfg, err := store.Load()
+		if err != nil {
+			return "", err
+		}
+		resolved, err := cfg.Resolve(connection, "")
+		if err != nil {
+			return "", err
+		}
+		secrets, err := opts.resolver()
+		if err != nil {
+			return "", err
+		}
+		return reg.SuggestTarget(ctx, resolved, secrets, opts.Redactor)
 	}
 }
 
