@@ -53,28 +53,30 @@
 // no message holding it, and, when kChat reports one, the target channel; kChat offers no way to remove an
 // upload that is never attached.
 //
-// Creating, changing, or deleting teams, adding or removing team members, invitations, user changes,
-// profile pictures, previews and thumbnails, the custom emoji catalog, and webhooks are deliberately out of
-// scope: this provider lists the teams, channels, and direct and group channels a connection may reach,
-// reads the details and members of a bound team and, only when a connection's tools list names it, sets one
-// current member's team role (the invitation identifier is never read), reads channel details and the
-// public channels of a bound team, creates one confirmed channel in a bound team (only for a connection
-// without a channel allow-list, because a new channel cannot be inside one), changes the display name, purpose, header, or handle of one confirmed public or
-// private channel, lists the members of a public or private channel and the archived channels of a bound
-// team, adds confirmed users who are the token's own user or members of the channel's team and, only when a
-// connection's tools list names it, removes one member, sets one member's channel role, archives or restores
-// one channel, or switches one channel between public and private (never in a direct or group channel, see
-// openMemberChannel), opens one confirmed direct or group channel with members of the bound teams, reads
-// channel posts, single posts, threads, reactions, pinned posts, and the attachments of posts (writing one to
-// a released local directory), uploads one confirmed file for a message, reads, lists, and searches the users
-// of the bound teams and reads their presence, searches the messages, files, and public channels of a bound
-// team, sends or replies with exactly one confirmed message, optionally with own uploads attached, changes the
-// text of one confirmed message, adds one confirmed reaction of the token's own user, pins or unpins one
-// confirmed message, and, only when a connection's tools list names it, deletes one confirmed message or
-// removes one own reaction. kChat renders Markdown and mentions such as @channel in a message, so the text is
-// sent as written. Every value a listing or a read answers with arrives from the provider and is treated as
-// untrusted data: normalised into a stable envelope, passed through the output encoders, and never rendered,
-// executed, or stored.
+// Creating, changing, or deleting teams, adding or removing team members, invitations, changes to other
+// users, profile pictures, previews and thumbnails, the custom emoji catalog, and webhooks are deliberately
+// out of scope: this provider lists the teams, channels, and direct and group channels a connection may
+// reach, reads the details and members of a bound team and, only when a connection's tools list names it,
+// sets one current member's team role (the invitation identifier is never read), reads channel details and
+// the public channels of a bound team, creates one confirmed channel in a bound team (only for a connection
+// without a channel allow-list, because a new channel cannot be inside one), changes the display name,
+// purpose, header, or handle of one confirmed public or private channel, lists the members of a public or
+// private channel and the archived channels of a bound team, adds confirmed users who are the token's own
+// user or members of the channel's team and, only when a connection's tools list names it, removes one
+// member, sets one member's channel role, archives or restores one channel, or switches one channel between
+// public and private (never in a direct or group channel, see openMemberChannel), opens one confirmed direct
+// or group channel with members of the bound teams, reads channel posts, single posts, threads, reactions,
+// pinned posts, and the attachments of posts (writing one to a released local directory), uploads one
+// confirmed file for a message, reads, lists, and searches the users of the bound teams and reads their
+// presence, searches the messages, files, and public channels of a bound team, sends or replies with exactly
+// one confirmed message, optionally with own uploads attached, changes the text of one confirmed message,
+// adds one confirmed reaction of the token's own user, pins or unpins one confirmed message, and, only when a
+// connection's tools list names it, deletes one confirmed message or removes one own reaction. The token's
+// own presence, custom status, and four display profile fields are the only user data it changes, always for
+// the user read from users/me and never taken from an argument. kChat renders Markdown and mentions such as
+// @channel in a message, so the text is sent as written. Every value a listing or a read answers with arrives
+// from the provider and is treated as untrusted data: normalised into a stable envelope, passed through the
+// output encoders, and never rendered, executed, or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
 // no proactive spacing of its own; a 429 kChat itself reports is still classified and, when it names a
@@ -483,7 +485,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat: messages (channel, direct, group), search, files, reactions, pins, users and presence, and channels (read, create, rename, members, visibility, lifecycle) of bound teams, team roles",
+		Description:        "Infomaniak kChat for bound teams: messages, search, files, reactions, pins, users, presence, own status and profile, team roles, and channels with members, visibility, and lifecycle",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -538,13 +540,15 @@ func Register(reg *capability.Registry) error {
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
 				"a confirmed message, or a confirmed reply to an existing thread, to a reachable channel, " +
 				"uploads a confirmed file to such a channel, edits the text of a confirmed message, adds a " +
-				"confirmed own reaction, and pins or unpins a confirmed message; deleting a message or removing a " +
+				"confirmed own reaction, pins or unpins a confirmed message, and sets the own presence and custom " +
+				"status or clears the custom status; deleting a message or removing a " +
 				"reaction is never part of a profile",
 			Tools: []string{teamsList.ID, channelsList.ID, directList.ID, directOpen.ID, groupMessagesOpen.ID,
 				messagesList.ID, messagesThread.ID, messagesGet.ID, messagesSend.ID, messagesUpdate.ID,
 				messagesFiles.ID, filesInfo.ID, filesDownload.ID, filesUpload.ID, reactionsList.ID, reactionsAdd.ID,
 				pinsList.ID, messagesPin.ID, messagesUnpin.ID, usersGet.ID, usersList.ID, usersSearch.ID,
-				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID},
+				usersStatus.ID, statusSet.ID, customStatusSet.ID, customStatusClear.ID, messagesSearch.ID,
+				filesSearch.ID, channelsSearch.ID},
 		}, {
 			ID: "channel-admin", Title: "Manage channels",
 			Description: "reads the bound teams, their channels with details, and the public channels, and also " +
@@ -596,6 +600,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(usersList), Handler: capability.Handler(invokeUsersList)},
 		capability.Operation{Descriptor: withGroup(usersSearch), Handler: capability.Handler(invokeUsersSearch)},
 		capability.Operation{Descriptor: withGroup(usersStatus), Handler: capability.Handler(invokeUsersStatus)},
+		capability.Operation{Descriptor: withGroup(statusSet), Handler: capability.Handler(invokeStatusSet)},
+		capability.Operation{Descriptor: withGroup(customStatusSet), Handler: capability.Handler(invokeCustomStatusSet)},
+		capability.Operation{Descriptor: withGroup(customStatusClear), Handler: capability.Handler(invokeCustomStatusClear)},
+		capability.Operation{Descriptor: withGroup(profileUpdate), Handler: capability.Handler(invokeProfileUpdate)},
 		capability.Operation{Descriptor: withGroup(directList), Handler: capability.Handler(invokeDirectList)},
 		capability.Operation{Descriptor: withGroup(directOpen), Handler: capability.Handler(invokeDirectOpen)},
 		capability.Operation{Descriptor: withGroup(groupMessagesOpen), Handler: capability.Handler(invokeGroupMessagesOpen)},

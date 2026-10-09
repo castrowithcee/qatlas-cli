@@ -44,6 +44,11 @@ const (
 	propTrashName     = "trashname"
 	propTrashOrigin   = "trashorigin"
 	propTrashDeleted  = "trashdeleted"
+	propTagID         = "tagid"
+	propTagName       = "tagname"
+	propTagVisible    = "tagvisible"
+	propTagAssignable = "tagassignable"
+	propTagCanAssign  = "tagcanassign"
 )
 
 // wantedProps maps the requested properties to their keys. Every other property of an answer is dropped,
@@ -57,6 +62,11 @@ var wantedProps = map[xml.Name]string{
 	{Space: ocNS, Local: "fileid"}:                     propFileID,
 	{Space: ocNS, Local: "size"}:                       propSize,
 	{Space: ocNS, Local: "permissions"}:                propPermissions,
+	{Space: ocNS, Local: "id"}:                         propTagID,
+	{Space: ocNS, Local: "display-name"}:               propTagName,
+	{Space: ocNS, Local: "user-visible"}:               propTagVisible,
+	{Space: ocNS, Local: "user-assignable"}:            propTagAssignable,
+	{Space: ocNS, Local: "can-assign"}:                 propTagCanAssign,
 	{Space: ncNS, Local: "trashbin-filename"}:          propTrashName,
 	{Space: ncNS, Local: "trashbin-original-location"}: propTrashOrigin,
 	{Space: ncNS, Local: "trashbin-deletion-time"}:     propTrashDeleted,

@@ -161,6 +161,24 @@ made between the ETag check and the `MOVE` is not detected. An unclear outcome i
 applied and never repeated. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore`
 are in none.
 
+## System tags
+
+`nextcloud.systemtags.list` reads the visible system tags of the instance (developer manual, WebDAV system
+tags: `remote.php/dav/systemtags`); the catalog belongs to the whole instance, so the tool needs an `account`
+target and refuses without one before any credential access. `nextcloud.filetags.list`, `filetags.add`, and
+`filetags.remove` work on one file or folder below the connection root and need a `folder` target. The
+argument is always the path, never the root itself and never a file ID: Qatlas stats the path first and
+addresses the relations (`remote.php/dav/systemtags-relations/files/<file_id>`) only under the file ID of that
+answer. A `tag_id` is digits only, as `systemtags.list` reports it.
+
+Only visible tags are ever listed or touched; a listing reports at most 200 tags and marks a cut with
+`truncated`. `assignable` is true when the identity may assign the tag. Tags are only assigned and removed
+here, never created, changed, or deleted. `filetags.add` and `filetags.remove` need `confirm`, read the tag
+once after the stat, and refuse an invisible or non-assignable tag without a change request; then they send
+exactly one `PUT` or `DELETE`. A tag that is already assigned, or not assigned on removal, is a clear error. An
+unclear outcome is reported as possibly applied, to be checked with `filetags.list`, and never repeated.
+`filetags.list` is in the setup profiles `read` and `write`; `systemtags.list`, `add`, and `remove` are in none.
+
 ## Local files
 
 `nextcloud.files.create` and `nextcloud.files.update` take exactly one of `content_base64` (up to 4 MiB) or
