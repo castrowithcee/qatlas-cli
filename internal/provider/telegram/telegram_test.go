@@ -106,8 +106,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 41 {
-		t.Fatalf("operation count = %d, want forty-one", len(operations))
+	if len(operations) != 43 {
+		t.Fatalf("operation count = %d, want forty-three", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {

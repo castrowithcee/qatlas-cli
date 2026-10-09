@@ -53,7 +53,7 @@ const (
 	noteIDSchema     = `{"type":"string","minLength":1,"maxLength":18,"pattern":"^[1-9][0-9]*$","x-form":"a note id of notes.list"}`
 	noteCursorSchema = `{"type":"string","minLength":1,"maxLength":256,"pattern":"^[A-Za-z0-9_.,:=+/~-]+$","x-form":"the next_cursor of the previous notes.list"}`
 	categorySchema   = `{"type":"string","minLength":1,"maxLength":1024}`
-	noteSchema       = `{"type":"object","properties":{"id":{"type":"string"},"title":{"type":"string"},"category":{"type":"string"},` +
+	noteItemSchema   = `{"type":"object","properties":{"id":{"type":"string"},"title":{"type":"string"},"category":{"type":"string"},` +
 		`"favorite":{"type":"boolean"},"readonly":{"type":"boolean"},"modified_at":{"type":"string"},"etag":{"type":"string"},` +
 		`"truncated":{"type":"boolean"}},"required":["id","title","category","favorite","readonly"],"additionalProperties":false}`
 )
@@ -68,7 +68,7 @@ var notesList = capability.Descriptor{
 	Tags: []string{"nextcloud", "notes", "list"}, Risk: notesReadRisk(), Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"category":` + categorySchema + `,"chunk_size":` +
 		`{"type":"integer","minimum":1,"maximum":200},"chunk_cursor":` + noteCursorSchema + `},"additionalProperties":false}`),
-	OutputSchema: json.RawMessage(`{"type":"object","properties":{"notes":{"type":"array","items":` + noteSchema + `},` +
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"notes":{"type":"array","items":` + noteItemSchema + `},` +
 		`"count":{"type":"integer"},"truncated":{"type":"boolean"},"next_cursor":{"type":"string"}},` +
 		`"required":["notes","count","truncated"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{

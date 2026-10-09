@@ -242,18 +242,19 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 41 || descriptors[0].ID != "nextcloud.deckboards.get" ||
+	if len(descriptors) != 44 || descriptors[0].ID != "nextcloud.deckboards.get" ||
 		descriptors[3].ID != "nextcloud.deckstacks.list" || descriptors[4].ID != "nextcloud.favorites.list" ||
 		descriptors[8].ID != "nextcloud.files.favorite" || descriptors[12].ID != "nextcloud.files.search" ||
 		descriptors[15].ID != "nextcloud.filetags.add" || descriptors[17].ID != "nextcloud.filetags.remove" ||
 		descriptors[19].ID != "nextcloud.folders.delete" || descriptors[20].ID != "nextcloud.noteattachments.get" ||
 		descriptors[22].ID != "nextcloud.notes.list" || descriptors[23].ID != "nextcloud.notesettings.get" ||
-		descriptors[26].ID != "nextcloud.shares.list" ||
-		descriptors[27].ID != "nextcloud.systemtags.create" || descriptors[29].ID != "nextcloud.systemtags.list" ||
-		descriptors[30].ID != "nextcloud.systemtags.update" || descriptors[31].ID != "nextcloud.talkmessages.list" ||
-		descriptors[34].ID != "nextcloud.talkrooms.list" || descriptors[35].ID != "nextcloud.trash.delete" ||
-		descriptors[37].ID != "nextcloud.trash.restore" || descriptors[38].ID != "nextcloud.versions.get" ||
-		descriptors[40].ID != "nextcloud.versions.restore" {
+		descriptors[25].ID != "nextcloud.shares.create" ||
+		descriptors[28].ID != "nextcloud.shares.list" || descriptors[29].ID != "nextcloud.shares.update" ||
+		descriptors[30].ID != "nextcloud.systemtags.create" || descriptors[32].ID != "nextcloud.systemtags.list" ||
+		descriptors[33].ID != "nextcloud.systemtags.update" || descriptors[34].ID != "nextcloud.talkmessages.list" ||
+		descriptors[37].ID != "nextcloud.talkrooms.list" || descriptors[38].ID != "nextcloud.trash.delete" ||
+		descriptors[40].ID != "nextcloud.trash.restore" || descriptors[41].ID != "nextcloud.versions.get" ||
+		descriptors[43].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
@@ -283,6 +284,10 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		for _, forbidden := range []string{
 			"base_url", "instance", "user", "password", "root", "href", "depth", "method", "url",
 		} {
+			// The share type enum of a new share names the recipient kind "user".
+			if forbidden == "user" && descriptor.ID == sharesCreate.ID {
+				continue
+			}
 			if strings.Contains(string(descriptor.InputSchema), forbidden) {
 				t.Errorf("the input schema of %s offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}

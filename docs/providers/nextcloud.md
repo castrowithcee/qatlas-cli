@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads, Deck, Talk, and note reads, typed targets, connection
-  permissions, and safety boundaries.
+  Describes Nextcloud file operations, share reads and management, Deck, Talk, and note reads, typed targets,
+  connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -50,9 +50,7 @@ identity reaches) or `kind/ID`:
   Files tools; without one they refuse locally, before any credential access or request.
 - `calendar` or `calendar/URI`, `addressbook` (all but the system address book) or `addressbook/URI`,
   `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric).
-- `notes` (all notes of the identity) or `notes/CATEGORY` (that category and everything below it, such as
-  `Work/Plans`; see Notes); may be listed more than once. Without a `notes` target the Notes tools refuse
-  locally, before any credential access or request.
+- `notes` or `notes/CATEGORY` (that category and everything below it, such as `Work/Plans`; see Notes).
 - `account`: the account-wide and instance-wide reach of the identity (notifications, activity, search,
   directory, incoming shares, system tag catalog and its administration).
 - `admin`: provisioning reads; only as the sole target of a connection.
@@ -122,7 +120,7 @@ that the path must be stat-ed and the favorites listed before repeating; Qatlas 
 
 ## Shares
 
-The tool group `shares` reads sharing. `nextcloud.shares.list` and `nextcloud.shares.get` (profiles `read` and
+The tool group `shares` reads and manages sharing. `nextcloud.shares.list` and `nextcloud.shares.get` (profiles `read` and
 `write`) need a `folder` target. A share counts only when its item lies at or below the root: the `path` of a
 share the identity owns, or the `file_target` of an incoming one (`shared_with_me`) in the Files tree of the
 identity. `list` drops every other share; `get` answers one outside the root exactly like a missing one. A share
@@ -143,7 +141,24 @@ unknown types, whose identifier may be an access token. It asks for at most 50 c
 10), never uses the global lookup server, and is in no setup profile. Without an `account` target it refuses
 locally, before any credential access or request.
 
-Sharing is read through the OCS API of the Sharing app (`/ocs/v2.php/apps/files_sharing/api/v1`), with the same
+`nextcloud.shares.create`, `nextcloud.shares.update`, and `nextcloud.shares.delete` need a `folder` target, a
+confirmation, and a tools list; no profile contains them. `create` shares one existing item below the root, never
+the root itself, with one existing user or group (`type` `user` or `group`; find IDs with `sharees.search`).
+Reading is always granted; `update`, `create`, `delete`, and `share` are flags that default to false and
+Qatlas turns into the permission bitmask. Optional are `expires_at` (a date) and `note`. Links, e-mail, federated,
+team, and Talk shares cannot be created or changed, and no password or label is set. `update` changes the
+rights, expiry, or note of a `user` or `group` share the identity made; rights not given keep their value.
+`delete` revokes any share the identity made below the root, whatever its type. Shares made to the identity
+are neither changed nor revoked.
+
+`update` and `delete` read the share once and refuse without a change a share outside the root, a share that
+is not the identity's own, and (for `update`) any other type; the refusal names no path. They then send exactly
+one request. After an unclear outcome (timeout, aborted connection, a 5xx or unreadable answer) the error says
+the change may have been applied and to check `shares.list` or `shares.get` before repeating; Qatlas never
+repeats. A refusal by the instance (for example a required expiry or disabled sharing) is a clear error
+without the text of the instance.
+
+Sharing is read and changed through the OCS API of the Sharing app (`/ocs/v2.php/apps/files_sharing/api/v1`), with the same
 basic authentication as WebDAV and without redirects. The client in `ocs.go` takes fixed path segments and
 typed query values and accepts an answer only when the envelope reports `ok` and 200; it forwards no message
 of the instance.
@@ -208,17 +223,15 @@ are in none.
 
 ## Notes
 
-The tool group `notes` reads the Notes app and is in the setup profile `notes-read`, which holds exactly its
-tools and changes nothing. Notes are personal data and everything the tools return is untrusted.
-
-A `notes/CATEGORY` target binds the notes whose category equals `CATEGORY` or lies below it; the comparison is
-exact and case-sensitive. The category filter of the Notes API misses sub-categories, so the list is read
-without a server-side filter and every note outside the binding is dropped locally: a foreign note never
-appears and is not counted. Because the binding is applied after the server has chosen the chunk, a chunk may
-be empty while a next cursor is still present. Reading a note outside the binding, or an attachment of one, is
-answered like a missing note, and no attachment request is sent for it. An attachment is addressed relative to
-its note and cannot leave it; it is returned inline or written with `local_path` as `files.get` does. The
-Notes settings are account-wide and need any `notes` target.
+The tool group `notes` reads the Notes app; the setup profile `notes-read` holds exactly its tools. Without a
+`notes` target the tools refuse locally, before any credential access or request. Notes are personal data, and
+everything the tools return is untrusted. A `notes/CATEGORY` target binds the notes whose category equals
+`CATEGORY` or lies below it, compared exactly. The category filter of the Notes API misses sub-categories, so
+the list is read unfiltered and every foreign note is dropped locally, never shown or counted; a chunk may
+therefore be empty while a next cursor is present. A foreign note, or an attachment of one, reads like a
+missing note, and no attachment request is sent. An attachment is addressed relative to its note and cannot
+leave it; it is returned inline or written with `local_path` as `files.get` does. The account-wide Notes
+settings need any `notes` target.
 
 ## System tags
 
