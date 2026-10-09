@@ -26,9 +26,10 @@ before the credential is read when the target is missing. Methods that accept on
 `@username` chat locally.
 
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the update
-tool to `updates`. A group never changes a tool ID, a permission, or a tools list. The base URL must be a plain
-`https` URL with a host and without user, query, or fragment, with no exception for local addresses, and
-redirects are never followed. `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
+tool to `updates`, the bot and webhook tools to `bot`. A group never changes a tool ID, a permission, or a tools
+list. The base URL must be a plain `https` URL with a host and without user, query, or fragment, with no
+exception for local addresses, and redirects are never followed. `config validate` rejects any other base URL.
+Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
 they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
@@ -60,11 +61,23 @@ bot token, so rotating the token invalidates every earlier reference. It is sign
 accepts a reference checks its format and target before the credential is read and its signature before any
 request.
 
+## Bot identity and webhook status
+
+`telegram.bot.get` (`read`) shows the identity of the bot behind the token: `id`, `username`, `first_name`,
+`can_join_groups`, `can_read_all_group_messages`, and `supports_inline_queries`. It runs on every connection
+and needs no `bot` target, since it concerns only the connection's own token.
+
+`telegram.webhook.get` (`read`) shows whether a webhook is active (`has_webhook`), the number of updates
+waiting (`pending_update_count`), and, when present, the time of the last delivery error (`last_error_date`).
+It needs the `bot` target and is refused before the credential is read without it. The webhook URL and every
+other field of Telegram's answer are never returned. It is part of no setup profile.
+
 ## Setup profiles
 
 The terminal editor starts a new connection on the setup profile `send`, which ticks `[create]` and
 `[telegram.messages.send]`: the read tools expose incoming message content, while a send reaches only a bound
-chat, each one after confirmation. The profile `read` ticks `[read]` and `[telegram.updates.list]`. The
-profile `messaging` also ticks `update`, `delete`, `telegram.messages.edit`, and `telegram.messages.delete`. A
-profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every
-tick can be changed before saving, and a saved connection never follows a profile.
+chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`, and
+`[telegram.bot.get]`. The profile `messaging` also ticks `update`, `delete`, `telegram.messages.edit`, and
+`telegram.messages.delete`. A profile is a visible starting selection, not a role: only the ticked
+`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
+follows a profile.
