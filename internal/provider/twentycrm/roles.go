@@ -20,8 +20,8 @@ const (
 	roleLabelMax       = 100
 	roleDescriptionMax = 500
 
-	rolesRightMessage = "the API key needs the Twenty permission \"Roles\" to read roles; that permission also " +
-		"allows changing roles and permissions, so use a connection with a key of its own for it"
+	rolesRightMessage = "the API key needs the Twenty permission \"Roles\" to read or change roles; that " +
+		"permission also covers role permissions, so use a connection with a key of its own for it"
 )
 
 // rolesDocument is the only document of roles.list. It takes no variables and selects only identifiers from
