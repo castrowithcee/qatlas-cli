@@ -92,6 +92,21 @@ func handoverHelper(mode, socket string) {
 	os.Exit(0)
 }
 
+// probeListener passes the handover of the listener it wraps through.
+type probeListener struct {
+	handoverListener
+	net.Listener
+	probe *writeProbe
+}
+
+func (l *probeListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	return l.probe.wrap(c), nil
+}
+
 // handoverFixture is an unlocked vault on disk served by a server in this process, which keeps its log and
 // may hand over, with a signed release whose archive holds the program the server was started from.
 type handoverFixture struct {
@@ -103,6 +118,7 @@ type handoverFixture struct {
 	socket   string
 	program  string
 	replaced atomic.Bool
+	probe    *writeProbe
 	release  ReleaseFiles
 	scope    vault.Scope
 	// mode is the helper mode a successor is started in; starts counts the successors started, and
@@ -160,7 +176,8 @@ func newHandoverFixture(t *testing.T) *handoverFixture {
 	f.server.KeepLog(f.vault.Dir(), 90)
 	f.server.ownProgram = func() (string, bool) { return f.program, f.replaced.Load() }
 	f.server.AllowHandover(f.vault.Dir(), []ssh.PublicKey{signer.PublicKey()}, f.start)
-	f.served = serve(t, f.server, l)
+	f.probe = &writeProbe{server: f.server}
+	f.served = serve(t, f.server, &probeListener{handoverListener: l.(handoverListener), Listener: l, probe: f.probe})
 	f.client = &Client{Path: f.socket, Recipient: key.Recipient().String(), Verify: allow}
 	return f
 }
@@ -472,6 +489,9 @@ func TestHandoverPrepareLocksWhenTheVaultSaysSo(t *testing.T) {
 	if err != nil || behaviour != vault.UpdateLock || h != nil {
 		t.Fatalf("PrepareHandover() = %q, %v, %v, want lock", behaviour, h, err)
 	}
+	if !f.probe.stoppingAtAnswer.Load() {
+		t.Fatalf("the lock was answered before the server stopped")
+	}
 	f.assertLocked()
 	if n := f.starts.Load(); n != 0 {
 		t.Fatalf("%d successors were started", n)
@@ -518,6 +538,9 @@ func TestHandoverFallsBackWhenTheSuccessorCannotTakeOver(t *testing.T) {
 	pid, err := h.Commit(context.Background())
 	if !errors.Is(err, ErrHandover) || pid != 0 {
 		t.Fatalf("Commit() = %d, %v, want ErrHandover", pid, err)
+	}
+	if !f.probe.stoppingAtAnswer.Load() {
+		t.Fatalf("the failure was answered before the server stopped")
 	}
 	if n := f.starts.Load(); n != 1 {
 		t.Fatalf("%d successors were started, want 1", n)

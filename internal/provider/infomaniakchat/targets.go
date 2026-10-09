@@ -132,8 +132,8 @@ func validMattermostID(value string) bool {
 // selectChannel checks a channel_id argument against the connection's local scope before any secret is
 // resolved and before any request is sent. A channel outside a configured channel allow-list is refused as
 // an invalid request, never as a provider failure, because the connection's own configuration decided
-// against it. Whether the channel truly belongs to one of the bound teams is confirmed later, live, against
-// the instance: local configuration alone proves nothing about what a channel_id really resolves to, see
+// against it. Whether the channel is truly inside the bound teams is confirmed later, live, against the
+// instance: local configuration alone proves nothing about what a channel_id really resolves to, see
 // (*Client).verifyChannelScope.
 func selectChannel(resolved *config.Resolved, channelID string) error {
 	bound, err := boundScope(resolved)

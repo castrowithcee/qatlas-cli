@@ -233,12 +233,6 @@ func (c *Client) SearchMessages(ctx context.Context, input *searchArguments) (*S
 		HasMore: len(list.Order) >= input.Limit, Count: len(entries)}, nil
 }
 
-// searchedFileJSON is a file hit; the search is the one answer that names the channel of a file.
-type searchedFileJSON struct {
-	fileJSON
-	ChannelID string `json:"channel_id"`
-}
-
 func invokeFilesSearch(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	input, client, err := prepareSearch(ctx, "search files", resolved, secrets, red, raw, "terms")
@@ -257,8 +251,8 @@ func (c *Client) SearchFiles(ctx context.Context, input *searchArguments) (*Sear
 		return nil, err
 	}
 	var list struct {
-		Order     []string                    `json:"order"`
-		FileInfos map[string]searchedFileJSON `json:"file_infos"`
+		Order     []string            `json:"order"`
+		FileInfos map[string]fileJSON `json:"file_infos"`
 	}
 	path := "/api/v4/teams/" + url.PathEscape(input.TeamID) + "/files/search"
 	if err := c.do(ctx, op, http.MethodPost, path, nil, input.body(), &list, false); err != nil {
@@ -271,7 +265,7 @@ func (c *Client) SearchFiles(ctx context.Context, input *searchArguments) (*Sear
 			reachable[file.ChannelID] == nil {
 			continue
 		}
-		entries = append(entries, fileEntryOf(file.fileJSON))
+		entries = append(entries, fileEntryOf(file))
 	}
 	return &SearchedFiles{TeamID: input.TeamID, Files: entries, Page: input.Page,
 		HasMore: len(list.Order) >= input.Limit, Count: len(entries)}, nil

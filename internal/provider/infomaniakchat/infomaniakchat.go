@@ -3,32 +3,32 @@
 // /api/v4/... REST surface Mattermost documents, authenticated with a bearer token: an Infomaniak Manager API
 // token with the kChat scope, or a bot token from the kChat interface, as the official kChat MCP server
 // (github.com/Infomaniak/mcp-server-kchat) documents (developer.infomaniak.com/openapi.json, operations
-// GetTeamsForUser, GetChannel, GetChannelsForTeamForUser, GetPostsForChannel, GetPost, GetPostThread,
-// CreatePost, PatchPost, and DeletePost, GetReactions, SaveReaction, and DeleteReaction, GetUser,
-// GetUserByUsername, GetUsers, SearchUsers, GetTeamMembersByIds, and GetUsersStatusesByIds,
-// GetFileInfosForPost, GetFileInfo, and GetFile, and SearchPosts, SearchFiles, and SearchChannels, all marked
-// x-auth-user with the bearerAuth security scheme). A kChat instance's base URL is always the team's own name
-// as the one DNS label directly below kchat.infomaniak.com, never an arbitrary host: the MCP server builds
-// every request from exactly that shape, https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider
-// accepts no other host, see parseInstance.
+// GetTeamsForUser, GetChannel, GetChannelMembers, GetChannelsForTeamForUser, CreateDirectChannel,
+// CreateGroupChannel, GetPostsForChannel, GetPost, GetPostThread, CreatePost, PatchPost, and DeletePost,
+// GetReactions, SaveReaction, and DeleteReaction, GetUser, GetUserByUsername, GetUsers, SearchUsers,
+// GetTeamMembersByIds, and GetUsersStatusesByIds, GetFileInfosForPost, GetFileInfo, and GetFile, SearchPosts,
+// SearchFiles, and SearchChannels, all marked x-auth-user with the bearerAuth security scheme). A kChat
+// instance's base URL is always the team's own name as the one DNS label directly below kchat.infomaniak.com,
+// never an arbitrary host: the MCP server builds every request from exactly that shape,
+// https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider accepts no other host, see parseInstance.
 //
 // A connection binds exactly one kChat instance, through its configured base URL, and one or more teams of it
-// (team/TEAM_ID, repeatable) plus, optionally, a narrower allow-list of channels of those teams
-// (channel/CHANNEL_ID, repeatable); without a channel allow-list, every channel of the bound teams the token
-// can reach is reachable. This mirrors the kDrive provider's account-plus-drive boundary for the same reason:
-// a single kChat token can reach several teams, which matters for a person who holds tokens, or is a member
-// of teams, of several customers. A channel_id argument outside a configured channel allow-list is refused
-// locally, before any request is sent; every operation that names a channel_id directly (messages.list,
-// messages.send, users.list, users.search) also confirms with kChat's own channel detail endpoint, in one
-// extra request, that the channel actually belongs to one of the bound teams, and is refused before the
-// matching endpoint is reached when it does not. Every operation that names a post_id (messages.thread,
-// messages.get, messages.files, messages.update, messages.delete, and the reactions tools) reads the post
-// first and binds it to its channel the same way, see verifyPostScope; the searches (messages.search,
-// files.search, channels.search) read the token's channels of the team once, see reachableChannels, and drop
-// every hit outside that set, so direct and group messages, other teams, and channels outside the allow-list
-// never show up; a message reply additionally confirms
-// that its root post belongs to the same channel before it is ever sent. Rejecting an out-of-scope channel or
-// post never carries a message's text into an error or a log.
+// (team/TEAM_ID, repeatable) plus, optionally, a narrower allow-list of channels (channel/CHANNEL_ID,
+// repeatable); without a channel allow-list, every channel of the bound teams the token can reach is
+// reachable, and so is every direct or group channel whose other participants are all live members of a bound
+// team. This mirrors the kDrive provider's account-plus-drive boundary for the same reason: a single kChat
+// token can reach several teams, which matters for a person who holds tokens, or is a member of teams, of
+// several customers. A channel_id argument outside a configured channel allow-list is refused locally, before
+// any request is sent; every operation that names a channel_id directly (messages.list, messages.send,
+// users.list, users.search) also confirms live, see verifyChannelScope, that the channel belongs to a bound
+// team or is a direct or group channel with their members only, and is refused before the matching endpoint
+// is reached when it does not. Every operation that names a post_id (messages.thread, messages.get,
+// messages.files, messages.update, messages.delete, and the reactions tools) reads the post first and binds
+// it to its channel the same way, see verifyPostScope; the searches (messages.search, files.search,
+// channels.search) read the token's channels of the team once, see reachableChannels, and drop every hit
+// outside that set, so direct and group messages, other teams, and channels outside the allow-list never show
+// up; a message reply additionally confirms that its root post belongs to the same channel before it is ever
+// sent. Rejecting an out-of-scope channel or post never carries a message's text into an error or a log.
 //
 // A file is reachable only through the post it is attached to: files.info and files.download read the file's
 // info first and bind its post_id the same way; a file without a post is refused before any content is
@@ -45,20 +45,27 @@
 // are separate Infomaniak products with their own authentication and their own providers, see the kDrive
 // provider's package doc for why they are not bundled together.
 //
-// Team management, channel membership, visibility and archiving of channels, direct messages, user changes,
-// profile pictures, file uploads, previews and thumbnails, the custom emoji catalog, and webhooks are
-// deliberately out of scope: this provider lists the teams and channels a connection may reach, reads channel
+// An upload is one multipart request that Qatlas builds itself, with only the channel and one file from a
+// released local path or small inline content; its channel is bound like a message's. A file created that way
+// belongs to no message, so a message attaches it only after its info shows the token's own user as uploader,
+// no message holding it, and, when kChat reports one, the target channel; kChat offers no way to remove an
+// upload that is never attached.
+//
+// Team management, channel membership, visibility and archiving of channels, user changes, profile pictures,
+// previews and thumbnails, the custom emoji catalog, and webhooks are deliberately out of scope: this
+// provider lists the teams, channels, and direct and group channels a connection may reach, reads channel
 // details and the public channels of a bound team, creates one confirmed channel in a bound team (only for a
 // connection without a channel allow-list, because a new channel cannot be inside one), changes the display
-// name, purpose, header, or handle of one confirmed public or private channel, reads channel posts, single
-// posts, threads, reactions, and the attachments of posts (writing one to a released local directory), reads,
-// lists, and searches the users of the bound teams and reads their presence, searches the messages, files,
-// and public channels of a bound team, sends or replies with exactly
-// one confirmed message, changes the text of one confirmed message, adds one confirmed reaction of the
-// token's own user, and, only when a connection's tools list names it, deletes one confirmed message or
-// removes one own reaction. kChat renders Markdown and mentions such as @channel in a message, so the text
-// is sent as written. Every value a listing or a read answers with arrives from the provider and is treated
-// as untrusted data: normalised into a stable envelope, passed through the output encoders, and never
+// name, purpose, header, or handle of one confirmed public or private channel, opens one confirmed direct or
+// group channel with members of the bound teams, reads channel posts, single posts, threads, reactions, and
+// the attachments of posts (writing one to a released local directory), uploads one confirmed file for a
+// message, reads, lists, and searches the users of the bound teams and reads their presence, searches the
+// messages, files, and public channels of a bound team, sends or replies with exactly one confirmed message,
+// optionally with own uploads attached, changes the text of one confirmed message, adds one confirmed
+// reaction of the token's own user, and, only when a connection's tools list names it, deletes one confirmed
+// message or removes one own reaction. kChat renders Markdown and mentions such as @channel in a message, so
+// the text is sent as written. Every value a listing or a read answers with arrives from the provider and is
+// treated as untrusted data: normalised into a stable envelope, passed through the output encoders, and never
 // rendered, executed, or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
@@ -124,6 +131,7 @@ func itoa(n int) string { return strconv.Itoa(n) }
 // connection.
 type Client struct {
 	scope   scope
+	self    string // own user ID, read at most once per client
 	origin  string
 	auth    string
 	http    *http.Client
@@ -240,6 +248,13 @@ const uncertain = "; the message may have been sent, read the channel before sen
 const (
 	uncertainUpdate = "; the message may have been changed, read it before changing it again"
 	uncertainDelete = "; the message may have been deleted, read it before deleting it again"
+	uncertainOpen   = "; the channel may have been opened, list the direct channels before opening it again"
+)
+
+// The refusals of a channel outside the boundary. Neither names the channel or a participant.
+const (
+	channelOutOfScope = "channel_id belongs to a team outside the targets of this connection"
+	directOutOfScope  = "channel_id is a direct or group channel outside the targets of this connection"
 )
 
 // do sends one bounded request below the instance origin, with a JSON body when body is not nil, and
@@ -259,9 +274,6 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 // suffix marks a read.
 func (c *Client) doWith(ctx context.Context, op, method, path string, query url.Values, body any, out any,
 	suffix string) error {
-	if err := c.limiter.Wait(ctx); err != nil {
-		return provider.Waited(op, "kChat", err)
-	}
 	var payload []byte
 	if body != nil {
 		encoded, err := json.Marshal(body)
@@ -270,26 +282,49 @@ func (c *Client) doWith(ctx context.Context, op, method, path string, query url.
 		}
 		payload = encoded
 	}
+	var reqBody io.Reader
+	contentType := ""
+	if payload != nil {
+		reqBody, contentType = bytes.NewReader(payload), "application/json"
+	}
+	return c.exchange(ctx, c.http, op, method, path, query, rawBody{reader: reqBody, length: int64(len(payload)),
+		contentType: contentType}, out, suffix)
+}
+
+// rawBody is a request body that is already built: the reader, its exact length, and the fixed content type
+// Qatlas itself chose. A nil reader sends no body.
+type rawBody struct {
+	reader      io.Reader
+	length      int64
+	contentType string
+}
+
+// exchange sends one bounded request with the given client and decodes the answer; it is the one place a
+// request leaves this provider.
+func (c *Client) exchange(ctx context.Context, hc *http.Client, op, method, path string, query url.Values,
+	body rawBody, out any, suffix string) error {
+	if err := c.limiter.Wait(ctx); err != nil {
+		return provider.Waited(op, "kChat", err)
+	}
 	endpoint := c.origin + path
 	if len(query) > 0 {
 		endpoint += "?" + query.Encode()
 	}
-	var reqBody io.Reader
-	if payload != nil {
-		reqBody = bytes.NewReader(payload)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, endpoint, reqBody)
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, body.reader)
 	if err != nil {
 		return providerError(op, "the request could not be built")
+	}
+	if body.reader != nil {
+		req.ContentLength = body.length
 	}
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "qatlas-cli")
-	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if body.reader != nil {
+		req.Header.Set("Content-Type", body.contentType)
 	}
 
-	response, err := c.http.Do(req)
+	response, err := hc.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "kChat", err)
 		if suffix != "" && failure.MayHaveArrived() {
@@ -345,6 +380,9 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 			Message: "kChat answered with a redirect, which Qatlas does not follow"}
 	case status == http.StatusGatewayTimeout:
 		return &provider.Error{Class: provider.ClassTimeout, Op: op, Message: "kChat did not answer in time"}
+	case status == http.StatusRequestEntityTooLarge:
+		return &provider.Error{Class: provider.ClassProviderError, Op: op,
+			Message: "kChat refuses the request as too large"}
 	case status == http.StatusBadRequest:
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: "kChat rejected the request as invalid"}
 	default:
@@ -354,28 +392,56 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 }
 
 // verifyChannelScope confirms, with kChat's own channel detail endpoint (GET /api/v4/channels/{channel_id}),
-// that a channel actually belongs to one of the teams this connection is bound to, and returns its team ID.
-// It runs before every operation that names a channel_id directly: a configured channel allow-list is
-// local configuration and proves nothing about what a channel_id really resolves to on the live instance,
-// exactly as the kDrive provider's drive-account check. A channel of another team is reported the same way
-// as one outside the allow-list: an invalid request, never a provider error, and the failure never carries
-// the channel's name or purpose.
-func (c *Client) verifyChannelScope(ctx context.Context, op, channelID string) (string, error) {
-	ch, err := c.boundChannel(ctx, op, channelID)
-	if err != nil {
-		return "", err
+// that a channel is inside this connection's boundary. A team channel must belong to a bound team. A direct
+// (D) or group (G) channel has no team; it is reachable only when every participant besides the token's own
+// user is a live member of a bound team, see participants and verifyUsersScope. It runs before every
+// operation that names a channel_id directly: a configured channel allow-list is local configuration and
+// proves nothing about what a channel_id really resolves to on the live instance, exactly as the kDrive
+// provider's drive-account check. Every refusal is an invalid request that never carries the channel's
+// name, purpose, or participants.
+func (c *Client) verifyChannelScope(ctx context.Context, op, channelID string) error {
+	var ch channelJSON
+	if err := c.do(ctx, op, http.MethodGet, "/api/v4/channels/"+url.PathEscape(channelID), nil, nil, &ch, false); err != nil {
+		return err
 	}
-	return ch.TeamID, nil
+	if ch.ID != channelID {
+		return invalidRequest(channelOutOfScope)
+	}
+	if ch.Type != channelDirect && ch.Type != channelGroup {
+		if !c.scope.allowsTeam(ch.TeamID) {
+			return invalidRequest(channelOutOfScope)
+		}
+		return nil
+	}
+	if ch.TeamID != "" {
+		return invalidRequest(directOutOfScope)
+	}
+	others, ok, err := c.participants(ctx, op, ch)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return invalidRequest(directOutOfScope)
+	}
+	allowed, err := c.verifyUsersScope(ctx, op, others)
+	if err != nil {
+		return err
+	}
+	if len(allowed) != len(others) {
+		return invalidRequest(directOutOfScope)
+	}
+	return nil
 }
 
-// boundChannel is verifyChannelScope returning the whole channel resource it read.
+// boundChannel reads a channel and returns it only when it belongs to a bound team; unlike
+// verifyChannelScope it never admits a direct or group channel, which has no team.
 func (c *Client) boundChannel(ctx context.Context, op, channelID string) (*channelJSON, error) {
 	var ch channelJSON
 	if err := c.do(ctx, op, http.MethodGet, "/api/v4/channels/"+url.PathEscape(channelID), nil, nil, &ch, false); err != nil {
 		return nil, err
 	}
 	if ch.ID != channelID || !c.scope.allowsTeam(ch.TeamID) {
-		return nil, invalidRequest("channel_id belongs to a team outside the targets of this connection")
+		return nil, invalidRequest(channelOutOfScope)
 	}
 	return &ch, nil
 }
@@ -405,11 +471,11 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds Infomaniak kChat metadata, its read-only connection test, and its message and reaction operations.
+// Register adds Infomaniak kChat metadata, its read-only connection test, and its operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat team messaging: messages, search, reactions, attachments, users and presence, and channels (read, create, rename) of the bound teams through its Mattermost-compatible REST API",
+		Description:        "Infomaniak kChat team messaging: channel, direct, and group messages, search, file upload and download, reactions, users and presence, and channels (read, create, rename) of the bound teams",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -428,19 +494,21 @@ func Register(reg *capability.Registry) error {
 			Required: true,
 			Multiple: true,
 			Description: "one or more team/TEAM_ID targets this connection is bound to, plus an optional, " +
-				"repeatable allow-list of channel/CHANNEL_ID targets of those teams; without a channel target, " +
-				"every channel of the bound teams the token can reach is reachable. A channel_id or root_id " +
-				"argument outside a configured allow-list, or outside a bound team, is refused locally or " +
-				"against the live instance before the matching request, and a message is refused before it is " +
-				"ever sent",
+				"repeatable allow-list of channel/CHANNEL_ID targets of those teams or of direct and group " +
+				"channels with their members; without a channel target, every channel of the bound teams the " +
+				"token can reach, and every direct or group channel with their members only, is reachable. A " +
+				"channel_id or root_id argument outside a configured allow-list, or outside that boundary, is " +
+				"refused locally or against the live instance before the matching request, and a message is " +
+				"refused before it is ever sent",
 			Kinds: []config.TargetKind{{
 				Name:        "team",
 				Description: "one kChat team this connection may reach; required, and may be listed more than once",
 				Forms:       []string{"team/TEAM_ID"},
 			}, {
-				Name:        "channel",
-				Description: "one channel of a bound team; optional, and may be listed more than once",
-				Forms:       []string{"channel/CHANNEL_ID"},
+				Name: "channel",
+				Description: "one channel of a bound team, or one direct or group channel whose other " +
+					"participants are members of them; optional, and may be listed more than once",
+				Forms: []string{"channel/CHANNEL_ID"},
 			}},
 			Validate:    validateTarget,
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
@@ -448,23 +516,25 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read teams, channels, messages, and users", Recommended: true,
 			Description: "lists the bound teams and their channels, reads channel details and the public " +
-				"channels of a bound team, searches messages, files, and channels, reads channel messages, " +
-				"single messages, threads, reactions, and " +
-				"attachments (metadata and download to a released local directory), and reads, lists, and " +
-				"searches the users of the bound teams and their presence; changes nothing",
-			Tools: []string{teamsList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID, messagesList.ID,
-				messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID, filesDownload.ID,
+				"channels of a bound team, lists the direct and group channels, searches messages, files, and " +
+				"channels, reads channel messages, single messages, threads, reactions, and attachments " +
+				"(metadata and download to a released local directory), and reads, lists, and searches the " +
+				"users of the bound teams and their presence; changes nothing",
+			Tools: []string{teamsList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID, directList.ID,
+				messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID, filesDownload.ID,
 				reactionsList.ID, usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID, messagesSearch.ID,
 				filesSearch.ID, channelsSearch.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
-			Description: "also sends a confirmed message, or a confirmed reply to an existing thread, to a " +
-				"channel of a bound team, edits the text of a confirmed message, and adds a confirmed own " +
-				"reaction; deleting a message or removing a reaction is never part of a profile",
-			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID,
-				messagesSend.ID, messagesUpdate.ID, messagesFiles.ID, filesInfo.ID, filesDownload.ID,
-				reactionsList.ID, reactionsAdd.ID, usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID,
-				messagesSearch.ID, filesSearch.ID, channelsSearch.ID},
+			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
+				"a confirmed message, or a confirmed reply to an existing thread, to a reachable channel, " +
+				"uploads a confirmed file to such a channel, edits the text of a confirmed message, and adds a " +
+				"confirmed own reaction; deleting a message or removing a reaction is never part of a profile",
+			Tools: []string{teamsList.ID, channelsList.ID, directList.ID, directOpen.ID, groupMessagesOpen.ID,
+				messagesList.ID, messagesThread.ID, messagesGet.ID, messagesSend.ID, messagesUpdate.ID,
+				messagesFiles.ID, filesInfo.ID, filesDownload.ID, filesUpload.ID, reactionsList.ID, reactionsAdd.ID,
+				usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID, messagesSearch.ID, filesSearch.ID,
+				channelsSearch.ID},
 		}, {
 			ID: "channel-admin", Title: "Manage channels",
 			Description: "reads the bound teams, their channels with details, and the public channels, and also " +
@@ -493,6 +563,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(messagesFiles), Handler: capability.Handler(invokeMessagesFiles)},
 		capability.Operation{Descriptor: withGroup(filesInfo), Handler: capability.Handler(invokeFilesInfo)},
 		capability.Operation{Descriptor: withGroup(filesDownload), Handler: capability.Handler(invokeFilesDownload)},
+		capability.Operation{Descriptor: withGroup(filesUpload), Handler: capability.Handler(invokeFilesUpload)},
 		capability.Operation{Descriptor: withGroup(reactionsList), Handler: capability.Handler(invokeReactionsList)},
 		capability.Operation{Descriptor: withGroup(reactionsAdd), Handler: capability.Handler(invokeReactionsAdd)},
 		capability.Operation{Descriptor: withGroup(reactionsRemove), Handler: capability.Handler(invokeReactionsRemove)},
@@ -500,6 +571,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(usersList), Handler: capability.Handler(invokeUsersList)},
 		capability.Operation{Descriptor: withGroup(usersSearch), Handler: capability.Handler(invokeUsersSearch)},
 		capability.Operation{Descriptor: withGroup(usersStatus), Handler: capability.Handler(invokeUsersStatus)},
+		capability.Operation{Descriptor: withGroup(directList), Handler: capability.Handler(invokeDirectList)},
+		capability.Operation{Descriptor: withGroup(directOpen), Handler: capability.Handler(invokeDirectOpen)},
+		capability.Operation{Descriptor: withGroup(groupMessagesOpen), Handler: capability.Handler(invokeGroupMessagesOpen)},
 		capability.Operation{Descriptor: withGroup(messagesSearch), Handler: capability.Handler(invokeMessagesSearch)},
 		capability.Operation{Descriptor: withGroup(filesSearch), Handler: capability.Handler(invokeFilesSearch)},
 		capability.Operation{Descriptor: withGroup(channelsSearch), Handler: capability.Handler(invokeChannelsSearch)},
