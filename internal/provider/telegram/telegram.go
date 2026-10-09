@@ -181,6 +181,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats"},
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot"},
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
+	{ID: groupMedia, Title: "Media", Description: "Send photos, documents, and albums to the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -231,6 +232,11 @@ func Register(reg *capability.Registry) error {
 			ID: "pins", Title: "Pin and unpin messages",
 			Description: "pins and unpins single messages in the bound chats; nothing is sent, edited, or deleted",
 			Tools:       []string{pinsPin.ID, pinsUnpin.ID},
+		}, {
+			ID: "media", Title: "Send photos, documents, and albums",
+			Description: "sends photos, documents, and albums from released local files or file references to the " +
+				"bound chats; earlier messages stay as they are",
+			Tools: []string{photosSend.ID, documentsSend.ID, mediaGroupsSend.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -253,6 +259,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: chatsMember, Handler: capability.Handler(invokeChatsMember)},
 		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
 		capability.Operation{Descriptor: filesDownload, Handler: capability.Handler(invokeFilesDownload)},
+		capability.Operation{Descriptor: photosSend, Handler: capability.Handler(invokePhotosSend)},
+		capability.Operation{Descriptor: documentsSend, Handler: capability.Handler(invokeDocumentsSend)},
+		capability.Operation{Descriptor: mediaGroupsSend, Handler: capability.Handler(invokeMediaGroupsSend)},
 	)
 }
 
