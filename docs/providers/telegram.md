@@ -11,8 +11,25 @@ updated: 2026-10-09
 
 A connection binds one bot token to its targets, given as `target` (one) or `targets` (a list). A target is
 a chat (a numeric chat ID, also negative, or an `@username`), `bot`, or `business/<id>`. It can send
-(`create`), edit (`update`), and delete (`delete`) messages in its chats, and every operation requires
-confirmation. Telegram's own edit and delete restrictions still apply.
+(`create`), edit (`update`, including the inline keyboard), and delete (`delete`) messages in its chats, and
+every operation requires confirmation. Telegram's own edit and delete restrictions still apply.
+
+`telegram.messages.send` sends text of 1 through 4096 characters. `parse_mode` (`HTML` or `MarkdownV2`)
+formats it; Telegram's parser decides whether the markup is valid, and its rejection surfaces as a provider
+error without Telegram's text. `reply_to_message_id` replies to a message of the same chat (never another
+chat), `message_thread_id` sends into a forum topic, `disable_notification` sends silently,
+`protect_content` forbids forwarding and saving, and `disable_link_preview` hides the link preview.
+
+`inline_keyboard` attaches an inline keyboard of at most 8 rows with 1 through 8 buttons each. A button has
+`text` (1 through 64 characters) and exactly one of `url` (a plain `https://` link with a host, or a `tg://`
+link, without control characters, at most 2048 characters) or `callback_data` (1 through 64 bytes). Web-app,
+login, pay, and `switch_inline_query` buttons and reply keyboards are not offered. The limits are checked
+before the credential is read.
+
+`telegram.messages.edit` accepts `parse_mode`, `disable_link_preview`, and `inline_keyboard` besides the text;
+reply, topic, silent, and protect do not apply to edits. An edit without `inline_keyboard` removes an existing
+keyboard. `telegram.messages.editreplymarkup` changes only the keyboard of a message: it sets
+`inline_keyboard` or, when that is omitted or empty, removes the keyboard.
 
 The chat tools take an optional `chat` argument. It must equal a bound chat target exactly: an `@username`
 never matches a numeric ID, and `bot` or `business/<id>` is no chat. Without `chat`, the tool uses the one
@@ -78,6 +95,6 @@ The terminal editor starts a new connection on the setup profile `send`, which t
 `[telegram.messages.send]`: the read tools expose incoming message content, while a send reaches only a bound
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`, and
 `[telegram.bot.get]`. The profile `messaging` also ticks `update`, `delete`, `telegram.messages.edit`, and
-`telegram.messages.delete`. A profile is a visible starting selection, not a role: only the ticked
-`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
-follows a profile.
+`telegram.messages.delete`; `telegram.messages.editreplymarkup` is in no profile. A profile is a visible
+starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed
+before saving, and a saved connection never follows a profile.
