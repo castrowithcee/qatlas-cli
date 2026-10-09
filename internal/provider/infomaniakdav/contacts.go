@@ -4,15 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"sort"
-	"strings"
-
-	"github.com/emersion/go-vcard"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -22,14 +19,6 @@ import (
 const (
 	defaultContactLimit = 50
 	maxContactLimit     = 200
-	maxContactText      = 256
-	maxContactNote      = 4096
-	maxContactEntries   = 20
-	maxContactType      = 64
-	maxContactBirthday  = 32
-	contactsQueryBody   = `<?xml version="1.0" encoding="UTF-8"?>` +
-		`<card:addressbook-query xmlns:d="DAV:" xmlns:card="urn:ietf:params:xml:ns:carddav">` +
-		`<d:prop><d:getetag/><card:address-data/></d:prop></card:addressbook-query>`
 )
 
 const (
@@ -122,64 +111,18 @@ var contactsGet = capability.Descriptor{
 	}},
 }
 
-// TypedValue is an e-mail address or phone number with its type parameter.
-type TypedValue struct {
-	Value string `json:"value,omitempty"`
-	Type  string `json:"type,omitempty"`
-}
-
-// ContactName is the structured name (N) of a contact.
-type ContactName struct {
-	Family     string `json:"family,omitempty"`
-	Given      string `json:"given,omitempty"`
-	Additional string `json:"additional,omitempty"`
-	Prefix     string `json:"prefix,omitempty"`
-	Suffix     string `json:"suffix,omitempty"`
-}
-
-// PostalAddress is one ADR of a contact.
-type PostalAddress struct {
-	Type       string `json:"type,omitempty"`
-	POBox      string `json:"po_box,omitempty"`
-	Extended   string `json:"extended,omitempty"`
-	Street     string `json:"street,omitempty"`
-	Locality   string `json:"locality,omitempty"`
-	Region     string `json:"region,omitempty"`
-	PostalCode string `json:"postal_code,omitempty"`
-	Country    string `json:"country,omitempty"`
-}
-
-// Contact is one contact. The list tool reports only the compact members.
-type Contact struct {
-	ID             string          `json:"id"`
-	UID            string          `json:"uid,omitempty"`
-	Name           string          `json:"name,omitempty"`
-	StructuredName *ContactName    `json:"structured_name,omitempty"`
-	Email          string          `json:"email,omitempty"`
-	Emails         []TypedValue    `json:"emails,omitempty"`
-	Phones         []TypedValue    `json:"phones,omitempty"`
-	Addresses      []PostalAddress `json:"addresses,omitempty"`
-	Organization   string          `json:"organization,omitempty"`
-	Title          string          `json:"title,omitempty"`
-	Birthday       string          `json:"birthday,omitempty"`
-	Note           string          `json:"note,omitempty"`
-	URLs           []string        `json:"urls,omitempty"`
-	Truncated      []string        `json:"truncated,omitempty"`
-	ETag           string          `json:"etag,omitempty"`
-}
-
 // ContactsPage is the result of the list tool.
 type ContactsPage struct {
-	Addressbook string    `json:"addressbook"`
-	Contacts    []Contact `json:"contacts"`
-	Count       int       `json:"count"`
-	Truncated   bool      `json:"truncated,omitempty"`
+	Addressbook string        `json:"addressbook"`
+	Contacts    []dav.Contact `json:"contacts"`
+	Count       int           `json:"count"`
+	Truncated   bool          `json:"truncated,omitempty"`
 }
 
 // ContactResult is the result of the get tool.
 type ContactResult struct {
-	Addressbook string  `json:"addressbook"`
-	Contact     Contact `json:"contact"`
+	Addressbook string      `json:"addressbook"`
+	Contact     dav.Contact `json:"contact"`
 }
 
 type contactArguments struct {
@@ -261,11 +204,11 @@ func (c *Client) addressbookHome(ctx context.Context, op string) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
-	resources, err := c.propfind(ctx, op, principal, "0", addressbookHomeBody)
+	resources, err := c.propfind(ctx, op, principal, "0", dav.AddressbookHomeBody)
 	if err != nil {
 		return nil, err
 	}
-	return singleLink(op, resources, propBookHome)
+	return singleLink(op, resources, dav.PropBookHome)
 }
 
 func (c *Client) listContacts(ctx context.Context, book string, limit int) (*ContactsPage, error) {
@@ -275,31 +218,31 @@ func (c *Client) listContacts(ctx context.Context, book string, limit int) (*Con
 		return nil, err
 	}
 	base := append(append([]string{}, home...), book)
-	data, _, err := c.request(ctx, op, methodReport, base, true, "1", contactsQueryBody, 207, maxResponseBytes)
+	data, _, err := c.request(ctx, op, methodReport, base, true, "1", dav.AddressbookQueryBody, 207, maxResponseBytes)
 	if err != nil {
 		return nil, err
 	}
-	resources, err := parseMultiStatus(op, data)
+	resources, err := server.ParseMultiStatus(op, data)
 	if err != nil {
 		return nil, err
 	}
-	page := &ContactsPage{Addressbook: book, Contacts: []Contact{}}
+	page := &ContactsPage{Addressbook: book, Contacts: []dav.Contact{}}
 	seen := map[string]bool{}
 	for i := range resources {
-		id, err := eventID(op, resources[i].href, base)
+		id, err := eventID(op, resources[i].Href, base)
 		if err != nil {
 			return nil, err
 		}
-		if resources[i].failure(op) != nil || seen[id] {
+		if failure(&resources[i], op) != nil || seen[id] {
 			continue
 		}
 		seen[id] = true
-		contact, err := parseContact(resources[i].text[keyAddress], false)
+		contact, err := dav.ParseContact(resources[i].Text[dav.KeyAddress], false)
 		if err != nil {
 			continue
 		}
 		contact.ID = id
-		contact.ETag = etagOf(resources[i].text[keyETag])
+		contact.ETag = dav.ETagOf(resources[i].Text[dav.KeyETag])
 		page.Contacts = append(page.Contacts, *contact)
 	}
 	sort.Slice(page.Contacts, func(i, j int) bool {
@@ -327,114 +270,11 @@ func (c *Client) getContact(ctx context.Context, book, id string) (*ContactResul
 	if err != nil {
 		return nil, err
 	}
-	contact, err := parseContact(string(data), true)
+	contact, err := dav.ParseContact(string(data), true)
 	if err != nil {
 		return nil, invalidResponse(op, "Infomaniak returned a contact that is not a valid vCard")
 	}
 	contact.ID = id
-	contact.ETag = etagOf(header.Get("ETag"))
+	contact.ETag = dav.ETagOf(header.Get("ETag"))
 	return &ContactResult{Addressbook: book, Contact: *contact}, nil
-}
-
-var errNoContact = errors.New("no contact")
-
-// parseContact reads one vCard. With full unset, only the compact members are filled. A photo or other
-// binary property is never read.
-func parseContact(data string, full bool) (contact *Contact, err error) {
-	defer func() {
-		if recover() != nil {
-			contact, err = nil, errNoContact
-		}
-	}()
-	card, err := vcard.NewDecoder(strings.NewReader(data)).Decode()
-	if err != nil {
-		return nil, err
-	}
-	contact = &Contact{
-		UID:          clean(card.Value(vcard.FieldUID), maxContactText),
-		Name:         clean(card.PreferredValue(vcard.FieldFormattedName), maxContactText),
-		Organization: orgOf(card.Value(vcard.FieldOrganization)),
-	}
-	name := card.Name()
-	if contact.Name == "" && name != nil {
-		contact.Name = clean(strings.Join(nonEmpty(name.HonorificPrefix, name.GivenName, name.AdditionalName,
-			name.FamilyName, name.HonorificSuffix), " "), maxContactText)
-	}
-	if !full {
-		if field := card.Get(vcard.FieldEmail); field != nil {
-			contact.Email = clean(field.Value, maxContactText)
-		}
-		return contact, nil
-	}
-	var cut []string
-	if name != nil {
-		contact.StructuredName = &ContactName{
-			Family: clean(name.FamilyName, maxContactText), Given: clean(name.GivenName, maxContactText),
-			Additional: clean(name.AdditionalName, maxContactText),
-			Prefix:     clean(name.HonorificPrefix, maxContactText), Suffix: clean(name.HonorificSuffix, maxContactText),
-		}
-	}
-	contact.Title = clean(card.Value(vcard.FieldTitle), maxContactText)
-	contact.Birthday = clean(card.Value(vcard.FieldBirthday), maxContactBirthday)
-	contact.Note = cleanText(card.Value(vcard.FieldNote), maxContactNote, true)
-	if len(strings.TrimSpace(card.Value(vcard.FieldNote))) > maxContactNote {
-		cut = append(cut, "note")
-	}
-	fields := card[vcard.FieldEmail]
-	contact.Emails, cut = typedOf(fields, "emails", cut)
-	contact.Phones, cut = typedOf(card[vcard.FieldTelephone], "phones", cut)
-	addresses := card.Addresses()
-	for i, address := range addresses {
-		if i >= maxContactEntries {
-			cut = append(cut, "addresses")
-			break
-		}
-		contact.Addresses = append(contact.Addresses, PostalAddress{
-			Type: typeOf(address.Field), POBox: clean(address.PostOfficeBox, maxContactText),
-			Extended: clean(address.ExtendedAddress, maxContactText), Street: clean(address.StreetAddress, maxContactText),
-			Locality: clean(address.Locality, maxContactText), Region: clean(address.Region, maxContactText),
-			PostalCode: clean(address.PostalCode, maxContactText), Country: clean(address.Country, maxContactText),
-		})
-	}
-	for i, field := range card[vcard.FieldURL] {
-		if i >= maxContactEntries {
-			cut = append(cut, "urls")
-			break
-		}
-		contact.URLs = append(contact.URLs, clean(field.Value, maxContactText))
-	}
-	contact.Truncated = cut
-	return contact, nil
-}
-
-func typedOf(fields []*vcard.Field, name string, cut []string) ([]TypedValue, []string) {
-	var out []TypedValue
-	for i, field := range fields {
-		if i >= maxContactEntries {
-			return out, append(cut, name)
-		}
-		out = append(out, TypedValue{Value: clean(field.Value, maxContactText), Type: typeOf(field)})
-	}
-	return out, cut
-}
-
-func typeOf(field *vcard.Field) string {
-	if field == nil {
-		return ""
-	}
-	return clean(strings.Join(field.Params.Types(), ","), maxContactType)
-}
-
-func orgOf(value string) string {
-	return clean(strings.Join(nonEmpty(strings.Split(value, ";")...), ", "), maxContactText)
-}
-
-func nonEmpty(values ...string) []string {
-	var out []string
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			out = append(out, strings.TrimSpace(value))
-		}
-	}
-	return out
 }

@@ -3,27 +3,16 @@ package infomaniakdav
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/mail"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
-
-	// The zone database is embedded so that a time zone is checked the same way on every host.
-	_ "time/tzdata"
-
-	"github.com/emersion/go-ical"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -32,21 +21,7 @@ const (
 	// writeUncertain is appended to a failure of a write whose request may have reached Infomaniak. The write
 	// is never repeated.
 	writeUncertain = "; the change may have taken effect, read it before repeating it"
-	maxTimezoneLen = 64
-	maxAddressLen  = 254
-	maxSequence    = 1000000
 	productID      = "-//Qatlas//Infomaniak DAV//EN"
-	localLayout    = "2006-01-02T15:04:05"
-	utcLayout      = "2006-01-02T15:04:05Z"
-	dateLayout     = "2006-01-02"
-	icalLocal      = "20060102T150405"
-	icalUTC        = "20060102T150405Z"
-	icalDate       = "20060102"
-)
-
-var (
-	timezonePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+){0,2}$`)
-	rrulePattern    = regexp.MustCompile(`^[A-Za-z0-9=;,+-]+$`)
 )
 
 const personArgSchema = `{"type":"object","properties":{"address":{"type":"string","minLength":3,"maxLength":254},` +
@@ -180,26 +155,11 @@ type WriteResult struct {
 	Deleted  bool   `json:"deleted,omitempty"`
 }
 
-type personInput struct {
-	Address string `json:"address"`
-	Name    string `json:"name"`
-}
-
 type eventWriteArguments struct {
-	Calendar    string        `json:"calendar"`
-	ID          string        `json:"id"`
-	ETag        string        `json:"etag"`
-	Summary     string        `json:"summary"`
-	Description string        `json:"description"`
-	Location    string        `json:"location"`
-	Start       string        `json:"start"`
-	End         string        `json:"end"`
-	AllDay      bool          `json:"all_day"`
-	Timezone    string        `json:"timezone"`
-	RRule       string        `json:"rrule"`
-	Status      string        `json:"status"`
-	Organizer   *personInput  `json:"organizer"`
-	Attendees   []personInput `json:"attendees"`
+	Calendar string `json:"calendar"`
+	ID       string `json:"id"`
+	ETag     string `json:"etag"`
+	dav.EventInput
 }
 
 func decodeWriteArguments(op string, raw json.RawMessage) (eventWriteArguments, error) {
@@ -210,283 +170,6 @@ func decodeWriteArguments(op string, raw json.RawMessage) (eventWriteArguments, 
 		return input, providerError(op, "the validated arguments could not be read")
 	}
 	return input, nil
-}
-
-// eventDraft is a validated event, ready to be encoded with a UID.
-type eventDraft struct {
-	summary, description, location, status, rrule string
-	start, end                                    *ical.Prop
-	organizer                                     *personInput
-	attendees                                     []personInput
-}
-
-// validText accepts valid UTF-8 without control characters; line breaks are allowed and end up escaped.
-func validText(value string, max int, lines bool) (string, bool) {
-	if lines {
-		value = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(value)
-	}
-	if len(value) > max || !utf8.ValidString(value) {
-		return "", false
-	}
-	for _, r := range value {
-		if lines && (r == '\n' || r == '\t') {
-			continue
-		}
-		if unicode.IsControl(r) {
-			return "", false
-		}
-	}
-	return value, true
-}
-
-func validAddress(address string) bool {
-	if len(address) < 3 || len(address) > maxAddressLen || strings.ContainsAny(address, " <>\",;:()\\") {
-		return false
-	}
-	parsed, err := mail.ParseAddress(address)
-	return err == nil && parsed.Address == address && parsed.Name == ""
-}
-
-func checkPerson(op string, person personInput) (personInput, error) {
-	name, ok := validText(person.Name, maxEventTextLength, false)
-	if !ok || strings.Contains(name, `"`) || !validAddress(person.Address) {
-		return person, providerError(op, "an organizer or attendee needs a plain e-mail address and a short name without control characters or quotes")
-	}
-	return personInput{Address: person.Address, Name: name}, nil
-}
-
-func validTimezone(name string) bool {
-	if len(name) > maxTimezoneLen || name == "Local" || !timezonePattern.MatchString(name) {
-		return false
-	}
-	_, err := time.LoadLocation(name)
-	return err == nil
-}
-
-// validRRule accepts a bounded RRULE value that the recurrence parser understands. It is never expanded.
-func validRRule(value string) bool {
-	if value == "" || len(value) > maxRRuleLength || !rrulePattern.MatchString(value) {
-		return false
-	}
-	prop := ical.NewProp(ical.PropRecurrenceRule)
-	prop.Value = value
-	props := ical.Props{}
-	props.Set(prop)
-	rule, err := props.RecurrenceRule()
-	return err == nil && rule != nil
-}
-
-// timeProps validates the time arguments and builds DTSTART and DTEND.
-func timeProps(op string, input eventWriteArguments) (start, end *ical.Prop, err error) {
-	bad := func(message string) (*ical.Prop, *ical.Prop, error) { return nil, nil, providerError(op, message) }
-	if input.AllDay {
-		if input.Timezone != "" {
-			return bad("an all-day event takes no timezone")
-		}
-		from, err := time.Parse(dateLayout, input.Start)
-		if err != nil {
-			return bad("start must be a date YYYY-MM-DD for an all-day event")
-		}
-		to := from.AddDate(0, 0, 1)
-		if input.End != "" {
-			if to, err = time.Parse(dateLayout, input.End); err != nil || !to.After(from) {
-				return bad("end must be a date YYYY-MM-DD after start for an all-day event")
-			}
-		}
-		return dateProp(ical.PropDateTimeStart, from), dateProp(ical.PropDateTimeEnd, to), nil
-	}
-	if input.End == "" {
-		return bad("end is required for an event with a time")
-	}
-	utc := strings.HasSuffix(input.Start, "Z")
-	if utc != strings.HasSuffix(input.End, "Z") {
-		return bad("start and end must both be UTC times or both be local times")
-	}
-	zone := input.Timezone
-	if utc {
-		if zone != "" && zone != "UTC" {
-			return bad("a UTC time takes no other timezone")
-		}
-		from, err1 := time.Parse(utcLayout, input.Start)
-		to, err2 := time.Parse(utcLayout, input.End)
-		if err1 != nil || err2 != nil || !to.After(from) {
-			return bad("start and end must be times YYYY-MM-DDTHH:MM:SSZ with end after start")
-		}
-		return valueProp(ical.PropDateTimeStart, from.Format(icalUTC), ""), valueProp(ical.PropDateTimeEnd, to.Format(icalUTC), ""), nil
-	}
-	if zone == "" {
-		return bad("a local time needs a timezone; a UTC time ends in Z instead")
-	}
-	if !validTimezone(zone) {
-		return bad("timezone must be an IANA time zone name such as Europe/Zurich")
-	}
-	loc, _ := time.LoadLocation(zone)
-	from, err1 := time.ParseInLocation(localLayout, input.Start, loc)
-	to, err2 := time.ParseInLocation(localLayout, input.End, loc)
-	if err1 != nil || err2 != nil || !to.After(from) {
-		return bad("start and end must be times YYYY-MM-DDTHH:MM:SS with end after start")
-	}
-	return valueProp(ical.PropDateTimeStart, from.Format(icalLocal), zone), valueProp(ical.PropDateTimeEnd, to.Format(icalLocal), zone), nil
-}
-
-func dateProp(name string, t time.Time) *ical.Prop {
-	prop := valueProp(name, t.Format(icalDate), "")
-	prop.SetValueType(ical.ValueDate)
-	return prop
-}
-
-func valueProp(name, value, zone string) *ical.Prop {
-	prop := ical.NewProp(name)
-	prop.Value = value
-	if zone != "" {
-		prop.Params.Set(ical.ParamTimezoneID, zone)
-	}
-	return prop
-}
-
-// newEventDraft validates every argument without any I/O. No message quotes a value.
-func newEventDraft(op string, input eventWriteArguments) (*eventDraft, error) {
-	draft := &eventDraft{}
-	var ok bool
-	if draft.summary, ok = validText(input.Summary, maxSummaryLength, true); !ok || strings.TrimSpace(draft.summary) == "" {
-		return nil, providerError(op, "summary is required, at most 256 bytes, without control characters")
-	}
-	if draft.description, ok = validText(input.Description, maxEventDescription, true); !ok {
-		return nil, providerError(op, "description must be at most 4096 bytes without control characters")
-	}
-	if draft.location, ok = validText(input.Location, maxLocationLength, true); !ok {
-		return nil, providerError(op, "location must be at most 256 bytes without control characters")
-	}
-	switch status := strings.ToUpper(input.Status); status {
-	case "", "TENTATIVE", "CONFIRMED", "CANCELLED":
-		draft.status = status
-	default:
-		return nil, providerError(op, "status must be TENTATIVE, CONFIRMED, or CANCELLED")
-	}
-	if input.RRule != "" {
-		if !validRRule(input.RRule) {
-			return nil, providerError(op, "rrule must be a valid recurrence rule of at most 512 bytes without the RRULE: prefix")
-		}
-		draft.rrule = input.RRule
-	}
-	var err error
-	if draft.start, draft.end, err = timeProps(op, input); err != nil {
-		return nil, err
-	}
-	if input.Organizer != nil {
-		person, err := checkPerson(op, *input.Organizer)
-		if err != nil {
-			return nil, err
-		}
-		draft.organizer = &person
-	}
-	if len(input.Attendees) > maxAttendees {
-		return nil, providerError(op, "an event takes at most 50 attendees")
-	}
-	seen := map[string]bool{}
-	for _, entry := range input.Attendees {
-		person, err := checkPerson(op, entry)
-		if err != nil {
-			return nil, err
-		}
-		key := strings.ToLower(person.Address)
-		if seen[key] {
-			return nil, providerError(op, "an attendee may be named only once")
-		}
-		seen[key] = true
-		draft.attendees = append(draft.attendees, person)
-	}
-	if _, err := draft.encode(op, "placeholder", 0, time.Now()); err != nil {
-		return nil, err
-	}
-	return draft, nil
-}
-
-func personProp(name string, person personInput, attendee bool) ical.Prop {
-	prop := ical.NewProp(name)
-	prop.Value = "mailto:" + person.Address
-	if person.Name != "" {
-		prop.Params.Set(ical.ParamCommonName, person.Name)
-	}
-	if attendee {
-		prop.Params.Set(ical.ParamParticipationStatus, "NEEDS-ACTION")
-		prop.Params.Set(ical.ParamRSVP, "TRUE")
-	}
-	return *prop
-}
-
-// encode renders the draft as one iCalendar object. Text values are escaped by the encoder library, so a
-// line break in an argument can never start a property of its own.
-func (d *eventDraft) encode(op, uid string, sequence int, now time.Time) (string, error) {
-	event := ical.NewEvent()
-	event.Props.SetText(ical.PropUID, uid)
-	event.Props.SetDateTime(ical.PropDateTimeStamp, now.UTC())
-	event.Props.Set(d.start)
-	event.Props.Set(d.end)
-	event.Props.SetText(ical.PropSummary, d.summary)
-	if d.description != "" {
-		event.Props.SetText(ical.PropDescription, d.description)
-	}
-	if d.location != "" {
-		event.Props.SetText(ical.PropLocation, d.location)
-	}
-	if d.status != "" {
-		event.Props.SetText(ical.PropStatus, d.status)
-	}
-	if d.rrule != "" {
-		rule := ical.NewProp(ical.PropRecurrenceRule)
-		rule.Value = d.rrule
-		event.Props.Set(rule)
-	}
-	if sequence > 0 {
-		event.Props.SetText(ical.PropSequence, strconv.Itoa(sequence))
-	}
-	if d.organizer != nil {
-		prop := personProp(ical.PropOrganizer, *d.organizer, false)
-		event.Props.Set(&prop)
-	}
-	for _, person := range d.attendees {
-		prop := personProp(ical.PropAttendee, person, true)
-		event.Props.Add(&prop)
-	}
-	calendar := ical.NewCalendar()
-	calendar.Props.SetText(ical.PropVersion, "2.0")
-	calendar.Props.SetText(ical.PropProductID, productID)
-	calendar.Children = append(calendar.Children, event.Component)
-	var buf bytes.Buffer
-	if err := ical.NewEncoder(&buf).Encode(calendar); err != nil || buf.Len() > maxEventBytes {
-		return "", providerError(op, "the event could not be encoded within the size limit")
-	}
-	return buf.String(), nil
-}
-
-// randomID returns a random version 4 UUID.
-func randomID() (string, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", err
-	}
-	raw[6] = raw[6]&0x0f | 0x40
-	raw[8] = raw[8]&0x3f | 0x80
-	text := hex.EncodeToString(raw[:])
-	return text[:8] + "-" + text[8:12] + "-" + text[12:16] + "-" + text[16:20] + "-" + text[20:], nil
-}
-
-// normalETag returns the entity tag in the form events.get reports it, or false for an unusable value. One
-// surrounding pair of quotes is accepted.
-func normalETag(value string) (string, bool) {
-	if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
-		value = value[1 : len(value)-1]
-	}
-	if value == "" || value == "*" || len(value) > maxEventETagLength {
-		return "", false
-	}
-	for i := 0; i < len(value); i++ {
-		if value[i] <= 0x20 || value[i] >= 0x7f || value[i] == '"' {
-			return "", false
-		}
-	}
-	return value, true
 }
 
 // writeTarget checks the calendar, the event id, and the etag before any secret or request.
@@ -500,7 +183,7 @@ func writeTarget(op string, resolved *config.Resolved, input eventWriteArguments
 	if !validCollectionID(input.ID) {
 		return "", providerError(op, "the event id must be one literal path segment as the list tool reports it")
 	}
-	etag, ok := normalETag(input.ETag)
+	etag, ok := dav.NormalETag(input.ETag)
 	if !ok {
 		return "", providerError(op, "etag must be the entity tag of the event as the read tools report it")
 	}
@@ -520,15 +203,15 @@ func invokeEventsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if _, err := writeTarget(op, resolved, input, false); err != nil {
 		return nil, err
 	}
-	draft, err := newEventDraft(op, input)
+	draft, err := dav.NewEventDraft(op, productID, input.EventInput)
 	if err != nil {
 		return nil, err
 	}
-	uid, err := randomID()
+	uid, err := dav.RandomID()
 	if err != nil {
 		return nil, providerError(op, "an event id could not be generated")
 	}
-	body, err := draft.encode(op, uid, 0, time.Now())
+	body, err := draft.Encode(op, uid, 0, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -545,7 +228,7 @@ func invokeEventsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return &WriteResult{Calendar: input.Calendar, ID: id, UID: uid, ETag: etagOf(header.Get("ETag")), Created: true}, nil
+	return &WriteResult{Calendar: input.Calendar, ID: id, UID: uid, ETag: dav.ETagOf(header.Get("ETag")), Created: true}, nil
 }
 
 func invokeEventsUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -559,7 +242,7 @@ func invokeEventsUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	draft, err := newEventDraft(op, input)
+	draft, err := dav.NewEventDraft(op, productID, input.EventInput)
 	if err != nil {
 		return nil, err
 	}
@@ -576,14 +259,14 @@ func invokeEventsUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	current, err := existingOf(data)
+	current, err := server.ExistingEventOf(op, data)
 	if err != nil {
 		return nil, err
 	}
-	if served := header.Get("ETag"); served != "" && etagOf(served) != etag {
+	if served := header.Get("ETag"); served != "" && dav.ETagOf(served) != etag {
 		return nil, errPrecondition(op, "event")
 	}
-	body, err := draft.encode(op, current.uid, current.sequence+1, time.Now())
+	body, err := draft.Encode(op, current.UID, current.Sequence+1, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -591,7 +274,7 @@ func invokeEventsUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	return &WriteResult{Calendar: input.Calendar, ID: input.ID, UID: current.uid, ETag: etagOf(out.Get("ETag")),
+	return &WriteResult{Calendar: input.Calendar, ID: input.ID, UID: current.UID, ETag: dav.ETagOf(out.Get("ETag")),
 		Updated: true}, nil
 }
 
@@ -619,50 +302,6 @@ func invokeEventsDelete(ctx context.Context, resolved *config.Resolved, secrets 
 		return nil, err
 	}
 	return &WriteResult{Calendar: input.Calendar, ID: input.ID, Deleted: true}, nil
-}
-
-type existing struct {
-	uid      string
-	sequence int
-}
-
-// existingOf reads the UID and the SEQUENCE of the stored event. It refuses an object that holds anything
-// but exactly one plain event, so an update never silently drops overrides of single occurrences.
-func existingOf(data []byte) (found existing, err error) {
-	const op = "update event"
-	defer func() {
-		if recover() != nil {
-			found, err = existing{}, invalidResponse(op, "Infomaniak returned an event that is not a valid iCalendar object")
-		}
-	}()
-	calendar, decodeErr := ical.NewDecoder(bytes.NewReader(data)).Decode()
-	if decodeErr != nil {
-		return existing{}, invalidResponse(op, "Infomaniak returned an event that is not a valid iCalendar object")
-	}
-	var chosen *ical.Component
-	for _, child := range calendar.Children {
-		switch {
-		case child.Name == ical.CompTimezone:
-		case child.Name == ical.CompEvent && chosen == nil && child.Props.Get(ical.PropRecurrenceID) == nil:
-			chosen = child
-		default:
-			return existing{}, providerError(op, "this event holds overrides of single occurrences or other components that Qatlas does not write; change it in a calendar application")
-		}
-	}
-	if chosen == nil {
-		return existing{}, invalidResponse(op, "Infomaniak returned an object without an event")
-	}
-	uid, ok := validText(textOf(chosen, ical.PropUID), maxEventTextLength, false)
-	if !ok || strings.TrimSpace(uid) == "" {
-		return existing{}, invalidResponse(op, "Infomaniak returned an event without a usable UID")
-	}
-	sequence := 0
-	if prop := chosen.Props.Get(ical.PropSequence); prop != nil {
-		if n, convErr := strconv.Atoi(strings.TrimSpace(prop.Value)); convErr == nil && n >= 0 && n < maxSequence {
-			sequence = n
-		}
-	}
-	return existing{uid: uid, sequence: sequence}, nil
 }
 
 func errPrecondition(op, noun string) error {
