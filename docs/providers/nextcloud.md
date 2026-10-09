@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads and management, Deck and Talk reads, typed targets, connection
+  Describes Nextcloud file operations, share reads and management, Deck reads and board management, Talk reads, typed targets, connection
   permissions, and safety boundaries.
 type: knowledge
 edit: shared
@@ -168,7 +168,8 @@ of the instance.
 The tool group `deck` reads Deck boards, stacks, and cards: `nextcloud.deckboards.list`, `nextcloud.deckboards.get`
 (with labels, sharing entries, and members), `nextcloud.deckstacks.list` (with the cards of each stack; `archived`
 lists the archived cards instead), and `nextcloud.deckcards.get`. The setup profile `deck-read` holds exactly these
-four. They need a `deck` target and never a folder target; without one they refuse locally.
+four. The boards are managed with `nextcloud.deckboards.create`, `.update` (title, color, archived), and `.delete`,
+none of them in a profile. All need a `deck` target and never a folder target; without one they refuse locally.
 
 The target `deck` binds every board of the identity, `deck/BOARD_ID` only that board. `list` drops every other
 board and every deleted one. A board ID that is not bound is refused locally, before any credential access or
@@ -180,8 +181,16 @@ or stack differs from the requested one.
 Requests go to the Deck REST API below `/index.php/apps/deck/api/v1.1/` with `OCS-APIRequest` and JSON, and follow
 no redirect. A 404, which a missing Deck app causes as well as a missing object, is one clear not-found failure.
 Titles, names, labels, and descriptions are untrusted: strings are cut at a fixed length (descriptions at 8 KiB, at
-1 KiB in a stack listing), lists are capped, and every cut sets `truncated`. Comments and attachments are not read,
-and nothing in Deck can be changed.
+1 KiB in a stack listing), lists are capped, and every cut sets `truncated`. Comments and attachments are not read;
+stacks, cards, labels, and sharing cannot be changed.
+
+Board management asks for `confirm` and sends one request. `create` needs the general `deck` target, because a
+`deck/BOARD_ID` binding would not hold the new board, and is refused locally otherwise. `update` and `delete`
+accept only a bound board and first read it once; they are refused, without a mutation, unless the identity holds
+the manage right on it, and `update` keeps the fields it was not given. Deck deletes softly and can restore the
+board, but Qatlas offers no restore; `delete` is reachable only through a tools list. After an unclear outcome
+(timeout, abort, 5xx, unreadable answer) the request is not repeated and the error says to check with
+`deckboards.list` or `deckboards.get` first; a redirect is a clear refusal.
 
 ## Talk
 
