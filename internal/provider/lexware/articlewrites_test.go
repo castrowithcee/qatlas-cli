@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
+	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
@@ -322,5 +323,112 @@ func TestArticleWriteToolsDeclareTheirRiskAndJoinOnlyTheWriteProfile(t *testing.
 		if has["lexware.articles.create"] != (profile.ID == "write") || has["lexware.articles.update"] != (profile.ID == "write") {
 			t.Errorf("profile %s tools = %v", profile.ID, profile.Tools)
 		}
+	}
+}
+
+func deleteAnswer() (*http.Response, error) { return jsonResponse(http.StatusNoContent, ""), nil }
+
+func TestDeleteArticleSendsOneDeleteToTheFixedPath(t *testing.T) {
+	requests := scripted(t, storedGet, deleteAnswer)
+	c, _ := client(t)
+	got, err := c.DeleteArticle(context.Background(), articleID)
+	if err != nil || got == nil || got.ID != articleID || !got.Deleted {
+		t.Fatalf("got = %+v, err = %v", got, err)
+	}
+	if len(*requests) != 1 || (*requests)[0].method != http.MethodDelete || (*requests)[0].path != "/v1/articles/"+articleID {
+		t.Errorf("requests = %+v, want exactly one DELETE on the article", *requests)
+	}
+}
+
+func TestDeleteArticleFailuresHintOnlyWhenTheOutcomeIsUnclear(t *testing.T) {
+	tests := []struct {
+		name  string
+		reply func() (*http.Response, error)
+		class provider.Class
+		hint  bool
+	}{
+		{"404", func() (*http.Response, error) { return jsonResponse(404, `{"message":"`+bodyCanary+`"}`), nil }, provider.ClassNotFound, false},
+		{"500", func() (*http.Response, error) { return jsonResponse(500, `{"message":"`+bodyCanary+`"}`), nil }, provider.ClassProviderError, true},
+		{"timeout", func() (*http.Response, error) { return nil, context.DeadlineExceeded }, provider.ClassTimeout, true},
+		{"403", func() (*http.Response, error) { return jsonResponse(403, "{}"), nil }, provider.ClassPermission, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requests := scripted(t, storedGet, tt.reply)
+			c, _ := client(t)
+			_, err := c.DeleteArticle(context.Background(), articleID)
+			if err == nil || classOf(err) != tt.class || strings.Contains(err.Error(), bodyCanary) {
+				t.Fatalf("err = %v, want class %q", err, tt.class)
+			}
+			if got := strings.Contains(err.Error(), articleMayBeDeleted); got != tt.hint {
+				t.Errorf("hint = %v, want %v (%v)", got, tt.hint, err)
+			}
+			if len(*requests) != 1 {
+				t.Errorf("requests = %d, want exactly one", len(*requests))
+			}
+		})
+	}
+}
+
+func TestDeleteArticleIsDeclaredAndOfferedOnlyThroughAToolEntry(t *testing.T) {
+	reg := registry(t)
+	for _, descriptor := range reg.Provider(Provider) {
+		if descriptor.ID != "lexware.articles.delete" {
+			continue
+		}
+		risk := descriptor.Risk
+		if risk.Effect != capability.EffectDelete || risk.Idempotency != capability.IdempotencyIdempotent ||
+			risk.Confirmation != capability.ConfirmationRequired || !risk.OpenWorld ||
+			risk.DataSensitivity != articleSensitivity || !descriptor.RequiresToolAllowList {
+			t.Errorf("risk = %+v", descriptor)
+		}
+	}
+	metadata, _ := reg.ProviderMetadata(Provider)
+	for _, profile := range metadata.Profiles {
+		for _, id := range profile.Tools {
+			if id == articlesDelete.ID {
+				t.Errorf("profile %s selects the delete tool", profile.ID)
+			}
+		}
+	}
+
+	stubLimiter(t, primaryKey)
+	var methods []string
+	serve(t, func(request *http.Request) (*http.Response, error) {
+		methods = append(methods, request.Method)
+		return jsonResponse(http.StatusNoContent, ""), nil
+	})
+	cfg := coreConfig()
+	cfg.Connections["lexware-plain"] = config.Connection{Service: "lexware", Credential: "primary-key",
+		Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}}
+	cfg.Connections["lexware-deleter"] = config.Connection{Service: "lexware", Credential: "primary-key",
+		Permissions: []config.Permission{config.PermissionDelete}, Tools: []string{"lexware.articles.delete"}}
+	red := &redact.Redactor{}
+	core := application.New(reg, cfg, resolver(red), red)
+	invoke := func(connection, id string, confirm bool) error {
+		_, err := core.Invoke(context.Background(), application.InvokeRequest{
+			Operation: "lexware.articles.delete", Connection: connection,
+			Arguments: json.RawMessage(`{"id":"` + id + `"}`), Confirmed: confirm})
+		return err
+	}
+	for _, connection := range []string{"lexware-plain", "lexware-primary"} {
+		if invoke(connection, articleID, true) == nil {
+			t.Errorf("%s offered the delete tool without a tools entry", connection)
+		}
+	}
+	if invoke("lexware-deleter", articleID, false) == nil {
+		t.Error("delete without confirm was accepted")
+	}
+	if invoke("lexware-deleter", "../v1/contacts/"+bodyCanary, true) == nil {
+		t.Error("an identifier that is no UUID was accepted")
+	}
+	if len(methods) != 0 {
+		t.Fatalf("requests before a valid call = %v, want none", methods)
+	}
+	if err := invoke("lexware-deleter", articleID, true); err != nil {
+		t.Fatalf("delete on a connection that names it = %v", err)
+	}
+	if len(methods) != 1 || methods[0] != http.MethodDelete {
+		t.Errorf("methods = %v, want one DELETE", methods)
 	}
 }
