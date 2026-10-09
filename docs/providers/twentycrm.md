@@ -2,8 +2,8 @@
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
   objects, count by field), record write (create, update, batches), duplicate search and merge, record
-  trash (delete, restore, destroy), and note and task link operations, object targets, connection
-  permissions, and safety boundaries.
+  trash (delete, restore, destroy), note and task link operations, webhook operations, object targets,
+  connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -17,9 +17,10 @@ objects (see Object targets). It can list and read companies (`read`), create th
 name or primary domain (`update`), and delete them (`delete`). It can also create records of any reachable
 object and change their fields, also up to 60 at a time (see Writing records and Batches), delete, restore,
 and destroy them (see Deleting and restoring), find duplicates and merge records (see Merging records),
-and link notes and tasks to records (see Linking notes and tasks).
+link notes and tasks to records (see Linking notes and tasks), and read, narrow, and delete the webhooks of
+the workspace (see Webhooks).
 Mutations require confirmation and only use the generated REST routes of the company or of a reachable
-object. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error, unreadable
+object, or the fixed webhook route. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error, unreadable
 answer) it reports the outcome as uncertain and does not repeat the request.
 
 A `domain` value sets the primary link to `https://<domain>` with the domain as its label; an empty value
@@ -190,6 +191,23 @@ from an argument. An object that the schema gives no single link relation cannot
   repeated. A connection offers it only when its `tools` list names it.
 - Identifiers are UUIDs. Links are workspace data of the record data class.
 
+## Webhooks
+
+`webhooks.list`, `webhooks.get`, `webhooks.update`, and `webhooks.delete` (`read`, `read`, `update`, `delete`)
+show where the workspace reports events, change which events it reports, and remove a webhook. There is no
+tool to create a webhook or to change its target or signing key.
+
+- The tools are workspace-wide: a connection with object targets is refused before any secret is resolved.
+  Twenty requires the settings right API keys and webhooks for the key; a 403 points to it.
+- The signing key is never shown, and the target is reduced to scheme, host with port, and path: query,
+  fragment, and credentials are dropped, because they often carry tokens. The path stays visible, so webhook
+  configuration has its own data class.
+- `update` replaces the whole event list and/or the description. The input is checked before any request is
+  sent, and the request contains nothing but these two fields.
+- Qatlas sends `update` and `delete` once. After an unclear result it reports the outcome as uncertain and
+  does not repeat; read the webhook before trying again. `delete` is offered only by a connection whose
+  `tools` list names it.
+
 ## Batches
 
 `records.batchcreate`, `records.batchupdate`, and `records.batchdelete` act on one reachable object with 1 to
@@ -264,7 +282,7 @@ connection's local `permissions` list can only narrow it, and an optional `tools
 excludes. The `companies.*` tools expose conservative core company fields and accept no custom-field
 payloads; custom fields are written through `records.create` and `records.update`. Invocation arguments never
 replace the configured origin. The terminal editor starts a new connection on the setup profile `read`, which
-ticks `[read]` and the two company, two object, five record read tools, and the link list tool; the profile
-`write` adds the two record write tools and the link create tool. A profile is a visible starting selection,
-not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving,
-and a saved connection never follows a profile.
+ticks `[read]` and the two company, two object, five record read tools, the link list tool, and the two
+webhook read tools; the profile `write` adds the two record write tools and the link create tool. A profile
+is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick
+can be changed before saving, and a saved connection never follows a profile.

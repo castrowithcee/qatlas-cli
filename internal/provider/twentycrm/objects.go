@@ -21,6 +21,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: objectsGroup, Title: "Objects", Description: "Objects of the workspace and their fields"},
 	{ID: recordsGroup, Title: "Records", Description: "Records of the reachable objects of the workspace"},
 	{ID: activityGroup, Title: "Notes and tasks", Description: "Links of notes and tasks to records"},
+	{ID: webhooksGroup, Title: "Webhooks", Description: "Where the workspace reports events"},
 }
 
 func inGroup(d capability.Descriptor, group string) capability.Descriptor {

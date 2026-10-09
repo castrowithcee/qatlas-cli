@@ -220,7 +220,8 @@ func companyMutationDescriptor(action string, effect capability.Effect, idempote
 
 // readTools are the tools of the read profile; the write profile adds the record writes to them.
 var readTools = []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID,
-	recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsSearchAll.ID, recordsGroupBy.ID, activitytargetsList.ID}
+	recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsSearchAll.ID, recordsGroupBy.ID, activitytargetsList.ID,
+	webhooksList.ID, webhooksGet.ID}
 
 // Register adds Twenty metadata, its read-only connection test, and the bounded company operations.
 func Register(reg *capability.Registry) error {
@@ -289,6 +290,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(recordsDuplicates, recordsGroup), Handler: capability.Handler(invokeRecordsDuplicates)},
 		capability.Operation{Descriptor: inGroup(recordsMergePreview, recordsGroup), Handler: capability.Handler(invokeRecordsMergePreview)},
 		capability.Operation{Descriptor: inGroup(recordsMerge, recordsGroup), Handler: capability.Handler(invokeRecordsMerge)},
+		capability.Operation{Descriptor: inGroup(webhooksList, webhooksGroup), Handler: capability.Handler(invokeWebhooksList)},
+		capability.Operation{Descriptor: inGroup(webhooksGet, webhooksGroup), Handler: capability.Handler(invokeWebhooksGet)},
+		capability.Operation{Descriptor: inGroup(webhooksUpdate, webhooksGroup), Handler: capability.Handler(invokeWebhooksUpdate)},
+		capability.Operation{Descriptor: inGroup(webhooksDelete, webhooksGroup), Handler: capability.Handler(invokeWebhooksDelete)},
 	)
 }
 
