@@ -23,6 +23,9 @@ const (
 	// updatesResponseBytes bounds a getUpdates response; an update with media metadata is far smaller.
 	updatesResponseBytes = 2 << 20
 
+	// maxConfirmUpdateID keeps update_id+1 exactly representable in JSON numbers of any client.
+	maxConfirmUpdateID = 1<<53 - 1
+
 	maxCaptionRunes  = 1024
 	maxNameRunes     = 256
 	maxCallbackRunes = 256
@@ -73,6 +76,82 @@ var updatesList = capability.Descriptor{
 		Description: "Read up to 20 pending updates of the bound chats",
 		Arguments:   json.RawMessage(`{}`),
 	}},
+}
+
+var updatesConfirm = capability.Descriptor{
+	ID:          Provider + ".updates.confirm",
+	Version:     1,
+	Title:       "Confirm Telegram updates",
+	Description: "Confirm all updates of the bot up to and including update_id, so telegram.updates.list no longer returns them",
+	Tags:        []string{"telegram", "updates", "delete"},
+	Risk: capability.Risk{
+		Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,
+		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
+	},
+	Provider: Provider, RequiresToolAllowList: true,
+	Group: groupUpdates,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"update_id":{"type":"integer","minimum":1,"maximum":9007199254740991}},` +
+		`"required":["update_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"confirmed_through":{"type":"integer"}},` +
+		`"required":["confirmed_through"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		{Name: "update_id", Description: "Highest update identifier already read; this and every lower update of the whole bot is confirmed", Required: true},
+	},
+	Fields: []capability.Field{{Name: "confirmed_through", Description: "The update identifier up to which Telegram accepted the confirmation"}},
+	Examples: []capability.Example{{
+		Description: "Confirm the updates read so far",
+		Arguments:   json.RawMessage(`{"update_id":10}`),
+	}},
+}
+
+func invokeUpdatesConfirm(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "confirm updates"
+	var arguments struct {
+		UpdateID int64 `json:"update_id"`
+	}
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if arguments.UpdateID < 1 || arguments.UpdateID > maxConfirmUpdateID {
+		return nil, providerError(op, "update_id is outside the supported range")
+	}
+	if resolved == nil {
+		return nil, providerError(op, "no connection was selected")
+	}
+	if err := requireBotScope(resolved); err != nil {
+		return nil, err
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.ConfirmUpdates(ctx, arguments.UpdateID)
+}
+
+// ConfirmUpdates confirms every update up to updateID with one getUpdates request whose offset is updateID+1.
+// The update that request returns is read only far enough to see an array and is dropped unseen: it is not
+// handled, so it must stay available to the next list.
+func (c *Client) ConfirmUpdates(ctx context.Context, updateID int64) (map[string]any, error) {
+	const op = "confirm updates"
+	if updateID < 1 || updateID > maxConfirmUpdateID {
+		return nil, providerError(op, "update_id is outside the supported range")
+	}
+	raw, err := c.call(ctx, spec{op: op, method: "getUpdates", limit: updatesResponseBytes},
+		struct {
+			Offset  int64 `json:"offset"`
+			Limit   int   `json:"limit"`
+			Timeout int   `json:"timeout"`
+		}{Offset: updateID + 1, Limit: 1, Timeout: 0})
+	if err != nil {
+		return nil, err
+	}
+	var discarded []json.RawMessage
+	if json.Unmarshal(raw, &discarded) != nil {
+		return nil, withUncertainty(spec{}, invalidResponse(op))
+	}
+	return map[string]any{"confirmed_through": updateID}, nil
 }
 
 func invokeUpdatesList(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
