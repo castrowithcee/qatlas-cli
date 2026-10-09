@@ -238,6 +238,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
 		capability.Operation{Descriptor: messagesEditReplyMarkup, Handler: capability.Handler(invokeMessagesEditReplyMarkup)},
 		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
+		capability.Operation{Descriptor: messagesDeleteMany, Handler: capability.Handler(invokeMessagesDeleteMany)},
 		capability.Operation{Descriptor: pinsPin, Handler: capability.Handler(invokePinsPin)},
 		capability.Operation{Descriptor: pinsUnpin, Handler: capability.Handler(invokePinsUnpin)},
 		capability.Operation{Descriptor: pinsUnpinAll, Handler: capability.Handler(invokePinsUnpinAll)},
