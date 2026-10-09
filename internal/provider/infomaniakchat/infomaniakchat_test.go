@@ -177,6 +177,23 @@ func coreConfig() *config.Config {
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
 			"nodelete": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete}},
+			// The member connections: "members" adds, "memberdel" removes and "memberroles" sets roles only
+			// because their tools lists name the tool; "memberch" narrows teamA to chanA, "twoteams" binds
+			// both teams, "memberno" holds the permissions without listing the tools.
+			"members": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+			"memberch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+			"twoteams": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}},
+			"memberdel": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+				Tools:       []string{channelsMembersRemove.ID}},
+			"memberroles": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
+				Tools:       []string{channelsMembersRoles.ID}},
+			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete, config.PermissionUpdate}},
 		},
 	}
 }
@@ -240,8 +257,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 32 {
-		t.Fatalf("tools = %+v, want 32", metadata.Tools)
+	if len(metadata.Tools) != 36 {
+		t.Fatalf("tools = %+v, want 36", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -277,7 +294,14 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!has("channel-admin", channelsBrowse.ID) {
 		t.Fatalf("profiles = %+v, want the channel tools in read and channel-admin only as specified", profiles)
 	}
+	if !has("read", channelsMembersList.ID) || has("messaging", channelsMembersList.ID) ||
+		!has("channel-admin", channelsMembersAdd.ID) || has("read", channelsMembersAdd.ID) {
+		t.Fatalf("profiles = %+v, want members.list in read and members.add in channel-admin", profiles)
+	}
 	for id := range profiles {
+		if has(id, channelsMembersRemove.ID) || has(id, channelsMembersRoles.ID) {
+			t.Fatalf("profile %s selects a member removal or role tool", id)
+		}
 		if has(id, messagesDelete.ID) || has(id, reactionsRemove.ID) {
 			t.Fatalf("profile %s selects a delete tool", id)
 		}
@@ -297,6 +321,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 		if tool.ID == messagesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
 			t.Fatalf("messages.delete metadata = %+v", tool)
+		}
+		if (tool.ID == channelsMembersRemove.ID || tool.ID == channelsMembersRoles.ID) && !tool.RequiresToolAllowList {
+			t.Fatalf("%s metadata = %+v", tool.ID, tool)
 		}
 		if tool.ID == reactionsRemove.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
 			t.Fatalf("reactions.remove metadata = %+v", tool)
