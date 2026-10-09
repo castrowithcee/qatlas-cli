@@ -11,7 +11,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/github"
-	"github.com/castrowithcee/qatlas-cli/internal/provider/telegram"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/todoist"
 )
 
 // groupedPicker opens the tool picker of a new-style GitHub connection, ready for typing, at the given size.
@@ -184,10 +184,10 @@ func TestTheGroupedPickerFitsNarrowTerminals(t *testing.T) {
 // A provider without groups keeps the flat picker.
 func TestAFlatProviderKeepsTheFlatPicker(t *testing.T) {
 	reg := capability.NewRegistry()
-	if err := telegram.Register(reg); err != nil {
+	if err := todoist.Register(reg); err != nil {
 		t.Fatal(err)
 	}
-	m, _ := toolsModel(t, reg, map[string]config.Connection{"route": {Service: "wiki", Credential: "reader", Target: "-1001"}})
+	m, _ := toolsModel(t, reg, map[string]config.Connection{"route": {Service: "wiki", Credential: "reader", Target: "*"}})
 	openEntryForm(t, m, sectionConnections, "route")
 	focusField(t, m, toolsLabel)
 	selectChoice(t, m, toolsSelected)
