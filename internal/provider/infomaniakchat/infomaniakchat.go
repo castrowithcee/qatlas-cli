@@ -1,36 +1,41 @@
 // Package infomaniakchat implements controlled access to one Infomaniak kChat instance: kChat is
 // Infomaniak's Mattermost-compatible team chat product, reached below an instance-owned base URL through
-// the same /api/v4/... REST surface Mattermost documents, authenticated with a personal access token as a
-// bearer credential (developer.infomaniak.com/openapi.json, operations GetTeamsForUser, GetChannel,
-// GetChannelsForTeamForUser, GetPostsForChannel, GetPost, GetPostThread, and CreatePost, all marked
-// x-auth-user with the bearerAuth security scheme). A kChat instance's base URL is always the team's own
-// name as the one DNS label directly below kchat.infomaniak.com, never an arbitrary host: Infomaniak's own
-// kChat MCP server (github.com/Infomaniak/mcp-server-kchat) builds every request from exactly that shape,
+// the same /api/v4/... REST surface Mattermost documents, authenticated with a bearer token: an Infomaniak
+// Manager API token with the kChat scope, or a bot token from the kChat interface, as the official kChat
+// MCP server (github.com/Infomaniak/mcp-server-kchat) documents
+// (developer.infomaniak.com/openapi.json, operations GetTeamsForUser, GetChannel,
+// GetChannelsForTeamForUser, GetPostsForChannel, GetPost, GetPostThread, CreatePost, PatchPost, and
+// DeletePost, all marked x-auth-user with the bearerAuth security scheme). A kChat instance's base URL is
+// always the team's own name as the one DNS label directly below kchat.infomaniak.com, never an arbitrary
+// host: the MCP server builds every request from exactly that shape,
 // https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider accepts no other host, see parseInstance.
 //
 // A connection binds exactly one kChat instance, through its configured base URL, and one or more teams of
 // it (team/TEAM_ID, repeatable) plus, optionally, a narrower allow-list of channels of those teams
 // (channel/CHANNEL_ID, repeatable); without a channel allow-list, every channel of the bound teams the
 // token can reach is reachable. This mirrors the kDrive provider's account-plus-drive boundary for the same
-// reason: a single kChat personal token can belong to every team its owner is a member of, which matters
-// for a person who holds tokens, or is a member of teams, of several customers. A channel_id argument
-// outside a configured channel allow-list is refused locally, before any request is sent; every operation
-// that names a channel_id directly (messages.list, messages.send) also confirms with kChat's own channel
-// detail endpoint, in one extra request, that the channel actually belongs to one of the bound teams, and
-// is refused before the matching endpoint is reached when it does not. A message reply additionally
-// confirms that its root post belongs to the same channel before it is ever sent. Rejecting an out-of-scope
-// channel or root post never carries a message's text into an error or a log.
+// reason: a single kChat token can reach several teams, which matters for a person who holds tokens, or is
+// a member of teams, of several customers. A channel_id argument outside a configured channel allow-list is
+// refused locally, before any request is sent; every operation that names a channel_id directly
+// (messages.list, messages.send) also confirms with kChat's own channel detail endpoint, in one extra
+// request, that the channel actually belongs to one of the bound teams, and is refused before the matching
+// endpoint is reached when it does not. Every operation that names a post_id (messages.thread,
+// messages.get, messages.update, messages.delete) reads the post first and binds it to its channel the same
+// way, see verifyPostScope; a message reply additionally confirms that its root post belongs to the same
+// channel before it is ever sent. Rejecting an out-of-scope channel or post never carries a message's text
+// into an error or a log.
 //
 // kChat is deliberately the only Infomaniak surface this provider reaches: Mail, CalDAV/CardDAV, and kDrive
 // are separate Infomaniak products with their own authentication and their own providers, see the kDrive
 // provider's package doc for why they are not bundled together.
 //
-// Channel and team management, editing or deleting a message, file attachments, reactions, and webhooks are
-// deliberately out of scope: this provider lists the teams and channels a connection may reach, reads
-// channel posts and threads page by page, and sends or replies with exactly one confirmed plain-text
-// message. Every value a listing or a read answers with arrives from the provider and is treated as
-// untrusted data: normalised into a stable envelope, passed through the output encoders, and never
-// rendered, executed, or stored.
+// Channel and team management, file attachments, reactions, and webhooks are deliberately out of scope:
+// this provider lists the teams and channels a connection may reach, reads channel posts, single posts, and
+// threads, sends or replies with exactly one confirmed message, changes the text of one confirmed message,
+// and, only when a connection's tools list names it, deletes one confirmed message. kChat renders Markdown
+// and mentions such as @channel in a message, so the text is sent as written. Every value a listing or a
+// read answers with arrives from the provider and is treated as untrusted data: normalised into a stable
+// envelope, passed through the output encoders, and never rendered, executed, or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
 // no proactive spacing of its own; a 429 kChat itself reports is still classified and, when it names a
@@ -91,7 +96,7 @@ var idSchema = `{"type":"string","minLength":1,"maxLength":` + itoa(maxIDLength)
 // itoa avoids importing strconv into every descriptor file just to build a schema literal.
 func itoa(n int) string { return strconv.Itoa(n) }
 
-// Client binds one kChat personal access token to the instance origin and the team/channel scope of its
+// Client binds one kChat bearer token to the instance origin and the team/channel scope of its
 // connection.
 type Client struct {
 	scope   scope
@@ -130,7 +135,7 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 		return nil, err
 	}
 	if !provider.ValidHeaderToken(value.Secret) {
-		return nil, &provider.Error{Class: provider.ClassAuth, Op: op, Message: "the kChat personal access token is unusable"}
+		return nil, &provider.Error{Class: provider.ClassAuth, Op: op, Message: "the kChat token is unusable"}
 	}
 	auth := "Bearer " + value.Secret
 	if red != nil {
@@ -207,12 +212,29 @@ var transport http.RoundTripper
 // by itself.
 const uncertain = "; the message may have been sent, read the channel before sending it again"
 
+// uncertainUpdate and uncertainDelete are the matching suffixes of an edit and a delete request.
+const (
+	uncertainUpdate = "; the message may have been changed, read it before changing it again"
+	uncertainDelete = "; the message may have been deleted, read it before deleting it again"
+)
+
 // do sends one bounded request below the instance origin, with a JSON body when body is not nil, and
 // decodes the answer into out when kChat sends one and out is not nil. change marks a request that may
 // change kChat's state: every failure of it that could mean the request nonetheless arrived says so, so
 // this provider never repeats it by itself.
 func (c *Client) do(ctx context.Context, op, method, path string, query url.Values, body any, out any,
 	change bool) error {
+	suffix := ""
+	if change {
+		suffix = uncertain
+	}
+	return c.doWith(ctx, op, method, path, query, body, out, suffix)
+}
+
+// doWith is do for a request whose possibly-arrived failure is reported with the given suffix; an empty
+// suffix marks a read.
+func (c *Client) doWith(ctx context.Context, op, method, path string, query url.Values, body any, out any,
+	suffix string) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "kChat", err)
 	}
@@ -246,8 +268,8 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	response, err := c.http.Do(req)
 	if err != nil {
 		failure := provider.Transport(op, "kChat", err)
-		if change && failure.MayHaveArrived() {
-			failure.Message += uncertain
+		if suffix != "" && failure.MayHaveArrived() {
+			failure.Message += suffix
 		}
 		return failure
 	}
@@ -255,17 +277,15 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 
 	if response.StatusCode < 200 || response.StatusCode > 299 {
 		failure := c.statusError(op, response)
-		if change && response.StatusCode >= 500 {
-			failure.Message += uncertain
+		if suffix != "" && response.StatusCode >= 500 {
+			failure.Message += suffix
 		}
 		return failure
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil || len(data) > maxResponseBytes {
 		message := "the kChat response could not be read within the size limit"
-		if change {
-			message += uncertain
-		}
+		message += suffix
 		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 	}
 	if out == nil || len(bytes.TrimSpace(data)) == 0 {
@@ -273,9 +293,7 @@ func (c *Client) do(ctx context.Context, op, method, path string, query url.Valu
 	}
 	if err := json.Unmarshal(data, out); err != nil {
 		message := "kChat returned an invalid response"
-		if change {
-			message += uncertain
-		}
+		message += suffix
 		return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: message}
 	}
 	return nil
@@ -288,7 +306,7 @@ func (c *Client) statusError(op string, response *http.Response) *provider.Error
 	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, maxResponseBytes))
 	switch {
 	case status == http.StatusUnauthorized:
-		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "kChat rejected the personal access token"}
+		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "kChat rejected the token"}
 	case status == http.StatusForbidden:
 		return &provider.Error{Class: provider.ClassPermission, Op: op, Message: "this kChat token may not " +
 			"perform this operation; check its rights on the team or channel in kChat"}
@@ -354,21 +372,23 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds Infomaniak kChat metadata, its read-only connection test, and its read and send operations.
+// Register adds Infomaniak kChat metadata, its read-only connection test, and its message read, send, edit, and delete operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat team messaging, read and sent through its Mattermost-compatible REST API",
+		Description:        "Infomaniak kChat team messaging: read, send, edit, and delete messages through its Mattermost-compatible REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
+		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
 			_, err := parseInstance(raw)
 			return err
 		},
 		SecretRoles: []config.SecretRole{{
 			Name: roleToken,
-			Description: "kChat personal access token, created in kChat under Profile, Security, Personal Access " +
-				"Tokens; it reaches every team and channel its owner belongs to on this one kChat instance, so " +
-				"the connection target decides which teams, and optionally which channels, Qatlas exposes",
+			Description: "kChat bearer token: an Infomaniak Manager API token with the kChat scope (valid " +
+				"account-wide), or a bot token created in the kChat interface; it reaches every team and " +
+				"channel its owner can reach on this one kChat instance, so the connection target decides " +
+				"which teams, and optionally which channels, Qatlas exposes",
 		}},
 		Target: config.TargetMetadata{
 			Label:    "teams and channels",
@@ -394,24 +414,29 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read teams, channels, and messages", Recommended: true,
-			Description: "lists the bound teams and their channels, and reads channel messages and threads " +
-				"page by page; changes nothing",
-			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID},
+			Description: "lists the bound teams and their channels, and reads channel messages, single messages, and " +
+				"threads; changes nothing",
+			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID},
 		}, {
-			ID: "messaging", Title: "Read and send messages",
+			ID: "messaging", Title: "Read, send, and edit messages",
 			Description: "also sends a confirmed message, or a confirmed reply to an existing thread, to a " +
-				"channel of a bound team",
-			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesSend.ID},
+				"channel of a bound team, and edits the text of a confirmed message; deleting a message is " +
+				"never part of a profile",
+			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID,
+				messagesSend.ID, messagesUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
 	}
 	return reg.Register(Provider,
-		capability.Operation{Descriptor: teamsList, Handler: capability.Handler(invokeTeamsList)},
-		capability.Operation{Descriptor: channelsList, Handler: capability.Handler(invokeChannelsList)},
-		capability.Operation{Descriptor: messagesList, Handler: capability.Handler(invokeMessagesList)},
-		capability.Operation{Descriptor: messagesThread, Handler: capability.Handler(invokeMessagesThread)},
-		capability.Operation{Descriptor: messagesSend, Handler: capability.Handler(invokeMessagesSend)},
+		capability.Operation{Descriptor: withGroup(teamsList), Handler: capability.Handler(invokeTeamsList)},
+		capability.Operation{Descriptor: withGroup(channelsList), Handler: capability.Handler(invokeChannelsList)},
+		capability.Operation{Descriptor: withGroup(messagesList), Handler: capability.Handler(invokeMessagesList)},
+		capability.Operation{Descriptor: withGroup(messagesThread), Handler: capability.Handler(invokeMessagesThread)},
+		capability.Operation{Descriptor: withGroup(messagesGet), Handler: capability.Handler(invokeMessagesGet)},
+		capability.Operation{Descriptor: withGroup(messagesSend), Handler: capability.Handler(invokeMessagesSend)},
+		capability.Operation{Descriptor: withGroup(messagesUpdate), Handler: capability.Handler(invokeMessagesUpdate)},
+		capability.Operation{Descriptor: withGroup(messagesDelete), Handler: capability.Handler(invokeMessagesDelete)},
 	)
 }
 

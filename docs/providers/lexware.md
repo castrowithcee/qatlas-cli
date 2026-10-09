@@ -1,7 +1,8 @@
 ---
 description: >
-  Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts and
-  articles, invoice drafts and issuing, permissions, and credentials.
+  Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
+  articles, the organization profile and reference data, invoice drafts and issuing, permissions, and
+  credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -25,6 +26,12 @@ note carries no prices. A dunning names the invoice it refers to; a down payment
 invoice once one exists. Templates for recurring invoices are listed page by page, sorted by one of a few fixed
 properties, and read by identifier, with interval, next execution, execution status and whether the last
 execution failed; the provider's error text of a failed execution is never shown.
+
+`lexware.profile.get` reads the organization, its contract features and tax settings as their own data class;
+the name, email and identifiers of the key creator are never returned. Countries, payment conditions, posting
+categories and print layouts are fixed reference lists; a list longer than its cap is cut and marked
+`truncated`. Print layouts need the Lexware contract scope `INVOICING_PRO`; without it the call fails as a
+missing contract scope.
 
 `lexware.invoices.create` creates an invoice as a draft without an invoice number (`create`), always with
 confirmation. Issuing an invoice is the separate tool `lexware.invoices.issue`: Lexware then assigns the
