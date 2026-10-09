@@ -175,7 +175,7 @@ var messagesDelete = capability.Descriptor{
 }
 
 var toolGroups = []config.ToolGroup{
-	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the bound chats"},
+	{ID: groupMessages, Title: "Messages", Description: "Send, forward, copy, edit, and delete messages in the bound chats"},
 	{ID: groupPins, Title: "Pins", Description: "Pin and unpin messages in the bound chats"},
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
 	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats; change their title, description, and photo"},
@@ -262,6 +262,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: messagesEditReplyMarkup, Handler: capability.Handler(invokeMessagesEditReplyMarkup)},
 		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
 		capability.Operation{Descriptor: messagesDeleteMany, Handler: capability.Handler(invokeMessagesDeleteMany)},
+		capability.Operation{Descriptor: messagesForward, Handler: capability.Handler(invokeMessagesForward)},
+		capability.Operation{Descriptor: messagesCopy, Handler: capability.Handler(invokeMessagesCopy)},
 		capability.Operation{Descriptor: pinsPin, Handler: capability.Handler(invokePinsPin)},
 		capability.Operation{Descriptor: pinsUnpin, Handler: capability.Handler(invokePinsUnpin)},
 		capability.Operation{Descriptor: pinsUnpinAll, Handler: capability.Handler(invokePinsUnpinAll)},

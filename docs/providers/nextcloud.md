@@ -1,6 +1,7 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads, Deck reads, typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud file operations, share reads and management, Deck and Talk reads, typed targets, connection
+  permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -119,7 +120,7 @@ that the path must be stat-ed and the favorites listed before repeating; Qatlas 
 
 ## Shares
 
-The tool group `shares` reads sharing. `nextcloud.shares.list` and `nextcloud.shares.get` (profiles `read` and
+The tool group `shares` reads and manages sharing. `nextcloud.shares.list` and `nextcloud.shares.get` (profiles `read` and
 `write`) need a `folder` target. A share counts only when its item lies at or below the root: the `path` of a
 share the identity owns, or the `file_target` of an incoming one (`shared_with_me`) in the Files tree of the
 identity. `list` drops every other share; `get` answers one outside the root exactly like a missing one. A share
@@ -140,7 +141,24 @@ unknown types, whose identifier may be an access token. It asks for at most 50 c
 10), never uses the global lookup server, and is in no setup profile. Without an `account` target it refuses
 locally, before any credential access or request.
 
-Sharing is read through the OCS API of the Sharing app (`/ocs/v2.php/apps/files_sharing/api/v1`), with the same
+`nextcloud.shares.create`, `nextcloud.shares.update`, and `nextcloud.shares.delete` need a `folder` target, a
+confirmation, and a tools list; no profile contains them. `create` shares one existing item below the root, never
+the root itself, with one existing user or group (`type` `user` or `group`; find IDs with `sharees.search`).
+Reading is always granted; `update`, `create`, `delete`, and `share` are flags that default to false and
+Qatlas turns into the permission bitmask. Optional are `expires_at` (a date) and `note`. Links, e-mail, federated,
+team, and Talk shares cannot be created or changed, and no password or label is set. `update` changes the
+rights, expiry, or note of a `user` or `group` share the identity made; rights not given keep their value.
+`delete` revokes any share the identity made below the root, whatever its type. Shares made to the identity
+are neither changed nor revoked.
+
+`update` and `delete` read the share once and refuse without a change a share outside the root, a share that
+is not the identity's own, and (for `update`) any other type; the refusal names no path. They then send exactly
+one request. After an unclear outcome (timeout, aborted connection, a 5xx or unreadable answer) the error says
+the change may have been applied and to check `shares.list` or `shares.get` before repeating; Qatlas never
+repeats. A refusal by the instance (for example a required expiry or disabled sharing) is a clear error
+without the text of the instance.
+
+Sharing is read and changed through the OCS API of the Sharing app (`/ocs/v2.php/apps/files_sharing/api/v1`), with the same
 basic authentication as WebDAV and without redirects. The client in `ocs.go` takes fixed path segments and
 typed query values and accepts an answer only when the envelope reports `ok` and 200; it forwards no message
 of the instance.
@@ -164,6 +182,28 @@ no redirect. A 404, which a missing Deck app causes as well as a missing object,
 Titles, names, labels, and descriptions are untrusted: strings are cut at a fixed length (descriptions at 8 KiB, at
 1 KiB in a stack listing), lists are capped, and every cut sets `truncated`. Comments and attachments are not read,
 and nothing in Deck can be changed.
+
+## Talk
+
+The tool group `talk` reads Talk conversations through the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`),
+with the same client and limits as sharing: `talkrooms.list`, `talkrooms.get`, `talkparticipants.list`, and
+`talkmessages.list`, all in the setup profile `talk-read` and in no other. They need a `talk` target and refuse
+locally without one. A conversation counts only when the target binds it: `talk` binds every conversation of the
+identity, `talk/TOKEN` one. `talkrooms.list` drops every other conversation. A tool that takes a `token`
+refuses an unbound or malformed one locally, before any credential access or request, and its message names
+no token; the token never reaches a path unvalidated.
+
+Each call first reads the `spreed` capability of the instance and refuses a missing Talk app or a missing
+feature clearly, instead of assuming a version; this costs one extra request per call. Participants report
+actor type, actor ID, display name, role, and call state; session IDs and phone numbers are not read.
+
+`talkmessages.list` reads one page of the history, newest first, with at most 100 messages (default 50) per
+page. The server is asked for no waiting, and not to move the read marker or mark notifications as read. `next_cursor`
+(the `X-Chat-Last-Given` header) continues with the older messages and is absent on the last page. A message
+text is cut at 4 KiB and marked `truncated`. Placeholders such as `{actor}` or `{file}` are replaced by the name
+of the rich object and listed in `objects`; links, paths, previews, and sizes of objects are never reported,
+because a file shared into a conversation carries an access token in them. Message texts and names are untrusted
+data.
 
 ## Versions
 
