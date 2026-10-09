@@ -134,16 +134,17 @@ func TestDefaultRegistry(t *testing.T) {
 		32: "telegram.messages.send", 33: "telegram.photos.send", 34: "telegram.pins.pin",
 		36: "telegram.pins.unpinall", 37: "telegram.polls.send", 38: "telegram.polls.stop",
 		39: "telegram.reactions.remove", 40: "telegram.reactions.removeall", 41: "telegram.reactions.set",
-		42: "telegram.senderchats.ban", 43: "telegram.senderchats.unban", 44: "telegram.updates.list",
-		45: "telegram.venues.send", 46: "telegram.videonotes.send", 47: "telegram.videos.send",
-		48: "telegram.webhook.get",
+		42: "telegram.senderchats.ban", 43: "telegram.senderchats.unban", 44: "telegram.stickers.customemoji",
+		45: "telegram.stickers.send", 46: "telegram.stickersets.get", 47: "telegram.topics.iconstickers",
+		48: "telegram.updates.list", 49: "telegram.venues.send", 50: "telegram.videonotes.send",
+		51: "telegram.videos.send", 52: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 49
+	ok2 := len(operations) == 53
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}
 	if !ok2 {
-		t.Errorf("Telegram operations = %v, want the explicit message, member, pin, update, chat, invite link, bot, file, media, interaction, structured send, and transfer operations",
+		t.Errorf("Telegram operations = %v, want the explicit message, member, pin, update, chat, invite link, bot, file, media, interaction, structured send, transfer, and sticker operations",
 			operations)
 	}
 }

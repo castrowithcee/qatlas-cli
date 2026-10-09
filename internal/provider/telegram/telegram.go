@@ -188,6 +188,8 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupInteractions, Title: "Interactions",
 		Description: "Send and stop polls, set and remove reactions, show chat actions, and send locations, " +
 			"venues, contacts, and dice in the bound chats"},
+	{ID: groupStickers, Title: "Stickers",
+		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers"},
 }
 
 const groupMessages = "messages"
@@ -308,6 +310,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: videosSend, Handler: capability.Handler(invokeVideosSend)},
 		capability.Operation{Descriptor: animationsSend, Handler: capability.Handler(invokeAnimationsSend)},
 		capability.Operation{Descriptor: videoNotesSend, Handler: capability.Handler(invokeVideoNotesSend)},
+		capability.Operation{Descriptor: stickersSend, Handler: capability.Handler(invokeStickersSend)},
+		capability.Operation{Descriptor: stickersetsGet, Handler: capability.Handler(invokeStickersetsGet)},
+		capability.Operation{Descriptor: stickersCustomEmoji, Handler: capability.Handler(invokeStickersCustomEmoji)},
+		capability.Operation{Descriptor: topicsIconStickers, Handler: capability.Handler(invokeTopicsIconStickers)},
 	)
 }
 
