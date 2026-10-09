@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
 )
 
 const workPath = calHome + "work/"
@@ -157,7 +158,7 @@ func TestEventsListEmptyRangeAndSizeCaps(t *testing.T) {
 	if _, err := listEventsOf(t, []string{"calendar/work"}, allArgs); classOf(err) != provider.ClassInvalidResponse {
 		t.Errorf("big event err = %v", err)
 	}
-	many := make([]string, maxEntries+1)
+	many := make([]string, dav.MaxEntries+1)
 	for i := range many {
 		many[i] = `<d:response><d:href>` + workPath + `x.ics</d:href></d:response>`
 	}
@@ -201,7 +202,7 @@ func TestEventsGetReadsStructuredEventWithETag(t *testing.T) {
 
 func TestEventsGetBoundsAttendees(t *testing.T) {
 	lines := []string{"UID:u", "DTSTART:20260310T090000Z"}
-	for i := 0; i < maxAttendees+5; i++ {
+	for i := 0; i < dav.MaxAttendees+5; i++ {
 		lines = append(lines, "ATTENDEE:mailto:a@example.org")
 	}
 	serve(t, eventsFake(t, "", func(*http.Request) (*http.Response, error) {
@@ -209,7 +210,7 @@ func TestEventsGetBoundsAttendees(t *testing.T) {
 	}))
 	out, err := invokeEventsGet(context.Background(), resolved("calendar/work"), resolver(nil), nil,
 		json.RawMessage(`{"calendar":"work","id":"u.ics"}`))
-	if event := out.(*EventResult).Event; err != nil || len(event.Attendees) != maxAttendees || !event.AttendeesTruncated {
+	if event := out.(*EventResult).Event; err != nil || len(event.Attendees) != dav.MaxAttendees || !event.AttendeesTruncated {
 		t.Errorf("event = %+v, err = %v", event, err)
 	}
 }
@@ -255,15 +256,5 @@ func TestEventsErrorsCarryNoProviderText(t *testing.T) {
 		json.RawMessage(`{"calendar":"work","id":"x.ics"}`))
 	if classOf(err) != provider.ClassInvalidResponse || strings.Contains(err.Error(), bodyCanary) {
 		t.Errorf("invalid ics err = %v", err)
-	}
-}
-
-func TestEventTextIsBounded(t *testing.T) {
-	event, err := parseEvent(icsOf(vevent("UID:u", "DTSTART:20260310T090000Z",
-		"SUMMARY:"+strings.Repeat("ä", 1000), "DESCRIPTION:"+strings.Repeat("b", 10000),
-		"LOCATION:"+strings.Repeat("c", 1000))), true)
-	if err != nil || len(event.Summary) > maxSummaryLength || len(event.Description) > maxEventDescription ||
-		len(event.Location) > maxLocationLength {
-		t.Errorf("event = %d/%d/%d, err = %v", len(event.Summary), len(event.Description), len(event.Location), err)
 	}
 }
