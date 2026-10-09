@@ -182,11 +182,14 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupInviteLinks, Title: "Invite links", Description: "Read the primary invite link and revoke invite links of the bound chats"},
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot"},
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
-	{ID: groupMedia, Title: "Media", Description: "Send photos, documents, videos, animations, video notes, audio files, voice messages, and albums to the bound chats"},
+	{ID: groupMedia, Title: "Media", Description: "Send photos, live photos, documents, videos, animations, video " +
+		"notes, audio files, voice messages, and albums to the bound chats"},
 	{ID: groupMembers, Title: "Members", Description: "Ban, unban, and restrict members and sender chats of the bound chats"},
 	{ID: groupInteractions, Title: "Interactions",
 		Description: "Send and stop polls, set and remove reactions, show chat actions, and send locations, " +
 			"venues, contacts, and dice in the bound chats"},
+	{ID: groupStickers, Title: "Stickers",
+		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers"},
 }
 
 const groupMessages = "messages"
@@ -245,8 +248,8 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "media", Title: "Send photos, videos, audio, documents, and albums",
 			Description: "sends photos, live photos, documents, videos, animations, video notes, audio files, voice " +
-				"messages, and albums " +
-				"from released local files or file references to the bound chats; earlier messages stay as they are",
+				"messages, and albums from released local files or file references to the bound chats; earlier " +
+				"messages stay as they are",
 			Tools: []string{photosSend.ID, documentsSend.ID, mediaGroupsSend.ID, videosSend.ID, animationsSend.ID,
 				videoNotesSend.ID, audioSend.ID, voiceSend.ID, livePhotosSend.ID},
 		}, {
@@ -308,6 +311,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: audioSend, Handler: capability.Handler(invokeAudioSend)},
 		capability.Operation{Descriptor: voiceSend, Handler: capability.Handler(invokeVoiceSend)},
 		capability.Operation{Descriptor: livePhotosSend, Handler: capability.Handler(invokeLivePhotosSend)},
+		capability.Operation{Descriptor: stickersSend, Handler: capability.Handler(invokeStickersSend)},
+		capability.Operation{Descriptor: stickersetsGet, Handler: capability.Handler(invokeStickersetsGet)},
+		capability.Operation{Descriptor: stickersCustomEmoji, Handler: capability.Handler(invokeStickersCustomEmoji)},
+		capability.Operation{Descriptor: topicsIconStickers, Handler: capability.Handler(invokeTopicsIconStickers)},
 	)
 }
 

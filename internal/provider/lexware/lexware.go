@@ -523,6 +523,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: articlesGet, Handler: capability.Handler(invokeArticlesGet)},
 		capability.Operation{Descriptor: articlesCreate, Handler: capability.Handler(invokeArticlesCreate)},
 		capability.Operation{Descriptor: articlesUpdate, Handler: capability.Handler(invokeArticlesUpdate)},
+		capability.Operation{Descriptor: articlesDelete, Handler: capability.Handler(invokeArticlesDelete)},
 		capability.Operation{Descriptor: contactsCreate, Handler: capability.Handler(invokeContactsCreate)},
 		capability.Operation{Descriptor: contactsUpdate, Handler: capability.Handler(invokeContactsUpdate)},
 		capability.Operation{Descriptor: voucherlistList, Handler: capability.Handler(invokeVoucherlistList)},
@@ -1424,6 +1425,11 @@ func (c *Client) put(ctx context.Context, op, resource, path string, payload, ou
 	return c.send(ctx, op, http.MethodPut, resource, path, nil, payload, out, uncertain)
 }
 
+// delete removes one object; uncertain works as for post. A success carries no body.
+func (c *Client) delete(ctx context.Context, op, resource, path string, uncertain string) error {
+	return c.send(ctx, op, http.MethodDelete, resource, path, nil, nil, nil, uncertain)
+}
+
 // send is the only place that talks to the gateway. It sends exactly one request and never repeats it. A
 // non-empty uncertain marks a change: it is appended to every failure after the request may have been
 // delivered (timeout, reset, unknown transport cause, 5xx, or an unusable 2xx answer) and never to a failure
@@ -1479,6 +1485,9 @@ func (c *Client) sendRaw(ctx context.Context, op, method, resource, path string,
 			failure.(*provider.Error).Message += uncertain
 		}
 		return failure
+	}
+	if out == nil {
+		return nil
 	}
 	if failure := provider.ReadJSON(op, "Lexware", response.Body, maxResponseBytes, out); failure != nil {
 		if uncertain != "" {
