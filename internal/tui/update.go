@@ -108,8 +108,6 @@ func (m *Model) updateUpdateConfirm(key tea.KeyMsg) tea.Cmd {
 	case "n", "esc":
 		m.screen = m.updateFrom
 		m.status = "Update not installed"
-	case "ctrl+c":
-		return m.quit()
 	}
 	return nil
 }

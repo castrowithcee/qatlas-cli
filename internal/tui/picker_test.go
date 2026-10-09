@@ -352,8 +352,16 @@ func TestThePermissionsAreTickedInThePicker(t *testing.T) {
 	}
 	typeText(t, m, "create")
 	press(t, m, " ", "esc")
-	if got := m.fieldValue("permissions"); got != "read" {
-		t.Fatalf("esc kept a tick: %q", got)
+	if m.screen != screenLeave || !strings.Contains(screenOf(m), "the ticks changed") {
+		t.Fatalf("esc dropped changed ticks without asking: screen %v", m.screen)
+	}
+	press(t, m, "d")
+	if got := m.fieldValue("permissions"); m.screen != screenForm || got != "read" {
+		t.Fatalf("discarding kept a tick: %q", got)
+	}
+	press(t, m, "enter", "esc")
+	if m.screen != screenForm {
+		t.Fatalf("esc on unchanged ticks asked: screen %v", m.screen)
 	}
 
 	press(t, m, "enter")

@@ -179,9 +179,6 @@ func (m *Model) openVaultUnlockPrompt(back screen) {
 func (m *Model) updateVaultUnlockPrompt(key tea.KeyMsg) tea.Cmd {
 	u := m.vaultUnlock
 	switch key.String() {
-	case "ctrl+c":
-		m.vaultUnlock = nil
-		return m.quit()
 	case "esc":
 		back := u.back
 		m.vaultUnlock = nil

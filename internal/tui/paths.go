@@ -17,8 +17,9 @@ import (
 
 // The path list of a connection is edited in a screen of its own, opened from its row like the target list:
 // a adds a path, enter or e edits the selected one, and x or d removes it after asking. F2 keeps the list and
-// saves the form in one step, from every state of the screen, the typed path included. esc closes an
-// unchanged list at once and asks about a changed one, so no change is dropped silently.
+// saves the form in one step, from every state of the screen, the typed path included. esc is one level back:
+// it closes an unchanged list, cancels an unchanged entry, and asks about a changed list or a typed entry,
+// so no change is dropped silently.
 //
 // The line a path is typed into has no other field to move to, so tab keeps what the text input does with
 // it: it takes the suggestion shown, and up/down switch between several. The suggestions are the
@@ -43,8 +44,6 @@ func (m *Model) openPaths() {
 // itself.
 func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "f2":
 		// F2 saves from every state of the list, the way it does from every row of the form. A typed path
 		// is taken first; one the rules refuse stays typed with the reason, and nothing is saved.
@@ -62,6 +61,10 @@ func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 	if m.pathEdit >= 0 {
 		switch key.String() {
 		case "esc":
+			if m.pathTyped() {
+				m.askLeave(false)
+				return nil
+			}
 			m.pathEdit = -1
 			m.pathInput.Blur()
 			m.clearMessages()
@@ -136,29 +139,25 @@ func (m *Model) leavePaths() tea.Cmd {
 		m.screen = screenForm
 		return nil
 	}
-	m.leaveFrom = screenPaths
-	m.screen = screenLeave
+	m.askLeave(false)
 	return nil
 }
 
-// answerPathsLeave answers the question a changed list asks before it closes: k keeps the list in its row,
-// d drops the changes, and esc returns to the list unchanged. No other key answers it.
-func (m *Model) answerPathsLeave(key tea.KeyMsg) tea.Cmd {
-	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
-	case "esc":
-		m.screen = screenPaths
-		m.status = "Still editing the paths; nothing was kept or discarded"
-	case "k":
-		m.keepPaths()
-		m.status = "Path list kept in the form; nothing was written yet"
-	case "d":
-		m.screen = screenForm
-		m.clearMessages()
-		m.status = "Path changes discarded; the list is as it was"
+// pathTyped reports whether the path being typed differs from the one it started from.
+func (m *Model) pathTyped() bool {
+	original := ""
+	if m.pathEdit < len(m.pathList.all) {
+		original = m.pathList.all[m.pathEdit]
 	}
-	return nil
+	return m.pathInput.Value() != original
+}
+
+// pathsPending reports whether closing the screen for good would lose a changed list or a typed path.
+func (m *Model) pathsPending() bool {
+	if m.pathEdit >= 0 && m.pathTyped() {
+		return true
+	}
+	return !slices.Equal(m.pathList.all, m.fields[m.focus].entries)
 }
 
 // editPath starts typing the path at index, or a new one at the end of the list.

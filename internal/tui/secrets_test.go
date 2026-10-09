@@ -1315,9 +1315,14 @@ func TestQuittingDropsAWaitingTypeChange(t *testing.T) {
 	answered := make(chan tea.Msg, 1)
 	go func() { answered <- guard() }()
 
+	// The changed form asks before it is lost; discarding it ends the editor while the check still waits.
 	m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if m.quitting || m.screen != screenLeave {
+		t.Fatalf("ctrl+c on a changed form did not ask: screen %v", m.screen)
+	}
+	press(t, m, "d")
 	if !m.quitting {
-		t.Fatal("ctrl+c did not end the editor")
+		t.Fatal("d after ctrl+c did not end the editor")
 	}
 
 	close(slow.guards)

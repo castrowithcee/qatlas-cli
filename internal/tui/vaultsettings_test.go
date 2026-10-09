@@ -522,7 +522,7 @@ func TestVaultSectionLeaveAsksBeforeLosingTimeoutChanges(t *testing.T) {
 	if m.screen != screenLeave {
 		t.Fatalf("esc with an unsaved timeout change = screen %v, want the leave question", m.screen)
 	}
-	press(t, m, "s")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("saving from the leave question reported %q", m.fail)
 	}

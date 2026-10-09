@@ -142,12 +142,14 @@ func TestFilesListsAreEditedAndSaved(t *testing.T) {
 		if !strings.Contains(m.fail, "directory:") || m.pathEdit < 0 {
 			t.Fatalf("%q was taken: error %q", broad, m.fail)
 		}
-		press(t, m, "esc")
+		press(t, m, "esc", "d")
 	}
-	press(t, m, "esc", "k")
+	pump(t, m, "f2")
+	openConnection(t, m, "wiki")
 	openFilesList(t, m, filesWriteLabel)
 	addPath(t, m, out)
-	press(t, m, "esc", "k")
+	pump(t, m, "f2")
+	openConnection(t, m, "wiki")
 	// Edit the second upload directory and remove the first.
 	openFilesList(t, m, filesReadLabel)
 	press(t, m, "down", "e")
@@ -166,7 +168,9 @@ func TestFilesListsAreEditedAndSaved(t *testing.T) {
 	// Emptied, both lists leave no key behind.
 	openConnection(t, m, "wiki")
 	openFilesList(t, m, filesReadLabel)
-	press(t, m, "x", "y", "esc", "k")
+	press(t, m, "x", "y")
+	pump(t, m, "f2")
+	openConnection(t, m, "wiki")
 	openFilesList(t, m, filesWriteLabel)
 	press(t, m, "x", "y")
 	pump(t, m, "f2")

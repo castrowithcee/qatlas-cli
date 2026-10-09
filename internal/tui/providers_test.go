@@ -368,7 +368,7 @@ func TestGuidedSetupChoosesItsProviderInTheTable(t *testing.T) {
 		t.Errorf("services = %v, want the Telegram service and a new one", got)
 	}
 
-	press(t, m, "f3")
+	press(t, m, "esc")
 	if m.screen != screenProviders || !strings.Contains(screenOf(m), "> (*) Telegram") {
 		t.Fatalf("going back does not show the table on telegram: screen %v\n%s", m.screen, screenOf(m))
 	}
