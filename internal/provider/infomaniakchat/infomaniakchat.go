@@ -47,6 +47,11 @@
 // presence status is returned, so users of other teams of the same instance are never shown. Users are
 // reduced to a fixed allow-list of profile fields.
 //
+// A sidebar category is the own user's and belongs to a bound team; every category tool reads it before it
+// changes it. A category shows only channels this connection may reach, see reachableChannels, and a change
+// of its channels writes the channels it may not reach back unchanged. The notification tool refuses direct
+// and group channels, whose participants it would otherwise have to prove, see boundChannel.
+//
 // kChat is deliberately the only Infomaniak surface this provider reaches: Mail, CalDAV/CardDAV, and kDrive
 // are separate Infomaniak products with their own authentication and their own providers, see the kDrive
 // provider's package doc for why they are not bundled together.
@@ -77,16 +82,17 @@
 // adds one confirmed reaction of the token's own user, pins or unpins one confirmed message, lists and reads
 // the threads the token's own user follows and follows or unfollows one confirmed thread, reads the unread
 // counts of a reachable channel and marks one confirmed channel, message, or thread as read or unread for the
-// token's own user only, and, only when a connection's tools list names it, deletes one confirmed message or
-// removes one own reaction. Only when a connection's tools list names them, it also lists, reads, describes,
-// and deletes the incoming webhooks of bound channels: a webhook's ID is the secret of its post URL, so those
-// tools carry their own data sensitivity, bind every webhook through its channel like a post, and write a
-// webhook back with its target unchanged. The token's own presence, custom status, and four display profile
-// fields are the only user data it changes, always for the user read from users/me and never taken from an
-// argument. kChat renders Markdown and mentions such as @channel in a message, so the text is sent as written.
-// Every value a listing or a read answers with arrives from the provider and is treated as untrusted data:
-// normalised into a stable envelope, passed through the output encoders, and never rendered, executed, or
-// stored.
+// token's own user only, lists, creates, and changes the own sidebar categories of a bound team and sets the
+// own notifications of one channel, and, only when a connection's tools list names it, deletes one confirmed
+// message, one custom category, or removes one own reaction. Only when a connection's tools list names them,
+// it also lists, reads, describes, and deletes the incoming webhooks of bound channels: a webhook's ID is the
+// secret of its post URL, so those tools carry their own data sensitivity, bind every webhook through its
+// channel like a post, and write a webhook back with its target unchanged. The token's own presence, custom
+// status, and four display profile fields are the only user data it changes, always for the user read from
+// users/me and never taken from an argument. kChat renders Markdown and mentions such as @channel in a
+// message, so the text is sent as written. Every value a listing or a read answers with arrives from the
+// provider and is treated as untrusted data: normalised into a stable envelope, passed through the output
+// encoders, and never rendered, executed, or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
 // no proactive spacing of its own; a 429 kChat itself reports is still classified and, when it names a
@@ -495,7 +501,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat for bound teams: messages, search, files, reactions, pins, followed threads, users, presence, own status and profile, team roles, channels and members, and incoming webhooks",
+		Description:        "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status, profile, and sidebar, team roles, channels with members and notifications, and webhooks",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -539,29 +545,31 @@ func Register(reg *capability.Registry) error {
 				"channels of a bound team, lists the direct and group channels, searches messages, files, and " +
 				"channels, lists the members of a channel and the archived channels of a team, reads channel " +
 				"messages, single messages, threads, followed threads, unread counts, reactions, pinned messages, " +
-				"and attachments (metadata and download to a released local directory), and reads, lists, and searches the users of the bound " +
-				"teams and their presence; changes nothing",
+				"and attachments (metadata and download to a released local directory), reads, lists, and searches " +
+				"the users of the bound teams and their presence, and lists the own sidebar categories; changes nothing",
 			Tools: []string{teamsList.ID, teamsGet.ID, teamMembersList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID,
 				channelsMembersList.ID, directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
 				filesDownload.ID, reactionsList.ID, pinsList.ID, usersGet.ID, usersList.ID, usersSearch.ID,
 				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID,
-				threadsList.ID, threadsGet.ID, channelsUnread.ID},
+				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
 				"a confirmed message, or a confirmed reply to an existing thread, to a reachable channel, " +
 				"uploads a confirmed file to such a channel, edits the text of a confirmed message, adds a " +
 				"confirmed own reaction, pins or unpins a confirmed message, follows or unfollows a confirmed thread, " +
-				"marks a confirmed channel, message, or thread as read or unread, and sets the own presence and " +
-				"custom status or clears the custom status; deleting a message or removing a " +
-				"reaction is never part of a profile",
+				"marks a confirmed channel, message, or thread as read or unread, sets the own presence and custom " +
+				"status or clears the custom status, and creates or changes a confirmed own sidebar category or the " +
+				"notifications of a channel; deleting a message, a category, or removing a reaction is never part " +
+				"of a profile",
 			Tools: []string{teamsList.ID, channelsList.ID, directList.ID, directOpen.ID, groupMessagesOpen.ID,
 				messagesList.ID, messagesThread.ID, messagesGet.ID, messagesSend.ID, messagesUpdate.ID,
 				messagesFiles.ID, filesInfo.ID, filesDownload.ID, filesUpload.ID, reactionsList.ID, reactionsAdd.ID,
 				pinsList.ID, messagesPin.ID, messagesUnpin.ID, usersGet.ID, usersList.ID, usersSearch.ID,
 				usersStatus.ID, statusSet.ID, customStatusSet.ID, customStatusClear.ID, messagesSearch.ID,
 				filesSearch.ID, channelsSearch.ID, threadsList.ID, threadsGet.ID, threadsFollow.ID, threadsUnfollow.ID,
-				channelsUnread.ID, channelsMarkRead.ID, messagesMarkUnread.ID, threadsMarkRead.ID},
+				channelsUnread.ID, channelsMarkRead.ID, messagesMarkUnread.ID, threadsMarkRead.ID,
+				categoriesList.ID, categoriesCreate.ID, categoriesUpdate.ID, channelNotificationsUpdate.ID},
 		}, {
 			ID: "channel-admin", Title: "Manage channels",
 			Description: "reads the bound teams, their channels with details, and the public channels, and also " +
@@ -593,6 +601,12 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(channelsMembersAdd), Handler: capability.Handler(invokeChannelsMembersAdd)},
 		capability.Operation{Descriptor: withGroup(channelsMembersRemove), Handler: capability.Handler(invokeChannelsMembersRemove)},
 		capability.Operation{Descriptor: withGroup(channelsMembersRoles), Handler: capability.Handler(invokeChannelsMembersRoles)},
+		capability.Operation{Descriptor: withGroup(categoriesList), Handler: capability.Handler(invokeCategoriesList)},
+		capability.Operation{Descriptor: withGroup(categoriesCreate), Handler: capability.Handler(invokeCategoriesCreate)},
+		capability.Operation{Descriptor: withGroup(categoriesUpdate), Handler: capability.Handler(invokeCategoriesUpdate)},
+		capability.Operation{Descriptor: withGroup(categoriesDelete), Handler: capability.Handler(invokeCategoriesDelete)},
+		capability.Operation{Descriptor: withGroup(channelNotificationsUpdate),
+			Handler: capability.Handler(invokeChannelNotificationsUpdate)},
 		capability.Operation{Descriptor: withGroup(messagesList), Handler: capability.Handler(invokeMessagesList)},
 		capability.Operation{Descriptor: withGroup(messagesThread), Handler: capability.Handler(invokeMessagesThread)},
 		capability.Operation{Descriptor: withGroup(messagesGet), Handler: capability.Handler(invokeMessagesGet)},
