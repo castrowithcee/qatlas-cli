@@ -212,6 +212,9 @@ func coreConfig() *config.Config {
 			"teamroles2": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
 				Tools:       []string{teamMembersRoles.ID}},
+			// "editor2" may update in both teams, so a thread of teamB can be named with teamA.
+			"editor2": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
 			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete, config.PermissionUpdate}},
 		},
@@ -277,8 +280,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 47 {
-		t.Fatalf("tools = %+v, want 47", metadata.Tools)
+	if len(metadata.Tools) != 51 {
+		t.Fatalf("tools = %+v, want 51", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -335,6 +338,16 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			t.Fatalf("profile %s selects a delete tool", id)
 		}
 	}
+	for _, id := range []string{threadsList.ID, threadsGet.ID} {
+		if !has("read", id) || !has("messaging", id) {
+			t.Fatalf("profiles = %+v, want %s in read and messaging", profiles, id)
+		}
+	}
+	for _, id := range []string{threadsFollow.ID, threadsUnfollow.ID} {
+		if has("read", id) || !has("messaging", id) || has("channel-admin", id) {
+			t.Fatalf("profiles = %+v, want %s in messaging only", profiles, id)
+		}
+	}
 	groups := map[string]bool{}
 	for _, group := range metadata.Groups {
 		groups[group.ID] = true
@@ -347,6 +360,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == pinsList.ID) &&
 			tool.Group != "messages" {
 			t.Fatalf("tool %s group = %q, want messages", tool.ID, tool.Group)
+		}
+		if strings.HasPrefix(tool.ID, Provider+".threads.") && tool.Group != "threads" {
+			t.Fatalf("tool %s group = %q, want threads", tool.ID, tool.Group)
 		}
 		if tool.ID == messagesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
 			t.Fatalf("messages.delete metadata = %+v", tool)
