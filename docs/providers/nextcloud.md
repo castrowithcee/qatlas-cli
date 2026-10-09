@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads and management, Deck reads, Talk reads and messages, typed
-  targets, connection permissions, and safety boundaries.
+  Describes Nextcloud file operations, file comments, share reads and management, Deck reads, Talk reads and
+  messages, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -185,31 +185,22 @@ and nothing in Deck can be changed.
 
 ## Talk
 
-The tool group `talk` uses the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`) with the same client and
-limits as sharing. The read tools `talkrooms.list`, `talkrooms.get`, `talkparticipants.list`, and
-`talkmessages.list` are in the setup profile `talk-read` and in no other; the change tools are in no profile.
-All need a `talk` target and refuse locally without one. A conversation counts only when the target binds it:
-`talk` binds every conversation of the identity, `talk/TOKEN` one. `talkrooms.list` drops every other
-conversation. A tool that takes a `token` refuses an unbound or malformed one locally, before any credential
-access or request, and its message names no token. Each call first reads the `spreed` capability and refuses a
-missing Talk app or feature clearly; this costs one extra request per call. Participants report actor type,
-actor ID, display name, role, and call state; session IDs and phone numbers are not read.
+The tool group `talk` works on Talk conversations through the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`)
+with the client of sharing. Its read tools form the setup profile `talk-read`; the change tools are in no
+profile, and deleting needs a tools list that names the tool. Every tool needs a `talk` target: `talk` binds
+every conversation of the identity, `talk/TOKEN` one. Listings drop unbound conversations, and an unbound or
+malformed token is refused locally, before any credential access or request, without naming it. Each call first
+reads the `spreed` capability and refuses a missing Talk app or feature clearly instead of assuming a version.
 
-`talkmessages.list` reads one page of the history, newest first, with at most 100 messages (default 50). The
-server is asked for no waiting, and not to move the read marker or mark notifications as read. `next_cursor`
-(the `X-Chat-Last-Given` header) continues with the older messages. A message text is cut at 4 KiB and marked
-`truncated`. Placeholders such as `{actor}` or `{file}` are replaced by the name of the rich object and listed
-in `objects`; links, paths, previews, and sizes of objects are never reported, because a file shared into a
-conversation carries an access token in them. Message texts and names are untrusted data.
+Reading never waits for new messages, moves the read marker, or marks notifications as read. Placeholders such
+as `{actor}` or `{file}` become the name of their rich object; links, paths, and previews of objects are never
+reported, because a file shared into a conversation carries an access token in them. Session IDs and phone
+numbers of participants are not read. Message texts and names are untrusted data.
 
-`talkmessages.send`, `talkmessages.edit`, `talkmessages.delete`, and `talkreactions.set` change one bound
-conversation per call. All need `confirm`, check the capability feature they depend on, and send exactly one
-request after it. A message ID is digits only and only ever reaches the path of the bound conversation; a text
-is at most 4000 characters, a reaction one emoji. `send` creates a message, optionally as a reply, and reports
-a random `reference_id` that `talkmessages.list` shows. `delete` needs a tools list that names it. An unclear
-outcome (timeout, dropped connection, 5xx, unreadable answer) is reported as possibly applied and never
-repeated; after an unclear `send`, look for the `reference_id` before sending again. A 429 is reported as
-rate-limited, without that hint. Refusals such as a foreign message or an expired edit period have fixed
+A change tool needs `confirm` and sends exactly one request after the capability read; a message ID only ever
+reaches the path of the bound conversation. An unclear outcome (timeout, dropped connection, 5xx, unreadable
+answer) is reported as possibly applied and never repeated; `talkmessages.send` reports a random `reference_id`
+to look for in `talkmessages.list` before sending again. A 429 is reported as rate-limited. Refusals have fixed
 messages without provider text.
 
 ## Versions
@@ -259,6 +250,16 @@ color. `update` and `delete` read the tag once first and treat an invisible tag 
 name is a clear error on `create`; on `update` Nextcloud reports it inside the answer, so a refused change
 cannot be told apart from a missing right. An unclear outcome is reported as possibly applied, to be checked
 with `systemtags.list`, and never repeated.
+
+## File comments
+
+The `nextcloud.comments.*` tools read and write the comments of one file below the bound root and need a `folder`
+target; folders are refused. The file ID comes only from a stat of the path, and a comment ID is only ever used
+below that file. Comment text and author names are untrusted data, and long text is cut and marked. Writing needs
+`confirm`, sends exactly one request after the stat, and is open-world because a mention notifies that user;
+Nextcloud lets an identity change or delete only its own comments. An unclear outcome is reported as possibly
+applied and never repeated. `comments.list` is in the `read` and `write` profiles, `create` and `update` in none,
+and `delete` is reachable only through a tools list.
 
 ## Local files
 
