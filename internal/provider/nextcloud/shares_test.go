@@ -17,6 +17,8 @@ const (
 	urlCanary   = "https://cloud.example.invalid/s/link-token-canary-nextcloud-5d2f"
 	hashCanary  = "password-hash-canary-nextcloud-9a40"
 	textCanary  = "provider-message-canary-nextcloud-1e77"
+	roomCanary  = "talk-room-token-canary-nextcloud-3c81"
+	otherCanary = "unknown-type-share-with-canary-nextcloud-77b0"
 )
 
 func ocsResponse(status int, body string) *http.Response {
@@ -48,8 +50,10 @@ func TestSharesListFiltersToTheRootAndHidesAccessSecrets(t *testing.T) {
 			shareJSON("4", "6", aliceUser, "/Reports/a", "/a", "r@remote", "1", "")+`,`+
 			shareJSON("5", "0", aliceUser, "/Other/secret.txt", "/secret.txt", "bob", "1", "")+`,`+
 			shareJSON("6", "0", aliceUser, "/ReportsX/a", "/a", "bob", "1", "")+`,`+
-			shareJSON("7", "99", aliceUser, "/Reports/b", "/b", "g", "1", "")+`,`+
-			shareJSON("8", "0", "dave", "/Reports/c", "/Reports/c", "alice", "1", "")+
+			shareJSON("7", "99", aliceUser, "/Reports/b", "/b", otherCanary, "1", "")+`,`+
+			shareJSON("8", "0", "dave", "/Reports/c", "/Reports/c", "alice", "1", "")+`,`+
+			shareJSON("9", "10", aliceUser, "/Reports/d", "/d", roomCanary, "1", `,"share_with_displayname":"Project room"`)+`,`+
+			shareJSON("10", "7", aliceUser, "/Reports/e", "/e", "circle1", "1", "")+
 			`]`)), nil
 	})
 	c, _ := client(t)
@@ -61,11 +65,11 @@ func TestSharesListFiltersToTheRootAndHidesAccessSecrets(t *testing.T) {
 	for _, share := range result.Shares {
 		ids = append(ids, share.ID)
 	}
-	if strings.Join(ids, ",") != "1,2,3,4,7" {
+	if strings.Join(ids, ",") != "1,2,3,4,7,9,10" {
 		t.Errorf("ids = %v, want only the outgoing shares below the root", ids)
 	}
 	encoded, _ := json.Marshal(result)
-	for _, canary := range []string{tokenCanary, urlCanary, hashCanary, textCanary} {
+	for _, canary := range []string{tokenCanary, urlCanary, hashCanary, textCanary, roomCanary, otherCanary} {
 		if strings.Contains(string(encoded), canary) {
 			t.Errorf("the result carries %q: %s", canary, encoded)
 		}
@@ -77,8 +81,16 @@ func TestSharesListFiltersToTheRootAndHidesAccessSecrets(t *testing.T) {
 		t.Errorf("first = %+v", first)
 	}
 	if link.Type != "link" || link.Recipient != nil || !link.HasPassword || email.Type != "email" || !email.HasPassword ||
-		email.Path != "" || result.Shares[3].Type != "federated" || result.Shares[4].Type != "other" {
+		email.Path != "" || result.Shares[3].Type != "federated" || result.Shares[3].Recipient.ID != "r@remote" ||
+		result.Shares[4].Type != "other" || result.Shares[4].Recipient != nil {
 		t.Errorf("shares = %+v", result.Shares)
+	}
+	talk, team := result.Shares[5], result.Shares[6]
+	if talk.Type != "talk" || talk.Recipient == nil || talk.Recipient.ID != "" || talk.Recipient.Name != "Project room" {
+		t.Errorf("talk = %+v", talk)
+	}
+	if team.Type != "team" || team.Recipient == nil || team.Recipient.ID != "circle1" {
+		t.Errorf("team = %+v", team)
 	}
 	request := (*calls)[0]
 	if request.method != http.MethodGet || request.url.Path != "/ocs/v2.php/apps/files_sharing/api/v1/shares" ||
@@ -275,6 +287,8 @@ func TestShareesSearchSendsFixedQueryAndReportsOnlyIdentity(t *testing.T) {
 			`"users":[{"label":"Bob","value":{"shareType":0,"shareWith":"bob"}},{"label":"Bobby","value":{"shareType":0,"shareWith":"bobby"}}],`+
 			`"groups":[{"label":"Team","value":{"shareType":1,"shareWith":"team"}}],`+
 			`"emails":[{"label":"e","value":{"shareType":4,"shareWith":"e@example.invalid"}}],`+
+			`"rooms":[{"label":"Room","value":{"shareType":10,"shareWith":"`+roomCanary+`"}}],`+
+			`"circles":[{"label":"Odd","value":{"shareType":99,"shareWith":"`+otherCanary+`"}}],`+
 			`"lookup":[{"label":"L","value":{"shareType":0,"shareWith":"far"}}],"lookupEnabled":false}`)), nil
 	})
 	core := accountClient(t, "account")
@@ -288,7 +302,8 @@ func TestShareesSearchSendsFixedQueryAndReportsOnlyIdentity(t *testing.T) {
 	var result ShareeResult
 	if err := json.Unmarshal(response.Result, &result); err != nil || result.Count != 4 ||
 		result.Sharees[0] != (Sharee{Type: "user", ID: "bob", Name: "Bob"}) || strings.Contains(string(response.Result), textCanary) ||
-		strings.Contains(string(response.Result), "far") {
+		strings.Contains(string(response.Result), "far") || strings.Contains(string(response.Result), roomCanary) ||
+		strings.Contains(string(response.Result), otherCanary) {
 		t.Errorf("result = %s, %v", response.Result, err)
 	}
 	query := (*calls)[0].url.Query()

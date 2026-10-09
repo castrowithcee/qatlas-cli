@@ -81,9 +81,10 @@ type Rights struct {
 	Share  bool `json:"share"`
 }
 
-// Recipient is who a share reaches, as the instance names it.
+// Recipient is who a share reaches, as the instance names it. A Talk share has no ID: its share_with is the
+// conversation token, which grants access to a public conversation.
 type Recipient struct {
-	ID   string `json:"id"`
+	ID   string `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
 }
 
@@ -228,10 +229,26 @@ func (c *Client) normalise(raw rawShare) (Share, bool) {
 	if raw.ItemType == "file" || raw.ItemType == "folder" {
 		share.ItemType = raw.ItemType
 	}
-	if kind != "link" && raw.ShareWith != "" {
-		share.Recipient = &Recipient{ID: bounded(raw.ShareWith), Name: bounded(raw.DisplayName)}
-	}
+	share.Recipient = recipientOf(kind, raw.ShareWith, raw.DisplayName)
 	return share, true
+}
+
+// recipientOf reports the recipient of a share without any access secret: a link carries a password hash in
+// share_with and a Talk share the conversation token, and the meaning of share_with for an unknown type is
+// not established, so only user, group, email, federated, and team shares report it as the ID.
+func recipientOf(kind, shareWith, displayName string) *Recipient {
+	switch {
+	case shareWith == "":
+		return nil
+	case kind == "talk":
+		if displayName == "" {
+			return nil
+		}
+		return &Recipient{Name: bounded(displayName)}
+	case kind == "link" || kind == shareTypeOther:
+		return nil
+	}
+	return &Recipient{ID: bounded(shareWith), Name: bounded(displayName)}
 }
 
 // expiry normalises the expiration Nextcloud writes without a zone to RFC 3339 in UTC; a value in another
@@ -350,7 +367,8 @@ type rawSharee struct {
 
 // shareeBuckets are the lists of the recipient answer this adapter reads, besides the same lists below
 // "exact". The "lookup" list is never read: the global lookup server is not asked.
-var shareeBuckets = []string{"users", "groups", "remotes", "remote_groups", "emails", "circles", "rooms"}
+// Talk rooms are not read: their identifier is the conversation token.
+var shareeBuckets = []string{"users", "groups", "remotes", "remote_groups", "emails", "circles"}
 
 // SearchSharees searches the possible recipients of the instance. The search is instance-wide and
 // independent of the root folder; the global lookup server is switched off.
@@ -394,7 +412,7 @@ func (c *Client) SearchSharees(ctx context.Context, search, itemType string, per
 			for _, candidate := range candidates {
 				kind := shareTypeName(candidate.Value.ShareType)
 				key := kind + "\x00" + candidate.Value.ShareWith
-				if candidate.Value.ShareWith == "" || seen[key] {
+				if candidate.Value.ShareWith == "" || kind == "talk" || kind == "link" || kind == shareTypeOther || seen[key] {
 					continue
 				}
 				if len(result.Sharees) == maxShareeEntries {
@@ -421,7 +439,7 @@ const (
 		`"direction":{"type":"string","enum":["outgoing","incoming"]},"path":{"type":"string"},` +
 		`"item_type":{"type":"string","enum":["file","folder"]},` +
 		`"recipient":{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"}},` +
-		`"required":["id"],"additionalProperties":false},"rights":` + rightsSchema + `,` +
+		`"additionalProperties":false},"rights":` + rightsSchema + `,` +
 		`"expires_at":{"type":"string"},"note":{"type":"string"},"label":{"type":"string"},` +
 		`"has_password":{"type":"boolean"}},` +
 		`"required":["id","type","direction","path","rights","has_password"],"additionalProperties":false}`
@@ -437,7 +455,7 @@ var shareFields = []capability.Field{
 		"incoming share its place in the Files tree of the identity"},
 	{Name: "item_type", Description: "Either file or folder"},
 	{Name: "recipient", Description: "Who the share reaches (identifier and display name, untrusted data); " +
-		"absent for a link"},
+		"only the display name for talk, absent for link and other"},
 	{Name: "rights", Description: "read, update, create, delete, and share as flags"},
 	{Name: "expires_at", Description: "Expiry in RFC 3339 UTC when the share has one"},
 	{Name: "note", Description: "Note to the recipient, untrusted data"},
@@ -502,7 +520,7 @@ var sharesGet = capability.Descriptor{
 }
 
 var shareeEntrySchema = `{"type":"object","properties":{"type":{"type":"string",` +
-	`"enum":["user","group","link","email","federated","team","talk","other"]},"id":{"type":"string"},` +
+	`"enum":["user","group","email","federated","team"]},"id":{"type":"string"},` +
 	`"name":{"type":"string"}},"required":["type","id"],"additionalProperties":false}`
 
 var shareesSearch = capability.Descriptor{

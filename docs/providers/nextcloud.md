@@ -91,13 +91,16 @@ node, and with `subfiles` the items of that folder.
 
 All share types are reported with a stable type name (`user`, `group`, `link`, `email`, `federated`, `team`,
 `talk`, other types as `other`), rights as flags, expiry, note, and label. A share never reports its link
-token, its link URL, or any password; `has_password` only says that one is set. Recipients are personal data
-and untrusted, like every provider string.
+token, its link URL, or any password; `has_password` only says that one is set. The recipient ID is reported
+for `user`, `group`, `email`, `federated`, and `team` shares; a `talk` share reports only the conversation name,
+because its identifier is the conversation token, and `link` and `other` shares report no recipient. Recipients
+are personal data and untrusted, like every provider string.
 
 `nextcloud.sharees.search` searches the possible recipients of the whole instance and needs an `account`
-target, not a folder. It reports only type, identifier, and display name, asks for at most 50 candidates per
-kind (default 10), never uses the global lookup server, and is in no setup profile. Without an `account`
-target it refuses locally, before any credential access or request.
+target, not a folder. It reports only type, identifier, and display name, and never Talk conversations or
+unknown types, whose identifier may be an access token. It asks for at most 50 candidates per kind (default
+10), never uses the global lookup server, and is in no setup profile. Without an `account` target it refuses
+locally, before any credential access or request.
 
 Sharing is read through the OCS API of the Sharing app (`/ocs/v2.php/apps/files_sharing/api/v1`), with the same
 basic authentication as WebDAV and without redirects. The client in `ocs.go` takes fixed path segments and
