@@ -1,6 +1,7 @@
 ---
 description: >
-  Describes Telegram message and update operations, fixed chat targets, connection permissions, and safety boundaries.
+  Describes Telegram message, update, and file operations, fixed chat targets, connection permissions, and
+  safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -43,10 +44,10 @@ before the credential is read when the target is missing. Methods that accept on
 `@username` chat locally.
 
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the update
-tool to `updates`, the bot and webhook tools to `bot`. A group never changes a tool ID, a permission, or a tools
-list. The base URL must be a plain `https` URL with a host and without user, query, or fragment, with no
-exception for local addresses, and redirects are never followed. `config validate` rejects any other base URL.
-Errors never carry Telegram's own error text.
+tool to `updates`, the bot and webhook tools to `bot`, the file tools to `files`. A group never changes a tool
+ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user,
+query, or fragment, with no exception for local addresses, and redirects are never followed. `config validate`
+rejects any other base URL. Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
 they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
@@ -88,6 +89,20 @@ and needs no `bot` target, since it concerns only the connection's own token.
 waiting (`pending_update_count`), and, when present, the time of the last delivery error (`last_error_date`).
 It needs the `bot` target and is refused before the credential is read without it. The webhook URL and every
 other field of Telegram's answer are never returned. It is part of no setup profile.
+
+## Files
+
+`telegram.files.get` (`read`) returns the size and `file_unique_id` of one file; `telegram.files.download`
+(`read`) writes it to `local_path`. Both take only a `file_ref` from `media.file_ref` of `telegram.updates.list`:
+a raw file identifier, a reference bound to another target, one signed with another token, or one of another
+kind is refused. Neither tool is part of a setup profile.
+
+`telegram.files.download` is offered only on a connection that releases a directory for writing (`files`).
+A `local_path` outside it is refused before the credential is read. An existing file is replaced only with
+confirmation, and a failed or incomplete transfer leaves no file. The result carries size and SHA-256, never the
+content. Files above 20 MB, the Bot API's limit for bots, are refused before the download, and a response
+longer than the reported size is rejected. The download URL carries the bot token; it and Telegram's
+`file_path` appear in no output, error, or log, and a redirect is never followed.
 
 ## Setup profiles
 
