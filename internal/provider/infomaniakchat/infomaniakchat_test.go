@@ -212,6 +212,10 @@ func coreConfig() *config.Config {
 			"teamroles2": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
 				Tools:       []string{teamMembersRoles.ID}},
+			// "catdel" lists the category delete tool; "nodelete" holds the permission without it.
+			"catdel": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+				Tools:       []string{categoriesDelete.ID}},
 			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete, config.PermissionUpdate}},
 		},
@@ -277,8 +281,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 47 {
-		t.Fatalf("tools = %+v, want 47", metadata.Tools)
+	if len(metadata.Tools) != 52 {
+		t.Fatalf("tools = %+v, want 52", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -324,7 +328,16 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	if !has("read", archivedChannelsList.ID) || has("channel-admin", archivedChannelsList.ID) {
 		t.Fatalf("profiles = %+v, want archivedchannels.list in read", profiles)
 	}
+	if !has("read", categoriesList.ID) || !has("messaging", categoriesList.ID) ||
+		!has("messaging", categoriesCreate.ID) || !has("messaging", categoriesUpdate.ID) ||
+		!has("messaging", channelNotificationsUpdate.ID) || has("read", categoriesCreate.ID) ||
+		has("read", categoriesUpdate.ID) || has("read", channelNotificationsUpdate.ID) {
+		t.Fatalf("profiles = %+v, want the category and notification tools in the specified profiles", profiles)
+	}
 	for id := range profiles {
+		if has(id, categoriesDelete.ID) {
+			t.Fatalf("profile %s selects the category delete tool", id)
+		}
 		if has(id, channelsArchive.ID) || has(id, channelsRestore.ID) || has(id, channelsPrivacy.ID) {
 			t.Fatalf("profile %s selects an archive, restore, or visibility tool", id)
 		}
@@ -363,6 +376,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 		if tool.ID == archivedChannelsList.ID && (tool.RequiresToolAllowList || tool.Group != "channels") {
 			t.Fatalf("archivedchannels.list metadata = %+v", tool)
+		}
+		if tool.ID == categoriesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
+			t.Fatalf("categories.delete metadata = %+v", tool)
+		}
+		if (tool.ID == categoriesList.ID || tool.ID == categoriesCreate.ID || tool.ID == categoriesUpdate.ID ||
+			tool.ID == channelNotificationsUpdate.ID) && (tool.RequiresToolAllowList || tool.Group != "channels") {
+			t.Fatalf("%s metadata = %+v", tool.ID, tool)
 		}
 		if tool.ID == reactionsRemove.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
 			t.Fatalf("reactions.remove metadata = %+v", tool)
