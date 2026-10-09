@@ -30,6 +30,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
 	"github.com/castrowithcee/qatlas-cli/internal/provider/ratelimit"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
@@ -146,7 +147,7 @@ func newHTTPClient() *http.Client {
 }
 
 // request is the single read path of this provider; writes go through mutate. The method is one of the three
-// read constants and never comes from an argument. The path comes from the fixed root or from segments that segmentsOf or
+// read constants and never comes from an argument. The path comes from the fixed root or from segments that Segments or
 // validCollectionID already validated; a collection path ends in a slash, an object path does not. A response
 // other than wantStatus is mapped to a class without reading its body, and a body beyond limit is refused.
 func (c *Client) request(ctx context.Context, op, method string, segments []string, collection bool,
@@ -202,13 +203,13 @@ func pathOf(segments []string, collection bool) string {
 }
 
 // propfind sends a fixed PROPFIND body to a collection path and reads the multi-status answer.
-func (c *Client) propfind(ctx context.Context, op string, segments []string, depth, body string) ([]resource, error) {
+func (c *Client) propfind(ctx context.Context, op string, segments []string, depth, body string) ([]dav.Resource, error) {
 	data, _, err := c.request(ctx, op, methodPropfind, segments, true, depth, body, http.StatusMultiStatus,
 		maxResponseBytes)
 	if err != nil {
 		return nil, err
 	}
-	resources, err := parseMultiStatus(op, data)
+	resources, err := server.ParseMultiStatus(op, data)
 	if err != nil {
 		return nil, err
 	}
