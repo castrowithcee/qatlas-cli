@@ -53,11 +53,13 @@
 // no message holding it, and, when kChat reports one, the target channel; kChat offers no way to remove an
 // upload that is never attached.
 //
-// Team management, user changes, profile pictures, previews and thumbnails, the custom emoji catalog, and
-// webhooks are deliberately out of scope: this provider lists the teams, channels, and direct and group
-// channels a connection may reach, reads channel details and the public channels of a bound team, creates one
-// confirmed channel in a bound team (only for a connection without a channel allow-list, because a new channel
-// cannot be inside one), changes the display name, purpose, header, or handle of one confirmed public or
+// Creating, changing, or deleting teams, adding or removing team members, invitations, user changes,
+// profile pictures, previews and thumbnails, the custom emoji catalog, and webhooks are deliberately out of
+// scope: this provider lists the teams, channels, and direct and group channels a connection may reach,
+// reads the details and members of a bound team and, only when a connection's tools list names it, sets one
+// current member's team role (the invitation identifier is never read), reads channel details and the
+// public channels of a bound team, creates one confirmed channel in a bound team (only for a connection
+// without a channel allow-list, because a new channel cannot be inside one), changes the display name, purpose, header, or handle of one confirmed public or
 // private channel, lists the members of a public or private channel and the archived channels of a bound
 // team, adds confirmed users who are the token's own user or members of the channel's team and, only when a
 // connection's tools list names it, removes one member, sets one member's channel role, archives or restores
@@ -481,7 +483,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat: messages (channel, direct, group), search, files, reactions, pins, users and presence, and channels (read, create, rename, members, visibility, lifecycle) of bound teams",
+		Description:        "Infomaniak kChat: messages (channel, direct, group), search, files, reactions, pins, users and presence, and channels (read, create, rename, members, visibility, lifecycle) of bound teams, team roles",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -521,14 +523,14 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read teams, channels, messages, and users", Recommended: true,
-			Description: "lists the bound teams and their channels, reads channel details and the public " +
+			Description: "lists the bound teams and their channels, reads team details and members, reads channel details and the public " +
 				"channels of a bound team, lists the direct and group channels, searches messages, files, and " +
 				"channels, lists the members of a channel and the archived channels of a team, reads channel " +
 				"messages, single messages, threads, reactions, pinned messages, and attachments (metadata and " +
 				"download to a released local directory), and reads, lists, and searches the users of the bound " +
 				"teams and their presence; changes nothing",
-			Tools: []string{teamsList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID, channelsMembersList.ID,
-				directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
+			Tools: []string{teamsList.ID, teamsGet.ID, teamMembersList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID,
+				channelsMembersList.ID, directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
 				filesDownload.ID, reactionsList.ID, pinsList.ID, usersGet.ID, usersList.ID, usersSearch.ID,
 				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID},
 		}, {
@@ -558,6 +560,9 @@ func Register(reg *capability.Registry) error {
 	}
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: withGroup(teamsList), Handler: capability.Handler(invokeTeamsList)},
+		capability.Operation{Descriptor: withGroup(teamsGet), Handler: capability.Handler(invokeTeamsGet)},
+		capability.Operation{Descriptor: withGroup(teamMembersList), Handler: capability.Handler(invokeTeamMembersList)},
+		capability.Operation{Descriptor: withGroup(teamMembersRoles), Handler: capability.Handler(invokeTeamMembersRoles)},
 		capability.Operation{Descriptor: withGroup(channelsList), Handler: capability.Handler(invokeChannelsList)},
 		capability.Operation{Descriptor: withGroup(channelsGet), Handler: capability.Handler(invokeChannelsGet)},
 		capability.Operation{Descriptor: withGroup(channelsBrowse), Handler: capability.Handler(invokeChannelsBrowse)},
