@@ -154,7 +154,7 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 
 	metadata, ok := reg.ProviderMetadata(Provider)
 	if !ok || metadata.Name != "Lexware Office" || metadata.DefaultBaseURL != gateway ||
-		metadata.Target.Required || len(metadata.SecretRoles) != 1 ||
+		metadata.Target.Required || metadata.Target.Multiple || metadata.Target.Validate == nil || len(metadata.SecretRoles) != 1 ||
 		metadata.SecretRoles[0].Name != roleAPIKey || metadata.SecretRoles[0].Description == "" {
 		t.Fatalf("metadata = %+v, %v", metadata, ok)
 	}

@@ -287,8 +287,15 @@ func Register(reg *capability.Registry) error {
 				"Public API in Lexware Office; it is sent as the bearer token",
 		}},
 		Target: config.TargetMetadata{
-			Label:       "target",
-			Description: "not used by Lexware; the organization follows from the API key",
+			Label: "organization",
+			Description: "optionally one organization/ORGANIZATION_ID target; without it the organization " +
+				"follows from the API key, with it a key of another organization is refused before any request",
+			Kinds: []config.TargetKind{{
+				Name:        "organization",
+				Description: "the Lexware organization the API key must belong to; optional, at most one",
+				Forms:       []string{"organization/ORGANIZATION_ID"},
+			}},
+			Validate: validateOrganizationTarget,
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read invoices, vouchers, contacts, articles and reference data", Recommended: true,
@@ -458,6 +465,8 @@ type Client struct {
 	auth    string
 	http    *http.Client
 	limiter *ratelimit.Limiter
+	// binding is nil for a connection without an organization target.
+	binding *binding
 }
 
 // Open resolves the API key of one selected connection and returns a client for the fixed gateway.
@@ -476,6 +485,10 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 		return nil, providerError("open",
 			"a Lexware service must use the fixed API gateway "+gateway)
 	}
+	want, err := boundOrganization(resolved)
+	if err != nil {
+		return nil, err
+	}
 	if secrets == nil {
 		return nil, providerError("open", "no credential resolver was configured")
 	}
@@ -492,7 +505,11 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	if lim == nil {
 		lim = limiters.For(value.Secret)
 	}
-	return &Client{auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}, nil
+	c := &Client{auth: "Bearer " + value.Secret, http: provider.NoRedirectClient(defaultTimeout, transport), limiter: lim}
+	if want != "" {
+		c.binding = &binding{want: want, entry: organizationEntryFor(resolved.Name, value.Secret)}
+	}
+	return c, nil
 }
 
 // isGateway reports whether a configured base URL names the fixed production gateway. A trailing slash is
@@ -1030,6 +1047,15 @@ func (c *Client) post(ctx context.Context, op, resource, path string, query url.
 // delivered (timeout, reset, unknown transport cause, 5xx, or an unusable 2xx answer) and never to a failure
 // that proves nothing was applied.
 func (c *Client) send(ctx context.Context, op, method, resource, path string, query url.Values, payload, out any, uncertain string) error {
+	// Every business request of every tool passes here, so a bound connection is verified before any of them.
+	if err := c.verifyOrganization(ctx, op); err != nil {
+		return err
+	}
+	return c.sendRaw(ctx, op, method, resource, path, query, payload, out, uncertain)
+}
+
+// sendRaw sends one request without the organization check; only the check itself may call it directly.
+func (c *Client) sendRaw(ctx context.Context, op, method, resource, path string, query url.Values, payload, out any, uncertain string) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "Lexware", err)
 	}

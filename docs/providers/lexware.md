@@ -22,6 +22,13 @@ voucher and one bookkeeping voucher with its positions; bookkeeping vouchers are
 Quotations, order confirmations, credit notes and delivery notes each have their own detail tool by
 identifier, with address, positions, totals, shipping and related vouchers; a delivery note carries no prices.
 
+A connection may carry one optional target `organization/<uuid>` (the `organizationId` of the profile). It
+protects connections whose keys belong to different customers: before the first request of a tool, Qatlas
+reads the profile of the key once per process and refuses a key of another organization as `permission`,
+without sending the request and without naming either organization. A failed profile read blocks the request
+with its own error class and is retried by the next call. The connection test reports the same refusal as
+`permission`. Without a target nothing is checked and the organization follows from the key.
+
 `lexware.profile.get` reads the organization, its contract features and tax settings as their own data class;
 the name, email and identifiers of the key creator are never returned. Countries, payment conditions, posting
 categories and print layouts are fixed reference lists; a list longer than its cap is cut and marked
