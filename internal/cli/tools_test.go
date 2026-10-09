@@ -642,7 +642,7 @@ func TestToolDescribesOneCompactContract(t *testing.T) {
 		}
 		for _, want := range []application.ArgumentRow{
 			{Name: "line_items", Type: "object[]", Required: true, Limits: "items 1..100"},
-			{Name: "line_items[].type", Type: "string", Required: true, Form: "custom|text"},
+			{Name: "line_items[].type", Type: "string", Required: true, Form: "custom|text|service|material"},
 			{Name: "line_items[].name", Type: "string", Required: true, Limits: "len 1..255"},
 			{Name: "line_items[].quantity", Type: "number"},
 			{Name: "address", Type: "object", Required: true},

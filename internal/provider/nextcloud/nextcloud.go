@@ -331,6 +331,10 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
 				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID, commentsList.ID,
 				foldersCreate.ID, filesMove.ID, filesCopy.ID},
+		}, {
+			ID: "deck-read", Title: "Read Deck boards",
+			Description: "lists the bound Deck boards, reads a board with its labels and members, its stacks and cards, and single cards; changes nothing",
+			Tools:       []string{deckBoardsList.ID, deckBoardsGet.ID, deckStacksList.ID, deckCardsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -369,6 +373,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(filesSearch), Handler: folderBound(invokeFilesSearch)},
 		capability.Operation{Descriptor: grouped(favoritesList), Handler: folderBound(invokeFavoritesList)},
 		capability.Operation{Descriptor: grouped(filesFavorite), Handler: folderBound(invokeFilesFavorite)},
+		capability.Operation{Descriptor: inGroup(deckBoardsList, groupDeck), Handler: deckBound(invokeDeckBoardsList)},
+		capability.Operation{Descriptor: inGroup(deckBoardsGet, groupDeck), Handler: deckBound(invokeDeckBoardsGet)},
+		capability.Operation{Descriptor: inGroup(deckStacksList, groupDeck), Handler: deckBound(invokeDeckStacksList)},
+		capability.Operation{Descriptor: inGroup(deckCardsGet, groupDeck), Handler: deckBound(invokeDeckCardsGet)},
 	)
 }
 
