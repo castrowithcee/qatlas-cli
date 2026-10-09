@@ -107,6 +107,12 @@ func parseMultiStatus(op string, body []byte) ([]resource, error) {
 // parseMultiStatusMax is parseMultiStatus with the number of nodes it accepts; the trash bin lists
 // entries of the whole account before they are filtered to the root folder.
 func parseMultiStatusMax(op string, body []byte, limit int) ([]resource, error) {
+	return parseMultiStatusBounded(op, body, limit, false)
+}
+
+// parseMultiStatusBounded is parseMultiStatusMax that may also accept an answer without a single node,
+// which is the correct answer of a search without a hit.
+func parseMultiStatusBounded(op string, body []byte, limit int, allowEmpty bool) ([]resource, error) {
 	decoder := xml.NewDecoder(bytes.NewReader(body))
 	decoder.Strict = true
 
@@ -189,7 +195,7 @@ func parseMultiStatusMax(op string, body []byte, limit int) ([]resource, error) 
 		}
 	}
 
-	if len(resources) == 0 {
+	if len(resources) == 0 && !allowEmpty {
 		return nil, invalidResponse(op, "Nextcloud answered without a single node")
 	}
 	return resources, nil

@@ -323,11 +323,13 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read files", Recommended: true,
 			Description: "lists folders, reads file metadata and content; changes nothing below the root folder",
-			Tools:       []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID, versionsList.ID, filesTagsList.ID},
+			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
+				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID},
 		}, {
 			ID: "write", Title: "Read and organise files",
 			Description: "lists folders, reads files, creates folders, and moves, renames, or copies files and folders without overwriting",
-			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID, versionsList.ID, filesTagsList.ID,
+			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
+				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID,
 				foldersCreate.ID, filesMove.ID, filesCopy.ID},
 		}},
 	}, TestConnection); err != nil {
@@ -357,6 +359,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(trashList), Handler: folderBound(invokeTrashList)},
 		capability.Operation{Descriptor: grouped(trashRestore), Handler: folderBound(invokeTrashRestore)},
 		capability.Operation{Descriptor: grouped(trashDelete), Handler: folderBound(invokeTrashDelete)},
+		capability.Operation{Descriptor: grouped(filesSearch), Handler: folderBound(invokeFilesSearch)},
+		capability.Operation{Descriptor: grouped(favoritesList), Handler: folderBound(invokeFavoritesList)},
+		capability.Operation{Descriptor: grouped(filesFavorite), Handler: folderBound(invokeFilesFavorite)},
 	)
 }
 

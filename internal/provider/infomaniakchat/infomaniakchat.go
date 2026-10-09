@@ -5,12 +5,13 @@
 // (github.com/Infomaniak/mcp-server-kchat) documents (developer.infomaniak.com/openapi.json, operations
 // GetTeamsForUser, GetChannel, GetChannelMembers, GetChannelsForTeamForUser, CreateDirectChannel,
 // CreateGroupChannel, GetPostsForChannel, GetPost, GetPostThread, CreatePost, PatchPost, and DeletePost,
-// GetReactions, SaveReaction, and DeleteReaction, GetUser, GetUserByUsername, GetUsers, SearchUsers,
-// GetTeamMembersByIds, and GetUsersStatusesByIds, GetFileInfosForPost, GetFileInfo, and GetFile, SearchPosts,
-// SearchFiles, and SearchChannels, all marked x-auth-user with the bearerAuth security scheme). A kChat
-// instance's base URL is always the team's own name as the one DNS label directly below kchat.infomaniak.com,
-// never an arbitrary host: the MCP server builds every request from exactly that shape,
-// https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider accepts no other host, see parseInstance.
+// GetReactions, SaveReaction, and DeleteReaction, GetPinnedPosts, PinPost, and UnpinPost, GetUser,
+// GetUserByUsername, GetUsers, SearchUsers, GetTeamMembersByIds, and GetUsersStatusesByIds,
+// GetFileInfosForPost, GetFileInfo, and GetFile, SearchPosts, SearchFiles, and SearchChannels, all marked
+// x-auth-user with the bearerAuth security scheme). A kChat instance's base URL is always the team's own name
+// as the one DNS label directly below kchat.infomaniak.com, never an arbitrary host: the MCP server builds
+// every request from exactly that shape, https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider
+// accepts no other host, see parseInstance.
 //
 // A connection binds exactly one kChat instance, through its configured base URL, and one or more teams of it
 // (team/TEAM_ID, repeatable) plus, optionally, a narrower allow-list of channels (channel/CHANNEL_ID,
@@ -20,15 +21,16 @@
 // token can reach several teams, which matters for a person who holds tokens, or is a member of teams, of
 // several customers. A channel_id argument outside a configured channel allow-list is refused locally, before
 // any request is sent; every operation that names a channel_id directly (messages.list, messages.send,
-// users.list, users.search) also confirms live, see verifyChannelScope, that the channel belongs to a bound
-// team or is a direct or group channel with their members only, and is refused before the matching endpoint
-// is reached when it does not. Every operation that names a post_id (messages.thread, messages.get,
-// messages.files, messages.update, messages.delete, and the reactions tools) reads the post first and binds
-// it to its channel the same way, see verifyPostScope; the searches (messages.search, files.search,
-// channels.search) read the token's channels of the team once, see reachableChannels, and drop every hit
-// outside that set, so direct and group messages, other teams, and channels outside the allow-list never show
-// up; a message reply additionally confirms that its root post belongs to the same channel before it is ever
-// sent. Rejecting an out-of-scope channel or post never carries a message's text into an error or a log.
+// users.list, users.search, pins.list) also confirms live, see verifyChannelScope, that the channel belongs to
+// a bound team or is a direct or group channel with their members only, and is refused before the matching
+// endpoint is reached when it does not. Every operation that names a post_id (messages.thread, messages.get,
+// messages.files, messages.update, messages.delete, messages.pin, messages.unpin, and the reactions tools)
+// reads the post first and binds it to its channel the same way, see verifyPostScope; the searches
+// (messages.search, files.search, channels.search) read the token's channels of the team once, see
+// reachableChannels, and drop every hit outside that set, so direct and group messages, other teams, and
+// channels outside the allow-list never show up; a message reply additionally confirms that its root post
+// belongs to the same channel before it is ever sent. Rejecting an out-of-scope channel or post never carries
+// a message's text into an error or a log.
 //
 // A file is reachable only through the post it is attached to: files.info and files.download read the file's
 // info first and bind its post_id the same way; a file without a post is refused before any content is
@@ -51,25 +53,25 @@
 // no message holding it, and, when kChat reports one, the target channel; kChat offers no way to remove an
 // upload that is never attached.
 //
-// Team management, visibility and archiving of channels, user changes, profile pictures,
-// previews and thumbnails, the custom emoji catalog, and webhooks are deliberately out of scope: this
-// provider lists the teams, channels, and direct and group channels a connection may reach, reads channel
-// details and the public channels of a bound team, creates one confirmed channel in a bound team (only for a
-// connection without a channel allow-list, because a new channel cannot be inside one), changes the display
-// name, purpose, header, or handle of one confirmed public or private channel, lists the members of a
-// public or private channel, adds confirmed users who are the token's own user or members of the channel's
-// team and, only when a connection's tools list names it, removes one member or sets one member's channel
-// role (never in a direct or group channel, see openMemberChannel), opens one confirmed direct or
-// group channel with members of the bound teams, reads channel posts, single posts, threads, reactions, and
-// the attachments of posts (writing one to a released local directory), uploads one confirmed file for a
-// message, reads, lists, and searches the users of the bound teams and reads their presence, searches the
-// messages, files, and public channels of a bound team, sends or replies with exactly one confirmed message,
-// optionally with own uploads attached, changes the text of one confirmed message, adds one confirmed
-// reaction of the token's own user, and, only when a connection's tools list names it, deletes one confirmed
-// message or removes one own reaction. kChat renders Markdown and mentions such as @channel in a message, so
-// the text is sent as written. Every value a listing or a read answers with arrives from the provider and is
-// treated as untrusted data: normalised into a stable envelope, passed through the output encoders, and never
-// rendered, executed, or stored.
+// Team management, visibility and archiving of channels, user changes, profile pictures, previews and
+// thumbnails, the custom emoji catalog, and webhooks are deliberately out of scope: this provider lists the
+// teams, channels, and direct and group channels a connection may reach, reads channel details and the public
+// channels of a bound team, creates one confirmed channel in a bound team (only for a connection without a
+// channel allow-list, because a new channel cannot be inside one), changes the display name, purpose, header,
+// or handle of one confirmed public or private channel, lists the members of a public or private channel, adds
+// confirmed users who are the token's own user or members of the channel's team and, only when a connection's
+// tools list names it, removes one member or sets one member's channel role (never in a direct or group
+// channel, see openMemberChannel), opens one confirmed direct or group channel with members of the bound
+// teams, reads channel posts, single posts, threads, reactions, pinned posts, and the attachments of posts
+// (writing one to a released local directory), uploads one confirmed file for a message, reads, lists, and
+// searches the users of the bound teams and reads their presence, searches the messages, files, and public
+// channels of a bound team, sends or replies with exactly one confirmed message, optionally with own uploads
+// attached, changes the text of one confirmed message, adds one confirmed reaction of the token's own user,
+// pins or unpins one confirmed message, and, only when a connection's tools list names it, deletes one
+// confirmed message or removes one own reaction. kChat renders Markdown and mentions such as @channel in a
+// message, so the text is sent as written. Every value a listing or a read answers with arrives from the
+// provider and is treated as untrusted data: normalised into a stable envelope, passed through the output
+// encoders, and never rendered, executed, or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
 // no proactive spacing of its own; a 429 kChat itself reports is still classified and, when it names a
@@ -478,7 +480,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat team messaging: channel, direct, and group messages, search, file upload and download, reactions, users and presence, and channels (read, create, rename, members) of the bound teams",
+		Description:        "Infomaniak kChat team messaging: channel, direct, and group messages, search, files, reactions, pins, users and presence, and channels (read, create, rename, members) of the bound teams",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -520,24 +522,26 @@ func Register(reg *capability.Registry) error {
 			ID: "read", Title: "Read teams, channels, messages, and users", Recommended: true,
 			Description: "lists the bound teams and their channels, reads channel details and the public " +
 				"channels of a bound team, lists the direct and group channels, searches messages, files, and " +
-				"channels, lists the members of a channel, reads channel messages, single messages, threads, reactions, and attachments " +
-				"(metadata and download to a released local directory), and reads, lists, and searches the " +
-				"users of the bound teams and their presence; changes nothing",
+				"channels, lists the members of a channel, reads channel messages, single messages, threads, " +
+				"reactions, pinned messages, and attachments (metadata and download to a released local " +
+				"directory), and reads, lists, and searches the users of the bound teams and their presence; " +
+				"changes nothing",
 			Tools: []string{teamsList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID, channelsMembersList.ID,
-				directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID, filesDownload.ID,
-				reactionsList.ID, usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID, messagesSearch.ID,
-				filesSearch.ID, channelsSearch.ID},
+				directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
+				filesDownload.ID, reactionsList.ID, pinsList.ID, usersGet.ID, usersList.ID, usersSearch.ID,
+				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
 				"a confirmed message, or a confirmed reply to an existing thread, to a reachable channel, " +
-				"uploads a confirmed file to such a channel, edits the text of a confirmed message, and adds a " +
-				"confirmed own reaction; deleting a message or removing a reaction is never part of a profile",
+				"uploads a confirmed file to such a channel, edits the text of a confirmed message, adds a " +
+				"confirmed own reaction, and pins or unpins a confirmed message; deleting a message or removing a " +
+				"reaction is never part of a profile",
 			Tools: []string{teamsList.ID, channelsList.ID, directList.ID, directOpen.ID, groupMessagesOpen.ID,
 				messagesList.ID, messagesThread.ID, messagesGet.ID, messagesSend.ID, messagesUpdate.ID,
 				messagesFiles.ID, filesInfo.ID, filesDownload.ID, filesUpload.ID, reactionsList.ID, reactionsAdd.ID,
-				usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID, messagesSearch.ID, filesSearch.ID,
-				channelsSearch.ID},
+				pinsList.ID, messagesPin.ID, messagesUnpin.ID, usersGet.ID, usersList.ID, usersSearch.ID,
+				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID},
 		}, {
 			ID: "channel-admin", Title: "Manage channels",
 			Description: "reads the bound teams, their channels with details, and the public channels, and also " +
@@ -575,6 +579,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(reactionsList), Handler: capability.Handler(invokeReactionsList)},
 		capability.Operation{Descriptor: withGroup(reactionsAdd), Handler: capability.Handler(invokeReactionsAdd)},
 		capability.Operation{Descriptor: withGroup(reactionsRemove), Handler: capability.Handler(invokeReactionsRemove)},
+		capability.Operation{Descriptor: withGroup(pinsList), Handler: capability.Handler(invokePinsList)},
+		capability.Operation{Descriptor: withGroup(messagesPin), Handler: capability.Handler(invokePin)},
+		capability.Operation{Descriptor: withGroup(messagesUnpin), Handler: capability.Handler(invokeUnpin)},
 		capability.Operation{Descriptor: withGroup(usersGet), Handler: capability.Handler(invokeUsersGet)},
 		capability.Operation{Descriptor: withGroup(usersList), Handler: capability.Handler(invokeUsersList)},
 		capability.Operation{Descriptor: withGroup(usersSearch), Handler: capability.Handler(invokeUsersSearch)},

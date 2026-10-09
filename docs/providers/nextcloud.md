@@ -92,6 +92,31 @@ Each tool sends exactly one request. A taken destination, an existing folder, or
 failure that names no path. After an unclear outcome (timeout, aborted connection, a 5xx answer) the error says the
 change may have been applied and that source and target, or the folder, must be stat-ed before repeating.
 
+## Search and favorites
+
+`nextcloud.files.search` (`SEARCH`) and `nextcloud.favorites.list` (`REPORT`) belong to the profile `read`;
+`nextcloud.files.favorite` (`PROPPATCH` of `oc:favorite`, effect `update`, idempotent) needs `confirm` and the
+permission `update`. All three work on the bound folder only; the root itself is never a hit and cannot be
+marked.
+
+The search takes structured filters that combine with AND, and at least one is required (an empty search is
+refused). `name_contains` is a literal, case-insensitive substring: Qatlas masks `%`, `_`, and the escape
+character `\` of Nextcloud's `d:like`. `content_type_prefix` matches the start of the MIME type,
+`modified_after` and `modified_before` take RFC 3339 times (exclusive, to the second), `size_min` and `size_max`
+are inclusive bytes (a folder counts with its subtree), `type` is `file` or `folder`, and `favorite` selects
+favorites or non-favorites. Qatlas writes the whole request XML itself and escapes every value; no caller XML,
+sorting, or offset exists. `limit` is 1 to 200 (default 50), the server picks which matches a limit keeps, and
+`truncated` is true when the limit was reached. The result is sorted by path.
+
+The favorites list reads at most 500 favorites below the root; more are cut and `truncated` says so. Every
+answered node is checked against the bound folder again; a node outside it, and a node the server refused,
+is dropped silently.
+
+`files.favorite` takes `path` and `favorite` (both required) and sends exactly one request, without a read
+before it. A `207` answer whose property status is an error is a clear failure. After an unclear outcome
+(timeout, aborted connection, a 5xx or unreadable answer) the error says the flag may have been changed and
+that the path must be stat-ed and the favorites listed before repeating; Qatlas never repeats the request.
+
 ## Shares
 
 The tool group `shares` reads sharing. `nextcloud.shares.list` and `nextcloud.shares.get` (profiles `read` and
