@@ -318,6 +318,9 @@ func TestSearchToolsRisksAndProfiles(t *testing.T) {
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
+		if p.ID == "talk-read" {
+			continue
+		}
 		got := strings.Join(p.Tools, " ")
 		if !strings.Contains(got, "nextcloud.files.search") || !strings.Contains(got, "nextcloud.favorites.list") ||
 			strings.Contains(got, "nextcloud.files.favorite") {

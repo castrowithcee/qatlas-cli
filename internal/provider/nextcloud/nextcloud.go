@@ -331,6 +331,10 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
 				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID,
 				foldersCreate.ID, filesMove.ID, filesCopy.ID},
+		}, {
+			ID: "talk-read", Title: "Read Talk conversations",
+			Description: "lists bound Talk conversations and their participants and reads their messages; changes nothing",
+			Tools:       []string{talkRoomsList.ID, talkRoomsGet.ID, talkParticipantsList.ID, talkMessagesList.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -365,6 +369,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(filesSearch), Handler: folderBound(invokeFilesSearch)},
 		capability.Operation{Descriptor: grouped(favoritesList), Handler: folderBound(invokeFavoritesList)},
 		capability.Operation{Descriptor: grouped(filesFavorite), Handler: folderBound(invokeFilesFavorite)},
+		capability.Operation{Descriptor: inGroup(talkRoomsList, groupTalk), Handler: invokeTalkRoomsList},
+		capability.Operation{Descriptor: inGroup(talkRoomsGet, groupTalk), Handler: invokeTalkRoomsGet},
+		capability.Operation{Descriptor: inGroup(talkParticipantsList, groupTalk), Handler: invokeTalkParticipantsList},
+		capability.Operation{Descriptor: inGroup(talkMessagesList, groupTalk), Handler: invokeTalkMessagesList},
 	)
 }
 

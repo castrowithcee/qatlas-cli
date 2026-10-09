@@ -42,6 +42,9 @@ var toolGroups = []config.ToolGroup{{
 }, {
 	ID: groupShares, Title: "Shares",
 	Description: "Shares of and to the identity below the Files root folder, and the recipients of the instance",
+}, {
+	ID: groupTalk, Title: "Talk",
+	Description: "Talk conversations the connection binds, their participants, and their messages",
 }}
 
 var targetKinds = []config.TargetKind{{

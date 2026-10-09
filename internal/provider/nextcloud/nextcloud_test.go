@@ -236,19 +236,21 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 			t.Errorf("target kind %+v needs a description and forms", kind)
 		}
 	}
-	if len(metadata.Groups) != 2 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" {
-		t.Fatalf("groups = %+v, want the files and shares groups", metadata.Groups)
+	if len(metadata.Groups) != 3 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" ||
+		metadata.Groups[2].ID != "talk" {
+		t.Fatalf("groups = %+v, want the files, shares, and talk groups", metadata.Groups)
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 29 || descriptors[0].ID != "nextcloud.favorites.list" ||
+	if len(descriptors) != 33 || descriptors[0].ID != "nextcloud.favorites.list" ||
 		descriptors[4].ID != "nextcloud.files.favorite" || descriptors[8].ID != "nextcloud.files.search" ||
 		descriptors[11].ID != "nextcloud.filetags.add" || descriptors[13].ID != "nextcloud.filetags.remove" ||
 		descriptors[15].ID != "nextcloud.folders.delete" || descriptors[18].ID != "nextcloud.shares.list" ||
 		descriptors[19].ID != "nextcloud.systemtags.create" || descriptors[21].ID != "nextcloud.systemtags.list" ||
-		descriptors[22].ID != "nextcloud.systemtags.update" || descriptors[23].ID != "nextcloud.trash.delete" ||
-		descriptors[25].ID != "nextcloud.trash.restore" || descriptors[26].ID != "nextcloud.versions.get" ||
-		descriptors[28].ID != "nextcloud.versions.restore" {
+		descriptors[22].ID != "nextcloud.systemtags.update" || descriptors[23].ID != "nextcloud.talkmessages.list" ||
+		descriptors[26].ID != "nextcloud.talkrooms.list" || descriptors[27].ID != "nextcloud.trash.delete" ||
+		descriptors[29].ID != "nextcloud.trash.restore" || descriptors[30].ID != "nextcloud.versions.get" ||
+		descriptors[32].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
@@ -258,6 +260,9 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 			if descriptor.ID == shareesSearch.ID {
 				wantSensitivity = shareeSensitivity
 			}
+		}
+		if strings.HasPrefix(descriptor.ID, "nextcloud.talk") {
+			wantGroup, wantSensitivity = "talk", talkSensitivity
 		}
 		if descriptor.Group != wantGroup {
 			t.Errorf("descriptor %s group = %q, want %s", descriptor.ID, descriptor.Group, wantGroup)
