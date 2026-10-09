@@ -1,8 +1,9 @@
 ---
 description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
-  articles, the organization profile and reference data, invoice, quotation, order confirmation, credit note,
-  delivery note and dunning drafts, invoice issuing, contact and article writes, permissions, and credentials.
+  articles, the organization profile and reference data, voucher document downloads, invoice, quotation, order
+  confirmation, credit note, delivery note and dunning drafts, invoice issuing, contact and article writes,
+  permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -26,6 +27,13 @@ note carries no prices. A dunning names the invoice it refers to; a down payment
 invoice once one exists. Templates for recurring invoices are listed page by page, sorted by one of a few fixed
 properties, and read by identifier, with interval, next execution, execution status and whether the last
 execution failed; the provider's error text of a failed execution is never shown.
+
+`lexware.documents.download` writes the final document of a finalized sales voucher and
+`lexware.files.download` the original file of a bookkeeping voucher to `local_path`. Both are offered only to a
+connection that releases a directory under `files.write`, replace an existing file only with confirmation, stop
+at 20 MiB, and return only identifier, size and SHA-256. The format `default` takes Lexware's own choice,
+`pdf` and `xml` select a representation; `xml` exists for an XRechnung only. Lexware generates the PDF of an
+XRechnung solely as a preview, not as a valid e-invoice. A draft has no document until it is finalized.
 
 A connection may carry one optional target `organization/<uuid>` (the `organizationId` of the profile). It
 protects connections whose keys belong to different customers: before the first request of a tool, Qatlas
