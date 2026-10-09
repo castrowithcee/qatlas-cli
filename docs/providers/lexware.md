@@ -2,7 +2,8 @@
 description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
   articles, the organization profile and reference data, voucher document downloads, invoice, quotation and
-  order confirmation drafts, invoice issuing, contact and article writes, permissions, and credentials.
+  order confirmation drafts, invoice issuing, contact and article writes, article deletion, permissions, and
+  credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -54,6 +55,11 @@ confirmation. Issuing an invoice is the separate tool `lexware.invoices.issue`: 
 invoice number, and its API can neither change nor delete the invoice afterwards. A connection offers
 `lexware.invoices.issue` only when its `tools` list names it, in addition to `create` in `permissions`; no
 profile ticks it.
+
+`lexware.articles.delete` deletes one article for good (`delete`), always with confirmation. Like the issue
+tool it is offered only when a connection's `tools` list names it, in addition to `delete` in `permissions`;
+no profile ticks it. A repeated call reports the article as missing; after an unclear outcome the error says
+that the article may have been deleted.
 
 `lexware.quotations.create` (with a required `expiration_date`) and `lexware.orderconfirmations.create` create a
 quotation and an order confirmation as drafts (`create`), always with confirmation, and share the voucher

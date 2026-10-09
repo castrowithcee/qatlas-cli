@@ -160,13 +160,13 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 32 {
-		t.Fatalf("operations = %d, want four invoice, four contact, four article, three voucher, six sales voucher, two sales voucher draft, two recurring template, two download, and five account and reference operations", len(operations))
+	if len(operations) != 33 {
+		t.Fatalf("operations = %d, want four invoice, four contact, five article, three voucher, six sales voucher, two sales voucher draft, two recurring template, two download, and five account and reference operations", len(operations))
 	}
 	versions := map[string]int{"lexware.invoices.create": 2, "lexware.invoices.issue": 1,
 		"lexware.quotations.create": 1, "lexware.orderconfirmations.create": 1,
 		"lexware.invoices.get": 1, "lexware.invoices.list": 1, "lexware.contacts.get": 1,
-		"lexware.contacts.list": 1, "lexware.contacts.create": 1, "lexware.contacts.update": 1, "lexware.articles.get": 1, "lexware.articles.list": 1, "lexware.articles.create": 1, "lexware.articles.update": 1,
+		"lexware.contacts.list": 1, "lexware.contacts.create": 1, "lexware.contacts.update": 1, "lexware.articles.get": 1, "lexware.articles.list": 1, "lexware.articles.create": 1, "lexware.articles.update": 1, "lexware.articles.delete": 1,
 		"lexware.voucherlist.list": 1, "lexware.payments.get": 1, "lexware.vouchers.get": 1,
 		"lexware.profile.get": 1, "lexware.countries.list": 1, "lexware.paymentconditions.list": 1,
 		"lexware.postingcategories.list": 1, "lexware.printlayouts.list": 1,
@@ -178,7 +178,7 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 		"lexware.contacts.list": contactSensitivity, "lexware.contacts.create": contactSensitivity,
 		"lexware.contacts.update": contactSensitivity, "lexware.articles.get": articleSensitivity,
 		"lexware.articles.list": articleSensitivity, "lexware.articles.create": articleSensitivity,
-		"lexware.articles.update": articleSensitivity, "lexware.vouchers.get": bookkeepingSensitivity, "lexware.files.download": bookkeepingSensitivity,
+		"lexware.articles.update": articleSensitivity, "lexware.articles.delete": articleSensitivity, "lexware.vouchers.get": bookkeepingSensitivity, "lexware.files.download": bookkeepingSensitivity,
 		"lexware.profile.get": accountSensitivity, "lexware.countries.list": referenceSensitivity,
 		"lexware.paymentconditions.list": referenceSensitivity, "lexware.postingcategories.list": referenceSensitivity,
 		"lexware.printlayouts.list": referenceSensitivity}
@@ -204,7 +204,7 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 			}
 		}
 	}
-	if operations[0].ID != "lexware.articles.create" || operations[31].ID != "lexware.vouchers.get" {
+	if operations[0].ID != "lexware.articles.create" || operations[32].ID != "lexware.vouchers.get" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 	profiles := map[string]config.ToolProfile{}
