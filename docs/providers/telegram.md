@@ -47,8 +47,8 @@ before the credential is read when the target is missing. Methods that accept on
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
 to `pins`, the member tools to `members`, the update tool to `updates`, the chat tools to `chats`, the invite
 link tools to `invitelinks`, the bot and webhook tools to `bot`, the file tools to `files`, the media tools to
-`media`, the poll, reaction, and chat action tools to `interactions`. A group never changes a tool ID, a
-permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
+`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`. A group
+never changes a tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
 fragment, with no exception for local addresses, and redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
 
@@ -103,6 +103,20 @@ reactions of that user or chat across the whole chat. Exactly one actor is requi
 supergroup in which the bot may delete messages, and both tools require a `tools` list. The actor chat is only
 an object, never the target. `telegram.chatactions.send` (`create`, idempotent) shows one of Telegram's fixed
 actions for about five seconds.
+
+## Locations, venues, contacts, and dice
+
+`telegram.locations.send`, `telegram.venues.send`, `telegram.contacts.send`, and `telegram.dice.send`
+(`create`, not idempotent) send one structured value to a bound chat. Every value is checked against the Bot
+API limits before the credential is read: coordinates, `horizontal_accuracy` (0 through 1500), `live_period`
+(60 through 86400, or 2147483647), `heading` (1 through 360), and `proximity_alert_radius` (1 through 100000).
+`heading` and `proximity_alert_radius` need a `live_period`; a live location can be sent but not updated or
+stopped. A venue needs `title` and `address`; place identifiers are not offered. A contact needs
+`phone_number` and `first_name`, `last_name` is optional, and no vCard is accepted. The dice `emoji` is one of
+🎲 (default), 🎯, 🏀, ⚽, 🎳, 🎰. The tools share the optional `reply_to_message_id`, `message_thread_id`,
+`disable_notification`, and `protect_content`; keyboards and paid broadcasts are not offered. Locations,
+venues, and contacts carry the data class `telegram-personal-data` and appear only in the request, never in
+errors, logs, or the audit trail. The result is only `message_id` and `date`.
 
 ## Invite links
 
@@ -221,6 +235,7 @@ tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
 `telegram.members.restrict`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
-`telegram.chats.deletephoto`, the interaction tools, and the invite link tools
-are in no profile. A profile is a visible starting selection, not a role: only the ticked `permissions` and
-`tools` are saved, every tick can be changed before saving, and a saved connection never follows a profile.
+`telegram.chats.deletephoto`, the interaction tools including locations, venues, contacts, and dice, and the
+invite link tools are in no profile. A profile is a visible starting selection, not a role: only the ticked
+`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
+follows a profile.
