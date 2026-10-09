@@ -52,7 +52,8 @@ var membersPromote = capability.Descriptor{
 	Version: 1,
 	Title:   "Promote or demote a Telegram chat administrator",
 	Description: "Set the complete administrator rights of one existing member in a bound supergroup or channel " +
-		"of an explicit Telegram connection; every right must be given explicitly, all false demotes. " +
+		"of an explicit Telegram connection; membership is verified with getChatMember first and non-members are " +
+		"refused; every right must be given explicitly, all false demotes. " +
 		"can_promote_members and can_invite_users extend who may add administrators and members",
 	Tags:     []string{"telegram", "members", "promote"},
 	Risk:     memberRisk(capability.EffectUpdate),
@@ -235,7 +236,29 @@ func invokeMembersSetTag(ctx context.Context, resolved *config.Resolved, secrets
 	return client.SetMemberTag(ctx, arguments.UserID, *arguments.Tag)
 }
 
-// PromoteMember performs exactly one promoteChatMember request with every right explicit.
+// requireMember sends one read-only getChatMember request, never retried, and refuses unless the user is
+// confirmed as a current member. Telegram can promote non-members in channels, which would open access.
+func (c *Client) requireMember(ctx context.Context, op string, userID int64) error {
+	member, err := c.GetChatMember(ctx, userID)
+	if err != nil || member.User.ID != userID {
+		return providerError(op, "the membership could not be confirmed")
+	}
+	switch member.Status {
+	case "member", "administrator":
+		return nil
+	case "restricted":
+		if member.IsMember != nil && *member.IsMember {
+			return nil
+		}
+		return providerError(op, "the user is not a member of the chat")
+	case "left", "kicked", "creator":
+		return providerError(op, "the user is not a member of the chat")
+	}
+	return providerError(op, "the membership could not be confirmed")
+}
+
+// PromoteMember checks membership with one getChatMember request, then performs exactly one promoteChatMember
+// request with every right explicit.
 func (c *Client) PromoteMember(ctx context.Context, userID int64, rights map[string]bool) (map[string]any, error) {
 	const op = "promote member"
 	if c.target == "" {
@@ -254,6 +277,9 @@ func (c *Client) PromoteMember(ctx context.Context, userID int64, rights map[str
 			return nil, providerError(op, "rights must set every right explicitly")
 		}
 		body[name] = v
+	}
+	if err := c.requireMember(ctx, op, userID); err != nil {
+		return nil, err
 	}
 	if err := c.confirmed(ctx, spec{op: op, method: "promoteChatMember", limit: defaultResponseBytes}, body); err != nil {
 		return nil, err

@@ -88,7 +88,9 @@ identifier is only the object of the call, never the target. Join requests are n
 
 `telegram.members.promote` (`update`) requires a `tools` list and sets the complete `rights` object of an
 existing member in a supergroup or channel: every administrator right of `promoteChatMember` is required and
-sent explicitly, a missing or unknown field is refused before any request, and all `false` demotes.
+sent explicitly, a missing or unknown field is refused before any request, and all `false` demotes. The
+membership is checked beforehand with `getChatMember`; a non-member or an unclear status is refused before
+any change.
 `can_promote_members` and `can_invite_users` widen who may add administrators and members. The default
 administrator rights of the bot are not offered. `telegram.members.setadmintitle` sets the custom `title` of
 an administrator the bot promoted in a supergroup, and `telegram.members.settag` the `tag` of a regular
