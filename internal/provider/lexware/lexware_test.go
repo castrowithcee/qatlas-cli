@@ -160,14 +160,16 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 35 {
-		t.Fatalf("operations = %d, want four invoice, four contact, four article, three voucher, nine sales voucher, two recurring template, two download, and five account and reference operations", len(operations))
+	if len(operations) != 40 {
+		t.Fatalf("operations = %d, want four invoice, four contact, five article, three voucher, thirteen sales voucher, two recurring template, two download, and five account and reference operations", len(operations))
 	}
 	versions := map[string]int{"lexware.invoices.create": 2, "lexware.invoices.issue": 1,
-		"lexware.quotations.create": 1, "lexware.orderconfirmations.create": 1,
+		"lexware.quotations.issue": 1, "lexware.orderconfirmations.issue": 1, "lexware.creditnotes.issue": 1,
+		"lexware.deliverynotes.issue": 1,
+		"lexware.quotations.create":   1, "lexware.orderconfirmations.create": 1,
 		"lexware.creditnotes.create": 1, "lexware.deliverynotes.create": 1, "lexware.dunnings.create": 1,
 		"lexware.invoices.get": 1, "lexware.invoices.list": 1, "lexware.contacts.get": 1,
-		"lexware.contacts.list": 1, "lexware.contacts.create": 1, "lexware.contacts.update": 1, "lexware.articles.get": 1, "lexware.articles.list": 1, "lexware.articles.create": 1, "lexware.articles.update": 1,
+		"lexware.contacts.list": 1, "lexware.contacts.create": 1, "lexware.contacts.update": 1, "lexware.articles.get": 1, "lexware.articles.list": 1, "lexware.articles.create": 1, "lexware.articles.update": 1, "lexware.articles.delete": 1,
 		"lexware.voucherlist.list": 1, "lexware.payments.get": 1, "lexware.vouchers.get": 1,
 		"lexware.profile.get": 1, "lexware.countries.list": 1, "lexware.paymentconditions.list": 1,
 		"lexware.postingcategories.list": 1, "lexware.printlayouts.list": 1,
@@ -179,12 +181,12 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 		"lexware.contacts.list": contactSensitivity, "lexware.contacts.create": contactSensitivity,
 		"lexware.contacts.update": contactSensitivity, "lexware.articles.get": articleSensitivity,
 		"lexware.articles.list": articleSensitivity, "lexware.articles.create": articleSensitivity,
-		"lexware.articles.update": articleSensitivity, "lexware.vouchers.get": bookkeepingSensitivity, "lexware.files.download": bookkeepingSensitivity,
+		"lexware.articles.update": articleSensitivity, "lexware.articles.delete": articleSensitivity, "lexware.vouchers.get": bookkeepingSensitivity, "lexware.files.download": bookkeepingSensitivity,
 		"lexware.profile.get": accountSensitivity, "lexware.countries.list": referenceSensitivity,
 		"lexware.paymentconditions.list": referenceSensitivity, "lexware.postingcategories.list": referenceSensitivity,
 		"lexware.printlayouts.list": referenceSensitivity}
 	for _, descriptor := range operations {
-		write := descriptor.Risk.Effect == capability.EffectCreate && (strings.HasPrefix(descriptor.ID, "lexware.invoices.") || strings.HasSuffix(descriptor.ID, ".create") && strings.Contains("lexware.quotations.create lexware.orderconfirmations.create lexware.creditnotes.create lexware.deliverynotes.create lexware.dunnings.create", descriptor.ID))
+		write := descriptor.Risk.Effect == capability.EffectCreate && (strings.HasPrefix(descriptor.ID, "lexware.invoices.") || strings.HasSuffix(descriptor.ID, ".issue") || strings.HasSuffix(descriptor.ID, ".create") && strings.Contains("lexware.quotations.create lexware.orderconfirmations.create lexware.creditnotes.create lexware.deliverynotes.create lexware.dunnings.create", descriptor.ID))
 		if descriptor.Version != versions[descriptor.ID] || descriptor.Provider != Provider ||
 			!descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != cmpSensitivity(sensitivities, descriptor.ID) {
 			t.Errorf("descriptor %s = %+v, want a bounded operation",
@@ -200,19 +202,19 @@ func TestRegisterPublishesMetadataAndTheInvoiceOperations(t *testing.T) {
 			wantRisk := capability.Risk{Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
 				Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity}
 			if descriptor.Risk != wantRisk || strings.Contains(string(descriptor.InputSchema), "finalize") ||
-				descriptor.RequiresToolAllowList != (descriptor.ID == "lexware.invoices.issue") {
+				descriptor.RequiresToolAllowList != strings.HasSuffix(descriptor.ID, ".issue") {
 				t.Errorf("descriptor %s = %+v", descriptor.ID, descriptor)
 			}
 		}
 	}
-	if operations[0].ID != "lexware.articles.create" || operations[34].ID != "lexware.vouchers.get" {
+	if operations[0].ID != "lexware.articles.create" || operations[39].ID != "lexware.vouchers.get" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 	profiles := map[string]config.ToolProfile{}
 	for _, profile := range metadata.Profiles {
 		profiles[profile.ID] = profile
 		for _, id := range profile.Tools {
-			if id == invoicesIssue.ID {
+			if strings.HasSuffix(id, ".issue") {
 				t.Errorf("profile %s selects the issue tool", profile.ID)
 			}
 		}
@@ -309,7 +311,8 @@ func issueConfig() *config.Config {
 		Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate}}
 	cfg.Connections["lexware-issuer"] = config.Connection{Service: "lexware", Credential: "primary-key",
 		Permissions: []config.Permission{config.PermissionCreate},
-		Tools:       []string{"lexware.invoices.create", "lexware.invoices.issue"}}
+		Tools: []string{"lexware.invoices.create", "lexware.invoices.issue", "lexware.quotations.issue",
+			"lexware.orderconfirmations.issue", "lexware.creditnotes.issue", "lexware.deliverynotes.issue"}}
 	return cfg
 }
 
@@ -1133,7 +1136,7 @@ func TestCreateReportsUncertainOutcome(t *testing.T) {
 		hint string
 	}{
 		{"create", (*Client).CreateInvoice, invoiceMayExist},
-		{"issue", (*Client).IssueInvoice, invoiceMayBeIssued},
+		{"issue", (*Client).IssueInvoice, "; the invoice may have been issued, check the voucher list before repeating it"},
 	}
 	for _, mode := range modes {
 		for _, tt := range tests {

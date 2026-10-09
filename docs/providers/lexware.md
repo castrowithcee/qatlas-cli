@@ -2,12 +2,12 @@
 description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
   articles, the organization profile and reference data, voucher document downloads, invoice, quotation, order
-  confirmation, credit note, delivery note and dunning drafts, invoice issuing, contact and article writes,
-  permissions, and credentials.
+  confirmation, credit note, delivery note and dunning drafts, issuing of sales vouchers, contact and article
+  writes, article deletion, permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 # Lexware Office
@@ -51,18 +51,26 @@ categories and print layouts are fixed reference lists; a list longer than its c
 missing contract scope.
 
 `lexware.invoices.create` creates an invoice as a draft without an invoice number (`create`), always with
-confirmation. Issuing an invoice is the separate tool `lexware.invoices.issue`: Lexware then assigns the
-invoice number, and its API can neither change nor delete the invoice afterwards. A connection offers
-`lexware.invoices.issue` only when its `tools` list names it, in addition to `create` in `permissions`; no
-profile ticks it.
+confirmation. Issuing is a separate tool per voucher type: `lexware.invoices.issue`,
+`lexware.quotations.issue`, `lexware.orderconfirmations.issue`, `lexware.creditnotes.issue` and
+`lexware.deliverynotes.issue`. Lexware then assigns the voucher number, and its API can neither change nor
+delete the voucher afterwards; a credit note linked to an invoice reduces its open amount at once. Each takes
+the inputs of its draft tool; invoices and credit notes may also be issued as the follow-up of another voucher
+with `preceding_voucher_id`, order confirmations and delivery notes not. A connection offers an issue tool
+only when its `tools` list names it, in addition to `create` in `permissions`; no profile ticks it.
+
+`lexware.articles.delete` deletes one article for good (`delete`), always with confirmation. Like the issue
+tools it is offered only when a connection's `tools` list names it, in addition to `delete` in `permissions`;
+no profile ticks it. A repeated call reports the article as missing; after an unclear outcome the error says
+that the article may have been deleted.
 
 `lexware.quotations.create` (with a required `expiration_date`), `lexware.orderconfirmations.create`,
 `lexware.creditnotes.create`, `lexware.deliverynotes.create` and `lexware.dunnings.create` create a quotation,
 an order confirmation, a credit note, a delivery note and a dunning as drafts (`create`), always with
-confirmation, and share the voucher structure of `lexware.invoices.create`. None finalizes, and there is no
-issue tool for them. A credit note carries no shipping or payment terms, a delivery note and a dunning no payment
-terms. A delivery note has no total, may omit the prices of its positions (a price needs net amount and tax
-rate together) and takes `delivery_terms`. Only `lexware.quotations.create` has no predecessor.
+confirmation, and share the voucher structure of `lexware.invoices.create`. None finalizes;
+dunnings have no issue tool. A credit note carries no shipping or payment terms, a delivery note and a dunning
+no payment terms. A delivery note has no total, may omit the prices of its positions (a price needs net amount
+and tax rate together) and takes `delivery_terms`. Only `lexware.quotations.create` has no predecessor.
 `preceding_voucher_id` creates the voucher as the follow-up of another one and is optional for invoices, order
 confirmations, credit notes and delivery notes; a dunning requires it (an invoice or down payment invoice) and is
 refused locally without it. Lexware allows at most one credit note per invoice, and the open amount of the
