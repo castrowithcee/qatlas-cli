@@ -1,9 +1,9 @@
 ---
 description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
-  articles, the organization profile and reference data, voucher document downloads, invoice, quotation and
-  order confirmation drafts, invoice issuing, contact and article writes, article deletion, permissions, and
-  credentials.
+  articles, the organization profile and reference data, voucher document downloads, invoice, quotation, order
+  confirmation, credit note, delivery note and dunning drafts, invoice issuing, contact and article writes,
+  article deletion, permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -61,15 +61,22 @@ tool it is offered only when a connection's `tools` list names it, in addition t
 no profile ticks it. A repeated call reports the article as missing; after an unclear outcome the error says
 that the article may have been deleted.
 
-`lexware.quotations.create` (with a required `expiration_date`) and `lexware.orderconfirmations.create` create a
-quotation and an order confirmation as drafts (`create`), always with confirmation, and share the voucher
-structure of `lexware.invoices.create`. Neither finalizes, and there is no issue tool for them. An order
-confirmation may follow up a quotation through `preceding_voucher_id`; Lexware refuses a quotation that cannot be
-followed up, for example one with optional positions, and the error says so without the provider's text. Besides
+`lexware.quotations.create` (with a required `expiration_date`), `lexware.orderconfirmations.create`,
+`lexware.creditnotes.create`, `lexware.deliverynotes.create` and `lexware.dunnings.create` create a quotation,
+an order confirmation, a credit note, a delivery note and a dunning as drafts (`create`), always with
+confirmation, and share the voucher structure of `lexware.invoices.create`. None finalizes, and there is no
+issue tool for them. A credit note carries no shipping or payment terms, a delivery note and a dunning no payment
+terms. A delivery note has no total, may omit the prices of its positions (a price needs net amount and tax
+rate together) and takes `delivery_terms`. Only `lexware.quotations.create` has no predecessor.
+`preceding_voucher_id` creates the voucher as the follow-up of another one and is optional for invoices, order
+confirmations, credit notes and delivery notes; a dunning requires it (an invoice or down payment invoice) and is
+refused locally without it. Lexware allows at most one credit note per invoice, and the open amount of the
+invoice shrinks only when the credit note is finalized. Lexware refuses a predecessor that cannot be followed up,
+for example a quotation with optional positions, and the error says so without the provider's text. Besides
 `custom` and `text`, positions may have the type `service` or `material` and then reference an article by its
-`id`; they carry quantity, unit and price like `custom`. All three tools accept the optional `payment_conditions`
-(label, duration, optional discount) and `print_layout_id`. Every identifier is checked as a UUID before any
-request.
+`id`; they carry quantity, unit and price like `custom`. Quotations, order confirmations and invoices accept the
+optional `payment_conditions` (label, duration, optional discount); all accept `print_layout_id`. Every
+identifier is checked as a UUID before any request.
 
 Breaking change: `lexware.invoices.create` version 2 no longer accepts `finalize` and rejects it as an unknown
 argument; its result no longer carries `finalized`. A connection that finalized invoices through `create`
@@ -77,7 +84,7 @@ needs `lexware.invoices.issue` in its `tools` list instead.
 
 Each creation or issue sends exactly one request and is never repeated, also not after a rate limit. When its
 outcome is unclear, such as after a timeout, a dropped connection, a server error or an unusable answer, the
-error says that the invoice may have been created or issued; check the voucher list before repeating it.
+error says that the voucher may have been created or issued; check the voucher list before repeating it.
 
 `lexware.articles.create` and `lexware.contacts.create` create a product or service and a customer or vendor
 (`create`); `lexware.articles.update` and `lexware.contacts.update` change named fields of one (`update`). All
@@ -102,6 +109,7 @@ further to named tools, for example `[lexware.invoices.get]`, and never admits a
 excludes. The terminal editor starts a new connection on the recommended setup profile `read`, which ticks
 `[read]` and every list and get tool; the profile `write` adds the permissions `create` and `update` and the
 tools `lexware.invoices.create`, `lexware.quotations.create`, `lexware.orderconfirmations.create`,
+`lexware.creditnotes.create`, `lexware.deliverynotes.create`, `lexware.dunnings.create`,
 `lexware.articles.create`, `lexware.articles.update`, `lexware.contacts.create` and `lexware.contacts.update`.
 A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
 every tick can be changed before saving, and a saved connection never follows a profile.
