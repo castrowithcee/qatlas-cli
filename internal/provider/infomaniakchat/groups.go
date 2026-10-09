@@ -13,7 +13,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: "channels", Title: "Channels", Description: "The channels of a bound team"},
 	{ID: "messages", Title: "Messages", Description: "Channel messages and threads: reading, sending, editing, and deleting"},
 	{ID: "reactions", Title: "Reactions", Description: "Reactions on messages: reading, adding, and removing the own"},
-	{ID: "files", Title: "Files", Description: "Message attachments: listing, metadata, and download to a released local directory"},
+	{ID: "files", Title: "Files", Description: "Message attachments: listing, metadata, upload from a released local file, and download to a released local directory"},
 	{ID: "users", Title: "Users", Description: "Users of the bound teams and their presence"},
 }
 
