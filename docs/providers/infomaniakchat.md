@@ -1,8 +1,9 @@
 ---
 description: >
   Describes the Infomaniak kChat provider: token setup, the team and channel allow-list, the team, channel,
-  message, thread, and reaction reads, pagination contracts, the confirmed send, edit, delete, and reaction
-  tools and their unclear-result contract, redirect handling, and the boundary to kDrive, Mail, and CalDAV/CardDAV.
+  message, thread, reaction, and user reads, the user scope check, pagination contracts, the confirmed send,
+  edit, delete, and reaction tools and their unclear-result contract, redirect handling, and the boundary to
+  kDrive, Mail, and CalDAV/CardDAV.
 type: knowledge
 edit: shared
 created: 2026-09-27
@@ -14,10 +15,11 @@ updated: 2026-10-09
 Infomaniak kChat is Infomaniak's Mattermost-compatible team chat product. This provider binds one kChat
 instance and one or more of its teams, optionally narrowed to specific channels of them: it lists the bound
 teams and channels, reads channel messages and threads page by page, and sends or replies with exactly one
-confirmed message, reads, edits, and deletes single messages, and reads, adds, and removes reactions, all
-through the instance's own `/api/v4/...` REST surface. kChat renders Markdown and mentions such as `@channel`
-in a message; Qatlas sends the text as written. It manages no channel or team, uploads no file, offers no
-custom emoji catalog, and configures no webhook.
+confirmed message, reads, edits, and deletes single messages, reads, adds, and removes reactions, and reads,
+lists, and searches the users of the bound teams and their presence, all through the instance's own
+`/api/v4/...` REST surface. kChat renders Markdown and mentions such as `@channel` in a message; Qatlas
+sends the text as written. It manages no channel, team, or membership, changes no user, sends no direct
+message, uploads no file, offers no custom emoji catalog, and configures no webhook.
 
 ## Configuration
 
@@ -71,22 +73,30 @@ through the same two checks `infomaniakdrive` applies to a `drive_id`:
 
 1. A malformed ID, and a `channel_id` outside a configured channel allow-list, are refused locally, as an
    invalid request, before any secret is read or any request is sent.
-2. `infomaniakchat.messages.list` and `infomaniakchat.messages.send` then confirm with kChat's own channel
-   detail endpoint (`GET /api/v4/channels/{channel_id}`) that the channel actually belongs to one of the
-   bound teams, in one extra request. The allow-list is local configuration a person wrote; it is never trusted on its own,
+2. `infomaniakchat.messages.list`, `infomaniakchat.messages.send`, and `infomaniakchat.users.list` and
+   `.search` with a `channel_id` then confirm with kChat's own channel detail endpoint
+   (`GET /api/v4/channels/{channel_id}`) that the channel actually belongs to one of the bound teams, in one
+   extra request. The allow-list is local configuration a person wrote; it is never trusted on its own,
    because the same token can belong to teams of several customers, and a channel named in an allow-list is
    not proof of which team it really belongs to. A channel of another team, or a check that failed or came
    back unreadable, aborts the request right there; there is no silent fallback to the message endpoint.
 
-A `post_id` (`messages.thread`, `messages.get`, `messages.update`, `messages.delete`, and the
-`reactions` tools) is bound through its
-channel: Qatlas reads the post, refuses an answer for another post or a deleted post, applies the channel
-allow-list to the post's channel, and runs the live channel check above, all before any detail is returned
+A `post_id` (`messages.thread`, `messages.get`, `messages.update`, `messages.delete`, and the `reactions` tools) is
+bound through its channel: Qatlas reads the post, refuses an answer for another post or a deleted post, applies the
+channel allow-list to the post's channel, and runs the live channel check above, all before any detail is returned
 or any change is sent. A refusal never names the foreign target and never carries message content.
 
 A reply additionally confirms, by reading the named `root_id` itself, that the root post belongs to the same
 `channel_id` before anything is sent. Rejecting an out-of-scope channel or root post never carries the
 message text into an error or a log.
+
+A user is reachable when it is the token's own user (`GET /api/v4/users/me`) or a current member of a bound
+team. Qatlas proves this live with `POST /api/v4/teams/{team_id}/members/ids`, one request per bound team
+and only until every user is proven; a member who has left the team does not count. `users.get` refuses an
+unreachable user as an invalid request without naming it, and `users.status` checks all its IDs before the
+status request, so one foreign ID refuses the whole call. `users.list` and `users.search` drop unreachable
+users from their answer. A `username` is read first and bound through the ID kChat reports before anything is
+returned; an unknown username is refused exactly like a foreign one.
 
 A successful `qatlas connection test` reads the teams of the current token: it proves the token is accepted,
 not that every team or channel on a narrower allow-list exists, is reachable, or actually belongs to it.
@@ -106,11 +116,15 @@ not that every team or channel on a narrower allow-list exists, is reachable, or
 | `infomaniakchat.reactions.list` | read | the reactions of one message, page by page |
 | `infomaniakchat.reactions.add` | create, confirmed | one reaction of the token's own user |
 | `infomaniakchat.reactions.remove` | delete, confirmed, tools list only | one reaction of the token's own user |
+| `infomaniakchat.users.get` | read | one reachable user by `user_id` or `username` (exactly one) |
+| `infomaniakchat.users.list` | read | the users of one bound team or one channel, page by page |
+| `infomaniakchat.users.search` | read | users of one bound team or channel matching a `term` |
+| `infomaniakchat.users.status` | read | the presence of 1 to 100 reachable users |
 
-The tools sort into the groups `teams`, `channels`, `messages`, and `reactions`. The reads need no
-confirmation; send, update, delete, and the reaction changes always do, through the same confirmation
-mechanism every other confirmed Qatlas tool uses. The terminal editor starts a new connection on the setup
-profile `read`, which ticks the read tools; `messaging` adds `messages.send`, `messages.update`, and
+The tools sort into the groups `teams`, `channels`, `messages`, `reactions`, and `users`. The reads need no
+confirmation; send, update, delete, and the reaction changes always do, through the same confirmation mechanism
+every other confirmed Qatlas tool uses. The terminal editor starts a new connection on the setup profile `read`,
+which ticks the read tools, the user tools included; `messaging` adds `messages.send`, `messages.update`, and
 `reactions.add` for a connection that should also post, edit, and react.
 
 `infomaniakchat.messages.delete` is in no profile and is offered only to a connection whose tools list names
@@ -123,6 +137,15 @@ call, never from an argument, so reactions of other users cannot be added or rem
 characters of `a-z`, `0-9`, `_`, `+`, and `-`, checked locally before any secret is read.
 `infomaniakchat.reactions.remove` is in no profile and is offered only to a connection whose tools list names
 it. Adding an existing reaction changes nothing.
+
+Users are output through a fixed field allow-list: `id`, `username`, `first_name`, `last_name`, `nickname`,
+`position`, `is_bot`, `deleted`, and `email` only when kChat reports one to the token. Roles, notification
+settings, properties, time zone, authentication service, and credential or MFA fields are never decoded.
+`users.list` and `users.search` need exactly one of `team_id` (a bound team) or `channel_id`; an
+instance-wide list is not offered. `username` is 1 to 64 characters of `a-z`, `0-9`, `.`, `_`, and `-`, and
+a search `term` is 1 to 64 characters. `users.search` is a `POST` that changes nothing. `users.status`
+reports `user_id`, `status`, `manual`, and `last_activity_at`; entries for IDs that were not asked are
+dropped. User results carry the data sensitivity `infomaniak-kchat-people`.
 
 ## Pagination
 
@@ -137,6 +160,9 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
   own `has_next`.
 - `infomaniakchat.reactions.list` reads kChat's complete reaction array for the post and pages it itself like
   the team listing, reporting only `user_id`, `emoji_name`, and `created_at` per reaction.
+- `infomaniakchat.users.list` pages kChat's own `page` and `per_page`: `page` (1-based) and `limit` select one
+  page, and `has_more` is true when the page was full; users outside the bound teams are dropped from it, so
+  `count` may be lower than `limit`. `users.search` takes only `limit` (1 to 100) and has no further page.
 - `infomaniakchat.messages.thread` pages kChat's own `GetPostThread` pagination: an opaque `cursor`, kChat's
   own `next_post_id` passed back unchanged, continues a thread forward; the answer reports `has_more` and,
   while it is true, a `cursor` for the next page.
@@ -173,7 +199,7 @@ never a provider error, so a scope refusal is never mistaken for a missing chann
 
 ## Untrusted data
 
-Team, channel, and message content come from the instance and are untrusted data. Qatlas normalises them
+Team, channel, message, and user content come from the instance and are untrusted data. Qatlas normalises them
 into a stable envelope and never renders them, follows a link inside them, or executes anything derived from
 them, including a message's own text.
 
@@ -183,8 +209,8 @@ This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV a
 products with their own authentication, none of them the token this provider uses; see the
 `infomaniakdrive` provider's documentation for why each is its own sibling provider rather than one shared
 Infomaniak provider. Within kChat itself, this provider offers no channel or team creation, membership, or
-administration, no file attachment, no custom emoji catalog, no removal of another user's reaction, and no webhook
-configuration, and an edit changes only a
+administration, no user change, no direct message, no profile picture, no file attachment, no custom emoji
+catalog, no removal of another user's reaction, and no webhook configuration, and an edit changes only a
 message's text, never its attachments, pin state, or properties.
 
 ## Live test scenario
@@ -197,7 +223,9 @@ disposable test channel and confirm exactly one message appears; send one confir
 confirm it threads under the original message; read it with `messages.get`; edit its text and confirm only
 the text and the edit time change; delete the reply from a connection that lists the delete tool and confirm
 the root stays; add a reaction, read it with `reactions.list`, and remove it from a connection that lists
-the remove tool; attempt a send, get, edit, delete, and reaction against a channel or post outside the connection's
+the remove tool; read a bound team's users and their presence, search one by name, and confirm a user who is only in
+another team of the instance is refused by `users.get` and `users.status` and absent from the list and
+search; attempt a send, get, edit, delete, and reaction against a channel or post outside the connection's
 targets and confirm each is refused before anything changes; attempt the same with a channel or team the
 credential's token cannot actually reach, to confirm the live check reports it, not a stale allow-list; and
 confirm which token sources an instance accepts, including a personal profile token.
