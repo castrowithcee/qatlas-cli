@@ -236,7 +236,7 @@ func TestConnectionTestExplainsAMissingKeyringSecretInEditorTerms(t *testing.T) 
 		"Connection test could not run",
 		"open Credentials",
 		"select token-secret",
-		"press s",
+		"press enter",
 		"system keyring",
 	} {
 		if !strings.Contains(words, want) {

@@ -403,7 +403,7 @@ func TestCtrlLIsHarmlessDuringOtherDialogs(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	pump(t, m, "enter") // saving asks for the vault's passphrase: screenAdminAuth
+	pump(t, m, "f2") // saving asks for the vault's passphrase: screenAdminAuth
 	if m.screen != screenAdminAuth {
 		t.Fatalf("saving a form on a locked vault = screen %v, want the admin dialog", m.screen)
 	}

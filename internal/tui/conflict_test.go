@@ -69,7 +69,7 @@ func TestSaveConflictKeepsTheOtherChangeAndRepeatSucceeds(t *testing.T) {
 
 			writer.write(t, store, "theirs")
 
-			press(t, m, "enter")
+			press(t, m, "f2")
 			if m.screen != screenForm || !strings.Contains(m.fail, "changed outside this editor") {
 				t.Fatalf("screen %v fail %q, want the form kept with a conflict message", m.screen, m.fail)
 			}
@@ -90,7 +90,7 @@ func TestSaveConflictKeepsTheOtherChangeAndRepeatSucceeds(t *testing.T) {
 				t.Errorf("the form lost its input: name = %q", got)
 			}
 
-			press(t, m, "enter")
+			press(t, m, "f2")
 			if m.fail != "" || !strings.HasPrefix(m.status, "Saved") {
 				t.Fatalf("repeating failed: fail %q status %q", m.fail, m.status)
 			}
@@ -116,7 +116,7 @@ func TestTwoEditorsSavingConflictAndTheSecondRepeats(t *testing.T) {
 	if _, ok := saved.Services["first"]; !ok || len(saved.Services) != 1 {
 		t.Fatalf("services = %v, want only the first editor's", saved.Services)
 	}
-	press(t, m2, "enter")
+	press(t, m2, "f2")
 	if m2.fail != "" {
 		t.Fatalf("repeating reported %q", m2.fail)
 	}
@@ -220,7 +220,7 @@ func TestSetupConflictStoresNothingRebasesAndRepeatSucceeds(t *testing.T) {
 	m, store, path, _, mem := newStoreModel(t)
 	walkSetup(t, m, stepSummary)
 	foreignWriters[0].write(t, store, "theirs")
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.wizard.saved != "" || !strings.Contains(m.fail, "changed outside this editor") {
 		t.Fatalf("saved %q fail %q, want a conflict", m.wizard.saved, m.fail)
 	}
@@ -228,7 +228,7 @@ func TestSetupConflictStoresNothingRebasesAndRepeatSucceeds(t *testing.T) {
 	if _, ok := savedConfig(t, path).Services["theirs"]; !ok {
 		t.Fatal("the other change was lost")
 	}
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.fail != "" || m.wizard.saved == "" {
 		t.Fatalf("repeating failed: %q", m.fail)
 	}

@@ -31,7 +31,7 @@ func walkSetup(t *testing.T, m *Model, until int) {
 			typeText(t, m, "wiki")
 			press(t, m, "tab")
 			typeText(t, m, "https://wiki.example.invalid")
-			press(t, m, "enter")
+			press(t, m, "f2")
 		},
 		func() {
 			press(t, m, "tab")
@@ -40,14 +40,14 @@ func walkSetup(t *testing.T, m *Model, until int) {
 			typeText(t, m, canaryID)
 			press(t, m, "tab")
 			typeText(t, m, canarySecret)
-			press(t, m, "enter")
+			press(t, m, "f2")
 		},
 		func() {
 			clearField(t, m)
 			typeText(t, m, "personal")
 			press(t, m, "tab", "tab")
 			typeText(t, m, "team wiki, read only")
-			press(t, m, "enter")
+			press(t, m, "f2")
 		},
 		func() { press(t, m, "f2") },
 	}
@@ -108,7 +108,7 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 	press(t, m, "tab")
 	typeText(t, m, canarySecret)
 	record()
-	press(t, m, "enter")
+	press(t, m, "f2")
 	record()
 	if m.wizard.step != stepScope {
 		t.Fatalf("credential step did not advance: %q", m.fail)
@@ -116,7 +116,7 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 	if m.fieldValue("name") != "bookstack" {
 		t.Errorf("the connection name is not suggested: %q", m.fieldValue("name"))
 	}
-	press(t, m, "enter")
+	press(t, m, "f2")
 	record()
 	press(t, m, "f2")
 	record()
@@ -135,7 +135,7 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 	}
 	assertNoStoredSecret(t, mem, filepath.Dir(path))
 
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	record()
 	if m.fail != "" || m.wizard.saved != "bookstack" {
 		t.Fatalf("save failed: %q", m.fail)
@@ -164,9 +164,9 @@ func TestGuidedSetupFromAnEmptyConfiguration(t *testing.T) {
 	assertNoCanary(t, "the configuration file", string(raw))
 	assertNoCanary(t, "the editor", views.String())
 
-	press(t, m, "enter")
+	press(t, m, "esc")
 	if m.wizard != nil || m.screen != screenList || m.section != sectionConnections {
-		t.Fatalf("enter after saving did not open Connections: screen %v", m.screen)
+		t.Fatalf("esc after saving did not open Connections: screen %v", m.screen)
 	}
 	if name, _ := m.selected(); name != "bookstack" {
 		t.Errorf("selected = %q, want the new connection", name)
@@ -194,11 +194,11 @@ func TestGuidedSetupReusesAServiceAndACredential(t *testing.T) {
 			t.Errorf("row %q of a new credential is shown while one is reused", f.label)
 		}
 	}
-	press(t, m, "f2", "enter", "f2")
+	press(t, m, "f2", "f2", "f2")
 	if !strings.Contains(screenOf(m), "reader (existing, unchanged)") {
 		t.Errorf("summary does not say the credential is reused:\n%s", screenOf(m))
 	}
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("save failed: %q", m.fail)
 	}
@@ -257,7 +257,7 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 	typeText(t, m, "wiki")
 	press(t, m, "tab")
 	typeText(t, m, "https://archive.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.wizard.step != stepService || !strings.Contains(m.fail, "already exists") {
 		t.Fatalf("a second service named wiki was accepted: step %d, error %q", m.wizard.step, m.fail)
 	}
@@ -267,7 +267,7 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 	press(t, m, "tab")
 	clearField(t, m)
 	typeText(t, m, "ftp://archive.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.wizard.step != stepService || !strings.Contains(m.fail, "base_url") {
 		t.Fatalf("the core did not refuse the base url in its step: step %d, error %q", m.wizard.step, m.fail)
 	}
@@ -276,7 +276,7 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 	}
 	clearField(t, m)
 	typeText(t, m, "https://archive.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 
 	// A new keyring credential needs every secret of its provider.
 	selectChoice(t, m, newCredential)
@@ -284,7 +284,7 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 	typeText(t, m, "reader")
 	press(t, m, "tab", "tab")
 	typeText(t, m, canaryID)
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.wizard.step != stepCredential || !strings.Contains(m.fail, "token-secret is empty") {
 		t.Fatalf("a missing secret was accepted: step %d, error %q", m.wizard.step, m.fail)
 	}
@@ -321,7 +321,7 @@ func TestAFailedSaveLeavesNothingBehind(t *testing.T) {
 		m, _, path, _, mem := newStoreModel(t)
 		walkSetup(t, m, stepSummary)
 		mem.Fail(secret.ErrUnavailable)
-		pump(t, m, "enter")
+		pump(t, m, "f2")
 		mem.Fail(nil)
 		if m.wizard.saved != "" || !strings.Contains(m.fail, "F3") {
 			t.Fatalf("a failed keyring did not say how to go on: %q", m.fail)
@@ -339,7 +339,7 @@ func TestAFailedSaveLeavesNothingBehind(t *testing.T) {
 		if err := os.MkdirAll(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
-		pump(t, m, "enter")
+		pump(t, m, "f2")
 		if m.wizard.saved != "" || !strings.Contains(m.fail, "the configuration was not changed") {
 			t.Fatalf("a failed write was not reported: %q", m.fail)
 		}
@@ -349,7 +349,7 @@ func TestAFailedSaveLeavesNothingBehind(t *testing.T) {
 		if err := os.Remove(path); err != nil {
 			t.Fatal(err)
 		}
-		pump(t, m, "enter")
+		pump(t, m, "f2")
 		if m.fail != "" || m.wizard.saved != "personal" {
 			t.Fatalf("retry failed: %q", m.fail)
 		}
@@ -375,8 +375,8 @@ func TestGuidedSetupOtherSecretSources(t *testing.T) {
 		typeText(t, m, "WIKI_ID")
 		press(t, m, "tab")
 		typeText(t, m, "WIKI_SECRET")
-		press(t, m, "enter", "enter", "f2")
-		pump(t, m, "enter")
+		press(t, m, "f2", "f2", "f2")
+		pump(t, m, "f2")
 		if m.fail != "" {
 			t.Fatalf("save failed: %q", m.fail)
 		}
@@ -408,7 +408,7 @@ func TestGuidedSetupTestsWithTheSameTester(t *testing.T) {
 		t.Fatalf("New() = %v", err)
 	}
 	walkSetup(t, m, stepSummary)
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("save failed: %q", m.fail)
 	}
@@ -497,7 +497,7 @@ func TestStorageScreensSayWhereNotTheType(t *testing.T) {
 		if words := strings.Join(strings.Fields(view), " "); !strings.Contains(words, "("+want+") unchanged") {
 			t.Errorf("reusing %s does not say %q:\n%s", credential, want, view)
 		}
-		press(t, m, "f2", "enter", "f2")
+		press(t, m, "f2", "f2", "f2")
 		if m.screen != screenSummary {
 			t.Fatalf("screen = %v, want the summary: %q", m.screen, m.fail)
 		}
@@ -565,9 +565,9 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 				press(t, m, "tab")
 				typeText(t, m, value)
 			}
-			press(t, m, "enter")
-			press(t, m, "enter", "f2")
-			pump(t, m, "enter")
+			press(t, m, "f2")
+			press(t, m, "f2", "f2")
+			pump(t, m, "f2")
 			if m.fail != "" {
 				t.Fatalf("the setup reported %q", m.fail)
 			}
@@ -587,7 +587,7 @@ func TestSetupAndEditorStoreAlike(t *testing.T) {
 					focusRole(t, e, role)
 					typeText(t, e, values(choice)[i])
 				}
-				pump(t, e, "enter")
+				pump(t, e, "f2")
 			} else {
 				pump(t, e, "f2")
 				if got := e.fieldValue(storageLabel); got != choice {

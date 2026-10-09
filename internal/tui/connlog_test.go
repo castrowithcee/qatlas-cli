@@ -73,7 +73,7 @@ func TestEditorLogsOneEntryPerChangedConnection(t *testing.T) {
 	openEntryForm(t, m, sectionConnections, "wiki")
 	focusField(t, m, "description")
 	typeText(t, m, "audit")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	entries = connectionEntries(t, path)
 	if len(entries) != 2 {
 		t.Fatalf("changing logged %d entries in total, want 2", len(entries))
@@ -182,7 +182,7 @@ func TestALogFailureWarningIsRedactedInTheStatusLine(t *testing.T) {
 func TestGuidedSetupLogsTheNewConnection(t *testing.T) {
 	m, _, path, _, _ := newStoreModel(t)
 	walkSetup(t, m, stepSummary)
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.fail != "" || m.wizard.saved == "" {
 		t.Fatalf("save failed: %q", m.fail)
 	}
@@ -199,7 +199,7 @@ func TestAFailedSetupSaveLogsNothing(t *testing.T) {
 	if err := os.MkdirAll(path, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.wizard.saved != "" {
 		t.Fatalf("the save did not fail")
 	}
@@ -240,7 +240,7 @@ func TestServiceChangeLogsTheConnectionsItReaches(t *testing.T) {
 	focusField(t, m, "base url")
 	clearField(t, m)
 	typeText(t, m, "https://moved.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
 	}
@@ -257,7 +257,7 @@ func TestServiceChangeLogsTheConnectionsItReaches(t *testing.T) {
 	// A description of the service reaches no scope: nothing is logged.
 	before = len(connectionEntries(t, path))
 	openEntryForm(t, m, sectionServices, "wiki")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if got := len(connectionEntries(t, path)); got != before {
 		t.Errorf("an unchanged service logged %d entries", got-before)
 	}

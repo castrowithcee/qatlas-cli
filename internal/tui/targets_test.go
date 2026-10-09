@@ -261,7 +261,7 @@ func TestTheGuidedSetupEditsTargetsAlike(t *testing.T) {
 	if m.fail != "" || m.screen != screenSummary {
 		t.Fatalf("the setup did not reach its summary: screen %v, error %q", m.screen, m.fail)
 	}
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("the setup reported %q", m.fail)
 	}
