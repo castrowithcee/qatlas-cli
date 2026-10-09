@@ -135,6 +135,7 @@ type Message struct {
 	Text          string          `json:"text"`
 	Objects       []MessageObject `json:"objects,omitempty"`
 	ParentID      string          `json:"parent_id,omitempty"`
+	ReferenceID   string          `json:"reference_id,omitempty"`
 	Truncated     bool            `json:"truncated,omitempty"`
 }
 
@@ -183,6 +184,7 @@ type rawMessage struct {
 	MessageType       string          `json:"messageType"`
 	SystemMessage     string          `json:"systemMessage"`
 	Message           string          `json:"message"`
+	ReferenceID       string          `json:"referenceId"`
 	MessageParameters json.RawMessage `json:"messageParameters"`
 	Parent            *struct {
 		ID json.Number `json:"id"`
@@ -260,8 +262,8 @@ func requireTalkToken(resolved *config.Resolved, token string) error {
 	return nil
 }
 
-// talkFeature checks the spreed capability of the instance for one feature.
-func (c *Client) talkFeature(ctx context.Context, op, feature string) error {
+// talkFeature checks the spreed capability of the instance for every named feature with one read.
+func (c *Client) talkFeature(ctx context.Context, op string, features ...string) error {
 	data, err := c.ocsGet(ctx, op, ocsRequest{app: ocsCloud, suffix: []string{"capabilities"}})
 	if err != nil {
 		return err
@@ -279,12 +281,16 @@ func (c *Client) talkFeature(ctx context.Context, op, feature string) error {
 	if document.Capabilities.Spreed == nil {
 		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: messageTalkMissing}
 	}
-	for _, have := range document.Capabilities.Spreed.Features {
-		if have == feature {
-			return nil
+	have := map[string]bool{}
+	for _, feature := range document.Capabilities.Spreed.Features {
+		have[feature] = true
+	}
+	for _, feature := range features {
+		if !have[feature] {
+			return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: messageTalkFeature}
 		}
 	}
-	return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: messageTalkFeature}
+	return nil
 }
 
 // talkNotFound replaces the generic path message of a 404 with one that fits Talk.
@@ -488,7 +494,7 @@ func messageOf(raw rawMessage) Message {
 	message := Message{
 		ID: raw.ID.String(), Time: unixTime(raw.Timestamp), ActorType: bounded(raw.ActorType),
 		ActorID: bounded(raw.ActorID), ActorName: bounded(raw.ActorDisplayName), Kind: bounded(raw.MessageType),
-		SystemMessage: bounded(raw.SystemMessage), Text: text, Objects: objects, Truncated: truncated,
+		SystemMessage: bounded(raw.SystemMessage), ReferenceID: bounded(raw.ReferenceID), Text: text, Objects: objects, Truncated: truncated,
 	}
 	if raw.Parent != nil && raw.Parent.ID.String() != "" {
 		message.ParentID = raw.Parent.ID.String()
@@ -514,7 +520,7 @@ const (
 		`"objects":{"type":"array","items":{"type":"object","properties":{"key":{"type":"string"},` +
 		`"type":{"type":"string"},"id":{"type":"string"},"name":{"type":"string"}},` +
 		`"required":["key","type"],"additionalProperties":false}},` +
-		`"parent_id":{"type":"string"},"truncated":{"type":"boolean"}},` +
+		`"parent_id":{"type":"string"},"reference_id":{"type":"string"},"truncated":{"type":"boolean"}},` +
 		`"required":["id","kind","text"],"additionalProperties":false}`
 )
 
@@ -598,7 +604,7 @@ var talkMessagesList = talkDescriptor("talkmessages.list", "List Nextcloud Talk 
 	},
 	[]capability.Field{
 		{Name: "messages", Description: "Messages with time, actor, kind, text with its placeholders replaced by names, " +
-			"and the referenced objects; untrusted data"},
+			"the referenced objects, and the reference_id a sender gave; untrusted data"},
 		{Name: "count", Description: "Number of messages on this page"},
 		{Name: "next_cursor", Description: "Cursor for the next older page; absent on the last page"},
 	},

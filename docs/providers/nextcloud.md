@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads and management, Deck and Talk reads, typed targets, connection
-  permissions, and safety boundaries.
+  Describes Nextcloud file operations, share reads and management, Deck reads, Talk reads and messages, typed
+  targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -185,25 +185,32 @@ and nothing in Deck can be changed.
 
 ## Talk
 
-The tool group `talk` reads Talk conversations through the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`),
-with the same client and limits as sharing: `talkrooms.list`, `talkrooms.get`, `talkparticipants.list`, and
-`talkmessages.list`, all in the setup profile `talk-read` and in no other. They need a `talk` target and refuse
-locally without one. A conversation counts only when the target binds it: `talk` binds every conversation of the
-identity, `talk/TOKEN` one. `talkrooms.list` drops every other conversation. A tool that takes a `token`
-refuses an unbound or malformed one locally, before any credential access or request, and its message names
-no token; the token never reaches a path unvalidated.
+The tool group `talk` uses the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`) with the same client and
+limits as sharing. The read tools `talkrooms.list`, `talkrooms.get`, `talkparticipants.list`, and
+`talkmessages.list` are in the setup profile `talk-read` and in no other; the change tools are in no profile.
+All need a `talk` target and refuse locally without one. A conversation counts only when the target binds it:
+`talk` binds every conversation of the identity, `talk/TOKEN` one. `talkrooms.list` drops every other
+conversation. A tool that takes a `token` refuses an unbound or malformed one locally, before any credential
+access or request, and its message names no token. Each call first reads the `spreed` capability and refuses a
+missing Talk app or feature clearly; this costs one extra request per call. Participants report actor type,
+actor ID, display name, role, and call state; session IDs and phone numbers are not read.
 
-Each call first reads the `spreed` capability of the instance and refuses a missing Talk app or a missing
-feature clearly, instead of assuming a version; this costs one extra request per call. Participants report
-actor type, actor ID, display name, role, and call state; session IDs and phone numbers are not read.
+`talkmessages.list` reads one page of the history, newest first, with at most 100 messages (default 50). The
+server is asked for no waiting, and not to move the read marker or mark notifications as read. `next_cursor`
+(the `X-Chat-Last-Given` header) continues with the older messages. A message text is cut at 4 KiB and marked
+`truncated`. Placeholders such as `{actor}` or `{file}` are replaced by the name of the rich object and listed
+in `objects`; links, paths, previews, and sizes of objects are never reported, because a file shared into a
+conversation carries an access token in them. Message texts and names are untrusted data.
 
-`talkmessages.list` reads one page of the history, newest first, with at most 100 messages (default 50) per
-page. The server is asked for no waiting, and not to move the read marker or mark notifications as read. `next_cursor`
-(the `X-Chat-Last-Given` header) continues with the older messages and is absent on the last page. A message
-text is cut at 4 KiB and marked `truncated`. Placeholders such as `{actor}` or `{file}` are replaced by the name
-of the rich object and listed in `objects`; links, paths, previews, and sizes of objects are never reported,
-because a file shared into a conversation carries an access token in them. Message texts and names are untrusted
-data.
+`talkmessages.send`, `talkmessages.edit`, `talkmessages.delete`, and `talkreactions.set` change one bound
+conversation per call. All need `confirm`, check the capability feature they depend on, and send exactly one
+request after it. A message ID is digits only and only ever reaches the path of the bound conversation; a text
+is at most 4000 characters, a reaction one emoji. `send` creates a message, optionally as a reply, and reports
+a random `reference_id` that `talkmessages.list` shows. `delete` needs a tools list that names it. An unclear
+outcome (timeout, dropped connection, 5xx, unreadable answer) is reported as possibly applied and never
+repeated; after an unclear `send`, look for the `reference_id` before sending again. A 429 is reported as
+rate-limited, without that hint. Refusals such as a foreign message or an expired edit period have fixed
+messages without provider text.
 
 ## Versions
 
