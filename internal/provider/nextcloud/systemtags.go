@@ -325,32 +325,41 @@ func (c *Client) ListFileTags(ctx context.Context, path string, rel []string) (*
 	return list, nil
 }
 
-// readTag reads one tag before it is assigned or removed. A tag that is invisible is answered like a
-// missing one, and one this identity may not assign is refused.
-func (c *Client) readTag(ctx context.Context, op, id string) error {
+// fetchTag reads one tag with a single PROPFIND of depth 0. A tag that is invisible is answered like a
+// missing one.
+func (c *Client) fetchTag(ctx context.Context, op, id string) (SystemTag, error) {
 	resources, err := c.propfindAt(ctx, op, c.tagURL(id), tagPropfindBody, depthSelf, false, maxTagNodes)
 	if err != nil {
 		if isNotFound(err) {
-			return providerError(op, messageTagMissing)
+			return SystemTag{}, providerError(op, messageTagMissing)
 		}
-		return err
+		return SystemTag{}, err
 	}
 	if len(resources) != 1 {
-		return invalidResponse(op, "Nextcloud answered with more than the requested node")
+		return SystemTag{}, invalidResponse(op, "Nextcloud answered with more than the requested node")
 	}
 	below, err := c.segmentsBelow(op, resources[0].href, c.tagsPrefix())
 	if err != nil {
-		return err
+		return SystemTag{}, err
 	}
 	if len(below) != 1 || below[0] != id {
-		return invalidResponse(op, messageForeignEntry)
+		return SystemTag{}, invalidResponse(op, messageForeignEntry)
 	}
 	if err := resources[0].failure(op); err != nil {
-		return err
+		return SystemTag{}, err
 	}
 	tag, visible := tagOf(id, &resources[0])
 	if !visible {
-		return providerError(op, messageTagMissing)
+		return SystemTag{}, providerError(op, messageTagMissing)
+	}
+	return tag, nil
+}
+
+// readTag reads one tag before it is assigned or removed; one this identity may not assign is refused.
+func (c *Client) readTag(ctx context.Context, op, id string) error {
+	tag, err := c.fetchTag(ctx, op, id)
+	if err != nil {
+		return err
 	}
 	if !tag.Assignable {
 		return providerError(op, messageTagNotAllowed)
