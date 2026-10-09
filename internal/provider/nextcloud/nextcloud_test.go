@@ -241,8 +241,8 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 9 || descriptors[0].ID != "nextcloud.files.copy" ||
-		descriptors[8].ID != "nextcloud.folders.create" {
+	if len(descriptors) != 10 || descriptors[0].ID != "nextcloud.files.copy" ||
+		descriptors[9].ID != "nextcloud.folders.delete" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
