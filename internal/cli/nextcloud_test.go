@@ -106,14 +106,14 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[22]{id,title,effect,requires,confirm,reason}:", "nextcloud.favorites.list,List Nextcloud favorites,read,", "nextcloud.files.favorite,Mark or unmark a Nextcloud favorite,update,path; favorite,true,", "nextcloud.files.search,Search Nextcloud files,read,", "nextcloud.files.copy,Copy a Nextcloud file or folder,create,", "nextcloud.files.create,Create a Nextcloud file,create,", "nextcloud.files.delete,Delete a Nextcloud file,delete,", "nextcloud.files.get,Read or download a Nextcloud file,read,", "nextcloud.files.list,List Nextcloud files,read,", "nextcloud.files.move,Move or rename a Nextcloud file or folder,update,", "nextcloud.files.stat,Get Nextcloud file metadata,read,", "nextcloud.files.update,Update a Nextcloud file,update,", "nextcloud.folders.create,Create a Nextcloud folder,create,", "nextcloud.sharees.search,Search Nextcloud recipients,read,", "nextcloud.shares.get,Get a Nextcloud share,read,", "nextcloud.shares.list,List Nextcloud shares,read,", "nextcloud.trash.delete,Delete a Nextcloud trash item for good,delete,trash_id,true,", "nextcloud.trash.list,List the Nextcloud trash bin,read,", "nextcloud.trash.restore,Restore a Nextcloud trash item,update,trash_id,true,", "nextcloud.versions.get,Read or download a Nextcloud file version,read,", "nextcloud.versions.list,List Nextcloud file versions,read,", "nextcloud.versions.restore,Restore a Nextcloud file version,update,",
+		"tools[26]{id,title,effect,requires,confirm,reason}:", "nextcloud.favorites.list,List Nextcloud favorites,read,", "nextcloud.files.favorite,Mark or unmark a Nextcloud favorite,update,path; favorite,true,", "nextcloud.files.search,Search Nextcloud files,read,", "nextcloud.files.copy,Copy a Nextcloud file or folder,create,", "nextcloud.files.create,Create a Nextcloud file,create,", "nextcloud.files.delete,Delete a Nextcloud file,delete,", "nextcloud.files.get,Read or download a Nextcloud file,read,", "nextcloud.files.list,List Nextcloud files,read,", "nextcloud.files.move,Move or rename a Nextcloud file or folder,update,", "nextcloud.files.stat,Get Nextcloud file metadata,read,", "nextcloud.files.update,Update a Nextcloud file,update,", "nextcloud.folders.create,Create a Nextcloud folder,create,", "nextcloud.sharees.search,Search Nextcloud recipients,read,", "nextcloud.shares.get,Get a Nextcloud share,read,", "nextcloud.shares.list,List Nextcloud shares,read,", "nextcloud.trash.delete,Delete a Nextcloud trash item for good,delete,trash_id,true,", "nextcloud.trash.list,List the Nextcloud trash bin,read,", "nextcloud.trash.restore,Restore a Nextcloud trash item,update,trash_id,true,", "nextcloud.versions.get,Read or download a Nextcloud file version,read,", "nextcloud.versions.list,List Nextcloud file versions,read,", "nextcloud.versions.restore,Restore a Nextcloud file version,update,", "nextcloud.filetags.add,Assign a Nextcloud system tag,update,\"path; tag_id:a tag_id of systemtags.list\",true,", "nextcloud.filetags.list,List the system tags of a Nextcloud file,read,", "nextcloud.filetags.remove,Remove a Nextcloud system tag from a file,update,\"path; tag_id:a tag_id of systemtags.list\",true,", "nextcloud.systemtags.list,List Nextcloud system tags,read,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--all", "--config", path))); len(got) != 22 {
-		t.Errorf("nextcloud tools = %v, want all twenty-two tools", got)
+	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--all", "--config", path))); len(got) != 26 {
+		t.Errorf("nextcloud tools = %v, want all twenty-six tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -274,9 +274,9 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 22 || searched.Operations[0].ID != "nextcloud.favorites.list" ||
-		searched.Operations[15].ID != "nextcloud.shares.list" || searched.Operations[18].ID != "nextcloud.trash.restore" ||
-		searched.Operations[21].ID != "nextcloud.versions.restore" {
+	if len(searched.Operations) != 26 || searched.Operations[0].ID != "nextcloud.favorites.list" ||
+		searched.Operations[18].ID != "nextcloud.shares.list" || searched.Operations[22].ID != "nextcloud.trash.restore" ||
+		searched.Operations[25].ID != "nextcloud.versions.restore" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
