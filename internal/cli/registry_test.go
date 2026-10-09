@@ -121,7 +121,7 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Errorf("Telegram metadata = %+v, %v", telegram, ok)
 	}
 	operations := reg.Provider("telegram")
-	if len(operations) != 33 || operations[0].ID != "telegram.bot.get" ||
+	if len(operations) != 37 || operations[0].ID != "telegram.bot.get" ||
 		operations[1].ID != "telegram.chatactions.send" || operations[2].ID != "telegram.chats.administrators" ||
 		operations[3].ID != "telegram.chats.deletephoto" || operations[6].ID != "telegram.chats.membercount" ||
 		operations[7].ID != "telegram.chats.setdescription" || operations[8].ID != "telegram.chats.setphoto" ||
@@ -134,7 +134,9 @@ func TestDefaultRegistry(t *testing.T) {
 		operations[24].ID != "telegram.photos.send" || operations[25].ID != "telegram.pins.pin" ||
 		operations[27].ID != "telegram.pins.unpinall" || operations[28].ID != "telegram.polls.send" ||
 		operations[29].ID != "telegram.polls.stop" || operations[30].ID != "telegram.reactions.set" ||
-		operations[31].ID != "telegram.updates.list" || operations[32].ID != "telegram.webhook.get" {
+		operations[31].ID != "telegram.stickers.customemoji" || operations[32].ID != "telegram.stickers.send" ||
+		operations[33].ID != "telegram.stickersets.get" || operations[34].ID != "telegram.topics.iconstickers" ||
+		operations[35].ID != "telegram.updates.list" || operations[36].ID != "telegram.webhook.get" {
 		t.Errorf("Telegram operations = %v, want the explicit message, member, pin, update, chat, invite link, bot, file, media, and interaction operations",
 			operations)
 	}

@@ -186,6 +186,8 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupMembers, Title: "Members", Description: "Ban, unban, and restrict members of the bound chats"},
 	{ID: groupInteractions, Title: "Interactions",
 		Description: "Send and stop polls, set reactions, and show chat actions in the bound chats"},
+	{ID: groupStickers, Title: "Stickers",
+		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers"},
 }
 
 const groupMessages = "messages"
@@ -289,6 +291,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: photosSend, Handler: capability.Handler(invokePhotosSend)},
 		capability.Operation{Descriptor: documentsSend, Handler: capability.Handler(invokeDocumentsSend)},
 		capability.Operation{Descriptor: mediaGroupsSend, Handler: capability.Handler(invokeMediaGroupsSend)},
+		capability.Operation{Descriptor: stickersSend, Handler: capability.Handler(invokeStickersSend)},
+		capability.Operation{Descriptor: stickersetsGet, Handler: capability.Handler(invokeStickersetsGet)},
+		capability.Operation{Descriptor: stickersCustomEmoji, Handler: capability.Handler(invokeStickersCustomEmoji)},
+		capability.Operation{Descriptor: topicsIconStickers, Handler: capability.Handler(invokeTopicsIconStickers)},
 	)
 }
 
