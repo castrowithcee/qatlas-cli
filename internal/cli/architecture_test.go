@@ -86,6 +86,7 @@ var storeHandles = map[string]map[string]bool{
 var providerAllowed = map[string]bool{
 	"internal/provider":           true,
 	"internal/provider/ratelimit": true,
+	"internal/provider/dav":       true,
 	"internal/capability":         true,
 	"internal/config":             true,
 	"internal/redact":             true,

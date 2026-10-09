@@ -81,8 +81,11 @@ positive Unix time) limits the ban, and `revoke_messages` also deletes all messa
 never removed; it invites nobody. `telegram.members.restrict` (`update`) requires a `tools` list and sets the
 complete `permissions` object of a user in a supergroup: every ChatPermissions boolean is required and sent
 explicitly, a missing or unknown field is refused before any request, and Telegram's permission dependencies
-are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. All three
-results are a single boolean. Promoting members, banning sender chats, and join requests are not offered.
+are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. All
+three results are a single boolean. `telegram.senderchats.ban` (`delete`) bans a channel as a sender by
+`sender_chat_id` and requires a `tools` list; `telegram.senderchats.unban` (`update`) lifts it. The channel
+identifier is only the object of the call, never the target. Promoting members and join requests are not
+offered.
 
 ## Polls, reactions, and chat actions
 
@@ -94,8 +97,12 @@ limits fix is checked locally before the credential is read. The result is `mess
 `telegram.messages.delete`, requires a `tools` list; it reports only `stopped`, never counts or voters.
 `telegram.reactions.set` (`update`, idempotent) sets at most one reaction of the bot from Telegram's
 fixed emoji list or a numeric `custom_emoji_id`; an empty `reactions` list removes it. Paid reactions are
-not offered. `telegram.chatactions.send` (`create`, idempotent) shows one of Telegram's fixed actions for
-about five seconds.
+not offered. `telegram.reactions.remove` (`delete`, idempotent) removes the reactions of one user (`user_id`)
+or one chat (`actor_chat_id`) from one message; `telegram.reactions.removeall` removes up to 10000 recent
+reactions of that user or chat across the whole chat. Exactly one actor is required, the chat is a group or
+supergroup in which the bot may delete messages, and both tools require a `tools` list. The actor chat is only
+an object, never the target. `telegram.chatactions.send` (`create`, idempotent) shows one of Telegram's fixed
+actions for about five seconds.
 
 ## Locations, venues, contacts, and dice
 
@@ -230,7 +237,8 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
-`telegram.members.restrict`, `telegram.chats.deletephoto`, the interaction tools including locations, venues,
-contacts, and dice, and the invite link tools are in no profile. A profile is a visible starting selection,
-not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
-saved connection never follows a profile.
+`telegram.members.restrict`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
+`telegram.chats.deletephoto`, the interaction tools including locations, venues, contacts, and dice, and the
+invite link tools are in no profile. A profile is a visible starting selection, not a role: only the ticked
+`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
+follows a profile.
