@@ -241,14 +241,14 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 29 || descriptors[0].ID != "nextcloud.favorites.list" ||
+	if len(descriptors) != 32 || descriptors[0].ID != "nextcloud.favorites.list" ||
 		descriptors[4].ID != "nextcloud.files.favorite" || descriptors[8].ID != "nextcloud.files.search" ||
 		descriptors[11].ID != "nextcloud.filetags.add" || descriptors[13].ID != "nextcloud.filetags.remove" ||
-		descriptors[15].ID != "nextcloud.folders.delete" || descriptors[18].ID != "nextcloud.shares.list" ||
-		descriptors[19].ID != "nextcloud.systemtags.create" || descriptors[21].ID != "nextcloud.systemtags.list" ||
-		descriptors[22].ID != "nextcloud.systemtags.update" || descriptors[23].ID != "nextcloud.trash.delete" ||
-		descriptors[25].ID != "nextcloud.trash.restore" || descriptors[26].ID != "nextcloud.versions.get" ||
-		descriptors[28].ID != "nextcloud.versions.restore" {
+		descriptors[15].ID != "nextcloud.folders.delete" || descriptors[20].ID != "nextcloud.shares.list" ||
+		descriptors[22].ID != "nextcloud.systemtags.create" || descriptors[24].ID != "nextcloud.systemtags.list" ||
+		descriptors[25].ID != "nextcloud.systemtags.update" || descriptors[26].ID != "nextcloud.trash.delete" ||
+		descriptors[28].ID != "nextcloud.trash.restore" || descriptors[29].ID != "nextcloud.versions.get" ||
+		descriptors[31].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
@@ -269,6 +269,10 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		for _, forbidden := range []string{
 			"base_url", "instance", "user", "password", "root", "href", "depth", "method", "url",
 		} {
+			// The share type enum of a new share names the recipient kind "user".
+			if forbidden == "user" && descriptor.ID == sharesCreate.ID {
+				continue
+			}
 			if strings.Contains(string(descriptor.InputSchema), forbidden) {
 				t.Errorf("the input schema of %s offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}
