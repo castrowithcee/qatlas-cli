@@ -1,5 +1,6 @@
 // Package telegram implements the deliberately small Telegram Bot API surface used by Qatlas: a safe
-// getMe connection check and confirmed send, edit, and delete operations.
+// getMe connection check, confirmed send, edit, and delete operations, and non-consuming reads of incoming
+// updates.
 package telegram
 
 import (
@@ -175,6 +176,7 @@ var messagesDelete = capability.Descriptor{
 
 var toolGroups = []config.ToolGroup{
 	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the bound chats"},
+	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -204,10 +206,16 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "send", Title: "Send messages", Recommended: true,
 			Description: "sends new messages to the bound chats; earlier messages stay as they are",
-			// Telegram offers no read tool, so the safe start is the narrowest change there is.
-			MutationReason: "a message goes only to a chat bound in the connection and every send needs " +
-				"confirmation in its own request; nothing already in the chat can be edited or deleted",
+			// The read tools expose the content of incoming messages, so the recommended start is the
+			// narrowest change there is rather than a read.
+			MutationReason: "the read tools expose incoming message content of the bound chats, so the " +
+				"recommended start is a send that reaches only a bound chat, after confirmation in its own " +
+				"request; nothing already in the chat can be edited or deleted",
 			Tools: []string{messagesSend.ID},
+		}, {
+			ID: "read", Title: "Read incoming updates",
+			Description: "reads pending messages and events of the bound chats; nothing is sent or acknowledged",
+			Tools:       []string{updatesList.ID},
 		}, {
 			ID: "messaging", Title: "Send, edit, and delete messages",
 			Description: "also edits messages and deletes messages in the bound chats: as admin also those of " +
@@ -222,6 +230,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
 		capability.Operation{Descriptor: messagesEditReplyMarkup, Handler: capability.Handler(invokeMessagesEditReplyMarkup)},
 		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
+		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 	)
 }
 
@@ -331,6 +340,7 @@ type Client struct {
 	token  string
 	target string
 	http   *http.Client
+	set    targetSet
 }
 
 // Open resolves the bot token only after the application core selected and confirmed the exact request.
@@ -367,7 +377,7 @@ func openWithHTTP(ctx context.Context, resolved *config.Resolved, secrets *secre
 	if httpClient == nil {
 		httpClient = newHTTPClient()
 	}
-	client := &Client{base: base, token: value.Secret, http: httpClient}
+	client := &Client{base: base, token: value.Secret, http: httpClient, set: set}
 	if len(set.chats) == 1 {
 		client.target = set.chats[0]
 	}
