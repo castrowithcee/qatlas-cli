@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-08
+updated: 2026-10-09
 ---
 
 # Nextcloud
@@ -106,6 +106,22 @@ Sharing is read through the OCS API of the Sharing app (`/ocs/v2.php/apps/files_
 basic authentication as WebDAV and without redirects. The client in `ocs.go` takes fixed path segments and
 typed query values and accepts an answer only when the envelope reports `ok` and 200; it forwards no message
 of the instance.
+
+## Versions
+
+`nextcloud.versions.list`, `nextcloud.versions.get`, and `nextcloud.versions.restore` read and restore older
+versions of one file below the connection root (developer manual, WebDAV versions: `remote.php/dav/versions/<user>/`
+of the same instance). The argument is always the file path; a file ID is never accepted. Qatlas stats the
+path first, refuses a folder, and addresses the versions only under the file ID of that answer. A `version_id`
+is a timestamp name from `versions.list`, digits only. `versions.list` reports at most 100 versions, newest
+first, and marks a cut with `truncated`; a node outside that file's version folder fails the call.
+
+`versions.get` returns up to 4 MiB inline or writes to `local_path` exactly as `files.get` does.
+`versions.restore` needs `confirm` and the `etag` of the current file and moves the version onto the
+restore target of the identity with one `MOVE`. The manual documents no condition for the `MOVE`, so a change
+made between the ETag check and the `MOVE` is not detected. An unclear outcome is reported as possibly
+applied and never repeated. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore`
+are in none.
 
 ## Local files
 

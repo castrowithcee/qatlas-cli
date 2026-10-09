@@ -319,11 +319,11 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read files", Recommended: true,
 			Description: "lists folders, reads file metadata and content; changes nothing below the root folder",
-			Tools:       []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID},
+			Tools:       []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID, versionsList.ID},
 		}, {
 			ID: "write", Title: "Read and organise files",
 			Description: "lists folders, reads files, creates folders, and moves, renames, or copies files and folders without overwriting",
-			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
+			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID, versionsList.ID,
 				foldersCreate.ID, filesMove.ID, filesCopy.ID},
 		}},
 	}, TestConnection); err != nil {
@@ -340,6 +340,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(foldersDelete), Handler: folderBound(invokeFoldersDelete)},
 		capability.Operation{Descriptor: grouped(filesMove), Handler: folderBound(invokeFilesMove)},
 		capability.Operation{Descriptor: grouped(filesCopy), Handler: folderBound(invokeFilesCopy)},
+		capability.Operation{Descriptor: grouped(versionsList), Handler: folderBound(invokeVersionsList)},
+		capability.Operation{Descriptor: grouped(versionsGet), Handler: folderBound(invokeVersionsGet)},
+		capability.Operation{Descriptor: grouped(versionsRestore), Handler: folderBound(invokeVersionsRestore)},
 		capability.Operation{Descriptor: inGroup(sharesList, groupShares), Handler: folderBound(invokeSharesList)},
 		capability.Operation{Descriptor: inGroup(sharesGet, groupShares), Handler: folderBound(invokeSharesGet)},
 		capability.Operation{Descriptor: inGroup(shareesSearch, groupShares), Handler: accountBound(invokeShareesSearch)},
@@ -921,16 +924,25 @@ func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
 	if err != nil || len(rel) == 0 {
 		return nil, providerError("get file", "a file path below the connection root is required")
 	}
-	response, err := c.webdav(ctx, "get file", http.MethodGet, rel, nil, "", "", "")
+	body, header, err := c.readInline(ctx, "get file", c.requestURL(rel), "the Nextcloud file exceeds 4 MiB, use local_path")
 	if err != nil {
 		return nil, err
+	}
+	return &Content{Path: path, ContentBase64: base64.StdEncoding.EncodeToString(body), ContentType: bounded(header.Get("Content-Type")), Size: len(body), ETag: bounded(strings.Trim(header.Get("ETag"), `"`))}, nil
+}
+
+// readInline reads the GET of an absolute URL, built from checked segments, up to the inline limit.
+func (c *Client) readInline(ctx context.Context, op, target, tooLarge string) ([]byte, http.Header, error) {
+	response, err := c.webdavTo(ctx, op, http.MethodGet, target, nil, "", "", "", nil)
+	if err != nil {
+		return nil, nil, err
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxFileBytes+1))
 	if err != nil || len(body) > maxFileBytes {
-		return nil, invalidResponse("get file", "the Nextcloud file exceeds 4 MiB, use local_path")
+		return nil, nil, invalidResponse(op, tooLarge)
 	}
-	return &Content{Path: path, ContentBase64: base64.StdEncoding.EncodeToString(body), ContentType: bounded(response.Header.Get("Content-Type")), Size: len(body), ETag: bounded(strings.Trim(response.Header.Get("ETag"), `"`))}, nil
+	return body, response.Header, nil
 }
 
 // transferClient is the client for a request that moves file content to or from a local path: the same
@@ -995,7 +1007,23 @@ func (c *Client) DownloadFile(ctx context.Context, path string, download *localf
 	if entry.Type != typeFile {
 		return nil, providerError(op, "only a file can be downloaded")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.requestURL(rel), nil)
+	header, err := c.downloadTo(ctx, op, c.requestURL(rel), download, done)
+	if err != nil {
+		return nil, err
+	}
+	sum, _ := download.SHA256()
+	etag := entry.ETag
+	if etag == "" {
+		etag = bounded(strings.Trim(header.Get("ETag"), `"`))
+	}
+	return &DownloadResult{Path: path, Name: entry.Name, ContentType: bounded(header.Get("Content-Type")),
+		Size: download.Size(), SHA256: sum, ETag: etag}, nil
+}
+
+// downloadTo streams the GET of an absolute URL, built from checked segments, into the prepared local file
+// and commits it. It returns the headers of the answer.
+func (c *Client) downloadTo(ctx context.Context, op, target string, download *localfile.Download, done *bool) (http.Header, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
 	}
@@ -1025,13 +1053,7 @@ func (c *Client) DownloadFile(ctx context.Context, path string, download *localf
 	if err := download.Commit(); err != nil {
 		return nil, err
 	}
-	sum, _ := download.SHA256()
-	etag := entry.ETag
-	if etag == "" {
-		etag = bounded(strings.Trim(response.Header.Get("ETag"), `"`))
-	}
-	return &DownloadResult{Path: path, Name: entry.Name, ContentType: bounded(response.Header.Get("Content-Type")),
-		Size: download.Size(), SHA256: sum, ETag: etag}, nil
+	return response.Header, nil
 }
 
 func (c *Client) PutFile(ctx context.Context, op, path, encoded string, create bool, match string) (string, error) {
