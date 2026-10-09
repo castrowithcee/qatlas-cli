@@ -238,8 +238,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 22 {
-		t.Fatalf("tools = %+v, want 22", metadata.Tools)
+	if len(metadata.Tools) != 25 {
+		t.Fatalf("tools = %+v, want 25", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {

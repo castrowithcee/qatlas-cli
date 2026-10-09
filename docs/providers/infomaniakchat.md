@@ -1,9 +1,9 @@
 ---
 description: >
   Describes the Infomaniak kChat provider: token setup, the team and channel allow-list, the team, channel,
-  message, thread, reaction, attachment, and user reads, the attachment download, the user scope check,
-  pagination contracts, the confirmed channel create and update, send, edit, delete, and reaction tools and
-  their unclear-result contract, redirect handling, and the boundary to kDrive, Mail, and CalDAV/CardDAV.
+  message, thread, search, reaction, attachment, and user reads, the attachment download, the user scope
+  check, pagination contracts, the confirmed channel create and update, send, edit, delete, and reaction tools
+  and their unclear-result contract, redirect handling, and the boundary to kDrive, Mail, and CalDAV/CardDAV.
 type: knowledge
 edit: shared
 created: 2026-09-27
@@ -18,11 +18,12 @@ teams and channels, shows channel details and the public channels of a team, cre
 and changes a channel's display name, purpose, header, or handle, reads channel messages and threads page by
 page, and sends or replies with exactly one confirmed message, reads, edits, and deletes single messages,
 reads, adds, and removes reactions, lists the attachments of a message and downloads one to a released local
-directory, and reads, lists, and searches the users of the bound teams and their presence, all through the
-instance's own `/api/v4/...` REST surface. kChat renders Markdown and mentions such as `@channel` in a
-message; Qatlas sends the text as written. It manages no team or membership, neither archives nor changes the
-visibility of a channel, changes no user, sends no direct message, uploads no file, offers no previews or
-thumbnails, offers no custom emoji catalog, and configures no webhook.
+directory, searches messages, files, and public channels of a bound team, and reads, lists, and searches the
+users of the bound teams and their presence, all through the instance's own `/api/v4/...` REST surface.
+kChat renders Markdown and mentions such as `@channel` in a message; Qatlas sends the text as written. It
+manages no team or membership, neither archives nor changes the visibility of a channel, changes no user,
+sends no direct message, uploads no file, offers no previews or thumbnails, offers no custom emoji catalog,
+and configures no webhook.
 
 ## Configuration
 
@@ -113,6 +114,14 @@ status request, so one foreign ID refuses the whole call. `users.list` and `user
 users from their answer. A `username` is read first and bound through the ID kChat reports before anything is
 returned; an unknown username is refused exactly like a foreign one.
 
+The searches (`messages.search`, `files.search`, `channels.search`) take a bound `team_id`, checked locally
+before any secret is read. Qatlas reads the token's channels of that team (`GET
+/api/v4/users/me/teams/{team_id}/channels`) and keeps only live channels of that team inside the channel
+allow-list, never direct or group channels; then it sends one search request and drops every hit outside
+that set, hits of other teams included. A file hit without a `channel_id` is dropped. Because the set comes
+from the token's own channels, a public channel the token has not joined yields no hit, and
+`channels.search` returns only public channels of that set.
+
 A successful `qatlas connection test` reads the teams of the current token: it proves the token is accepted,
 not that every team or channel on a narrower allow-list exists, is reachable, or actually belongs to it.
 
@@ -124,17 +133,20 @@ not that every team or channel on a narrower allow-list exists, is reachable, or
 | `infomaniakchat.channels.list` | read | the token's channels of one bound team, filtered to the channel allow-list, page by page |
 | `infomaniakchat.channels.get` | read | one channel with header, member count, creation time, and archive state |
 | `infomaniakchat.channels.browse` | read | the public channels of one bound team, page by page, members or not |
+| `infomaniakchat.channels.search` | read | public channels of one bound team matching a `term`, limited to the token's own reachable channels |
 | `infomaniakchat.channels.create` | create, confirmed | one public or private channel in a bound team |
 | `infomaniakchat.channels.update` | update, confirmed | display name, purpose, header, or handle of one channel |
 | `infomaniakchat.messages.list` | read | the messages of one channel this connection may reach, newest first, page by page |
 | `infomaniakchat.messages.thread` | read | one message and the rest of its thread, page by page |
 | `infomaniakchat.messages.get` | read | one message by `post_id` |
+| `infomaniakchat.messages.search` | read | messages of one bound team matching `terms`, only from reachable channels, page by page |
 | `infomaniakchat.messages.send` | create, confirmed | exactly one message, or, with `root_id`, one reply |
 | `infomaniakchat.messages.update` | update, confirmed | the text of one message; nothing else of the post changes |
 | `infomaniakchat.messages.delete` | delete, confirmed, tools list only | one message |
 | `infomaniakchat.messages.files` | read | the metadata of the live files attached to one message, at most 50 |
 | `infomaniakchat.files.info` | read | the metadata of one file attached to a reachable message |
 | `infomaniakchat.files.download` | read, writes a local file | one attached file to `local_path` |
+| `infomaniakchat.files.search` | read | file attachments of one bound team matching `terms`, only from reachable channels, page by page |
 | `infomaniakchat.reactions.list` | read | the reactions of one message, page by page |
 | `infomaniakchat.reactions.add` | create, confirmed | one reaction of the token's own user |
 | `infomaniakchat.reactions.remove` | delete, confirmed, tools list only | one reaction of the token's own user |
@@ -147,9 +159,9 @@ The tools sort into the groups `teams`, `channels`, `messages`, `files`, `reacti
 need no confirmation; channel create and update, send, update, delete, and the reaction changes always do,
 through the same confirmation mechanism every other confirmed Qatlas tool uses. The terminal editor starts a
 new connection on the setup profile `read`, which ticks the read tools, the channel, user, and attachment
-tools included; `messaging` adds `messages.send`, `messages.update`, and `reactions.add` for a connection that
-should also post, edit, and react; `channel-admin` reads teams and channels and adds `channels.create` and
-`channels.update`.
+tools and the three searches included; `messaging` adds `messages.send`, `messages.update`, and
+`reactions.add` for a connection that should also post, edit, and react; `channel-admin` reads teams and
+channels and adds `channels.create` and `channels.update`.
 
 `channels.create` takes `team_id`, `name`, `display_name`, `type` (`O` public or `P` private), and optionally
 `purpose` and `header`; `channels.update` takes `channel_id` and at least one of `display_name`, `purpose`,
@@ -177,6 +189,9 @@ redirect, for example to a storage host, is a `provider-error` and is not follow
 the data sensitivity `infomaniak-kchat-files`; file names and media types are untrusted data, and
 `include_deleted` is never sent.
 
+A search `terms` is 1 to 512 characters without control characters; kChat's `from:`, `in:`, and `ext:` syntax
+is allowed because the reachable-channel filter applies afterwards. The term is never part of an error.
+
 Users are output through a fixed field allow-list: `id`, `username`, `first_name`, `last_name`, `nickname`,
 `position`, `is_bot`, `deleted`, and `email` only when kChat reports one to the token. Roles, notification
 settings, properties, time zone, authentication service, and credential or MFA fields are never decoded.
@@ -200,6 +215,11 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 - `infomaniakchat.messages.list` pages kChat's own `GetPostsForChannel` pagination directly: `page` (1-based)
   and `limit` select one page of the channel, newest first, and the answer reports `has_more` from kChat's
   own `has_next`.
+- `infomaniakchat.messages.search` and `files.search` pass `page` (1-based) and `limit` (1 to 100, default 50)
+  to kChat's own search and read no further page; `has_more` is true when kChat's page was full, and `count`
+  may be lower than `limit` because hits outside the reachable channels are dropped. kChat documents the
+  paging of its search as working only with Elasticsearch. `channels.search` has no paging. Searches never
+  include archived channels.
 - `infomaniakchat.reactions.list` reads kChat's complete reaction array for the post and pages it itself like
   the team listing, reporting only `user_id`, `emoji_name`, and `created_at` per reaction.
 - `infomaniakchat.users.list` pages kChat's own `page` and `per_page`: `page` (1-based) and `limit` select one
@@ -259,21 +279,22 @@ an edit changes only a message's text, never its attachments, pin state, or prop
 ## Live test scenario
 
 A future live test against a real kChat instance should, in order: read `teams.list` and confirm the
-configured team allow-list matches what the token actually belongs to; read `channels.list` of one bound team
-and confirm the channel allow-list, when configured, is applied; read one channel with `channels.get` by ID
-and by name, and browse the public channels across two pages; create a disposable channel from a connection
-without a channel allow-list, change its header, and confirm the same call is refused on a connection with
-one; read `messages.list` of one channel across two pages and confirm `has_more` turns false on the last one;
-send one confirmed message to a disposable test channel and confirm exactly one message appears; send one
-confirmed reply with `root_id` and confirm it threads under the original message; read it with `messages.get`;
-edit its text and confirm only the text and the edit time change; delete the reply from a connection that
-lists the delete tool and confirm the root stays; add a reaction, read it with `reactions.list`, and remove it
-from a connection that lists the remove tool; list the attachments of a message with a file, download one into
-a released directory, and confirm the written size matches `size` and that a storage-host redirect, if kChat
-answers with one, is reported as `provider-error`; read a bound team's users and their presence, search one by
-name, and confirm a user who is only in another team of the instance is refused by `users.get` and
-`users.status` and absent from the list and search; attempt a send, get, edit, delete, reaction, and file
-download against a channel or post outside the connection's targets and confirm each is refused before
-anything changes; attempt the same with a channel or team the credential's token cannot actually reach, to
-confirm the live check reports it, not a stale allow-list; and confirm which token sources an instance
-accepts, including a personal profile token.
+configured team allow-list matches what the token actually belongs to; read `channels.list` of one bound
+team and confirm the channel allow-list, when configured, is applied; read one channel with `channels.get`
+by ID and by name, and browse the public channels across two pages; search messages, files, and channels and
+confirm hits from a channel outside the allow-list, a direct message, and another team are absent; create a
+disposable channel from a connection without a channel allow-list, change its header, and confirm the same
+call is refused on a connection with one; read `messages.list` of one channel across two pages and confirm
+`has_more` turns false on the last one; send one confirmed message to a disposable test channel and confirm
+exactly one message appears; send one confirmed reply with `root_id` and confirm it threads under the
+original message; read it with `messages.get`; edit its text and confirm only the text and the edit time
+change; delete the reply from a connection that lists the delete tool and confirm the root stays; add a
+reaction, read it with `reactions.list`, and remove it from a connection that lists the remove tool; list
+the attachments of a message with a file, download one into a released directory, and confirm the written
+size matches `size` and that a storage-host redirect, if kChat answers with one, is reported as
+`provider-error`; read a bound team's users and their presence, search one by name, and confirm a user who
+is only in another team of the instance is refused by `users.get` and `users.status` and absent from the
+list and search; attempt a send, get, edit, delete, reaction, and file download against a channel or post
+outside the connection's targets and confirm each is refused before anything changes; attempt the same with
+a channel or team the credential's token cannot actually reach, to confirm the live check reports it, not a
+stale allow-list; and confirm which token sources an instance accepts, including a personal profile token.

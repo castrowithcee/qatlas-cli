@@ -6,10 +6,11 @@
 // GetTeamsForUser, GetChannel, GetChannelsForTeamForUser, GetPostsForChannel, GetPost, GetPostThread,
 // CreatePost, PatchPost, and DeletePost, GetReactions, SaveReaction, and DeleteReaction, GetUser,
 // GetUserByUsername, GetUsers, SearchUsers, GetTeamMembersByIds, and GetUsersStatusesByIds,
-// GetFileInfosForPost, GetFileInfo, and GetFile, all marked x-auth-user with the bearerAuth security scheme).
-// A kChat instance's base URL is always the team's own name as the one DNS label directly below
-// kchat.infomaniak.com, never an arbitrary host: the MCP server builds every request from exactly that shape,
-// https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider accepts no other host, see parseInstance.
+// GetFileInfosForPost, GetFileInfo, and GetFile, and SearchPosts, SearchFiles, and SearchChannels, all marked
+// x-auth-user with the bearerAuth security scheme). A kChat instance's base URL is always the team's own name
+// as the one DNS label directly below kchat.infomaniak.com, never an arbitrary host: the MCP server builds
+// every request from exactly that shape, https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider
+// accepts no other host, see parseInstance.
 //
 // A connection binds exactly one kChat instance, through its configured base URL, and one or more teams of it
 // (team/TEAM_ID, repeatable) plus, optionally, a narrower allow-list of channels of those teams
@@ -22,7 +23,10 @@
 // extra request, that the channel actually belongs to one of the bound teams, and is refused before the
 // matching endpoint is reached when it does not. Every operation that names a post_id (messages.thread,
 // messages.get, messages.files, messages.update, messages.delete, and the reactions tools) reads the post
-// first and binds it to its channel the same way, see verifyPostScope; a message reply additionally confirms
+// first and binds it to its channel the same way, see verifyPostScope; the searches (messages.search,
+// files.search, channels.search) read the token's channels of the team once, see reachableChannels, and drop
+// every hit outside that set, so direct and group messages, other teams, and channels outside the allow-list
+// never show up; a message reply additionally confirms
 // that its root post belongs to the same channel before it is ever sent. Rejecting an out-of-scope channel or
 // post never carries a message's text into an error or a log.
 //
@@ -48,7 +52,8 @@
 // connection without a channel allow-list, because a new channel cannot be inside one), changes the display
 // name, purpose, header, or handle of one confirmed public or private channel, reads channel posts, single
 // posts, threads, reactions, and the attachments of posts (writing one to a released local directory), reads,
-// lists, and searches the users of the bound teams and reads their presence, sends or replies with exactly
+// lists, and searches the users of the bound teams and reads their presence, searches the messages, files,
+// and public channels of a bound team, sends or replies with exactly
 // one confirmed message, changes the text of one confirmed message, adds one confirmed reaction of the
 // token's own user, and, only when a connection's tools list names it, deletes one confirmed message or
 // removes one own reaction. kChat renders Markdown and mentions such as @channel in a message, so the text
@@ -404,7 +409,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat team messaging: messages, reactions, attachments, users and presence, and channels (read, create, rename) of the bound teams through its Mattermost-compatible REST API",
+		Description:        "Infomaniak kChat team messaging: messages, search, reactions, attachments, users and presence, and channels (read, create, rename) of the bound teams through its Mattermost-compatible REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -443,12 +448,14 @@ func Register(reg *capability.Registry) error {
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read teams, channels, messages, and users", Recommended: true,
 			Description: "lists the bound teams and their channels, reads channel details and the public " +
-				"channels of a bound team, reads channel messages, single messages, threads, reactions, and " +
+				"channels of a bound team, searches messages, files, and channels, reads channel messages, " +
+				"single messages, threads, reactions, and " +
 				"attachments (metadata and download to a released local directory), and reads, lists, and " +
 				"searches the users of the bound teams and their presence; changes nothing",
 			Tools: []string{teamsList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID, messagesList.ID,
 				messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID, filesDownload.ID,
-				reactionsList.ID, usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID},
+				reactionsList.ID, usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID, messagesSearch.ID,
+				filesSearch.ID, channelsSearch.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also sends a confirmed message, or a confirmed reply to an existing thread, to a " +
@@ -456,7 +463,8 @@ func Register(reg *capability.Registry) error {
 				"reaction; deleting a message or removing a reaction is never part of a profile",
 			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID,
 				messagesSend.ID, messagesUpdate.ID, messagesFiles.ID, filesInfo.ID, filesDownload.ID,
-				reactionsList.ID, reactionsAdd.ID, usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID},
+				reactionsList.ID, reactionsAdd.ID, usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID,
+				messagesSearch.ID, filesSearch.ID, channelsSearch.ID},
 		}, {
 			ID: "channel-admin", Title: "Manage channels",
 			Description: "reads the bound teams, their channels with details, and the public channels, and also " +
@@ -492,6 +500,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(usersList), Handler: capability.Handler(invokeUsersList)},
 		capability.Operation{Descriptor: withGroup(usersSearch), Handler: capability.Handler(invokeUsersSearch)},
 		capability.Operation{Descriptor: withGroup(usersStatus), Handler: capability.Handler(invokeUsersStatus)},
+		capability.Operation{Descriptor: withGroup(messagesSearch), Handler: capability.Handler(invokeMessagesSearch)},
+		capability.Operation{Descriptor: withGroup(filesSearch), Handler: capability.Handler(invokeFilesSearch)},
+		capability.Operation{Descriptor: withGroup(channelsSearch), Handler: capability.Handler(invokeChannelsSearch)},
 	)
 }
 
