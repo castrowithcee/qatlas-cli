@@ -45,8 +45,9 @@ before the credential is read when the target is missing. Methods that accept on
 `@username` chat locally.
 
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
-to `pins`, the update tool to `updates`, the chat tools to `chats`, the bot and webhook tools to `bot`, the file
-tools to `files`, the media tools to `media`. A group never changes a tool ID, a permission, or a tools list.
+to `pins`, the member tools to `members`, the update tool to `updates`, the chat tools to `chats`, the bot
+and webhook tools to `bot`, the file tools to `files`, the media tools to `media`. A group never changes a
+tool ID, a permission, or a tools list.
 The base URL must be a plain `https` URL with a host and without user, query, or fragment, with no exception
 for local addresses, and redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
@@ -71,6 +72,15 @@ accepted the request, not which messages are gone.
 `telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
 `telegram.pins.unpinall` unpins every pinned message of the chat and, like `telegram.messages.delete`,
 requires a `tools` list. Telegram's own pin rights still apply, and topic-specific unpinning is not offered.
+
+`telegram.members.ban` bans one user by `user_id` (`delete`) and requires a `tools` list; `until_date` (a
+positive Unix time) limits the ban, and `revoke_messages` also deletes all messages of the user in the chat.
+`telegram.members.unban` lifts a ban (`update`) and always sends `only_if_banned`, so a current member is
+never removed; it invites nobody. `telegram.members.restrict` (`update`) requires a `tools` list and sets the
+complete `permissions` object of a user in a supergroup: every ChatPermissions boolean is required and sent
+explicitly, a missing or unknown field is refused before any request, and Telegram's permission dependencies
+are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. All three
+results are a single boolean. Promoting members, banning sender chats, and join requests are not offered.
 
 ## Reading updates
 
@@ -158,6 +168,8 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 `[telegram.bot.get]`, and the four `telegram.chats.*` tools. The profile `messaging` also ticks `update`,
 `delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
 `telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the three media send
-tools. `telegram.messages.editreplymarkup` and `telegram.pins.unpinall` are in no profile. A profile is a
-visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
-changed before saving, and a saved connection never follows a profile.
+tools; the profile `moderation` ticks `update` and `telegram.members.unban`.
+`telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`, and
+`telegram.members.restrict` are in no profile. A profile is a visible starting selection, not a role: only the
+ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved
+connection never follows a profile.

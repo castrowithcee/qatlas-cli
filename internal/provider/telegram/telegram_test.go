@@ -71,9 +71,10 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 7 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
+	if len(metadata.Groups) != 8 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
 		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "chats" || metadata.Groups[4].ID != "bot" ||
-		metadata.Groups[5].ID != "files" || metadata.Groups[6].ID != "media" {
+		metadata.Groups[5].ID != "files" || metadata.Groups[6].ID != "media" ||
+		metadata.Groups[7].ID != "members" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
@@ -83,6 +84,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "updates"
 		case strings.HasPrefix(tool.ID, "telegram.pins."):
 			want = "pins"
+		case strings.HasPrefix(tool.ID, "telegram.members."):
+			want = "members"
 		case strings.HasPrefix(tool.ID, "telegram.chats."):
 			want = "chats"
 		case tool.ID == filesGet.ID || tool.ID == filesDownload.ID:
@@ -97,8 +100,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 20 {
-		t.Fatalf("operation count = %d, want twenty", len(operations))
+	if len(operations) != 23 {
+		t.Fatalf("operation count = %d, want twenty-three", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -119,7 +122,8 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 		t.Fatal(err)
 	}
 	for _, d := range reg.Provider(Provider) {
-		want := d.ID == messagesDelete.ID || d.ID == messagesDeleteMany.ID || d.ID == pinsUnpinAll.ID
+		want := d.ID == messagesDelete.ID || d.ID == messagesDeleteMany.ID || d.ID == pinsUnpinAll.ID ||
+			d.ID == membersBan.ID || d.ID == membersRestrict.ID
 		if d.RequiresToolAllowList != want {
 			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
 		}
