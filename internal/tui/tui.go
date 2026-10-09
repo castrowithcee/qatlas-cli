@@ -36,6 +36,17 @@ import (
 // provider knowledge of its own; the caller supplies this function.
 type Tester func(ctx context.Context, connection string) (provider.Class, error)
 
+// TargetSuggester reads the target a provider offers for a connection that has none, or "" for none. The
+// editor only shows it as a prefilled form value; it never saves it. Like Tester, it keeps the editor free
+// of provider knowledge.
+type TargetSuggester func(ctx context.Context, connection string) (string, error)
+
+// suggestDoneMsg carries a target suggestion back into the event loop.
+type suggestDoneMsg struct {
+	name   string
+	target string
+}
+
 // testDoneMsg carries the outcome of a connection test back into the event loop.
 type testDoneMsg struct {
 	id    int
@@ -526,6 +537,12 @@ type Model struct {
 	testID     int
 	cancelTest context.CancelFunc
 
+	// suggester may be nil. suggested holds, for this process only, the target a successful test of an
+	// unbound connection offered; the connection form prefills it without saving.
+	suggester     TargetSuggester
+	suggested     map[string]string
+	cancelSuggest context.CancelFunc
+
 	// wizard is the guided setup while it runs, and nil otherwise.
 	wizard *setup
 
@@ -654,7 +671,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer m.keepScrollPosition()
 	switch msg := msg.(type) {
 	case testDoneMsg:
-		m.finishTest(msg)
+		return m, m.finishTest(msg)
+	case suggestDoneMsg:
+		m.finishSuggest(msg)
 		return m, nil
 	case sourcesMsg:
 		return m, m.handleSources(msg)
@@ -2201,9 +2220,9 @@ func connectionTestError(err error) string {
 
 // finishTest accepts a result only while it is still the current one, so a cancelled test cannot report
 // back later.
-func (m *Model) finishTest(done testDoneMsg) {
+func (m *Model) finishTest(done testDoneMsg) tea.Cmd {
 	if !m.testing || done.id != m.testID {
-		return
+		return nil
 	}
 	m.testing = false
 	m.testID++
@@ -2214,14 +2233,63 @@ func (m *Model) finishTest(done testDoneMsg) {
 	if done.err != "" {
 		// Redaction happens before anything reaches the model, including an unexpected provider error.
 		m.fail = "Connection test could not run: " + m.redactor.Apply(done.err)
-		return
+		return nil
 	}
 	m.testClass = done.class
+	if done.class == provider.ClassOK {
+		return m.suggestTarget(m.testName)
+	}
+	return nil
+}
+
+// suggestTarget asks, after a successful test, for the target of a connection that has none. It runs like
+// the test, off the event loop; a failure only means there is no suggestion.
+func (m *Model) suggestTarget(name string) tea.Cmd {
+	if m.suggester == nil || len(m.cfg.Connections[name].TargetValues()) > 0 {
+		return nil
+	}
+	if m.cancelSuggest != nil {
+		m.cancelSuggest()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelSuggest = cancel
+	suggester := m.suggester
+	return func() tea.Msg {
+		target, err := suggester(ctx, name)
+		if err != nil {
+			target = ""
+		}
+		return suggestDoneMsg{name: name, target: strings.TrimSpace(target)}
+	}
+}
+
+// finishSuggest remembers a suggestion for a connection that is still unbound and says so on the status
+// line. Nothing is saved.
+func (m *Model) finishSuggest(done suggestDoneMsg) {
+	if m.quitting || done.target == "" || len(m.cfg.Connections[done.name].TargetValues()) > 0 {
+		return
+	}
+	if m.suggested == nil {
+		m.suggested = map[string]string{}
+	}
+	m.suggested[done.name] = done.target
+	m.status = "Suggested target " + done.target + "; edit the connection to bind it"
+}
+
+// suggestedTarget is the remembered suggestion of a connection that is still unbound.
+func (m *Model) suggestedTarget(name string) string {
+	if len(m.cfg.Connections[name].TargetValues()) > 0 {
+		return ""
+	}
+	return m.suggested[name]
 }
 
 // quit ends the editor. A running test is cancelled first, so its context never outlives the editor.
 func (m *Model) quit() tea.Cmd {
 	m.stopTest()
+	if m.cancelSuggest != nil {
+		m.cancelSuggest()
+	}
 	m.quitting = true
 	return tea.Quit
 }
@@ -2359,6 +2427,14 @@ func (m *Model) openEntry(name, source string) tea.Cmd {
 	m.focus = m.firstEditable()
 	m.applyFocus()
 	m.pristine = m.formState()
+	if m.section == sectionConnections && name != "" && source == "" {
+		// Set after pristine: the offered target counts as an unsaved edit the person adopts by saving.
+		if target := m.suggestedTarget(name); target != "" {
+			if f := m.field(targetsLabel); f != nil && len(f.entries) == 0 {
+				f.entries = []string{target}
+			}
+		}
+	}
 	if m.section == sectionCredentials && !m.isPayloadForm() && m.credentialType() == config.CredentialTypeKeyring {
 		return m.refreshSources(m.editedQuery())
 	}
@@ -4669,14 +4745,15 @@ func keyHintGroup(group string) string {
 // Run starts the editor on the given terminal streams. The updater may be nil, in which case the editor does
 // not look for a newer release. The restart may be nil, in which case an installed release waits for a
 // restart by hand.
-func Run(svc *manage.Service, store *config.Store, tester Tester, secrets Secrets, redactor *redact.Redactor,
-	updater Updater, restart *Restart, in, out *os.File) error {
+func Run(svc *manage.Service, store *config.Store, tester Tester, suggester TargetSuggester, secrets Secrets,
+	redactor *redact.Redactor, updater Updater, restart *Restart, in, out *os.File) error {
 	// Read before anything else, so that no child of the editor inherits the handoff.
 	predecessor := takeHandoff()
 	model, err := New(svc, store, tester, secrets, redactor)
 	if err != nil {
 		return err
 	}
+	model.suggester = suggester
 	model.updater = updater
 	model.restart = restart
 	if predecessor != nil {

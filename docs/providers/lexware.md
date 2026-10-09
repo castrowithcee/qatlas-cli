@@ -27,7 +27,9 @@ protects connections whose keys belong to different customers: before the first 
 reads the profile of the key once per process and refuses a key of another organization as `permission`,
 without sending the request and without naming either organization. A failed profile read blocks the request
 with its own error class and is retried by the next call. The connection test reports the same refusal as
-`permission`. Without a target nothing is checked and the organization follows from the key.
+`permission`. Without a target nothing is checked and the organization follows from the key. After a
+successful connection test of an unbound connection, the terminal editor offers the organization of the key as
+a prefilled target in the connection form; it is saved only when you save the form.
 
 `lexware.profile.get` reads the organization, its contract features and tax settings as their own data class;
 the name, email and identifiers of the key creator are never returned. Countries, payment conditions, posting

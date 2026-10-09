@@ -311,6 +311,9 @@ func Register(reg *capability.Registry) error {
 	}, TestConnection); err != nil {
 		return err
 	}
+	if err := reg.RegisterTargetSuggester(Provider, SuggestTarget); err != nil {
+		return err
+	}
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: invoicesList, Handler: capability.Handler(invokeInvoicesList)},
 		capability.Operation{Descriptor: invoicesGet, Handler: capability.Handler(invokeInvoicesGet)},

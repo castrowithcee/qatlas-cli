@@ -250,3 +250,58 @@ func TestOpenRefusesAnUnusableOrganizationTarget(t *testing.T) {
 		t.Error("open() accepted two organizations")
 	}
 }
+
+func TestSuggestTargetReadsTheProfileOnceForAnUnboundConnection(t *testing.T) {
+	resetOrganizations(t)
+	profiles, business := serveOrganization(t, orgA)
+	red := &redact.Redactor{}
+	got, err := SuggestTarget(context.Background(), resolvedConnection("suggest-unbound", "lexware-key", primaryEnv), resolver(red), red)
+	if err != nil {
+		t.Fatalf("SuggestTarget() = %v", err)
+	}
+	if want := "organization/" + orgA; got != want {
+		t.Errorf("SuggestTarget() = %q, want %q", got, want)
+	}
+	if profiles.Load() != 1 || business.Load() != 0 {
+		t.Errorf("profile requests = %d, business requests = %d, want 1 and 0", profiles.Load(), business.Load())
+	}
+}
+
+func TestSuggestTargetStaysSilentForABoundConnection(t *testing.T) {
+	resetOrganizations(t)
+	profiles, business := serveOrganization(t, orgA)
+	red := &redact.Redactor{}
+	got, err := SuggestTarget(context.Background(), boundConnection("suggest-bound", "organization/"+orgB), resolver(red), red)
+	if err != nil || got != "" {
+		t.Errorf("SuggestTarget() = %q, %v, want empty", got, err)
+	}
+	if profiles.Load()+business.Load() != 0 {
+		t.Error("a bound connection caused requests")
+	}
+}
+
+func TestSuggestTargetIgnoresAnInvalidOrganization(t *testing.T) {
+	resetOrganizations(t)
+	serveOrganization(t, "not-a-uuid")
+	red := &redact.Redactor{}
+	got, err := SuggestTarget(context.Background(), resolvedConnection("suggest-invalid", "lexware-key", primaryEnv), resolver(red), red)
+	if err != nil || got != "" {
+		t.Errorf("SuggestTarget() = %q, %v, want empty", got, err)
+	}
+}
+
+func TestRegistryOffersTheLexwareSuggester(t *testing.T) {
+	resetOrganizations(t)
+	serveOrganization(t, orgA)
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	red := &redact.Redactor{}
+	resolved := resolvedConnection("suggest-registry", "lexware-key", primaryEnv)
+	resolved.Provider = Provider
+	got, err := reg.SuggestTarget(context.Background(), resolved, resolver(red), red)
+	if err != nil || got != "organization/"+orgA {
+		t.Errorf("SuggestTarget() = %q, %v", got, err)
+	}
+}

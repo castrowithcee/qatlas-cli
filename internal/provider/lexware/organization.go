@@ -11,6 +11,8 @@ import (
 
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 	"github.com/castrowithcee/qatlas-cli/internal/provider"
+	"github.com/castrowithcee/qatlas-cli/internal/redact"
+	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
 const organizationPrefix = "organization/"
@@ -116,4 +118,26 @@ func (c *Client) verifyOrganization(ctx context.Context, op string) error {
 		}
 	}
 	return nil
+}
+
+// SuggestTarget offers the organization of the API key as the target of a connection that has none, from
+// one profile read. A bound connection, or a profile without a valid organization, yields "".
+func SuggestTarget(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor) (string, error) {
+	if resolved == nil || strings.TrimSpace(resolved.Target) != "" || len(resolved.Targets) > 0 {
+		return "", nil
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return "", err
+	}
+	profile, err := client.GetProfile(ctx)
+	if err != nil {
+		return "", err
+	}
+	id := strings.ToLower(profile.OrganizationID)
+	if !validUUID(id) {
+		return "", nil
+	}
+	return organizationPrefix + id, nil
 }
