@@ -152,10 +152,10 @@ by a connection whose `tools` list names them; no profile ticks them.
 `workspacemembers.list`, `workspacemembers.get`, and `roles.list` (`read`) are workspace-wide. Members are
 personal data with their own data class; avatars, user identifiers, and member and key names are never read.
 
-`roles.create`, `roles.update`, and `roles.delete` are confirmed, need a tools list that names them, and assign
-nothing. A role assigned to an API key or not editable is never changed or deleted: Qatlas reads it first and
-refuses before the change, also when that read is unclear. All five need the Twenty right "Roles", which also
-allows changing roles: use a key of its own. No profile ticks them.
+`roles.create`, `update`, `delete`, `setobjectpermissions`, `setfieldpermissions`, and `setpermissionflags` are
+confirmed, need a `tools` entry, and assign nothing. They change only a role that a first read shows editable and
+without API keys. A rights call covers one non-system object checked against the data model ("Data model"). Flags
+are replaced as a whole. All need "Roles", so use a key of its own; no profile ticks them.
 
 ## Data model
 
