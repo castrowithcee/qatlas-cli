@@ -141,6 +141,10 @@ defaults:
 		want int
 	}{
 		{name: "two distinct targets", body: valid, want: exitOK},
+		{name: "http base URL", body: strings.Replace(valid, "https://api.telegram.org", "http://api.telegram.org", 1), want: exitUsage},
+		{name: "loopback http base URL", body: strings.Replace(valid, "https://api.telegram.org", "http://127.0.0.1:8080", 1), want: exitUsage},
+		{name: "base URL with query", body: strings.Replace(valid, "https://api.telegram.org", "https://api.telegram.org?x=1", 1), want: exitUsage},
+		{name: "base URL with user", body: strings.Replace(valid, "https://api.telegram.org", "https://u@127.0.0.1", 1), want: exitUsage},
 		{name: "target is required", body: strings.Replace(valid, `    target: "-1001111111111"`, `    target: ""`, 1), want: exitUsage},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
