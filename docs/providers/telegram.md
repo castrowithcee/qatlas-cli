@@ -225,18 +225,21 @@ longer than the reported size is rejected. The download URL carries the bot toke
 
 ## Sending media
 
-`telegram.photos.send`, `telegram.documents.send`, and `telegram.mediagroups.send` (`create`) send a photo, a
-document, or an album of 2 through 10 photos or of 2 through 10 documents; the kinds are never mixed. Each
-file comes from exactly one of `local_path` or `file_ref`; an album takes the choice per item. A URL is never
-a source. The tools are offered only on a connection that releases a directory for reading (`files`), and the
-options of `telegram.messages.send` that apply (`parse_mode`, `reply_to_message_id`, `message_thread_id`,
-`disable_notification`, `protect_content`) carry over, plus a `caption` of at most 1024 characters. An album
-caption goes on its first item.
+`telegram.photos.send`, `telegram.documents.send`, `telegram.videos.send`, `telegram.animations.send`,
+`telegram.videonotes.send`, and `telegram.mediagroups.send` (`create`) send a photo, a document, a video, an
+animation, a video note, or an album. An album has 2 through 10 items: photos and videos may be mixed, with an
+optional `type` per item, documents are never mixed with them. Each file comes from exactly one of `local_path`
+or `file_ref`; an album takes the choice per item. A URL is never a source. The tools are offered only on a
+connection that releases a directory for reading (`files`), and the options of `telegram.messages.send` that
+apply (`parse_mode`, `reply_to_message_id`, `message_thread_id`, `disable_notification`, `protect_content`)
+carry over, plus a `caption` of at most 1024 characters. An album caption goes on its first item. A video note
+has no caption and no `parse_mode`, as the Bot API gives it none. Duration, size, thumbnail, streaming, and
+spoiler settings are not offered; Telegram reads them from the file.
 
 A `local_path` outside the released directories is refused before the credential is read. A photo is limited
-to 10 MB, any other file to 50 MB, and the files of one album together to 50 MB; the size is checked from the
-file before it is read or sent. A local file is sent under a neutral name (`file` or `file-N`, plus the plain
-extension), so neither the path nor the file name leaves the machine.
+to 10 MB, any other file, videos included, to 50 MB, and the files of one album together to 50 MB; the size is
+checked from the file before it is read or sent. A local file is sent under a neutral name (`file` or `file-N`,
+plus the plain extension), so neither the path nor the file name leaves the machine.
 
 A `file_ref` must come from the selected chat itself: one issued for another target, even another bound chat,
 for another token, or of another kind is refused before the credential is read, and a raw file identifier is
@@ -252,7 +255,7 @@ The terminal editor starts a new connection on the setup profile `send`, which t
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
 `[telegram.bot.get]`, and the four chat read tools. The profile `messaging` also ticks `update`,
 `delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
-`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the three media send
+`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the six media send
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
