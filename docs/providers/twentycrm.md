@@ -2,8 +2,8 @@
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
   objects, count by field), record write (create, update, batches), duplicate search and merge, record
-  trash (delete, restore, destroy), note and task link operations, workflow read, object targets, connection
-  permissions, and safety boundaries.
+  trash (delete, restore, destroy), note and task link operations, workflow, member, and role read, object
+  targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -106,9 +106,8 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
   | boolean | `eq`, `is` |
   | identifier, relation identifier | `eq`, `neq`, `in`, `is` |
 
-- `is` takes `NULL` or `NOT_NULL`; `in` takes a list of at most 20 values of one type. Dates are
-  `YYYY-MM-DD`, date-times `YYYY-MM-DDTHH:MM:SSZ`, numbers plain decimals. Text is at most 64 characters of
-  letters, digits, spaces, and `. _ + @ & -`.
+- `is` takes `NULL` or `NOT_NULL`; `in` takes a list of at most 20 values of one type. Values are plain
+  text, numbers, `YYYY-MM-DD` dates, or `YYYY-MM-DDTHH:MM:SSZ` date-times; the help text lists the characters.
 - A refused field, operator, or value is refused after the schema was read and before any record is read,
   and the refusal names neither field nor value. The enum values of the schema serve only this check and
   never appear in a result, including `objects.get`.
@@ -126,8 +125,7 @@ passes the checked arguments only as variables; no argument becomes part of a qu
 GraphQL. Twenty reports a failed query as an answer with errors; Qatlas maps it to a class and shows no
 text of it.
 
-- `text` has 1 to 64 characters of letters, digits, spaces, and `. _ ' + @ & -`. `limit` is 1 to 100.
-  `objects` limits the search to a subset of the reachable objects; an object outside the connection is
+- `objects` limits the search to a subset of the reachable objects; an object outside the connection is
   ignored, and an empty remaining set is refused before the search is sent.
 - The searched objects are always named explicitly: the bound objects with targets, otherwise the
   non-system objects of the workspace catalog, each cut with `objects`. Hits of any other object are
@@ -142,14 +140,26 @@ failed runs. They work only on a connection without object targets and are refus
 otherwise. `workflow`, `workflowVersion`, and `workflowRun` are system objects, so the record tools never reach
 them; these tools use fixed routes and a fixed field selection.
 
-- `workflows.list` returns per workflow name, statuses, the last published version, and timestamps.
-  `workflows.get` adds the 50 newest versions with name, status, trigger type, step types, and number of
-  steps. `workflowruns.list` returns the runs of one workflow, newest first, optionally of one status, with
-  status, version, and timestamps.
+- `workflows.get` adds the 50 newest versions to a workflow; `workflowruns.list` returns the runs of one
+  workflow, newest first, optionally of one status.
 - Step and trigger settings, run outputs, context, state, and error texts are never read out. Status,
   trigger, and step types come from fixed lists; any other value is shown as `unknown`.
 - Starting a workflow run is not possible with an API key: Twenty refuses it for keys, and Qatlas does not
   work around that.
+
+## Reading members and roles
+
+`workspacemembers.list`, `workspacemembers.get`, and `roles.list` let an agent see who can be assigned work
+and which roles exist. They work only on a connection without object targets. `workspaceMember` is a
+system object, so the record tools never reach it; these tools use a fixed route and a fixed field selection.
+
+- Members are personal data: name, email, time zone, and locale, never avatars or user identifiers. They
+  appear only in a result, never in errors, and carry their own data class.
+- `roles.list` shows per role its label, assignability, six global rights, and the number of assigned
+  members and API keys, from one fixed query on the metadata API; no member or API key name, and no object
+  or field right, is read. The data class is the role class.
+- `roles.list` needs the Twenty right "Roles", which also allows changing roles and permissions. Use a
+  connection with an API key of its own for it. No profile ticks it.
 
 ## Writing records
 
@@ -281,7 +291,7 @@ connection's local `permissions` list can only narrow it, and an optional `tools
 excludes. The `companies.*` tools expose conservative core company fields and accept no custom-field
 payloads; custom fields are written through `records.create` and `records.update`. Invocation arguments never
 replace the configured origin. The terminal editor starts a new connection on the setup profile `read`, which
-ticks `[read]` and the two company, two object, five record read tools, the link list tool, and the three
-workflow read tools; the profile `write` adds the two record write tools and the link create tool. A profile
-is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick
-can be changed before saving, and a saved connection never follows a profile.
+ticks `[read]` and the two company, two object, five record read tools, the link list tool, the three
+workflow read tools, and the two member read tools; the profile `write` adds the two record write tools and
+the link create tool. A profile is a visible starting selection, not a role: only the ticked `permissions` and
+`tools` are saved, every tick can be changed before saving, and a saved connection never follows a profile.
