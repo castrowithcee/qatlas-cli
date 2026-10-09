@@ -4,7 +4,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-08
+updated: 2026-10-09
 ---
 
 # Nextcloud
@@ -22,10 +22,23 @@ is a clear failure that did not act on the server, and the app password only eve
 `nextcloud.files.delete` deletes one file and `nextcloud.folders.delete` one folder with everything in it, each
 bound to the ETag of the version read (`*` is refused) and confirmed. The root folder is never deletable. When
 the `files_trashbin` app is active Nextcloud moves the deleted item to the trash bin, otherwise it deletes it
-for good; Qatlas cannot tell which applies and has no trash control.
+for good; Qatlas cannot tell which applies. The trash bin is read and handled with the tools under Trash bin.
 
 Both tools require a tools list: no profile and no permission offers them. A connection without a `tools` list
 therefore offers neither; it no longer offers `nextcloud.files.delete` as before.
+
+## Trash bin
+
+`nextcloud.trash.list`, `nextcloud.trash.restore`, and `nextcloud.trash.delete` work on the deleted items of the
+identity whose original location lies below the bound root folder (`/` binds all). Everything else in the trash
+bin is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
+naming it. Items inside a deleted folder, emptying the trash bin, and restoring to another place are not offered.
+
+`list` reports at most 500 items, marks a cut list as `truncated`, and refuses an answer larger than 4 MiB.
+`restore` and `delete` take the `trash_id` from `list`, read the item once, and then send one `MOVE` to the
+`restore` collection or one `DELETE`. `restore` puts the item back to its original location. `delete` removes it
+for good and requires a tools list like the delete tools above. No profile contains any of the three tools. An
+unclear outcome is reported as for the file mutations under Local files and never repeated.
 
 ## Targets
 
