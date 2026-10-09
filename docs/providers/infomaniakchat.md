@@ -1,9 +1,9 @@
 ---
 description: >
   Describes the Infomaniak kChat provider: token setup, the team and channel allow-list, the team, channel,
-  message, thread, reaction, and user reads, the user scope check, pagination contracts, the confirmed channel
-  create and update, send, edit, delete, and reaction tools and their unclear-result contract, redirect
-  handling, and the boundary to kDrive, Mail, and CalDAV/CardDAV.
+  message, thread, reaction, attachment, and user reads, the attachment download, the user scope check,
+  pagination contracts, the confirmed channel create and update, send, edit, delete, and reaction tools and
+  their unclear-result contract, redirect handling, and the boundary to kDrive, Mail, and CalDAV/CardDAV.
 type: knowledge
 edit: shared
 created: 2026-09-27
@@ -17,11 +17,12 @@ instance and one or more of its teams, optionally narrowed to specific channels 
 teams and channels, shows channel details and the public channels of a team, creates one confirmed channel
 and changes a channel's display name, purpose, header, or handle, reads channel messages and threads page by
 page, and sends or replies with exactly one confirmed message, reads, edits, and deletes single messages,
-reads, adds, and removes reactions, and reads, lists, and searches the users of the bound teams and their
-presence, all through the instance's own `/api/v4/...` REST surface. kChat renders Markdown and mentions such
-as `@channel` in a message; Qatlas sends the text as written. It manages no team or membership, neither
-archives nor changes the visibility of a channel, changes no user, sends no direct message, uploads no file,
-offers no custom emoji catalog, and configures no webhook.
+reads, adds, and removes reactions, lists the attachments of a message and downloads one to a released local
+directory, and reads, lists, and searches the users of the bound teams and their presence, all through the
+instance's own `/api/v4/...` REST surface. kChat renders Markdown and mentions such as `@channel` in a
+message; Qatlas sends the text as written. It manages no team or membership, neither archives nor changes the
+visibility of a channel, changes no user, sends no direct message, uploads no file, offers no previews or
+thumbnails, offers no custom emoji catalog, and configures no webhook.
 
 ## Configuration
 
@@ -100,6 +101,10 @@ A reply additionally confirms, by reading the named `root_id` itself, that the r
 `channel_id` before anything is sent. Rejecting an out-of-scope channel or root post never carries the
 message text into an error or a log.
 
+A file (`files.info`, `files.download`) is bound only through the `post_id` kChat reports in its info: Qatlas
+reads the info first, refuses a file without a `post_id` or a deleted file, and then applies the post binding
+above, all before any content is requested. `messages.files` binds its `post_id` the same way.
+
 A user is reachable when it is the token's own user (`GET /api/v4/users/me`) or a current member of a bound
 team. Qatlas proves this live with `POST /api/v4/teams/{team_id}/members/ids`, one request per bound team
 and only until every user is proven; a member who has left the team does not count. `users.get` refuses an
@@ -127,6 +132,9 @@ not that every team or channel on a narrower allow-list exists, is reachable, or
 | `infomaniakchat.messages.send` | create, confirmed | exactly one message, or, with `root_id`, one reply |
 | `infomaniakchat.messages.update` | update, confirmed | the text of one message; nothing else of the post changes |
 | `infomaniakchat.messages.delete` | delete, confirmed, tools list only | one message |
+| `infomaniakchat.messages.files` | read | the metadata of the live files attached to one message, at most 50 |
+| `infomaniakchat.files.info` | read | the metadata of one file attached to a reachable message |
+| `infomaniakchat.files.download` | read, writes a local file | one attached file to `local_path` |
 | `infomaniakchat.reactions.list` | read | the reactions of one message, page by page |
 | `infomaniakchat.reactions.add` | create, confirmed | one reaction of the token's own user |
 | `infomaniakchat.reactions.remove` | delete, confirmed, tools list only | one reaction of the token's own user |
@@ -135,12 +143,12 @@ not that every team or channel on a narrower allow-list exists, is reachable, or
 | `infomaniakchat.users.search` | read | users of one bound team or channel matching a `term` |
 | `infomaniakchat.users.status` | read | the presence of 1 to 100 reachable users |
 
-The tools sort into the groups `teams`, `channels`, `messages`, `reactions`, and `users`. The reads need no
-confirmation; channel create and update, send, update, delete, and the reaction changes always do, through the
-same confirmation mechanism every other confirmed Qatlas tool uses. The terminal editor starts a new
-connection on the setup profile `read`, which ticks the read tools, the channel and user tools included;
-`messaging` adds `messages.send`, `messages.update`, and `reactions.add` for a connection that should also
-post, edit, and react; `channel-admin` reads teams and channels and adds `channels.create` and
+The tools sort into the groups `teams`, `channels`, `messages`, `files`, `reactions`, and `users`. The reads
+need no confirmation; channel create and update, send, update, delete, and the reaction changes always do,
+through the same confirmation mechanism every other confirmed Qatlas tool uses. The terminal editor starts a
+new connection on the setup profile `read`, which ticks the read tools, the channel, user, and attachment
+tools included; `messaging` adds `messages.send`, `messages.update`, and `reactions.add` for a connection that
+should also post, edit, and react; `channel-admin` reads teams and channels and adds `channels.create` and
 `channels.update`.
 
 `channels.create` takes `team_id`, `name`, `display_name`, `type` (`O` public or `P` private), and optionally
@@ -158,6 +166,16 @@ call, never from an argument, so reactions of other users cannot be added or rem
 characters of `a-z`, `0-9`, `_`, `+`, and `-`, checked locally before any secret is read.
 `infomaniakchat.reactions.remove` is in no profile and is offered only to a connection whose tools list names
 it. Adding an existing reaction changes nothing.
+
+`files.download` follows the local file contract of `infomaniakdrive.files.download`: it writes only inside a
+directory the connection releases for writing (`files: write`), replaces an existing file only with
+confirmation, and leaves no file when the transfer is incomplete or its size differs from the size kChat
+reported in the file's info. A transfer above the fixed Qatlas file limit is refused. The result carries only
+`file_id`, `name`, `size`, and `sha256`, never content. The content request is the fixed
+`GET /api/v4/files/{file_id}`; kChat's answer is streamed to the file and never decoded or returned. A
+redirect, for example to a storage host, is a `provider-error` and is not followed. Attachment results carry
+the data sensitivity `infomaniak-kchat-files`; file names and media types are untrusted data, and
+`include_deleted` is never sent.
 
 Users are output through a fixed field allow-list: `id`, `username`, `first_name`, `last_name`, `nickname`,
 `position`, `is_bot`, `deleted`, and `email` only when kChat reports one to the token. Roles, notification
@@ -234,9 +252,9 @@ This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV a
 products with their own authentication, none of them the token this provider uses; see the `infomaniakdrive`
 provider's documentation for why each is its own sibling provider rather than one shared Infomaniak provider.
 Within kChat itself, this provider offers no team management, channel membership, visibility change,
-archiving, or deletion, no user change, no direct message, no profile picture, no file attachment, no custom
-emoji catalog, no removal of another user's reaction, and no webhook configuration, and an edit changes only a
-message's text, never its attachments, pin state, or properties.
+archiving, or deletion, no user change, no direct message, no profile picture, no file upload, no preview or
+thumbnail, no custom emoji catalog, no removal of another user's reaction, and no webhook configuration, and
+an edit changes only a message's text, never its attachments, pin state, or properties.
 
 ## Live test scenario
 
@@ -250,10 +268,12 @@ send one confirmed message to a disposable test channel and confirm exactly one 
 confirmed reply with `root_id` and confirm it threads under the original message; read it with `messages.get`;
 edit its text and confirm only the text and the edit time change; delete the reply from a connection that
 lists the delete tool and confirm the root stays; add a reaction, read it with `reactions.list`, and remove it
-from a connection that lists the remove tool; read a bound team's users and their presence, search one by
+from a connection that lists the remove tool; list the attachments of a message with a file, download one into
+a released directory, and confirm the written size matches `size` and that a storage-host redirect, if kChat
+answers with one, is reported as `provider-error`; read a bound team's users and their presence, search one by
 name, and confirm a user who is only in another team of the instance is refused by `users.get` and
-`users.status` and absent from the list and search; attempt a send, get, edit, delete, and reaction against a
-channel or post outside the connection's targets and confirm each is refused before anything changes; attempt
-the same with a channel or team the credential's token cannot actually reach, to confirm the live check
-reports it, not a stale allow-list; and confirm which token sources an instance accepts, including a personal
-profile token.
+`users.status` and absent from the list and search; attempt a send, get, edit, delete, reaction, and file
+download against a channel or post outside the connection's targets and confirm each is refused before
+anything changes; attempt the same with a channel or team the credential's token cannot actually reach, to
+confirm the live check reports it, not a stale allow-list; and confirm which token sources an instance
+accepts, including a personal profile token.
