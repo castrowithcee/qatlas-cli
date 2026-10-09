@@ -1,5 +1,5 @@
 // Package telegram implements the deliberately small Telegram Bot API surface used by Qatlas: a safe
-// getMe connection check and confirmed plain-text send, edit, and delete operations.
+// getMe connection check and confirmed send, edit, and delete operations.
 package telegram
 
 import (
@@ -33,7 +33,7 @@ var messagesSend = capability.Descriptor{
 	ID:          Provider + ".messages.send",
 	Version:     1,
 	Title:       "Send a Telegram message",
-	Description: "Send one plain-text message to a bound chat of an explicit Telegram connection",
+	Description: "Send one message, optionally formatted, as a reply, in a topic, or with an inline keyboard, to a bound chat of an explicit Telegram connection",
 	Tags:        []string{"telegram", "messages", "send"},
 	Risk: capability.Risk{
 		Effect:          capability.EffectCreate,
@@ -45,14 +45,26 @@ var messagesSend = capability.Descriptor{
 	Provider: Provider,
 	Group:    groupMessages,
 	InputSchema: json.RawMessage(
-		`{"type":"object","properties":{"chat":{"type":"string","minLength":1,"maxLength":128},"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["text"],"additionalProperties":false}`,
+		`{"type":"object","properties":{"chat":{"type":"string","minLength":1,"maxLength":128},"text":{"type":"string","minLength":1,"maxLength":4096},` +
+			`"parse_mode":{"type":"string","enum":["HTML","MarkdownV2"]},` +
+			`"reply_to_message_id":{"type":"integer","minimum":1},"message_thread_id":{"type":"integer","minimum":1},` +
+			`"disable_notification":{"type":"boolean"},"protect_content":{"type":"boolean"},` +
+			`"disable_link_preview":{"type":"boolean"},"inline_keyboard":` + keyboardSchema +
+			`},"required":["text"],"additionalProperties":false}`,
 	),
 	OutputSchema: json.RawMessage(
 		`{"type":"object","properties":{"message_id":{"type":"integer"},"date":{"type":"integer"}},"required":["message_id","date"],"additionalProperties":false}`,
 	),
 	Arguments: []capability.Argument{
 		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
-		{Name: "text", Description: "Plain-text message, from 1 through 4096 characters", Required: true},
+		{Name: "text", Description: "Message text, from 1 through 4096 characters", Required: true},
+		parseModeArgument,
+		{Name: "reply_to_message_id", Description: "Message of the same chat to reply to"},
+		{Name: "message_thread_id", Description: "Forum topic to send into"},
+		{Name: "disable_notification", Description: "Send silently"},
+		{Name: "protect_content", Description: "Forbid forwarding and saving of the message"},
+		{Name: "disable_link_preview", Description: "Do not show a link preview"},
+		{Name: "inline_keyboard", Description: keyboardArgument},
 	},
 	Fields: []capability.Field{
 		{Name: "message_id", Description: "Telegram message identifier"},
@@ -79,19 +91,57 @@ var messagesEdit = capability.Descriptor{
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"chat":{"type":"string","minLength":1,"maxLength":128},` +
 		`"message_id":{"type":"integer","minimum":1},` +
-		`"text":{"type":"string","minLength":1,"maxLength":4096}},` +
+		`"text":{"type":"string","minLength":1,"maxLength":4096},` +
+		`"parse_mode":{"type":"string","enum":["HTML","MarkdownV2"]},"disable_link_preview":{"type":"boolean"},` +
+		`"inline_keyboard":` + keyboardSchema + `},` +
 		`"required":["message_id","text"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer"}},` +
 		`"required":["message_id"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
 		{Name: "message_id", Description: "Identifier of the message in the chat", Required: true},
-		{Name: "text", Description: "Replacement plain text, from 1 through 4096 characters", Required: true},
+		{Name: "text", Description: "Replacement text, from 1 through 4096 characters", Required: true},
+		parseModeArgument,
+		{Name: "disable_link_preview", Description: "Do not show a link preview"},
+		{Name: "inline_keyboard", Description: keyboardArgument + "; omitted removes an existing keyboard"},
 	},
 	Fields: []capability.Field{{Name: "message_id", Description: "Edited Telegram message identifier"}},
 	Examples: []capability.Example{{
 		Description: "Replace the text of a message sent to this connection's chat",
 		Arguments:   json.RawMessage(`{"message_id":91,"text":"Deployment completed"}`),
+	}},
+}
+
+var messagesEditReplyMarkup = capability.Descriptor{
+	ID:          Provider + ".messages.editreplymarkup",
+	Version:     1,
+	Title:       "Edit the inline keyboard of a Telegram message",
+	Description: "Set or remove the inline keyboard of one message in a bound chat of an explicit Telegram connection",
+	Tags:        []string{"telegram", "messages", "edit", "keyboard"},
+	Risk: capability.Risk{
+		Effect: capability.EffectUpdate, Idempotency: capability.IdempotencyIdempotent,
+		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
+	},
+	Provider: Provider,
+	Group:    groupMessages,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"chat":{"type":"string","minLength":1,"maxLength":128},` +
+		`"message_id":{"type":"integer","minimum":1},"inline_keyboard":` + keyboardSchema + `},` +
+		`"required":["message_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer"},` +
+		`"updated":{"type":"boolean"}},"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
+		{Name: "message_id", Description: "Identifier of the message in the chat", Required: true},
+		{Name: "inline_keyboard", Description: keyboardArgument + "; omitted or empty removes the keyboard"},
+	},
+	Fields: []capability.Field{
+		{Name: "message_id", Description: "Edited Telegram message identifier"},
+		{Name: "updated", Description: "True when Telegram confirmed the change without returning the message"},
+	},
+	Examples: []capability.Example{{
+		Description: "Remove the inline keyboard of a message",
+		Arguments:   json.RawMessage(`{"message_id":91}`),
 	}},
 }
 
@@ -170,6 +220,7 @@ func Register(reg *capability.Registry) error {
 	return reg.Register(Provider,
 		capability.Operation{Descriptor: messagesSend, Handler: capability.Handler(invokeMessagesSend)},
 		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
+		capability.Operation{Descriptor: messagesEditReplyMarkup, Handler: capability.Handler(invokeMessagesEditReplyMarkup)},
 		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
 	)
 }
@@ -178,18 +229,21 @@ func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets 
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	var arguments struct {
 		Chat string `json:"chat"`
-		Text string `json:"text"`
+		SendOptions
 	}
-	if err := json.Unmarshal(raw, &arguments); err != nil {
+	if err := decodeStrict(raw, &arguments); err != nil {
 		return nil, &provider.Error{
 			Class: provider.ClassProviderError, Op: "send message", Message: "the validated arguments could not be read",
 		}
+	}
+	if err := arguments.SendOptions.validate(); err != nil {
+		return nil, err
 	}
 	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
 	if err != nil {
 		return nil, err
 	}
-	return client.SendMessage(ctx, arguments.Text)
+	return client.Send(ctx, arguments.SendOptions)
 }
 
 func invokeMessagesEdit(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -197,16 +251,39 @@ func invokeMessagesEdit(ctx context.Context, resolved *config.Resolved, secrets 
 	var arguments struct {
 		Chat      string `json:"chat"`
 		MessageID int64  `json:"message_id"`
-		Text      string `json:"text"`
+		EditOptions
 	}
-	if err := json.Unmarshal(raw, &arguments); err != nil {
+	if err := decodeStrict(raw, &arguments); err != nil {
 		return nil, providerError("edit message", "the validated arguments could not be read")
+	}
+	if err := arguments.EditOptions.validate(arguments.MessageID); err != nil {
+		return nil, err
 	}
 	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
 	if err != nil {
 		return nil, err
 	}
-	return client.EditMessage(ctx, arguments.MessageID, arguments.Text)
+	return client.Edit(ctx, arguments.MessageID, arguments.EditOptions)
+}
+
+func invokeMessagesEditReplyMarkup(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var arguments struct {
+		Chat           string   `json:"chat"`
+		MessageID      int64    `json:"message_id"`
+		InlineKeyboard keyboard `json:"inline_keyboard"`
+	}
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return nil, providerError("edit reply markup", "the validated arguments could not be read")
+	}
+	if err := validateMarkupEdit(arguments.MessageID, arguments.InlineKeyboard); err != nil {
+		return nil, err
+	}
+	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	if err != nil {
+		return nil, err
+	}
+	return client.EditReplyMarkup(ctx, arguments.MessageID, arguments.InlineKeyboard)
 }
 
 func invokeMessagesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -329,19 +406,108 @@ func (c *Client) testConnection(ctx context.Context) provider.Class {
 	return provider.ClassOK
 }
 
-// SendMessage performs exactly one sendMessage request. The target comes only from the Client's resolved
-// connection and no retry is attempted after any transport or provider result.
+// SendOptions are the optional features of one sendMessage request. The zero value sends plain text.
+type SendOptions struct {
+	Text                string   `json:"text"`
+	ParseMode           string   `json:"parse_mode"`
+	ReplyToMessageID    int64    `json:"reply_to_message_id"`
+	MessageThreadID     int64    `json:"message_thread_id"`
+	DisableNotification bool     `json:"disable_notification"`
+	ProtectContent      bool     `json:"protect_content"`
+	DisableLinkPreview  bool     `json:"disable_link_preview"`
+	InlineKeyboard      keyboard `json:"inline_keyboard"`
+}
+
+// EditOptions are the options editMessageText accepts besides the chat and message.
+type EditOptions struct {
+	Text               string   `json:"text"`
+	ParseMode          string   `json:"parse_mode"`
+	DisableLinkPreview bool     `json:"disable_link_preview"`
+	InlineKeyboard     keyboard `json:"inline_keyboard"`
+}
+
+func validText(text string) bool {
+	count := utf8.RuneCountInString(text)
+	return utf8.ValidString(text) && count >= 1 && count <= maxMessageLength
+}
+
+func (o SendOptions) validate() error {
+	switch {
+	case !validText(o.Text):
+		return providerError("send message", "the message text is outside the supported length")
+	case !validParseMode(o.ParseMode):
+		return providerError("send message", "the parse mode is not supported")
+	case o.ReplyToMessageID < 0 || o.MessageThreadID < 0:
+		return providerError("send message", "the reply and topic identifiers must be positive")
+	}
+	if msg := validateKeyboard(o.InlineKeyboard); msg != "" {
+		return providerError("send message", msg)
+	}
+	return nil
+}
+
+func (o EditOptions) validate(messageID int64) error {
+	switch {
+	case messageID < 1:
+		return providerError("edit message", "the message identifier must be positive")
+	case !validText(o.Text):
+		return providerError("edit message", "the message text is outside the supported length")
+	case !validParseMode(o.ParseMode):
+		return providerError("edit message", "the parse mode is not supported")
+	}
+	if msg := validateKeyboard(o.InlineKeyboard); msg != "" {
+		return providerError("edit message", msg)
+	}
+	return nil
+}
+
+func validateMarkupEdit(messageID int64, k keyboard) error {
+	if messageID < 1 {
+		return providerError("edit reply markup", "the message identifier must be positive")
+	}
+	if msg := validateKeyboard(k); msg != "" {
+		return providerError("edit reply markup", msg)
+	}
+	return nil
+}
+
+// SendMessage sends plain text; see Send.
 func (c *Client) SendMessage(ctx context.Context, text string) (map[string]any, error) {
+	return c.Send(ctx, SendOptions{Text: text})
+}
+
+// Send performs exactly one sendMessage request. The target comes only from the Client's resolved
+// connection and no retry is attempted after any transport or provider result.
+func (c *Client) Send(ctx context.Context, o SendOptions) (map[string]any, error) {
 	if c.target == "" {
 		return nil, providerError("send message", "no chat was selected")
 	}
-	if count := utf8.RuneCountInString(text); !utf8.ValidString(text) || count < 1 || count > maxMessageLength {
-		return nil, providerError("send message", "the plain-text message is outside the supported length")
+	if err := o.validate(); err != nil {
+		return nil, err
 	}
-	raw, err := c.call(ctx, spec{op: "send message", method: "sendMessage", limit: defaultResponseBytes}, struct {
-		ChatID string `json:"chat_id"`
-		Text   string `json:"text"`
-	}{ChatID: c.target, Text: text})
+	body := struct {
+		ChatID              string              `json:"chat_id"`
+		Text                string              `json:"text"`
+		ParseMode           string              `json:"parse_mode,omitempty"`
+		ReplyParameters     *replyParameters    `json:"reply_parameters,omitempty"`
+		MessageThreadID     int64               `json:"message_thread_id,omitempty"`
+		DisableNotification bool                `json:"disable_notification,omitempty"`
+		ProtectContent      bool                `json:"protect_content,omitempty"`
+		LinkPreviewOptions  *linkPreviewOptions `json:"link_preview_options,omitempty"`
+		ReplyMarkup         *replyMarkup        `json:"reply_markup,omitempty"`
+	}{
+		ChatID: c.target, Text: o.Text, ParseMode: o.ParseMode, MessageThreadID: o.MessageThreadID,
+		DisableNotification: o.DisableNotification, ProtectContent: o.ProtectContent,
+		ReplyMarkup: markupOf(o.InlineKeyboard),
+	}
+	if o.ReplyToMessageID > 0 {
+		// No chat_id: the reply stays in the chat this request addresses.
+		body.ReplyParameters = &replyParameters{MessageID: o.ReplyToMessageID}
+	}
+	if o.DisableLinkPreview {
+		body.LinkPreviewOptions = &linkPreviewOptions{IsDisabled: true}
+	}
+	raw, err := c.call(ctx, spec{op: "send message", method: "sendMessage", limit: defaultResponseBytes}, body)
 	if err != nil {
 		return nil, err
 	}
@@ -355,22 +521,33 @@ func (c *Client) SendMessage(ctx context.Context, text string) (map[string]any, 
 	return map[string]any{"message_id": result.MessageID, "date": result.Date}, nil
 }
 
-// EditMessage replaces one message's plain text in the chosen chat without retrying an ambiguous result.
+// EditMessage replaces one message's plain text; see Edit.
 func (c *Client) EditMessage(ctx context.Context, messageID int64, text string) (map[string]any, error) {
+	return c.Edit(ctx, messageID, EditOptions{Text: text})
+}
+
+// Edit replaces one message's text in the chosen chat without retrying an ambiguous result. A missing
+// keyboard removes an existing one, as editMessageText does.
+func (c *Client) Edit(ctx context.Context, messageID int64, o EditOptions) (map[string]any, error) {
 	if c.target == "" {
 		return nil, providerError("edit message", "no chat was selected")
 	}
-	if messageID < 1 {
-		return nil, providerError("edit message", "the message identifier must be positive")
+	if err := o.validate(messageID); err != nil {
+		return nil, err
 	}
-	if count := utf8.RuneCountInString(text); !utf8.ValidString(text) || count < 1 || count > maxMessageLength {
-		return nil, providerError("edit message", "the plain-text message is outside the supported length")
+	body := struct {
+		ChatID             string              `json:"chat_id"`
+		MessageID          int64               `json:"message_id"`
+		Text               string              `json:"text"`
+		ParseMode          string              `json:"parse_mode,omitempty"`
+		LinkPreviewOptions *linkPreviewOptions `json:"link_preview_options,omitempty"`
+		ReplyMarkup        *replyMarkup        `json:"reply_markup,omitempty"`
+	}{ChatID: c.target, MessageID: messageID, Text: o.Text, ParseMode: o.ParseMode,
+		ReplyMarkup: markupOf(o.InlineKeyboard)}
+	if o.DisableLinkPreview {
+		body.LinkPreviewOptions = &linkPreviewOptions{IsDisabled: true}
 	}
-	raw, err := c.call(ctx, spec{op: "edit message", method: "editMessageText", limit: defaultResponseBytes}, struct {
-		ChatID    string `json:"chat_id"`
-		MessageID int64  `json:"message_id"`
-		Text      string `json:"text"`
-	}{ChatID: c.target, MessageID: messageID, Text: text})
+	raw, err := c.call(ctx, spec{op: "edit message", method: "editMessageText", limit: defaultResponseBytes}, body)
 	if err != nil {
 		return nil, err
 	}
@@ -379,6 +556,37 @@ func (c *Client) EditMessage(ctx context.Context, messageID int64, text string) 
 	}
 	if json.Unmarshal(raw, &result) != nil || result.MessageID != messageID {
 		return nil, withUncertainty(spec{}, invalidResponse("edit message"))
+	}
+	return map[string]any{"message_id": result.MessageID}, nil
+}
+
+// EditReplyMarkup sets the inline keyboard of one message, or removes it when k is empty. Removal omits
+// reply_markup, which the Bot API treats as "no keyboard" for edits.
+func (c *Client) EditReplyMarkup(ctx context.Context, messageID int64, k keyboard) (map[string]any, error) {
+	if c.target == "" {
+		return nil, providerError("edit reply markup", "no chat was selected")
+	}
+	if err := validateMarkupEdit(messageID, k); err != nil {
+		return nil, err
+	}
+	raw, err := c.call(ctx, spec{op: "edit reply markup", method: "editMessageReplyMarkup", limit: defaultResponseBytes},
+		struct {
+			ChatID      string       `json:"chat_id"`
+			MessageID   int64        `json:"message_id"`
+			ReplyMarkup *replyMarkup `json:"reply_markup,omitempty"`
+		}{ChatID: c.target, MessageID: messageID, ReplyMarkup: markupOf(k)})
+	if err != nil {
+		return nil, err
+	}
+	var confirmed bool
+	if json.Unmarshal(raw, &confirmed) == nil && confirmed {
+		return map[string]any{"updated": true}, nil
+	}
+	var result struct {
+		MessageID int64 `json:"message_id"`
+	}
+	if json.Unmarshal(raw, &result) != nil || result.MessageID != messageID {
+		return nil, withUncertainty(spec{}, invalidResponse("edit reply markup"))
 	}
 	return map[string]any{"message_id": result.MessageID}, nil
 }

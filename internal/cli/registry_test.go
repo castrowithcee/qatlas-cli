@@ -121,9 +121,9 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Errorf("Telegram metadata = %+v, %v", telegram, ok)
 	}
 	operations := reg.Provider("telegram")
-	if len(operations) != 3 || operations[0].ID != "telegram.messages.delete" ||
-		operations[2].ID != "telegram.messages.send" {
-		t.Errorf("Telegram operations = %v, want the three explicit message operations", operations)
+	if len(operations) != 4 || operations[0].ID != "telegram.messages.delete" ||
+		operations[3].ID != "telegram.messages.send" {
+		t.Errorf("Telegram operations = %v, want the four explicit message operations", operations)
 	}
 }
 
