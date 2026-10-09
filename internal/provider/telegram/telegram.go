@@ -178,7 +178,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the bound chats"},
 	{ID: groupPins, Title: "Pins", Description: "Pin and unpin messages in the bound chats"},
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
-	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats"},
+	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats; change their title, description, and photo"},
 	{ID: groupInviteLinks, Title: "Invite links", Description: "Read the primary invite link and revoke invite links of the bound chats"},
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot"},
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
@@ -233,6 +233,11 @@ func Register(reg *capability.Registry) error {
 				"others, in private chats also incoming ones",
 			Tools: []string{messagesSend.ID, messagesEdit.ID, messagesDelete.ID},
 		}, {
+			ID: "chat-admin", Title: "Change chat title, description, and photo",
+			Description: "changes the title, the description, and the photo of the bound chats; the photo can " +
+				"only be replaced, not removed",
+			Tools: []string{chatsSetTitle.ID, chatsSetDescription.ID, chatsSetPhoto.ID},
+		}, {
 			ID: "pins", Title: "Pin and unpin messages",
 			Description: "pins and unpins single messages in the bound chats; nothing is sent, edited, or deleted",
 			Tools:       []string{pinsPin.ID, pinsUnpin.ID},
@@ -273,6 +278,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: chatsAdministrators, Handler: capability.Handler(invokeChatsAdministrators)},
 		capability.Operation{Descriptor: chatsMemberCount, Handler: capability.Handler(invokeChatsMemberCount)},
 		capability.Operation{Descriptor: chatsMember, Handler: capability.Handler(invokeChatsMember)},
+		capability.Operation{Descriptor: chatsSetTitle, Handler: capability.Handler(invokeChatsSetTitle)},
+		capability.Operation{Descriptor: chatsSetDescription, Handler: capability.Handler(invokeChatsSetDescription)},
+		capability.Operation{Descriptor: chatsSetPhoto, Handler: capability.Handler(invokeChatsSetPhoto)},
+		capability.Operation{Descriptor: chatsDeletePhoto, Handler: capability.Handler(invokeChatsDeletePhoto)},
 		capability.Operation{Descriptor: invitelinksPrimary, Handler: capability.Handler(invokeInviteLinksPrimary)},
 		capability.Operation{Descriptor: invitelinksRevoke, Handler: capability.Handler(invokeInviteLinksRevoke)},
 		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
