@@ -313,7 +313,8 @@ connections:
 defaults: {}
 `)
 		code, stdout, stderr := runTools(t, nil, "providers", "--config", empty)
-		if code != exitOK || stderr != "" || !strings.Contains(stdout, `  telegram,Cloud-based instant messaging service,"",3,0,1`) {
+		if code != exitOK || stderr != "" || !strings.Contains(stdout, fmt.Sprintf(`  telegram,Cloud-based instant messaging service,"",%d,0,1`,
+			len(defaultRegistry().Provider("telegram")))) {
 			t.Errorf("providers: exit=%d stdout=%q stderr=%q, want telegram with no usable and one configured "+
 				"connection", code, stdout, stderr)
 		}
