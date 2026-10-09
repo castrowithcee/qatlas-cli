@@ -209,7 +209,7 @@ func addService(t *testing.T, m *Model, name, baseURL string) {
 	press(t, m, "tab") // provider, the only choice is preselected
 	press(t, m, "tab")
 	typeText(t, m, baseURL)
-	press(t, m, "enter")
+	press(t, m, "f2")
 }
 
 // addCredential walks the real key sequence for a credential of type env: name, type, one variable name
@@ -703,7 +703,7 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	typeText(t, m, "wiki")
 	step("tab", "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	step("enter", "2", "n")
+	step("f2", "2", "n")
 	typeText(t, m, "reader")
 	step("tab", "tab")
 	selectChoice(t, m, storageEnv)
@@ -711,9 +711,9 @@ func TestRebuildWithoutADashboard(t *testing.T) {
 	typeText(t, m, "WIKI_ID")
 	step("tab")
 	typeText(t, m, "WIKI_SECRET")
-	step("enter", "3", "n")
+	step("f2", "3", "n")
 	typeText(t, m, "wiki")
-	step("enter")
+	step("f2")
 
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
@@ -1087,7 +1087,7 @@ func TestValidationErrorsAreShown(t *testing.T) {
 			build: func(t *testing.T, m *Model) {
 				openSectionByName(t, m, sectionServices)
 				pressNew(t, m)
-				press(t, m, "enter")
+				press(t, m, "f2")
 			},
 			wantIn: "name must not be empty",
 		},
@@ -1097,7 +1097,7 @@ func TestValidationErrorsAreShown(t *testing.T) {
 				openSectionByName(t, m, sectionServices)
 				pressNew(t, m)
 				typeText(t, m, "wiki")
-				press(t, m, "enter")
+				press(t, m, "f2")
 			},
 			wantIn: "base_url",
 		},
@@ -1225,7 +1225,7 @@ func TestNameOfAnExistingEntryIsReadOnly(t *testing.T) {
 	}
 	clearField(t, m)
 	typeText(t, m, "renamed")
-	press(t, m, "enter")
+	press(t, m, "f2")
 
 	saved, err := store.Load()
 	if err != nil {
@@ -1504,7 +1504,7 @@ func TestConnectionDescriptionIsEditedThroughTheForm(t *testing.T) {
 		focusField(t, m, "description")
 		clearField(t, m)
 		typeText(t, m, step.typed)
-		press(t, m, "enter")
+		press(t, m, "f2")
 		if m.fail != "" {
 			t.Fatalf("editor reported %q", m.fail)
 		}
@@ -1545,7 +1545,7 @@ func TestATooLongConnectionDescriptionIsRefused(t *testing.T) {
 	openEntryForm(t, m, sectionConnections, "wiki")
 	focusField(t, m, "description")
 	typeText(t, m, strings.Repeat("a", 201))
-	press(t, m, "enter")
+	press(t, m, "f2")
 
 	if m.fail == "" || !strings.Contains(m.fail, "201 characters") {
 		t.Errorf("fail = %q, want the reason the core gave", m.fail)
@@ -1601,7 +1601,7 @@ func TestAnUndescribedConnectionBesideAnotherOfItsProviderIsMarked(t *testing.T)
 	openEntryForm(t, m, sectionConnections, "wiki")
 	focusField(t, m, "description")
 	typeText(t, m, "the live team wiki")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
 	}
@@ -1634,7 +1634,7 @@ func TestSpacesAtTheEdgesAreTrimmedVisibly(t *testing.T) {
 
 	press(t, m, "tab")
 	typeText(t, m, " https://wiki.example.invalid ")
-	press(t, m, "enter")
+	press(t, m, "f2")
 
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
@@ -1798,7 +1798,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 	press(t, m, "tab")
 
 	before := strings.Join(strings.Fields(screenOf(m)), " ")
-	if !strings.Contains(before, "enter save credential first") {
+	if !strings.Contains(before, "F2 save credential first") {
 		t.Errorf("new credential does not explain the first save:\n%s", before)
 	}
 	detail := strings.Join(strings.Fields(m.fieldDetail(m.fields[m.focus])), " ")
@@ -1806,7 +1806,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 		!strings.Contains(detail, "not a name you choose") {
 		t.Errorf("new credential does not explain token-id:\n%s\n%s", before, detail)
 	}
-	press(t, m, "enter")
+	press(t, m, "f2")
 
 	if m.screen != screenForm || m.editing != "wiki-reader" {
 		t.Fatalf("screen = %v editing = %q, want the saved credential form", m.screen, m.editing)
@@ -1815,7 +1815,7 @@ func TestNewKeyringCredentialContinuesWithItsSecrets(t *testing.T) {
 		t.Fatalf("focused field kind = %v, want a secret role", m.fields[m.focus].kind)
 	}
 	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	for _, want := range []string{"Credential saved", "press s on each role", "system keyring"} {
+	for _, want := range []string{"Credential saved", "press enter on each role", "system keyring"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("continued credential form does not contain %q:\n%s", want, view)
 		}
@@ -1930,7 +1930,7 @@ func TestALockedNameSaysSoAndTakesNoEditingFocus(t *testing.T) {
 	}
 	clearField(t, m)
 	typeText(t, m, "https://wiki.example.invalid/next")
-	press(t, m, "enter")
+	press(t, m, "f2")
 
 	if m.fail != "" {
 		t.Fatalf("editor reported %q", m.fail)
