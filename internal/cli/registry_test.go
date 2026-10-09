@@ -121,18 +121,19 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Errorf("Telegram metadata = %+v, %v", telegram, ok)
 	}
 	operations := reg.Provider("telegram")
-	if len(operations) != 26 || operations[0].ID != "telegram.bot.get" ||
+	if len(operations) != 29 || operations[0].ID != "telegram.bot.get" ||
 		operations[1].ID != "telegram.chatactions.send" || operations[2].ID != "telegram.chats.administrators" ||
 		operations[5].ID != "telegram.chats.membercount" || operations[6].ID != "telegram.documents.send" ||
 		operations[7].ID != "telegram.files.download" || operations[8].ID != "telegram.files.get" ||
 		operations[9].ID != "telegram.invitelinks.primary" || operations[10].ID != "telegram.invitelinks.revoke" ||
-		operations[11].ID != "telegram.mediagroups.send" || operations[13].ID != "telegram.messages.deletemany" ||
-		operations[16].ID != "telegram.messages.send" || operations[17].ID != "telegram.photos.send" ||
-		operations[18].ID != "telegram.pins.pin" || operations[20].ID != "telegram.pins.unpinall" ||
-		operations[21].ID != "telegram.polls.send" || operations[22].ID != "telegram.polls.stop" ||
-		operations[23].ID != "telegram.reactions.set" || operations[24].ID != "telegram.updates.list" ||
-		operations[25].ID != "telegram.webhook.get" {
-		t.Errorf("Telegram operations = %v, want the explicit message, pin, update, chat, invite link, bot, file, media, and interaction operations",
+		operations[11].ID != "telegram.mediagroups.send" || operations[12].ID != "telegram.members.ban" ||
+		operations[13].ID != "telegram.members.restrict" || operations[14].ID != "telegram.members.unban" ||
+		operations[16].ID != "telegram.messages.deletemany" || operations[19].ID != "telegram.messages.send" ||
+		operations[20].ID != "telegram.photos.send" || operations[21].ID != "telegram.pins.pin" ||
+		operations[23].ID != "telegram.pins.unpinall" || operations[24].ID != "telegram.polls.send" ||
+		operations[25].ID != "telegram.polls.stop" || operations[26].ID != "telegram.reactions.set" ||
+		operations[27].ID != "telegram.updates.list" || operations[28].ID != "telegram.webhook.get" {
+		t.Errorf("Telegram operations = %v, want the explicit message, member, pin, update, chat, invite link, bot, file, media, and interaction operations",
 			operations)
 	}
 }

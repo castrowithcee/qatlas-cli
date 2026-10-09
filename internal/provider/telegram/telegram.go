@@ -183,6 +183,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot"},
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
 	{ID: groupMedia, Title: "Media", Description: "Send photos, documents, and albums to the bound chats"},
+	{ID: groupMembers, Title: "Members", Description: "Ban, unban, and restrict members of the bound chats"},
 	{ID: groupInteractions, Title: "Interactions",
 		Description: "Send and stop polls, set reactions, and show chat actions in the bound chats"},
 }
@@ -240,6 +241,10 @@ func Register(reg *capability.Registry) error {
 			Description: "sends photos, documents, and albums from released local files or file references to the " +
 				"bound chats; earlier messages stay as they are",
 			Tools: []string{photosSend.ID, documentsSend.ID, mediaGroupsSend.ID},
+		}, {
+			ID: "moderation", Title: "Unban members",
+			Description: "lifts bans in the bound chats; a user who is not banned is left untouched",
+			Tools:       []string{membersUnban.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -253,6 +258,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: pinsPin, Handler: capability.Handler(invokePinsPin)},
 		capability.Operation{Descriptor: pinsUnpin, Handler: capability.Handler(invokePinsUnpin)},
 		capability.Operation{Descriptor: pinsUnpinAll, Handler: capability.Handler(invokePinsUnpinAll)},
+		capability.Operation{Descriptor: membersBan, Handler: capability.Handler(invokeMembersBan)},
+		capability.Operation{Descriptor: membersUnban, Handler: capability.Handler(invokeMembersUnban)},
+		capability.Operation{Descriptor: membersRestrict, Handler: capability.Handler(invokeMembersRestrict)},
+
 		capability.Operation{Descriptor: pollsSend, Handler: capability.Handler(invokePollsSend)},
 		capability.Operation{Descriptor: pollsStop, Handler: capability.Handler(invokePollsStop)},
 		capability.Operation{Descriptor: reactionsSet, Handler: capability.Handler(invokeReactionsSet)},
