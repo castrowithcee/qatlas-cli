@@ -486,7 +486,7 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 		return m.openSection(s)
 	}
 	switch key.String() {
-	case "q", "ctrl+c":
+	case "q":
 		return m.quit()
 	case "?":
 		m.openHelp()
@@ -565,8 +565,6 @@ func (lv *logView) moveFocus(by int) {
 func (m *Model) updateLogSearch(key tea.KeyMsg) tea.Cmd {
 	lv := m.logs
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "esc":
 		lv.list.clearFilter()
 	case "enter":
@@ -590,9 +588,7 @@ func (m *Model) updateLogDetail(key tea.KeyMsg) tea.Cmd {
 		return m.openSection(s)
 	}
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
-	case "esc", "enter", "backspace", "left", "h":
+	case "esc":
 		m.screen = screenLogs
 	case "?":
 		m.openHelp()
@@ -631,8 +627,6 @@ func (m *Model) openLogDateDialog() {
 func (m *Model) updateLogDateDialog(key tea.KeyMsg) tea.Cmd {
 	lv, d := m.logs, m.logs.dialog
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "esc":
 		lv.dialog = nil
 		return nil
@@ -720,8 +714,6 @@ func filterText(value string) string {
 func (m *Model) updateLogPick(key tea.KeyMsg) tea.Cmd {
 	lv, p := m.logs, m.logs.pick
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "esc":
 		if p.filter >= 0 {
 			m.openLogPick(-1)
@@ -959,13 +951,13 @@ func (m *Model) logKeys() string {
 		case lv.list.editing:
 			return "type to search · enter keep · esc clear"
 		case lv.focus == logFocusMode:
-			return "left/right mode · tab next · f filter · esc back"
+			return "left/right mode · tab next · f filter · esc back · q quit"
 		case lv.focus == logFocusDate:
-			return "enter date · tab next · f filter · esc back"
+			return "enter date · tab next · f filter · esc back · q quit"
 		case len(lv.list.matches) == 0:
-			return "tab bar · f filter · / search · esc back"
+			return "tab bar · f filter · / search · esc back · q quit"
 		}
-		return "enter detail · tab bar · f filter · / search · esc back"
+		return "enter detail · tab bar · f filter · / search · esc back · q quit"
 	}
 	switch {
 	case m.screen == screenNav:
@@ -973,13 +965,13 @@ func (m *Model) logKeys() string {
 	case lv.list.editing:
 		return "type to search · up/down move · enter keep search · esc clear search"
 	case lv.focus == logFocusMode:
-		return "left/right change mode · tab next · f filter · / search · 1-8 section · esc back · ? help"
+		return "left/right change mode · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
 	case lv.focus == logFocusDate:
-		return "enter or left/right change the date · tab next · f filter · / search · 1-8 section · esc back · ? help"
+		return "enter or left/right change the date · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
 	case len(lv.list.matches) == 0:
-		return "tab focus bar · left/right change · f filter · / search · 1-8 section · esc back · ? help"
+		return "tab focus bar · left/right change · f filter · / search · 1-8 section · esc back · ? help · q quit"
 	}
-	keys := "enter details · tab focus bar · left/right change · f filter · / search · 1-8 section · esc back · ? help"
+	keys := "enter details · tab focus bar · left/right change · f filter · / search · 1-8 section · esc back · ? help · q quit"
 	if lv.list.query() != "" {
 		keys = strings.Replace(keys, "esc back", "esc clear search", 1)
 	}

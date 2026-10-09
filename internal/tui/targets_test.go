@@ -86,15 +86,17 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	if !strings.Contains(m.fail, "already in the list") || m.targetEdit < 0 {
 		t.Fatalf("a duplicate was taken: error %q, editing %d", m.fail, m.targetEdit)
 	}
-	press(t, m, "esc")
+	press(t, m, "esc", "d")
 	addTarget(t, m, "octo/a")
 	if m.fail == "" || m.targetEdit < 0 {
 		t.Fatalf("an invalid target was taken: %v", m.targetList.all)
 	}
-	press(t, m, "esc", "esc", "k")
-	if m.screen != screenForm {
-		t.Fatalf("keeping the list left screen %v, want the form", m.screen)
+	press(t, m, "esc", "d", "f2")
+	if m.fail != "" || m.screen != screenList {
+		t.Fatalf("saving from the list left screen %v, error %q", m.screen, m.fail)
 	}
+	openConnection(t, m, "gh")
+	focusField(t, m, targetsLabel)
 	if got := m.field(targetsLabel).entries; !reflect.DeepEqual(got,
 		[]string{"repos/octo/a", "repos/octo/b", "orgs/octo/projects/1"}) {
 		t.Fatalf("targets = %v", got)
@@ -164,17 +166,26 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	}
 }
 
-// A changed list is unsaved input like every other row: leaving the form asks first.
+// A changed list is unsaved input like every other row: esc asks, and F2 in the question keeps the list and
+// saves the connection.
 func TestAChangedTargetListAsksBeforeLeaving(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
-	m, _ := toolsModel(t, reg, map[string]config.Connection{"gh": {Service: "wiki", Credential: "reader"}})
+	m, path := toolsModel(t, reg, map[string]config.Connection{"gh": {Service: "wiki", Credential: "reader"}})
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
 	addTarget(t, m, "repos/octo/a")
-	press(t, m, "esc", "k", "esc")
-	if m.screen != screenLeave || !strings.Contains(screenOf(m), "unsaved changes in gh") {
-		t.Fatalf("esc left a changed form without asking: screen %v\n%s", m.screen, screenOf(m))
+	press(t, m, "esc")
+	if m.screen != screenLeave || !strings.Contains(screenOf(m), "target list changed") {
+		t.Fatalf("esc left a changed list without asking: screen %v\n%s", m.screen, screenOf(m))
 	}
+	press(t, m, "f2")
+	if m.screen != screenList || m.fail != "" {
+		t.Fatalf("F2 in the question left screen %v, error %q", m.screen, m.fail)
+	}
+	if saved := savedConnection(t, path, reg, "gh"); saved.Target != "repos/octo/a" {
+		t.Fatalf("F2 in the question saved %q / %v", saved.Target, saved.Targets)
+	}
+
 }
 
 // Telegram takes exactly one chat: a second one is refused where it is added, and no chat is refused where
@@ -251,7 +262,7 @@ func TestTheGuidedSetupEditsTargetsAlike(t *testing.T) {
 	if hasConnection(t, path, reg, "github") {
 		t.Fatal("F2 in the setup list wrote the unfinished connection")
 	}
-	press(t, m, "f3")
+	press(t, m, "esc")
 	focusField(t, m, targetsLabel)
 	press(t, m, "right")
 	if view := screenOf(m); !strings.Contains(view, "users/octo/projects/3") {
@@ -312,8 +323,8 @@ func TestOneF2SavesTheTargetsFromEveryState(t *testing.T) {
 	}
 }
 
-// esc closes an unchanged list at once and asks about a changed one: keep the list, discard the changes, or
-// go on editing. No other key answers, and nothing is written either way.
+// esc closes an unchanged list at once and asks about a changed one: save, discard the changes, or go on
+// editing. No other key answers, and nothing is written before F2.
 func TestEscAsksBeforeDroppingTargetChanges(t *testing.T) {
 	reg := targetsRegistry(t, github.Register)
 	m, path := toolsModel(t, reg, map[string]config.Connection{
@@ -329,10 +340,10 @@ func TestEscAsksBeforeDroppingTargetChanges(t *testing.T) {
 	addTarget(t, m, "repos/octo/b")
 	press(t, m, "esc")
 	if view := screenOf(m); m.screen != screenLeave || !strings.Contains(view, "target list changed") ||
-		!strings.Contains(view, "k keep the list") {
+		!strings.Contains(view, "F2 save") {
 		t.Fatalf("esc on a changed list did not ask: screen %v\n%s", m.screen, view)
 	}
-	press(t, m, "y", "n", "s", "enter")
+	press(t, m, "y", "n", "s", "k", "enter", "backspace", "f3")
 	if m.screen != screenLeave {
 		t.Fatalf("a stray key answered the question: screen %v", m.screen)
 	}
@@ -350,20 +361,15 @@ func TestEscAsksBeforeDroppingTargetChanges(t *testing.T) {
 		t.Fatalf("discarding left screen %v with targets %v", m.screen, got)
 	}
 
-	// k keeps the list in the row; the form is changed, and still asks before it is left.
+	// F2 keeps the list in the row and saves the connection.
 	openTargetList(t, m)
 	addTarget(t, m, "repos/octo/b")
-	press(t, m, "esc", "k")
-	if got := m.field(targetsLabel).entries; m.screen != screenForm ||
-		!reflect.DeepEqual(got, []string{"repos/octo/a", "repos/octo/b"}) {
-		t.Fatalf("keeping left screen %v with targets %v", m.screen, got)
+	press(t, m, "esc", "f2")
+	if m.screen != screenList || m.fail != "" {
+		t.Fatalf("saving left screen %v, error %q", m.screen, m.fail)
 	}
-	if saved := savedConnection(t, path, reg, "gh"); saved.Target != "repos/octo/a" || saved.Targets != nil {
-		t.Fatalf("keeping the list wrote %q / %v", saved.Target, saved.Targets)
-	}
-	press(t, m, "esc")
-	if m.screen != screenLeave || m.leaveFrom != screenForm {
-		t.Fatalf("the changed form was left without asking: screen %v", m.screen)
+	if saved := savedConnection(t, path, reg, "gh"); !reflect.DeepEqual(saved.Targets, []string{"repos/octo/a", "repos/octo/b"}) {
+		t.Fatalf("saving wrote %q / %v", saved.Target, saved.Targets)
 	}
 }
 
@@ -541,7 +547,7 @@ func TestTheBuilderWritesEveryGitHubKind(t *testing.T) {
 	if !strings.Contains(m.fail, "already in the list") {
 		t.Fatalf("a listed project was built again: %v, error %q", m.targetList.all, m.fail)
 	}
-	press(t, m, "esc")
+	press(t, m, "esc", "d")
 	build(t, m, "project", "users", "octo", "* (all)")
 	build(t, m, "owner", "users", "octo")
 	if m.fail != "" {
@@ -555,21 +561,38 @@ func TestTheBuilderWritesEveryGitHubKind(t *testing.T) {
 	}
 }
 
-// The builder steps back on backspace, and what the provider refuses stays typed with the reason, so it
-// can be fixed or cancelled like a typed target.
+// The builder steps back on esc and asks on its first step, backspace only edits the typed line, and what
+// the provider refuses stays typed with the reason, so it can be fixed or cancelled like a typed target.
 func TestTheBuilderStepsBackAndHandsOverWhatIsRefused(t *testing.T) {
 	m, _, _ := knownTargetsModel(t)
 	openConnection(t, m, "gh-a")
 	openTargetList(t, m)
 	build(t, m, "project", "orgs", "=octo-org")
 	press(t, m, "backspace")
+	if m.targetAdd == nil || len(m.targetAdd.chosen) != 3 {
+		t.Fatalf("backspace on an empty line stepped back: %v", m.targetAdd.chosen)
+	}
+	press(t, m, "esc")
 	if view := screenOf(m); !strings.Contains(view, "New project · LOGIN") {
-		t.Fatalf("backspace did not step back to the login:\n%s", view)
+		t.Fatalf("esc did not step back to the login:\n%s", view)
 	}
-	press(t, m, "backspace", "backspace")
-	if m.targetAdd == nil || m.targetAdd.kind != -1 {
-		t.Fatal("backspace did not step back to the menu")
+	press(t, m, "esc")
+	if m.targetAdd == nil || len(m.targetAdd.chosen) != 0 || m.screen != screenTargets {
+		t.Fatalf("esc did not step back to the first step: %v", m.targetAdd)
 	}
+	press(t, m, "esc")
+	if view := screenOf(m); m.screen != screenLeave || !strings.Contains(view, "new target is not finished") {
+		t.Fatalf("esc on the first step did not ask:\n%s", view)
+	}
+	press(t, m, "esc")
+	if m.screen != screenTargets || m.targetAdd == nil || m.targetAdd.kind < 0 {
+		t.Fatalf("esc did not keep building: screen %v", m.screen)
+	}
+	press(t, m, "esc", "d")
+	if m.screen != screenTargets || m.targetAdd != nil || len(m.targetList.all) != 3 {
+		t.Fatalf("d did not drop the builder: screen %v, targets %v", m.screen, m.targetList.all)
+	}
+	press(t, m, "a")
 	pickRow(t, m, "new project")
 	press(t, m, "enter")
 	pickRow(t, m, "orgs")

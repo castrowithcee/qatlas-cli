@@ -355,9 +355,6 @@ func (m *Model) askSecret(role string) {
 // updateSecret handles the masked prompt.
 func (m *Model) updateSecret(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "ctrl+c":
-		m.secretInput.Reset()
-		return m.quit()
 	case "esc":
 		m.secretInput.Reset()
 		m.screen = screenForm
@@ -498,9 +495,6 @@ func (m *Model) openVaultOffer(title, hint string, optional, twice bool,
 func (m *Model) updateVaultOffer(key tea.KeyMsg) tea.Cmd {
 	o := m.vaultOffer
 	switch key.String() {
-	case "ctrl+c":
-		m.vaultOffer = nil
-		return m.quit()
 	case "esc":
 		cancel := o.cancel
 		m.vaultOffer = nil

@@ -82,22 +82,24 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	if !strings.Contains(m.fail, "already in the list") || m.pathEdit < 0 {
 		t.Fatalf("a duplicate was taken: error %q, editing %d", m.fail, m.pathEdit)
 	}
-	press(t, m, "esc")
+	press(t, m, "esc", "d")
 	for _, invalid := range []string{"relative/dir", filepath.Join(root, "*")} {
 		addPath(t, m, invalid)
 		if !strings.Contains(m.fail, "must name a directory") || m.pathEdit < 0 {
 			t.Fatalf("%q was taken: error %q, list %v", invalid, m.fail, m.pathList.all)
 		}
-		press(t, m, "esc")
+		press(t, m, "esc", "d")
 	}
 	press(t, m, "esc")
 	if view := screenOf(m); !strings.Contains(view, "the path list changed") {
 		t.Fatalf("closing a changed list does not ask:\n%s", view)
 	}
-	press(t, m, "k")
-	if m.screen != screenForm {
-		t.Fatalf("keeping the list left screen %v, want the form", m.screen)
+	press(t, m, "f2")
+	if m.fail != "" || m.screen != screenList {
+		t.Fatalf("saving from the question left screen %v, error %q", m.screen, m.fail)
 	}
+	openConnection(t, m, "gh")
+	focusField(t, m, pathsLabel)
 	if got := m.field(pathsLabel).entries; !reflect.DeepEqual(got, []string{first, "~/repos"}) {
 		t.Fatalf("paths = %v", got)
 	}
@@ -160,16 +162,24 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	}
 }
 
-// A changed path list is unsaved input like every other row: leaving the form asks first.
+// A changed path list is unsaved input like every other row: esc asks, and ctrl+c asks the same.
 func TestAChangedPathListAsksBeforeLeaving(t *testing.T) {
 	reg := wikiRegistry(t)
 	m, _ := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
 	openConnection(t, m, "wiki")
 	openPathList(t, m)
 	addPath(t, m, t.TempDir())
-	press(t, m, "esc", "k", "esc")
-	if m.screen != screenLeave || !strings.Contains(screenOf(m), "unsaved changes in wiki") {
-		t.Fatalf("esc left a changed form without asking: screen %v\n%s", m.screen, screenOf(m))
+	press(t, m, "esc")
+	if m.screen != screenLeave || !strings.Contains(screenOf(m), "path list changed") {
+		t.Fatalf("esc left a changed list without asking: screen %v\n%s", m.screen, screenOf(m))
+	}
+	press(t, m, "esc", "ctrl+c")
+	if m.screen != screenLeave || !m.leaveQuit || m.quitting {
+		t.Fatalf("ctrl+c did not ask: screen %v", m.screen)
+	}
+	press(t, m, "d")
+	if !m.quitting {
+		t.Fatal("d after ctrl+c did not quit")
 	}
 }
 

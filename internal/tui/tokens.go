@@ -406,8 +406,6 @@ func (m *Model) updateTokenScreens(key tea.KeyMsg) (tea.Cmd, bool) {
 				m.screen = screenList
 			}
 			m.status = "Cancelled; the token stays"
-		case "ctrl+c":
-			return m.quit(), true
 		}
 		return nil, true
 	}
@@ -433,8 +431,6 @@ func (m *Model) updateTokenScreens(key tea.KeyMsg) (tea.Cmd, bool) {
 		m.tokenDetail, m.tokenReveal = "", false
 		m.screen = screenList
 		m.clearMessages()
-	case "ctrl+c":
-		return m.quit(), true
 	}
 	return nil, true
 }

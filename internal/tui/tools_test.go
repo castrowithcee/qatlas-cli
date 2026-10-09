@@ -163,8 +163,12 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 		t.Fatalf("space did not tick the shown tool:\n%s", screenOf(m))
 	}
 	press(t, m, "esc")
-	if got := m.fieldValue(toolListLabel); got != "" {
-		t.Fatalf("esc kept the ticks: %q", got)
+	if m.screen != screenLeave {
+		t.Fatalf("esc dropped the ticks without asking: screen %v", m.screen)
+	}
+	press(t, m, "d")
+	if got := m.fieldValue(toolListLabel); got != "" || m.screen != screenForm {
+		t.Fatalf("discarding kept the ticks: %q on screen %v", got, m.screen)
 	}
 	press(t, m, "/")
 	typeText(t, m, "pages.get")
