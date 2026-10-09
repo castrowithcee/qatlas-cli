@@ -108,8 +108,8 @@ var messagesSend = capability.Descriptor{
 	ID:      Provider + ".messages.send",
 	Version: 1,
 	Title:   "Send an Infomaniak kChat message",
-	Description: "Send exactly one confirmed plain-text message to a channel this connection may reach, or, " +
-		"with root_id, one confirmed reply to an existing thread of that channel",
+	Description: "Send exactly one confirmed message (kChat renders Markdown and mentions such as @channel) to a " +
+		"channel this connection may reach, or, with root_id, one confirmed reply to an existing thread of that channel",
 	Tags: []string{"infomaniak", "kchat", "messages", "send", "reply"},
 	Risk: capability.Risk{
 		Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
@@ -124,7 +124,7 @@ var messagesSend = capability.Descriptor{
 		`"required":["id","channel_id","created_at"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		channelIDArgument,
-		{Name: "text", Description: "Plain-text message, from 1 through " + itoa(maxMessageLength) + " characters", Required: true},
+		{Name: "text", Description: "Message text, from 1 through " + itoa(maxMessageLength) + " characters", Required: true},
 		{Name: "root_id", Description: "Identifier of the thread root to reply to; the root must belong to channel_id"},
 	},
 	Fields: []capability.Field{
@@ -134,9 +134,89 @@ var messagesSend = capability.Descriptor{
 		{Name: "created_at", Description: "Send time, normalised to RFC 3339 in UTC"},
 	},
 	Examples: []capability.Example{{
-		Description: "Send one plain-text message to a channel of a bound team",
+		Description: "Send one message to a channel of a bound team",
 		Arguments:   json.RawMessage(`{"channel_id":"abc123channel00000000000000","text":"Deployment finished"}`),
 	}},
+}
+
+var postIDArgument = capability.Argument{Name: "post_id", Required: true,
+	Description: "Message (post) identifier; its channel must be inside this connection's channel allow-list " +
+		"when it has one and inside a bound team, which is always re-checked with extra requests"}
+
+func messageChangeRisk(effect capability.Effect) capability.Risk {
+	return capability.Risk{Effect: effect, Idempotency: capability.IdempotencyIdempotent,
+		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity}
+}
+
+var messagesGet = capability.Descriptor{
+	ID:          Provider + ".messages.get",
+	Version:     1,
+	Title:       "Read one Infomaniak kChat message",
+	Description: "Read exactly one message by its identifier, for a channel this connection may reach",
+	Tags:        []string{"infomaniak", "kchat", "messages", "get", "post"},
+	Risk:        readRisk,
+	Provider:    Provider,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"post_id":` + idSchema + `},` +
+		`"required":["post_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(messageEntrySchema),
+	Arguments:    []capability.Argument{postIDArgument},
+	Fields:       messageEntryFields,
+	Examples: []capability.Example{{Description: "Read one message",
+		Arguments: json.RawMessage(`{"post_id":"abc123post00000000000000000"}`)}},
+}
+
+var messagesUpdate = capability.Descriptor{
+	ID:      Provider + ".messages.update",
+	Version: 1,
+	Title:   "Edit an Infomaniak kChat message",
+	Description: "Replace the text of exactly one existing message of a channel this connection may reach with " +
+		"one confirmed text; whether the token may edit a message of another author is kChat's decision. " +
+		"kChat renders Markdown and mentions such as @channel",
+	Tags:     []string{"infomaniak", "kchat", "messages", "update", "edit"},
+	Risk:     messageChangeRisk(capability.EffectUpdate),
+	Provider: Provider,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"post_id":` + idSchema + `,"text":` +
+		messageTextSchema + `},"required":["post_id","text"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"id":` + idSchema + `,"channel_id":` + idSchema + `,"edited_at":{"type":"string"}},` +
+		`"required":["id","channel_id"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		postIDArgument,
+		{Name: "text", Description: "New message text, from 1 through " + itoa(maxMessageLength) + " characters", Required: true},
+	},
+	Fields: []capability.Field{
+		{Name: "id", Description: "Identifier of the edited message"},
+		{Name: "channel_id", Description: "Channel of the edited message"},
+		{Name: "edited_at", Description: "Edit time, normalised to RFC 3339 in UTC, when kChat reports one"},
+	},
+	Examples: []capability.Example{{Description: "Correct the text of one message",
+		Arguments: json.RawMessage(`{"post_id":"abc123post00000000000000000","text":"Deployment finished"}`)}},
+}
+
+var messagesDelete = capability.Descriptor{
+	ID:      Provider + ".messages.delete",
+	Version: 1,
+	Title:   "Delete an Infomaniak kChat message",
+	Description: "Delete exactly one confirmed message of a channel this connection may reach; deleting a thread " +
+		"root also removes its replies, and users cannot restore the result. kChat decides whether the token " +
+		"may delete a message of another author",
+	Tags:                  []string{"infomaniak", "kchat", "messages", "delete"},
+	Risk:                  messageChangeRisk(capability.EffectDelete),
+	Provider:              Provider,
+	RequiresToolAllowList: true,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"post_id":` + idSchema + `},` +
+		`"required":["post_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
+		`"id":` + idSchema + `,"channel_id":` + idSchema + `,"deleted":{"type":"boolean"}},` +
+		`"required":["id","channel_id","deleted"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{postIDArgument},
+	Fields: []capability.Field{
+		{Name: "id", Description: "Identifier of the deleted message"},
+		{Name: "channel_id", Description: "Channel the message belonged to"},
+		{Name: "deleted", Description: "True once kChat confirmed the deletion"},
+	},
+	Examples: []capability.Example{{Description: "Delete one message",
+		Arguments: json.RawMessage(`{"post_id":"abc123post00000000000000000"}`)}},
 }
 
 // postJSON is the subset of the kChat Post resource this provider reads.
@@ -144,6 +224,7 @@ type postJSON struct {
 	ID        string `json:"id"`
 	CreateAt  int64  `json:"create_at"`
 	EditAt    int64  `json:"edit_at"`
+	DeleteAt  int64  `json:"delete_at"`
 	UserID    string `json:"user_id"`
 	ChannelID string `json:"channel_id"`
 	RootID    string `json:"root_id"`
@@ -297,24 +378,39 @@ func invokeMessagesThread(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	// The channel of a thread is learned from the root post itself and verified live before the thread is
-	// ever read, the same guarantee messages.list and messages.send give a directly named channel_id.
-	var root postJSON
-	if err := client.do(ctx, op, http.MethodGet, "/api/v4/posts/"+url.PathEscape(input.PostID), nil, nil, &root,
-		false); err != nil {
-		return nil, err
-	}
-	if root.ID != input.PostID {
-		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
-			Message: "kChat returned a different post than the one requested"}
-	}
-	if err := selectChannel(resolved, root.ChannelID); err != nil {
-		return nil, err
-	}
-	if _, err := client.verifyChannelScope(ctx, op, root.ChannelID); err != nil {
+	// The channel of a thread is learned from the root post itself and verified before the thread is ever
+	// read, the same guarantee messages.list and messages.send give a directly named channel_id.
+	root, err := client.verifyPostScope(ctx, resolved, op, input.PostID)
+	if err != nil {
 		return nil, err
 	}
 	return client.ReadThread(ctx, input.PostID, root.ChannelID, input.Cursor, limit)
+}
+
+// verifyPostScope binds a post_id argument to this connection through the post's channel: it reads the post,
+// refuses an answer for a different post or a deleted post, then checks the channel against the local
+// allow-list and live against the bound teams. Every tool that takes a foreign post_id goes through it
+// before any detail is returned or any change is sent. A refusal is an invalid request that names neither
+// the foreign target nor any message content.
+func (c *Client) verifyPostScope(ctx context.Context, resolved *config.Resolved, op, postID string) (postJSON, error) {
+	var post postJSON
+	if err := c.do(ctx, op, http.MethodGet, "/api/v4/posts/"+url.PathEscape(postID), nil, nil, &post, false); err != nil {
+		return postJSON{}, err
+	}
+	if post.ID != postID {
+		return postJSON{}, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "kChat returned a different post than the one requested"}
+	}
+	if post.DeleteAt > 0 {
+		return postJSON{}, invalidRequest("post_id refers to a deleted message")
+	}
+	if err := selectChannel(resolved, post.ChannelID); err != nil {
+		return postJSON{}, err
+	}
+	if _, err := c.verifyChannelScope(ctx, op, post.ChannelID); err != nil {
+		return postJSON{}, err
+	}
+	return post, nil
 }
 
 // ReadThread reads one page of a thread, forward from cursor when it is given, and pages the result exactly
@@ -416,4 +512,121 @@ func validMessageText(value string) bool {
 		}
 	}
 	return true
+}
+
+// UpdatedMessage is the answer of one confirmed edit.
+type UpdatedMessage struct {
+	ID        string `json:"id"`
+	ChannelID string `json:"channel_id"`
+	EditedAt  string `json:"edited_at,omitempty"`
+}
+
+// DeletedMessage is the answer of one confirmed delete.
+type DeletedMessage struct {
+	ID        string `json:"id"`
+	ChannelID string `json:"channel_id"`
+	Deleted   bool   `json:"deleted"`
+}
+
+type postIDArguments struct {
+	PostID string `json:"post_id"`
+}
+
+type messagesUpdateArguments struct {
+	PostID string `json:"post_id"`
+	Text   string `json:"text"`
+}
+
+func invokeMessagesGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "get message"
+	var input postIDArguments
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if !validMattermostID(input.PostID) {
+		return nil, invalidRequest("post_id must be a kChat-style identifier")
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	post, err := client.verifyPostScope(ctx, resolved, op, input.PostID)
+	if err != nil {
+		return nil, err
+	}
+	return messageEntryOf(post), nil
+}
+
+func invokeMessagesUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "update message"
+	var input messagesUpdateArguments
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if !validMattermostID(input.PostID) {
+		return nil, invalidRequest("post_id must be a kChat-style identifier")
+	}
+	if !validMessageText(input.Text) {
+		return nil, invalidRequest("text must be 1 to " + itoa(maxMessageLength) +
+			" characters without unsupported control characters")
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	post, err := client.verifyPostScope(ctx, resolved, op, input.PostID)
+	if err != nil {
+		return nil, err
+	}
+	return client.UpdateMessage(ctx, post.ID, post.ChannelID, input.Text)
+}
+
+// UpdateMessage replaces the text of one post with exactly one PATCH carrying nothing but the message, and
+// never repeats it: a failure after the request may have reached kChat says so instead.
+func (c *Client) UpdateMessage(ctx context.Context, postID, channelID, text string) (*UpdatedMessage, error) {
+	const op = "update message"
+	var post postJSON
+	if err := c.doWith(ctx, op, http.MethodPut, "/api/v4/posts/"+url.PathEscape(postID)+"/patch", nil,
+		map[string]string{"message": text}, &post, uncertainUpdate); err != nil {
+		return nil, err
+	}
+	if post.ID != postID || post.ChannelID != channelID {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "kChat returned an invalid response" + uncertainUpdate}
+	}
+	return &UpdatedMessage{ID: post.ID, ChannelID: post.ChannelID, EditedAt: msToRFC3339(post.EditAt)}, nil
+}
+
+func invokeMessagesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "delete message"
+	var input postIDArguments
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if !validMattermostID(input.PostID) {
+		return nil, invalidRequest("post_id must be a kChat-style identifier")
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	post, err := client.verifyPostScope(ctx, resolved, op, input.PostID)
+	if err != nil {
+		return nil, err
+	}
+	return client.DeleteMessage(ctx, post.ID, post.ChannelID)
+}
+
+// DeleteMessage deletes one post with exactly one DELETE and never repeats it. kChat soft-deletes the post,
+// which users cannot restore.
+func (c *Client) DeleteMessage(ctx context.Context, postID, channelID string) (*DeletedMessage, error) {
+	const op = "delete message"
+	if err := c.doWith(ctx, op, http.MethodDelete, "/api/v4/posts/"+url.PathEscape(postID), nil, nil, nil,
+		uncertainDelete); err != nil {
+		return nil, err
+	}
+	return &DeletedMessage{ID: postID, ChannelID: channelID, Deleted: true}, nil
 }
