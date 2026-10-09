@@ -3,12 +3,9 @@
 package telegram
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -29,7 +26,6 @@ const (
 	defaultURL       = "https://api.telegram.org"
 	defaultTimeout   = 30 * time.Second
 	maxMessageLength = 4096
-	maxResponseBytes = 64 << 10
 	dataSensitivity  = "telegram-message-content"
 )
 
@@ -47,6 +43,7 @@ var messagesSend = capability.Descriptor{
 		DataSensitivity: dataSensitivity,
 	},
 	Provider: Provider,
+	Group:    groupMessages,
 	InputSchema: json.RawMessage(
 		`{"type":"object","properties":{"text":{"type":"string","minLength":1,"maxLength":4096}},"required":["text"],"additionalProperties":false}`,
 	),
@@ -77,6 +74,7 @@ var messagesEdit = capability.Descriptor{
 		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
 	},
 	Provider: Provider,
+	Group:    groupMessages,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"message_id":{"type":"integer","minimum":1},` +
 		`"text":{"type":"string","minLength":1,"maxLength":4096}},` +
@@ -105,6 +103,7 @@ var messagesDelete = capability.Descriptor{
 		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity,
 	},
 	Provider: Provider, RequiresToolAllowList: true,
+	Group: groupMessages,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer","minimum":1}},` +
 		`"required":["message_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
@@ -119,10 +118,22 @@ var messagesDelete = capability.Descriptor{
 	}},
 }
 
+var toolGroups = []config.ToolGroup{
+	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the configured chat"},
+}
+
+const groupMessages = "messages"
+
 // Register adds Telegram metadata, its read-only connection test, and the message operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Telegram", DefaultBaseURL: defaultURL,
+		ValidateBaseURL: func(raw string) error {
+			_, err := parseBase(raw)
+			return err
+		},
+		// Only groups with a registered tool are declared: the registry rejects an empty group.
+		Groups:             toolGroups,
 		Description:        "Cloud-based instant messaging service",
 		DefaultPermissions: []config.Permission{config.PermissionCreate},
 		SecretRoles: []config.SecretRole{{
@@ -221,10 +232,9 @@ func openWithHTTP(ctx context.Context, resolved *config.Resolved, secrets *secre
 	if resolved == nil {
 		return nil, providerError("open", "no connection was selected")
 	}
-	base, err := url.Parse(resolved.BaseURL)
-	if err != nil || base.Scheme != "https" || base.Host == "" || base.User != nil ||
-		base.RawQuery != "" || base.Fragment != "" {
-		return nil, providerError("open", "the Telegram base URL must be a plain HTTPS URL")
+	base, err := parseBase(resolved.BaseURL)
+	if err != nil {
+		return nil, providerError("open", err.Error())
 	}
 	if err := validateTarget(resolved.Target); err != nil {
 		return nil, providerError("open", "the configured Telegram target is unusable")
@@ -272,23 +282,10 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 }
 
 func (c *Client) testConnection(ctx context.Context) provider.Class {
-	response, err := c.do(ctx, "test connection", http.MethodGet, "getMe", nil)
+	_, err := c.exchange(ctx, spec{op: "test connection", method: "getMe", limit: defaultResponseBytes, readOnly: true},
+		http.MethodGet, "", nil)
 	if err != nil {
 		return errorClass(err)
-	}
-	if response.StatusCode != http.StatusOK {
-		defer response.Body.Close()
-		return errorClass(statusError("test connection", response.StatusCode))
-	}
-	body, err := readResponse(response.Body)
-	if err != nil {
-		return provider.ClassInvalidResponse
-	}
-	var result struct {
-		OK bool `json:"ok"`
-	}
-	if json.Unmarshal(body, &result) != nil || !result.OK {
-		return provider.ClassInvalidResponse
 	}
 	return provider.ClassOK
 }
@@ -299,43 +296,21 @@ func (c *Client) SendMessage(ctx context.Context, text string) (map[string]any, 
 	if count := utf8.RuneCountInString(text); !utf8.ValidString(text) || count < 1 || count > maxMessageLength {
 		return nil, providerError("send message", "the plain-text message is outside the supported length")
 	}
-	body, err := json.Marshal(struct {
+	raw, err := c.call(ctx, spec{op: "send message", method: "sendMessage", limit: defaultResponseBytes}, struct {
 		ChatID string `json:"chat_id"`
 		Text   string `json:"text"`
 	}{ChatID: c.target, Text: text})
 	if err != nil {
-		return nil, providerError("send message", "the request could not be encoded")
-	}
-	response, err := c.do(ctx, "send message", http.MethodPost, "sendMessage", bytes.NewReader(body))
-	if err != nil {
 		return nil, err
 	}
-	if response.StatusCode != http.StatusOK {
-		defer response.Body.Close()
-		return nil, statusError("send message", response.StatusCode)
-	}
-	responseBody, err := readResponse(response.Body)
-	if err != nil {
-		return nil, &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: "send message",
-			Message: "Telegram returned an invalid response",
-		}
-	}
 	var result struct {
-		OK     bool `json:"ok"`
-		Result struct {
-			MessageID int64 `json:"message_id"`
-			Date      int64 `json:"date"`
-		} `json:"result"`
+		MessageID int64 `json:"message_id"`
+		Date      int64 `json:"date"`
 	}
-	if json.Unmarshal(responseBody, &result) != nil || !result.OK ||
-		result.Result.MessageID <= 0 || result.Result.Date <= 0 {
-		return nil, &provider.Error{
-			Class: provider.ClassInvalidResponse, Op: "send message",
-			Message: "Telegram returned an invalid response",
-		}
+	if json.Unmarshal(raw, &result) != nil || result.MessageID <= 0 || result.Date <= 0 {
+		return nil, withUncertainty(spec{}, invalidResponse("send message"))
 	}
-	return map[string]any{"message_id": result.Result.MessageID, "date": result.Result.Date}, nil
+	return map[string]any{"message_id": result.MessageID, "date": result.Date}, nil
 }
 
 // EditMessage replaces one message's plain text in the fixed target without retrying an ambiguous result.
@@ -346,28 +321,21 @@ func (c *Client) EditMessage(ctx context.Context, messageID int64, text string) 
 	if count := utf8.RuneCountInString(text); !utf8.ValidString(text) || count < 1 || count > maxMessageLength {
 		return nil, providerError("edit message", "the plain-text message is outside the supported length")
 	}
-	body, err := json.Marshal(struct {
+	raw, err := c.call(ctx, spec{op: "edit message", method: "editMessageText", limit: defaultResponseBytes}, struct {
 		ChatID    string `json:"chat_id"`
 		MessageID int64  `json:"message_id"`
 		Text      string `json:"text"`
 	}{ChatID: c.target, MessageID: messageID, Text: text})
 	if err != nil {
-		return nil, providerError("edit message", "the request could not be encoded")
-	}
-	responseBody, err := c.mutate(ctx, "edit message", "editMessageText", body)
-	if err != nil {
 		return nil, err
 	}
 	var result struct {
-		OK     bool `json:"ok"`
-		Result struct {
-			MessageID int64 `json:"message_id"`
-		} `json:"result"`
+		MessageID int64 `json:"message_id"`
 	}
-	if json.Unmarshal(responseBody, &result) != nil || !result.OK || result.Result.MessageID != messageID {
-		return nil, invalidResponse("edit message")
+	if json.Unmarshal(raw, &result) != nil || result.MessageID != messageID {
+		return nil, withUncertainty(spec{}, invalidResponse("edit message"))
 	}
-	return map[string]any{"message_id": result.Result.MessageID}, nil
+	return map[string]any{"message_id": result.MessageID}, nil
 }
 
 // DeleteMessage removes one message from the fixed target without retrying an ambiguous result.
@@ -375,90 +343,18 @@ func (c *Client) DeleteMessage(ctx context.Context, messageID int64) (map[string
 	if messageID < 1 {
 		return nil, providerError("delete message", "the message identifier must be positive")
 	}
-	body, err := json.Marshal(struct {
+	raw, err := c.call(ctx, spec{op: "delete message", method: "deleteMessage", limit: defaultResponseBytes}, struct {
 		ChatID    string `json:"chat_id"`
 		MessageID int64  `json:"message_id"`
 	}{ChatID: c.target, MessageID: messageID})
 	if err != nil {
-		return nil, providerError("delete message", "the request could not be encoded")
-	}
-	responseBody, err := c.mutate(ctx, "delete message", "deleteMessage", body)
-	if err != nil {
 		return nil, err
 	}
-	var result struct {
-		OK     bool `json:"ok"`
-		Result bool `json:"result"`
-	}
-	if json.Unmarshal(responseBody, &result) != nil || !result.OK || !result.Result {
-		return nil, invalidResponse("delete message")
+	var deleted bool
+	if json.Unmarshal(raw, &deleted) != nil || !deleted {
+		return nil, withUncertainty(spec{}, invalidResponse("delete message"))
 	}
 	return map[string]any{"deleted": true}, nil
-}
-
-func (c *Client) mutate(ctx context.Context, op, method string, body []byte) ([]byte, error) {
-	response, err := c.do(ctx, op, http.MethodPost, method, bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	if response.StatusCode != http.StatusOK {
-		defer response.Body.Close()
-		return nil, statusError(op, response.StatusCode)
-	}
-	responseBody, err := readResponse(response.Body)
-	if err != nil {
-		return nil, invalidResponse(op)
-	}
-	return responseBody, nil
-}
-
-func invalidResponse(op string) error {
-	return &provider.Error{Class: provider.ClassInvalidResponse, Op: op, Message: "Telegram returned an invalid response"}
-}
-
-func (c *Client) do(ctx context.Context, op, method, apiMethod string, body io.Reader) (*http.Response, error) {
-	target := *c.base
-	target.Path = strings.TrimRight(target.Path, "/") + "/bot" + c.token + "/" + apiMethod
-	target.RawPath = ""
-	req, err := http.NewRequestWithContext(ctx, method, target.String(), body)
-	if err != nil {
-		return nil, providerError(op, "the request could not be built")
-	}
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	response, err := c.http.Do(req)
-	if err != nil {
-		return nil, provider.Transport(op, "Telegram", err)
-	}
-	return response, nil
-}
-
-func readResponse(body io.ReadCloser) ([]byte, error) {
-	defer body.Close()
-	value, err := io.ReadAll(io.LimitReader(body, maxResponseBytes+1))
-	if err != nil || len(value) > maxResponseBytes {
-		return nil, errors.New("response could not be read within the limit")
-	}
-	return value, nil
-}
-
-func statusError(op string, status int) error {
-	switch status {
-	case http.StatusUnauthorized:
-		return &provider.Error{Class: provider.ClassAuth, Op: op, Message: "Telegram rejected the bot token"}
-	case http.StatusForbidden:
-		return &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "Telegram refused this operation; check the rights of the bot in Telegram"}
-	case http.StatusTooManyRequests:
-		return &provider.Error{Class: provider.ClassRateLimited, Op: op, Message: "Telegram rate-limited the operation"}
-	default:
-		return &provider.Error{
-			Class: provider.ClassProviderError, Op: op,
-			Message: fmt.Sprintf("Telegram rejected the operation (HTTP %d)", status),
-		}
-	}
 }
 
 func errorClass(err error) provider.Class {

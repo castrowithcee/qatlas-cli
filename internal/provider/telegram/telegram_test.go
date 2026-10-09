@@ -67,6 +67,18 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		len(metadata.SecretRoles) != 1 || metadata.SecretRoles[0].Name != roleBotToken {
 		t.Fatalf("metadata = %+v, %v", metadata, ok)
 	}
+	if metadata.ValidateBaseURL == nil || metadata.ValidateBaseURL("http://127.0.0.1") == nil ||
+		metadata.ValidateBaseURL(defaultURL) != nil {
+		t.Errorf("ValidateBaseURL does not enforce the origin rule")
+	}
+	if len(metadata.Groups) != 1 || metadata.Groups[0].ID != "messages" {
+		t.Errorf("groups = %+v", metadata.Groups)
+	}
+	for _, tool := range metadata.Tools {
+		if tool.Group != "messages" {
+			t.Errorf("tool %s group = %q", tool.ID, tool.Group)
+		}
+	}
 	operations := reg.Provider(Provider)
 	if len(operations) != 3 {
 		t.Fatalf("operations = %v, want three", operations)
@@ -288,7 +300,7 @@ func TestSendMessageRejectsInvalidOrOversizedResponses(t *testing.T) {
 		{name: "not ok", body: `{"ok":false}`},
 		{name: "missing message id", body: `{"ok":true,"result":{"date":1787220000}}`},
 		{name: "missing date", body: `{"ok":true,"result":{"message_id":1}}`},
-		{name: "oversized", body: strings.Repeat("x", maxResponseBytes+1)},
+		{name: "oversized", body: strings.Repeat("x", defaultResponseBytes+1)},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
