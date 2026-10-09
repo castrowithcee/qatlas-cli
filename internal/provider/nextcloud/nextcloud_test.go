@@ -236,22 +236,26 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 			t.Errorf("target kind %+v needs a description and forms", kind)
 		}
 	}
-	if len(metadata.Groups) != 4 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" ||
-		metadata.Groups[2].ID != "deck" || metadata.Groups[3].ID != "calendar" {
-		t.Fatalf("groups = %+v, want the files, shares, deck, and calendar groups", metadata.Groups)
+	if len(metadata.Groups) != 5 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" ||
+		metadata.Groups[2].ID != "deck" || metadata.Groups[3].ID != "talk" || metadata.Groups[4].ID != "calendar" {
+		t.Fatalf("groups = %+v, want the files, shares, deck, talk, and calendar groups", metadata.Groups)
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 36 || descriptors[0].ID != "nextcloud.calendars.list" ||
-		descriptors[4].ID != "nextcloud.deckstacks.list" || descriptors[5].ID != "nextcloud.events.get" ||
-		descriptors[6].ID != "nextcloud.events.list" || descriptors[7].ID != "nextcloud.favorites.list" ||
-		descriptors[11].ID != "nextcloud.files.favorite" || descriptors[15].ID != "nextcloud.files.search" ||
-		descriptors[18].ID != "nextcloud.filetags.add" || descriptors[20].ID != "nextcloud.filetags.remove" ||
-		descriptors[22].ID != "nextcloud.folders.delete" || descriptors[25].ID != "nextcloud.shares.list" ||
-		descriptors[26].ID != "nextcloud.systemtags.create" || descriptors[28].ID != "nextcloud.systemtags.list" ||
-		descriptors[29].ID != "nextcloud.systemtags.update" || descriptors[30].ID != "nextcloud.trash.delete" ||
-		descriptors[32].ID != "nextcloud.trash.restore" || descriptors[33].ID != "nextcloud.versions.get" ||
-		descriptors[35].ID != "nextcloud.versions.restore" {
+	if len(descriptors) != 47 || descriptors[0].ID != "nextcloud.calendars.list" ||
+		descriptors[1].ID != "nextcloud.comments.create" ||
+		descriptors[3].ID != "nextcloud.comments.list" || descriptors[5].ID != "nextcloud.deckboards.get" ||
+		descriptors[8].ID != "nextcloud.deckstacks.list" || descriptors[9].ID != "nextcloud.events.get" ||
+		descriptors[10].ID != "nextcloud.events.list" || descriptors[11].ID != "nextcloud.favorites.list" ||
+		descriptors[15].ID != "nextcloud.files.favorite" || descriptors[19].ID != "nextcloud.files.search" ||
+		descriptors[22].ID != "nextcloud.filetags.add" || descriptors[24].ID != "nextcloud.filetags.remove" ||
+		descriptors[26].ID != "nextcloud.folders.delete" || descriptors[28].ID != "nextcloud.shares.create" ||
+		descriptors[31].ID != "nextcloud.shares.list" || descriptors[32].ID != "nextcloud.shares.update" ||
+		descriptors[33].ID != "nextcloud.systemtags.create" || descriptors[35].ID != "nextcloud.systemtags.list" ||
+		descriptors[36].ID != "nextcloud.systemtags.update" || descriptors[37].ID != "nextcloud.talkmessages.list" ||
+		descriptors[40].ID != "nextcloud.talkrooms.list" || descriptors[41].ID != "nextcloud.trash.delete" ||
+		descriptors[43].ID != "nextcloud.trash.restore" || descriptors[44].ID != "nextcloud.versions.get" ||
+		descriptors[46].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
@@ -259,14 +263,17 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		if strings.HasPrefix(descriptor.ID, "nextcloud.deck") {
 			wantGroup, wantSensitivity = "deck", deckSensitivity
 		}
-		if descriptor.ID == calendarsList.ID || strings.HasPrefix(descriptor.ID, "nextcloud.events.") {
-			wantGroup, wantSensitivity = "calendar", calendarSensitivity
-		}
 		if strings.HasPrefix(descriptor.ID, "nextcloud.share") {
 			wantGroup, wantSensitivity = "shares", sharesSensitivity
 			if descriptor.ID == shareesSearch.ID {
 				wantSensitivity = shareeSensitivity
 			}
+		}
+		if strings.HasPrefix(descriptor.ID, "nextcloud.talk") {
+			wantGroup, wantSensitivity = "talk", talkSensitivity
+		}
+		if descriptor.ID == calendarsList.ID || strings.HasPrefix(descriptor.ID, "nextcloud.events.") {
+			wantGroup, wantSensitivity = "calendar", calendarSensitivity
 		}
 		if descriptor.Group != wantGroup {
 			t.Errorf("descriptor %s group = %q, want %s", descriptor.ID, descriptor.Group, wantGroup)
@@ -278,6 +285,10 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		for _, forbidden := range []string{
 			"base_url", "instance", "user", "password", "root", "href", "depth", "method", "url",
 		} {
+			// The share type enum of a new share names the recipient kind "user".
+			if forbidden == "user" && descriptor.ID == sharesCreate.ID {
+				continue
+			}
 			if strings.Contains(string(descriptor.InputSchema), forbidden) {
 				t.Errorf("the input schema of %s offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}

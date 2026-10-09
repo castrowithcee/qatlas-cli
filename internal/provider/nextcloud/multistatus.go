@@ -49,6 +49,15 @@ const (
 	propTagVisible    = "tagvisible"
 	propTagAssignable = "tagassignable"
 	propTagCanAssign  = "tagcanassign"
+
+	propCommentVerb      = "commentverb"
+	propCommentActorType = "commentactortype"
+	propCommentActorID   = "commentactorid"
+	propCommentActorName = "commentactorname"
+	propCommentCreated   = "commentcreated"
+	propCommentMessage   = "commentmessage"
+	propCommentObjType   = "commentobjecttype"
+	propCommentObjID     = "commentobjectid"
 )
 
 // wantedProps maps the requested properties to their keys. Every other property of an answer is dropped,
@@ -67,6 +76,14 @@ var wantedProps = map[xml.Name]string{
 	{Space: ocNS, Local: "user-visible"}:               propTagVisible,
 	{Space: ocNS, Local: "user-assignable"}:            propTagAssignable,
 	{Space: ocNS, Local: "can-assign"}:                 propTagCanAssign,
+	{Space: ocNS, Local: "verb"}:                       propCommentVerb,
+	{Space: ocNS, Local: "actorType"}:                  propCommentActorType,
+	{Space: ocNS, Local: "actorId"}:                    propCommentActorID,
+	{Space: ocNS, Local: "actorDisplayName"}:           propCommentActorName,
+	{Space: ocNS, Local: "creationDateTime"}:           propCommentCreated,
+	{Space: ocNS, Local: "message"}:                    propCommentMessage,
+	{Space: ocNS, Local: "objectType"}:                 propCommentObjType,
+	{Space: ocNS, Local: "objectId"}:                   propCommentObjID,
 	{Space: ncNS, Local: "trashbin-filename"}:          propTrashName,
 	{Space: ncNS, Local: "trashbin-original-location"}: propTrashOrigin,
 	{Space: ncNS, Local: "trashbin-deletion-time"}:     propTrashDeleted,

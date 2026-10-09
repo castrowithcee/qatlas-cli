@@ -33,11 +33,11 @@ reply, topic, silent, and protect do not apply to edits. An edit without `inline
 keyboard. `telegram.messages.editreplymarkup` changes only the keyboard of a message: it sets
 `inline_keyboard` or, when that is omitted or empty, removes the keyboard.
 
-The chat tools take an optional `chat` argument. It must equal a bound chat target exactly: an `@username`
-never matches a numeric ID, and `bot` or `business/<id>` is no chat. Without `chat`, the tool uses the one
-bound chat and refuses when the connection binds none or several. A chat that is not bound is refused before
-the credential is read and before any request, without naming it. A chat ID from an invocation argument or a
-Telegram response never becomes a target on its own.
+The chat tools take an optional `chat` argument, the forward and copy tools also `from_chat`. It must equal a
+bound chat target exactly: an `@username` never matches a numeric ID, and `bot` or `business/<id>` is no chat.
+Without `chat`, the tool uses the one bound chat and refuses when the connection binds none or several. A chat
+that is not bound is refused before the credential is read and before any request, without naming it. A chat
+ID from an invocation argument or a Telegram response never becomes a target on its own.
 
 `bot` unlocks only bot-wide tools and `business/<id>` only the tools of that one business connection; both
 combine with chats, and a connection with only `bot` has no chat. A tool that needs one of them is refused
@@ -67,6 +67,17 @@ messages.
 requires a `tools` list. Its reach is that of `telegram.messages.delete`. Repeated identifiers count once.
 Telegram skips missing or undeletable identifiers without any notice, so success reports only that Telegram
 accepted the request, not which messages are gone.
+
+`telegram.messages.forward` and `telegram.messages.copy` (`create`) move messages between two bound chats of the
+connection. `from_chat` names the source and `chat` the target; both follow the rule for `chat` above and may be
+the same chat. The source is one `message_id`, which uses `forwardMessage` or `copyMessage`, or `message_ids`, from
+2 through 100 distinct positive identifiers in strictly ascending order, which uses `forwardMessages` or
+`copyMessages`; exactly one of the two is required, and another order is refused rather than sorted. `copy`
+leaves out the link to the original. Its optional `caption` (1 through 1024 characters, with `parse_mode`)
+replaces the original caption of a single message and is refused with `message_ids`, since `copyMessages` has
+none. `message_thread_id`, `disable_notification`, and `protect_content` apply as for `telegram.messages.send`.
+The result is `message_id` for one source and `message_ids` for a list, nothing else. Telegram skips sources it
+cannot find or transfer without notice, so `message_ids` can be shorter than the request.
 
 `telegram.pins.pin` pins one message by `message_id`; `disable_notification` pins silently.
 `telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
@@ -203,18 +214,21 @@ longer than the reported size is rejected. The download URL carries the bot toke
 
 ## Sending media
 
-`telegram.photos.send`, `telegram.documents.send`, and `telegram.mediagroups.send` (`create`) send a photo, a
-document, or an album of 2 through 10 photos or of 2 through 10 documents; the kinds are never mixed. Each
-file comes from exactly one of `local_path` or `file_ref`; an album takes the choice per item. A URL is never
-a source. The tools are offered only on a connection that releases a directory for reading (`files`), and the
-options of `telegram.messages.send` that apply (`parse_mode`, `reply_to_message_id`, `message_thread_id`,
-`disable_notification`, `protect_content`) carry over, plus a `caption` of at most 1024 characters. An album
-caption goes on its first item.
+`telegram.photos.send`, `telegram.documents.send`, `telegram.videos.send`, `telegram.animations.send`,
+`telegram.videonotes.send`, and `telegram.mediagroups.send` (`create`) send a photo, a document, a video, an
+animation, a video note, or an album. An album has 2 through 10 items: photos and videos may be mixed, with an
+optional `type` per item, documents are never mixed with them. Each file comes from exactly one of `local_path`
+or `file_ref`; an album takes the choice per item. A URL is never a source. The tools are offered only on a
+connection that releases a directory for reading (`files`), and the options of `telegram.messages.send` that
+apply (`parse_mode`, `reply_to_message_id`, `message_thread_id`, `disable_notification`, `protect_content`)
+carry over, plus a `caption` of at most 1024 characters. An album caption goes on its first item. A video note
+has no caption and no `parse_mode`, as the Bot API gives it none. Duration, size, thumbnail, streaming, and
+spoiler settings are not offered; Telegram reads them from the file.
 
 A `local_path` outside the released directories is refused before the credential is read. A photo is limited
-to 10 MB, any other file to 50 MB, and the files of one album together to 50 MB; the size is checked from the
-file before it is read or sent. A local file is sent under a neutral name (`file` or `file-N`, plus the plain
-extension), so neither the path nor the file name leaves the machine.
+to 10 MB, any other file, videos included, to 50 MB, and the files of one album together to 50 MB; the size is
+checked from the file before it is read or sent. A local file is sent under a neutral name (`file` or `file-N`,
+plus the plain extension), so neither the path nor the file name leaves the machine.
 
 A `file_ref` must come from the selected chat itself: one issued for another target, even another bound chat,
 for another token, or of another kind is refused before the credential is read, and a raw file identifier is
@@ -230,12 +244,12 @@ The terminal editor starts a new connection on the setup profile `send`, which t
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
 `[telegram.bot.get]`, and the four chat read tools. The profile `messaging` also ticks `update`,
 `delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
-`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the three media send
+`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the six media send
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
 `telegram.members.restrict`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
-`telegram.chats.deletephoto`, the interaction tools including locations, venues, contacts, and dice, and the
-invite link tools are in no profile. A profile is a visible starting selection, not a role: only the ticked
-`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
-follows a profile.
+`telegram.chats.deletephoto`, `telegram.messages.forward`, `telegram.messages.copy`, the interaction tools
+including locations, venues, contacts, and dice, and the invite link tools are in no profile. A profile is a
+visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
+changed before saving, and a saved connection never follows a profile.
