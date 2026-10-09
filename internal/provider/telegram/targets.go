@@ -114,6 +114,12 @@ func targetsOf(resolved *config.Resolved) (targetSet, error) {
 // selectChat picks the chat a chat tool addresses from the bound chat targets only. The comparison is exact:
 // an @username never equals a numeric ID. Errors never name a target.
 func selectChat(resolved *config.Resolved, requested string) (string, error) {
+	return selectChatArgument(resolved, requested, "chat")
+}
+
+// selectChatArgument is selectChat for a tool with several chat arguments; argument names the one being
+// resolved so the refusal says which argument failed.
+func selectChatArgument(resolved *config.Resolved, requested, argument string) (string, error) {
 	set, err := targetsOf(resolved)
 	if err != nil {
 		return "", providerError("select chat", "the configured Telegram targets are unusable")
@@ -125,14 +131,15 @@ func selectChat(resolved *config.Resolved, requested string) (string, error) {
 		if len(set.chats) == 0 {
 			return "", providerError("select chat", "this connection binds no chat target")
 		}
-		return "", providerError("select chat", "this connection binds several chats; the chat argument is required")
+		return "", providerError("select chat",
+			"this connection binds several chats; the "+argument+" argument is required")
 	}
 	for _, chat := range set.chats {
 		if chat == requested {
 			return chat, nil
 		}
 	}
-	return "", providerError("select chat", "the chat is not bound to this connection")
+	return "", providerError("select chat", "the "+argument+" is not bound to this connection")
 }
 
 // requireBotScope refuses a bot-wide tool unless the connection binds the bot target.
