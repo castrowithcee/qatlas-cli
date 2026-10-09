@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes Telegram message operations, fixed chat targets, connection permissions, and safety boundaries.
+  Describes Telegram message and update operations, fixed chat targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -25,10 +25,10 @@ combine with chats, and a connection with only `bot` has no chat. A tool that ne
 before the credential is read when the target is missing. Methods that accept only a numeric chat ID refuse an
 `@username` chat locally.
 
-Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`. A group
-never changes a tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a
-host and without user, query, or fragment, with no exception for local addresses, and redirects are never
-followed. `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
+Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the update
+tool to `updates`. A group never changes a tool ID, a permission, or a tools list. The base URL must be a plain
+`https` URL with a host and without user, query, or fragment, with no exception for local addresses, and
+redirects are never followed. `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
 they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
@@ -41,9 +41,30 @@ list no longer offers it. Its reach is that of the Bot API `deleteMessage`: in a
 deletes its own messages and, as an administrator, those of others; in a private chat it also deletes incoming
 messages.
 
+## Reading updates
+
+`telegram.updates.list` (`read`) shows the pending updates of the bot, without `chat`, for every bound chat.
+It needs at least one chat target. Only updates of bound chats appear; every other update, whatever its chat
+or type, is only counted in `skipped`, and `last_update_id` names the highest update seen, skipped ones
+included. An `@username` target is matched through a fixed `getChat` call on the configured name; the ID that
+returns is used for matching only. A long poll (`wait_seconds`) waits for a new update.
+
+The tool acknowledges nothing and stores no offset: the same updates appear again on the next call until
+Telegram drops them, which it does after at most 24 hours. Telegram allows one consumer per bot. The call
+fails with a conflict while a webhook is active or another `getUpdates` consumer runs, and a long poll
+interrupts the long poll of another consumer of the same bot.
+
+Identifiers that belong to no chat (a file, a callback query, a join request) are returned only as signed
+references, never as Telegram's raw identifier. A reference is bound to the target it came from and to the
+bot token, so rotating the token invalidates every earlier reference. It is signed, not secret. A tool that
+accepts a reference checks its format and target before the credential is read and its signature before any
+request.
+
+## Setup profiles
+
 The terminal editor starts a new connection on the setup profile `send`, which ticks `[create]` and
-`[telegram.messages.send]`: Telegram offers no read tool, and a send reaches only a bound chat, each
-one after confirmation. The profile `messaging` also ticks `update`, `delete`, `telegram.messages.edit`, and
-`telegram.messages.delete`. A profile is a visible starting selection, not a role: only the ticked
-`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
-follows a profile.
+`[telegram.messages.send]`: the read tools expose incoming message content, while a send reaches only a bound
+chat, each one after confirmation. The profile `read` ticks `[read]` and `[telegram.updates.list]`. The
+profile `messaging` also ticks `update`, `delete`, `telegram.messages.edit`, and `telegram.messages.delete`. A
+profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every
+tick can be changed before saving, and a saved connection never follows a profile.
