@@ -129,6 +129,19 @@ the boolean rights Telegram returns, `custom_title`, and `until_date`. `telegram
 of administrators and members is classified `telegram-member-data`; the other two tools keep the provider's
 message classification.
 
+## Changing chat title, description, and photo
+
+`telegram.chats.settitle` (1 through 128 characters), `telegram.chats.setdescription` (up to 255 characters;
+the argument is required, and an empty string removes the description), `telegram.chats.setphoto` (`update`),
+and `telegram.chats.deletephoto` (`delete`) change the master data of a bound group or channel; Telegram
+refuses private chats. Lengths are checked before the credential is read, and each result is only
+`updated: true` or `deleted: true`. `telegram.chats.deletephoto` requires a `tools` list.
+
+`telegram.chats.setphoto` takes only a `local_path` inside a directory the connection releases for reading
+(`files`), never a `file_ref` or URL, and repeating it has an unknown effect. The photo is limited to 10 MB,
+checked from the file before it is read, and sent under a neutral name, so neither path nor file name leaves
+the machine.
+
 ## Bot identity and webhook status
 
 `telegram.bot.get` (`read`) shows the identity of the bot behind the token: `id`, `username`, `first_name`,
@@ -181,11 +194,12 @@ under `messages`. Each tool sends exactly one request and reports an unclear out
 The terminal editor starts a new connection on the setup profile `send`, which ticks `[create]` and
 `[telegram.messages.send]`: the read tools expose incoming message content, while a send reaches only a bound
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
-`[telegram.bot.get]`, and the four `telegram.chats.*` tools. The profile `messaging` also ticks `update`,
+`[telegram.bot.get]`, and the four chat read tools. The profile `messaging` also ticks `update`,
 `delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
 `telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the three media send
-tools; the profile `moderation` ticks `update` and `telegram.members.unban`.
+tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
+ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
-`telegram.members.restrict`, and the invite link tools are in no profile. A profile is a visible starting
-selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
-saving, and a saved connection never follows a profile.
+`telegram.members.restrict`, `telegram.chats.deletephoto`, and the invite link tools are in no profile.
+A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
+every tick can be changed before saving, and a saved connection never follows a profile.
