@@ -212,7 +212,7 @@ func TestActionsFollowTheFilteredSelection(t *testing.T) {
 	typeText(t, m, "wiki-c")
 	press(t, m, "tab", "tab")
 	typeText(t, m, "https://wiki-c.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("creating reported %q", m.fail)
 	}

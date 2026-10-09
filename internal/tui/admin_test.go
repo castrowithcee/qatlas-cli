@@ -106,7 +106,7 @@ func TestAdminSessionAsksOnceThenStaysActive(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 
 	if m.screen != screenAdminAuth || m.adminAuth == nil || m.adminAuth.locked {
 		t.Fatalf("saving a new service against an unlocked, session-less vault = screen %v, want the "+
@@ -164,7 +164,7 @@ func TestAdminSessionCancelPreservesFormInput(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.screen != screenAdminAuth {
 		t.Fatalf("screen = %v, want the admin dialog open", m.screen)
 	}
@@ -213,7 +213,7 @@ func TestAdminTimeoutZeroAsksEveryChange(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.screen != screenAdminAuth {
 		t.Fatalf("a second change with admin_timeout: 0 did not ask again: screen %v", m.screen)
 	}
@@ -253,7 +253,7 @@ func TestAdminSessionIdlesOutAndKeysRenewIt(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.screen != screenAdminAuth {
 		t.Fatalf("a managing action after the idle timeout did not ask again: screen %v", m.screen)
 	}
@@ -282,7 +282,7 @@ func TestAdminSessionNoneForUnencryptedVault(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.screen == screenAdminAuth {
 		t.Fatal("an unencrypted vault still asked for an admin passphrase")
 	}
@@ -348,14 +348,14 @@ func TestAdminSessionGatesGuidedSetupSave(t *testing.T) {
 	typeText(t, m, canaryID)
 	press(t, m, "tab")
 	typeText(t, m, canarySecret)
-	press(t, m, "enter")
-	press(t, m, "enter") // scope step, default target
+	press(t, m, "f2")
+	press(t, m, "f2") // scope step, default target
 	press(t, m, "f2")
 	if m.screen != screenSummary {
 		t.Fatalf("did not reach the summary: screen %v fail %q", m.screen, m.fail)
 	}
 
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.screen != screenAdminAuth || m.adminAuth == nil || m.adminAuth.locked {
 		t.Fatalf("saving the guided setup against a session-less encrypted vault did not open the "+
 			"admin-only dialog: screen %v", m.screen)
@@ -383,7 +383,7 @@ func TestAdminSessionSecondEnterWhileCheckingIsIgnored(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.screen != screenAdminAuth {
 		t.Fatalf("did not open the admin dialog: screen %v", m.screen)
 	}
@@ -432,7 +432,7 @@ func TestAdminSessionFailsClosedWhenVaultStateCannotBeRead(t *testing.T) {
 	press(t, m, "tab")
 	press(t, m, "tab")
 	typeText(t, m, "https://wiki.example.invalid")
-	press(t, m, "enter")
+	press(t, m, "f2")
 
 	if m.screen != screenForm {
 		t.Fatalf("a vault whose state could not be read still changed the screen: %v", m.screen)
@@ -451,7 +451,7 @@ func TestAdminSessionFailsClosedWhenVaultStateCannotBeRead(t *testing.T) {
 	// Once the vault is reachable again, the very same save goes through without retyping anything.
 	os.Chmod(vaultDir, 0o700)
 	m.fail = ""
-	press(t, m, "enter")
+	press(t, m, "f2")
 	if m.screen != screenAdminAuth {
 		t.Fatalf("the retried save did not reach the admin dialog: screen %v fail %q", m.screen, m.fail)
 	}
@@ -503,7 +503,7 @@ func TestAdminTimeoutZeroAsksAgainAfterVaultAction(t *testing.T) {
 			press(t, m, "tab")
 			press(t, m, "tab")
 			typeText(t, m, "https://wiki.example.invalid")
-			press(t, m, "enter")
+			press(t, m, "f2")
 			if got := m.screen == screenAdminAuth; got != tc.wantDialog {
 				t.Fatalf("admin dialog open after a vault action = %v, want %v (screen %v, fail %q)",
 					got, tc.wantDialog, m.screen, m.fail)

@@ -87,8 +87,8 @@ func TestRoleHelpComesFromTheProviderOfTheCredential(t *testing.T) {
 	}
 }
 
-func TestLongRoleHelpNeverReplacesTheForm(t *testing.T) {
-	sizes := []struct{ w, h int }{{80, 24}, {75, 40}, {208, 60}, {120, 30}}
+func TestFocusedFieldHintStandsWholeAndWrapped(t *testing.T) {
+	sizes := []struct{ w, h int }{{80, 40}, {75, 40}, {208, 60}, {120, 30}}
 	for _, size := range sizes {
 		for _, credential := range []string{"a-cred", "b-cred", "c-cred"} {
 			m := roleCollisionModel(t)
@@ -104,56 +104,36 @@ func TestLongRoleHelpNeverReplacesTheForm(t *testing.T) {
 					t.Errorf("%dx%d %s: view lacks %q:\n%s", size.w, size.h, credential, want, view)
 				}
 			}
-			if strings.Contains(view, "PERMISSION-LIST-TAIL") {
-				t.Errorf("%dx%d %s: the whole help stands in the form:\n%s", size.w, size.h, credential, view)
+			if strings.Contains(view, "…") || strings.Contains(view, "F1") {
+				t.Errorf("%dx%d %s: the hint is cut or names F1:\n%s", size.w, size.h, credential, view)
 			}
-			if credential == "a-cred" && !strings.Contains(view, "F1 more") {
-				t.Errorf("%dx%d: the key line does not name F1:\n%s", size.w, size.h, view)
+			if credential == "a-cred" {
+				flat := strings.Join(strings.Fields(view), " ")
+				if !strings.Contains(flat, "PERMISSION-LIST-TAIL") || !strings.Contains(flat, "Actions: write") {
+					t.Errorf("%dx%d: the hint is not whole:\n%s", size.w, size.h, view)
+				}
 			}
 		}
 	}
 }
 
-func TestF1OpensTheWholeHintOfTheFocusedField(t *testing.T) {
+func TestF1HasNoEffect(t *testing.T) {
 	m := roleCollisionModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
 	editEntry(t, m, "a-cred")
 	focusField(t, m, "token")
+	before := m.focus
+	press(t, m, "f1")
+	if m.screen != screenForm || m.focus != before {
+		t.Errorf("F1: screen %v focus %d, want the form on the same row", m.screen, m.focus)
+	}
+	if strings.Contains(screenOf(m), "F1") {
+		t.Errorf("the form names F1:\n%s", screenOf(m))
+	}
+	// f1 closes nothing in the help either.
+	m.openHelp()
 	press(t, m, "f1")
 	if m.screen != screenHelp {
-		t.Fatalf("F1 opened screen %v, want the help", m.screen)
-	}
-	view := strings.Join(strings.Fields(screenOf(m)), " ")
-	if !strings.Contains(view, "PERMISSION-LIST-TAIL") || !strings.Contains(view, "Actions: write") {
-		t.Errorf("the detail help lacks the full text:\n%s", screenOf(m))
-	}
-	if strings.Contains(view, "Resize terminal") {
-		t.Errorf("the detail help shows the resize notice:\n%s", screenOf(m))
-	}
-	press(t, m, "esc")
-	if m.screen != screenForm || m.helpDetail != "" || m.fields[m.focus].label != "token" {
-		t.Errorf("esc: screen %v, detail %q, focus %q; want the form back on the same row",
-			m.screen, m.helpDetail, m.fields[m.focus].label)
-	}
-	// The topic help keeps working afterwards.
-	press(t, m, "esc")
-	openSectionByName(t, m, sectionCredentials)
-	press(t, m, "?")
-	if m.screen != screenHelp || m.helpDetail != "" {
-		t.Errorf("? after a field help: screen %v, detail %q, want the topic help", m.screen, m.helpDetail)
-	}
-}
-
-func TestHintsAreCutToAFewLines(t *testing.T) {
-	m, _, _ := newModel(t)
-	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	text := strings.Repeat("a long and growing hint ", 40)
-	shown, cut := m.limitedHint(text)
-	if !cut || strings.Count(shown, "\n")+1 != maxHintLines || !strings.HasSuffix(shown, "…") {
-		t.Errorf("limitedHint = %q, cut %v; want %d lines ending in an ellipsis", shown, cut, maxHintLines)
-	}
-	if shown, cut := m.limitedHint("short"); cut || !strings.Contains(shown, "short") {
-		t.Errorf("limitedHint(short) = %q, %v", shown, cut)
+		t.Errorf("f1 in the help left it for screen %v", m.screen)
 	}
 }
 

@@ -121,7 +121,7 @@ func TestAConnectionWithoutToolsIsSavedWithoutTools(t *testing.T) {
 
 	pressNew(t, m)
 	typeText(t, m, "fresh")
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}
