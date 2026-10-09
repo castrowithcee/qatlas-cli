@@ -63,9 +63,8 @@ func serve(t *testing.T, calls *[]call, handler func(*http.Request) (*http.Respo
 	transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		var body string
 		if request.Body != nil {
-			buf := make([]byte, 8192)
-			n, _ := request.Body.Read(buf)
-			body = string(buf[:n])
+			data, _ := io.ReadAll(io.LimitReader(request.Body, 1<<20))
+			body = string(data)
 			request.Body = io.NopCloser(strings.NewReader(body))
 		}
 		*calls = append(*calls, call{
@@ -241,8 +240,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 25 {
-		t.Fatalf("tools = %+v, want 25", metadata.Tools)
+	if len(metadata.Tools) != 26 {
+		t.Fatalf("tools = %+v, want 26", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
