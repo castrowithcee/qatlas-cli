@@ -129,19 +129,20 @@ func TestDefaultRegistry(t *testing.T) {
 		14: "telegram.files.get", 15: "telegram.invitelinks.primary", 16: "telegram.invitelinks.revoke",
 		17: "telegram.locations.send", 18: "telegram.mediagroups.send", 19: "telegram.members.ban",
 		20: "telegram.members.promote", 21: "telegram.members.restrict", 22: "telegram.members.setadmintitle",
-		23: "telegram.members.settag", 24: "telegram.members.unban", 26: "telegram.messages.deletemany",
-		29: "telegram.messages.send", 30: "telegram.photos.send", 31: "telegram.pins.pin",
-		33: "telegram.pins.unpinall", 34: "telegram.polls.send", 35: "telegram.polls.stop",
-		36: "telegram.reactions.remove", 37: "telegram.reactions.removeall", 38: "telegram.reactions.set",
-		39: "telegram.senderchats.ban", 40: "telegram.senderchats.unban", 41: "telegram.updates.list",
-		42: "telegram.venues.send", 43: "telegram.webhook.get",
+		23: "telegram.members.settag", 24: "telegram.members.unban", 25: "telegram.messages.copy",
+		27: "telegram.messages.deletemany", 30: "telegram.messages.forward", 31: "telegram.messages.send",
+		32: "telegram.photos.send", 33: "telegram.pins.pin", 35: "telegram.pins.unpinall",
+		36: "telegram.polls.send", 37: "telegram.polls.stop", 38: "telegram.reactions.remove",
+		39: "telegram.reactions.removeall", 40: "telegram.reactions.set", 41: "telegram.senderchats.ban",
+		42: "telegram.senderchats.unban", 43: "telegram.updates.list", 44: "telegram.venues.send",
+		45: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 44
+	ok2 := len(operations) == 46
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}
 	if !ok2 {
-		t.Errorf("Telegram operations = %v, want the explicit message, member, pin, update, chat, invite link, bot, file, media, interaction, and structured send operations",
+		t.Errorf("Telegram operations = %v, want the explicit message, member, pin, update, chat, invite link, bot, file, media, interaction, structured send, and transfer operations",
 			operations)
 	}
 }

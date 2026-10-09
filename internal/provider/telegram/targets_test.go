@@ -217,8 +217,8 @@ func TestInvokeFunctionsRefuseBeforeSecretResolution(t *testing.T) {
 
 func TestChatArgumentIsDeclared(t *testing.T) {
 	for _, d := range []capability.Descriptor{messagesSend, messagesEdit, messagesEditReplyMarkup, messagesDelete,
-		messagesDeleteMany, pinsPin, pinsUnpin, pinsUnpinAll, pollsSend, pollsStop, reactionsSet, chatActionsSend,
-		locationsSend, venuesSend, contactsSend, diceSend,
+		messagesDeleteMany, messagesForward, messagesCopy, pinsPin, pinsUnpin, pinsUnpinAll, pollsSend, pollsStop,
+		reactionsSet, chatActionsSend, locationsSend, venuesSend, contactsSend, diceSend,
 		invitelinksPrimary, invitelinksRevoke, membersBan, membersUnban, membersRestrict, membersPromote,
 		membersSetAdminTitle, membersSetTag, chatsSetTitle,
 		chatsSetDescription, chatsSetPhoto, chatsDeletePhoto, chatsGet, chatsAdministrators, chatsMemberCount,
