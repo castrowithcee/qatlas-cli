@@ -58,7 +58,6 @@ func (c *Client) callMultipart(ctx context.Context, s spec, fields []field, file
 	writer := multipart.NewWriter(&buf)
 	total := 0
 	for _, f := range fields {
-		total += len(f.value)
 		if err := writer.WriteField(f.name, f.value); err != nil {
 			return nil, providerError(s.op, "the request could not be encoded")
 		}

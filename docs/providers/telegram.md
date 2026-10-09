@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Telegram message, update, and file operations, fixed chat targets, connection permissions, and
-  safety boundaries.
+  Describes Telegram message, update, file, and media operations, fixed chat targets, connection
+  permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -46,9 +46,9 @@ before the credential is read when the target is missing. Methods that accept on
 
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
 to `pins`, the update tool to `updates`, the chat tools to `chats`, the invite link tools to `invitelinks`, the
-bot and webhook tools to `bot`, the file tools to `files`. A group never changes a tool ID, a permission, or a
-tools list. The base URL must be a plain `https` URL with a host and without user, query, or fragment, with no
-exception for local addresses, and redirects are never followed.
+bot and webhook tools to `bot`, the file tools to `files`, the media tools to `media`. A group never changes a
+tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user,
+query, or fragment, with no exception for local addresses, and redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
@@ -142,6 +142,28 @@ content. Files above 20 MB, the Bot API's limit for bots, are refused before the
 longer than the reported size is rejected. The download URL carries the bot token; it and Telegram's
 `file_path` appear in no output, error, or log, and a redirect is never followed.
 
+## Sending media
+
+`telegram.photos.send`, `telegram.documents.send`, and `telegram.mediagroups.send` (`create`) send a photo, a
+document, or an album of 2 through 10 photos or of 2 through 10 documents; the kinds are never mixed. Each
+file comes from exactly one of `local_path` or `file_ref`; an album takes the choice per item. A URL is never
+a source. The tools are offered only on a connection that releases a directory for reading (`files`), and the
+options of `telegram.messages.send` that apply (`parse_mode`, `reply_to_message_id`, `message_thread_id`,
+`disable_notification`, `protect_content`) carry over, plus a `caption` of at most 1024 characters. An album
+caption goes on its first item.
+
+A `local_path` outside the released directories is refused before the credential is read. A photo is limited
+to 10 MB, any other file to 50 MB, and the files of one album together to 50 MB; the size is checked from the
+file before it is read or sent. A local file is sent under a neutral name (`file` or `file-N`, plus the plain
+extension), so neither the path nor the file name leaves the machine.
+
+A `file_ref` must come from the selected chat itself: one issued for another target, even another bound chat,
+for another token, or of another kind is refused before the credential is read, and a raw file identifier is
+never accepted. Its size is not known locally; Telegram enforces the limits for it.
+
+The result is `message_id`, `date`, and a `file_ref` of the sent file, for an album one such entry per message
+under `messages`. Each tool sends exactly one request and reports an unclear outcome instead of repeating it.
+
 ## Setup profiles
 
 The terminal editor starts a new connection on the setup profile `send`, which ticks `[create]` and
@@ -149,7 +171,7 @@ The terminal editor starts a new connection on the setup profile `send`, which t
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
 `[telegram.bot.get]`, and the four `telegram.chats.*` tools. The profile `messaging` also ticks `update`,
 `delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
-`telegram.pins.pin`, and `telegram.pins.unpin`. `telegram.messages.editreplymarkup`,
-`telegram.pins.unpinall`, and the invite link tools are in no profile. A profile is a visible starting
-selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
-saving, and a saved connection never follows a profile.
+`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the three media send
+tools. `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, and the invite link tools are in no
+profile. A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are
+saved, every tick can be changed before saving, and a saved connection never follows a profile.
