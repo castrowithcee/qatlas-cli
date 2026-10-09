@@ -2,7 +2,7 @@
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
   objects, count by field), record write (create, update, batches), duplicate search and merge, record
-  trash (delete, restore, destroy), and note and task link operations, object targets, connection
+  trash (delete, restore, destroy), note and task link operations, workflow read, object targets, connection
   permissions, and safety boundaries.
 type: knowledge
 edit: shared
@@ -36,7 +36,8 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
   on every connection that should not see all of them: tools for further objects make, for example, person
   data reachable on a connection without targets.
 - System objects (messages, calendar events, attachments, workflows, workspace members, and the like) are
-  never reachable and cannot be a target. The two link objects of notes and tasks are system objects too;
+  never reachable through the object and record tools and cannot be a target; workflows have their own
+  read tools (see Reading workflows). The two link objects of notes and tasks are system objects too;
   only the link tools touch them, and no records tool does. Qatlas keeps them in a fixed list, so an object a
   later Twenty version marks as a system object stays reachable on a connection without targets until the
   list is updated.
@@ -133,6 +134,22 @@ text of it.
   dropped and only counted in `omitted`.
 - No image URLs, rank values, or search filters are read. The cursor is bound to the connection, its
   targets, `text`, and `objects`.
+
+## Reading workflows
+
+`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) let an agent follow automations and find
+failed runs. They work only on a connection without object targets and are refused before the key is read
+otherwise. `workflow`, `workflowVersion`, and `workflowRun` are system objects, so the record tools never reach
+them; these tools use fixed routes and a fixed field selection.
+
+- `workflows.list` returns per workflow name, statuses, the last published version, and timestamps.
+  `workflows.get` adds the 50 newest versions with name, status, trigger type, step types, and number of
+  steps. `workflowruns.list` returns the runs of one workflow, newest first, optionally of one status, with
+  status, version, and timestamps.
+- Step and trigger settings, run outputs, context, state, and error texts are never read out. Status,
+  trigger, and step types come from fixed lists; any other value is shown as `unknown`.
+- Starting a workflow run is not possible with an API key: Twenty refuses it for keys, and Qatlas does not
+  work around that.
 
 ## Writing records
 
@@ -264,7 +281,7 @@ connection's local `permissions` list can only narrow it, and an optional `tools
 excludes. The `companies.*` tools expose conservative core company fields and accept no custom-field
 payloads; custom fields are written through `records.create` and `records.update`. Invocation arguments never
 replace the configured origin. The terminal editor starts a new connection on the setup profile `read`, which
-ticks `[read]` and the two company, two object, five record read tools, and the link list tool; the profile
-`write` adds the two record write tools and the link create tool. A profile is a visible starting selection,
-not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving,
-and a saved connection never follows a profile.
+ticks `[read]` and the two company, two object, five record read tools, the link list tool, and the three
+workflow read tools; the profile `write` adds the two record write tools and the link create tool. A profile
+is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick
+can be changed before saving, and a saved connection never follows a profile.

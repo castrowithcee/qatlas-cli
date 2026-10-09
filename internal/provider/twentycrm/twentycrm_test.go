@@ -189,8 +189,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 28 {
-		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, and three activity link operations", len(operations))
+	if len(operations) != 31 {
+		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, three activity link, and three workflow read operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -227,7 +227,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		operations[22].ID != "twentycrm.records.merge" || operations[23].ID != "twentycrm.records.mergepreview" ||
 		operations[24].ID != "twentycrm.records.restore" || operations[25].ID != "twentycrm.records.search" ||
 		operations[26].ID != "twentycrm.records.searchall" ||
-		operations[27].ID != "twentycrm.records.update" {
+		operations[27].ID != "twentycrm.records.update" || operations[28].ID != "twentycrm.workflowruns.list" ||
+		operations[29].ID != "twentycrm.workflows.get" || operations[30].ID != "twentycrm.workflows.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1121,6 +1122,9 @@ func classOf(err error) provider.Class {
 func wantSensitivity(id string) string {
 	if strings.HasPrefix(id, Provider+".records.") || strings.HasPrefix(id, Provider+".activitytargets.") {
 		return recordDataSensitivity
+	}
+	if strings.HasPrefix(id, Provider+".workflow") {
+		return workflowDataSensitivity
 	}
 	return dataSensitivity
 }
