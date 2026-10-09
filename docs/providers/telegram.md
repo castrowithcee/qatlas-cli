@@ -47,9 +47,9 @@ before the credential is read when the target is missing. Methods that accept on
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
 to `pins`, the member tools to `members`, the update tool to `updates`, the chat tools to `chats`, the invite
 link tools to `invitelinks`, the bot and webhook tools to `bot`, the file tools to `files`, the media tools to
-`media`. A group never changes a tool ID, a permission, or a tools list. The base URL must be a plain `https`
-URL with a host and without user, query, or fragment, with no exception for local addresses, and redirects are
-never followed.
+`media`, the poll, reaction, and chat action tools to `interactions`. A group never changes a tool ID, a
+permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
+fragment, with no exception for local addresses, and redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
@@ -83,6 +83,19 @@ complete `permissions` object of a user in a supergroup: every ChatPermissions b
 explicitly, a missing or unknown field is refused before any request, and Telegram's permission dependencies
 are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. All three
 results are a single boolean. Promoting members, banning sender chats, and join requests are not offered.
+
+## Polls, reactions, and chat actions
+
+`telegram.polls.send` (`create`, not idempotent) sends one poll or quiz as plain text: no entities, no
+media, no paid or business parameters. A quiz requires `correct_option_ids`, which regular polls refuse,
+as they refuse an `explanation`. `open_period` and `close_date` exclude each other; everything Telegram's
+limits fix is checked locally before the credential is read. The result is `message_id`, `date`, and
+`poll_id`. `telegram.polls.stop` (`update`, idempotent) closes a poll of the bot for good and, like
+`telegram.messages.delete`, requires a `tools` list; it reports only `stopped`, never counts or voters.
+`telegram.reactions.set` (`update`, idempotent) sets at most one reaction of the bot from Telegram's
+fixed emoji list or a numeric `custom_emoji_id`; an empty `reactions` list removes it. Paid reactions are
+not offered. `telegram.chatactions.send` (`create`, idempotent) shows one of Telegram's fixed actions for
+about five seconds.
 
 ## Invite links
 
@@ -186,6 +199,6 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 `telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the three media send
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
-`telegram.members.restrict`, and the invite link tools are in no profile. A profile is a visible starting
-selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
-saving, and a saved connection never follows a profile.
+`telegram.members.restrict`, the interaction tools, and the invite link tools are in no profile. A profile is
+a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can
+be changed before saving, and a saved connection never follows a profile.
