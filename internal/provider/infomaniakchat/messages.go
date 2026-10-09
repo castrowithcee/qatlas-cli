@@ -20,7 +20,7 @@ import (
 // (*Client).verifyChannelScope before the matching endpoint is ever reached.
 var channelIDArgument = capability.Argument{Name: "channel_id",
 	Description: "Channel identifier; must be inside this connection's channel allow-list when it has one, " +
-		"and is always re-checked against this connection's bound teams with one extra request", Required: true}
+		"and is always re-checked live against this connection's bound teams before use", Required: true}
 
 var messageTextSchema = `{"type":"string","minLength":1,"maxLength":` + itoa(maxMessageLength) +
 	`,"pattern":"^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]+$"}`
@@ -331,7 +331,7 @@ func invokeMessagesList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
+	if err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
 		return nil, err
 	}
 	return client.ListMessages(ctx, input.ChannelID, page, limit)
@@ -407,7 +407,7 @@ func (c *Client) verifyPostScope(ctx context.Context, resolved *config.Resolved,
 	if err := selectChannel(resolved, post.ChannelID); err != nil {
 		return postJSON{}, err
 	}
-	if _, err := c.verifyChannelScope(ctx, op, post.ChannelID); err != nil {
+	if err := c.verifyChannelScope(ctx, op, post.ChannelID); err != nil {
 		return postJSON{}, err
 	}
 	return post, nil
@@ -461,7 +461,7 @@ func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
+	if err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
 		return nil, err
 	}
 	if input.RootID != "" {
