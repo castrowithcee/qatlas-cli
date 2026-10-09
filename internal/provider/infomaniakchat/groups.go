@@ -32,6 +32,8 @@ func groupOf(id string) string {
 		return "users"
 	case "channelmembers", "archivedchannels":
 		return "channels"
+	case "teammembers":
+		return "teams"
 	case "direct", "groupmessages", "pins":
 		return "messages"
 	}
