@@ -95,13 +95,13 @@ func runNextcloudCLI(t *testing.T, reads *atomic.Int32, input string, args ...st
 	return code, stdout.String(), stderr.String()
 }
 
-// The Nextcloud namespace publishes exactly the two read-only Files tools, with the connections that can
+// The Nextcloud namespace publishes all its tools, with the connections that can
 // run them and without contacting an instance.
 func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 	path := nextcloudConfig(t)
 	var reads atomic.Int32
 
-	code, stdout, stderr := runNextcloudCLI(t, &reads, "", "tools", "nextcloud", "--all", "--config", path)
+	code, stdout, stderr := runNextcloudCLI(t, &reads, "", "tools", "nextcloud", "--all", "--query", "nextcloud", "--config", path)
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
@@ -112,7 +112,7 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--all", "--config", path))); len(got) != 51 {
+	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--all", "--query", "nextcloud", "--config", path))); len(got) != 51 {
 		t.Errorf("nextcloud tools = %v, want all fifty-one tools", got)
 	}
 	if reads.Load() != 0 {
@@ -254,7 +254,7 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	options := &Options{Config: path, Redactor: &redact.Redactor{}}
 	input := strings.Join([]string{
 		`{"jsonrpc":"2.0","id":"search","method":"tools/call","params":{` + mcpTestMeta +
-			`,"name":"qatlas.search","arguments":{"provider":"nextcloud","all":true}}}`,
+			`,"name":"qatlas.search","arguments":{"provider":"nextcloud","query":"nextcloud","all":true}}}`,
 		`{"jsonrpc":"2.0","id":"describe","method":"tools/call","params":{` + mcpTestMeta +
 			`,"name":"qatlas.describe","arguments":{"operation":"nextcloud.files.list","version":1}}}`,
 		`{"jsonrpc":"2.0","id":"invoke","method":"tools/call","params":{` + mcpTestMeta +
@@ -272,12 +272,14 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 	search := toolResultFrom(t, responses[`"search"`])
 	var searched struct {
 		Operations []application.SearchHit `json:"operations"`
+		NextCursor string                  `json:"next_cursor"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 51 || searched.Operations[0].ID != "nextcloud.comments.create" ||
+	// More than one page of tools: the first page holds 50 and a cursor continues.
+	if len(searched.Operations) != 50 || searched.NextCursor == "" || searched.Operations[0].ID != "nextcloud.comments.create" ||
 		searched.Operations[4].ID != "nextcloud.deckboards.create" || searched.Operations[6].ID != "nextcloud.deckboards.get" ||
 		searched.Operations[31].ID != "nextcloud.shares.list" || searched.Operations[47].ID != "nextcloud.trash.restore" ||
-		searched.Operations[50].ID != "nextcloud.versions.restore" {
+		searched.Operations[49].ID != "nextcloud.versions.list" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
