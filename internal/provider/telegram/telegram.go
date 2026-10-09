@@ -182,11 +182,13 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupInviteLinks, Title: "Invite links", Description: "Read the primary invite link and revoke invite links of the bound chats"},
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot"},
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
-	{ID: groupMedia, Title: "Media", Description: "Send photos, documents, and albums to the bound chats"},
+	{ID: groupMedia, Title: "Media", Description: "Send photos, documents, videos, animations, video notes, and albums to the bound chats"},
 	{ID: groupMembers, Title: "Members", Description: "Ban, unban, and restrict members and sender chats of the bound chats"},
 	{ID: groupInteractions, Title: "Interactions",
 		Description: "Send and stop polls, set and remove reactions, show chat actions, and send locations, " +
 			"venues, contacts, and dice in the bound chats"},
+	{ID: groupStickers, Title: "Stickers",
+		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers"},
 }
 
 const groupMessages = "messages"
@@ -243,10 +245,11 @@ func Register(reg *capability.Registry) error {
 			Description: "pins and unpins single messages in the bound chats; nothing is sent, edited, or deleted",
 			Tools:       []string{pinsPin.ID, pinsUnpin.ID},
 		}, {
-			ID: "media", Title: "Send photos, documents, and albums",
-			Description: "sends photos, documents, and albums from released local files or file references to the " +
-				"bound chats; earlier messages stay as they are",
-			Tools: []string{photosSend.ID, documentsSend.ID, mediaGroupsSend.ID},
+			ID: "media", Title: "Send photos, videos, documents, and albums",
+			Description: "sends photos, documents, videos, animations, video notes, and albums from released local " +
+				"files or file references to the bound chats; earlier messages stay as they are",
+			Tools: []string{photosSend.ID, documentsSend.ID, mediaGroupsSend.ID, videosSend.ID, animationsSend.ID,
+				videoNotesSend.ID},
 		}, {
 			ID: "moderation", Title: "Unban members",
 			Description: "lifts bans in the bound chats; a user who is not banned is left untouched",
@@ -301,6 +304,13 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: photosSend, Handler: capability.Handler(invokePhotosSend)},
 		capability.Operation{Descriptor: documentsSend, Handler: capability.Handler(invokeDocumentsSend)},
 		capability.Operation{Descriptor: mediaGroupsSend, Handler: capability.Handler(invokeMediaGroupsSend)},
+		capability.Operation{Descriptor: videosSend, Handler: capability.Handler(invokeVideosSend)},
+		capability.Operation{Descriptor: animationsSend, Handler: capability.Handler(invokeAnimationsSend)},
+		capability.Operation{Descriptor: videoNotesSend, Handler: capability.Handler(invokeVideoNotesSend)},
+		capability.Operation{Descriptor: stickersSend, Handler: capability.Handler(invokeStickersSend)},
+		capability.Operation{Descriptor: stickersetsGet, Handler: capability.Handler(invokeStickersetsGet)},
+		capability.Operation{Descriptor: stickersCustomEmoji, Handler: capability.Handler(invokeStickersCustomEmoji)},
+		capability.Operation{Descriptor: topicsIconStickers, Handler: capability.Handler(invokeTopicsIconStickers)},
 	)
 }
 

@@ -193,7 +193,7 @@ func invokeChatsSetPhotoWith(ctx context.Context, resolved *config.Resolved, sec
 		return nil, err
 	}
 	// The release check and the size check happen before the credential is resolved or any byte is read.
-	prepared, err := prepareSources(ctx, resolved, op, chat, kindPhoto, []mediaSource{{LocalPath: arguments.LocalPath}})
+	prepared, err := prepareSources(ctx, resolved, op, chat, []string{kindPhoto}, []mediaSource{{LocalPath: arguments.LocalPath}})
 	if err != nil {
 		return nil, err
 	}
