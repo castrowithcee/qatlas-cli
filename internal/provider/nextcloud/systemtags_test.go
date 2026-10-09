@@ -366,7 +366,7 @@ func TestFileTagToolsRisksProfilesAndGroup(t *testing.T) {
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
-		if p.ID == "deck-read" {
+		if p.ID == "deck-read" || p.ID == "calendar" {
 			continue
 		}
 		has := false

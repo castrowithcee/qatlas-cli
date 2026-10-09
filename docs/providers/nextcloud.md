@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads, Deck reads, typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud file operations, share, Deck, and calendar reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -47,7 +47,9 @@ identity reaches) or `kind/ID`:
 
 - `folder` (the whole Files root) or `folder/PATH`; at most one per connection. Only a `folder` target enables the
   Files tools; without one they refuse locally, before any credential access or request.
-- `calendar` or `calendar/URI`, `addressbook` (all but the system address book) or `addressbook/URI`,
+- `calendar` (every calendar of the identity, shared ones included) or `calendar/URI` (exactly that calendar,
+  case-sensitive); the scheduling inbox and outbox and the trash bin are never calendars, however they are bound.
+- `addressbook` (all but the system address book) or `addressbook/URI`,
   `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric), `notes` or `notes/CATEGORY` (a sub-folder
   such as `Work/Plans` is allowed).
 - `account`: the account-wide and instance-wide reach of the identity (notifications, activity, search,
@@ -64,7 +66,8 @@ refused, because it could mean a folder or a typed target; write it as `folder/P
 refusal changes the behaviour of such existing values.
 
 The connection test reads the bound folder, or the Files root of the identity when the connection binds none;
-it reports no metadata.
+a connection with calendar targets also reads each bound calendar, or the calendar home for `calendar`. It
+reports no metadata.
 
 Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound
 folder. Connection permissions independently hide and block operations, while the identity's WebDAV rights
@@ -164,6 +167,21 @@ no redirect. A 404, which a missing Deck app causes as well as a missing object,
 Titles, names, labels, and descriptions are untrusted: strings are cut at a fixed length (descriptions at 8 KiB, at
 1 KiB in a stack listing), lists are capped, and every cut sets `truncated`. Comments and attachments are not read,
 and nothing in Deck can be changed.
+
+## Calendar
+
+The tool group `calendar` reads calendars and events through CalDAV: `nextcloud.calendars.list`,
+`nextcloud.events.list` (events that overlap a bounded time range), and `nextcloud.events.get`. The setup profile
+`calendar` holds exactly these three. They need a `calendar` target and never a folder target; without one, or for
+a calendar the connection does not bind, they refuse locally, before any credential access or request, without
+naming the calendar.
+
+Only direct children of the calendar home of the identity count as calendars, and only direct children of a bound
+calendar as its events; any other location in an answer is dropped. Subscriptions are not calendars of these tools.
+`read_only` is conservative: a calendar is writable only when the identity holds `all`, `write`, or both `bind` and
+`write-content`, so a missing or partial privilege set reads as read-only. Repeating events are reported as their
+recurrence rule and never expanded. Calendar names, event texts, and attendees are untrusted data. Nothing in a
+calendar can be changed.
 
 ## Versions
 

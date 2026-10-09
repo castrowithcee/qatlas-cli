@@ -335,6 +335,10 @@ func Register(reg *capability.Registry) error {
 			ID: "deck-read", Title: "Read Deck boards",
 			Description: "lists the bound Deck boards, reads a board with its labels and members, its stacks and cards, and single cards; changes nothing",
 			Tools:       []string{deckBoardsList.ID, deckBoardsGet.ID, deckStacksList.ID, deckCardsGet.ID},
+		}, {
+			ID: "calendar", Title: "Read calendars",
+			Description: "lists the bound calendars and reads their events in a time range and single events; changes nothing",
+			Tools:       []string{calendarsList.ID, eventsList.ID, eventsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -373,6 +377,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(deckBoardsGet, groupDeck), Handler: deckBound(invokeDeckBoardsGet)},
 		capability.Operation{Descriptor: inGroup(deckStacksList, groupDeck), Handler: deckBound(invokeDeckStacksList)},
 		capability.Operation{Descriptor: inGroup(deckCardsGet, groupDeck), Handler: deckBound(invokeDeckCardsGet)},
+		capability.Operation{Descriptor: inGroup(calendarsList, groupCalendar), Handler: calendarBound(invokeCalendarsList)},
+		capability.Operation{Descriptor: inGroup(eventsList, groupCalendar), Handler: calendarBound(invokeEventsList)},
+		capability.Operation{Descriptor: inGroup(eventsGet, groupCalendar), Handler: calendarBound(invokeEventsGet)},
 	)
 }
 
@@ -807,7 +814,8 @@ var transport http.RoundTripper
 // TestConnection performs the smallest safe authenticated read: one PROPFIND of depth 0 on the fixed root
 // folder, or on the Files root of the identity when the connection binds no folder. It proves that the
 // instance answers Files WebDAV, that the app password is accepted, and, with a folder, that the identity
-// may read it. Nothing is written, no content is read, and no metadata is reported.
+// may read it. Nothing is written, no content is read, and no metadata is reported. A connection that binds
+// calendars also reads each bound calendar, or the calendar home, with a PROPFIND of depth 0.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
 	client, err := open(ctx, resolved, secrets, red, false)
@@ -818,7 +826,15 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 		}
 		return "", err
 	}
-	return client.testConnection(ctx)
+	class, err := client.testConnection(ctx)
+	if err != nil || class != provider.ClassOK {
+		return class, err
+	}
+	// open has parsed the targets, so the scope is valid here.
+	if bound, err := scopeOf(resolved); err == nil && bound.calendars.bound() {
+		return client.testCalendars(ctx, bound.calendars)
+	}
+	return class, nil
 }
 
 func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {

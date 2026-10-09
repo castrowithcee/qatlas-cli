@@ -34,6 +34,10 @@ var (
 	elemProp         = xml.Name{Space: davNS, Local: "prop"}
 	elemStatus       = xml.Name{Space: davNS, Local: "status"}
 	elemResourceType = xml.Name{Space: davNS, Local: "resourcetype"}
+	elemPrivilegeSet = xml.Name{Space: davNS, Local: "current-user-privilege-set"}
+	elemPrivilege    = xml.Name{Space: davNS, Local: "privilege"}
+	elemCompSet      = xml.Name{Space: caldavNS, Local: "supported-calendar-component-set"}
+	elemComp         = xml.Name{Space: caldavNS, Local: "comp"}
 
 	PropPrincipal    = xml.Name{Space: davNS, Local: "current-user-principal"}
 	PropCalHome      = xml.Name{Space: caldavNS, Local: "calendar-home-set"}
@@ -74,6 +78,7 @@ const (
 	maxTextBytes     = 4 << 10
 	MaxEventBytes    = 64 << 10
 	maxLinks         = 8
+	maxFlags         = 32
 	maxSegments      = 16
 	maxSegmentLen    = 255
 )
@@ -89,6 +94,9 @@ type Resource struct {
 	// Calendar and Addressbook report the resource type; collection is not needed on its own.
 	Calendar, Addressbook bool
 	Read                  bool
+	// Privileges are the DAV: privilege names of current-user-privilege-set; Components are the names of
+	// supported-calendar-component-set. Both are empty when the property was not asked for or not granted.
+	Privileges, Components []string
 }
 
 // ParseMultiStatus reads a 207 answer with a bounded token walk. Depth, element count, and text length are
@@ -131,6 +139,21 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 			case len(stack) == 3 && current != nil && element.Name == elemPropstat:
 				pending = &Resource{Text: map[string]string{}, Links: map[xml.Name][]string{}}
 				status = ""
+			case len(stack) == 7 && pending != nil && stack[4] == elemPrivilegeSet && stack[5] == elemPrivilege &&
+				element.Name.Space == davNS:
+				if len(pending.Privileges) >= maxFlags {
+					return nil, provider.InvalidResponse(op, s.Name+" answered with too many privileges")
+				}
+				pending.Privileges = append(pending.Privileges, element.Name.Local)
+			case len(stack) == 6 && pending != nil && stack[4] == elemCompSet && element.Name == elemComp:
+				if len(pending.Components) >= maxFlags {
+					return nil, provider.InvalidResponse(op, s.Name+" answered with too many components")
+				}
+				for _, attr := range element.Attr {
+					if attr.Name.Local == "name" && len(attr.Value) <= 32 {
+						pending.Components = append(pending.Components, attr.Value)
+					}
+				}
 			case len(stack) == 6 && pending != nil && stack[4] == elemResourceType:
 				switch element.Name {
 				case typeCalendar:
@@ -162,6 +185,8 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 					current.Read = true
 					current.Calendar = current.Calendar || pending.Calendar
 					current.Addressbook = current.Addressbook || pending.Addressbook
+					current.Privileges = append(current.Privileges, pending.Privileges...)
+					current.Components = append(current.Components, pending.Components...)
 					for key, value := range pending.Text {
 						current.Text[key] = value
 					}

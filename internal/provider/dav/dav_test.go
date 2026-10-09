@@ -162,3 +162,23 @@ func TestParseRangeAndETag(t *testing.T) {
 		t.Error("wildcard etag accepted")
 	}
 }
+
+func TestPrivilegesAndComponentsAreReadFromSuccessfulPropstatOnly(t *testing.T) {
+	body := multistatus(`<d:response><d:href>/c/work/</d:href><d:propstat><d:prop>` +
+		`<d:current-user-privilege-set><d:privilege><d:read/></d:privilege><d:privilege><d:write/></d:privilege>` +
+		`<d:privilege><c:read-free-busy/></d:privilege></d:current-user-privilege-set>` +
+		`<c:supported-calendar-component-set><c:comp name="VEVENT"/><c:comp name="VTODO"/></c:supported-calendar-component-set>` +
+		`</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat><d:propstat><d:prop>` +
+		`<d:current-user-privilege-set><d:privilege><d:all/></d:privilege></d:current-user-privilege-set>` +
+		`</d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat></d:response>`)
+	resources, err := testServer.ParseMultiStatus("t", []byte(body))
+	if err != nil || len(resources) != 1 {
+		t.Fatalf("resources = %v, %v", resources, err)
+	}
+	if got := strings.Join(resources[0].Privileges, ","); got != "read,write" {
+		t.Errorf("privileges = %q", got)
+	}
+	if got := strings.Join(resources[0].Components, ","); got != "VEVENT,VTODO" {
+		t.Errorf("components = %q", got)
+	}
+}
