@@ -345,6 +345,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: downPaymentInvoicesGet, Handler: salesVoucherHandler(downPaymentInvoiceKind)},
 		capability.Operation{Descriptor: recurringTemplatesList, Handler: capability.Handler(invokeRecurringTemplatesList)},
 		capability.Operation{Descriptor: recurringTemplatesGet, Handler: capability.Handler(invokeRecurringTemplatesGet)},
+		capability.Operation{Descriptor: documentsDownload, Handler: capability.Handler(invokeDocumentsDownload)},
+		capability.Operation{Descriptor: filesDownload, Handler: capability.Handler(invokeFilesDownload)},
 	)
 }
 
@@ -1193,6 +1195,7 @@ const (
 	resourceArticle = "article"
 	resourcePayment = "payment status"
 	resourceVoucher = "voucher"
+	resourceFile    = "file"
 )
 
 func providerError(op, message string) error {
