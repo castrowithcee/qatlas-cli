@@ -113,9 +113,9 @@ func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 			m.pathRemove = true
 			m.clearMessages()
 		}
-	case "up", "k":
+	case "up":
 		m.pathList.move(-1)
-	case "down", "j":
+	case "down":
 		m.pathList.move(1)
 	case "pgup", "pgdown", "home", "end":
 		start, end := m.pathWindow()
@@ -336,7 +336,7 @@ func (m *Model) pathFrame() (string, string) {
 	}
 
 	var foot strings.Builder
-	keys := "a add · enter edit · d remove · up/down move · F2 save · esc close"
+	keys := "a add · enter edit · d remove · up/down move · F2 save · esc close · ? help"
 	switch {
 	case m.pathEdit >= 0:
 		label := "add path: "
@@ -362,9 +362,9 @@ func (m *Model) pathFrame() (string, string) {
 		// %q keeps control characters visible, but it would also double every backslash of a Windows path.
 		quoted := strings.ReplaceAll(fmt.Sprintf("%q", path), `\\`, `\`)
 		foot.WriteString("\n" + m.wrapped(warningStyle, "Remove "+quoted+" from the list?") + "\n")
-		keys = "y remove · n/esc keep"
+		keys = "y remove · n/esc keep · ? help"
 	}
-	foot.WriteString(m.hint(keys))
+	foot.WriteString(m.keyHint(keys))
 	return head.String(), foot.String() + m.notes()
 }
 

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/castrowithcee/qatlas-cli/internal/helptopics"
 )
@@ -24,15 +23,15 @@ func (m *Model) updateHelp(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "esc", "?":
 		m.screen = m.helpFrom
-	case "right", "l", "tab":
+	case "right", "tab":
 		m.helpTopic, m.helpOffset = wrap(m.helpTopic+1, topics), 0
-	case "left", "h", "shift+tab":
+	case "left", "shift+tab":
 		m.helpTopic, m.helpOffset = wrap(m.helpTopic-1, topics), 0
-	case "down", "j":
+	case "down":
 		m.helpOffset++
-	case "up", "k":
+	case "up":
 		m.helpOffset--
-	case "pgdown", " ":
+	case "pgdown":
 		m.helpOffset += room
 	case "pgup":
 		m.helpOffset -= room
@@ -72,14 +71,11 @@ func (m *Model) helpFrame() (string, string, int) {
 	base := m.wrapped(titleStyle, title) + "\n\n"
 	note := m.wrapped(hintStyle, macOSFunctionKeyNote) + "\n\n"
 	lines := len(m.helpLines())
-	keys := "left/right topic · up/down scroll · esc close"
-	if lipgloss.Width(keys) > m.width {
-		keys = "left/right topic · up/down · esc close"
-	}
+	keys := "left/right topic · up/down scroll · pgup/pgdown page · esc/? close"
 	// layout lays the topic text out under head and reports how many lines of it fit; a topic longer than
 	// that gains the position line, which itself takes one of those lines.
 	layout := func(head string) (string, string, int) {
-		foot := m.hint(keys)
+		foot := m.keyHint(keys)
 		room := m.height - strings.Count(head, "\n") - strings.Count(foot, "\n") - 1
 		if lines > room {
 			room--

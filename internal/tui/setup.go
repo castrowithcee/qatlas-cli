@@ -608,19 +608,19 @@ func (m *Model) summaryView() string {
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
 		b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 	}
-	keys := "F2 save · esc back"
+	keys := "F2 save · esc back · ? help"
 	switch {
 	case w.saving:
-		keys = "ctrl+c quit"
+		keys = "ctrl+c quit · ? help"
 	case w.saved != "" && m.testing:
-		keys = "esc cancel test"
+		keys = "esc cancel test · ? help"
 	case w.saved != "":
-		keys = "t test connection · esc connections list"
+		keys = "t test connection · esc connections list · ? help"
 	}
 	if w.saved != "" {
 		b.WriteString(m.testLine())
 	}
-	b.WriteString(m.hint(keys))
+	b.WriteString(m.keyHint(keys))
 	return b.String()
 }
 

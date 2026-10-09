@@ -635,7 +635,7 @@ func (m *Model) vaultOfferView() string {
 		b.WriteString("  " + o.input.View() + "\n")
 		b.WriteString(m.indented("type it again to confirm it") + "\n")
 	}
-	b.WriteString(m.hint("enter continue · esc cancel, nothing is saved"))
+	b.WriteString(m.keyHint("enter continue · esc cancel, nothing is saved"))
 	return b.String()
 }
 

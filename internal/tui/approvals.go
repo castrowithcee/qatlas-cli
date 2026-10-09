@@ -199,7 +199,7 @@ func (m *Model) approvalDetailView() string {
 	if unavailable != "" {
 		// The vault changed under the open detail screen (locked, or turned unencrypted, elsewhere): there
 		// is nothing left here to show or approve.
-		return title + m.wrapped(failStyle, "error: "+unavailable) + m.hint("esc back")
+		return title + m.wrapped(failStyle, "error: "+unavailable) + m.keyHint("esc back · ? help")
 	}
 	var change *approval.Change
 	for i := range report.Open {
@@ -211,7 +211,7 @@ func (m *Model) approvalDetailView() string {
 	if change == nil {
 		// Approved or removed elsewhere while this screen was open.
 		return title + m.wrapped(hintStyle, "this connection is no longer open; nothing to approve") +
-			m.hint("esc back")
+			m.keyHint("esc back · ? help")
 	}
 	return m.approvalChangeView(title, *change)
 }
@@ -231,20 +231,20 @@ func (m *Model) approvalChangeView(title string, change approval.Change) string 
 		}
 		lines = append(lines, strings.Split(m.row(false, row.text), "\n")...)
 	}
-	keys := "l logs · y approve · n/esc back, stays open"
+	keys := "o logs · y approve · n/esc back, stays open · ? help"
 	if len(lines) > 0 && approvalHasKept(change) {
 		keys = "e unchanged · " + keys
 		if m.approvalExpanded {
-			keys = "e fold unchanged · l logs · y approve · n/esc back, stays open"
+			keys = "e fold unchanged · o logs · y approve · n/esc back, stays open · ? help"
 		}
 	}
 	room := m.approvalRoom(title, keys, len(lines))
 	offset := max(min(m.approvalOffset, len(lines)-room), 0)
 	m.approvalOffset, m.approvalPage = offset, room
-	foot := m.hint(keys)
+	foot := m.keyHint(keys)
 	if len(lines) > room {
 		foot = "\n" + m.wrapped(hintStyle, fmt.Sprintf("lines %d-%d of %d", offset+1,
-			min(offset+room, len(lines)), len(lines))) + m.hint("up/down scroll · "+keys)
+			min(offset+room, len(lines)), len(lines))) + m.keyHint("up/down scroll · "+keys)
 	}
 	return title + strings.Join(lines[offset:min(offset+room, len(lines))], "\n") + "\n" + foot
 }
@@ -252,9 +252,9 @@ func (m *Model) approvalChangeView(title string, change approval.Change) string 
 // approvalRoom is how many body lines of the detail screen fit under its title and above its keys; when the
 // body is longer, one of them goes to the position line and the keys gain the scroll keys.
 func (m *Model) approvalRoom(title, keys string, lines int) int {
-	room := m.height - strings.Count(title, "\n") - strings.Count(m.hint(keys), "\n") - 1
+	room := m.height - strings.Count(title, "\n") - strings.Count(m.keyHint(keys), "\n") - 1
 	if lines > room {
-		longer := m.hint("up/down scroll · " + keys)
+		longer := m.keyHint("up/down scroll · " + keys)
 		room = m.height - strings.Count(title, "\n") - strings.Count(longer, "\n") - 2
 	}
 	return max(room, 1)
@@ -277,7 +277,7 @@ func (m *Model) approveAllConfirmView() string {
 			"also removes %d stale approval(s) of a connection that no longer reads the vault",
 			len(report.Stale))) + "\n")
 	}
-	b.WriteString(m.hint("y approve all · n/esc cancel"))
+	b.WriteString(m.keyHint("y approve all · n/esc cancel · ? help"))
 	return b.String()
 }
 

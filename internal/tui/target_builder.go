@@ -525,7 +525,10 @@ func (m *Model) addFrame() (string, string) {
 	if len(a.choices.matches) == 0 {
 		head.WriteString(m.wrapped(hintStyle, "(nothing to choose; type a value)") + "\n")
 	}
-	return head.String(), m.hint(keys) + m.notes()
+	if a.choices.query() == "" {
+		keys += " · ? help"
+	}
+	return head.String(), m.keyHint(keys) + m.notes()
 }
 
 func (m *Model) addRow(i int) string {

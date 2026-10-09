@@ -32,13 +32,18 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"shows the sections in one navigation line above the workspace. Below 40x12 the editor asks for a\n" +
 			"larger terminal and keeps everything as it was until it gets one.\n\n" +
 			"The editor opens with the focus on the sidebar or, below 80 columns, the navigation line above\n" +
-			"the workspace. From 80 columns up/down (or j/k, and shift+tab for up) choose a section, and\n" +
-			"enter, right, or tab move the focus into the list; left, tab, or esc move the focus back to the\n" +
-			"navigation. Below 80 columns left/right (or h/l) choose a section instead, wrapping from the last\n" +
-			"to the first and back; down or enter or tab move the focus into the list, and up does nothing\n" +
-			"there. In that list, up/down (or k/j) move the selection without wrapping, up at the first entry\n" +
-			"or in an empty list moves the focus back to the navigation, down stays at the last entry, and\n" +
-			"left/right (or h/l) leave the focus where it is; tab or esc still move it back.\n" +
+			"the workspace. The arrow keys move on every screen, and h/j/k/l (left, down, up, right) do the\n" +
+			"same on every screen that takes no typed text; where text is typed, a letter is text. pgup/pgdown\n" +
+			"and home/end jump in every list, picker, table, and the sidebar. tab and shift+tab go to the\n" +
+			"next or previous field, or between the sidebar and the list; in a path being typed, tab takes the\n" +
+			"suggested directory. space ticks in a multiple choice and does nothing else.\n" +
+			"From 80 columns up/down choose a section, and enter, right, or tab move the focus into the\n" +
+			"list; left, tab, or esc move the focus back to the navigation. Below 80 columns left/right\n" +
+			"choose a section instead, wrapping from the last to the first and back; down or enter or tab move\n" +
+			"the focus into the list, and up does nothing there. In that list, up/down move the selection\n" +
+			"without wrapping, up at the first entry or in an empty list moves the focus back to the\n" +
+			"navigation, down stays at the last entry, and left/right leave the focus where it is; tab or esc\n" +
+			"still move it back.\n" +
 			"1-8 open a section directly from the sidebar, a list, or the Logs screen; in a form, digits are\n" +
 			"text instead.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
@@ -113,10 +118,12 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"The header above the sections always shows the vault's state, unlocked, locked, or unencrypted,\n" +
 			"symbol and word together so it reads without colour, plus the admin abbreviation while it is\n" +
 			"encrypted: admin off, admin Nm left, or admin: confirm each change for vault.admin_timeout: 0.\n" +
-			"ctrl+l works everywhere, forms included: on a locked vault it opens a masked prompt that unlocks\n" +
-			"it, hands it to a vault process on Linux, macOS, and Windows the same way 'qatlas vault unlock' does, and\n" +
-			"starts this window's admin session in the same step; on an unlocked, encrypted vault it asks Lock\n" +
-			"the vault now?, and y locks the vault process, forgets the key this window held, and ends the\n" +
+			"ctrl+l works on the sidebar, the lists, the forms, the pickers and tables, the target and path\n" +
+			"lists, the setup summary, and the Logs screens, never over a question, a masked prompt, the\n" +
+			"template choice, or the help. On a locked vault it opens a masked prompt that unlocks it, hands\n" +
+			"it to a vault process on Linux, macOS, and Windows the same way 'qatlas vault unlock' does, and\n" +
+			"starts this window's admin session in the same step; on an unlocked, encrypted vault it asks\n" +
+			"Lock the vault now?, and y locks the vault process, forgets the key this window held, and ends the\n" +
 			"admin session. An unencrypted vault has nothing to lock, and ctrl+l says so.\n\n" +
 			"The system keyring is the credential store the operating system already provides: Secret\n" +
 			"Service on Linux (for example GNOME Keyring or KWallet), the macOS Keychain, or the Windows\n" +
@@ -193,14 +200,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"move through the entries, pgup/pgdown and home/end jump. Filtering never changes the file.\n\n" +
 			"Every provider row, in the forms of services, credentials, and connections and as the first step\n" +
 			"of the guided setup, is chosen in the same provider table, however many providers there are:\n" +
-			"enter, space, or / on the row opens it. The table lists every provider the row offers with its\n" +
+			"enter or / on the row opens it. The table lists every provider the row offers with its\n" +
 			"name and ID, marks the current one, and always shows the search line, the position of the\n" +
 			"selection, and the total. Typing filters by name and ID, ignoring case; up/down, pgup/pgdown and\n" +
 			"home/end move; enter takes the selected provider and updates the rows that depend on it, and esc\n" +
 			"leaves the provider and every row that depends on it unchanged. In the guided setup, enter goes\n" +
 			"on to the next step and esc cancels the setup, asking first once a provider was chosen. A form\n" +
 			"does not open on a provider row while another row takes input.\n\n" +
-			"Every other choice row opens the same way: enter, space, or / on the row opens a searchable\n" +
+			"Every other choice row opens the same way: enter or / on the row opens a searchable\n" +
 			"picker that filters as you type, ignoring case; up/down, pgup/pgdown and home/end move, and esc\n" +
 			"leaves the row unchanged. On a row that holds one value, such as service, credential, secrets,\n" +
 			"profile, tools, or the connection of a default, the picker marks the current value and enter\n" +
@@ -216,7 +223,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"groups, folded or not, and space on a group row then acts on the matches only. The groups only\n" +
 			"arrange the list: the saved tools are the same IDs as without them.\n\n" +
 			"The targets row of a connection, in its form and in the scope step of the guided setup alike,\n" +
-			"holds a list. enter, space, or / opens it: a adds a target, enter edits the selected one, and\n" +
+			"holds a list. enter or / opens it: a adds a target, enter edits the selected one, and\n" +
 			"d removes it after asking. F2 keeps the list and saves the connection in one step, taking a\n" +
 			"target that is still being typed first; in the guided setup it goes on to the next step instead,\n" +
 			"since the setup saves only from its summary. esc closes an unchanged list; after a change, or with\n" +
@@ -267,9 +274,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"own. A profile is a starting selection, not a role: the configuration keeps only permissions\n" +
 			"and the concrete tool IDs, so a tool a later version adds joins no saved connection, and no\n" +
 			"local tick narrows what the credential itself may do at the provider.\n\n" +
-			"? on the sidebar or in a list shows the help topics start, agents, and configuration, the same\n" +
-			"text as 'qatlas help start' and the others. left/right switch the topic, up/down and pgup/pgdown\n" +
-			"scroll, and esc closes the help.\n\n" +
+			"? shows the help topics start, agents, and configuration, the same text as 'qatlas help start'\n" +
+			"and the others, on every screen that takes no typed text: the sidebar, the lists, every question,\n" +
+			"the target and path lists, the setup summary, and the details of an approval, a token, and a log\n" +
+			"entry. It also opens on the provider table, the add menu of targets, and the template search while\n" +
+			"the search is empty. A form and every typed line keep ? as text, and name their keys in the footer.\n" +
+			"left/right switch the topic, up/down and pgup/pgdown scroll, and esc or ? closes the help and\n" +
+			"returns to the screen it was opened from. Every footer names the keys of its screen, apart from the\n" +
+			"h/j/k/l letters.\n\n" +
 			"At start the editor asks GitHub in the background, for at most five seconds, whether a newer\n" +
 			"stable release exists, and names it in the top line, for example Update available v0.4.0 →\n" +
 			"v0.5.0 · u update. u on the sidebar or in a list asks first and then installs it the way\n" +

@@ -188,7 +188,7 @@ func (m *Model) adminAuthView() string {
 	b.WriteString(titleStyle.Render(title) + "\n\n")
 	b.WriteString("  " + a.input.View() + "\n")
 	b.WriteString(m.indented(hint) + "\n")
-	b.WriteString(m.hint(keys))
+	b.WriteString(m.keyHint(keys))
 	return b.String()
 }
 
