@@ -45,10 +45,10 @@ before the credential is read when the target is missing. Methods that accept on
 `@username` chat locally.
 
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
-to `pins`, the update tool to `updates`, the chat tools to `chats`, the bot and webhook tools to `bot`, the file
-tools to `files`, the media tools to `media`. A group never changes a tool ID, a permission, or a tools list.
-The base URL must be a plain `https` URL with a host and without user, query, or fragment, with no exception
-for local addresses, and redirects are never followed.
+to `pins`, the update tool to `updates`, the chat tools to `chats`, the invite link tools to `invitelinks`, the
+bot and webhook tools to `bot`, the file tools to `files`, the media tools to `media`. A group never changes a
+tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user,
+query, or fragment, with no exception for local addresses, and redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
@@ -71,6 +71,20 @@ accepted the request, not which messages are gone.
 `telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
 `telegram.pins.unpinall` unpins every pinned message of the chat and, like `telegram.messages.delete`,
 requires a `tools` list. Telegram's own pin rights still apply, and topic-specific unpinning is not offered.
+
+## Invite links
+
+`telegram.invitelinks.primary` (`read`) returns only the `invite_link` field of the chat, and no other chat
+data; `telegram.chats.get` never shows it. The link grants joining the chat and carries the data class
+`telegram-invite-link`: it appears only in this result, never in errors, logs, or the audit trail. A value
+that is not a `t.me` invite link is dropped.
+
+`telegram.invitelinks.revoke` revokes one link of the bound chat and requires a `tools` list. It accepts only
+`https://t.me/+TOKEN` or `https://t.me/joinchat/TOKEN` with the exact host `t.me`, checked before the
+credential is read. The request carries only the bound chat and the link, so Telegram refuses links of other
+chats. The result is only `revoked: true`, never the link. When the primary link is revoked, Telegram
+generates a new primary link by itself; the result does not contain it, and creating, exporting, or editing
+invite links is not offered.
 
 ## Reading updates
 
@@ -158,6 +172,6 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 `[telegram.bot.get]`, and the four `telegram.chats.*` tools. The profile `messaging` also ticks `update`,
 `delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
 `telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the three media send
-tools. `telegram.messages.editreplymarkup` and `telegram.pins.unpinall` are in no profile. A profile is a
-visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
-changed before saving, and a saved connection never follows a profile.
+tools. `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, and the invite link tools are in no
+profile. A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are
+saved, every tick can be changed before saving, and a saved connection never follows a profile.
