@@ -176,7 +176,7 @@ func invokeFilesUpload(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
-	if _, err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
+	if err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
 		return nil, err
 	}
 	return client.upload(ctx, op, input.ChannelID, size, stream, multipartBody)
