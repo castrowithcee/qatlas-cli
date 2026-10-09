@@ -15,7 +15,7 @@ var toolGroups = []config.ToolGroup{
 		"direct and group channels, reading, sending, editing, pinning, and deleting"},
 	{ID: "reactions", Title: "Reactions", Description: "Reactions on messages: reading, adding, and removing the own"},
 	{ID: "files", Title: "Files", Description: "Message attachments: listing, metadata, upload from a released local file, and download to a released local directory"},
-	{ID: "users", Title: "Users", Description: "Users of the bound teams and their presence"},
+	{ID: "users", Title: "Users", Description: "Users of the bound teams, their presence, and the own status and profile"},
 }
 
 // groupOf returns the group of a kChat tool ID (infomaniakchat.<segment>.<action>), or "" for an ID outside
@@ -28,6 +28,8 @@ func groupOf(id string) string {
 	switch parts[1] {
 	case "teams", "channels", "messages", "reactions", "files", "users":
 		return parts[1]
+	case "status", "customstatus", "profile":
+		return "users"
 	case "channelmembers":
 		return "channels"
 	case "direct", "groupmessages", "pins":
