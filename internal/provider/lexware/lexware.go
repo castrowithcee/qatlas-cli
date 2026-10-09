@@ -244,15 +244,19 @@ func inputSchema(members string, required ...string) string {
 var (
 	voucherRequired = []string{"voucher_date", "address", "line_items", "currency", "tax_type", "shipping_type"}
 
-	invoiceInputSchema = inputSchema(voucherProperties, voucherRequired...)
-	// Only the creation takes a predecessor; issuing an invoice does not.
+	// Creating and issuing an invoice take the same members, including the optional predecessor.
 	invoiceCreateInputSchema = inputSchema(properties(voucherProperties, precedingProperty), voucherRequired...)
 	quotationInputSchema     = inputSchema(properties(voucherProperties, expirationProperty),
 		append(append([]string{}, voucherRequired...), "expiration_date")...)
 	orderConfirmationInputSchema = inputSchema(properties(voucherProperties, precedingProperty), voucherRequired...)
-	creditNoteInputSchema        = inputSchema(creditNoteProperties, "voucher_date", "address", "line_items", "currency", "tax_type")
-	deliveryNoteInputSchema      = inputSchema(deliveryNoteProperties, "voucher_date", "address", "line_items", "tax_type", "shipping_type")
-	dunningInputSchema           = inputSchema(dunningProperties,
+	// Issuing an order confirmation or a delivery note is not a follow-up; the closed schema rejects a predecessor.
+	orderConfirmationIssueInputSchema = inputSchema(voucherProperties, voucherRequired...)
+	creditNoteInputSchema             = inputSchema(creditNoteProperties, "voucher_date", "address", "line_items", "currency", "tax_type")
+	deliveryNoteInputSchema           = inputSchema(deliveryNoteProperties, "voucher_date", "address", "line_items", "tax_type", "shipping_type")
+	deliveryNoteIssueInputSchema      = inputSchema(properties(voucherCoreProperties, currencyProperty, taxTypeProperty,
+		shippingProperties, textProperties, deliveryTermsProperty, layoutProperty),
+		"voucher_date", "address", "line_items", "tax_type", "shipping_type")
+	dunningInputSchema = inputSchema(dunningProperties,
 		append(append([]string{}, voucherRequired...), "preceding_voucher_id")...)
 )
 
@@ -274,8 +278,6 @@ var voucherArguments = []capability.Argument{
 	{Name: "payment_conditions", Description: "Payment terms object: label and duration_days, optionally discount_percentage and discount_range_days"},
 	{Name: "print_layout_id", Description: "Print layout as a UUID, as returned by lexware.printlayouts.list"},
 }
-
-var invoiceArguments = voucherArguments
 
 var invoiceCreateArguments = append(append([]capability.Argument{}, voucherArguments...),
 	capability.Argument{Name: "preceding_voucher_id", Description: "Voucher to follow up, as a UUID; the invoice is then created as its successor"})
@@ -315,6 +317,10 @@ var deliveryNoteArguments = append(append(optional(without(voucherArguments, "pa
 	capability.Argument{Name: "delivery_terms", Description: "Delivery terms text, up to 4096 characters"}),
 	capability.Argument{Name: "preceding_voucher_id", Description: "Voucher to follow up, as a UUID; the delivery note is then created as its successor"})
 
+var orderConfirmationIssueArguments = without(orderConfirmationArguments, "preceding_voucher_id")
+
+var deliveryNoteIssueArguments = without(deliveryNoteArguments, "preceding_voucher_id")
+
 var dunningArguments = append(without(voucherArguments, "payment_conditions"),
 	capability.Argument{Name: "preceding_voucher_id", Description: "Invoice or down payment invoice to remind about, as a UUID", Required: true})
 
@@ -348,14 +354,14 @@ var invoicesCreate = capability.Descriptor{
 
 var invoicesIssue = capability.Descriptor{
 	ID: Provider + ".invoices.issue", Version: 1, Title: "Issue a Lexware invoice",
-	Description: "Create one outgoing invoice and finalize it immediately: Lexware assigns the invoice " +
-		"number, and the API can neither change nor delete the invoice afterwards. Offered only by a " +
-		"connection whose tools list names it",
+	Description: "Create one outgoing invoice, optionally as the successor of another voucher, and finalize " +
+		"it immediately: Lexware assigns the invoice number, and the API can neither change nor delete the " +
+		"invoice afterwards. Offered only by a connection whose tools list names it",
 	Tags:     []string{"lexware", "invoices", "issue", "finalize", "accounting"},
 	Provider: Provider, Risk: invoiceWriteRisk, RequiresToolAllowList: true,
-	InputSchema:  json.RawMessage(invoiceInputSchema),
+	InputSchema:  json.RawMessage(invoiceCreateInputSchema),
 	OutputSchema: json.RawMessage(invoiceOutputSchema),
-	Arguments:    invoiceArguments, Fields: invoiceFields, Examples: invoiceExamples,
+	Arguments:    invoiceCreateArguments, Fields: invoiceFields, Examples: invoiceExamples,
 }
 
 var quotationsCreate = capability.Descriptor{
@@ -454,6 +460,44 @@ var dunningsCreate = capability.Descriptor{
 	}},
 }
 
+// issueDescriptor derives the issuing tool of a voucher type from its draft tool: same output and final
+// effect, offered only by a connection whose tools list names it.
+func issueDescriptor(draft capability.Descriptor, id, title, noun, effect, schema string, arguments []capability.Argument) capability.Descriptor {
+	issue := draft
+	issue.ID, issue.Version, issue.Title = id, 1, title
+	issue.Description = "Create one " + noun + " and finalize it immediately: Lexware assigns the " + noun +
+		" number, and the API can neither change nor delete the " + noun + " afterwards" + effect +
+		". Offered only by a connection whose tools list names it"
+	issue.Tags = slices.Clone(draft.Tags)
+	issue.Tags[slices.Index(issue.Tags, "create")], issue.Tags[slices.Index(issue.Tags, "draft")] = "issue", "finalize"
+	issue.RequiresToolAllowList = true
+	issue.InputSchema, issue.Arguments = json.RawMessage(schema), arguments
+	return issue
+}
+
+// withExample replaces the examples of a derived descriptor whose inputs differ from its draft tool.
+func withExample(descriptor capability.Descriptor, description, arguments string) capability.Descriptor {
+	descriptor.Examples = []capability.Example{{Description: description, Arguments: json.RawMessage(arguments)}}
+	return descriptor
+}
+
+var (
+	quotationsIssue = issueDescriptor(quotationsCreate, Provider+".quotations.issue", "Issue a Lexware quotation",
+		"quotation", "", quotationInputSchema, quotationArguments)
+	orderConfirmationsIssue = withExample(issueDescriptor(orderConfirmationsCreate, Provider+".orderconfirmations.issue",
+		"Issue a Lexware order confirmation", "order confirmation", "", orderConfirmationIssueInputSchema,
+		orderConfirmationIssueArguments), "Confirm one custom position", `{"voucher_date":"2026-09-12T00:00:00+02:00",`+
+		`"address":{"contact_id":"11111111-2222-3333-4444-555555555555"},`+
+		`"line_items":[{"type":"custom","name":"Consulting","quantity":2,"unit_name":"hour",`+
+		`"net_amount":120,"tax_rate_percentage":19}],`+
+		`"currency":"EUR","tax_type":"net","shipping_type":"none"}`)
+	creditNotesIssue = issueDescriptor(creditNotesCreate, Provider+".creditnotes.issue", "Issue a Lexware credit note",
+		"credit note", "; a credit note linked to an invoice reduces its open amount immediately",
+		creditNoteInputSchema, creditNoteArguments)
+	deliveryNotesIssue = issueDescriptor(deliveryNotesCreate, Provider+".deliverynotes.issue",
+		"Issue a Lexware delivery note", "delivery note", "", deliveryNoteIssueInputSchema, deliveryNoteIssueArguments)
+)
+
 // voucherFields describes the result of a draft creation for the named voucher type.
 func voucherFields(noun string) []capability.Field {
 	fields := append([]capability.Field{}, invoiceFields...)
@@ -496,7 +540,7 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "write", Title: "Master data and drafts",
 			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile and reference data and " +
-				"creates invoice, quotation, order confirmation, credit note, delivery note and dunning drafts and creates and changes articles and contacts; issuing an invoice is never part of a profile",
+				"creates invoice, quotation, order confirmation, credit note, delivery note and dunning drafts and creates and changes articles and contacts; issuing a voucher is never part of a profile",
 			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, quotationsCreate.ID,
 				orderConfirmationsCreate.ID, creditNotesCreate.ID, deliveryNotesCreate.ID, dunningsCreate.ID, articlesCreate.ID, articlesUpdate.ID,
 				contactsCreate.ID, contactsUpdate.ID),
@@ -513,6 +557,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: invoicesCreate, Handler: capability.Handler(invokeInvoicesCreate)},
 		capability.Operation{Descriptor: invoicesIssue, Handler: capability.Handler(invokeInvoicesIssue)},
 		capability.Operation{Descriptor: quotationsCreate, Handler: capability.Handler(invokeQuotationsCreate)},
+		capability.Operation{Descriptor: quotationsIssue, Handler: capability.Handler(invokeQuotationsIssue)},
+		capability.Operation{Descriptor: orderConfirmationsIssue, Handler: capability.Handler(invokeOrderConfirmationsIssue)},
+		capability.Operation{Descriptor: creditNotesIssue, Handler: capability.Handler(invokeCreditNotesIssue)},
+		capability.Operation{Descriptor: deliveryNotesIssue, Handler: capability.Handler(invokeDeliveryNotesIssue)},
 		capability.Operation{Descriptor: orderConfirmationsCreate, Handler: capability.Handler(invokeOrderConfirmationsCreate)},
 		capability.Operation{Descriptor: creditNotesCreate, Handler: capability.Handler(invokeCreditNotesCreate)},
 		capability.Operation{Descriptor: deliveryNotesCreate, Handler: capability.Handler(invokeDeliveryNotesCreate)},
@@ -642,6 +690,22 @@ func invokeCreditNotesCreate(ctx context.Context, resolved *config.Resolved, sec
 
 func invokeDeliveryNotesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
 	return invokeDraftPost(ctx, resolved, secrets, red, raw, deliveryNoteDraft)
+}
+
+func invokeQuotationsIssue(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, issued(quotationDraft, "quotation", false))
+}
+
+func invokeOrderConfirmationsIssue(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, issued(orderConfirmationDraft, "order confirmation", false))
+}
+
+func invokeCreditNotesIssue(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, issued(creditNoteDraft, "credit note", true))
+}
+
+func invokeDeliveryNotesIssue(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, issued(deliveryNoteDraft, "delivery note", false))
 }
 
 func invokeDunningsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
@@ -1102,7 +1166,7 @@ type createResult struct {
 type draftKind struct {
 	op, path, mayExist string
 	noun               string // names the voucher type in the fixed follow-up rejection
-	finalize           bool   // invoices only, set by the issue tool and never by an argument
+	finalize           bool   // set by an issue tool and never by an argument
 	expiration         bool   // quotations only
 	follow             bool   // the type may be created as a follow-up voucher
 	needPreceding      bool   // the type exists only as a follow-up voucher (dunnings)
@@ -1115,10 +1179,19 @@ func mayExistHint(noun string) string {
 }
 
 func invoiceDraft(finalize bool) draftKind {
-	kind := draftKind{op: "create invoice", path: "/v1/invoices", mayExist: invoiceMayExist, noun: "an invoice", follow: !finalize}
+	kind := draftKind{op: "create invoice", path: "/v1/invoices", mayExist: invoiceMayExist, noun: "an invoice", follow: true}
 	if finalize {
-		kind.op, kind.mayExist, kind.finalize = "issue invoice", invoiceMayBeIssued, true
+		return issued(kind, "invoice", true)
 	}
+	return kind
+}
+
+// issued turns a draft kind into the issuing kind of the same voucher type: the fixed finalize query and a
+// failure hint that says the voucher may be final. Where the issue tool is no follow-up, the predecessor
+// is dropped; its closed schema already rejects the argument.
+func issued(kind draftKind, noun string, follow bool) draftKind {
+	kind.op, kind.finalize, kind.follow = "issue "+noun, true, follow
+	kind.mayExist = "; the " + noun + " may have been issued, check the voucher list before repeating it"
 	return kind
 }
 
@@ -1405,9 +1478,6 @@ func (raw *invoiceJSON) normalize() *SalesVoucher {
 // invoiceMayExist is appended to a failure of an invoice creation whose request may have reached Lexware:
 // the invoice may exist although no usable confirmation arrived. Qatlas never repeats such a request.
 const invoiceMayExist = "; the invoice may have been created, check the voucher list before repeating it"
-
-// invoiceMayBeIssued is the hint of an issuing request: the invoice may already be final and numbered.
-const invoiceMayBeIssued = "; the invoice may have been issued, check the voucher list before repeating it"
 
 // get performs one bounded read against the fixed gateway and decodes the response into out.
 func (c *Client) get(ctx context.Context, op, resource, path string, query url.Values, out any) error {
