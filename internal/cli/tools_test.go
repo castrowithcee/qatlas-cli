@@ -186,7 +186,7 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,68,1,1\n",
 		"  telegram,Cloud-based instant messaging service,\"\",3,1,1\n",
 		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", "  lexware,Online accounting and invoicing service for small businesses,\"\",24,0,0\n",
-		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",26,0,0\n", ",\"\",10,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",11,0,0\n", ",\"\",2,0,0\n",
+		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",26,0,0\n", ",\"\",13,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",11,0,0\n", ",\"\",2,0,0\n",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -488,7 +488,7 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		}},
 		{"namespace nextcloud", []string{"nextcloud"}, []string{
 			"nextcloud.files.copy", "nextcloud.files.create", "nextcloud.files.delete", "nextcloud.files.get", "nextcloud.files.list",
-			"nextcloud.files.move", "nextcloud.files.stat", "nextcloud.files.update", "nextcloud.folders.create", "nextcloud.folders.delete",
+			"nextcloud.files.move", "nextcloud.files.stat", "nextcloud.files.update", "nextcloud.folders.create", "nextcloud.folders.delete", "nextcloud.sharees.search", "nextcloud.shares.get", "nextcloud.shares.list",
 		}},
 		{"query", []string{"--query", "pages"}, []string{"bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.attachments.download", "bookstack.attachments.get", "bookstack.attachments.list", "bookstack.attachments.update", "bookstack.books.delete", "bookstack.books.get", "bookstack.chapters.delete", "bookstack.chapters.get", "bookstack.content.search", "bookstack.images.delete", "bookstack.imports.get", "bookstack.recyclebin.list"}},
 		{"namespace and query", []string{"bookstack", "--query", "list"}, []string{"bookstack.attachments.list", "bookstack.auditlog.list", "bookstack.books.list", "bookstack.chapters.list", "bookstack.comments.list", "bookstack.images.list", "bookstack.imports.list", "bookstack.pages.list", "bookstack.recyclebin.list", "bookstack.roles.list", "bookstack.shelves.list", "bookstack.tags.list", "bookstack.tags.values", "bookstack.users.list", "bookstack.attachments.download", "bookstack.attachments.get", "bookstack.chapters.get", "bookstack.contentpermissions.update", "bookstack.roles.create", "bookstack.roles.delete", "bookstack.roles.update", "bookstack.shelves.create", "bookstack.shelves.get", "bookstack.shelves.update", "bookstack.users.delete", "bookstack.users.update"}},

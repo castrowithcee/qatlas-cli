@@ -33,9 +33,15 @@ const (
 // groupFiles is the tool group of the Files tools.
 const groupFiles = "files"
 
+// groupShares is the tool group of the sharing tools.
+const groupShares = "shares"
+
 var toolGroups = []config.ToolGroup{{
 	ID: groupFiles, Title: "Files",
 	Description: "Folders and files below the Files root folder of the identity",
+}, {
+	ID: groupShares, Title: "Shares",
+	Description: "Shares of and to the identity below the Files root folder, and the recipients of the instance",
 }}
 
 var targetKinds = []config.TargetKind{{
@@ -297,6 +303,33 @@ func folderBound(handler capability.Handler) capability.Handler {
 	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor, raw json.RawMessage) (any, error) {
 		if _, err := requireFolder(resolved); err != nil {
+			return nil, err
+		}
+		return handler(ctx, resolved, secrets, red, raw)
+	}
+}
+
+// requireAccount refuses a connection without an account target locally, before any credential access or
+// request, and names no other target.
+func requireAccount(resolved *config.Resolved) error {
+	s, err := scopeOf(resolved)
+	if err != nil {
+		return err
+	}
+	if !s.account {
+		return &provider.Error{
+			Class: provider.ClassPermission, Op: "open",
+			Message: "this connection is not bound to the account of the identity",
+		}
+	}
+	return nil
+}
+
+// accountBound is folderBound for the tools that reach the instance rather than a folder.
+func accountBound(handler capability.Handler) capability.Handler {
+	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+		red *redact.Redactor, raw json.RawMessage) (any, error) {
+		if err := requireAccount(resolved); err != nil {
 			return nil, err
 		}
 		return handler(ctx, resolved, secrets, red, raw)
