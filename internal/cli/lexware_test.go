@@ -86,14 +86,14 @@ func TestLexwareToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[20]{id,title,effect,requires,confirm,reason}:", "lexware.articles.get,Get a Lexware article,read,", "lexware.articles.list,List Lexware articles,read,", "lexware.contacts.get,Get a Lexware contact,read,", "lexware.contacts.list,List Lexware contacts,read,", "lexware.countries.list,List Lexware countries,read,", "lexware.paymentconditions.list,List Lexware payment conditions,read,", "lexware.postingcategories.list,List Lexware posting categories,read,", "lexware.printlayouts.list,List Lexware print layouts,read,", "lexware.profile.get,Get the Lexware organization profile,read,", "lexware.invoices.create,Create a Lexware invoice draft,create,", "lexware.invoices.issue,Issue a Lexware invoice,create,", "lexware.invoices.get,Get a Lexware invoice,read,", "lexware.invoices.list,List open Lexware invoices,read,", "lexware.payments.get,Get the payment status of a Lexware voucher,read,", "lexware.voucherlist.list,List Lexware vouchers,read,", "lexware.vouchers.get,Get a Lexware bookkeeping voucher,read,", "lexware.quotations.get,Get a Lexware quotation,read,", "lexware.orderconfirmations.get,Get a Lexware order confirmation,read,", "lexware.creditnotes.get,Get a Lexware credit note,read,", "lexware.deliverynotes.get,Get a Lexware delivery note,read,",
+		"tools[24]{id,title,effect,requires,confirm,reason}:", "lexware.articles.get,Get a Lexware article,read,", "lexware.articles.list,List Lexware articles,read,", "lexware.contacts.get,Get a Lexware contact,read,", "lexware.contacts.list,List Lexware contacts,read,", "lexware.countries.list,List Lexware countries,read,", "lexware.paymentconditions.list,List Lexware payment conditions,read,", "lexware.postingcategories.list,List Lexware posting categories,read,", "lexware.printlayouts.list,List Lexware print layouts,read,", "lexware.profile.get,Get the Lexware organization profile,read,", "lexware.invoices.create,Create a Lexware invoice draft,create,", "lexware.invoices.issue,Issue a Lexware invoice,create,", "lexware.invoices.get,Get a Lexware invoice,read,", "lexware.invoices.list,List open Lexware invoices,read,", "lexware.payments.get,Get the payment status of a Lexware voucher,read,", "lexware.voucherlist.list,List Lexware vouchers,read,", "lexware.vouchers.get,Get a Lexware bookkeeping voucher,read,", "lexware.quotations.get,Get a Lexware quotation,read,", "lexware.orderconfirmations.get,Get a Lexware order confirmation,read,", "lexware.creditnotes.get,Get a Lexware credit note,read,", "lexware.deliverynotes.get,Get a Lexware delivery note,read,", "lexware.dunnings.get,Get a Lexware dunning,read,", "lexware.downpaymentinvoices.get,Get a Lexware down payment invoice,read,", "lexware.recurringtemplates.list,List Lexware recurring invoice templates,read,", "lexware.recurringtemplates.get,Get a Lexware recurring invoice template,read,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runLexwareJSON(t, "", "tools", "lexware", "--all", "--config", path))); len(got) != 20 {
-		t.Errorf("lexware tools = %v, want all twenty tools", got)
+	if got := toolIDs(t, string(runLexwareJSON(t, "", "tools", "lexware", "--all", "--config", path))); len(got) != 24 {
+		t.Errorf("lexware tools = %v, want all twenty-four tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -229,8 +229,8 @@ func TestLexwareMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 20 || searched.Operations[0].ID != "lexware.articles.get" ||
-		searched.Operations[19].ID != "lexware.vouchers.get" {
+	if len(searched.Operations) != 24 || searched.Operations[0].ID != "lexware.articles.get" ||
+		searched.Operations[23].ID != "lexware.vouchers.get" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
