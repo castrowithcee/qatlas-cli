@@ -60,6 +60,10 @@ var filesRoot = []string{"remote.php", "dav", "files"}
 // uploadsRoot are the fixed path segments of the upload area for chunked uploads; the user ID follows them.
 var uploadsRoot = []string{"remote.php", "dav", "uploads"}
 
+// trashbinRoot are the fixed path segments of the trash bin; the user ID and the collections trash and
+// restore follow them.
+var trashbinRoot = []string{"remote.php", "dav", "trashbin"}
+
 // methodPropfind is the HTTP method of every metadata read. The file operations add only their own fixed
 // methods (GET, PUT, DELETE, and the chunked upload methods); no method comes from a request.
 const methodPropfind = "PROPFIND"
@@ -343,6 +347,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(sharesList, groupShares), Handler: folderBound(invokeSharesList)},
 		capability.Operation{Descriptor: inGroup(sharesGet, groupShares), Handler: folderBound(invokeSharesGet)},
 		capability.Operation{Descriptor: inGroup(shareesSearch, groupShares), Handler: accountBound(invokeShareesSearch)},
+		capability.Operation{Descriptor: grouped(trashList), Handler: folderBound(invokeTrashList)},
+		capability.Operation{Descriptor: grouped(trashRestore), Handler: folderBound(invokeTrashRestore)},
+		capability.Operation{Descriptor: grouped(trashDelete), Handler: folderBound(invokeTrashDelete)},
 	)
 }
 
@@ -556,6 +563,8 @@ type Client struct {
 	// uploads are the decoded segments of the upload area of the same identity, below which chunked
 	// uploads create their one folder.
 	uploads []string
+	// trashbin are the decoded segments of the trash bin of the same identity.
+	trashbin []string
 	// install are the decoded segments of the optional installation path, below which the OCS API lives.
 	install []string
 	// user is the identity, which tells an own share from an incoming one.
@@ -628,8 +637,10 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	prefix = append(prefix, userID)
 	uploads := append(append([]string{}, install...), uploadsRoot...)
 	uploads = append(uploads, userID)
-	client := &Client{origin: origin, prefix: prefix, uploads: uploads, install: install, user: userID, root: root,
-		auth: header}
+	trashbin := append(append([]string{}, install...), trashbinRoot...)
+	trashbin = append(trashbin, userID)
+	client := &Client{origin: origin, prefix: prefix, uploads: uploads, trashbin: trashbin, install: install,
+		user: userID, root: root, auth: header}
 	client.http = provider.NoRedirectClient(defaultTimeout, transport)
 	return client, nil
 }
@@ -1126,7 +1137,12 @@ func (c *Client) webdav(ctx context.Context, op, method string, rel []string, bo
 
 // webdavWith is webdav with fixed extra request headers, which the calling operation builds itself.
 func (c *Client) webdavWith(ctx context.Context, op, method string, rel []string, body io.Reader, condition, value, uncertain string, extra http.Header) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, c.requestURL(rel), body)
+	return c.webdavTo(ctx, op, method, c.requestURL(rel), body, condition, value, uncertain, extra)
+}
+
+// webdavTo sends one request to an absolute URL the calling operation built from the configured origin.
+func (c *Client) webdavTo(ctx context.Context, op, method, target string, body io.Reader, condition, value, uncertain string, extra http.Header) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, target, body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
 	}
@@ -1282,12 +1298,18 @@ func (c *Client) propfind(ctx context.Context, op string, rel []string, depth st
 // request, and it can build no method other than PROPFIND.
 func (c *Client) propfindWith(ctx context.Context, op string, rel []string, depth string,
 	capabilities bool) ([]resource, error) {
-	req, err := http.NewRequestWithContext(ctx, methodPropfind, c.requestURL(rel),
-		strings.NewReader(propfindBody))
+	return c.propfindAt(ctx, op, c.requestURL(rel), propfindBody, depth, capabilities, maxEntries)
+}
+
+// propfindAt sends the one PROPFIND form of this adapter to an absolute URL built from checked segments,
+// with one of the fixed property bodies.
+func (c *Client) propfindAt(ctx context.Context, op, target, propBody, depth string, capabilities bool,
+	limit int) ([]resource, error) {
+	req, err := http.NewRequestWithContext(ctx, methodPropfind, target, strings.NewReader(propBody))
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
 	}
-	req.ContentLength = int64(len(propfindBody))
+	req.ContentLength = int64(len(propBody))
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("Content-Type", "application/xml; charset=utf-8")
 	req.Header.Set("Accept", "application/xml")
@@ -1311,7 +1333,7 @@ func (c *Client) propfindWith(ctx context.Context, op string, rel []string, dept
 	if err != nil || len(body) > maxBodyBytes {
 		return nil, invalidResponse(op, "the Nextcloud response could not be read within the size limit")
 	}
-	return parseMultiStatus(op, body)
+	return parseMultiStatusMax(op, body, limit)
 }
 
 // checkWebDAV verifies that the instance announces WebDAV class 1, which is what the Files app serves. A
