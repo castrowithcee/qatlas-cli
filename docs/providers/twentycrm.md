@@ -3,7 +3,7 @@ description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
   objects, count by field), record write (create, update, batches), duplicate search and merge, record
   trash (delete, restore, destroy), note and task link operations, workflow read and control, member,
-  role, and data model read, webhook operations, object targets, connection permissions, and safety
+  role, and data model read and write, webhook operations, object targets, connection permissions, and safety
   boundaries.
 type: knowledge
 edit: shared
@@ -14,16 +14,14 @@ updated: 2026-10-09
 # Twenty CRM
 
 A connection binds one API key to one managed or self-hosted workspace and, optionally, to a set of its
-objects (see Object targets). It can list and read companies (`read`), create them (`create`), change their
-name or primary domain (`update`), and delete them (`delete`). It can also create records of any reachable
-object and change their fields, also up to 60 at a time (see Writing records and Batches), delete, restore,
-and destroy them (see Deleting and restoring), find duplicates and merge records (see Merging records),
-link notes and tasks to records (see Linking notes and tasks), read, narrow, and delete the webhooks of the
-workspace (see Webhooks), and activate or deactivate workflow versions and stop or retry runs (see
-Controlling workflows). Mutations require confirmation and only use the generated REST routes of the
-company or of a reachable object, or fixed webhook and workflow routes. Qatlas sends each mutation once;
-after an unclear result (timeout, reset, server error, unreadable answer) it reports the outcome as
-uncertain and does not repeat the request.
+objects (see Object targets). It can list, read, create, change (name or primary domain), and delete
+companies, and work with records of any reachable object: write, also up to 60 at a time (see Writing records
+and Batches), delete, restore, destroy (see Deleting and restoring), find duplicates, merge (see Merging
+records), and link notes and tasks (see Linking notes and tasks). It also covers webhooks (see Webhooks),
+workflows (see Controlling workflows), and the data model (see Data model). Mutations require confirmation
+and only use the generated REST routes of the company or of a reachable object, or fixed metadata, webhook,
+and workflow routes. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error,
+unreadable answer) it reports the outcome as uncertain and does not repeat the request.
 
 A `domain` value sets the primary link to `https://<domain>` with the domain as its label; an empty value
 clears both. Twenty allows 100 requests per minute for each API key, and Qatlas spaces the requests of one
@@ -39,27 +37,25 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
   on every connection that should not see all of them.
 - System objects (messages, calendar events, attachments, workflows, workspace members, and the like) are
   never reachable through the object and record tools and cannot be a target; workflows and workspace
-  members have their own read tools. The two link objects of notes and tasks are system objects too;
-  only the link tools touch them, and no records tool does. Qatlas keeps them in a fixed list, so an object a
-  later Twenty version marks as a system object stays reachable on a connection without targets until the
-  list is updated.
+  members have their own read tools. The two link objects of notes and tasks are system objects too; only the
+  link tools touch them. Qatlas keeps them in a fixed list, so an object a later Twenty version marks as a
+  system object stays reachable on a connection without targets until the list is updated.
 - `companies.*` need `company` to be reachable: with targets, `object/company` must be bound.
 - Workspace-wide tools work only on a connection without object targets; on any other connection they are
   refused before the key is read.
 
 `objects.list` and `objects.get` (`read`) show the reachable objects and their fields; relations to objects the
 connection does not reach are left out. The catalog comes from the workspace's generated API document
-(`/open-api/core`), which needs no settings right, unlike the metadata API (see Reading the data model). Only
+(`/open-api/core`), which needs no settings right, unlike the metadata API (see Data model). Only
 names, types, and flags leave Qatlas; descriptions and options of the document never do.
 
 ## Reading records
 
 `records.list` and `records.get` (`read`) read the records of any reachable object, standard or custom, by its
 singular API name. Qatlas takes the REST path of an object only from the workspace catalog, never from an
-argument. A list returns one page without filters (see Filtering and counting records for conditions), 1 to 100
-records, with an opaque `next_cursor`.
-`order_by` sorts by one field, or by `field.subfield` of a composite field, in direction `asc` or `desc`.
-Relation, array, and rich-text fields cannot be sorted by.
+argument. A list returns one page without filters (see Filtering and counting records for conditions), 1 to
+100 records, with an opaque `next_cursor`. `order_by` sorts by one field, or by `field.subfield` of a
+composite field, in direction `asc` or `desc`. Relation, array, and rich-text fields cannot be sorted by.
 
 - `fields` names at most 50 top-level fields and is sent to Twenty as its `fields` parameter. Qatlas checks
   `fields` and `order_by` against the response shape of the object in the workspace document, so an unknown
@@ -72,9 +68,8 @@ Relation, array, and rich-text fields cannot be sorted by.
 - A cursor is bound to the connection, object, sort, and field selection that produced it; any other use is
   refused before a request is sent.
 - A value or an answer above the bounds is an invalid response; Qatlas does not cut it.
-- Record values are untrusted workspace content and often personal data (names, emails, phone numbers,
-  notes). They appear only in a result, never in errors, logs, or audit entries, and carry their own data
-  class. Set `object/` targets to keep a connection away from objects whose records it does not need.
+- Record values are untrusted workspace content, often personal data. They appear only in a result, never in
+  errors, logs, or audit entries, and carry their own data class.
 - The role of the API key is the ceiling: Twenty returns only the objects and fields the role grants, and
   Qatlas adds no right. Soft-deleted records are read only by `records.list` with `deleted`.
 
@@ -106,8 +101,7 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
   | boolean | `eq`, `is` |
   | identifier, relation identifier | `eq`, `neq`, `in`, `is` |
 
-- `is` takes `NULL` or `NOT_NULL`; `in` takes a list of values of one type. The value forms are in the tool
-  help.
+- `is` takes `NULL` or `NOT_NULL`; `in` takes a list of values of one type (see the tool help).
 - A refused field, operator, or value is refused after the schema was read and before any record is read,
   and the refusal names neither field nor value. The enum values of the schema serve only this check and
   never appear in a result, including `objects.get`.
@@ -120,10 +114,9 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
 
 `records.searchall` (`read`) finds records by full-text search over all reachable objects in one call and
 returns per hit `object`, `id`, and `label` (display name, capped), plus `omitted`. Read a hit with
-`records.get`. It is the only tool that uses Twenty's GraphQL endpoint. Qatlas sends one fixed query and
-passes the checked arguments only as variables; no argument becomes part of a query, and there is no free
-GraphQL. Twenty reports a failed query as an answer with errors; Qatlas maps it to a class and shows no
-text of it.
+`records.get`. Qatlas sends one fixed query and passes the checked arguments only as variables; no argument
+becomes part of a query, and there is no free GraphQL. Twenty reports a failed query as an answer with errors;
+Qatlas maps it to a class and shows no text of it.
 
 - `objects` limits the search to a subset of the reachable objects; an object outside the connection is
   ignored, and an empty remaining set is refused before the search is sent.
@@ -140,14 +133,13 @@ record tools never reach them; these tools use fixed routes and a fixed field se
 
 - Step and trigger settings, run outputs, context, state, and error texts are never read out. Status,
   trigger, and step types come from fixed lists; any other value is shown as `unknown`.
-- Starting a workflow run is not possible with an API key: Twenty refuses it for keys, and Qatlas does not
-  work around that.
+- A workflow run cannot be started with an API key: Twenty refuses it, and Qatlas does not work around that.
 
 ## Controlling workflows
 
 `workflowversions.activate`, `workflowversions.deactivate` (`update`), `workflowruns.stop`, and
-`workflowruns.retry` (`execute`) are workspace-wide, need the settings right Workflows, and are offered only by
-a connection whose `tools` list names them; no profile ticks them.
+`workflowruns.retry` (`execute`) are workspace-wide, need the settings right Workflows, and are offered only
+by a connection whose `tools` list names them; no profile ticks them.
 
 - `activate` reads the version first and activates it only if it opens no lasting path to the outside through
   Qatlas: a webhook trigger or a step that can send data out or run code is refused before any change. The
@@ -165,12 +157,24 @@ nothing. A role assigned to an API key or not editable is never changed or delet
 refuses before the change, also when that read is unclear. All five need the Twenty right "Roles", which also
 allows changing roles: use a key of its own. No profile ticks them.
 
-## Reading the data model
+## Data model
 
 `metaobjects.list`, `metaobjects.get`, and `metafields.get` (`read`) are workspace-wide and read Twenty's
-metadata API for all objects and fields, as a basis for schema and permission work; default values, settings,
-and relation details are never read. They need the Twenty right "Data model", which also allows changing and
-deleting the schema: use a connection with an API key of its own for it. No profile ticks them.
+metadata API for all objects and fields; default values, settings, and relation details are never read.
+
+`metaobjects.create`, `metaobjects.update`, `metafields.create`, and `metafields.update` (`create`, `update`)
+change the schema for every user and integration of the workspace. All seven tools need the Twenty right
+"Data model", which also allows deleting the schema: use a connection with an API key of its own. The
+writers are offered only by a connection whose `tools` list names them; no profile ticks any of them.
+
+- Created are custom objects and non-relational fields; relation types are refused. A field is created on a
+  custom object only; its options are required for selections and refused for other types.
+- An update never changes API names or types; a read before the write refuses system and relation fields and
+  limits standard objects and fields to label changes.
+- Options are replaced as a whole: a left-out option clears its value in all records. Deactivating hides an
+  object or field from everyone.
+- A new custom object is reachable at once without targets; with object targets only after it is entered
+  there, which Qatlas never does.
 
 ## Writing records
 
@@ -186,8 +190,7 @@ every field from the workspace catalog and builds the request body from the chec
 - Supported are scalar fields, selections (values of the schema), and the composite fields emails, phones,
   links, currency, full name, and address; a composite value may contain only the parts the schema names.
   Null is refused; send an empty value to clear a text.
-- Rich text takes only `{"markdown": ...}`; Twenty derives the block document from it. A read reports it the
-  same way.
+- Rich text takes only `{"markdown": ...}`, as a read reports it.
 - A relation is set by its identifier field (`<relation>Id`, a UUID) and only when the relation's target is
   reachable through the connection; otherwise the field is refused without naming the target. Identifier
   fields that are not a relation to a reachable object are refused as well.
@@ -196,8 +199,7 @@ every field from the workspace catalog and builds the request body from the chec
 - The answer is the written record, read at depth 0 and reduced like a read; it must name the requested
   record.
 - For `create` an uncertain report warns that repeating adds a duplicate record; search the object first.
-- A 403 means the role of the API key lacks the right to write the object or one of the fields; Twenty's own
-  text is never shown.
+- A 403 means the role of the API key lacks the right to write the object or a field.
 
 ## Linking notes and tasks
 
@@ -211,7 +213,7 @@ from an argument. An object that the schema gives no single link relation cannot
   `object/note` (or `object/task`) and the object are bound. A refusal comes before any secret is resolved
   and names neither object nor identifier.
 - `list` names only links whose two sides are reachable and counts the others in `omitted`.
-- Repeating `create` adds a duplicate link. The answer must name the requested link.
+- Repeating `create` adds a duplicate link; the answer must name the requested link.
 - `delete` removes only the link, never the note, task, or record. It reads the link first and removes it only
   when both sides are reachable. A connection offers it only when its `tools` list names it. Links are
   workspace data of the record data class.
@@ -229,8 +231,7 @@ tool to create a webhook or to change its target or signing key.
   configuration has its own data class.
 - `update` replaces the whole event list and/or the description. The input is checked before any request is
   sent, and the request contains nothing but these two fields.
-- Read the webhook before repeating an uncertain change. `delete` is offered only by a connection whose
-  `tools` list names it.
+- `delete` is offered only by a connection whose `tools` list names it.
 
 ## Batches
 
@@ -266,8 +267,8 @@ identifiers are distinct UUIDs of that object.
   promised. It is offered only by a connection whose `tools` list names it, and no profile ticks it. Preview
   first, then merge.
 
-Duplicates and results are records like those of `records.get`, untrusted workspace data. The answer of a
-merge must name one of the given records. A 403 points to the object permissions of the role of the key.
+Results are untrusted records like those of `records.get`; a merge answer must name one of the given records.
+A 403 points to the object permissions of the role of the key.
 
 ## Deleting and restoring
 
@@ -281,12 +282,11 @@ Companies and records of any reachable object share one trash contract:
 - `list` with `deleted` set to `true` lists only what is in the trash; this holds for `companies.list` and
   `records.list`, not for `records.search`.
 
-The record tools are `records.delete`, `records.restore`, and `records.destroy`. Each acts on one record of one
-reachable object, identified by its UUID, and sends one fixed route; no argument switches `delete` to permanent
-deletion or adds a filter, so there is no deletion or restore by filter. A refused object is rejected before
-the secret is read. Qatlas checks that the answer names the requested record. A 403 on
-`records.delete` and `records.destroy` points to the right of the role of the key (Delete Records, Destroy
-Records); Twenty's own text is never shown.
+`records.delete`, `records.restore`, and `records.destroy` each act on one record of one reachable object,
+identified by its UUID, and send one fixed route; no argument switches `delete` to permanent deletion or adds
+a filter, so there is no deletion or restore by filter. A refused object is rejected before the secret is
+read, and the answer must name the requested record. A 403 on `delete` and `destroy` points to the right of
+the role of the key (Delete Records, Destroy Records); Twenty's own text is never shown.
 
 `delete` and `destroy`, for companies and records, are offered only by a connection whose `tools` list names
 them; `permissions` alone does not admit them. No profile ticks them or `records.restore`.
