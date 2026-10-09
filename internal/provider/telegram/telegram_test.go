@@ -80,7 +80,7 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 	for _, tool := range metadata.Tools {
 		want := "messages"
 		switch {
-		case tool.ID == updatesList.ID:
+		case tool.ID == updatesList.ID || tool.ID == updatesConfirm.ID:
 			want = "updates"
 		case strings.HasPrefix(tool.ID, "telegram.pins."):
 			want = "pins"
@@ -106,8 +106,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 37 {
-		t.Fatalf("operation count = %d, want thirty-seven", len(operations))
+	if len(operations) != 38 {
+		t.Fatalf("operation count = %d, want thirty-eight", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -130,7 +130,7 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 	for _, d := range reg.Provider(Provider) {
 		want := d.ID == messagesDelete.ID || d.ID == messagesDeleteMany.ID || d.ID == pinsUnpinAll.ID ||
 			d.ID == membersBan.ID || d.ID == membersRestrict.ID || d.ID == invitelinksRevoke.ID || d.ID == pollsStop.ID ||
-			d.ID == chatsDeletePhoto.ID
+			d.ID == chatsDeletePhoto.ID || d.ID == updatesConfirm.ID
 		if d.RequiresToolAllowList != want {
 			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
 		}

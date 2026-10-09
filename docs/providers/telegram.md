@@ -45,7 +45,7 @@ before the credential is read when the target is missing. Methods that accept on
 `@username` chat locally.
 
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
-to `pins`, the member tools to `members`, the update tool to `updates`, the chat tools to `chats`, the invite
+to `pins`, the member tools to `members`, the update tools to `updates`, the chat tools to `chats`, the invite
 link tools to `invitelinks`, the bot and webhook tools to `bot`, the file tools to `files`, the media tools to
 `media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`. A group
 never changes a tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
@@ -133,10 +133,18 @@ or type, is only counted in `skipped`, and `last_update_id` names the highest up
 included. An `@username` target is matched through a fixed `getChat` call on the configured name; the ID that
 returns is used for matching only. A long poll (`wait_seconds`) waits for a new update.
 
-The tool acknowledges nothing and stores no offset: the same updates appear again on the next call until
-Telegram drops them, which it does after at most 24 hours. Telegram allows one consumer per bot. The call
-fails with a conflict while a webhook is active or another `getUpdates` consumer runs, and a long poll
+`telegram.updates.list` acknowledges nothing and stores no offset: the same updates appear again on the next
+call until Telegram drops them, which it does after at most 24 hours. Telegram allows one consumer per bot. The
+call fails with a conflict while a webhook is active or another `getUpdates` consumer runs, and a long poll
 interrupts the long poll of another consumer of the same bot.
+
+`telegram.updates.confirm` (`delete`, confirmation required) makes Telegram drop all updates up to and
+including `update_id`, so the next `telegram.updates.list` shows only newer ones. It needs the target `bot`, is
+released only through the connection's tools list, and belongs to no profile. Its effect is bot-wide: it
+confirms the updates of every chat of the bot, including chats this connection does not bind, and it is
+the only way an update leaves the list before Telegram drops it. It fails with a conflict while a webhook is
+active, and another poller of the same bot loses the confirmed updates or competes for the offset. A failure
+whose outcome is unknown is reported as such and never repeated. The result contains only `confirmed_through`.
 
 Identifiers that belong to no chat (a file, a callback query, a join request) are returned only as signed
 references, never as Telegram's raw identifier. A reference is bound to the target it came from and to the
