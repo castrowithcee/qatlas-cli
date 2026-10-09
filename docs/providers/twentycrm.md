@@ -2,8 +2,9 @@
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
   objects, count by field), record write (create, update, batches), duplicate search and merge, record
-  trash (delete, restore, destroy), note and task link operations, workflow read and control, webhook
-  operations, object targets, connection permissions, and safety boundaries.
+  trash (delete, restore, destroy), note and task link operations, workflow read and control, member,
+  role, and data model read, webhook operations, object targets, connection permissions, and safety
+  boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -19,11 +20,10 @@ object and change their fields, also up to 60 at a time (see Writing records and
 and destroy them (see Deleting and restoring), find duplicates and merge records (see Merging records),
 link notes and tasks to records (see Linking notes and tasks), read, narrow, and delete the webhooks of the
 workspace (see Webhooks), and activate or deactivate workflow versions and stop or retry runs (see
-Controlling workflows).
-Mutations require confirmation and only use the generated REST routes of the company or of a reachable
-object, or fixed webhook and workflow routes. Qatlas sends each mutation once; after an unclear result
-(timeout, reset, server error, unreadable answer) it reports the outcome as uncertain and does not repeat
-the request.
+Controlling workflows). Mutations require confirmation and only use the generated REST routes of the
+company or of a reachable object, or fixed webhook and workflow routes. Qatlas sends each mutation once;
+after an unclear result (timeout, reset, server error, unreadable answer) it reports the outcome as
+uncertain and does not repeat the request.
 
 A `domain` value sets the primary link to `https://<domain>` with the domain as its label; an empty value
 clears both. Twenty allows 100 requests per minute for each API key, and Qatlas spaces the requests of one
@@ -38,8 +38,8 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
 - Without targets, the connection reaches every non-system object its API key reaches. Set `object/` targets
   on every connection that should not see all of them.
 - System objects (messages, calendar events, attachments, workflows, workspace members, and the like) are
-  never reachable through the object and record tools and cannot be a target; workflows have their own
-  read tools (see Reading workflows). The two link objects of notes and tasks are system objects too;
+  never reachable through the object and record tools and cannot be a target; workflows and workspace
+  members have their own read tools. The two link objects of notes and tasks are system objects too;
   only the link tools touch them, and no records tool does. Qatlas keeps them in a fixed list, so an object a
   later Twenty version marks as a system object stays reachable on a connection without targets until the
   list is updated.
@@ -47,12 +47,10 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
 - Workspace-wide tools work only on a connection without object targets; on any other connection they are
   refused before the key is read.
 
-`objects.list` and `objects.get` (`read`) show the reachable objects and, per object, each field with its
-JSON type, subfields of composite fields, whether a value is required or can be written, and the reachable
-object a relation points to. Relations to objects the connection does not reach are left out. The catalog is
-read from the workspace's generated API document (`/open-api/core`), which needs no right beyond the API
-key's ordinary access, not from the metadata API, which needs the settings right. Only names, types, and
-flags leave Qatlas; descriptions and options of the document never do.
+`objects.list` and `objects.get` (`read`) show the reachable objects and their fields; relations to objects the
+connection does not reach are left out. The catalog comes from the workspace's generated API document
+(`/open-api/core`), which needs no settings right, unlike the metadata API (see Reading the data model). Only
+names, types, and flags leave Qatlas; descriptions and options of the document never do.
 
 ## Reading records
 
@@ -72,9 +70,8 @@ Relation, array, and rich-text fields cannot be sorted by.
   record, and a relation to an object the connection cannot reach stays an identifier. Rich text appears
   only as `markdown`, never as its block document.
 - A cursor is bound to the connection, object, sort, and field selection that produced it; any other use is
-  refused.
-- A value above the bounds or an answer above the response limit is an invalid response; Qatlas does not
-  cut it.
+  refused before a request is sent.
+- A value or an answer above the bounds is an invalid response; Qatlas does not cut it.
 - Record values are untrusted workspace content and often personal data (names, emails, phone numbers,
   notes). They appear only in a result, never in errors, logs, or audit entries, and carry their own data
   class. Set `object/` targets to keep a connection away from objects whose records it does not need.
@@ -149,17 +146,31 @@ record tools never reach them; these tools use fixed routes and a fixed field se
 ## Controlling workflows
 
 `workflowversions.activate`, `workflowversions.deactivate` (`update`), `workflowruns.stop`, and
-`workflowruns.retry` (`execute`) switch automations on and off and steer runs. They are workspace-wide, need
-the settings right Workflows, and are offered only by a connection whose `tools` list names them; no profile
-ticks them. Each sends one fixed GraphQL mutation once, and an unclear result is reported as uncertain.
+`workflowruns.retry` (`execute`) are workspace-wide, need the settings right Workflows, and are offered only by
+a connection whose `tools` list names them; no profile ticks them.
 
 - `activate` reads the version first and activates it only if it opens no lasting path to the outside through
-  Qatlas: a webhook trigger or a step that can send data out or run code is refused before any change, and
-  the refusal names at most the type. The decision rests on trigger and step types alone, from a fixed
-  positive list; a type not on it is refused. Activate other versions in Twenty. The version can change
-  between the read and the activation.
-- `deactivate` and `stop` need no such check.
-- `retry` runs the steps of the run again, including steps with effects outside Twenty, which are repeated.
+  Qatlas: a webhook trigger or a step that can send data out or run code is refused before any change. The
+  check rests on trigger and step types alone, from a fixed positive list; activate other versions in Twenty.
+  The version can change between the read and the activation.
+- `retry` runs the steps of the run again, including steps with effects outside Twenty.
+
+## Reading members and roles
+
+`workspacemembers.list`, `workspacemembers.get`, and `roles.list` (`read`) are workspace-wide and show who can
+be assigned work and which roles exist, with a fixed field selection. Members are personal data with their own
+data class; avatars and user identifiers are never read, and member values never appear in errors.
+
+- `roles.list` sends one fixed query to the metadata API and reduces assigned members and API keys to counts;
+  their names are never read. It needs the Twenty right "Roles", which also allows changing roles and
+  permissions: use a connection with an API key of its own for it. No profile ticks it.
+
+## Reading the data model
+
+`metaobjects.list`, `metaobjects.get`, and `metafields.get` (`read`) are workspace-wide and read Twenty's
+metadata API for all objects and fields, as a basis for schema and permission work; default values, settings,
+and relation details are never read. They need the Twenty right "Data model", which also allows changing and
+deleting the schema: use a connection with an API key of its own for it. No profile ticks them.
 
 ## Writing records
 
@@ -188,9 +199,6 @@ every field from the workspace catalog and builds the request body from the chec
 - A 403 means the role of the API key lacks the right to write the object or one of the fields; Twenty's own
   text is never shown.
 
-The setup profile `write` ticks the read tools, these two record tools, and the link create tool. It adds no
-company change and no deletion or restore.
-
 ## Linking notes and tasks
 
 `activitytargets.list`, `activitytargets.create`, and `activitytargets.delete` (`read`, `create`, `delete`)
@@ -202,15 +210,11 @@ from an argument. An object that the schema gives no single link relation cannot
 - The note or task and the object must both be reachable through the connection, so with targets both
   `object/note` (or `object/task`) and the object are bound. A refusal comes before any secret is resolved
   and names neither object nor identifier.
-- `list` takes either `activity_id` (the links of a note or task) or `object` with `record_id` (the notes or
-  tasks linked to a record), one page with cursor like the record reads. It names only links whose two sides
-  are reachable and counts the others in `omitted`.
-- `create` sends one request with the activity and the one target identifier. Repeating it adds a duplicate
-  link. The answer must name the requested link.
+- `list` names only links whose two sides are reachable and counts the others in `omitted`.
+- Repeating `create` adds a duplicate link. The answer must name the requested link.
 - `delete` removes only the link, never the note, task, or record. It reads the link first and removes it only
-  when both sides are reachable, then sends one request. A connection offers it only when its `tools` list
-  names it.
-- Links are workspace data of the record data class.
+  when both sides are reachable. A connection offers it only when its `tools` list names it. Links are
+  workspace data of the record data class.
 
 ## Webhooks
 
@@ -225,8 +229,8 @@ tool to create a webhook or to change its target or signing key.
   configuration has its own data class.
 - `update` replaces the whole event list and/or the description. The input is checked before any request is
   sent, and the request contains nothing but these two fields.
-- Read the webhook after an unclear result before trying again. `delete` is offered only by a connection
-  whose `tools` list names it.
+- Read the webhook before repeating an uncertain change. `delete` is offered only by a connection whose
+  `tools` list names it.
 
 ## Batches
 
@@ -246,23 +250,21 @@ tool to create a webhook or to change its target or signing key.
 - It is not established whether Twenty applies a batch as a whole when one record fails. An answer that does
   not name exactly the requested records (for `upsert`, another count) is reported as an uncertain partial
   effect, not as success, and so is any unclear result. Read the records before repeating a batch.
-- The answer is reduced like a read and capped.
-- No setup profile ticks the batch tools.
+- The answer is reduced like a read and capped. No setup profile ticks the batch tools.
 
 ## Merging records
 
 Duplicates and merges act on records of one reachable object; there is no merge across objects. The
 identifiers are distinct UUIDs of that object.
 
-- `records.duplicates` reports, for each identifier, the possible duplicates by the criteria Twenty defines
-  for the object, with their total count. It changes nothing. An identifier that does not exist makes the
-  whole call fail.
-- `records.mergepreview` takes the identifiers and the position of the record that wins conflicts
-  (`conflict_priority_index`, counted from 0). It shows the record the merge would leave and changes nothing.
-- `records.merge` takes the same arguments and merges for real: the other records are deleted and their
-  relations are moved to the remaining record. Whether the deleted records can be restored is not promised.
-  It is offered only by a connection whose `tools` list names it, requires confirmation, and no profile ticks
-  it. Preview first, then merge.
+- `records.duplicates` reports the possible duplicates of each given record by the criteria Twenty defines
+  for the object and changes nothing. An identifier that does not exist makes the whole call fail.
+- `records.mergepreview` shows the record a merge would leave and changes nothing; Twenty computes the
+  preview in a dry run that no argument controls.
+- `records.merge` takes the arguments of the preview and merges for real: the other records are deleted and
+  their relations are moved to the remaining record. Whether the deleted records can be restored is not
+  promised. It is offered only by a connection whose `tools` list names it, and no profile ticks it. Preview
+  first, then merge.
 
 Duplicates and results are records like those of `records.get`, untrusted workspace data. The answer of a
 merge must name one of the given records. A 403 points to the object permissions of the role of the key.
@@ -295,7 +297,7 @@ connection's local `permissions` list can only narrow it, and an optional `tools
 excludes. The `companies.*` tools expose conservative core company fields and accept no custom-field
 payloads; custom fields are written through `records.create` and `records.update`. Invocation arguments never
 replace the configured origin. The terminal editor starts a new connection on the setup profile `read`, which
-ticks `[read]` and the read tools; the profile `write` adds the two record write tools and the link
-create tool. A profile is a visible starting selection, not a role: only the ticked
-`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
-follows a profile.
+ticks `[read]` and the read tools it lists; the profile `write` adds the two record write tools and the link
+create tool. A profile is a visible starting selection, not a role: only the ticked `permissions` and
+`tools` are saved, every tick can be changed before saving, and a saved connection never follows a
+profile.
