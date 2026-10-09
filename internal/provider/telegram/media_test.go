@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -20,6 +21,8 @@ import (
 )
 
 const mediaChat = "-1001"
+
+var singleKinds = []string{kindPhoto, kindDocument, kindVideo, kindAnimation, kindVideoNote}
 
 type sentRequest struct {
 	path        string
@@ -63,7 +66,8 @@ func (e *mediaEnv) transport() http.RoundTripper {
 			return e.answer(r)
 		}
 		return response(200, `{"ok":true,"result":{"message_id":7,"date":1700000000,`+
-			`"photo":[{"file_id":"small"},{"file_id":"BIG"}],"document":{"file_id":"DOC"}}}`), nil
+			`"photo":[{"file_id":"small"},{"file_id":"BIG"}],"document":{"file_id":"DOC"},"video":{"file_id":"VID"},`+
+			`"animation":{"file_id":"ANI"},"video_note":{"file_id":"VNOTE"}}}`), nil
 	})
 }
 
@@ -92,7 +96,7 @@ func (e *mediaEnv) run(t *testing.T, tool string, arguments any) (any, error) {
 	httpClient.Transport = e.transport()
 	ctx := capability.WithConfirmed(context.Background())
 	switch tool {
-	case "photo", "document":
+	case kindPhoto, kindDocument, kindVideo, kindAnimation, kindVideoNote:
 		return invokeSingleSend(ctx, e.resolved, e.secrets, e.red, raw, httpClient, tool)
 	}
 	return invokeMediaGroupsSendWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
@@ -127,13 +131,19 @@ func parts(t *testing.T, r sentRequest) (fields map[string]string, files map[str
 func (e *mediaEnv) ref(chat, id string) string { return signRef(testToken, refFile, chat, id) }
 
 func TestMediaSendsUseTheFixedMethodWithAnExactMultipartBody(t *testing.T) {
-	for kind, method := range map[string]string{kindPhoto: "sendPhoto", kindDocument: "sendDocument"} {
+	for kind, method := range map[string]string{kindPhoto: "sendPhoto", kindDocument: "sendDocument",
+		kindVideo: "sendVideo", kindAnimation: "sendAnimation", kindVideoNote: "sendVideoNote"} {
 		e := newMediaEnv(t)
 		path := e.write(t, "private-name.JPG", 12)
-		out, err := e.run(t, kind, map[string]any{
+		arguments := map[string]any{
 			"local_path": path, "caption": "hi", "parse_mode": "HTML", "reply_to_message_id": 5,
 			"message_thread_id": 9, "disable_notification": true, "protect_content": true,
-		})
+		}
+		if kind == kindVideoNote {
+			delete(arguments, "caption")
+			delete(arguments, "parse_mode")
+		}
+		out, err := e.run(t, kind, arguments)
 		if err != nil {
 			t.Fatalf("%s: %v", kind, err)
 		}
@@ -144,6 +154,10 @@ func TestMediaSendsUseTheFixedMethodWithAnExactMultipartBody(t *testing.T) {
 		want := map[string]string{"chat_id": mediaChat, "caption": "hi", "parse_mode": "HTML",
 			"reply_parameters": `{"message_id":5}`, "message_thread_id": "9",
 			"disable_notification": "true", "protect_content": "true"}
+		if kind == kindVideoNote {
+			delete(want, "caption")
+			delete(want, "parse_mode")
+		}
 		if len(fields) != len(want) {
 			t.Errorf("%s fields = %v, want %v", kind, fields, want)
 		}
@@ -152,7 +166,7 @@ func TestMediaSendsUseTheFixedMethodWithAnExactMultipartBody(t *testing.T) {
 				t.Errorf("%s field %s = %q, want %q", kind, name, fields[name], value)
 			}
 		}
-		if len(files) != 1 || files[kind] != [2]string{"file.JPG", "xxxxxxxxxxxx"} {
+		if len(files) != 1 || files[kindSpecs[kind].field] != [2]string{"file.JPG", "xxxxxxxxxxxx"} {
 			t.Errorf("%s files = %v", kind, files)
 		}
 		for _, secretText := range []string{e.dir, "private-name", path} {
@@ -165,7 +179,8 @@ func TestMediaSendsUseTheFixedMethodWithAnExactMultipartBody(t *testing.T) {
 		if err != nil || parsed.binding != mediaChat {
 			t.Fatalf("%s file_ref = %v, %v", kind, result, err)
 		}
-		wantID := map[string]string{kindPhoto: "BIG", kindDocument: "DOC"}[kind]
+		wantID := map[string]string{kindPhoto: "BIG", kindDocument: "DOC", kindVideo: "VID", kindAnimation: "ANI",
+			kindVideoNote: "VNOTE"}[kind]
 		if id := parsed.id; id != wantID || result["message_id"] != int64(7) || result["date"] != int64(1700000000) || len(result) != 3 {
 			t.Errorf("%s result = %v id %q", kind, result, id)
 		}
@@ -173,22 +188,157 @@ func TestMediaSendsUseTheFixedMethodWithAnExactMultipartBody(t *testing.T) {
 }
 
 func TestMediaSendFromAFileRefUsesAJSONBody(t *testing.T) {
+	for kind, want := range map[string]string{
+		kindDocument:  `{"caption":"c","chat_id":"-1001","document":"FID-1","reply_parameters":{"message_id":3}}`,
+		kindVideo:     `{"caption":"c","chat_id":"-1001","reply_parameters":{"message_id":3},"video":"FID-1"}`,
+		kindAnimation: `{"animation":"FID-1","caption":"c","chat_id":"-1001","reply_parameters":{"message_id":3}}`,
+		kindVideoNote: `{"chat_id":"-1001","reply_parameters":{"message_id":3},"video_note":"FID-1"}`,
+	} {
+		e := newMediaEnv(t)
+		arguments := map[string]any{"file_ref": e.ref(mediaChat, "FID-1"), "caption": "c", "reply_to_message_id": 3}
+		if kind == kindVideoNote {
+			delete(arguments, "caption")
+		}
+		if _, err := e.run(t, kind, arguments); err != nil {
+			t.Fatal(err)
+		}
+		r := e.requests[0]
+		if len(e.requests) != 1 || r.path != "POST /bot"+testToken+"/"+kindSpecs[kind].method ||
+			r.contentType != "application/json" {
+			t.Fatalf("%s request = %+v", kind, r)
+		}
+		var body map[string]any
+		_ = json.Unmarshal(r.body, &body)
+		got, _ := json.Marshal(body)
+		if string(got) != want {
+			t.Errorf("%s body = %s, want %s", kind, got, want)
+		}
+	}
+}
+
+func TestVideoNoteRefusesACaptionBeforeSecretsAndIO(t *testing.T) {
 	e := newMediaEnv(t)
-	_, err := e.run(t, kindDocument, map[string]any{"file_ref": e.ref(mediaChat, "FID-1"), "caption": "c",
-		"reply_to_message_id": 3})
+	path := e.write(t, "n.mp4", 3)
+	for _, extra := range []map[string]any{{"caption": "c"}, {"parse_mode": "HTML"}} {
+		arguments := map[string]any{"local_path": path}
+		for k, v := range extra {
+			arguments[k] = v
+		}
+		if _, err := e.run(t, kindVideoNote, arguments); err == nil {
+			t.Errorf("video note with %v was accepted", extra)
+		}
+	}
+	if e.lookups != 0 || len(e.requests) != 0 {
+		t.Errorf("secret lookups = %d, requests = %d, want none", e.lookups, len(e.requests))
+	}
+}
+
+func TestVideoToolsLimitSizeToFiftyMegabytesBeforeIO(t *testing.T) {
+	for _, kind := range []string{kindVideo, kindAnimation, kindVideoNote} {
+		e := newMediaEnv(t)
+		if _, err := e.run(t, kind, map[string]any{"local_path": e.write(t, "big.mp4", maxUploadBytes+1)}); err == nil {
+			t.Errorf("%s above 50 MB was accepted", kind)
+		}
+		if e.lookups != 0 || len(e.requests) != 0 {
+			t.Errorf("%s: secret lookups = %d, requests = %d, want none", kind, e.lookups, len(e.requests))
+		}
+		if _, err := e.run(t, kind, map[string]any{"local_path": e.write(t, "ok.mp4", maxUploadBytes)}); err != nil {
+			t.Errorf("%s of 50 MB: %v", kind, err)
+		}
+	}
+}
+
+func TestAlbumMixesPhotosAndVideos(t *testing.T) {
+	e := newMediaEnv(t)
+	a, b := e.write(t, "one.jpg", 3), e.write(t, "two.mp4", 4)
+	e.answer = func(*http.Request) (*http.Response, error) {
+		return response(200, `{"ok":true,"result":[{"message_id":1,"date":10,"photo":[{"file_id":"P1"}]},`+
+			`{"message_id":2,"date":10,"video":{"file_id":"V2"}},{"message_id":3,"date":10,"video":{"file_id":"V3"}}]}`), nil
+	}
+	out, err := e.run(t, "album", map[string]any{"type": "photo", "caption": "c", "items": []any{
+		map[string]any{"local_path": a}, map[string]any{"type": "video", "local_path": b},
+		map[string]any{"type": "video", "file_ref": e.ref(mediaChat, "KNOWN")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := e.requests[0]
-	if len(e.requests) != 1 || r.path != "POST /bot"+testToken+"/sendDocument" || r.contentType != "application/json" {
-		t.Fatalf("request = %+v", r)
+	fields, files := parts(t, e.requests[0])
+	want := `[{"type":"photo","media":"attach://file0","caption":"c"},{"type":"video","media":"attach://file1"},` +
+		`{"type":"video","media":"KNOWN"}]`
+	if len(e.requests) != 1 || fields["media"] != want || len(files) != 2 || files["file1"][0] != "file-2.mp4" {
+		t.Errorf("fields = %v, files = %v", fields, files)
 	}
-	var body map[string]any
-	_ = json.Unmarshal(r.body, &body)
-	want := `{"caption":"c","chat_id":"-1001","document":"FID-1","reply_parameters":{"message_id":3}}`
-	got, _ := json.Marshal(body)
-	if string(got) != want {
-		t.Errorf("body = %s, want %s", got, want)
+	messages := out.(map[string]any)["messages"].([]map[string]any)
+	for i, id := range []string{"P1", "V2", "V3"} {
+		parsed, err := parseRef(e.resolved, refFile, messages[i]["file_ref"].(string))
+		if err != nil || parsed.id != id {
+			t.Errorf("message %d = %v, %v", i, messages[i], err)
+		}
+	}
+}
+
+func TestAlbumKeepsDocumentsApartAndChecksVideoLimits(t *testing.T) {
+	e := newMediaEnv(t)
+	ref := e.ref(mediaChat, "A")
+	for name, arguments := range map[string]map[string]any{
+		"document with item type": {"type": "document", "items": []any{
+			map[string]any{"file_ref": ref}, map[string]any{"type": "photo", "file_ref": ref}}},
+		"document item in photo album": {"type": "photo", "items": []any{
+			map[string]any{"file_ref": ref}, map[string]any{"type": "document", "file_ref": ref}}},
+		"videos above 50 MB together": {"type": "video", "items": []any{
+			map[string]any{"local_path": e.write(t, "a.mp4", maxUploadBytes/2+1)},
+			map[string]any{"local_path": e.write(t, "b.mp4", maxUploadBytes/2+1)}}},
+		"photo item above 10 MB": {"type": "video", "items": []any{
+			map[string]any{"type": "photo", "local_path": e.write(t, "c.jpg", maxPhotoBytes+1)},
+			map[string]any{"file_ref": ref}}},
+	} {
+		if _, err := e.run(t, "album", arguments); err == nil {
+			t.Errorf("%s was accepted", name)
+		}
+	}
+	if e.lookups != 0 || len(e.requests) != 0 {
+		t.Errorf("secret lookups = %d, requests = %d, want none", e.lookups, len(e.requests))
+	}
+}
+
+// The schemas and argument texts of the media tools state the limits the code enforces.
+func TestMediaSchemaBoundsMatchTheCode(t *testing.T) {
+	for _, d := range []capability.Descriptor{photosSend, documentsSend, videosSend, animationsSend, videoNotesSend,
+		mediaGroupsSend} {
+		var schema struct {
+			Properties map[string]struct {
+				MaxLength int `json:"maxLength"`
+				MaxItems  int `json:"maxItems"`
+				MinItems  int `json:"minItems"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(d.InputSchema, &schema); err != nil {
+			t.Fatalf("%s: %v", d.ID, err)
+		}
+		caption, hasCaption := schema.Properties["caption"]
+		if d.ID == videoNotesSend.ID {
+			if hasCaption || schema.Properties["parse_mode"].MaxLength != 0 {
+				t.Errorf("%s offers a caption", d.ID)
+			}
+			if _, ok := schema.Properties["parse_mode"]; ok {
+				t.Errorf("%s offers parse_mode", d.ID)
+			}
+		} else if !hasCaption || caption.MaxLength != maxCaptionRunes {
+			t.Errorf("%s caption maxLength = %d, want %d", d.ID, caption.MaxLength, maxCaptionRunes)
+		}
+		if d.ID == mediaGroupsSend.ID {
+			items := schema.Properties["items"]
+			if items.MinItems != minAlbumItems || items.MaxItems != maxAlbumItems {
+				t.Errorf("items bounds = %d..%d", items.MinItems, items.MaxItems)
+			}
+		}
+	}
+	for _, d := range []capability.Descriptor{documentsSend, videosSend, animationsSend, videoNotesSend} {
+		if want := strconv.Itoa(maxUploadBytes>>20) + " MB"; !strings.Contains(d.Description, "up to "+want) {
+			t.Errorf("%s description does not state %s", d.ID, want)
+		}
+	}
+	if want := strconv.Itoa(maxPhotoBytes>>20) + " MB"; !strings.Contains(photosSend.Description, "up to "+want) {
+		t.Errorf("photo description does not state %s", want)
 	}
 }
 
@@ -210,7 +360,10 @@ func TestMediaSendRejectsSourcesBeforeSecretsAndIO(t *testing.T) {
 		"parse mode":       {"local_path": local, "parse_mode": "Markdown", "chat": mediaChat},
 	}
 	for name, arguments := range cases {
-		for _, kind := range []string{kindPhoto, kindDocument} {
+		for _, kind := range singleKinds {
+			if kind == kindVideoNote && (name == "long caption" || name == "parse mode") {
+				continue
+			}
 			_, err := e.run(t, kind, arguments)
 			if err == nil {
 				t.Errorf("%s/%s was accepted", name, kind)
@@ -379,7 +532,7 @@ func TestMediaSendsNeverRetryAndReportUncertainty(t *testing.T) {
 		"unreadable": func(*http.Request) (*http.Response, error) { return response(200, `not json`), nil },
 		"no message": func(*http.Request) (*http.Response, error) { return response(200, `{"ok":true,"result":{}}`), nil },
 	} {
-		for _, kind := range []string{kindPhoto, kindDocument, "album"} {
+		for _, kind := range append(append([]string{}, singleKinds...), "album") {
 			e := newMediaEnv(t)
 			e.answer = answer
 			path := e.write(t, "f.bin", 2)
@@ -407,7 +560,8 @@ func TestMediaToolsDeclareRiskGroupAndProfile(t *testing.T) {
 	if err := reg.ValidateProfiles(); err != nil {
 		t.Fatal(err)
 	}
-	for _, d := range []capability.Descriptor{photosSend, documentsSend, mediaGroupsSend} {
+	for _, d := range []capability.Descriptor{photosSend, documentsSend, mediaGroupsSend, videosSend, animationsSend,
+		videoNotesSend} {
 		if d.Risk != mediaRisk || d.Group != groupMedia || d.LocalFiles != config.LocalFilesRead || d.RequiresToolAllowList ||
 			d.Risk.Effect != capability.EffectCreate || d.Risk.Idempotency != capability.IdempotencyNonIdempotent ||
 			d.Risk.Confirmation != capability.ConfirmationRequired || !d.Risk.OpenWorld || d.Risk.DataSensitivity == "" {
@@ -418,11 +572,12 @@ func TestMediaToolsDeclareRiskGroupAndProfile(t *testing.T) {
 	found := false
 	for _, profile := range metadata.Profiles {
 		if profile.ID == "media" {
-			found = !profile.Recommended && len(profile.Tools) == 3 && profile.Tools[0] == photosSend.ID &&
-				profile.Tools[1] == documentsSend.ID && profile.Tools[2] == mediaGroupsSend.ID
+			found = !profile.Recommended && len(profile.Tools) == 6 && profile.Tools[0] == photosSend.ID &&
+				profile.Tools[1] == documentsSend.ID && profile.Tools[2] == mediaGroupsSend.ID &&
+				profile.Tools[3] == videosSend.ID && profile.Tools[4] == animationsSend.ID && profile.Tools[5] == videoNotesSend.ID
 		}
 	}
 	if !found {
-		t.Errorf("profiles = %+v, want media with exactly the three send tools", metadata.Profiles)
+		t.Errorf("profiles = %+v, want media with exactly the six send tools", metadata.Profiles)
 	}
 }
