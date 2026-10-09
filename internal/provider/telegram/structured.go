@@ -112,7 +112,7 @@ var venuesSend = capability.Descriptor{
 	Provider:    Provider,
 	Group:       groupInteractions,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` + coordinateSchema + `,` +
-		`"title":{"type":"string","minLength":1,"maxLength":1024},"address":{"type":"string","minLength":1,"maxLength":2048},` +
+		`"title":{"type":"string","minLength":1,"maxLength":256},"address":{"type":"string","minLength":1,"maxLength":512},` +
 		structuredCommonSchema + `},"required":["latitude","longitude","title","address"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(structuredOutputSchema),
 	Arguments: structuredArguments(
@@ -138,9 +138,9 @@ var contactsSend = capability.Descriptor{
 	Provider:    Provider,
 	Group:       groupInteractions,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` +
-		`"phone_number":{"type":"string","minLength":1,"maxLength":256},` +
-		`"first_name":{"type":"string","minLength":1,"maxLength":256},` +
-		`"last_name":{"type":"string","minLength":1,"maxLength":256},` +
+		`"phone_number":{"type":"string","minLength":1,"maxLength":64},` +
+		`"first_name":{"type":"string","minLength":1,"maxLength":64},` +
+		`"last_name":{"type":"string","minLength":1,"maxLength":64},` +
 		structuredCommonSchema + `},"required":["phone_number","first_name"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(structuredOutputSchema),
 	Arguments: structuredArguments(

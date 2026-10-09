@@ -276,3 +276,27 @@ func TestStructuredRiskGroupAndProfiles(t *testing.T) {
 		}
 	}
 }
+
+func TestStructuredSchemaLengthsMatchChecks(t *testing.T) {
+	for _, c := range []struct {
+		d     capability.Descriptor
+		field string
+		max   int
+	}{
+		{venuesSend, "title", maxVenueTitleRunes}, {venuesSend, "address", maxVenueAddressRunes},
+		{contactsSend, "phone_number", maxContactPhoneRunes}, {contactsSend, "first_name", maxContactNameRunes},
+		{contactsSend, "last_name", maxContactNameRunes},
+	} {
+		var schema struct {
+			Properties map[string]struct {
+				MaxLength int `json:"maxLength"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(c.d.InputSchema, &schema); err != nil {
+			t.Fatal(err)
+		}
+		if got := schema.Properties[c.field].MaxLength; got != c.max {
+			t.Errorf("%s %s maxLength = %d, want %d", c.d.ID, c.field, got, c.max)
+		}
+	}
+}
