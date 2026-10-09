@@ -92,7 +92,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "chats"
 		case tool.ID == filesGet.ID || tool.ID == filesDownload.ID:
 			want = "files"
-		case tool.ID == photosSend.ID || tool.ID == documentsSend.ID || tool.ID == mediaGroupsSend.ID:
+		case tool.ID == photosSend.ID || tool.ID == documentsSend.ID || tool.ID == mediaGroupsSend.ID ||
+			tool.ID == videosSend.ID || tool.ID == animationsSend.ID || tool.ID == videoNotesSend.ID:
 			want = "media"
 		case strings.HasPrefix(tool.ID, "telegram.polls.") || strings.HasPrefix(tool.ID, "telegram.reactions.") ||
 			strings.HasPrefix(tool.ID, "telegram.chatactions.") || tool.ID == locationsSend.ID ||
@@ -106,8 +107,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 37 {
-		t.Fatalf("operation count = %d, want thirty-seven", len(operations))
+	if len(operations) != 40 {
+		t.Fatalf("operation count = %d, want forty", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
