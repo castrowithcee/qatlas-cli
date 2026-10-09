@@ -241,13 +241,14 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 26 || descriptors[0].ID != "nextcloud.favorites.list" ||
+	if len(descriptors) != 29 || descriptors[0].ID != "nextcloud.favorites.list" ||
 		descriptors[4].ID != "nextcloud.files.favorite" || descriptors[8].ID != "nextcloud.files.search" ||
 		descriptors[11].ID != "nextcloud.filetags.add" || descriptors[13].ID != "nextcloud.filetags.remove" ||
 		descriptors[15].ID != "nextcloud.folders.delete" || descriptors[18].ID != "nextcloud.shares.list" ||
-		descriptors[19].ID != "nextcloud.systemtags.list" || descriptors[20].ID != "nextcloud.trash.delete" ||
-		descriptors[22].ID != "nextcloud.trash.restore" || descriptors[23].ID != "nextcloud.versions.get" ||
-		descriptors[25].ID != "nextcloud.versions.restore" {
+		descriptors[19].ID != "nextcloud.systemtags.create" || descriptors[21].ID != "nextcloud.systemtags.list" ||
+		descriptors[22].ID != "nextcloud.systemtags.update" || descriptors[23].ID != "nextcloud.trash.delete" ||
+		descriptors[25].ID != "nextcloud.trash.restore" || descriptors[26].ID != "nextcloud.versions.get" ||
+		descriptors[28].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {

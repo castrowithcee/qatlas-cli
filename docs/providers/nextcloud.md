@@ -51,7 +51,7 @@ identity reaches) or `kind/ID`:
   `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric), `notes` or `notes/CATEGORY` (a sub-folder
   such as `Work/Plans` is allowed).
 - `account`: the account-wide and instance-wide reach of the identity (notifications, activity, search,
-  directory, incoming shares, system tag catalog).
+  directory, incoming shares, system tag catalog and its administration).
 - `admin`: provisioning reads; only as the sole target of a connection.
 
 The general and the specific form of one kind cannot be combined, and no kind lists more than 100 entries.
@@ -172,12 +172,26 @@ addresses the relations (`remote.php/dav/systemtags-relations/files/<file_id>`) 
 answer. A `tag_id` is digits only, as `systemtags.list` reports it.
 
 Only visible tags are ever listed or touched; a listing reports at most 200 tags and marks a cut with
-`truncated`. `assignable` is true when the identity may assign the tag. Tags are only assigned and removed
-here, never created, changed, or deleted. `filetags.add` and `filetags.remove` need `confirm`, read the tag
+`truncated`. `assignable` is true when the identity may assign the tag. The `filetags` tools only assign and
+remove tags; they never create, change, or delete one. `filetags.add` and `filetags.remove` need `confirm`, read the tag
 once after the stat, and refuse an invisible or non-assignable tag without a change request; then they send
 exactly one `PUT` or `DELETE`. A tag that is already assigned, or not assigned on removal, is a clear error. An
 unclear outcome is reported as possibly applied, to be checked with `filetags.list`, and never repeated.
 `filetags.list` is in the setup profiles `read` and `write`; `systemtags.list`, `add`, and `remove` are in none.
+
+`nextcloud.systemtags.create`, `systemtags.update`, and `systemtags.delete` administer the catalog, need an
+`account` target and `confirm`, and are in no setup profile; `systemtags.delete` is reachable only through a
+tools list and drops every assignment of the tag on the whole instance. The rights of the identity stay the
+upper bound: creating or hiding a tag from users (`visible` or `assignable` false) needs administrator rights in
+Nextcloud. `create` defaults both to true, takes a name of at most 64 characters, and sends one `POST`; it
+reports the new `tag_id` only when Nextcloud names it as a direct child of the catalog, otherwise it reports
+the tag as created without an ID, to be found with `systemtags.list`. `update` changes name, `visible`,
+`assignable`, or `color` (six hex digits) with one `PROPPATCH`; it takes at least one field and cannot clear a
+color. `update` and `delete` read the tag once first and treat an invisible tag as missing, but, unlike
+`filetags.add`, also act on a tag the identity may not assign. Group restrictions are not offered. A taken
+name is a clear error on `create`; on `update` Nextcloud reports it inside the answer, so a refused change
+cannot be told apart from a missing right. An unclear outcome is reported as possibly applied, to be checked
+with `systemtags.list`, and never repeated.
 
 ## Local files
 
