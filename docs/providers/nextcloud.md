@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads, typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud file operations, file comments, share reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -192,6 +192,25 @@ color. `update` and `delete` read the tag once first and treat an invisible tag 
 name is a clear error on `create`; on `update` Nextcloud reports it inside the answer, so a refused change
 cannot be told apart from a missing right. An unclear outcome is reported as possibly applied, to be checked
 with `systemtags.list`, and never repeated.
+
+## File comments
+
+`nextcloud.comments.list`, `comments.create`, `comments.update`, and `comments.delete` work on the comments of one
+file below the connection root and need a `folder` target. A folder is refused. The file is addressed by path; the `file_id` comes
+from a stat of that path and is never an argument, and a `comment_id` is digits only, as `comments.list` reports
+it, and is only ever appended to the collection of that file.
+
+`list` reads newest first with one `REPORT`; `limit` is 1 to 50 (default 20), `offset` skips comments, and
+`truncated` marks that more follow. Text and author names are untrusted data; a text above 1000 characters, the
+length Nextcloud accepts, is cut and marked with `message_truncated`. Input text is limited to the same 1000
+characters. `create` sends one `POST` and reports the `comment_id` only when Nextcloud names it; `update` replaces
+the text with one `PROPPATCH`; `delete` sends one `DELETE`. Each needs `confirm` and sends exactly one request
+after the stat. A mention in the text notifies that user, so the tools are open-world. Nextcloud lets an identity
+change or delete only its own comments; a refusal is reported as a permission error. An unclear outcome is
+reported as possibly applied, to be checked with `comments.list`, and never repeated.
+
+`comments.list` is in the setup profiles `read` and `write`; `create` and `update` are in none, and `delete`
+is reachable only through a tools list.
 
 ## Local files
 
