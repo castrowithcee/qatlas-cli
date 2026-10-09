@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads and management, Deck and Talk reads, typed targets, connection
-  permissions, and safety boundaries.
+  Describes Nextcloud file operations, file comments, share reads and management, Deck and Talk reads, typed targets,
+  connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -252,6 +252,16 @@ color. `update` and `delete` read the tag once first and treat an invisible tag 
 name is a clear error on `create`; on `update` Nextcloud reports it inside the answer, so a refused change
 cannot be told apart from a missing right. An unclear outcome is reported as possibly applied, to be checked
 with `systemtags.list`, and never repeated.
+
+## File comments
+
+The `nextcloud.comments.*` tools read and write the comments of one file below the bound root and need a `folder`
+target; folders are refused. The file ID comes only from a stat of the path, and a comment ID is only ever used
+below that file. Comment text and author names are untrusted data, and long text is cut and marked. Writing needs
+`confirm`, sends exactly one request after the stat, and is open-world because a mention notifies that user;
+Nextcloud lets an identity change or delete only its own comments. An unclear outcome is reported as possibly
+applied and never repeated. `comments.list` is in the `read` and `write` profiles, `create` and `update` in none,
+and `delete` is reachable only through a tools list.
 
 ## Local files
 
