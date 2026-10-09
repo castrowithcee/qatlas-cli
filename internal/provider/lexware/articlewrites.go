@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 	"unicode/utf8"
 
@@ -279,4 +280,71 @@ func (c *Client) CreateArticle(ctx context.Context, input articleChanges) (*crea
 func (c *Client) UpdateArticle(ctx context.Context, input articleChanges) (*createResult, error) {
 	return c.updateObject(ctx, "update article", resourceArticle, "/v1/articles", input.ID,
 		articleMayChanged, "an article", input.set)
+}
+
+const articleMayBeDeleted = "; the article may have been deleted, check the article list before repeating it"
+
+// Deleting is final, yet repeating it only reports the article as missing.
+var articleDeleteRisk = capability.Risk{
+	Effect:          capability.EffectDelete,
+	Idempotency:     capability.IdempotencyIdempotent,
+	Confirmation:    capability.ConfirmationRequired,
+	OpenWorld:       true,
+	DataSensitivity: articleSensitivity,
+}
+
+var articlesDelete = capability.Descriptor{
+	ID: Provider + ".articles.delete", Version: 1, Title: "Delete a Lexware article",
+	Description: "Permanently delete one article from the Lexware Office article master data; it cannot be " +
+		"restored. Offered only by a connection whose tools list names it",
+	Tags:     []string{"lexware", "articles", "delete", "products", "services", "accounting"},
+	Provider: Provider, Risk: articleDeleteRisk, RequiresToolAllowList: true,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema +
+		`},"required":["id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"},` +
+		`"deleted":{"type":"boolean"}},"required":["id","deleted"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		{Name: "id", Description: "Article identifier as a UUID, as returned by lexware.articles.list", Required: true},
+	},
+	Fields: []capability.Field{
+		{Name: "id", Description: "Identifier of the deleted article"},
+		{Name: "deleted", Description: "Always true: Lexware confirmed the deletion"},
+	},
+	Examples: []capability.Example{{
+		Description: "Delete one article",
+		Arguments:   json.RawMessage(`{"id":"11111111-2222-3333-4444-555555555555"}`),
+	}},
+}
+
+type articleDeleted struct {
+	ID      string `json:"id"`
+	Deleted bool   `json:"deleted"`
+}
+
+func invokeArticlesDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "delete article"
+	var arguments struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &arguments); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if !validUUID(arguments.ID) {
+		return nil, providerError(op, "the article identifier must be a UUID")
+	}
+	client, err := Open(ctx, resolved, secrets, red)
+	if err != nil {
+		return nil, err
+	}
+	return client.DeleteArticle(ctx, arguments.ID)
+}
+
+// DeleteArticle sends exactly one DELETE, never repeated.
+func (c *Client) DeleteArticle(ctx context.Context, id string) (*articleDeleted, error) {
+	const op = "delete article"
+	if err := c.delete(ctx, op, resourceArticle, "/v1/articles/"+url.PathEscape(id), articleMayBeDeleted); err != nil {
+		return nil, err
+	}
+	return &articleDeleted{ID: id, Deleted: true}, nil
 }
