@@ -71,19 +71,23 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 4 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "updates" ||
-		metadata.Groups[2].ID != "chats" || metadata.Groups[3].ID != "bot" {
+	if len(metadata.Groups) != 6 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
+		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "chats" || metadata.Groups[4].ID != "bot" ||
+		metadata.Groups[5].ID != "files" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
 		want := "messages"
-		if tool.ID == updatesList.ID {
+		switch {
+		case tool.ID == updatesList.ID:
 			want = "updates"
-		}
-		if strings.HasPrefix(tool.ID, "telegram.chats.") {
+		case strings.HasPrefix(tool.ID, "telegram.pins."):
+			want = "pins"
+		case strings.HasPrefix(tool.ID, "telegram.chats."):
 			want = "chats"
-		}
-		if tool.ID == botGet.ID || tool.ID == webhookGet.ID {
+		case tool.ID == filesGet.ID || tool.ID == filesDownload.ID:
+			want = "files"
+		case tool.ID == botGet.ID || tool.ID == webhookGet.ID:
 			want = "bot"
 		}
 		if tool.Group != want {
@@ -91,8 +95,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 11 {
-		t.Fatalf("operation count = %d, want eleven", len(operations))
+	if len(operations) != 17 {
+		t.Fatalf("operation count = %d, want seventeen", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -113,7 +117,8 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 		t.Fatal(err)
 	}
 	for _, d := range reg.Provider(Provider) {
-		if want := d.ID == messagesDelete.ID; d.RequiresToolAllowList != want {
+		want := d.ID == messagesDelete.ID || d.ID == messagesDeleteMany.ID || d.ID == pinsUnpinAll.ID
+		if d.RequiresToolAllowList != want {
 			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
 		}
 	}

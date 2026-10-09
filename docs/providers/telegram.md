@@ -1,6 +1,7 @@
 ---
 description: >
-  Describes Telegram message and update operations, fixed chat targets, connection permissions, and safety boundaries.
+  Describes Telegram message, update, and file operations, fixed chat targets, connection permissions, and
+  safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -11,8 +12,9 @@ updated: 2026-10-09
 
 A connection binds one bot token to its targets, given as `target` (one) or `targets` (a list). A target is
 a chat (a numeric chat ID, also negative, or an `@username`), `bot`, or `business/<id>`. It can send
-(`create`), edit (`update`, including the inline keyboard), and delete (`delete`) messages in its chats, and
-every operation requires confirmation. Telegram's own edit and delete restrictions still apply.
+(`create`), edit (`update`, including the inline keyboard), and delete (`delete`) messages in its chats and pin
+or unpin them (`update`), and every operation requires confirmation. Telegram's own edit and delete
+restrictions still apply.
 
 `telegram.messages.send` sends text of 1 through 4096 characters. `parse_mode` (`HTML` or `MarkdownV2`)
 formats it; Telegram's parser decides whether the markup is valid, and its rejection surfaces as a provider
@@ -42,10 +44,11 @@ combine with chats, and a connection with only `bot` has no chat. A tool that ne
 before the credential is read when the target is missing. Methods that accept only a numeric chat ID refuse an
 `@username` chat locally.
 
-Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the update
-tool to `updates`, the chat tools to `chats`, the bot and webhook tools to `bot`. A group never changes a tool
-ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user,
-query, or fragment, with no exception for local addresses, and redirects are never followed.
+Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
+to `pins`, the update tool to `updates`, the chat tools to `chats`, the bot and webhook tools to `bot`, the file
+tools to `files`. A group never changes a tool ID, a permission, or a tools list. The base URL must be a plain
+`https` URL with a host and without user, query, or fragment, with no exception for local addresses, and
+redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
@@ -58,6 +61,16 @@ result, preventing duplicate sends or unplanned repeated changes.
 list no longer offers it. Its reach is that of the Bot API `deleteMessage`: in a bound chat the bot
 deletes its own messages and, as an administrator, those of others; in a private chat it also deletes incoming
 messages.
+
+`telegram.messages.deletemany` deletes from 1 through 100 messages of one chat in a single request and also
+requires a `tools` list. Its reach is that of `telegram.messages.delete`. Repeated identifiers count once.
+Telegram skips missing or undeletable identifiers without any notice, so success reports only that Telegram
+accepted the request, not which messages are gone.
+
+`telegram.pins.pin` pins one message by `message_id`; `disable_notification` pins silently.
+`telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
+`telegram.pins.unpinall` unpins every pinned message of the chat and, like `telegram.messages.delete`,
+requires a `tools` list. Telegram's own pin rights still apply, and topic-specific unpinning is not offered.
 
 ## Reading updates
 
@@ -101,12 +114,28 @@ waiting (`pending_update_count`), and, when present, the time of the last delive
 It needs the `bot` target and is refused before the credential is read without it. The webhook URL and every
 other field of Telegram's answer are never returned. It is part of no setup profile.
 
+## Files
+
+`telegram.files.get` (`read`) returns the size and `file_unique_id` of one file; `telegram.files.download`
+(`read`) writes it to `local_path`. Both take only a `file_ref` from `media.file_ref` of `telegram.updates.list`:
+a raw file identifier, a reference bound to another target, one signed with another token, or one of another
+kind is refused. Neither tool is part of a setup profile.
+
+`telegram.files.download` is offered only on a connection that releases a directory for writing (`files`).
+A `local_path` outside it is refused before the credential is read. An existing file is replaced only with
+confirmation, and a failed or incomplete transfer leaves no file. The result carries size and SHA-256, never the
+content. Files above 20 MB, the Bot API's limit for bots, are refused before the download, and a response
+longer than the reported size is rejected. The download URL carries the bot token; it and Telegram's
+`file_path` appear in no output, error, or log, and a redirect is never followed.
+
 ## Setup profiles
 
 The terminal editor starts a new connection on the setup profile `send`, which ticks `[create]` and
 `[telegram.messages.send]`: the read tools expose incoming message content, while a send reaches only a bound
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
 `[telegram.bot.get]`, and the four `telegram.chats.*` tools. The profile `messaging` also ticks `update`,
-`delete`, `telegram.messages.edit`, and `telegram.messages.delete`; `telegram.messages.editreplymarkup` is in
-no profile. A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools`
-are saved, every tick can be changed before saving, and a saved connection never follows a profile.
+`delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
+`telegram.pins.pin`, and `telegram.pins.unpin`. `telegram.messages.editreplymarkup` and
+`telegram.pins.unpinall` are in no profile. A profile is a visible starting selection, not a role: only the
+ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection
+never follows a profile.

@@ -221,7 +221,8 @@ func companyMutationDescriptor(action string, effect capability.Effect, idempote
 // readTools are the tools of the read profile; the write profile adds the record writes to them.
 var readTools = []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID,
 	recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsSearchAll.ID, recordsGroupBy.ID, activitytargetsList.ID,
-	workflowsList.ID, workflowsGet.ID, workflowRunsList.ID}
+	workflowsList.ID, workflowsGet.ID, workflowRunsList.ID, webhooksList.ID, webhooksGet.ID, membersList.ID,
+	membersGet.ID}
 
 // Register adds Twenty metadata, its read-only connection test, and the bounded company operations.
 func Register(reg *capability.Registry) error {
@@ -249,7 +250,7 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read companies, objects, and records", Recommended: true,
-			Description: "lists and reads companies, the objects of the workspace, their records, also by structured conditions and counted by field, and the workflows and runs of the workspace; changes nothing in Twenty CRM",
+			Description: "lists and reads companies, the objects of the workspace, their records, also by structured conditions and counted by field, the workflows and runs of the workspace, and its members; changes nothing in Twenty CRM",
 			Tools:       readTools,
 		}, {
 			ID: "write", Title: "Read and write records",
@@ -284,6 +285,12 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(workflowsList, workflowsGroup), Handler: capability.Handler(invokeWorkflowsList)},
 		capability.Operation{Descriptor: inGroup(workflowsGet, workflowsGroup), Handler: capability.Handler(invokeWorkflowsGet)},
 		capability.Operation{Descriptor: inGroup(workflowRunsList, workflowsGroup), Handler: capability.Handler(invokeWorkflowRunsList)},
+		capability.Operation{Descriptor: inGroup(membersList, membersGroup), Handler: capability.Handler(invokeMembersList)},
+		capability.Operation{Descriptor: inGroup(membersGet, membersGroup), Handler: capability.Handler(invokeMembersGet)},
+		capability.Operation{Descriptor: inGroup(rolesList, membersGroup), Handler: capability.Handler(invokeRolesList)},
+		capability.Operation{Descriptor: inGroup(metaObjectsList, metadataGroup), Handler: capability.Handler(invokeMetaObjectsList)},
+		capability.Operation{Descriptor: inGroup(metaObjectsGet, metadataGroup), Handler: capability.Handler(invokeMetaObjectsGet)},
+		capability.Operation{Descriptor: inGroup(metaFieldsGet, metadataGroup), Handler: capability.Handler(invokeMetaFieldsGet)},
 		capability.Operation{Descriptor: inGroup(recordsDelete, recordsGroup), Handler: capability.Handler(invokeRecordsDelete)},
 		capability.Operation{Descriptor: inGroup(recordsRestore, recordsGroup), Handler: capability.Handler(invokeRecordsRestore)},
 		capability.Operation{Descriptor: inGroup(recordsDestroy, recordsGroup), Handler: capability.Handler(invokeRecordsDestroy)},
@@ -293,6 +300,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(recordsDuplicates, recordsGroup), Handler: capability.Handler(invokeRecordsDuplicates)},
 		capability.Operation{Descriptor: inGroup(recordsMergePreview, recordsGroup), Handler: capability.Handler(invokeRecordsMergePreview)},
 		capability.Operation{Descriptor: inGroup(recordsMerge, recordsGroup), Handler: capability.Handler(invokeRecordsMerge)},
+		capability.Operation{Descriptor: inGroup(webhooksList, webhooksGroup), Handler: capability.Handler(invokeWebhooksList)},
+		capability.Operation{Descriptor: inGroup(webhooksGet, webhooksGroup), Handler: capability.Handler(invokeWebhooksGet)},
+		capability.Operation{Descriptor: inGroup(webhooksUpdate, webhooksGroup), Handler: capability.Handler(invokeWebhooksUpdate)},
+		capability.Operation{Descriptor: inGroup(webhooksDelete, webhooksGroup), Handler: capability.Handler(invokeWebhooksDelete)},
 	)
 }
 
@@ -928,6 +939,12 @@ func primaryDomain(raw json.RawMessage) string {
 
 // get performs one bounded read against the configured origin and decodes the response into out.
 func (c *Client) get(ctx context.Context, op, path string, query url.Values, limit int64, out any) error {
+	return c.getWith(ctx, op, path, query, limit, out, defaultStatusTexts)
+}
+
+// getWith is get with the texts of a failed status chosen by the caller.
+func (c *Client) getWith(ctx context.Context, op, path string, query url.Values, limit int64, out any,
+	texts provider.StatusTexts) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "Twenty", err)
 	}
@@ -950,7 +967,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, lim
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return c.responseError(op, response)
+		return c.responseErrorWith(op, response, texts)
 	}
 	if failure := provider.ReadJSON(op, "Twenty", response.Body, limit, out); failure != nil {
 		return failure
@@ -1011,16 +1028,22 @@ func (c *Client) changeWith(ctx context.Context, op, uncertain, method, path str
 // request and record detail into it, and the class plus the status is what a caller can act on. A 429
 // holds the rate limit of the key for the time Twenty asks for.
 func (c *Client) responseError(op string, response *http.Response) *provider.Error {
+	return c.responseErrorWith(op, response, defaultStatusTexts)
+}
+
+var defaultStatusTexts = provider.StatusTexts{
+	Subject: "Twenty",
+	Auth:    "Twenty rejected the API key",
+	Permission: "the workspace role of this API key may not perform this operation; check the role of " +
+		"the API key in Twenty",
+	NotFound: "this Twenty workspace does not hold this record or object",
+}
+
+func (c *Client) responseErrorWith(op string, response *http.Response, texts provider.StatusTexts) *provider.Error {
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
-		Subject: "Twenty",
-		Auth:    "Twenty rejected the API key",
-		Permission: "the workspace role of this API key may not perform this operation; check the role of " +
-			"the API key in Twenty",
-		NotFound: "this Twenty workspace does not hold this record or object",
-	})
+	return provider.ClassifyStatus(op, response.StatusCode, texts)
 }
 
 func providerError(op, message string) error {

@@ -131,6 +131,7 @@ type fileJSON struct {
 	ID        string `json:"id"`
 	UserID    string `json:"user_id"`
 	PostID    string `json:"post_id"`
+	ChannelID string `json:"channel_id"`
 	CreateAt  int64  `json:"create_at"`
 	DeleteAt  int64  `json:"delete_at"`
 	Name      string `json:"name"`

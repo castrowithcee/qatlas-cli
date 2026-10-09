@@ -20,12 +20,6 @@ const (
 	administratorsBytes = 256 << 10
 )
 
-const chatArgument = `"chat":{"type":"string","minLength":1,"maxLength":128}`
-
-var chatArgumentDoc = capability.Argument{
-	Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat",
-}
-
 func readRisk(sensitivity string) capability.Risk {
 	return capability.Risk{
 		Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
@@ -86,13 +80,13 @@ var chatsGet = capability.Descriptor{
 	Risk:        readRisk(dataSensitivity),
 	Provider:    Provider,
 	Group:       groupChats,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatArgument + `},"additionalProperties":false}`),
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"},"type":{"type":"string"},` +
 		`"title":{"type":"string"},"username":{"type":"string"},"is_forum":{"type":"boolean"},` +
 		`"description":{"type":"string"},"permissions":` + permissionsSchema + `,"slow_mode_delay":{"type":"integer"},` +
 		`"pinned_message_id":{"type":"integer"},"linked_chat_id":{"type":"integer"}},` +
 		`"required":["id","type"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{chatArgumentDoc},
+	Arguments: []capability.Argument{chatArgument},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Telegram chat identifier"},
 		{Name: "type", Description: "private, group, supergroup, or channel"},
@@ -117,10 +111,10 @@ var chatsAdministrators = capability.Descriptor{
 	Risk:        readRisk(memberDataSensitivity),
 	Provider:    Provider,
 	Group:       groupChats,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatArgument + `},"additionalProperties":false}`),
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"administrators":{"type":"array","items":` +
 		memberSchema + `},"truncated":{"type":"boolean"}},"required":["administrators"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{chatArgumentDoc},
+	Arguments: []capability.Argument{chatArgument},
 	Fields: append([]capability.Field{
 		{Name: "administrators", Description: "At most 200 administrators"},
 		{Name: "truncated", Description: "True when Telegram returned more administrators than are shown"},
@@ -137,10 +131,10 @@ var chatsMemberCount = capability.Descriptor{
 	Risk:        readRisk(dataSensitivity),
 	Provider:    Provider,
 	Group:       groupChats,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatArgument + `},"additionalProperties":false}`),
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `},"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"count":{"type":"integer"}},` +
 		`"required":["count"],"additionalProperties":false}`),
-	Arguments: []capability.Argument{chatArgumentDoc},
+	Arguments: []capability.Argument{chatArgument},
 	Fields:    []capability.Field{{Name: "count", Description: "Number of members of the chat"}},
 	Examples:  []capability.Example{{Description: "Count the members of the chat", Arguments: json.RawMessage(`{}`)}},
 }
@@ -154,11 +148,11 @@ var chatsMember = capability.Descriptor{
 	Risk:        readRisk(memberDataSensitivity),
 	Provider:    Provider,
 	Group:       groupChats,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatArgument + `,` +
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` +
 		`"user_id":{"type":"integer","minimum":1}},"required":["user_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(memberSchema),
 	Arguments: []capability.Argument{
-		chatArgumentDoc,
+		chatArgument,
 		{Name: "user_id", Description: "Telegram user identifier of the member", Required: true},
 	},
 	Fields:   memberFields,
