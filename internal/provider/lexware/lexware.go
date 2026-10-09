@@ -276,6 +276,7 @@ func Register(reg *capability.Registry) error {
 	readTools := []string{invoicesList.ID, invoicesGet.ID, contactsList.ID, contactsGet.ID,
 		articlesList.ID, articlesGet.ID, voucherlistList.ID, paymentsGet.ID, vouchersGet.ID,
 		quotationsGet.ID, orderConfirmationsGet.ID, creditNotesGet.ID, deliveryNotesGet.ID,
+		dunningsGet.ID, downPaymentInvoicesGet.ID, recurringTemplatesList.ID, recurringTemplatesGet.ID,
 		profileGet.ID, countriesList.ID, paymentConditionsList.ID, postingCategoriesList.ID, printLayoutsList.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
@@ -325,6 +326,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: paymentConditionsList, Handler: capability.Handler(invokePaymentConditionsList)},
 		capability.Operation{Descriptor: postingCategoriesList, Handler: capability.Handler(invokePostingCategoriesList)},
 		capability.Operation{Descriptor: printLayoutsList, Handler: capability.Handler(invokePrintLayoutsList)},
+		capability.Operation{Descriptor: dunningsGet, Handler: salesVoucherHandler(dunningKind)},
+		capability.Operation{Descriptor: downPaymentInvoicesGet, Handler: salesVoucherHandler(downPaymentInvoiceKind)},
+		capability.Operation{Descriptor: recurringTemplatesList, Handler: capability.Handler(invokeRecurringTemplatesList)},
+		capability.Operation{Descriptor: recurringTemplatesGet, Handler: capability.Handler(invokeRecurringTemplatesGet)},
 	)
 }
 
@@ -909,19 +914,20 @@ type voucherListJSON struct {
 // order confirmations, credit notes, and delivery notes share this structure; a member a type does not
 // carry stays empty.
 type invoiceJSON struct {
-	ID             string `json:"id"`
-	CreatedDate    string `json:"createdDate"`
-	UpdatedDate    string `json:"updatedDate"`
-	Version        int    `json:"version"`
-	Language       string `json:"language"`
-	Archived       bool   `json:"archived"`
-	VoucherStatus  string `json:"voucherStatus"`
-	VoucherNumber  string `json:"voucherNumber"`
-	VoucherDate    string `json:"voucherDate"`
-	DueDate        string `json:"dueDate"`
-	ExpirationDate string `json:"expirationDate"`
-	DeliveryTerms  string `json:"deliveryTerms"`
-	Address        struct {
+	ID               string `json:"id"`
+	CreatedDate      string `json:"createdDate"`
+	UpdatedDate      string `json:"updatedDate"`
+	Version          int    `json:"version"`
+	Language         string `json:"language"`
+	Archived         bool   `json:"archived"`
+	VoucherStatus    string `json:"voucherStatus"`
+	VoucherNumber    string `json:"voucherNumber"`
+	VoucherDate      string `json:"voucherDate"`
+	DueDate          string `json:"dueDate"`
+	ClosingInvoiceID string `json:"closingInvoiceId"`
+	ExpirationDate   string `json:"expirationDate"`
+	DeliveryTerms    string `json:"deliveryTerms"`
+	Address          struct {
 		ContactID   string `json:"contactId"`
 		Name        string `json:"name"`
 		Supplement  string `json:"supplement"`

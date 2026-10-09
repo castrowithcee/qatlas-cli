@@ -5,7 +5,8 @@
 // MCP server (github.com/Infomaniak/mcp-server-kchat) documents
 // (developer.infomaniak.com/openapi.json, operations GetTeamsForUser, GetChannel,
 // GetChannelsForTeamForUser, GetPostsForChannel, GetPost, GetPostThread, CreatePost, PatchPost, and
-// DeletePost, all marked x-auth-user with the bearerAuth security scheme). A kChat instance's base URL is
+// DeletePost, GetReactions, SaveReaction, and DeleteReaction, all marked x-auth-user with the bearerAuth
+// security scheme). A kChat instance's base URL is
 // always the team's own name as the one DNS label directly below kchat.infomaniak.com, never an arbitrary
 // host: the MCP server builds every request from exactly that shape,
 // https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider accepts no other host, see parseInstance.
@@ -20,8 +21,8 @@
 // (messages.list, messages.send) also confirms with kChat's own channel detail endpoint, in one extra
 // request, that the channel actually belongs to one of the bound teams, and is refused before the matching
 // endpoint is reached when it does not. Every operation that names a post_id (messages.thread,
-// messages.get, messages.update, messages.delete) reads the post first and binds it to its channel the same
-// way, see verifyPostScope; a message reply additionally confirms that its root post belongs to the same
+// messages.get, messages.update, messages.delete, and the reactions tools) reads the post first and binds
+// it to its channel the same way, see verifyPostScope; a message reply additionally confirms that its root post belongs to the same
 // channel before it is ever sent. Rejecting an out-of-scope channel or post never carries a message's text
 // into an error or a log.
 //
@@ -29,11 +30,12 @@
 // are separate Infomaniak products with their own authentication and their own providers, see the kDrive
 // provider's package doc for why they are not bundled together.
 //
-// Channel and team management, file attachments, reactions, and webhooks are deliberately out of scope:
-// this provider lists the teams and channels a connection may reach, reads channel posts, single posts, and
-// threads, sends or replies with exactly one confirmed message, changes the text of one confirmed message,
-// and, only when a connection's tools list names it, deletes one confirmed message. kChat renders Markdown
-// and mentions such as @channel in a message, so the text is sent as written. Every value a listing or a
+// Channel and team management, file attachments, the custom emoji catalog, and webhooks are deliberately
+// out of scope: this provider lists the teams and channels a connection may reach, reads channel posts,
+// single posts, threads, and reactions, sends or replies with exactly one confirmed message, changes the
+// text of one confirmed message, adds one confirmed reaction of the token's own user, and, only when a
+// connection's tools list names it, deletes one confirmed message or removes one own reaction.
+// kChat renders Markdown and mentions such as @channel in a message, so the text is sent as written. Every value a listing or a
 // read answers with arrives from the provider and is treated as untrusted data: normalised into a stable
 // envelope, passed through the output encoders, and never rendered, executed, or stored.
 //
@@ -372,11 +374,11 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 	return provider.ClassOK, nil
 }
 
-// Register adds Infomaniak kChat metadata, its read-only connection test, and its message read, send, edit, and delete operations.
+// Register adds Infomaniak kChat metadata, its read-only connection test, and its message and reaction operations.
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat team messaging: read, send, edit, and delete messages through its Mattermost-compatible REST API",
+		Description:        "Infomaniak kChat team messaging: read, send, edit, and delete messages and read, add, and remove reactions through its Mattermost-compatible REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -414,16 +416,17 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read teams, channels, and messages", Recommended: true,
-			Description: "lists the bound teams and their channels, and reads channel messages, single messages, and " +
-				"threads; changes nothing",
-			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID},
-		}, {
-			ID: "messaging", Title: "Read, send, and edit messages",
-			Description: "also sends a confirmed message, or a confirmed reply to an existing thread, to a " +
-				"channel of a bound team, and edits the text of a confirmed message; deleting a message is " +
-				"never part of a profile",
+			Description: "lists the bound teams and their channels, and reads channel messages, single messages, " +
+				"threads, and reactions; changes nothing",
 			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID,
-				messagesSend.ID, messagesUpdate.ID},
+				reactionsList.ID},
+		}, {
+			ID: "messaging", Title: "Read, send, edit, and react",
+			Description: "also sends a confirmed message, or a confirmed reply to an existing thread, to a " +
+				"channel of a bound team, edits the text of a confirmed message, and adds a confirmed own " +
+				"reaction; deleting a message or removing a reaction is never part of a profile",
+			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID,
+				messagesSend.ID, messagesUpdate.ID, reactionsList.ID, reactionsAdd.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -437,6 +440,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(messagesSend), Handler: capability.Handler(invokeMessagesSend)},
 		capability.Operation{Descriptor: withGroup(messagesUpdate), Handler: capability.Handler(invokeMessagesUpdate)},
 		capability.Operation{Descriptor: withGroup(messagesDelete), Handler: capability.Handler(invokeMessagesDelete)},
+		capability.Operation{Descriptor: withGroup(reactionsList), Handler: capability.Handler(invokeReactionsList)},
+		capability.Operation{Descriptor: withGroup(reactionsAdd), Handler: capability.Handler(invokeReactionsAdd)},
+		capability.Operation{Descriptor: withGroup(reactionsRemove), Handler: capability.Handler(invokeReactionsRemove)},
 	)
 }
 
