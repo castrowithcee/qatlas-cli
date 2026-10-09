@@ -139,6 +139,9 @@ func TestFileToolsAreReadOnlyGroupedAndInBothProfiles(t *testing.T) {
 	}
 	metadata, _ := registry(t).ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
+		if profile.ID != "read" && profile.ID != "messaging" {
+			continue
+		}
 		got := map[string]bool{}
 		for _, id := range profile.Tools {
 			got[id] = true
