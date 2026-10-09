@@ -599,6 +599,8 @@ type Model struct {
 
 	// payloadSaving is true while the commit of a payload secret is in flight; its form takes no input then.
 	payloadSaving bool
+	// payloadRemoveAsk is true while the question before removing the focused payload field is open.
+	payloadRemoveAsk bool
 
 	quitting bool
 }
@@ -1008,22 +1010,17 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		return m.openForm(name)
-	case "x":
-		if m.section != sectionTokens {
+	case "d":
+		if m.section == sectionApprovals {
 			return nil
 		}
 		if name, ok := m.selected(); ok {
-			m.tokenRevoke = name
+			if m.section == sectionTokens {
+				// A token is revoked, never deleted like a configuration entry.
+				m.tokenRevoke = name
+			}
 			m.screen = screenConfirm
 			m.clearMessages()
-		}
-	case "d":
-		// A token is revoked with x, never deleted like a configuration entry.
-		if m.section != sectionApprovals && m.section != sectionTokens {
-			if _, ok := m.selected(); ok {
-				m.screen = screenConfirm
-				m.clearMessages()
-			}
 		}
 	case "t":
 		return m.startTest()
@@ -1457,6 +1454,17 @@ func (m *Model) saveAndLeave() tea.Cmd {
 func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	if m.payloadSaving {
 		// The values are on their way to the store; nothing typed now could still take part.
+		return nil
+	}
+	if m.payloadRemoveAsk {
+		switch key.String() {
+		case "y":
+			m.payloadRemoveAsk = false
+			m.removePayloadField()
+		case "n", "esc":
+			m.payloadRemoveAsk = false
+			m.status = "Field kept"
+		}
 		return nil
 	}
 	if key.String() == "f2" {
@@ -3500,6 +3508,10 @@ func (m *Model) editorView() string {
 			// A token is created, not saved: it goes to the vault, never into the configuration.
 			keys = strings.ReplaceAll(keys, " save", " create")
 		}
+		if m.payloadRemoveAsk {
+			b.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
+			keys = "y remove · n/esc keep"
+		}
 		b.WriteString(m.hint(keys))
 	case screenSecret:
 		where := secret.StoreLabel(platform) + " of this machine"
@@ -3579,11 +3591,11 @@ func (m *Model) editorView() string {
 			} else if m.section == sectionCredentials &&
 				(credType == config.CredentialTypeKeyring || credType == config.CredentialTypeVault) {
 				b.WriteString(m.indented(
-					"its stored secrets are not removed with it; remove them first with x on the role, "+
+					"its stored secrets are not removed with it; remove them first with d on the role, "+
 						"or later with 'qatlas credential delete'") + "\n")
 			}
 		}
-		b.WriteString(m.hint("y remove · n keep"))
+		b.WriteString(m.hint("y remove · n/esc keep"))
 	case screenSummary:
 		b.WriteString(m.summaryView())
 	case screenLeave:
@@ -3751,7 +3763,7 @@ func (m *Model) listFrame() (string, string) {
 	case m.section == sectionTokens && m.tokensBlocked() != "" && len(m.list.all) == 0:
 		keys = "1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionTokens:
-		keys = "/ filter · n new · p duplicate · enter show · x revoke · 1-8 or " + back + " · ? help · q quit"
+		keys = "/ filter · n new · p duplicate · enter show · d revoke · 1-8 or " + back + " · ? help · q quit"
 	case m.section == sectionConnections:
 		keys = "/ filter · n new · p duplicate · enter edit · d delete · t test · c guided setup · 1-8 or " + back +
 			" · ? help · q quit"
@@ -4943,6 +4955,6 @@ func (m *Model) profileConfirmView() string {
 	b.WriteString(fmt.Sprintf("Replace the permission and tool ticks with profile %s?\n", profile.ID))
 	b.WriteString(m.indented(profileText(metadata, profile)) + "\n")
 	b.WriteString(m.indented("every tick stays changeable afterwards; nothing is saved before you save the form") + "\n")
-	b.WriteString(m.hint("y replace the ticks · n keep them"))
+	b.WriteString(m.hint("y replace the ticks · n/esc keep them"))
 	return b.String()
 }

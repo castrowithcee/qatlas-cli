@@ -2088,7 +2088,7 @@ func TestNoHintStandsTwice(t *testing.T) {
 		if i == 0 {
 			want = 1
 		}
-		if got := strings.Count(words, "x remove; typing is masked"); got != want {
+		if got := strings.Count(words, "d remove; typing is masked"); got != want {
 			t.Errorf("role %q: the secret keys stand %d times, want %d:\n%s", role, got, want, view)
 		}
 		if got := strings.Count(view, "checked:"); got != 1 {

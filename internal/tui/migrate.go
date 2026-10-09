@@ -342,7 +342,7 @@ func (m *Model) migrateResultView() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Delete credentials.yaml?") + "\n\n")
 	b.WriteString(m.indented(m.migrateResult) + "\n")
-	b.WriteString(m.hint("y delete · n keep the file"))
+	b.WriteString(m.hint("y delete · n/esc keep the file"))
 	return b.String()
 }
 

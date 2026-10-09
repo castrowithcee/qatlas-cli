@@ -40,6 +40,7 @@ func TestPayloadSaveChainsTheVaultProcessWarnings(t *testing.T) {
 	typeText(t, m, "new-user-value-2")
 	pump(t, m, "tab")
 	m.Update(ctrlD())
+	press(t, m, "y")
 	pump(t, m, "f2")
 	if m.screen != screenAdminAuth {
 		t.Fatalf("the encrypted vault did not ask for the admin passphrase: screen %v", m.screen)

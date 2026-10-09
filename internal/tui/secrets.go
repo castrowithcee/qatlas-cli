@@ -667,7 +667,7 @@ func (m *Model) explain(err error, credential, role string) string {
 	if errors.As(err, &remaining) {
 		// A delete that could not clear the keyring says first what may still be stored.
 		text = err.Error() + "; " + text
-		retry = "x"
+		retry = "d"
 	}
 	if state != secret.StoreOff {
 		text += ", then retry " + retry
@@ -708,7 +708,7 @@ func (m *Model) guardVaultTypeChange() string {
 		return ""
 	}
 	return fmt.Sprintf("a secret of %s is still stored in the vault (%s); the secrets cannot move to %s "+
-		"until it is removed first with x on the role, or with 'qatlas credential delete'",
+		"until it is removed first with d on the role, or with 'qatlas credential delete'",
 		m.editing, strings.Join(held.Roles, ", "), vaultTypeChangeDestination(newType))
 }
 
@@ -779,7 +779,7 @@ func (m *Model) handlePlaced(msg placedMsg) tea.Cmd {
 	if len(held) > 0 {
 		problems = append(problems,
 			fmt.Sprintf("a secret of %s is still stored (%s)", msg.credential, strings.Join(held, ", ")))
-		ways = append(ways, fmt.Sprintf("switch %s back to %s and remove it with x on the role, or "+
+		ways = append(ways, fmt.Sprintf("switch %s back to %s and remove it with d on the role, or "+
 			"run 'qatlas credential delete %s <role>'", storageLabel, storageKeyring, msg.credential))
 	}
 	if len(unsure) > 0 {
@@ -931,15 +931,15 @@ func (m *Model) secretRowHint(credential, role string, lead, full bool) string {
 // the storage row now names.
 func (m *Model) secretKeys() string {
 	if m.credentialType() == config.CredentialTypeVault {
-		return "enter store in the " + placeVault + " · x remove"
+		return "enter store in the " + placeVault + " · d remove"
 	}
-	return "enter store in " + storageKeyring + " · x remove"
+	return "enter store in " + storageKeyring + " · d remove"
 }
 
 // secretRowKey handles the keys of a focused secret row.
 func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	action := key.String()
-	if action != "enter" && action != "x" {
+	if action != "enter" && action != "d" {
 		return nil
 	}
 	if m.editing == "" {
@@ -960,7 +960,7 @@ func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	switch action {
 	case "enter":
 		m.askSecret(role)
-	case "x":
+	case "d":
 		// Removing a stored secret is irreversible, so it is confirmed like every other deletion here. A
 		// vault locked at this point is unlocked, masked and never on this process's own terminal, only once
 		// that confirmation is given and the removal itself is about to run (see requireAdmin in
