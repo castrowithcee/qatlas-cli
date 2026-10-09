@@ -33,11 +33,11 @@ reply, topic, silent, and protect do not apply to edits. An edit without `inline
 keyboard. `telegram.messages.editreplymarkup` changes only the keyboard of a message: it sets
 `inline_keyboard` or, when that is omitted or empty, removes the keyboard.
 
-The chat tools take an optional `chat` argument. It must equal a bound chat target exactly: an `@username`
-never matches a numeric ID, and `bot` or `business/<id>` is no chat. Without `chat`, the tool uses the one
-bound chat and refuses when the connection binds none or several. A chat that is not bound is refused before
-the credential is read and before any request, without naming it. A chat ID from an invocation argument or a
-Telegram response never becomes a target on its own.
+The chat tools take an optional `chat` argument, the forward and copy tools also `from_chat`. It must equal a
+bound chat target exactly: an `@username` never matches a numeric ID, and `bot` or `business/<id>` is no chat.
+Without `chat`, the tool uses the one bound chat and refuses when the connection binds none or several. A chat
+that is not bound is refused before the credential is read and before any request, without naming it. A chat
+ID from an invocation argument or a Telegram response never becomes a target on its own.
 
 `bot` unlocks only bot-wide tools and `business/<id>` only the tools of that one business connection; both
 combine with chats, and a connection with only `bot` has no chat. A tool that needs one of them is refused
@@ -67,6 +67,17 @@ messages.
 requires a `tools` list. Its reach is that of `telegram.messages.delete`. Repeated identifiers count once.
 Telegram skips missing or undeletable identifiers without any notice, so success reports only that Telegram
 accepted the request, not which messages are gone.
+
+`telegram.messages.forward` and `telegram.messages.copy` (`create`) move messages between two bound chats of the
+connection. `from_chat` names the source and `chat` the target; both follow the rule for `chat` above and may be
+the same chat. The source is one `message_id`, which uses `forwardMessage` or `copyMessage`, or `message_ids`, from
+2 through 100 distinct positive identifiers in strictly ascending order, which uses `forwardMessages` or
+`copyMessages`; exactly one of the two is required, and another order is refused rather than sorted. `copy`
+leaves out the link to the original. Its optional `caption` (1 through 1024 characters, with `parse_mode`)
+replaces the original caption of a single message and is refused with `message_ids`, since `copyMessages` has
+none. `message_thread_id`, `disable_notification`, and `protect_content` apply as for `telegram.messages.send`.
+The result is `message_id` for one source and `message_ids` for a list, nothing else. Telegram skips sources it
+cannot find or transfer without notice, so `message_ids` can be shorter than the request.
 
 `telegram.pins.pin` pins one message by `message_id`; `disable_notification` pins silently.
 `telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
@@ -213,6 +224,7 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
-`telegram.members.restrict`, `telegram.chats.deletephoto`, the interaction tools, and the invite link tools
-are in no profile. A profile is a visible starting selection, not a role: only the ticked `permissions` and
-`tools` are saved, every tick can be changed before saving, and a saved connection never follows a profile.
+`telegram.members.restrict`, `telegram.chats.deletephoto`, `telegram.messages.forward`, `telegram.messages.copy`,
+the interaction tools, and the invite link tools are in no profile. A profile is a visible starting selection,
+not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
+saved connection never follows a profile.
