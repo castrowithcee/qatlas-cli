@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -149,6 +150,53 @@ func toolIDs(t *testing.T, stdout string) []string {
 	return ids
 }
 
+// registryProviders returns the provider IDs of the shipped registry, sorted. The registry, not a literal,
+// says how many providers and tools discovery has to show.
+func registryProviders() []string {
+	var ids []string
+	for _, metadata := range defaultRegistry().ProviderMetadataAll() {
+		ids = append(ids, metadata.ID)
+	}
+	return ids
+}
+
+// registryToolIDs returns the sorted IDs of the provider's registered tools that keep accepts; a nil keep
+// accepts all. A provider without a tool fails the test, so an empty registry cannot satisfy a derived
+// expectation.
+func registryToolIDs(t *testing.T, provider string, keep func(capability.Descriptor) bool) []string {
+	t.Helper()
+	all := defaultRegistry().Provider(provider)
+	if len(all) == 0 {
+		t.Fatalf("the registry has no %s tool", provider)
+	}
+	ids := []string{}
+	for _, descriptor := range all {
+		if keep == nil || keep(descriptor) {
+			ids = append(ids, descriptor.ID)
+		}
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// offeredBy keeps the tools a connection with exactly the given effect permissions offers: no allow-list
+// tool and no local-file tool, since the fixture connections grant neither.
+func offeredBy(effects ...capability.Effect) func(capability.Descriptor) bool {
+	return func(d capability.Descriptor) bool {
+		return !d.RequiresToolAllowList && d.LocalFiles == "" && slices.Contains(effects, d.Risk.Effect)
+	}
+}
+
+// requireIDs fails unless the derived list holds every anchor, so a registry built wrongly cannot pass.
+func requireIDs(t *testing.T, ids []string, anchors ...string) {
+	t.Helper()
+	for _, anchor := range anchors {
+		if !slices.Contains(ids, anchor) {
+			t.Fatalf("the registry lacks the stable anchor tool %s", anchor)
+		}
+	}
+}
+
 // providerSummaries decodes the namespace index. Decoding into the core type is what proves that the
 // command publishes that model and nothing else: a stray field would fail the strict decoder.
 func providerSummaries(t *testing.T, stdout string) []application.ProviderSummary {
@@ -174,19 +222,37 @@ func TestProvidersListsTheNamespacesAsTOON(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	if !strings.HasPrefix(stdout, "providers[18]{provider,description,note,tools,connections,configured}:\n") ||
-		!strings.HasSuffix(stdout, "\n") || strings.Contains(stdout, "\r") {
-		t.Errorf("stdout = %q, want an LF TOON table of eighteen namespace rows", stdout)
+	providers := registryProviders()
+	for _, provider := range providers {
+		registryToolIDs(t, provider, nil)
 	}
+	requireIDs(t, registryToolIDs(t, "bookstack", nil), "bookstack.pages.get")
+	requireIDs(t, registryToolIDs(t, "telegram", nil), "telegram.messages.send")
+	requireIDs(t, registryToolIDs(t, "lexware", nil), "lexware.invoices.list")
+	// BookStack has exactly one configured connection, Telegram one, and every other compiled provider
+	// none. An unconfigured namespace stays visible with zero. Every row names the provider first, then its
+	// description and the note the configuration keeps, which is empty where there is none, then the counts
+	// of tools, usable connections, and configured connections.
+	counts := map[string]string{"bookstack": "1,1", "telegram": "1,1"}
+	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
+	if want := fmt.Sprintf("providers[%d]{provider,description,note,tools,connections,configured}:", len(providers)); lines[0] != want ||
+		!strings.HasSuffix(stdout, "\n") || strings.Contains(stdout, "\r") || len(lines) != len(providers)+1 {
+		t.Errorf("stdout = %q, want an LF TOON table with %q and one row per provider", stdout, want)
+	}
+	for i, provider := range providers {
+		connections := counts[provider]
+		if connections == "" {
+			connections = "0,0"
+		}
+		tail := fmt.Sprintf(",%d,%s", len(defaultRegistry().Provider(provider)), connections)
+		if i+1 >= len(lines) || !strings.HasPrefix(lines[i+1], "  "+provider+",") || !strings.HasSuffix(lines[i+1], tail) {
+			t.Errorf("row %d does not start with %q and end with %q:\n%s", i+1, "  "+provider+",", tail, stdout)
+		}
+	}
+	// The full rows pin the column format; their tool counts come from the registry.
 	for _, want := range []string{
-		// BookStack has exactly one configured connection, Telegram one, and every other compiled
-		// provider none. An unconfigured namespace stays visible with zero. Every row names the provider
-		// first, then its description and the note the configuration keeps, which is empty where there is
-		// none, then the counts of tools, usable connections, and configured connections.
-		"  bookstack,Self-hosted documentation platform for team knowledge,company handbook,68,1,1\n",
-		"  telegram,Cloud-based instant messaging service,\"\",4,1,1\n",
-		"  github,Code hosting and software collaboration platform,\"\",194,0,0\n", "  lexware,Online accounting and invoicing service for small businesses,\"\",28,0,0\n",
-		"  infomaniakdrive,\"Infomaniak kDrive file storage: reads, folder creation, rename, move, copy, upload, trash handling, share links, dropboxes, and user, team, and invitation access through the Infomaniak REST API\",\"\",26,0,0\n", ",\"\",13,0,0\n", ",\"\",40,0,0\n", ",\"\",39,0,0\n", ",\"\",15,0,0\n", ",\"\",2,0,0\n",
+		fmt.Sprintf("  bookstack,Self-hosted documentation platform for team knowledge,company handbook,%d,1,1\n", len(defaultRegistry().Provider("bookstack"))),
+		fmt.Sprintf("  telegram,Cloud-based instant messaging service,\"\",%d,1,1\n", len(defaultRegistry().Provider("telegram"))),
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -247,7 +313,8 @@ connections:
 defaults: {}
 `)
 		code, stdout, stderr := runTools(t, nil, "providers", "--config", empty)
-		if code != exitOK || stderr != "" || !strings.Contains(stdout, `  telegram,Cloud-based instant messaging service,"",4,0,1`) {
+		if code != exitOK || stderr != "" || !strings.Contains(stdout, fmt.Sprintf(`  telegram,Cloud-based instant messaging service,"",%d,0,1`,
+			len(defaultRegistry().Provider("telegram")))) {
 			t.Errorf("providers: exit=%d stdout=%q stderr=%q, want telegram with no usable and one configured "+
 				"connection", code, stdout, stderr)
 		}
@@ -281,39 +348,25 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 	if code != exitOK || stderr != "" {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
-	// The wiki connection keeps the read-only default permissions, so it offers the two read tools only.
-	// The connection is named once; both tools are offered by it, so no row repeats it. The entries share
-	// their columns, so the listing stays a table with one row per tool.
-	if want := "connections[1]: wiki\n" +
-		"tools[27]{id,title,effect,requires}:\n" +
-		"  bookstack.attachments.get,Get a BookStack attachment,read,id\n" +
-		"  bookstack.attachments.list,List BookStack page attachments,read,\"\"\n" +
-		"  bookstack.books.get,Get a BookStack book,read,id\n" +
-		"  bookstack.books.list,List BookStack books,read,\"\"\n" +
-		"  bookstack.chapters.get,Get a BookStack chapter,read,id\n" +
-		"  bookstack.chapters.list,List BookStack chapters,read,\"\"\n" +
-		"  bookstack.comments.get,Get a BookStack page comment,read,id\n" +
-		"  bookstack.comments.list,List BookStack page comments,read,\"\"\n" +
-		"  bookstack.content.export,Export BookStack content as text,read,\"type:page|chapter|book; id; format:markdown|plaintext|html\"\n" +
-		"  bookstack.content.search,Search BookStack content,read,query\n" +
-		"  bookstack.contentpermissions.get,Get BookStack content permissions,read,\"type:page|chapter|book|bookshelf; id\"\n" +
-		"  bookstack.images.get,Get a BookStack image,read,id\n" +
-		"  bookstack.images.list,List BookStack page images,read,\"\"\n" +
-		"  bookstack.imports.get,Show a BookStack ZIP import,read,id\n" +
-		"  bookstack.imports.list,List BookStack ZIP imports,read,\"\"\n" +
-		"  bookstack.pages.get,Get a BookStack page,read,id\n" +
-		"  bookstack.pages.list,List BookStack pages,read,\"\"\n" +
-		"  bookstack.recyclebin.list,List the BookStack recycle bin,read,\"\"\n" +
-		"  bookstack.roles.get,Get a BookStack role,read,id\n" +
-		"  bookstack.roles.list,List BookStack roles,read,\"\"\n" +
-		"  bookstack.shelves.get,Get a BookStack shelf,read,id\n" +
-		"  bookstack.shelves.list,List BookStack shelves,read,\"\"\n" +
-		"  bookstack.system.get,Get BookStack instance information,read,\"\"\n" +
-		"  bookstack.tags.list,List BookStack tag names,read,\"\"\n" +
-		"  bookstack.tags.values,List values of a BookStack tag,read,name\n" +
-		"  bookstack.users.get,Get a BookStack user,read,id\n" +
-		"  bookstack.users.list,List BookStack users,read,\"\"\n"; stdout != want {
-		t.Errorf("stdout = %q, want %q", stdout, want)
+	// The wiki connection keeps the read-only default permissions, so it offers the read tools only. The
+	// connection is named once; every tool is offered by it, so no row repeats it. The entries share their
+	// columns, so the listing stays a table with one row per tool, in ID order.
+	offered := registryToolIDs(t, "bookstack", offeredBy(capability.EffectRead))
+	requireIDs(t, offered, "bookstack.pages.get", "bookstack.pages.list")
+	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
+	if want := fmt.Sprintf("tools[%d]{id,title,effect,requires}:", len(offered)); len(lines) != len(offered)+2 ||
+		lines[0] != "connections[1]: wiki" || lines[1] != want || !strings.HasSuffix(stdout, "\n") {
+		t.Fatalf("stdout = %q, want the connection line, %q and one row per offered tool", stdout, want)
+	}
+	for i, id := range offered {
+		descriptor, _, _ := defaultRegistry().Lookup(id)
+		if want := "  " + id + "," + descriptor.Title + ",read,"; !strings.HasPrefix(lines[i+2], want) {
+			t.Errorf("row %d = %q, want a prefix %q", i+1, lines[i+2], want)
+		}
+	}
+	// One full row pins the requires column.
+	if want := "\n  bookstack.pages.get,Get a BookStack page,read,id\n"; !strings.Contains(stdout, want) {
+		t.Errorf("stdout does not contain %q:\n%s", want, stdout)
 	}
 	for _, absent := range []string{"description", ",tags", "version", "reason", "alerts", "read-only account"} {
 		if strings.Contains(stdout, absent) {
@@ -350,7 +403,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Fatalf("exit=%d stderr=%q", code, stderr)
 		}
 		for _, want := range []string{
-			"connections[1]: wiki\ntools[68]{id,title,effect,requires,confirm,reason}:\n",
+			fmt.Sprintf("connections[1]: wiki\ntools[%d]{id,title,effect,requires,confirm,reason}:\n", len(defaultRegistry().Provider("bookstack"))),
 			`  bookstack.pages.create,Create a BookStack page,create,name,true,effect-not-permitted` + "\n",
 			`  bookstack.pages.delete,Delete a BookStack page,delete,id,true,effect-not-permitted` + "\n",
 			`  bookstack.pages.get,Get a BookStack page,read,id,false,""` + "\n",
@@ -369,8 +422,8 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 	t.Run("an empty listing points to --all", func(t *testing.T) {
 		code, stdout, stderr := runTools(t, nil, "tools", "lexware", "--config", cfg)
 		if code != exitOK || stdout != "tools: []\n" ||
-			stderr != "qatlas: no connection offers any of the 28 matching tools; --all lists them with the "+
-				"reason, 'qatlas connections' lists the connections\n" {
+			stderr != fmt.Sprintf("qatlas: no connection offers any of the %d matching tools; --all lists them with the "+
+				"reason, 'qatlas connections' lists the connections\n", len(defaultRegistry().Provider("lexware"))) {
 			t.Errorf("exit=%d stdout=%q stderr=%q", code, stdout, stderr)
 		}
 		code, stdout, stderr = runTools(t, nil, "tools", "--query", "absent", "--config", cfg)
@@ -393,103 +446,27 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 	cfg, _, _ := catalogEnvironment(t)
 
+	// The expected lists come from the shipped registry; the stable anchors guard against an empty one.
+	requireIDs(t, registryToolIDs(t, "bookstack", nil), "bookstack.pages.get", "bookstack.pages.delete")
+	requireIDs(t, registryToolIDs(t, "telegram", nil), "telegram.messages.send")
+	requireIDs(t, registryToolIDs(t, "lexware", nil), "lexware.invoices.list")
+	requireIDs(t, registryToolIDs(t, "github", nil), "github.issues.list")
+	requireIDs(t, registryToolIDs(t, "nextcloud", nil), "nextcloud.files.list")
+	wikiOffered := registryToolIDs(t, "bookstack", offeredBy(capability.EffectRead))
+	alertsOffered := registryToolIDs(t, "telegram", offeredBy(capability.EffectCreate))
+
 	tests := []struct {
 		name string
 		args []string
 		want []string
 	}{
-		{"namespace", []string{"bookstack", "--query", "bookstack"}, []string{"bookstack.attachments.delete", "bookstack.attachments.download", "bookstack.attachments.get", "bookstack.attachments.link", "bookstack.attachments.list", "bookstack.attachments.replace", "bookstack.attachments.update", "bookstack.attachments.upload", "bookstack.auditlog.list", "bookstack.books.create", "bookstack.books.delete", "bookstack.books.get", "bookstack.books.list", "bookstack.books.setcover", "bookstack.books.update", "bookstack.chapters.create", "bookstack.chapters.delete", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.chapters.update", "bookstack.comments.create", "bookstack.comments.delete", "bookstack.comments.get", "bookstack.comments.list", "bookstack.comments.update", "bookstack.content.download", "bookstack.content.export", "bookstack.content.search", "bookstack.contentpermissions.get", "bookstack.contentpermissions.update", "bookstack.images.delete", "bookstack.images.download", "bookstack.images.get", "bookstack.images.list", "bookstack.images.replace", "bookstack.images.update", "bookstack.images.upload", "bookstack.imports.delete", "bookstack.imports.get", "bookstack.imports.list", "bookstack.imports.run", "bookstack.imports.upload", "bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.recyclebin.destroy", "bookstack.recyclebin.list", "bookstack.recyclebin.restore", "bookstack.roles.create", "bookstack.roles.delete", "bookstack.roles.get", "bookstack.roles.list", "bookstack.roles.update", "bookstack.shelves.create", "bookstack.shelves.delete", "bookstack.shelves.get", "bookstack.shelves.list", "bookstack.shelves.setcover", "bookstack.shelves.update", "bookstack.system.get", "bookstack.tags.list", "bookstack.tags.values", "bookstack.users.delete", "bookstack.users.get", "bookstack.users.list", "bookstack.users.update"}},
-		{"namespace telegram", []string{"telegram"}, []string{"telegram.messages.delete", "telegram.messages.edit", "telegram.messages.send", "telegram.updates.list"}},
-		{"namespace lexware", []string{"lexware"}, []string{"lexware.articles.create", "lexware.articles.get", "lexware.articles.list", "lexware.articles.update", "lexware.contacts.create", "lexware.contacts.get", "lexware.contacts.list", "lexware.contacts.update", "lexware.countries.list", "lexware.creditnotes.get", "lexware.deliverynotes.get", "lexware.downpaymentinvoices.get", "lexware.dunnings.get", "lexware.invoices.create", "lexware.invoices.get", "lexware.invoices.issue", "lexware.invoices.list", "lexware.orderconfirmations.get", "lexware.paymentconditions.list", "lexware.payments.get", "lexware.postingcategories.list", "lexware.printlayouts.list", "lexware.profile.get", "lexware.quotations.get", "lexware.recurringtemplates.get", "lexware.recurringtemplates.list", "lexware.voucherlist.list", "lexware.vouchers.get"}},
-		{"namespace twentycrm", []string{"twentycrm"}, []string{
-			"twentycrm.activitytargets.create", "twentycrm.activitytargets.delete", "twentycrm.activitytargets.list", "twentycrm.companies.create", "twentycrm.companies.delete", "twentycrm.companies.destroy", "twentycrm.companies.get", "twentycrm.companies.list", "twentycrm.companies.restore", "twentycrm.companies.update",
-			"twentycrm.objects.get", "twentycrm.objects.list", "twentycrm.records.batchcreate", "twentycrm.records.batchdelete", "twentycrm.records.batchupdate", "twentycrm.records.create", "twentycrm.records.delete", "twentycrm.records.destroy", "twentycrm.records.duplicates", "twentycrm.records.get", "twentycrm.records.groupby", "twentycrm.records.list", "twentycrm.records.merge", "twentycrm.records.mergepreview", "twentycrm.records.restore", "twentycrm.records.search", "twentycrm.records.searchall", "twentycrm.records.update",
-		}},
-		{"namespace seatable", []string{"seatable"}, []string{"seatable.base.operations", "seatable.collaborators.list", "seatable.columns.create", "seatable.columns.delete", "seatable.columns.list", "seatable.columns.optionsadd", "seatable.columns.optionsdelete", "seatable.columns.optionsupdate", "seatable.columns.update", "seatable.comments.create", "seatable.comments.delete", "seatable.comments.list", "seatable.files.delete", "seatable.files.get", "seatable.files.upload", "seatable.links.create", "seatable.links.delete", "seatable.links.list", "seatable.links.update", "seatable.rows.activities", "seatable.rows.batchcreate", "seatable.rows.batchdelete", "seatable.rows.batchupdate", "seatable.rows.create", "seatable.rows.delete", "seatable.rows.get", "seatable.rows.list", "seatable.rows.search", "seatable.rows.update", "seatable.snapshots.create", "seatable.tables.create", "seatable.tables.delete", "seatable.tables.duplicate", "seatable.tables.list", "seatable.tables.rename", "seatable.views.create", "seatable.views.delete", "seatable.views.get", "seatable.views.list", "seatable.views.update"}},
-		{"namespace github", []string{"github", "--query", "github"}, []string{
-			"github.accounts.me",
-			"github.actionspermissions.get", "github.actionspermissions.update",
-			"github.blame.get",
-			"github.branches.create",
-			"github.branches.list",
-			"github.code.search",
-			"github.codequalityfindings.get", "github.codescanningalerts.get", "github.codescanningalerts.list",
-			"github.collaborators.list",
-			"github.comments.create", "github.comments.delete", "github.comments.list", "github.comments.update",
-			"github.commits.get", "github.commits.list", "github.commits.search",
-			"github.contents.delete",
-			"github.contents.get",
-			"github.contents.put",
-			"github.copilotassignments.create", "github.copilotreviews.request",
-			"github.customproperties.get",
-			"github.customproperties.set",
-			"github.dependabotalerts.get", "github.dependabotalerts.list",
-			"github.discussioncategories.list", "github.discussioncomments.create", "github.discussioncomments.delete",
-			"github.discussioncomments.list", "github.discussioncomments.update",
-			"github.discussions.create", "github.discussions.get", "github.discussions.list",
-			"github.files.push",
-			"github.gists.create", "github.gists.delete", "github.gists.get", "github.gists.list", "github.gists.update",
-			"github.globaladvisories.get", "github.globaladvisories.list",
-			"github.issuedependencies.add", "github.issuedependencies.list", "github.issuedependencies.remove",
-			"github.issuefields.list", "github.issuefields.set",
-			"github.issues.close", "github.issues.create",
-			"github.issues.get", "github.issues.list", "github.issues.reopen", "github.issues.search", "github.issues.update",
-			"github.issuetypes.list",
-			"github.labels.create", "github.labels.delete", "github.labels.get", "github.labels.list", "github.labels.update",
-			"github.milestones.list",
-			"github.notifications.dismiss", "github.notifications.get", "github.notifications.list",
-			"github.notifications.markall",
-			"github.organizationadvisories.list", "github.organizations.search",
-			"github.projectcollaborators.update", "github.projectdrafts.convert", "github.projectdrafts.create", "github.projectdrafts.update",
-			"github.projectfieldoptions.delete", "github.projectfields.create",
-			"github.projectfields.delete", "github.projectfields.list", "github.projectfields.update",
-			"github.projectissues.create", "github.projectitems.add",
-			"github.projectitems.archive", "github.projectitems.delete", "github.projectitems.get",
-			"github.projectitems.list", "github.projectitems.move", "github.projectitems.unarchive",
-			"github.projectitems.update", "github.projectiterations.replace", "github.projects.copy", "github.projects.create",
-			"github.projects.delete", "github.projects.link", "github.projects.linkteam", "github.projects.list",
-			"github.projects.unlink", "github.projects.unlinkteam", "github.projects.update",
-			"github.projectstatus.create", "github.projectstatus.delete", "github.projectstatus.list",
-			"github.projectstatus.update", "github.projectteams.list", "github.projecttemplates.mark", "github.projecttemplates.unmark",
-			"github.projectviews.create", "github.projectviews.delete", "github.projectviews.list",
-			"github.projectviews.update", "github.projectworkflows.delete", "github.projectworkflows.list",
-			"github.pullrequestbranches.update", "github.pullrequestchecks.list", "github.pullrequestcomments.create",
-			"github.pullrequestcomments.list", "github.pullrequestcommits.list",
-			"github.pullrequestdiffs.get", "github.pullrequestfiles.list",
-			"github.pullrequestreviewcomments.list", "github.pullrequestreviewcomments.reply",
-			"github.pullrequestreviewers.remove", "github.pullrequestreviewers.request",
-			"github.pullrequestreviews.approve", "github.pullrequestreviews.create", "github.pullrequestreviews.list",
-			"github.pullrequestreviewthreads.list", "github.pullrequestreviewthreads.resolve",
-			"github.pullrequestreviewthreads.unresolve",
-			"github.pullrequests.close",
-			"github.pullrequests.create", "github.pullrequests.get", "github.pullrequests.list",
-			"github.pullrequests.merge", "github.pullrequests.reopen", "github.pullrequests.search", "github.pullrequests.update",
-			"github.reactions.add", "github.reactions.remove",
-			"github.releaseassets.list", "github.releases.create", "github.releases.delete",
-			"github.releases.get", "github.releases.list", "github.releases.update",
-			"github.repositories.create", "github.repositories.delete", "github.repositories.fork",
-			"github.repositories.list", "github.repositories.search", "github.repositoryadvisories.list", "github.repositorysettings.get",
-			"github.repositorysettings.update", "github.repositorysubscriptions.set",
-			"github.rulesets.create", "github.rulesets.delete", "github.rulesets.get", "github.rulesets.list",
-			"github.rulesets.update",
-			"github.secretscanningalerts.get", "github.secretscanningalerts.list",
-			"github.stars.add", "github.stars.list", "github.stars.remove",
-			"github.subissues.add", "github.subissues.list", "github.subissues.remove", "github.subissues.reprioritize",
-			"github.tags.get", "github.tags.list",
-			"github.teammembers.list", "github.teams.list", "github.threadsubscriptions.set", "github.trees.get",
-			"github.users.search",
-			"github.workflowartifacts.list", "github.workflowfiles.create",
-			"github.workflowfiles.get", "github.workflowfiles.list", "github.workflowfiles.update",
-			"github.workflowjobs.get", "github.workflowjobs.list", "github.workflowjobs.log",
-			"github.workflowpermissions.get", "github.workflowpermissions.update", "github.workflowrunlogs.delete",
-			"github.workflowruns.cancel", "github.workflowruns.get", "github.workflowruns.list", "github.workflowruns.rerun",
-			"github.workflowruns.rerunfailed", "github.workflowruns.usage", "github.workflows.disable", "github.workflows.dispatch",
-			"github.workflows.enable", "github.workflows.get", "github.workflows.list",
-		}},
-		{"namespace nextcloud", []string{"nextcloud"}, []string{
-			"nextcloud.files.copy", "nextcloud.files.create", "nextcloud.files.delete", "nextcloud.files.get", "nextcloud.files.list",
-			"nextcloud.files.move", "nextcloud.files.stat", "nextcloud.files.update", "nextcloud.folders.create", "nextcloud.folders.delete", "nextcloud.sharees.search", "nextcloud.shares.get", "nextcloud.shares.list",
-		}},
+		{"namespace", []string{"bookstack", "--query", "bookstack"}, registryToolIDs(t, "bookstack", nil)},
+		{"namespace telegram", []string{"telegram"}, registryToolIDs(t, "telegram", nil)},
+		{"namespace lexware", []string{"lexware"}, registryToolIDs(t, "lexware", nil)},
+		{"namespace twentycrm", []string{"twentycrm"}, registryToolIDs(t, "twentycrm", nil)},
+		{"namespace seatable", []string{"seatable"}, registryToolIDs(t, "seatable", nil)},
+		{"namespace github", []string{"github", "--query", "github"}, registryToolIDs(t, "github", nil)},
+		{"namespace nextcloud", []string{"nextcloud"}, registryToolIDs(t, "nextcloud", nil)},
 		{"query", []string{"--query", "pages"}, []string{"bookstack.pages.create", "bookstack.pages.delete", "bookstack.pages.get", "bookstack.pages.list", "bookstack.pages.update", "bookstack.attachments.download", "bookstack.attachments.get", "bookstack.attachments.list", "bookstack.attachments.update", "bookstack.books.delete", "bookstack.books.get", "bookstack.chapters.delete", "bookstack.chapters.get", "bookstack.content.search", "bookstack.images.delete", "bookstack.imports.get", "bookstack.recyclebin.list"}},
 		{"namespace and query", []string{"bookstack", "--query", "list"}, []string{"bookstack.attachments.list", "bookstack.auditlog.list", "bookstack.books.list", "bookstack.chapters.list", "bookstack.comments.list", "bookstack.images.list", "bookstack.imports.list", "bookstack.pages.list", "bookstack.recyclebin.list", "bookstack.roles.list", "bookstack.shelves.list", "bookstack.tags.list", "bookstack.tags.values", "bookstack.users.list", "bookstack.attachments.download", "bookstack.attachments.get", "bookstack.chapters.get", "bookstack.contentpermissions.update", "bookstack.roles.create", "bookstack.roles.delete", "bookstack.roles.update", "bookstack.shelves.create", "bookstack.shelves.get", "bookstack.shelves.update", "bookstack.users.delete", "bookstack.users.update"}},
 		{"query without a match", []string{"--query", "absent"}, []string{}},
@@ -515,15 +492,15 @@ func TestToolsFiltersByNamespaceAndQuery(t *testing.T) {
 		args []string
 		want []string
 	}{
-		{"offered by namespace", []string{"bookstack"}, []string{"bookstack.attachments.get", "bookstack.attachments.list", "bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.comments.get", "bookstack.comments.list", "bookstack.content.export", "bookstack.content.search", "bookstack.contentpermissions.get", "bookstack.images.get", "bookstack.images.list", "bookstack.imports.get", "bookstack.imports.list", "bookstack.pages.get", "bookstack.pages.list", "bookstack.recyclebin.list", "bookstack.roles.get", "bookstack.roles.list", "bookstack.shelves.get", "bookstack.shelves.list", "bookstack.system.get", "bookstack.tags.list", "bookstack.tags.values", "bookstack.users.get", "bookstack.users.list"}},
+		{"offered by namespace", []string{"bookstack"}, wikiOffered},
 		{"offered by query", []string{"--query", "pages"}, []string{"bookstack.pages.get", "bookstack.pages.list", "bookstack.attachments.get", "bookstack.attachments.list", "bookstack.books.get", "bookstack.chapters.get", "bookstack.content.search", "bookstack.imports.get", "bookstack.recyclebin.list"}},
-		{"offered by a connection", []string{"telegram", "--connection", "alerts"}, []string{"telegram.messages.send"}},
+		{"offered by a connection", []string{"telegram", "--connection", "alerts"}, alertsOffered},
 		{"offered by another provider's connection", []string{"--query", "pages", "--connection", "alerts"}, []string{}},
 		// A query also finds a tool by the description and the note of its provider and by the description
 		// of a connection that offers it.
-		{"offered by the provider description", []string{"--query", "instant"}, []string{"telegram.messages.send"}},
-		{"offered by the provider note", []string{"--query", "Handbook"}, []string{"bookstack.attachments.get", "bookstack.attachments.list", "bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.comments.get", "bookstack.comments.list", "bookstack.content.export", "bookstack.content.search", "bookstack.contentpermissions.get", "bookstack.images.get", "bookstack.images.list", "bookstack.imports.get", "bookstack.imports.list", "bookstack.pages.get", "bookstack.pages.list", "bookstack.recyclebin.list", "bookstack.roles.get", "bookstack.roles.list", "bookstack.shelves.get", "bookstack.shelves.list", "bookstack.system.get", "bookstack.tags.list", "bookstack.tags.values", "bookstack.users.get", "bookstack.users.list"}},
-		{"offered by a connection description", []string{"--query", "read-only account"}, []string{"bookstack.attachments.get", "bookstack.attachments.list", "bookstack.books.get", "bookstack.books.list", "bookstack.chapters.get", "bookstack.chapters.list", "bookstack.comments.get", "bookstack.comments.list", "bookstack.content.export", "bookstack.content.search", "bookstack.contentpermissions.get", "bookstack.images.get", "bookstack.images.list", "bookstack.imports.get", "bookstack.imports.list", "bookstack.pages.get", "bookstack.pages.list", "bookstack.recyclebin.list", "bookstack.roles.get", "bookstack.roles.list", "bookstack.shelves.get", "bookstack.shelves.list", "bookstack.system.get", "bookstack.tags.list", "bookstack.tags.values", "bookstack.users.get", "bookstack.users.list"}},
+		{"offered by the provider description", []string{"--query", "instant"}, alertsOffered},
+		{"offered by the provider note", []string{"--query", "Handbook"}, wikiOffered},
+		{"offered by a connection description", []string{"--query", "read-only account"}, wikiOffered},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			args := append([]string{"tools"}, tt.args...)
