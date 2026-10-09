@@ -177,6 +177,7 @@ var messagesDelete = capability.Descriptor{
 var toolGroups = []config.ToolGroup{
 	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the bound chats"},
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
+	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats"},
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot"},
 }
 
@@ -214,10 +215,11 @@ func Register(reg *capability.Registry) error {
 				"request; nothing already in the chat can be edited or deleted",
 			Tools: []string{messagesSend.ID},
 		}, {
-			ID: "read", Title: "Read updates and bot identity",
-			Description: "reads pending messages and events of the bound chats and the bot identity; nothing is " +
-				"sent or acknowledged",
-			Tools: []string{updatesList.ID, botGet.ID},
+			ID: "read", Title: "Read updates, chats, and bot identity",
+			Description: "reads pending messages and events, chat information, administrators, and members of " +
+				"the bound chats and the bot identity; nothing is sent or acknowledged",
+			Tools: []string{updatesList.ID, botGet.ID, chatsGet.ID, chatsAdministrators.ID, chatsMemberCount.ID,
+				chatsMember.ID},
 		}, {
 			ID: "messaging", Title: "Send, edit, and delete messages",
 			Description: "also edits messages and deletes messages in the bound chats: as admin also those of " +
@@ -235,6 +237,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 		capability.Operation{Descriptor: botGet, Handler: capability.Handler(invokeBotGet)},
 		capability.Operation{Descriptor: webhookGet, Handler: capability.Handler(invokeWebhookGet)},
+		capability.Operation{Descriptor: chatsGet, Handler: capability.Handler(invokeChatsGet)},
+		capability.Operation{Descriptor: chatsAdministrators, Handler: capability.Handler(invokeChatsAdministrators)},
+		capability.Operation{Descriptor: chatsMemberCount, Handler: capability.Handler(invokeChatsMemberCount)},
+		capability.Operation{Descriptor: chatsMember, Handler: capability.Handler(invokeChatsMember)},
 	)
 }
 

@@ -121,9 +121,10 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Errorf("Telegram metadata = %+v, %v", telegram, ok)
 	}
 	operations := reg.Provider("telegram")
-	if len(operations) != 7 || operations[0].ID != "telegram.bot.get" ||
-		operations[4].ID != "telegram.messages.send" || operations[5].ID != "telegram.updates.list" ||
-		operations[6].ID != "telegram.webhook.get" {
+	if len(operations) != 11 || operations[0].ID != "telegram.bot.get" ||
+		operations[1].ID != "telegram.chats.administrators" || operations[4].ID != "telegram.chats.membercount" ||
+		operations[8].ID != "telegram.messages.send" || operations[9].ID != "telegram.updates.list" ||
+		operations[10].ID != "telegram.webhook.get" {
 		t.Errorf("Telegram operations = %v, want the explicit message and update operations", operations)
 	}
 }

@@ -43,10 +43,10 @@ before the credential is read when the target is missing. Methods that accept on
 `@username` chat locally.
 
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the update
-tool to `updates`, the bot and webhook tools to `bot`. A group never changes a tool ID, a permission, or a tools
-list. The base URL must be a plain `https` URL with a host and without user, query, or fragment, with no
-exception for local addresses, and redirects are never followed. `config validate` rejects any other base URL.
-Errors never carry Telegram's own error text.
+tool to `updates`, the chat tools to `chats`, the bot and webhook tools to `bot`. A group never changes a tool
+ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user,
+query, or fragment, with no exception for local addresses, and redirects are never followed.
+`config validate` rejects any other base URL. Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
 they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
@@ -78,6 +78,18 @@ bot token, so rotating the token invalidates every earlier reference. It is sign
 accepts a reference checks its format and target before the credential is read and its signature before any
 request.
 
+## Reading chats and members
+
+The four chat read tools address a bound chat through `chat` as above and return fixed fields only.
+`telegram.chats.get` shows `id`, `type`, `title`, `username`, `is_forum`, `description`, the boolean default
+`permissions`, `slow_mode_delay`, `pinned_message_id` (the number only, never the message), and `linked_chat_id`
+(a number only, never a target). `telegram.chats.administrators` lists at most 200 administrators and
+`telegram.chats.member` shows one member by `user_id`: identity (`id`, `is_bot`, names, `username`), `status`,
+the boolean rights Telegram returns, `custom_title`, and `until_date`. `telegram.chats.membercount` shows
+`count`. The invite link and every other field are never returned. Strings are length-capped. Member data
+of administrators and members is classified `telegram-member-data`; the other two tools keep the provider's
+message classification.
+
 ## Bot identity and webhook status
 
 `telegram.bot.get` (`read`) shows the identity of the bot behind the token: `id`, `username`, `first_name`,
@@ -93,8 +105,8 @@ other field of Telegram's answer are never returned. It is part of no setup prof
 
 The terminal editor starts a new connection on the setup profile `send`, which ticks `[create]` and
 `[telegram.messages.send]`: the read tools expose incoming message content, while a send reaches only a bound
-chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`, and
-`[telegram.bot.get]`. The profile `messaging` also ticks `update`, `delete`, `telegram.messages.edit`, and
-`telegram.messages.delete`; `telegram.messages.editreplymarkup` is in no profile. A profile is a visible
-starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed
-before saving, and a saved connection never follows a profile.
+chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
+`[telegram.bot.get]`, and the four `telegram.chats.*` tools. The profile `messaging` also ticks `update`,
+`delete`, `telegram.messages.edit`, and `telegram.messages.delete`; `telegram.messages.editreplymarkup` is in
+no profile. A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools`
+are saved, every tick can be changed before saving, and a saved connection never follows a profile.

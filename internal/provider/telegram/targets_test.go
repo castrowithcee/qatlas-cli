@@ -182,14 +182,27 @@ func TestInvokeFunctionsRefuseBeforeSecretResolution(t *testing.T) {
 	invokes := map[string]func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor, json.RawMessage) (any, error){
 		"send": invokeMessagesSend, "edit": invokeMessagesEdit, "delete": invokeMessagesDelete,
 		"edit_reply_markup": invokeMessagesEditReplyMarkup,
+		"chats_get":         invokeChatsGet, "chats_administrators": invokeChatsAdministrators,
+		"chats_membercount": invokeChatsMemberCount, "chats_member": invokeChatsMember,
 	}
 	for name, invoke := range invokes {
 		for _, resolved := range []*config.Resolved{
 			resolvedWith("-1001", "-1002"), resolvedWith("bot"), resolvedWith("-1001"),
 		} {
 			args := `{"message_id":1,"text":"x"`
+			if strings.HasPrefix(name, "chats_") {
+				args = `{"user_id":1`
+			}
 			if len(resolved.Targets) == 1 && resolved.Targets[0] == "-1001" {
 				args += `,"chat":"-1002"`
+			}
+			if name == "chats_get" || name == "chats_administrators" || name == "chats_membercount" {
+				args = strings.Replace(args, `"user_id":1`, `"chat":"-1001"`, 1)
+				if !strings.Contains(args, "-1002") {
+					args = `{"chat":"-9999"`
+				} else {
+					args = `{"chat":"-1002"`
+				}
 			}
 			if _, err := invoke(context.Background(), resolved, resolver, nil, json.RawMessage(args+`}`)); err == nil {
 				t.Errorf("%s with %v succeeded", name, resolved.Targets)
@@ -202,7 +215,8 @@ func TestInvokeFunctionsRefuseBeforeSecretResolution(t *testing.T) {
 }
 
 func TestChatArgumentIsDeclared(t *testing.T) {
-	for _, d := range []capability.Descriptor{messagesSend, messagesEdit, messagesEditReplyMarkup, messagesDelete} {
+	for _, d := range []capability.Descriptor{messagesSend, messagesEdit, messagesEditReplyMarkup, messagesDelete,
+		chatsGet, chatsAdministrators, chatsMemberCount, chatsMember} {
 		found := false
 		for _, a := range d.Arguments {
 			found = found || (a.Name == "chat" && !a.Required)
