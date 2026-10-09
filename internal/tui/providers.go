@@ -103,11 +103,9 @@ func (m *Model) openProviderTable() {
 // setup like on every other step.
 func (m *Model) updateProviderTable(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "esc":
 		if m.wizard != nil {
-			return m.leaveSetup()
+			return m.setupEsc()
 		}
 		m.screen = screenForm
 	case "enter":

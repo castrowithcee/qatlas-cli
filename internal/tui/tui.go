@@ -450,9 +450,11 @@ type Model struct {
 	tokenReveal bool
 	tokenRevoke string
 	// pristine is what the open form held when it was opened, so leaving it can tell whether anything
-	// would be lost. leaveFrom is the screen the leave question returns to when the user stays.
+	// would be lost. leaveFrom is the screen the leave question returns to when the user stays; leaveQuit
+	// says that the question was raised by ctrl+c, so discarding ends the program instead of leaving.
 	pristine  string
 	leaveFrom screen
+	leaveQuit bool
 
 	status string
 	fail   string
@@ -720,7 +722,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.activeScreenTooSmall() {
 			switch msg.String() {
 			case "ctrl+c":
-				return m, m.quit()
+				return m, m.interrupt()
 			case "q":
 				// q is a letter in a form, so it quits only where nothing typed can be lost.
 				if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
@@ -741,6 +743,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// a passphrase dialog, a confirmation, or vault work already running.
 		if msg.String() == "ctrl+l" && m.vaultLockKeyAllowed() {
 			return m, m.handleVaultLockKey()
+		}
+		if msg.String() == "ctrl+c" {
+			return m, m.interrupt()
 		}
 		var cmd tea.Cmd
 		switch m.screen {
@@ -806,7 +811,7 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 		return m.openSection(s)
 	}
 	switch key.String() {
-	case "q", "ctrl+c":
+	case "q":
 		return m.quit()
 	case "shift+tab":
 		return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
@@ -926,7 +931,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		m.openHelp()
 	case "u":
 		m.askUpdate()
-	case "q", "ctrl+c":
+	case "q":
 		return m.quit()
 	case "/":
 		m.list.startFilter()
@@ -1024,8 +1029,6 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 // the letters and digits that are list keys otherwise; the arrows still move through what it matches.
 func (m *Model) updateFilter(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "esc":
 		m.list.clearFilter()
 	case "enter":
@@ -1118,7 +1121,12 @@ func (m *Model) leaveScreen() tea.Cmd {
 		return nil
 	case screenLeave:
 		// Staying is the answer that loses nothing.
-		m.screen = m.leaveFrom
+		m.screen, m.leaveQuit = m.leaveFrom, false
+		return nil
+	case screenVaultUnlock:
+		m.screen = m.vaultUnlock.back
+		m.vaultUnlock = nil
+		m.status = "Cancelled"
 		return nil
 	case screenHelp:
 		m.screen = m.helpFrom
@@ -1133,17 +1141,12 @@ func (m *Model) leaveScreen() tea.Cmd {
 	case screenForm, screenSummary:
 		return m.requestLeave()
 	case screenTargets:
-		// A typed target or a remove question is dropped as esc drops it; a changed list still asks.
-		m.targetEdit, m.targetRemove, m.targetAdd = -1, false, nil
-		m.targetInput.Blur()
-		return m.leaveTargets()
+		return m.updateTargets(tea.KeyMsg{Type: tea.KeyEsc})
 	case screenPaths:
-		m.pathEdit, m.pathRemove = -1, false
-		m.pathInput.Blur()
-		return m.leavePaths()
+		return m.updatePaths(tea.KeyMsg{Type: tea.KeyEsc})
 	case screenProviders:
 		if m.wizard != nil {
-			return m.leaveSetup()
+			return m.setupEsc()
 		}
 	case screenConfirm:
 		if m.approvalDetail != "" || m.approveAllConfirm {
@@ -1210,10 +1213,70 @@ func (m *Model) requestLeave() tea.Cmd {
 	if !m.dirty() {
 		return m.abandon()
 	}
-	m.leaveFrom = m.screen
+	m.askLeave(false)
+	return nil
+}
+
+// askLeave raises the one question every unsaved change meets, from the screen that is shown now. quit says
+// that ctrl+c raised it, so discarding ends the program.
+func (m *Model) askLeave(quit bool) {
+	m.leaveFrom, m.leaveQuit = m.screen, quit
 	m.screen = screenLeave
 	m.clearMessages()
-	return nil
+}
+
+// interrupt is ctrl+c on every screen: it ends the program at once, unless that would lose unsaved
+// changes. A prompt over the form is closed first, so the question is asked, and answered, on the form.
+func (m *Model) interrupt() tea.Cmd {
+	if m.screen == screenLeave {
+		m.leaveQuit = true
+		return nil
+	}
+	if m.payloadSaving || (m.wizard != nil && (m.wizard.saving || m.wizard.saved != "")) || !m.unsaved() {
+		return m.quit()
+	}
+	var cmd tea.Cmd
+	switch m.screen {
+	case screenForm, screenSummary, screenProviders, screenPicker, screenTargets, screenPaths:
+	default:
+		cmd = m.leaveScreen()
+	}
+	m.askLeave(true)
+	return cmd
+}
+
+// unsaved reports whether the screen shown, or the form under it, holds changes that no key has kept yet.
+func (m *Model) unsaved() bool {
+	screen := m.screen
+	switch screen {
+	case screenVaultUnlock:
+		screen = m.vaultUnlock.back
+	case screenAdminAuth:
+		screen = m.adminAuth.back
+	case screenConfirm:
+		if m.confirmRole == "" && m.pendingProfile == "" {
+			return false
+		}
+		screen = screenForm
+	}
+	switch screen {
+	case screenTargets:
+		if m.targetsPending() {
+			return true
+		}
+	case screenPaths:
+		if m.pathsPending() {
+			return true
+		}
+	case screenPicker:
+		if m.pickerChanged() {
+			return true
+		}
+	case screenForm, screenSummary, screenProviders, screenSecret, screenVaultOffer:
+	default:
+		return false
+	}
+	return m.formDirty()
 }
 
 // abandon returns to the list of the form's own section, dropping the form or the guided setup with
@@ -1228,13 +1291,18 @@ func (m *Model) abandon() tea.Cmd {
 	return cmd
 }
 
-// dirty reports whether leaving now would lose input. A guided setup with a chosen provider always holds
-// some; a form does when any row differs from what it opened with.
+// dirty reports whether leaving the form now would lose input.
 func (m *Model) dirty() bool {
+	return (m.wizard != nil || m.screen == screenForm) && m.formDirty()
+}
+
+// formDirty reports whether the open form holds input. A guided setup with a chosen provider always does;
+// a form does when any row differs from what it opened with.
+func (m *Model) formDirty() bool {
 	if m.wizard != nil {
-		return m.wizard.provider != ""
+		return m.wizard.provider != "" && m.wizard.saved == ""
 	}
-	return m.screen == screenForm && m.formState() != m.pristine
+	return m.fields != nil && m.formState() != m.pristine
 }
 
 // formState is what the rows of the form hold, in a form that compares whole. It holds a typed secret only
@@ -1247,40 +1315,88 @@ func (m *Model) formState() string {
 	return b.String()
 }
 
-// updateLeave answers the leave question. s saves through the same path as enter and then goes on, d
-// drops the input and goes on, and esc returns to the form unchanged. Nothing else answers it, not even
-// y or n, whose meaning would be a guess, so a stray key neither saves nor discards.
+// updateLeave answers the leave question. F2 saves, or goes on in the guided setup, d drops the input and
+// goes on, or ends the program after ctrl+c, and esc returns to where it came from unchanged. Nothing else
+// answers it, not even y or n, whose meaning would be a guess, so a stray key neither saves nor discards.
 func (m *Model) updateLeave(key tea.KeyMsg) tea.Cmd {
-	if m.leaveFrom == screenTargets {
-		return m.answerTargetsLeave(key)
-	}
-	if m.leaveFrom == screenPaths {
-		return m.answerPathsLeave(key)
-	}
+	from := m.leaveFrom
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "esc":
-		m.screen = m.leaveFrom
+		m.screen, m.leaveQuit = from, false
 		m.status = "Still editing; nothing was saved or discarded"
 	case "d":
-		setup := m.wizard != nil
-		cmd := m.abandon()
-		if !setup {
-			m.status = "Changes discarded; nothing was written"
+		if m.leaveQuit {
+			return m.quit()
 		}
-		return cmd
-	case "s":
+		return m.discard()
+	case "f2":
+		m.leaveQuit = false
+		switch from {
+		case screenTargets:
+			m.screen = from
+			return m.updateTargets(key)
+		case screenPaths:
+			m.screen = from
+			return m.updatePaths(key)
+		case screenSummary:
+			m.screen = from
+			return m.startSetupSave()
+		case screenPicker:
+			m.keepPicker()
+		}
+		m.screen = screenForm
 		if m.wizard != nil {
-			// The guided setup saves only from its summary, after every step has been checked.
+			m.setupNext()
 			return nil
 		}
+		m.leaveFrom = screenForm
 		return m.saveAndLeave()
 	}
 	return nil
 }
 
-// saveAndLeave saves the form like enter does and leaves it only when the save went through. A refused
+// discard is d in the leave question: it drops what the screen it came from holds, down to the one level
+// that esc would have left.
+func (m *Model) discard() tea.Cmd {
+	m.screen = m.leaveFrom
+	switch m.leaveFrom {
+	case screenTargets:
+		switch {
+		case m.targetAdd != nil:
+			m.targetAdd = nil
+		case m.targetEdit >= 0:
+			m.targetEdit = -1
+			m.targetInput.Blur()
+		default:
+			m.screen = screenForm
+		}
+		m.clearMessages()
+		m.status = "Target changes discarded"
+		return nil
+	case screenPaths:
+		if m.pathEdit >= 0 {
+			m.pathEdit = -1
+			m.pathInput.Blur()
+		} else {
+			m.screen = screenForm
+		}
+		m.clearMessages()
+		m.status = "Path changes discarded"
+		return nil
+	case screenPicker:
+		m.screen = screenForm
+		m.status = "Selection discarded; the row is as it was"
+		return nil
+	}
+	setup := m.wizard != nil
+	cmd := m.abandon()
+	if !setup {
+		m.status = "Changes discarded; nothing was written"
+	}
+	return cmd
+}
+
+// saveAndLeave saves the form like F2 does and leaves it only when the save went through. A refused
 // save keeps the form open with every input and the reason.
 func (m *Model) saveAndLeave() tea.Cmd {
 	m.screen = m.leaveFrom
@@ -1322,9 +1438,6 @@ func (m *Model) saveAndLeave() tea.Cmd {
 func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	if m.payloadSaving {
 		// The values are on their way to the store; nothing typed now could still take part.
-		if key.String() == "ctrl+c" {
-			return m.quit()
-		}
 		return nil
 	}
 	if key.String() == "f2" {
@@ -1379,21 +1492,13 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	if m.isPayloadForm() && m.payloadKey(key) {
 		return nil
 	}
-	if m.wizard != nil {
-		switch key.String() {
-		case "esc":
-			return m.requestLeave()
-		case "f3":
-			m.setupBack()
-			return nil
-		}
-	}
 	switch key.String() {
 	case "esc":
 		// Leaving a form never drops input silently: an unchanged form closes, a changed one asks first.
+		if m.wizard != nil {
+			return m.setupEsc()
+		}
 		return m.requestLeave()
-	case "ctrl+c":
-		return m.quit()
 	case "tab", "down":
 		m.moveFocus(1)
 		return nil
@@ -1519,20 +1624,19 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 			}
 			return nil
 		case "enter":
-			f := &m.fields[m.focus]
-			f.selected = map[string]bool{}
-			for choice, marked := range m.pickerMarks {
-				if marked {
-					f.selected[choice] = true
-				}
-			}
+			m.keepPicker()
 			m.screen = screenForm
+			return nil
+		case "esc":
+			if m.pickerChanged() {
+				m.askLeave(false)
+			} else {
+				m.screen = screenForm
+			}
 			return nil
 		}
 	}
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "esc":
 		m.screen = screenForm
 	case "enter":
@@ -1566,6 +1670,39 @@ func (m *Model) updatePicker(key tea.KeyMsg) tea.Cmd {
 		return m.picker.updateFilter(key)
 	}
 	return nil
+}
+
+// keepPicker hands the ticks of the picker to the row it was opened from.
+func (m *Model) keepPicker() {
+	if m.pickerMarks == nil {
+		return
+	}
+	f := &m.fields[m.focus]
+	f.selected = map[string]bool{}
+	for choice, marked := range m.pickerMarks {
+		if marked {
+			f.selected[choice] = true
+		}
+	}
+}
+
+// pickerChanged reports whether the ticks of an open picker differ from the row they came from.
+func (m *Model) pickerChanged() bool {
+	if m.pickerMarks == nil {
+		return false
+	}
+	kept := m.fields[m.focus].selected
+	for choice, marked := range m.pickerMarks {
+		if marked != kept[choice] {
+			return true
+		}
+	}
+	for choice, marked := range kept {
+		if marked && !m.pickerMarks[choice] {
+			return true
+		}
+	}
+	return false
 }
 
 // choose puts one of its values on the focused choice or provider row and brings the rows that depend on it
@@ -1998,8 +2135,6 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			back := m.vaultLockBack
 			m.vaultLockConfirm, m.screen = false, back
 			m.status = "Cancelled; the vault stays unlocked"
-		case "ctrl+c":
-			return m.quit()
 		}
 		return nil
 	}
@@ -2012,8 +2147,6 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "n", "esc":
 			m.decryptConfirm, m.decryptPassphrase, m.screen = false, "", screenForm
 			m.status = "Cancelled; the vault stays encrypted"
-		case "ctrl+c":
-			return m.quit()
 		}
 		return nil
 	}
@@ -2025,8 +2158,6 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "n", "esc":
 			m.migratePlanConfirm, m.migrate, m.screen = false, nil, screenForm
 			m.status = "Cancelled; credentials.yaml was not touched"
-		case "ctrl+c":
-			return m.quit()
 		}
 		return nil
 	}
@@ -2039,8 +2170,6 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			m.migrateDeleteConfirm, m.screen = false, screenForm
 			m.status = m.migrateResult + "; the file was kept"
 			m.migrate, m.migrateResult = nil, ""
-		case "ctrl+c":
-			return m.quit()
 		}
 		return nil
 	}
@@ -2071,8 +2200,6 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			m.approvalOffset = 0
 		case "end":
 			m.approvalOffset = 1 << 20
-		case "ctrl+c":
-			return m.quit()
 		}
 		return nil
 	}
@@ -2084,8 +2211,6 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "n", "esc":
 			m.approveAllConfirm, m.screen = false, screenList
 			m.status = "Cancelled"
-		case "ctrl+c":
-			return m.quit()
 		}
 		return nil
 	}
@@ -2098,8 +2223,6 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 		case "n", "esc":
 			m.pendingProfile, m.screen = "", screenForm
 			m.status = "Profile not applied; the ticks are unchanged"
-		case "ctrl+c":
-			return m.quit()
 		}
 		return nil
 	}
@@ -2127,8 +2250,6 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			m.screen = screenList
 		}
 		m.status = "Cancelled"
-	case "ctrl+c":
-		return m.quit()
 	}
 	return nil
 }
@@ -3182,7 +3303,7 @@ func (m *Model) workspaceView() string {
 	}
 	width, height := lipgloss.Width(view), lipgloss.Height(view)
 	way := "esc leave, asking first if anything changed"
-	if m.screen == screenNav || m.screen == screenList {
+	if m.screen == screenNav || m.screen == screenList || m.screen == screenLogs {
 		way = "q quit"
 	}
 	return m.boundView(wrapCells(fmt.Sprintf("Resize terminal. Need %dx%d. %s.",
@@ -3415,25 +3536,60 @@ func (m *Model) leaveView() string {
 	case m.section == sectionVault:
 		what, where = "the vault settings", "Vault"
 	}
-	warning, keys := "warning: unsaved changes in "+what, "s save and go on · d discard · esc keep editing"
+	warning, save := "warning: unsaved changes in "+what, "F2 save"
 	why := "Leaving for " + where + " would lose them."
 	if m.wizard != nil {
-		warning, keys = "warning: the guided setup is not saved", "d discard setup · esc keep editing"
+		warning, save = "warning: the guided setup is not saved", "F2 next step"
+		if m.leaveFrom == screenSummary {
+			save = "F2 save"
+		}
 		why = "Leaving for " + where + " drops every step, typed secrets included. Nothing was written yet."
 	}
-	if m.leaveFrom == screenTargets || m.leaveFrom == screenPaths {
-		warning = "warning: the target list changed"
-		if m.leaveFrom == screenPaths {
-			warning = "warning: the path list changed"
-			if isFilesLabel(m.fields[m.focus].label) {
-				warning = "warning: the " + m.fields[m.focus].label + " list changed"
-			}
-		}
-		keys = "k keep the list · d discard changes · esc keep editing"
-		why = "Closing the list without keeping it would lose the changes. Nothing was written yet."
+	if sub := m.leaveSubject(); sub != "" {
+		warning = "warning: " + sub
+		why = "Closing it without keeping it would lose the changes. Nothing was written yet."
 	}
-	return m.wrapped(warningStyle, warning) + "\n" + m.wrapped(hintStyle, keys) + "\n\n" +
-		m.wrapped(lipgloss.NewStyle(), why)
+	discard := "d discard"
+	if m.leaveQuit {
+		discard = "d discard and quit"
+		why = "Quitting would lose them. Nothing was written yet."
+	}
+	return m.wrapped(warningStyle, warning) + "\n" + m.wrapped(hintStyle, save+" · "+discard+" · esc keep editing") +
+		"\n\n" + m.wrapped(lipgloss.NewStyle(), why)
+}
+
+// leaveSubject names what a list, a picker or a builder would lose; it is empty for a form and a setup.
+func (m *Model) leaveSubject() string {
+	switch m.leaveFrom {
+	case screenPicker:
+		if m.pickerChanged() {
+			return "the ticks changed"
+		}
+	case screenTargets:
+		if !m.targetsPending() {
+			return ""
+		}
+		switch {
+		case m.targetAdd != nil && m.targetAdd.kind >= 0:
+			return "the new target is not finished"
+		case m.targetAdd != nil || m.targetEdit >= 0:
+			return "the typed target was not taken"
+		}
+		return "the target list changed"
+	case screenPaths:
+		if !m.pathsPending() {
+			return ""
+		}
+		list := "path"
+		if isFilesLabel(m.fields[m.focus].label) {
+			list = m.fields[m.focus].label
+		}
+		if m.pathEdit >= 0 {
+			return "the typed " + list + " was not taken"
+		}
+		return "the " + list + " list changed"
+	}
+	return ""
 }
 
 // notes are the lines under every editor screen: what is still running, and what the last action did.
@@ -3568,14 +3724,14 @@ func (m *Model) navKeys() string {
 	return "left/right move · down open · 1-8 open · n new · c setup · ? help · q quit"
 }
 
-// backToSectionsHint names the key that takes the focus from the list back to the sections: left, in the
-// sidebar layout, where it also steps the sidebar's own selection; tab, below the sidebar width, where
+// backToSectionsHint names the keys that take the focus from the list back to the sections: esc, and left in
+// the sidebar layout, where it also steps the sidebar's own selection; tab below the sidebar width, where
 // left/right instead stay inside the list (see updateList).
 func (m *Model) backToSectionsHint() string {
 	if m.sidebarLayout() {
-		return "left sections"
+		return "esc/left sections"
 	}
-	return "tab sections"
+	return "esc/tab sections"
 }
 
 // filterLine shows the filter of l: while it is typed with its cursor, afterwards as the text it holds.

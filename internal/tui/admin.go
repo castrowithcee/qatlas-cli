@@ -98,9 +98,6 @@ func (m *Model) openAdminPrompt(locked bool, back screen, action func() tea.Cmd)
 func (m *Model) updateAdminAuth(key tea.KeyMsg) tea.Cmd {
 	a := m.adminAuth
 	switch key.String() {
-	case "ctrl+c":
-		m.adminAuth = nil
-		return m.quit()
 	case "esc":
 		back := a.back
 		m.adminAuth = nil

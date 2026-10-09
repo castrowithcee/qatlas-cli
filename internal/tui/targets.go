@@ -14,8 +14,8 @@ import (
 // add, which offers known targets and a builder where there are any, enter edits the selected target, and x
 // or d removes it after asking. F2 keeps the list and saves the form in one step, from every state of the
 // screen, the typed target included; in the guided setup it goes on to the next step instead, which saves
-// only from its summary. esc closes an unchanged list at once and asks about a changed one, so no change is
-// dropped silently. Each target is typed on its own, so none has to be quoted into a line with the others. A
+// only from its summary. esc is one level back: it closes an unchanged list, cancels an unchanged entry,
+// and asks about a changed list, a typed entry or a half-built target, so no change is dropped silently. Each target is typed on its own, so none has to be quoted into a line with the others. A
 // target is checked by the provider when it is taken; the list as a whole is checked by the core when the
 // form is saved, like every other rule.
 
@@ -38,8 +38,6 @@ func (m *Model) openTargets() {
 // the list itself.
 func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "f2":
 		// F2 saves from every state of the list, the way it does from every row of the form. A typed
 		// target is taken first; one the provider refuses stays typed with the reason, and nothing is saved.
@@ -64,6 +62,10 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 	if m.targetEdit >= 0 {
 		switch key.String() {
 		case "esc":
+			if m.targetTyped() {
+				m.askLeave(false)
+				return nil
+			}
 			m.targetEdit = -1
 			m.targetInput.Blur()
 			m.clearMessages()
@@ -137,29 +139,29 @@ func (m *Model) leaveTargets() tea.Cmd {
 		m.screen = screenForm
 		return nil
 	}
-	m.leaveFrom = screenTargets
-	m.screen = screenLeave
+	m.askLeave(false)
 	return nil
 }
 
-// answerTargetsLeave answers the question a changed list asks before it closes: k keeps the list in its
-// row, d drops the changes, and esc returns to the list unchanged. No other key answers it.
-func (m *Model) answerTargetsLeave(key tea.KeyMsg) tea.Cmd {
-	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
-	case "esc":
-		m.screen = screenTargets
-		m.status = "Still editing the targets; nothing was kept or discarded"
-	case "k":
-		m.keepTargets()
-		m.status = "Target list kept in the form; nothing was written yet"
-	case "d":
-		m.screen = screenForm
-		m.clearMessages()
-		m.status = "Target changes discarded; the list is as it was"
+// targetTyped reports whether the target being typed differs from the one it started from.
+func (m *Model) targetTyped() bool {
+	original := ""
+	if m.targetEdit < len(m.targetList.all) {
+		original = m.targetList.all[m.targetEdit]
 	}
-	return nil
+	return m.targetInput.Value() != original
+}
+
+// targetsPending reports whether closing the screen for good would lose something: a changed list, a typed
+// target or a half-built one.
+func (m *Model) targetsPending() bool {
+	if a := m.targetAdd; a != nil && (a.kind >= 0 || a.choices.query() != "") {
+		return true
+	}
+	if m.targetEdit >= 0 && m.targetTyped() {
+		return true
+	}
+	return !slices.Equal(m.targetList.all, m.fields[m.focus].entries)
 }
 
 // editTarget starts typing the target at index, or a new one at the end of the list.

@@ -35,7 +35,7 @@ type targetAdd struct {
 	known map[string][]string
 	// kind is the chosen kind, or -1 in the menu. forms are the forms of the kind, split into segments,
 	// that still fit what was chosen; chosen are the segments so far, and history their number before each
-	// choice, so backspace on an empty line can step back.
+	// choice, so esc can step back.
 	kind    int
 	forms   [][]string
 	chosen  []string
@@ -301,7 +301,7 @@ func (m *Model) startBuilder(kind int) {
 	for _, form := range m.targetMetadata().Kinds[kind].Forms {
 		a.forms = append(a.forms, strings.Split(form, "/"))
 	}
-	// The kind itself is the first choice, so backspace on its first step returns to the menu.
+	// The kind itself is the first choice, so history is never empty while the builder is open.
 	a.history = []int{-1}
 	if target, complete := a.autofill(); complete {
 		// A kind without a single choice is complete as soon as it is chosen.
@@ -318,16 +318,11 @@ func (m *Model) resetAddLine() {
 	m.refreshAdd()
 }
 
-// stepBack undoes the last choice of the builder, or returns from its first step to the menu.
+// stepBack undoes the last choice of the builder.
 func (m *Model) stepBack() {
 	a := m.targetAdd
 	last := a.history[len(a.history)-1]
 	a.history = a.history[:len(a.history)-1]
-	if last < 0 {
-		a.kind = -1
-		m.resetAddLine()
-		return
-	}
 	a.chosen = a.chosen[:last]
 	a.forms = nil
 	for _, form := range m.targetMetadata().Kinds[a.kind].Forms {
@@ -431,7 +426,7 @@ func (m *Model) saveAdd() bool {
 	kind := m.targetMetadata().Kinds[a.kind].Name
 	m.status = ""
 	m.fail = "the new " + kind + " is not complete yet: choose " + m.addAsk() +
-		" by typing it or with enter, or esc to cancel it; nothing was saved"
+		" by typing it or with enter, or esc to leave it; nothing was saved"
 	return false
 }
 
@@ -457,8 +452,16 @@ func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
 	a := m.targetAdd
 	switch key.String() {
 	case "esc":
-		m.targetAdd = nil
-		m.clearMessages()
+		switch {
+		case a.kind >= 0 && len(a.history) > 1:
+			m.stepBack()
+		case a.kind >= 0 || a.choices.query() != "":
+			// The first step of a build and a typed line each hold something that esc would drop.
+			m.askLeave(false)
+		default:
+			m.targetAdd = nil
+			m.clearMessages()
+		}
 	case "enter":
 		if choice, ok := a.choices.selected(); ok {
 			m.pickAdd(choice)
@@ -470,12 +473,6 @@ func (m *Model) updateAdd(key tea.KeyMsg) tea.Cmd {
 	case "pgup", "pgdown", "home", "end":
 		start, end := m.addWindow()
 		a.choices.page(key.String(), start, end)
-	case "backspace":
-		if a.kind >= 0 && a.choices.query() == "" {
-			m.stepBack()
-			return nil
-		}
-		fallthrough
 	default:
 		before := a.choices.query()
 		cmd := a.choices.updateFilter(key)
@@ -519,8 +516,10 @@ func (m *Model) addFrame() (string, string) {
 		}
 		head.WriteString(m.wrapped(hintStyle, "so far: "+so+"   forms: "+strings.Join(forms, ", ")) + "\n")
 		label = "value: "
-		keys = "type a value or filter · up/down move · enter choose · backspace on an empty line steps back · " +
-			save + " · esc cancel entry"
+		keys = "type a value or filter · up/down move · enter choose · " + save + " · esc step back"
+		if len(a.history) <= 1 {
+			keys = "type a value or filter · up/down move · enter choose · " + save + " · esc cancel entry"
+		}
 	}
 	head.WriteString(m.searchLine(&a.choices, label) + "\n")
 	if len(a.choices.matches) == 0 {

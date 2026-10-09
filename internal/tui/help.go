@@ -22,8 +22,6 @@ func (m *Model) updateHelp(key tea.KeyMsg) tea.Cmd {
 	topics := len(helptopics.All())
 	_, _, room := m.helpFrame()
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "esc", "?":
 		m.screen = m.helpFrom
 	case "right", "l", "tab":
@@ -53,7 +51,7 @@ func (m *Model) helpLines() []string {
 	return strings.Split(helptopics.Wrap(text, m.usable(0)), "\n")
 }
 
-// macOSFunctionKeyNote explains why F2 and F3, used throughout the editor, might not reach it on a Mac
+// macOSFunctionKeyNote explains why F2, used throughout the editor, might not reach it on a Mac
 // keyboard without fn held or the system setting turned on; every other host reaches them directly.
 const macOSFunctionKeyNote = "On macOS, hold fn for F-keys, or turn on 'Use F1, F2, etc. keys as standard " +
 	"function keys' in System Settings."

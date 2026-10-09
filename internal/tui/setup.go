@@ -301,10 +301,16 @@ func (m *Model) setupBack() {
 	m.setupShow(w.step - 1)
 }
 
-// leaveSetup is esc: it closes a saved setup, and cancels one that is not saved yet, asking first once a
-// provider was chosen. Dropping the setup drops every typed secret with it; nothing reached the file or a
-// store.
-func (m *Model) leaveSetup() tea.Cmd { return m.requestLeave() }
+// setupEsc is esc in the setup: one step back, and on the first step the way out. That closes a saved setup
+// and cancels one that is not saved yet, asking first once a provider was chosen. Dropping the setup drops
+// every typed secret with it; nothing reached the file or a store.
+func (m *Model) setupEsc() tea.Cmd {
+	if w := m.wizard; w.step != stepProvider && !w.saving && w.saved == "" {
+		m.setupBack()
+		return nil
+	}
+	return m.requestLeave()
+}
 
 // finishSetup ends a saved setup on the Connections list, with the new connection selected.
 func (m *Model) finishSetup() tea.Cmd {
@@ -429,9 +435,6 @@ func setupProblem(err error) error {
 // updateSummary handles the last step: saving, and once saved, testing.
 func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 	w := m.wizard
-	if key.String() == "ctrl+c" {
-		return m.quit()
-	}
 	if w.saving {
 		return nil
 	}
@@ -451,9 +454,7 @@ func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 	}
 	switch key.String() {
 	case "esc":
-		return m.leaveSetup()
-	case "f3":
-		m.setupBack()
+		return m.setupEsc()
 	case "f2":
 		return m.startSetupSave()
 	}
@@ -566,8 +567,8 @@ func (m *Model) setupRebase() {
 // setupError turns a failed save into the way out. The configuration is unchanged in every case.
 func (m *Model) setupError(err error) string {
 	if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
-		return fmt.Sprintf("%v; nothing was saved. %s, then press F2 again, or press F3 to go back "+
-			"and choose %s instead", err, secret.StoreAdvice(secret.StoreStateOf(err), platform), storageEnv)
+		return fmt.Sprintf("%v; nothing was saved. %s, then press F2 again, or press esc to go "+
+			"back and choose %s instead", err, secret.StoreAdvice(secret.StoreStateOf(err), platform), storageEnv)
 	}
 	return err.Error() + "; the configuration was not changed"
 }
@@ -576,7 +577,7 @@ func setupKeys(step int) string {
 	if step == stepProvider {
 		return "F2 next · esc cancel setup"
 	}
-	return "F2 next · F3 back · esc cancel setup"
+	return "F2 next · esc back"
 }
 
 // setupHeading is the title of the current step and, with withLead, what it decides. The per-field form
@@ -607,7 +608,7 @@ func (m *Model) summaryView() string {
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
 		b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 	}
-	keys := "F2 save · F3 back · esc cancel setup"
+	keys := "F2 save · esc back"
 	switch {
 	case w.saving:
 		keys = "ctrl+c quit"

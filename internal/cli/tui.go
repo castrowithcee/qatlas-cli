@@ -42,9 +42,10 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"1-8 open a section directly from the sidebar, a list, or the Logs screen; in a form, digits are\n" +
 			"text instead.\n" +
 			"In a list, / filters, n adds, enter edits, d deletes, t tests the selected connection, c starts\n" +
-			"the guided setup, and q quits; ctrl+c quits anywhere without saving. esc only ever steps back one\n" +
-			"level: it clears a filter, cancels a running test, closes a picker, a table, or a question, or\n" +
-			"leaves a form.\n\n" +
+			"the guided setup, and q quits, as it does from the sidebar and the Logs screen; on any other\n" +
+			"screen q is not a key. esc is one level back on every screen, and the only key that\n" +
+			"goes back: it clears a filter, cancels a running test, closes a picker, a table, a dialog, or a\n" +
+			"log entry, or leaves a form. backspace never goes back.\n\n" +
 			"Services, credentials, connections, and agent tokens can be copied. p duplicates the selected\n" +
 			"entry into a filled form of a new entry named <name>-copy (or <name>-copy-2, and so on), and n\n" +
 			"first asks whether the new entry starts empty or from an existing one, which is chosen in a\n" +
@@ -53,10 +54,14 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"credential keeps only where its secrets are kept and you store its secrets afterwards, and a\n" +
 			"copied agent token keeps its vorbilder and an expiry that still lies ahead, but gets its own\n" +
 			"value.\n\n" +
-			"A form with unsaved changes is never left silently. esc first asks: s saves through the same\n" +
-			"checks as F2 and goes on only when the save succeeds, d discards the changes\n" +
-			"and goes on, and esc keeps editing with every input intact. An unchanged form closes at once. An\n" +
-			"unfinished guided setup can only be kept or discarded, since it saves from its summary only.\n\n" +
+			"Nothing unsaved is dropped silently, and one question asks about all of it: a changed form, a\n" +
+			"changed list of targets or paths, a target or path typed but not yet taken, a half-built target,\n" +
+			"a multiple choice with changed ticks, and an unfinished guided setup. F2 saves through the same\n" +
+			"checks as on the screen itself and goes on only when that succeeds (in the guided setup it goes\n" +
+			"on to the next step instead), d discards what the screen holds, and esc keeps editing with every\n" +
+			"input intact. Unchanged input closes at once. ctrl+c quits at once, and asks the same question\n" +
+			"when something unsaved would be lost; d then discards it and quits. A single-line dialog, such as\n" +
+			"a passphrase, a secret, a search, or the date of the Logs, is closed by esc without a question.\n\n" +
 			"Focus and state read without colour. The active section is marked > while the sidebar has the\n" +
 			"focus and * while the workspace has it, the pane with the focus has a double border, and the\n" +
 			"selected entry or field is marked >. A connection test reports [ok] or [failed], other messages\n" +
@@ -70,9 +75,9 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"defaults.secret_store decides which of the first two is preselected, and none is called a\n" +
 			"recommendation. Secrets are typed masked and never shown. Storing the vault's very first\n" +
 			"secret offers a passphrase, typed masked and twice; leaving it empty keeps the vault\n" +
-			"unencrypted. Nothing is written before the summary is saved: esc cancels, asking first once a\n" +
-			"provider is chosen, F3 goes back one step, and should the configuration fail to save, the\n" +
-			"secrets just stored are removed again.\n\n" +
+			"unencrypted. Nothing is written before the summary is saved: esc goes back one step, and on the\n" +
+			"first step cancels the setup, asking first once a provider is chosen, and should the\n" +
+			"configuration fail to save, the secrets just stored are removed again.\n\n" +
 			"The sections remain for direct editing. The editor manages services, credentials, connections,\n" +
 			"and domain defaults, can test a selected connection, and stores the secrets of a credential in\n" +
 			"a masked field. It never displays a stored secret back: what it shows is which source delivers\n" +
@@ -214,20 +219,20 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"holds a list. enter, space, or / opens it: a adds a target, enter edits the selected one, and x or\n" +
 			"d removes it after asking. F2 keeps the list and saves the connection in one step, taking a\n" +
 			"target that is still being typed first; in the guided setup it goes on to the next step instead,\n" +
-			"since the setup saves only from its summary. esc closes an unchanged list; after a change it asks\n" +
-			"first: k keeps the list in the row, d discards the changes, and esc returns to the list.\n\n" +
+			"since the setup saves only from its summary. esc closes an unchanged list; after a change, or with\n" +
+			"a target typed but not taken, it asks the question above, and F2 then keeps the list and saves.\n\n" +
 			"a opens a menu whenever there is more to offer than typing: the targets other connections of the\n" +
 			"same service use, marked with those connections, and for a provider that names kinds of targets,\n" +
 			"such as GitHub's repository, project, and owner, a builder for a new one. Typing filters the menu,\n" +
 			"and its first row takes the typed line as a target, the way for experts. The builder asks for the\n" +
 			"parts of the kind one by one, for example the owner and then the repository name or the project\n" +
 			"number, suggests the values the same service already uses there, offers * as all, and writes the\n" +
-			"usual path such as repos/OWNER/REPO; backspace on an empty line steps back, and esc cancels the\n" +
-			"entry. * is never selected when a step opens, so a pattern is added only when it is chosen with\n" +
-			"enter or typed. F2 takes a typed line, or a typed value that completes a build, never a row\n" +
-			"that is merely selected, and says what is missing otherwise. Every target, however it was added,\n" +
-			"is checked by the provider when it is taken; a refused one stays typed with the reason, and one\n" +
-			"the list holds already is refused. enter on a target edits it as typed text.\n\n" +
+			"usual path such as repos/OWNER/REPO; esc steps back one part, and on the first part leaves the\n" +
+			"builder after the question above. * is never selected when a step opens, so a pattern is added\n" +
+			"only when it is chosen with enter or typed. F2 takes a typed line, or a typed value that completes\n" +
+			"a build, never a row that is merely selected, and says what is missing otherwise. Every target,\n" +
+			"however it was added, is checked by the provider when it is taken; a refused one stays typed with\n" +
+			"the reason, and one the list holds already is refused. enter on a target edits it as typed text.\n\n" +
 			"In the form, right unfolds the targets row to show every target and left folds it again to their\n" +
 			"number and the first two. The row says what an empty list means for the provider: a GitHub\n" +
 			"connection without targets reaches whatever its credential reaches, while SeaTable or Telegram\n" +
@@ -237,8 +242,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"absolute or starting with ~/; without paths the connection applies in every project. The row\n" +
 			"opens its list like the targets row, with the same keys: a adds a path, enter or e edits the\n" +
 			"selected one, x or d removes it after asking, F2 keeps the list and saves the connection, and\n" +
-			"esc asks before it drops a changed list. While a path is typed, tab takes the suggested\n" +
-			"directory and up/down switch between several; only directories are suggested, and with nothing\n" +
+			"esc asks before it drops a changed list or a typed path. While a path is typed, tab takes the\n" +
+			"suggested directory and up/down switch between several; only directories are suggested, and with nothing\n" +
 			"typed the directory the TUI was started in. A path that does not exist yet is taken as typed,\n" +
 			"and qatlas config validate warns about it.\n\n" +
 			"enter on a text row goes on to the next row, and on the last one does nothing; it never saves.\n" +
