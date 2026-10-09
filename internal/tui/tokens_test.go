@@ -148,7 +148,7 @@ func TestCreatingATokenInTheTUI(t *testing.T) {
 	}
 	view := screenOf(m)
 	for _, want := range []string{"New agent token", "vorbilder", "expires", "each vorbild sets the ceiling",
-		"can never change or delete a vorbild connection itself", "enter create"} {
+		"can never change or delete a vorbild connection itself", "F2 create"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the token form does not show %q:\n%s", want, view)
 		}
@@ -156,7 +156,7 @@ func TestCreatingATokenInTheTUI(t *testing.T) {
 
 	typeText(t, m, "kunde-a-ci")
 	press(t, m, "tab")
-	if view := screenOf(m); !strings.Contains(view, "enter tick") || !strings.Contains(view, "F2 create") {
+	if view := screenOf(m); !strings.Contains(view, "enter open") || !strings.Contains(view, "F2 create") {
 		t.Errorf("the vorbilder row does not name its keys:\n%s", view)
 	}
 	press(t, m, "enter")

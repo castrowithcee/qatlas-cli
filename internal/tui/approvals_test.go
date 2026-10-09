@@ -404,7 +404,7 @@ func TestUnencryptedVaultUnaffectedBySaving(t *testing.T) {
 	addService(t, m, "wiki", "https://wiki.example.invalid")
 	addVaultCredential(t, m, "reader")
 	focusRole(t, m, "token-id")
-	press(t, m, "s")
+	press(t, m, "enter")
 	typeText(t, m, "canary-token-id-9f31")
 	pump(t, m, "enter")
 	if m.screen == screenVaultOffer {
