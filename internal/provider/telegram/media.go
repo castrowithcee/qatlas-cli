@@ -36,15 +36,20 @@ const (
 	kindVideo     = "video"
 	kindAnimation = "animation"
 	kindVideoNote = "videonote"
+	kindAudio     = "audio"
+	kindVoice     = "voice"
 )
 
-// kindSpecs holds the fixed Bot API method, upload field, and display noun of every single-file kind.
-var kindSpecs = map[string]struct{ method, field, noun, example string }{
-	kindPhoto:     {"sendPhoto", "photo", "photo", ".jpg"},
-	kindDocument:  {"sendDocument", "document", "document", ".pdf"},
-	kindVideo:     {"sendVideo", "video", "video", ".mp4"},
-	kindAnimation: {"sendAnimation", "animation", "animation", ".mp4"},
-	kindVideoNote: {"sendVideoNote", "video_note", "video note", ".mp4"},
+// kindSpecs holds the fixed Bot API method, upload field, display noun, example extension, and tool ID segment
+// of every single-file kind. The segment is spelled out because audio and voice have no plural.
+var kindSpecs = map[string]struct{ method, field, noun, example, segment string }{
+	kindPhoto:     {"sendPhoto", "photo", "photo", ".jpg", "photos"},
+	kindDocument:  {"sendDocument", "document", "document", ".pdf", "documents"},
+	kindVideo:     {"sendVideo", "video", "video", ".mp4", "videos"},
+	kindAnimation: {"sendAnimation", "animation", "animation", ".mp4", "animations"},
+	kindVideoNote: {"sendVideoNote", "video_note", "video note", ".mp4", "videonotes"},
+	kindAudio:     {"sendAudio", "audio", "audio file", ".mp3", "audio"},
+	kindVoice:     {"sendVoice", "voice", "voice message", ".ogg", "voice"},
 }
 
 var mediaRisk = capability.Risk{
@@ -105,13 +110,13 @@ func singleDescriptor(kind, title, limit string) capability.Descriptor {
 	arguments[0].Description = "Local " + noun + " to send, absolute or starting with ~/, inside a directory the " +
 		"connection releases for reading, up to " + limit + "; instead of file_ref"
 	return capability.Descriptor{
-		ID:      Provider + "." + kind + "s.send",
+		ID:      Provider + "." + kindSpecs[kind].segment + ".send",
 		Version: 1,
 		Title:   title,
 		Description: "Send one " + noun + " up to " + limit + " to a bound chat of an explicit Telegram connection, from " +
 			"local_path in a directory the connection releases for reading or from a signed file_ref. A local file is " +
 			"sent under a neutral name without its path. An unclear outcome is never repeated",
-		Tags:         []string{"telegram", kind + "s", "send", "files"},
+		Tags:         []string{"telegram", kindSpecs[kind].segment, "send", "files"},
 		Risk:         mediaRisk,
 		Provider:     Provider,
 		Group:        groupMedia,
@@ -137,37 +142,44 @@ var animationsSend = singleDescriptor(kindAnimation, "Send a Telegram animation"
 
 var videoNotesSend = singleDescriptor(kindVideoNote, "Send a Telegram video note", "50 MB")
 
+var audioSend = singleDescriptor(kindAudio, "Send a Telegram audio file", "50 MB")
+
+var voiceSend = singleDescriptor(kindVoice, "Send a Telegram voice message", "50 MB")
+
 var mediaGroupsSend = capability.Descriptor{
 	ID:      Provider + ".mediagroups.send",
 	Version: 1,
 	Title:   "Send a Telegram album",
-	Description: "Send an album of 2 through 10 photos and videos, which may be mixed, or of 2 through 10 documents, " +
-		"which are not mixed with anything, to a bound chat of an explicit Telegram connection, each item from a " +
-		"local file in a directory the connection releases for reading or from a signed file_ref. The files of one " +
-		"album together stay below 50 MB. An unclear outcome is never repeated",
+	Description: "Send an album of 2 through 10 photos and videos, which may be mixed, of 2 through 10 documents, or " +
+		"of 2 through 10 audio files, the last two never mixed with anything, to a bound chat of an explicit " +
+		"Telegram connection, each item from a local file in a directory the connection releases for reading or " +
+		"from a signed file_ref. The files of one album together stay below 50 MB. An unclear outcome is never repeated",
 	Tags:       []string{"telegram", "mediagroups", "send", "files"},
 	Risk:       mediaRisk,
 	Provider:   Provider,
 	Group:      groupMedia,
 	LocalFiles: config.LocalFilesRead,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` +
-		`"type":{"type":"string","enum":["photo","video","document"]},` +
+		`"type":{"type":"string","enum":["photo","video","document","audio"]},` +
 		`"items":{"type":"array","minItems":2,"maxItems":10,"items":{"type":"object","properties":{` +
 		`"type":{"type":"string","enum":["photo","video"]},` + sourceProperties + `},"additionalProperties":false}},` + mediaOptionSchema +
 		`},"required":["type","items"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"messages":{"type":"array","items":` + sentSchema +
 		`}},"required":["messages"],"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{
-		{Name: "type", Description: "photo, video, or document; the type of every item without its own type. " +
-			"Documents are never mixed with photos or videos", Required: true},
+		{Name: "type", Description: "photo, video, document, or audio; the type of every item without its own type. " +
+			"Documents and audio files are never mixed with other types", Required: true},
 		{Name: "items", Description: "From 2 through 10 items, each with exactly one of local_path and file_ref and, " +
-			"in a photo or video album, an optional type photo or video; photos up to 10 MB each, videos and " +
-			"documents up to 50 MB each", Required: true},
+			"in a photo or video album, an optional type photo or video; photos up to 10 MB each, videos, " +
+			"documents, and audio files up to 50 MB each", Required: true},
 	}, mediaArguments("Caption of the album, shown on its first item")...),
 	Fields: []capability.Field{{Name: "messages", Description: "One entry per sent message with message_id, date, and file_ref"}},
 	Examples: []capability.Example{{
 		Description: "Send two local photos as one album",
 		Arguments:   json.RawMessage(`{"type":"photo","items":[{"local_path":"~/shots/a.jpg"},{"local_path":"~/shots/b.jpg"}]}`),
+	}, {
+		Description: "Send two local audio files as one album",
+		Arguments:   json.RawMessage(`{"type":"audio","items":[{"local_path":"~/music/a.mp3"},{"local_path":"~/music/b.mp3"}]}`),
 	}, {
 		Description: "Send a photo and a video as one album",
 		Arguments:   json.RawMessage(`{"type":"photo","items":[{"local_path":"~/shots/a.jpg"},{"type":"video","local_path":"~/shots/b.mp4"}]}`),
@@ -335,6 +347,16 @@ func invokeVideoNotesSend(ctx context.Context, resolved *config.Resolved, secret
 	return invokeSingleSend(ctx, resolved, secrets, red, raw, newHTTPClient(), kindVideoNote)
 }
 
+func invokeAudioSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeSingleSend(ctx, resolved, secrets, red, raw, newHTTPClient(), kindAudio)
+}
+
+func invokeVoiceSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeSingleSend(ctx, resolved, secrets, red, raw, newHTTPClient(), kindVoice)
+}
+
 func invokeSingleSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage, httpClient *http.Client, kind string) (any, error) {
 	op := "send " + kindSpecs[kind].noun
@@ -438,7 +460,7 @@ func invokeMediaGroupsSendWith(ctx context.Context, resolved *config.Resolved, s
 }
 
 // albumItem is one album entry; a photo or video album lets an item override the album type with the other of
-// the two, a document album never mixes.
+// the two, a document or audio album never mixes.
 type albumItem struct {
 	mediaSource
 	Type string `json:"type"`
@@ -447,12 +469,12 @@ type albumItem struct {
 func albumKinds(op, albumType string, items []albumItem) ([]string, error) {
 	kinds := make([]string, len(items))
 	switch albumType {
-	case kindDocument:
+	case kindDocument, kindAudio:
 		for i, item := range items {
 			if item.Type != "" {
-				return nil, providerError(op, "documents are not mixed with photos or videos")
+				return nil, providerError(op, "documents and audio files are not mixed with other types")
 			}
-			kinds[i] = kindDocument
+			kinds[i] = albumType
 		}
 	case kindPhoto, kindVideo:
 		for i, item := range items {
@@ -466,7 +488,7 @@ func albumKinds(op, albumType string, items []albumItem) ([]string, error) {
 			}
 		}
 	default:
-		return nil, providerError(op, "the album type must be photo, video, or document")
+		return nil, providerError(op, "the album type must be photo, video, document, or audio")
 	}
 	return kinds, nil
 }
@@ -564,6 +586,8 @@ type inputMedia struct {
 	ParseMode string `json:"parse_mode,omitempty"`
 }
 
+func exclusiveKind(kind string) bool { return kind == kindDocument || kind == kindAudio }
+
 // sendAlbum performs exactly one sendMediaGroup request. The caption goes on the first item only, where
 // Telegram shows it for the whole album.
 func (c *Client) sendAlbum(ctx context.Context, items []mediaItem, o mediaOptions) (map[string]any, error) {
@@ -574,18 +598,16 @@ func (c *Client) sendAlbum(ctx context.Context, items []mediaItem, o mediaOption
 	if len(items) < minAlbumItems || len(items) > maxAlbumItems {
 		return nil, providerError(op, "an album has from 2 through 10 items")
 	}
-	documents := 0
 	for _, item := range items {
 		switch item.kind {
-		case kindDocument:
-			documents++
-		case kindPhoto, kindVideo:
+		case kindDocument, kindAudio, kindPhoto, kindVideo:
 		default:
-			return nil, providerError(op, "an album has only photos, videos, or documents")
+			return nil, providerError(op, "an album has only photos, videos, documents, or audio files")
 		}
-	}
-	if documents != 0 && documents != len(items) {
-		return nil, providerError(op, "documents are not mixed with photos or videos")
+		// Documents and audio files only group with their own kind.
+		if item.kind != items[0].kind && (exclusiveKind(item.kind) || exclusiveKind(items[0].kind)) {
+			return nil, providerError(op, "documents and audio files are not mixed with other types")
+		}
 	}
 	s := spec{op: op, method: "sendMediaGroup", limit: maxAlbumResponseBytes}
 	media := make([]inputMedia, len(items))
@@ -661,6 +683,8 @@ func (c *Client) parseSent(raw json.RawMessage, kind string) (map[string]any, bo
 		Video     *fileIDField  `json:"video"`
 		Animation *fileIDField  `json:"animation"`
 		VideoNote *fileIDField  `json:"video_note"`
+		Audio     *fileIDField  `json:"audio"`
+		Voice     *fileIDField  `json:"voice"`
 	}
 	if json.Unmarshal(raw, &message) != nil || message.MessageID <= 0 || message.Date <= 0 {
 		return nil, false
@@ -678,6 +702,10 @@ func (c *Client) parseSent(raw json.RawMessage, kind string) (map[string]any, bo
 		fileID = message.Animation.FileID
 	case kind == kindVideoNote && message.VideoNote != nil:
 		fileID = message.VideoNote.FileID
+	case kind == kindAudio && message.Audio != nil:
+		fileID = message.Audio.FileID
+	case kind == kindVoice && message.Voice != nil:
+		fileID = message.Voice.FileID
 	}
 	out := map[string]any{"message_id": message.MessageID, "date": message.Date}
 	if ref := signRef(c.token, refFile, c.target, fileID); ref != "" {
