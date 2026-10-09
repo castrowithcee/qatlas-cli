@@ -53,14 +53,15 @@
 // no message holding it, and, when kChat reports one, the target channel; kChat offers no way to remove an
 // upload that is never attached.
 //
-// Team management, visibility and archiving of channels, changes to other users, profile pictures, previews and
-// thumbnails, the custom emoji catalog, and webhooks are deliberately out of scope: this provider lists the
-// teams, channels, and direct and group channels a connection may reach, reads channel details and the public
-// channels of a bound team, creates one confirmed channel in a bound team (only for a connection without a
-// channel allow-list, because a new channel cannot be inside one), changes the display name, purpose, header,
-// or handle of one confirmed public or private channel, lists the members of a public or private channel, adds
-// confirmed users who are the token's own user or members of the channel's team and, only when a connection's
-// tools list names it, removes one member or sets one member's channel role (never in a direct or group
+// Team management, changes to other users, profile pictures, previews and thumbnails, the custom emoji
+// catalog, and webhooks are deliberately out of scope: this provider lists the teams, channels, and direct
+// and group channels a connection may reach, reads channel details and the public channels of a bound team,
+// creates one confirmed channel in a bound team (only for a connection without a channel allow-list, because
+// a new channel cannot be inside one), changes the display name, purpose, header, or handle of one confirmed
+// public or private channel, lists the members of a public or private channel and the archived channels of a
+// bound team, adds confirmed users who are the token's own user or members of the channel's team and, only
+// when a connection's tools list names it, removes one member, sets one member's channel role, archives or
+// restores one channel, or switches one channel between public and private (never in a direct or group
 // channel, see openMemberChannel), opens one confirmed direct or group channel with members of the bound
 // teams, reads channel posts, single posts, threads, reactions, pinned posts, and the attachments of posts
 // (writing one to a released local directory), uploads one confirmed file for a message, reads, lists, and
@@ -70,10 +71,10 @@
 // pins or unpins one confirmed message, and, only when a connection's tools list names it, deletes one
 // confirmed message or removes one own reaction. The token's own presence, custom status, and four display
 // profile fields are the only user data it changes, always for the user read from users/me and never taken
-// from an argument. kChat renders Markdown and mentions such as @channel in a
-// message, so the text is sent as written. Every value a listing or a read answers with arrives from the
-// provider and is treated as untrusted data: normalised into a stable envelope, passed through the output
-// encoders, and never rendered, executed, or stored.
+// from an argument. kChat renders Markdown and mentions such as @channel in a message, so the text is sent as
+// written. Every value a listing or a read answers with arrives from the provider and is treated as untrusted
+// data: normalised into a stable envelope, passed through the output encoders, and never rendered, executed,
+// or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
 // no proactive spacing of its own; a 429 kChat itself reports is still classified and, when it names a
@@ -482,7 +483,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat: channel, direct, and group messages, search, files, reactions, pins, users, presence, own status and profile, and channels (read, create, rename, members) of the bound teams",
+		Description:        "Infomaniak kChat for bound teams: channel, direct, and group messages, search, files, reactions, pins, users, presence, own status and profile, and channels with members, visibility, and lifecycle",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -524,14 +525,14 @@ func Register(reg *capability.Registry) error {
 			ID: "read", Title: "Read teams, channels, messages, and users", Recommended: true,
 			Description: "lists the bound teams and their channels, reads channel details and the public " +
 				"channels of a bound team, lists the direct and group channels, searches messages, files, and " +
-				"channels, lists the members of a channel, reads channel messages, single messages, threads, " +
-				"reactions, pinned messages, and attachments (metadata and download to a released local " +
-				"directory), and reads, lists, and searches the users of the bound teams and their presence; " +
-				"changes nothing",
+				"channels, lists the members of a channel and the archived channels of a team, reads channel " +
+				"messages, single messages, threads, reactions, pinned messages, and attachments (metadata and " +
+				"download to a released local directory), and reads, lists, and searches the users of the bound " +
+				"teams and their presence; changes nothing",
 			Tools: []string{teamsList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID, channelsMembersList.ID,
 				directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
 				filesDownload.ID, reactionsList.ID, pinsList.ID, usersGet.ID, usersList.ID, usersSearch.ID,
-				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID},
+				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
@@ -551,8 +552,8 @@ func Register(reg *capability.Registry) error {
 			Description: "reads the bound teams, their channels with details, and the public channels, and also " +
 				"creates a confirmed channel in a bound team (only without a channel allow-list), changes " +
 				"the display name, purpose, header, or handle of a confirmed channel, and adds confirmed " +
-				"members of the channel's team to a channel; archiving, visibility changes, removing " +
-				"members, and changing member roles are never part of a profile",
+				"members of the channel's team to a channel; archiving, restoring, visibility " +
+				"changes, removing members, and changing member roles are never part of a profile",
 			Tools: []string{teamsList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID, channelsCreate.ID,
 				channelsUpdate.ID, channelsMembersAdd.ID},
 		}},
@@ -566,6 +567,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(channelsBrowse), Handler: capability.Handler(invokeChannelsBrowse)},
 		capability.Operation{Descriptor: withGroup(channelsCreate), Handler: capability.Handler(invokeChannelsCreate)},
 		capability.Operation{Descriptor: withGroup(channelsUpdate), Handler: capability.Handler(invokeChannelsUpdate)},
+		capability.Operation{Descriptor: withGroup(archivedChannelsList), Handler: capability.Handler(invokeArchivedChannelsList)},
+		capability.Operation{Descriptor: withGroup(channelsArchive), Handler: capability.Handler(invokeChannelsArchive)},
+		capability.Operation{Descriptor: withGroup(channelsRestore), Handler: capability.Handler(invokeChannelsRestore)},
+		capability.Operation{Descriptor: withGroup(channelsPrivacy), Handler: capability.Handler(invokeChannelsPrivacy)},
 		capability.Operation{Descriptor: withGroup(channelsMembersList), Handler: capability.Handler(invokeChannelsMembersList)},
 		capability.Operation{Descriptor: withGroup(channelsMembersAdd), Handler: capability.Handler(invokeChannelsMembersAdd)},
 		capability.Operation{Descriptor: withGroup(channelsMembersRemove), Handler: capability.Handler(invokeChannelsMembersRemove)},

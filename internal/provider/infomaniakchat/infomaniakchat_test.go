@@ -192,6 +192,19 @@ func coreConfig() *config.Config {
 			"memberroles": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
 				Tools:       []string{channelsMembersRoles.ID}},
+			// The archive connections: each holds one tool in its tools list; "archivech" narrows teamA to chanA.
+			"archiver": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+				Tools:       []string{channelsArchive.ID}},
+			"archivech": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+				Tools:       []string{channelsArchive.ID}},
+			"restorer": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
+				Tools:       []string{channelsRestore.ID}},
+			"privater": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
+				Tools:       []string{channelsPrivacy.ID}},
 			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete, config.PermissionUpdate}},
 		},
@@ -257,8 +270,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 40 {
-		t.Fatalf("tools = %+v, want 40", metadata.Tools)
+	if len(metadata.Tools) != 44 {
+		t.Fatalf("tools = %+v, want 44", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -298,7 +311,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!has("channel-admin", channelsMembersAdd.ID) || has("read", channelsMembersAdd.ID) {
 		t.Fatalf("profiles = %+v, want members.list in read and members.add in channel-admin", profiles)
 	}
+	if !has("read", archivedChannelsList.ID) || has("channel-admin", archivedChannelsList.ID) {
+		t.Fatalf("profiles = %+v, want archivedchannels.list in read", profiles)
+	}
 	for id := range profiles {
+		if has(id, channelsArchive.ID) || has(id, channelsRestore.ID) || has(id, channelsPrivacy.ID) {
+			t.Fatalf("profile %s selects an archive, restore, or visibility tool", id)
+		}
 		if has(id, channelsMembersRemove.ID) || has(id, channelsMembersRoles.ID) {
 			t.Fatalf("profile %s selects a member removal or role tool", id)
 		}
@@ -324,6 +343,16 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 		if (tool.ID == channelsMembersRemove.ID || tool.ID == channelsMembersRoles.ID) && !tool.RequiresToolAllowList {
 			t.Fatalf("%s metadata = %+v", tool.ID, tool)
+		}
+		if (tool.ID == channelsArchive.ID || tool.ID == channelsRestore.ID || tool.ID == channelsPrivacy.ID) &&
+			!tool.RequiresToolAllowList {
+			t.Fatalf("%s metadata = %+v", tool.ID, tool)
+		}
+		if tool.ID == channelsArchive.ID && tool.Effect != config.PermissionDelete {
+			t.Fatalf("channels.archive metadata = %+v", tool)
+		}
+		if tool.ID == archivedChannelsList.ID && (tool.RequiresToolAllowList || tool.Group != "channels") {
+			t.Fatalf("archivedchannels.list metadata = %+v", tool)
 		}
 		if tool.ID == reactionsRemove.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
 			t.Fatalf("reactions.remove metadata = %+v", tool)

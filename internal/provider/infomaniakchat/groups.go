@@ -30,7 +30,7 @@ func groupOf(id string) string {
 		return parts[1]
 	case "status", "customstatus", "profile":
 		return "users"
-	case "channelmembers":
+	case "channelmembers", "archivedchannels":
 		return "channels"
 	case "direct", "groupmessages", "pins":
 		return "messages"
