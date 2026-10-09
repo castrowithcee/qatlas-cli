@@ -1,8 +1,8 @@
 ---
 description: >
   Describes the Infomaniak kChat provider: token setup, the team and channel allow-list, the team, channel,
-  message, and thread reads, pagination contracts, the confirmed send, edit, and delete tools and their
-  unclear-result contract, redirect handling, and the boundary to kDrive, Mail, and CalDAV/CardDAV.
+  message, thread, and reaction reads, pagination contracts, the confirmed send, edit, delete, and reaction
+  tools and their unclear-result contract, redirect handling, and the boundary to kDrive, Mail, and CalDAV/CardDAV.
 type: knowledge
 edit: shared
 created: 2026-09-27
@@ -14,9 +14,10 @@ updated: 2026-10-09
 Infomaniak kChat is Infomaniak's Mattermost-compatible team chat product. This provider binds one kChat
 instance and one or more of its teams, optionally narrowed to specific channels of them: it lists the bound
 teams and channels, reads channel messages and threads page by page, and sends or replies with exactly one
-confirmed message, reads, edits, and deletes single messages, all through the instance's own `/api/v4/...`
-REST surface. kChat renders Markdown and mentions such as `@channel` in a message; Qatlas sends the text as
-written. It manages no channel or team, uploads no file, adds no reaction, and configures no webhook.
+confirmed message, reads, edits, and deletes single messages, and reads, adds, and removes reactions, all
+through the instance's own `/api/v4/...` REST surface. kChat renders Markdown and mentions such as `@channel`
+in a message; Qatlas sends the text as written. It manages no channel or team, uploads no file, offers no
+custom emoji catalog, and configures no webhook.
 
 ## Configuration
 
@@ -77,7 +78,8 @@ through the same two checks `infomaniakdrive` applies to a `drive_id`:
    not proof of which team it really belongs to. A channel of another team, or a check that failed or came
    back unreadable, aborts the request right there; there is no silent fallback to the message endpoint.
 
-A `post_id` (`messages.thread`, `messages.get`, `messages.update`, `messages.delete`) is bound through its
+A `post_id` (`messages.thread`, `messages.get`, `messages.update`, `messages.delete`, and the
+`reactions` tools) is bound through its
 channel: Qatlas reads the post, refuses an answer for another post or a deleted post, applies the channel
 allow-list to the post's channel, and runs the live channel check above, all before any detail is returned
 or any change is sent. A refusal never names the foreign target and never carries message content.
@@ -101,16 +103,26 @@ not that every team or channel on a narrower allow-list exists, is reachable, or
 | `infomaniakchat.messages.send` | create, confirmed | exactly one message, or, with `root_id`, one reply |
 | `infomaniakchat.messages.update` | update, confirmed | the text of one message; nothing else of the post changes |
 | `infomaniakchat.messages.delete` | delete, confirmed, tools list only | one message |
+| `infomaniakchat.reactions.list` | read | the reactions of one message, page by page |
+| `infomaniakchat.reactions.add` | create, confirmed | one reaction of the token's own user |
+| `infomaniakchat.reactions.remove` | delete, confirmed, tools list only | one reaction of the token's own user |
 
-The tools sort into the groups `teams`, `channels`, and `messages`. The five reads need no confirmation; send,
-update, and delete always do, through the same confirmation mechanism every other confirmed Qatlas tool
-uses. The terminal editor starts a new connection on the setup profile `read`, which ticks the read tools;
-`messaging` adds `messages.send` and `messages.update` for a connection that should also post and edit.
+The tools sort into the groups `teams`, `channels`, `messages`, and `reactions`. The reads need no
+confirmation; send, update, delete, and the reaction changes always do, through the same confirmation
+mechanism every other confirmed Qatlas tool uses. The terminal editor starts a new connection on the setup
+profile `read`, which ticks the read tools; `messaging` adds `messages.send`, `messages.update`, and
+`reactions.add` for a connection that should also post, edit, and react.
 
 `infomaniakchat.messages.delete` is in no profile and is offered only to a connection whose tools list names
 it. kChat soft-deletes the post, which users cannot restore, and deleting a thread root also removes its
 replies. Whether a token may edit or delete a message of another author is kChat's decision
 (`edit_others_posts`, `delete_others_posts`); a refusal is `permission`.
+
+Reactions are always those of the token's own user. Its ID comes from `GET /api/v4/users/me` in the same
+call, never from an argument, so reactions of other users cannot be added or removed. `emoji_name` is 1 to 64
+characters of `a-z`, `0-9`, `_`, `+`, and `-`, checked locally before any secret is read.
+`infomaniakchat.reactions.remove` is in no profile and is offered only to a connection whose tools list names
+it. Adding an existing reaction changes nothing.
 
 ## Pagination
 
@@ -123,18 +135,21 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 - `infomaniakchat.messages.list` pages kChat's own `GetPostsForChannel` pagination directly: `page` (1-based)
   and `limit` select one page of the channel, newest first, and the answer reports `has_more` from kChat's
   own `has_next`.
+- `infomaniakchat.reactions.list` reads kChat's complete reaction array for the post and pages it itself like
+  the team listing, reporting only `user_id`, `emoji_name`, and `created_at` per reaction.
 - `infomaniakchat.messages.thread` pages kChat's own `GetPostThread` pagination: an opaque `cursor`, kChat's
   own `next_post_id` passed back unchanged, continues a thread forward; the answer reports `has_more` and,
   while it is true, a `cursor` for the next page.
 
 ## Confirmation and unclear results
 
-`infomaniakchat.messages.send`, `.update`, and `.delete` require confirmation in their own request and
-change kChat with exactly one request, sent after the binding reads: Qatlas never repeats it automatically.
-An edit answered with another post or channel than the one addressed is an unreadable answer. A failure
-whose request may nonetheless have reached kChat, such as a timeout, a connection reset, or a 5xx response,
-says so in its message and is reported as-is; the caller decides whether to check the channel before
-sending again, never Qatlas on its own.
+`infomaniakchat.messages.send`, `.update`, `.delete`, `reactions.add`, and `reactions.remove` require
+confirmation in their own request and change kChat with exactly one request, sent after the binding reads:
+Qatlas never repeats it automatically. An edit answered with another post or channel, or a reaction answered
+with another user, post, or emoji than the one addressed, is an unreadable answer. A failure whose request
+may nonetheless have reached kChat, such as a timeout, a connection reset, or a 5xx response, says so in its
+message and is reported as-is; the caller decides whether to check before repeating it, never Qatlas on its
+own.
 
 ## Errors
 
@@ -168,7 +183,8 @@ This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV a
 products with their own authentication, none of them the token this provider uses; see the
 `infomaniakdrive` provider's documentation for why each is its own sibling provider rather than one shared
 Infomaniak provider. Within kChat itself, this provider offers no channel or team creation, membership, or
-administration, no file attachment, no reaction, and no webhook configuration, and an edit changes only a
+administration, no file attachment, no custom emoji catalog, no removal of another user's reaction, and no webhook
+configuration, and an edit changes only a
 message's text, never its attachments, pin state, or properties.
 
 ## Live test scenario
@@ -180,7 +196,8 @@ across two pages and confirm `has_more` turns false on the last one; send one co
 disposable test channel and confirm exactly one message appears; send one confirmed reply with `root_id` and
 confirm it threads under the original message; read it with `messages.get`; edit its text and confirm only
 the text and the edit time change; delete the reply from a connection that lists the delete tool and confirm
-the root stays; attempt a send, get, edit, and delete against a channel or post outside the connection's
+the root stays; add a reaction, read it with `reactions.list`, and remove it from a connection that lists
+the remove tool; attempt a send, get, edit, delete, and reaction against a channel or post outside the connection's
 targets and confirm each is refused before anything changes; attempt the same with a channel or team the
 credential's token cannot actually reach, to confirm the live check reports it, not a stale allow-list; and
 confirm which token sources an instance accepts, including a personal profile token.
