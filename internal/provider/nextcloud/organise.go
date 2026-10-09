@@ -51,6 +51,28 @@ var foldersCreate = capability.Descriptor{
 	Examples: []capability.Example{{Description: "Create a folder", Arguments: json.RawMessage(`{"path":"2026/Invoices"}`)}},
 }
 
+var foldersDelete = capability.Descriptor{
+	ID: Provider + ".folders.delete", Version: 1,
+	Title: "Delete a Nextcloud folder",
+	Description: "Delete one confirmed folder below the fixed root of a connection together with everything in it, " +
+		"bound to the folder ETag; the root itself is never deleted. Nextcloud moves the folder to the trash bin " +
+		"when the files_trashbin app is active, otherwise it is deleted for good",
+	Tags: []string{"nextcloud", "folders", "webdav", "delete"}, Provider: Provider, RequiresToolAllowList: true,
+	Risk: capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,
+		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"path":` + pathSchema + `,` +
+		`"etag":{"type":"string","minLength":1,"maxLength":1024,"pattern":"[^*\\s\"]","x-form":"the ETag of the folder, never *"}},` +
+		`"required":["path","etag"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
+		`"required":["deleted"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{
+		{Name: "path", Required: true, Description: "Folder relative to the fixed root folder of this connection; never the root itself"},
+		{Name: "etag", Required: true, Description: "Entity tag of the folder version to delete, from files.stat or files.list"},
+	},
+	Fields:   []capability.Field{{Name: "deleted", Description: "True when Nextcloud applied the deletion"}},
+	Examples: []capability.Example{{Description: "Delete a folder with its content", Arguments: json.RawMessage(`{"path":"2026/Old","etag":"abc123"}`)}},
+}
+
 func transferDescriptor(action, done, title, description string, effect capability.Effect) capability.Descriptor {
 	return capability.Descriptor{
 		ID: Provider + ".files." + action, Version: 1, Title: title, Description: description,
