@@ -10,7 +10,7 @@ import (
 // toolGroups are the subject areas the kChat tools are sorted into for display.
 var toolGroups = []config.ToolGroup{
 	{ID: "teams", Title: "Teams", Description: "The bound teams of the token"},
-	{ID: "channels", Title: "Channels", Description: "The channels of a bound team"},
+	{ID: "channels", Title: "Channels", Description: "The channels of a bound team, their members, and the own sidebar categories and notifications"},
 	{ID: "messages", Title: "Messages", Description: "Channel, direct, and group messages and threads: opening " +
 		"direct and group channels, reading, sending, editing, pinning, and deleting"},
 	{ID: "threads", Title: "Threads", Description: "Followed threads of a bound team: reading, following, and unfollowing"},
@@ -33,7 +33,7 @@ func groupOf(id string) string {
 		return parts[1]
 	case "status", "customstatus", "profile":
 		return "users"
-	case "channelmembers", "archivedchannels":
+	case "channelmembers", "archivedchannels", "categories", "channelnotifications":
 		return "channels"
 	case "teammembers":
 		return "teams"
