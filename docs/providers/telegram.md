@@ -61,6 +61,11 @@ list no longer offers it. Its reach is that of the Bot API `deleteMessage`: in a
 deletes its own messages and, as an administrator, those of others; in a private chat it also deletes incoming
 messages.
 
+`telegram.messages.deletemany` deletes from 1 through 100 messages of one chat in a single request and also
+requires a `tools` list. Its reach is that of `telegram.messages.delete`. Repeated identifiers count once.
+Telegram skips missing or undeletable identifiers without any notice, so success reports only that Telegram
+accepted the request, not which messages are gone.
+
 `telegram.pins.pin` pins one message by `message_id`; `disable_notification` pins silently.
 `telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
 `telegram.pins.unpinall` unpins every pinned message of the chat and, like `telegram.messages.delete`,
