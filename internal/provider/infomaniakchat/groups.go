@@ -11,7 +11,8 @@ import (
 var toolGroups = []config.ToolGroup{
 	{ID: "teams", Title: "Teams", Description: "The bound teams of the token"},
 	{ID: "channels", Title: "Channels", Description: "The channels of a bound team"},
-	{ID: "messages", Title: "Messages", Description: "Channel messages and threads: reading, sending, editing, and deleting"},
+	{ID: "messages", Title: "Messages", Description: "Channel, direct, and group messages and threads: opening " +
+		"direct and group channels, reading, sending, editing, and deleting"},
 	{ID: "reactions", Title: "Reactions", Description: "Reactions on messages: reading, adding, and removing the own"},
 	{ID: "files", Title: "Files", Description: "Message attachments: listing, metadata, and download to a released local directory"},
 	{ID: "users", Title: "Users", Description: "Users of the bound teams and their presence"},
@@ -27,6 +28,8 @@ func groupOf(id string) string {
 	switch parts[1] {
 	case "teams", "channels", "messages", "reactions", "files", "users":
 		return parts[1]
+	case "direct", "groupmessages":
+		return "messages"
 	}
 	return ""
 }
