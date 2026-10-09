@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes Nextcloud file operations, typed targets, the Files folder, connection permissions, and WebDAV safety boundaries.
+  Describes Nextcloud file operations, share reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -78,6 +78,31 @@ into itself or a descendant. Qatlas checks this locally before any credential ac
 Each tool sends exactly one request. A taken destination, an existing folder, or a missing parent is a clear
 failure that names no path. After an unclear outcome (timeout, aborted connection, a 5xx answer) the error says the
 change may have been applied and that source and target, or the folder, must be stat-ed before repeating.
+
+## Shares
+
+The tool group `shares` reads sharing. `nextcloud.shares.list` and `nextcloud.shares.get` (profiles `read` and
+`write`) need a `folder` target. A share counts only when its item lies at or below the root: the `path` of a
+share the identity owns, or the `file_target` of an incoming one (`shared_with_me`) in the Files tree of the
+identity. `list` drops every other share; `get` answers one outside the root exactly like a missing one. A share
+the identity passed on without owning it is neither own nor incoming and is not reported. Without `path`, `list`
+reads all shares and filters them, so the whole subtree below the root is covered; with `path` it reads that
+node, and with `subfiles` the items of that folder.
+
+All share types are reported with a stable type name (`user`, `group`, `link`, `email`, `federated`, `team`,
+`talk`, other types as `other`), rights as flags, expiry, note, and label. A share never reports its link
+token, its link URL, or any password; `has_password` only says that one is set. Recipients are personal data
+and untrusted, like every provider string.
+
+`nextcloud.sharees.search` searches the possible recipients of the whole instance and needs an `account`
+target, not a folder. It reports only type, identifier, and display name, asks for at most 50 candidates per
+kind (default 10), never uses the global lookup server, and is in no setup profile. Without an `account`
+target it refuses locally, before any credential access or request.
+
+Sharing is read through the OCS API of the Sharing app (`/ocs/v2.php/apps/files_sharing/api/v1`), with the same
+basic authentication as WebDAV and without redirects. The client in `ocs.go` takes fixed path segments and
+typed query values and accepts an answer only when the envelope reports `ok` and 200; it forwards no message
+of the instance.
 
 ## Local files
 
