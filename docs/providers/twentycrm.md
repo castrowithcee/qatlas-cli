@@ -2,8 +2,8 @@
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
   objects, count by field), record write (create, update, batches), duplicate search and merge, record
-  trash (delete, restore, destroy), note and task link operations, workflow read, object targets, connection
-  permissions, and safety boundaries.
+  trash (delete, restore, destroy), note and task link operations, workflow read, webhook operations,
+  object targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -17,9 +17,10 @@ objects (see Object targets). It can list and read companies (`read`), create th
 name or primary domain (`update`), and delete them (`delete`). It can also create records of any reachable
 object and change their fields, also up to 60 at a time (see Writing records and Batches), delete, restore,
 and destroy them (see Deleting and restoring), find duplicates and merge records (see Merging records),
-and link notes and tasks to records (see Linking notes and tasks).
+link notes and tasks to records (see Linking notes and tasks), and read, narrow, and delete the webhooks of
+the workspace (see Webhooks).
 Mutations require confirmation and only use the generated REST routes of the company or of a reachable
-object. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error, unreadable
+object, or the fixed webhook route. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error, unreadable
 answer) it reports the outcome as uncertain and does not repeat the request.
 
 A `domain` value sets the primary link to `https://<domain>` with the domain as its label; an empty value
@@ -42,7 +43,8 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
   later Twenty version marks as a system object stays reachable on a connection without targets until the
   list is updated.
 - `companies.*` need `company` to be reachable: with targets, `object/company` must be bound.
-- Workspace-wide tools work only on a connection without object targets.
+- Workspace-wide tools work only on a connection without object targets; on any other connection they are
+  refused before the key is read.
 
 `objects.list` and `objects.get` (`read`) show the reachable objects and, per object, each field with its
 JSON type, subfields of composite fields, whether a value is required or can be written, and the reachable
@@ -137,15 +139,10 @@ text of it.
 
 ## Reading workflows
 
-`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) let an agent follow automations and find
-failed runs. They work only on a connection without object targets and are refused before the key is read
-otherwise. `workflow`, `workflowVersion`, and `workflowRun` are system objects, so the record tools never reach
-them; these tools use fixed routes and a fixed field selection.
+`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) are workspace-wide and let an agent follow
+automations and find failed runs. `workflow`, `workflowVersion`, and `workflowRun` are system objects, so the
+record tools never reach them; these tools use fixed routes and a fixed field selection.
 
-- `workflows.list` returns per workflow name, statuses, the last published version, and timestamps.
-  `workflows.get` adds the 50 newest versions with name, status, trigger type, step types, and number of
-  steps. `workflowruns.list` returns the runs of one workflow, newest first, optionally of one status, with
-  status, version, and timestamps.
 - Step and trigger settings, run outputs, context, state, and error texts are never read out. Status,
   trigger, and step types come from fixed lists; any other value is shown as `unknown`.
 - Starting a workflow run is not possible with an API key: Twenty refuses it for keys, and Qatlas does not
@@ -206,6 +203,23 @@ from an argument. An object that the schema gives no single link relation cannot
   when both sides are reachable, then sends one request. An unclear result is reported as uncertain and not
   repeated. A connection offers it only when its `tools` list names it.
 - Identifiers are UUIDs. Links are workspace data of the record data class.
+
+## Webhooks
+
+`webhooks.list`, `webhooks.get`, `webhooks.update`, and `webhooks.delete` (`read`, `read`, `update`, `delete`)
+show where the workspace reports events, change which events it reports, and remove a webhook. There is no
+tool to create a webhook or to change its target or signing key.
+
+- The tools are workspace-wide. Twenty requires the settings right API keys and webhooks for the key; a 403
+  points to it.
+- The signing key is never shown, and the target is reduced to scheme, host with port, and path: query,
+  fragment, and credentials are dropped, because they often carry tokens. The path stays visible, so webhook
+  configuration has its own data class.
+- `update` replaces the whole event list and/or the description. The input is checked before any request is
+  sent, and the request contains nothing but these two fields.
+- Qatlas sends `update` and `delete` once. After an unclear result it reports the outcome as uncertain and
+  does not repeat; read the webhook before trying again. `delete` is offered only by a connection whose
+  `tools` list names it.
 
 ## Batches
 
@@ -281,7 +295,8 @@ connection's local `permissions` list can only narrow it, and an optional `tools
 excludes. The `companies.*` tools expose conservative core company fields and accept no custom-field
 payloads; custom fields are written through `records.create` and `records.update`. Invocation arguments never
 replace the configured origin. The terminal editor starts a new connection on the setup profile `read`, which
-ticks `[read]` and the two company, two object, five record read tools, the link list tool, and the three
-workflow read tools; the profile `write` adds the two record write tools and the link create tool. A profile
-is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick
-can be changed before saving, and a saved connection never follows a profile.
+ticks `[read]` and the two company, two object, five record read tools, the link list tool, the three
+workflow read tools, and the two webhook read tools; the profile `write` adds the two record write tools
+and the link create tool. A profile is a visible starting selection, not a role: only the ticked
+`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
+follows a profile.
