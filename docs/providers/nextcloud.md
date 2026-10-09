@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads, typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud file operations, share and note reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -48,8 +48,10 @@ identity reaches) or `kind/ID`:
 - `folder` (the whole Files root) or `folder/PATH`; at most one per connection. Only a `folder` target enables the
   Files tools; without one they refuse locally, before any credential access or request.
 - `calendar` or `calendar/URI`, `addressbook` (all but the system address book) or `addressbook/URI`,
-  `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric), `notes` or `notes/CATEGORY` (a sub-folder
-  such as `Work/Plans` is allowed).
+  `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric).
+- `notes` (all notes of the identity) or `notes/CATEGORY` (that category and everything below it, such as
+  `Work/Plans`; see Notes); may be listed more than once. Without a `notes` target the Notes tools refuse
+  locally, before any credential access or request.
 - `account`: the account-wide and instance-wide reach of the identity (notifications, activity, search,
   directory, incoming shares, system tag catalog and its administration).
 - `admin`: provisioning reads; only as the sole target of a connection.
@@ -160,6 +162,20 @@ restore target of the identity with one `MOVE`. The manual documents no conditio
 made between the ETag check and the `MOVE` is not detected. An unclear outcome is reported as possibly
 applied and never repeated. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore`
 are in none.
+
+## Notes
+
+The tool group `notes` reads the Notes app and is in the setup profile `notes-read`, which holds exactly its
+tools and changes nothing. Notes are personal data and everything the tools return is untrusted.
+
+A `notes/CATEGORY` target binds the notes whose category equals `CATEGORY` or lies below it; the comparison is
+exact and case-sensitive. The category filter of the Notes API misses sub-categories, so the list is read
+without a server-side filter and every note outside the binding is dropped locally: a foreign note never
+appears and is not counted. Because the binding is applied after the server has chosen the chunk, a chunk may
+be empty while a next cursor is still present. Reading a note outside the binding, or an attachment of one, is
+answered like a missing note, and no attachment request is sent for it. An attachment is addressed relative to
+its note and cannot leave it; it is returned inline or written with `local_path` as `files.get` does. The
+Notes settings are account-wide and need any `notes` target.
 
 ## System tags
 

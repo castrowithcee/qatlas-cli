@@ -331,6 +331,10 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
 				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID,
 				foldersCreate.ID, filesMove.ID, filesCopy.ID},
+		}, {
+			ID: "notes-read", Title: "Read notes",
+			Description: "lists and reads notes, their embedded attachments, and the Notes settings; changes nothing",
+			Tools:       []string{notesList.ID, notesGet.ID, notesAttachmentsGet.ID, notesSettingsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -365,6 +369,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(filesSearch), Handler: folderBound(invokeFilesSearch)},
 		capability.Operation{Descriptor: grouped(favoritesList), Handler: folderBound(invokeFavoritesList)},
 		capability.Operation{Descriptor: grouped(filesFavorite), Handler: folderBound(invokeFilesFavorite)},
+		capability.Operation{Descriptor: inGroup(notesList, groupNotes), Handler: notesBound(invokeNotesList)},
+		capability.Operation{Descriptor: inGroup(notesGet, groupNotes), Handler: notesBound(invokeNotesGet)},
+		capability.Operation{Descriptor: inGroup(notesAttachmentsGet, groupNotes), Handler: notesBound(invokeNotesAttachmentsGet)},
+		capability.Operation{Descriptor: inGroup(notesSettingsGet, groupNotes), Handler: notesBound(invokeNotesSettingsGet)},
 	)
 }
 

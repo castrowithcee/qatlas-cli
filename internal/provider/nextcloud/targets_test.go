@@ -90,6 +90,7 @@ func TestInvalidTargetSetsAreRefusedWithoutQuotingValues(t *testing.T) {
 		"board empty":              {"deck/"},
 		"account with id":          {"account/SECRET"},
 		"traversing category":      {"notes/../SECRET"},
+		"empty category":           {"notes/"},
 		"traversing folder":        {"folder/../SECRET"},
 		"folder with empty path":   {"folder/"},
 		"folder with absolute":     {"folder//SECRET"},

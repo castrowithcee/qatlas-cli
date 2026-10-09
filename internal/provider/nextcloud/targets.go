@@ -42,6 +42,9 @@ var toolGroups = []config.ToolGroup{{
 }, {
 	ID: groupShares, Title: "Shares",
 	Description: "Shares of and to the identity below the Files root folder, and the recipients of the instance",
+}, {
+	ID: groupNotes, Title: "Notes",
+	Description: "Notes of the identity in the bound categories, their embedded attachments, and the Notes settings",
 }}
 
 var targetKinds = []config.TargetKind{{
@@ -255,6 +258,9 @@ func checkBoardID(id string) error {
 }
 
 func checkCategory(category string) error {
+	if category == "" {
+		return errors.New("a notes category must not be empty")
+	}
 	_, err := splitRelative(category)
 	return err
 }

@@ -366,6 +366,9 @@ func TestFileTagToolsRisksProfilesAndGroup(t *testing.T) {
 	}
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, p := range metadata.Profiles {
+		if p.ID == "notes-read" {
+			continue
+		}
 		has := false
 		for _, id := range p.Tools {
 			has = has || id == filesTagsList.ID

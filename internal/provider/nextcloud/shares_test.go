@@ -383,6 +383,9 @@ func TestProfilesOfferTheShareReadsButNotTheRecipientSearch(t *testing.T) {
 	reg := registry(t)
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
+		if profile.ID == "notes-read" {
+			continue
+		}
 		has := map[string]bool{}
 		for _, id := range profile.Tools {
 			has[id] = true
