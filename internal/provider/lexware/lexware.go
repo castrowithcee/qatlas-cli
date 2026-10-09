@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -203,27 +204,57 @@ var invoiceWriteRisk = capability.Risk{
 	DataSensitivity: dataSensitivity,
 }
 
-// voucherProperties are the closed members every sales voucher draft shares. None of the draft inputs
+// The closed members of the sales voucher drafts are composed per voucher type. None of the draft inputs
 // has a finalize member: whether an invoice is final follows from the operation, never from an argument.
-const voucherProperties = `"voucher_date":{"type":"string","minLength":1,"maxLength":40},` +
-	`"address":{"type":"object","properties":{"contact_id":{"type":"string","maxLength":36},"name":{"type":"string","maxLength":255},"supplement":{"type":"string","maxLength":255},"street":{"type":"string","maxLength":255},"city":{"type":"string","maxLength":255},"zip":{"type":"string","maxLength":32},"country_code":{"type":"string","minLength":2,"maxLength":2}},"additionalProperties":false},` +
-	`"line_items":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"object","properties":{"type":{"type":"string","enum":["custom","text","service","material"]},"id":{"type":"string","maxLength":36},"name":{"type":"string","minLength":1,"maxLength":255},"description":{"type":"string","maxLength":4096},"quantity":{"type":"number"},"unit_name":{"type":"string","maxLength":64},"currency":{"type":"string","minLength":3,"maxLength":3},"net_amount":{"type":"number"},"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"}},"required":["type","name"],"additionalProperties":false}},` +
-	`"currency":{"type":"string","minLength":3,"maxLength":3},"tax_type":{"type":"string","enum":["net","gross","vatfree"]},` +
-	`"shipping_date":{"type":"string","minLength":1,"maxLength":40},"shipping_end_date":{"type":"string","minLength":1,"maxLength":40},"shipping_type":{"type":"string","enum":["delivery","deliveryperiod","service","serviceperiod","none"]},` +
-	`"title":{"type":"string","maxLength":255},"introduction":{"type":"string","maxLength":4096},"remark":{"type":"string","maxLength":4096},` +
-	`"payment_conditions":{"type":"object","properties":{"label":{"type":"string","minLength":1,"maxLength":255},"duration_days":{"type":"integer","minimum":0,"maximum":3650},"discount_percentage":{"type":"number","minimum":0,"maximum":100},"discount_range_days":{"type":"integer","minimum":0,"maximum":3650}},"required":["label","duration_days"],"additionalProperties":false},` +
-	`"print_layout_id":{"type":"string","maxLength":36}`
+const (
+	voucherCoreProperties = `"voucher_date":{"type":"string","minLength":1,"maxLength":40},` +
+		`"address":{"type":"object","properties":{"contact_id":{"type":"string","maxLength":36},"name":{"type":"string","maxLength":255},"supplement":{"type":"string","maxLength":255},"street":{"type":"string","maxLength":255},"city":{"type":"string","maxLength":255},"zip":{"type":"string","maxLength":32},"country_code":{"type":"string","minLength":2,"maxLength":2}},"additionalProperties":false},` +
+		`"line_items":{"type":"array","minItems":1,"maxItems":100,"items":{"type":"object","properties":{"type":{"type":"string","enum":["custom","text","service","material"]},"id":{"type":"string","maxLength":36},"name":{"type":"string","minLength":1,"maxLength":255},"description":{"type":"string","maxLength":4096},"quantity":{"type":"number"},"unit_name":{"type":"string","maxLength":64},"currency":{"type":"string","minLength":3,"maxLength":3},"net_amount":{"type":"number"},"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"}},"required":["type","name"],"additionalProperties":false}}`
+	currencyProperty      = `"currency":{"type":"string","minLength":3,"maxLength":3}`
+	taxTypeProperty       = `"tax_type":{"type":"string","enum":["net","gross","vatfree"]}`
+	shippingProperties    = `"shipping_date":{"type":"string","minLength":1,"maxLength":40},"shipping_end_date":{"type":"string","minLength":1,"maxLength":40},"shipping_type":{"type":"string","enum":["delivery","deliveryperiod","service","serviceperiod","none"]}`
+	textProperties        = `"title":{"type":"string","maxLength":255},"introduction":{"type":"string","maxLength":4096},"remark":{"type":"string","maxLength":4096}`
+	paymentProperty       = `"payment_conditions":{"type":"object","properties":{"label":{"type":"string","minLength":1,"maxLength":255},"duration_days":{"type":"integer","minimum":0,"maximum":3650},"discount_percentage":{"type":"number","minimum":0,"maximum":100},"discount_range_days":{"type":"integer","minimum":0,"maximum":3650}},"required":["label","duration_days"],"additionalProperties":false}`
+	layoutProperty        = `"print_layout_id":{"type":"string","maxLength":36}`
+	precedingProperty     = `"preceding_voucher_id":{"type":"string","maxLength":36}`
+	expirationProperty    = `"expiration_date":{"type":"string","minLength":1,"maxLength":40}`
+	deliveryTermsProperty = `"delivery_terms":{"type":"string","maxLength":4096}`
+)
 
-const voucherRequired = `"voucher_date","address","line_items","currency","tax_type","shipping_type"`
+func properties(parts ...string) string { return strings.Join(parts, ",") }
 
-const invoiceInputSchema = `{"type":"object","properties":{` + voucherProperties + `},"required":[` + voucherRequired + `],"additionalProperties":false}`
+var (
+	voucherProperties = properties(voucherCoreProperties, currencyProperty, taxTypeProperty,
+		shippingProperties, textProperties, paymentProperty, layoutProperty)
+	// Credit notes carry neither shipping nor payment terms; dunnings carry no payment terms.
+	creditNoteProperties = properties(voucherCoreProperties, currencyProperty, taxTypeProperty,
+		textProperties, layoutProperty, precedingProperty)
+	deliveryNoteProperties = properties(voucherCoreProperties, currencyProperty, taxTypeProperty,
+		shippingProperties, textProperties, deliveryTermsProperty, layoutProperty, precedingProperty)
+	dunningProperties = properties(voucherCoreProperties, currencyProperty, taxTypeProperty,
+		shippingProperties, textProperties, layoutProperty, precedingProperty)
+)
 
-const quotationInputSchema = `{"type":"object","properties":{` + voucherProperties +
-	`,"expiration_date":{"type":"string","minLength":1,"maxLength":40}},"required":[` + voucherRequired +
-	`,"expiration_date"],"additionalProperties":false}`
+// inputSchema closes the object over the given members; the required names are listed without quotes.
+func inputSchema(members string, required ...string) string {
+	return `{"type":"object","properties":{` + members + `},"required":["` + strings.Join(required, `","`) +
+		`"],"additionalProperties":false}`
+}
 
-const orderConfirmationInputSchema = `{"type":"object","properties":{` + voucherProperties +
-	`,"preceding_voucher_id":{"type":"string","maxLength":36}},"required":[` + voucherRequired + `],"additionalProperties":false}`
+var (
+	voucherRequired = []string{"voucher_date", "address", "line_items", "currency", "tax_type", "shipping_type"}
+
+	invoiceInputSchema = inputSchema(voucherProperties, voucherRequired...)
+	// Only the creation takes a predecessor; issuing an invoice does not.
+	invoiceCreateInputSchema = inputSchema(properties(voucherProperties, precedingProperty), voucherRequired...)
+	quotationInputSchema     = inputSchema(properties(voucherProperties, expirationProperty),
+		append(append([]string{}, voucherRequired...), "expiration_date")...)
+	orderConfirmationInputSchema = inputSchema(properties(voucherProperties, precedingProperty), voucherRequired...)
+	creditNoteInputSchema        = inputSchema(creditNoteProperties, "voucher_date", "address", "line_items", "currency", "tax_type")
+	deliveryNoteInputSchema      = inputSchema(deliveryNoteProperties, "voucher_date", "address", "line_items", "tax_type", "shipping_type")
+	dunningInputSchema           = inputSchema(dunningProperties,
+		append(append([]string{}, voucherRequired...), "preceding_voucher_id")...)
+)
 
 // invoiceOutputSchema is the result of both creations: the identifier and the timestamps Lexware reports.
 const invoiceOutputSchema = `{"type":"object","properties":{"id":{"type":"string"},"created_date":{"type":"string"},"updated_date":{"type":"string"},"version":{"type":"integer"}},"required":["id"],"additionalProperties":false}`
@@ -246,12 +277,46 @@ var voucherArguments = []capability.Argument{
 
 var invoiceArguments = voucherArguments
 
+var invoiceCreateArguments = append(append([]capability.Argument{}, voucherArguments...),
+	capability.Argument{Name: "preceding_voucher_id", Description: "Voucher to follow up, as a UUID; the invoice is then created as its successor"})
+
 var quotationArguments = append([]capability.Argument{
 	{Name: "expiration_date", Description: "Date until the quotation is valid, as an RFC 3339 timestamp", Required: true},
 }, voucherArguments...)
 
 var orderConfirmationArguments = append(append([]capability.Argument{}, voucherArguments...),
 	capability.Argument{Name: "preceding_voucher_id", Description: "Quotation to follow up, as a UUID; the order confirmation is then created as its successor"})
+
+// without drops the named arguments, optional makes them optional.
+func without(arguments []capability.Argument, names ...string) []capability.Argument {
+	var kept []capability.Argument
+	for _, argument := range arguments {
+		if !slices.Contains(names, argument.Name) {
+			kept = append(kept, argument)
+		}
+	}
+	return kept
+}
+
+func optional(arguments []capability.Argument, names ...string) []capability.Argument {
+	out := append([]capability.Argument{}, arguments...)
+	for i := range out {
+		if slices.Contains(names, out[i].Name) {
+			out[i].Required = false
+		}
+	}
+	return out
+}
+
+var creditNoteArguments = append(without(voucherArguments, "shipping_type", "shipping_date", "shipping_end_date", "payment_conditions"),
+	capability.Argument{Name: "preceding_voucher_id", Description: "Invoice to credit, as a UUID; the credit note is then created as its successor"})
+
+var deliveryNoteArguments = append(append(optional(without(voucherArguments, "payment_conditions"), "currency"),
+	capability.Argument{Name: "delivery_terms", Description: "Delivery terms text, up to 4096 characters"}),
+	capability.Argument{Name: "preceding_voucher_id", Description: "Voucher to follow up, as a UUID; the delivery note is then created as its successor"})
+
+var dunningArguments = append(without(voucherArguments, "payment_conditions"),
+	capability.Argument{Name: "preceding_voucher_id", Description: "Invoice or down payment invoice to remind about, as a UUID", Required: true})
 
 var invoiceFields = []capability.Field{
 	{Name: "id", Description: "Identifier Lexware assigned to the new invoice"},
@@ -272,13 +337,13 @@ var invoiceExamples = []capability.Example{{
 
 var invoicesCreate = capability.Descriptor{
 	ID: Provider + ".invoices.create", Version: 2, Title: "Create a Lexware invoice draft",
-	Description: "Create one outgoing invoice as a draft without invoice number; a draft can still be " +
-		"changed in Lexware Office. Issuing the invoice is a separate tool",
+	Description: "Create one outgoing invoice as a draft without invoice number, optionally as the successor " +
+		"of another voucher; a draft can still be changed in Lexware Office. Issuing the invoice is a separate tool",
 	Tags:     []string{"lexware", "invoices", "create", "draft", "accounting"},
 	Provider: Provider, Risk: invoiceWriteRisk,
-	InputSchema:  json.RawMessage(invoiceInputSchema),
+	InputSchema:  json.RawMessage(invoiceCreateInputSchema),
 	OutputSchema: json.RawMessage(invoiceOutputSchema),
-	Arguments:    invoiceArguments, Fields: invoiceFields, Examples: invoiceExamples,
+	Arguments:    invoiceCreateArguments, Fields: invoiceFields, Examples: invoiceExamples,
 }
 
 var invoicesIssue = capability.Descriptor{
@@ -331,6 +396,64 @@ var orderConfirmationsCreate = capability.Descriptor{
 	}},
 }
 
+var creditNotesCreate = capability.Descriptor{
+	ID: Provider + ".creditnotes.create", Version: 1, Title: "Create a Lexware credit note draft",
+	Description: "Create one credit note as a draft, optionally as the successor of an invoice; a draft can " +
+		"still be changed in Lexware Office. Lexware allows at most one credit note per invoice, and the " +
+		"open amount of the invoice is reduced only when the credit note is finalized. Finalizing is not " +
+		"part of this tool",
+	Tags:     []string{"lexware", "creditnotes", "create", "draft", "accounting"},
+	Provider: Provider, Risk: invoiceWriteRisk,
+	InputSchema:  json.RawMessage(creditNoteInputSchema),
+	OutputSchema: json.RawMessage(invoiceOutputSchema),
+	Arguments:    creditNoteArguments, Fields: voucherFields("credit note"),
+	Examples: []capability.Example{{
+		Description: "Credit one custom position of an invoice",
+		Arguments: json.RawMessage(`{"voucher_date":"2026-09-12T00:00:00+02:00","preceding_voucher_id":"11111111-2222-3333-4444-555555555555",` +
+			`"address":{"contact_id":"11111111-2222-3333-4444-555555555555"},` +
+			`"line_items":[{"type":"custom","name":"Consulting","quantity":1,"unit_name":"hour",` +
+			`"net_amount":120,"tax_rate_percentage":19}],"currency":"EUR","tax_type":"net"}`),
+	}},
+}
+
+var deliveryNotesCreate = capability.Descriptor{
+	ID: Provider + ".deliverynotes.create", Version: 1, Title: "Create a Lexware delivery note draft",
+	Description: "Create one delivery note as a draft, optionally as the successor of another voucher; positions " +
+		"may omit prices, and a draft can still be changed in Lexware Office. Finalizing is not part of this tool",
+	Tags:     []string{"lexware", "deliverynotes", "create", "draft", "accounting"},
+	Provider: Provider, Risk: invoiceWriteRisk,
+	InputSchema:  json.RawMessage(deliveryNoteInputSchema),
+	OutputSchema: json.RawMessage(invoiceOutputSchema),
+	Arguments:    deliveryNoteArguments, Fields: voucherFields("delivery note"),
+	Examples: []capability.Example{{
+		Description: "Deliver one position without prices",
+		Arguments: json.RawMessage(`{"voucher_date":"2026-09-12T00:00:00+02:00",` +
+			`"address":{"contact_id":"11111111-2222-3333-4444-555555555555"},` +
+			`"line_items":[{"type":"custom","name":"Cable lock","quantity":2,"unit_name":"piece"}],` +
+			`"tax_type":"net","shipping_type":"delivery","shipping_date":"2026-09-12T00:00:00+02:00"}`),
+	}},
+}
+
+var dunningsCreate = capability.Descriptor{
+	ID: Provider + ".dunnings.create", Version: 1, Title: "Create a Lexware dunning draft",
+	Description: "Create one dunning as a draft for an existing invoice or down payment invoice; the " +
+		"preceding voucher is required, and a draft can still be changed in Lexware Office. Finalizing is " +
+		"not part of this tool",
+	Tags:     []string{"lexware", "dunnings", "create", "draft", "accounting"},
+	Provider: Provider, Risk: invoiceWriteRisk,
+	InputSchema:  json.RawMessage(dunningInputSchema),
+	OutputSchema: json.RawMessage(invoiceOutputSchema),
+	Arguments:    dunningArguments, Fields: voucherFields("dunning"),
+	Examples: []capability.Example{{
+		Description: "Remind about an open invoice",
+		Arguments: json.RawMessage(`{"voucher_date":"2026-09-12T00:00:00+02:00","preceding_voucher_id":"11111111-2222-3333-4444-555555555555",` +
+			`"address":{"contact_id":"11111111-2222-3333-4444-555555555555"},` +
+			`"line_items":[{"type":"custom","name":"Consulting","quantity":2,"unit_name":"hour",` +
+			`"net_amount":120,"tax_rate_percentage":19}],` +
+			`"currency":"EUR","tax_type":"net","shipping_type":"none"}`),
+	}},
+}
+
 // voucherFields describes the result of a draft creation for the named voucher type.
 func voucherFields(noun string) []capability.Field {
 	fields := append([]capability.Field{}, invoiceFields...)
@@ -373,9 +496,9 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "write", Title: "Master data and drafts",
 			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile and reference data and " +
-				"creates invoice, quotation and order confirmation drafts and creates and changes articles and contacts; issuing an invoice is never part of a profile",
+				"creates invoice, quotation, order confirmation, credit note, delivery note and dunning drafts and creates and changes articles and contacts; issuing an invoice is never part of a profile",
 			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, quotationsCreate.ID,
-				orderConfirmationsCreate.ID, articlesCreate.ID, articlesUpdate.ID,
+				orderConfirmationsCreate.ID, creditNotesCreate.ID, deliveryNotesCreate.ID, dunningsCreate.ID, articlesCreate.ID, articlesUpdate.ID,
 				contactsCreate.ID, contactsUpdate.ID),
 		}},
 	}, TestConnection); err != nil {
@@ -391,6 +514,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: invoicesIssue, Handler: capability.Handler(invokeInvoicesIssue)},
 		capability.Operation{Descriptor: quotationsCreate, Handler: capability.Handler(invokeQuotationsCreate)},
 		capability.Operation{Descriptor: orderConfirmationsCreate, Handler: capability.Handler(invokeOrderConfirmationsCreate)},
+		capability.Operation{Descriptor: creditNotesCreate, Handler: capability.Handler(invokeCreditNotesCreate)},
+		capability.Operation{Descriptor: deliveryNotesCreate, Handler: capability.Handler(invokeDeliveryNotesCreate)},
+		capability.Operation{Descriptor: dunningsCreate, Handler: capability.Handler(invokeDunningsCreate)},
 		capability.Operation{Descriptor: contactsList, Handler: capability.Handler(invokeContactsList)},
 		capability.Operation{Descriptor: contactsGet, Handler: capability.Handler(invokeContactsGet)},
 		capability.Operation{Descriptor: articlesList, Handler: capability.Handler(invokeArticlesList)},
@@ -415,6 +541,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: downPaymentInvoicesGet, Handler: salesVoucherHandler(downPaymentInvoiceKind)},
 		capability.Operation{Descriptor: recurringTemplatesList, Handler: capability.Handler(invokeRecurringTemplatesList)},
 		capability.Operation{Descriptor: recurringTemplatesGet, Handler: capability.Handler(invokeRecurringTemplatesGet)},
+		capability.Operation{Descriptor: documentsDownload, Handler: capability.Handler(invokeDocumentsDownload)},
+		capability.Operation{Descriptor: filesDownload, Handler: capability.Handler(invokeFilesDownload)},
 	)
 }
 
@@ -484,9 +612,10 @@ type createInput struct {
 		DiscountRange *int        `json:"discount_range_days,omitempty"`
 	} `json:"payment_conditions,omitempty"`
 	PrintLayoutID string `json:"print_layout_id,omitempty"`
-	// ExpirationDate belongs to quotations and PrecedingVoucherID to order confirmations; the schema of the
-	// other tools does not admit them.
+	// ExpirationDate belongs to quotations, DeliveryTerms to delivery notes, and PrecedingVoucherID to the
+	// follow-up capable types; the schema of the other tools does not admit them.
 	ExpirationDate     string `json:"expiration_date,omitempty"`
+	DeliveryTerms      string `json:"delivery_terms,omitempty"`
 	PrecedingVoucherID string `json:"preceding_voucher_id,omitempty"`
 }
 
@@ -504,6 +633,18 @@ func invokeQuotationsCreate(ctx context.Context, resolved *config.Resolved, secr
 
 func invokeOrderConfirmationsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
 	return invokeDraftPost(ctx, resolved, secrets, red, raw, orderConfirmationDraft)
+}
+
+func invokeCreditNotesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, creditNoteDraft)
+}
+
+func invokeDeliveryNotesCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, deliveryNoteDraft)
+}
+
+func invokeDunningsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeDraftPost(ctx, resolved, secrets, red, raw, dunningDraft)
 }
 
 // invokeDraftPost validates the arguments, including every foreign identifier, before the credential is
@@ -539,8 +680,15 @@ func (input createInput) validate(kind draftKind) error {
 		return errors.New("at least one line item is required")
 	}
 	for _, item := range input.LineItems {
-		if item.Type != "text" && (item.Quantity == "" || item.UnitName == "" || item.NetAmount == "" || item.TaxRate == "") {
-			return errors.New("a custom, service, or material line item needs quantity, unit_name, net_amount, and tax_rate_percentage")
+		if item.Type != "text" && (item.Quantity == "" || item.UnitName == "") {
+			return errors.New("a custom, service, or material line item needs quantity and unit_name")
+		}
+		priced := item.Type != "text" && (item.NetAmount != "" || item.TaxRate != "")
+		if item.Type != "text" && (item.NetAmount == "" || item.TaxRate == "") && (priced || !kind.unpriced) {
+			return errors.New("a priced line item needs net_amount and tax_rate_percentage")
+		}
+		if priced && input.Currency == "" && item.Currency == "" {
+			return errors.New("a priced line item needs a currency")
 		}
 		article := item.Type == "service" || item.Type == "material"
 		if article && !validUUID(item.ID) {
@@ -558,8 +706,14 @@ func (input createInput) validate(kind draftKind) error {
 			return errors.New("expiration_date must be an RFC 3339 timestamp")
 		}
 	}
+	if kind.needPreceding && input.PrecedingVoucherID == "" {
+		return errors.New("preceding_voucher_id is required")
+	}
 	if input.PrecedingVoucherID != "" && !validUUID(input.PrecedingVoucherID) {
 		return errors.New("preceding_voucher_id must be a UUID")
+	}
+	if kind.noShipping {
+		return nil
 	}
 	if input.ShippingType != "none" {
 		if _, err := time.Parse(time.RFC3339, input.ShippingDate); err != nil {
@@ -946,13 +1100,21 @@ type createResult struct {
 // argument; every tool has its own fixed path.
 type draftKind struct {
 	op, path, mayExist string
-	finalize           bool // invoices only, set by the issue tool and never by an argument
-	expiration         bool // quotations only
-	follow             bool // order confirmations only
+	noun               string // names the voucher type in the fixed follow-up rejection
+	finalize           bool   // invoices only, set by the issue tool and never by an argument
+	expiration         bool   // quotations only
+	follow             bool   // the type may be created as a follow-up voucher
+	needPreceding      bool   // the type exists only as a follow-up voucher (dunnings)
+	noShipping         bool   // credit notes carry no shipping conditions
+	unpriced           bool   // delivery notes: a position may omit its price, and there is no total
+}
+
+func mayExistHint(noun string) string {
+	return "; the " + noun + " may have been created, check the voucher list before repeating it"
 }
 
 func invoiceDraft(finalize bool) draftKind {
-	kind := draftKind{op: "create invoice", path: "/v1/invoices", mayExist: invoiceMayExist}
+	kind := draftKind{op: "create invoice", path: "/v1/invoices", mayExist: invoiceMayExist, noun: "an invoice", follow: !finalize}
 	if finalize {
 		kind.op, kind.mayExist, kind.finalize = "issue invoice", invoiceMayBeIssued, true
 	}
@@ -961,14 +1123,23 @@ func invoiceDraft(finalize bool) draftKind {
 
 var (
 	quotationDraft = draftKind{op: "create quotation", path: "/v1/quotations", expiration: true,
-		mayExist: "; the quotation may have been created, check the voucher list before repeating it"}
+		mayExist: mayExistHint("quotation")}
 	orderConfirmationDraft = draftKind{op: "create order confirmation", path: "/v1/order-confirmations", follow: true,
-		mayExist: "; the order confirmation may have been created, check the voucher list before repeating it"}
+		noun: "an order confirmation", mayExist: mayExistHint("order confirmation")}
+	creditNoteDraft = draftKind{op: "create credit note", path: "/v1/credit-notes", follow: true,
+		noun: "a credit note", mayExist: mayExistHint("credit note"), noShipping: true}
+	deliveryNoteDraft = draftKind{op: "create delivery note", path: "/v1/delivery-notes", follow: true,
+		noun: "a delivery note", mayExist: mayExistHint("delivery note"), unpriced: true}
+	dunningDraft = draftKind{op: "create dunning", path: "/v1/dunnings", follow: true, needPreceding: true,
+		noun: "a dunning", mayExist: mayExistHint("dunning")}
 )
 
 // precedingMessage is the fixed text of an HTTP 406 on a follow-up: Lexware refuses a predecessor that
 // cannot be followed up, for example a quotation with optional positions.
-const precedingMessage = "Lexware rejected the follow-up voucher; the preceding voucher cannot be followed up by an order confirmation, or the data is invalid"
+func precedingMessage(kind draftKind) string {
+	return "Lexware rejected the follow-up voucher; the preceding voucher cannot be followed up by " +
+		kind.noun + ", or the data is invalid"
+}
 
 // CreateInvoice posts one draft: the request carries no finalize query.
 func (c *Client) CreateInvoice(ctx context.Context, input createInput) (*createResult, error) {
@@ -981,6 +1152,21 @@ func (c *Client) IssueInvoice(ctx context.Context, input createInput) (*createRe
 	return c.postDraft(ctx, invoiceDraft(true), input)
 }
 
+// CreateCreditNote posts one credit note draft, optionally as the successor of an invoice.
+func (c *Client) CreateCreditNote(ctx context.Context, input createInput) (*createResult, error) {
+	return c.postDraft(ctx, creditNoteDraft, input)
+}
+
+// CreateDeliveryNote posts one delivery note draft, optionally as the successor of another voucher.
+func (c *Client) CreateDeliveryNote(ctx context.Context, input createInput) (*createResult, error) {
+	return c.postDraft(ctx, deliveryNoteDraft, input)
+}
+
+// CreateDunning posts one dunning draft; its predecessor is required.
+func (c *Client) CreateDunning(ctx context.Context, input createInput) (*createResult, error) {
+	return c.postDraft(ctx, dunningDraft, input)
+}
+
 // CreateQuotation posts one quotation draft.
 func (c *Client) CreateQuotation(ctx context.Context, input createInput) (*createResult, error) {
 	return c.postDraft(ctx, quotationDraft, input)
@@ -989,6 +1175,18 @@ func (c *Client) CreateQuotation(ctx context.Context, input createInput) (*creat
 // CreateOrderConfirmation posts one order confirmation draft, optionally as the successor of a quotation.
 func (c *Client) CreateOrderConfirmation(ctx context.Context, input createInput) (*createResult, error) {
 	return c.postDraft(ctx, orderConfirmationDraft, input)
+}
+
+// shippingConditions maps the shipping members; the dates appear only when given.
+func shippingConditions(input createInput) map[string]string {
+	shipping := map[string]string{"shippingType": input.ShippingType}
+	if input.ShippingDate != "" {
+		shipping["shippingDate"] = input.ShippingDate
+	}
+	if input.ShippingEndDate != "" {
+		shipping["shippingEndDate"] = input.ShippingEndDate
+	}
+	return shipping
 }
 
 // draftPayload builds the request body from the closed input members only.
@@ -1007,12 +1205,14 @@ func draftPayload(kind draftKind, input createInput) map[string]any {
 			value["description"] = item.Description
 		}
 		if item.Type != "text" {
+			value["quantity"] = item.Quantity
+			value["unitName"] = item.UnitName
+		}
+		if item.Type != "text" && item.NetAmount != "" {
 			currency := item.Currency
 			if currency == "" {
 				currency = input.Currency
 			}
-			value["quantity"] = item.Quantity
-			value["unitName"] = item.UnitName
 			value["unitPrice"] = map[string]any{"currency": currency, "netAmount": item.NetAmount, "taxRatePercentage": item.TaxRate}
 			if item.Discount != "" {
 				value["discountPercentage"] = item.Discount
@@ -1020,15 +1220,14 @@ func draftPayload(kind draftKind, input createInput) map[string]any {
 		}
 		items = append(items, value)
 	}
-	shipping := map[string]string{"shippingType": input.ShippingType}
-	if input.ShippingDate != "" {
-		shipping["shippingDate"] = input.ShippingDate
+	payload := map[string]any{"voucherDate": input.VoucherDate, "address": address, "lineItems": items, "taxConditions": map[string]string{"taxType": input.TaxType}}
+	if !kind.unpriced {
+		payload["totalPrice"] = map[string]string{"currency": input.Currency}
 	}
-	if input.ShippingEndDate != "" {
-		shipping["shippingEndDate"] = input.ShippingEndDate
+	if !kind.noShipping {
+		payload["shippingConditions"] = shippingConditions(input)
 	}
-	payload := map[string]any{"voucherDate": input.VoucherDate, "address": address, "lineItems": items, "totalPrice": map[string]string{"currency": input.Currency}, "taxConditions": map[string]string{"taxType": input.TaxType}, "shippingConditions": shipping}
-	for _, field := range []struct{ name, value string }{{"title", input.Title}, {"introduction", input.Introduction}, {"remark", input.Remark}, {"printLayoutId", input.PrintLayoutID}} {
+	for _, field := range []struct{ name, value string }{{"title", input.Title}, {"introduction", input.Introduction}, {"remark", input.Remark}, {"printLayoutId", input.PrintLayoutID}, {"deliveryTerms", input.DeliveryTerms}} {
 		if field.value != "" {
 			payload[field.name] = field.value
 		}
@@ -1067,7 +1266,7 @@ func (c *Client) postDraft(ctx context.Context, kind draftKind, input createInpu
 	if err := c.post(ctx, kind.op, "", kind.path, query, draftPayload(kind, input), &response, kind.mayExist); err != nil {
 		var failure *provider.Error
 		if kind.follow && input.PrecedingVoucherID != "" && errors.As(err, &failure) && failure.Message == validationMessage {
-			failure.Message = precedingMessage
+			failure.Message = precedingMessage(kind)
 		}
 		return nil, err
 	}
@@ -1357,6 +1556,7 @@ const (
 	resourceArticle = "article"
 	resourcePayment = "payment status"
 	resourceVoucher = "voucher"
+	resourceFile    = "file"
 )
 
 func providerError(op, message string) error {

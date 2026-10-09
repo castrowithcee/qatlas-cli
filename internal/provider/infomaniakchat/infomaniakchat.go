@@ -5,7 +5,8 @@
 // (github.com/Infomaniak/mcp-server-kchat) documents (developer.infomaniak.com/openapi.json, operations
 // GetTeamsForUser, GetChannel, GetChannelMembers, GetChannelsForTeamForUser, CreateDirectChannel,
 // CreateGroupChannel, GetPostsForChannel, GetPost, GetPostThread, CreatePost, PatchPost, and DeletePost,
-// GetReactions, SaveReaction, and DeleteReaction, GetPinnedPosts, PinPost, and UnpinPost, GetUser,
+// GetReactions, SaveReaction, and DeleteReaction, GetPinnedPosts, PinPost, and UnpinPost, GetUserThreads,
+// GetUserThread, StartFollowingThread, and StopFollowingThread, GetUser,
 // GetUserByUsername, GetUsers, SearchUsers, GetTeamMembersByIds, and GetUsersStatusesByIds,
 // GetFileInfosForPost, GetFileInfo, and GetFile, SearchPosts, SearchFiles, and SearchChannels, all marked
 // x-auth-user with the bearerAuth security scheme). A kChat instance's base URL is always the team's own name
@@ -24,7 +25,8 @@
 // users.list, users.search, pins.list) also confirms live, see verifyChannelScope, that the channel belongs to
 // a bound team or is a direct or group channel with their members only, and is refused before the matching
 // endpoint is reached when it does not. Every operation that names a post_id (messages.thread, messages.get,
-// messages.files, messages.update, messages.delete, messages.pin, messages.unpin, and the reactions tools)
+// messages.files, messages.update, messages.delete, messages.pin, messages.unpin, the reactions tools, and
+// the threads tools, which also require the root post's channel to be a reachable channel of the named team)
 // reads the post first and binds it to its channel the same way, see verifyPostScope; the searches
 // (messages.search, files.search, channels.search) read the token's channels of the team once, see
 // reachableChannels, and drop every hit outside that set, so direct and group messages, other teams, and
@@ -75,7 +77,8 @@
 // confirmed file for a message, reads, lists, and searches the users of the bound teams and reads their
 // presence, searches the messages, files, and public channels of a bound team, sends or replies with exactly
 // one confirmed message, optionally with own uploads attached, changes the text of one confirmed message,
-// adds one confirmed reaction of the token's own user, pins or unpins one confirmed message, lists, creates, and
+// adds one confirmed reaction of the token's own user, pins or unpins one confirmed message, lists and reads
+// the threads the token's own user follows and follows or unfollows one confirmed thread, lists, creates, and
 // changes the own sidebar categories of a bound team and sets the own notifications of one channel, and, only
 // when a connection's tools list names it, deletes one confirmed message, one custom category, or removes one
 // own reaction. The token's
@@ -492,7 +495,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat for bound teams: messages, search, files, reactions, pins, users, own status and profile, team roles, channels with members, own sidebar categories, and channel notifications",
+		Description:        "Infomaniak kChat for bound teams: messages, search, files, reactions, pins, followed threads, users, own status and profile, team roles, channels with members, sidebar categories, and notifications",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -535,30 +538,30 @@ func Register(reg *capability.Registry) error {
 			Description: "lists the bound teams and their channels, reads team details and members, reads channel details and the public " +
 				"channels of a bound team, lists the direct and group channels, searches messages, files, and " +
 				"channels, lists the members of a channel and the archived channels of a team, reads channel " +
-				"messages, single messages, threads, reactions, pinned messages, and attachments (metadata and " +
-				"download to a released local directory), reads, lists, and searches the users of the bound " +
-				"teams and their presence, and lists the own sidebar categories; changes nothing",
+				"messages, single messages, threads, followed threads, reactions, pinned messages, and attachments " +
+				"(metadata and download to a released local directory), reads, lists, and searches the users of the " +
+				"bound teams and their presence, and lists the own sidebar categories; changes nothing",
 			Tools: []string{teamsList.ID, teamsGet.ID, teamMembersList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID,
 				channelsMembersList.ID, directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
 				filesDownload.ID, reactionsList.ID, pinsList.ID, usersGet.ID, usersList.ID, usersSearch.ID,
 				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID,
-				categoriesList.ID},
+				threadsList.ID, threadsGet.ID, categoriesList.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
 				"a confirmed message, or a confirmed reply to an existing thread, to a reachable channel, " +
 				"uploads a confirmed file to such a channel, edits the text of a confirmed message, adds a " +
-				"confirmed own reaction, pins or unpins a confirmed message, and sets the own presence and custom " +
-				"status or clears the custom status, and creates or changes a confirmed own sidebar category or the " +
-				"notifications of a channel; deleting a message, a category, or removing a reaction is never part of " +
-				"a profile",
+				"confirmed own reaction, pins or unpins a confirmed message, follows or unfollows a confirmed thread, " +
+				"sets the own presence and custom status or clears the custom status, and creates or changes a " +
+				"confirmed own sidebar category or the notifications of a channel; deleting a message, a category, " +
+				"or removing a reaction is never part of a profile",
 			Tools: []string{teamsList.ID, channelsList.ID, directList.ID, directOpen.ID, groupMessagesOpen.ID,
 				messagesList.ID, messagesThread.ID, messagesGet.ID, messagesSend.ID, messagesUpdate.ID,
 				messagesFiles.ID, filesInfo.ID, filesDownload.ID, filesUpload.ID, reactionsList.ID, reactionsAdd.ID,
 				pinsList.ID, messagesPin.ID, messagesUnpin.ID, usersGet.ID, usersList.ID, usersSearch.ID,
 				usersStatus.ID, statusSet.ID, customStatusSet.ID, customStatusClear.ID, messagesSearch.ID,
-				filesSearch.ID, channelsSearch.ID, categoriesList.ID, categoriesCreate.ID, categoriesUpdate.ID,
-				channelNotificationsUpdate.ID},
+				filesSearch.ID, channelsSearch.ID, threadsList.ID, threadsGet.ID, threadsFollow.ID, threadsUnfollow.ID,
+				categoriesList.ID, categoriesCreate.ID, categoriesUpdate.ID, channelNotificationsUpdate.ID},
 		}, {
 			ID: "channel-admin", Title: "Manage channels",
 			Description: "reads the bound teams, their channels with details, and the public channels, and also " +
@@ -626,6 +629,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(messagesSearch), Handler: capability.Handler(invokeMessagesSearch)},
 		capability.Operation{Descriptor: withGroup(filesSearch), Handler: capability.Handler(invokeFilesSearch)},
 		capability.Operation{Descriptor: withGroup(channelsSearch), Handler: capability.Handler(invokeChannelsSearch)},
+		capability.Operation{Descriptor: withGroup(threadsList), Handler: capability.Handler(invokeThreadsList)},
+		capability.Operation{Descriptor: withGroup(threadsGet), Handler: capability.Handler(invokeThreadsGet)},
+		capability.Operation{Descriptor: withGroup(threadsFollow), Handler: capability.Handler(invokeThreadsFollow)},
+		capability.Operation{Descriptor: withGroup(threadsUnfollow), Handler: capability.Handler(invokeThreadsUnfollow)},
 	)
 }
 
