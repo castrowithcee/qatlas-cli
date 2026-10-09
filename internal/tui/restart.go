@@ -195,8 +195,6 @@ func (m *Model) updateRestartConfirm(key tea.KeyMsg) tea.Cmd {
 	case "n", "esc":
 		m.screen = m.restartBack
 		m.status = m.restartHint()
-	case "ctrl+c":
-		return m.quit()
 	}
 	return nil
 }

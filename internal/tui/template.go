@@ -176,8 +176,6 @@ func (m *Model) updateTemplate(key tea.KeyMsg) tea.Cmd {
 	}
 	if !t.picking {
 		switch key.String() {
-		case "ctrl+c":
-			return m.quit()
 		case "esc":
 			m.template = nil
 			m.screen = t.from
@@ -201,8 +199,6 @@ func (m *Model) updateTemplate(key tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	switch key.String() {
-	case "ctrl+c":
-		return m.quit()
 	case "esc":
 		t.picking = false
 		m.templateList.stopFilter()

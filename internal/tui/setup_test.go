@@ -222,9 +222,15 @@ func TestCancellingTheGuidedSetupWritesNothing(t *testing.T) {
 		t.Run(setupTitles[step], func(t *testing.T) {
 			m, _, path, _, mem := newStoreModel(t)
 			walkSetup(t, m, step)
+			// Every step is one level back; the first one leaves, and asks first once a provider is chosen.
+			for at := step; at > stepProvider; at-- {
+				press(t, m, "esc")
+				if m.wizard == nil || m.wizard.step != at-1 || m.screen == screenLeave {
+					t.Fatalf("esc on step %d did not go back one step: step %d, screen %v", at, m.wizard.step, m.screen)
+				}
+			}
 			press(t, m, "esc")
 			if step > stepProvider {
-				// Once a provider is chosen the setup holds input, and leaving it asks first.
 				if m.screen != screenLeave || m.wizard == nil {
 					t.Fatalf("esc did not ask before dropping the setup: screen %v", m.screen)
 				}
@@ -295,7 +301,7 @@ func TestARefusedStepKeepsItsInput(t *testing.T) {
 	}
 
 	// Going back shows the confirmed step as it was, and coming forward again the refused one.
-	press(t, m, "f3")
+	press(t, m, "esc")
 	if m.wizard.step != stepService || m.fieldValue("service") != newService ||
 		m.fieldValue("name") != "archive" || m.fieldValue("base url") != "https://archive.example.invalid" {
 		t.Fatalf("going back lost the service step: step %d name %q", m.wizard.step, m.fieldValue("name"))
@@ -323,7 +329,7 @@ func TestAFailedSaveLeavesNothingBehind(t *testing.T) {
 		mem.Fail(secret.ErrUnavailable)
 		pump(t, m, "f2")
 		mem.Fail(nil)
-		if m.wizard.saved != "" || !strings.Contains(m.fail, "F3") {
+		if m.wizard.saved != "" || !strings.Contains(m.fail, "esc") {
 			t.Fatalf("a failed keyring did not say how to go on: %q", m.fail)
 		}
 		if _, err := os.Stat(path); err == nil {

@@ -756,14 +756,14 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		}
 		view := m.View()
 		for _, want := range []string{
-			"warning: unsaved changes", "s save and go on", "d discard", "esc keep editing", "the Services list",
+			"warning: unsaved changes", "F2 save", "d discard", "esc keep editing", "the Services list",
 		} {
 			if !strings.Contains(view, want) {
 				t.Errorf("the leave question does not say %q:\n%s", want, view)
 			}
 		}
 		// Keys that are no answer change nothing.
-		press(t, m, "enter", "x", "2", "q", "n", "y")
+		press(t, m, "enter", "x", "2", "q", "n", "y", "s", "k", "f3", "backspace")
 		if m.screen != screenLeave || m.quitting {
 			t.Fatalf("a stray key answered the question: screen %v quitting %v", m.screen, m.quitting)
 		}
@@ -798,7 +798,7 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 	t.Run("save writes through the core and goes on", func(t *testing.T) {
 		m, _ := startForm(t)
 		press(t, m, "esc")
-		pump(t, m, "s")
+		pump(t, m, "f2")
 		if m.fail != "" || m.screen != screenList || m.section != sectionServices {
 			t.Fatalf("save = screen %v section %v error %q", m.screen, m.section, m.fail)
 		}
@@ -812,7 +812,7 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		press(t, m, "shift+tab", "shift+tab")
 		clearField(t, m)
 		press(t, m, "esc")
-		pump(t, m, "s")
+		pump(t, m, "f2")
 		if m.screen != screenForm || m.section != sectionServices || m.fail == "" {
 			t.Fatalf("a refused save = screen %v section %v error %q", m.screen, m.section, m.fail)
 		}
@@ -829,21 +829,33 @@ func TestLeavingAChangedFormAsksFirst(t *testing.T) {
 		m.Update(tea.WindowSizeMsg{Width: 100, Height: 28})
 		walkSetup(t, m, 1)
 		press(t, m, "esc")
-		if m.screen != screenLeave {
-			t.Fatalf("esc in the setup = screen %v, want the leave question", m.screen)
-		}
-		if view := m.View(); strings.Contains(view, "s save") || !strings.Contains(view, "d discard setup") {
-			t.Errorf("the setup question offers the wrong answers:\n%s", view)
-		}
-		press(t, m, "s")
-		if m.screen != screenLeave {
-			t.Fatalf("s answered the setup question: screen %v", m.screen)
+		if m.screen != screenProviders || m.wizard == nil || m.wizard.step != stepProvider {
+			t.Fatalf("esc on the service step = screen %v, want the provider table", m.screen)
 		}
 		press(t, m, "esc")
-		if m.wizard == nil || m.screen != screenForm {
+		if m.screen != screenLeave {
+			t.Fatalf("esc on the first step = screen %v, want the leave question", m.screen)
+		}
+		if view := m.View(); !strings.Contains(view, "F2 next step") || !strings.Contains(view, "d discard") {
+			t.Errorf("the setup question offers the wrong answers:\n%s", view)
+		}
+		press(t, m, "s", "k")
+		if m.screen != screenLeave {
+			t.Fatalf("a stray key answered the setup question: screen %v", m.screen)
+		}
+		press(t, m, "esc")
+		if m.wizard == nil || m.screen != screenProviders {
 			t.Fatalf("staying dropped the setup: screen %v", m.screen)
 		}
-		press(t, m, "esc", "d")
+		// F2 in the question goes on like F2 in the setup and saves nothing.
+		press(t, m, "esc", "f2")
+		if m.wizard == nil || m.wizard.step != stepService || m.screen != screenForm {
+			t.Fatalf("F2 in the question did not go on: screen %v", m.screen)
+		}
+		if _, err := os.Stat(path); err == nil {
+			t.Error("F2 in the setup question wrote the file")
+		}
+		press(t, m, "esc", "esc", "d")
 		if m.wizard != nil || m.screen != screenList || m.section != sectionServices {
 			t.Fatalf("discard = wizard %v screen %v section %v", m.wizard != nil, m.screen, m.section)
 		}
@@ -2166,9 +2178,9 @@ func TestReturningToASetupStepShowsOnlyTheFocusedHint(t *testing.T) {
 	if m.wizard.step != stepSummary {
 		t.Fatalf("f2 did not reach the summary: step %d, error %q", m.wizard.step, m.fail)
 	}
-	pump(t, m, "f3")
+	pump(t, m, "esc")
 	if m.wizard.step != stepPermissions {
-		t.Fatalf("f3 did not return to the permissions step: step %d", m.wizard.step)
+		t.Fatalf("esc did not return to the permissions step: step %d", m.wizard.step)
 	}
 
 	assertNoRepeatedHint(t, m, "the permissions step after going back")

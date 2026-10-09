@@ -13,6 +13,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: "channels", Title: "Channels", Description: "The channels of a bound team"},
 	{ID: "messages", Title: "Messages", Description: "Channel messages and threads: reading, sending, editing, and deleting"},
 	{ID: "reactions", Title: "Reactions", Description: "Reactions on messages: reading, adding, and removing the own"},
+	{ID: "users", Title: "Users", Description: "Users of the bound teams and their presence"},
 }
 
 // groupOf returns the group of a kChat tool ID (infomaniakchat.<segment>.<action>), or "" for an ID outside
@@ -23,7 +24,7 @@ func groupOf(id string) string {
 		return ""
 	}
 	switch parts[1] {
-	case "teams", "channels", "messages", "reactions":
+	case "teams", "channels", "messages", "reactions", "users":
 		return parts[1]
 	}
 	return ""

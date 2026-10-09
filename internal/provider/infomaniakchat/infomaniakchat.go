@@ -5,11 +5,12 @@
 // MCP server (github.com/Infomaniak/mcp-server-kchat) documents
 // (developer.infomaniak.com/openapi.json, operations GetTeamsForUser, GetChannel,
 // GetChannelsForTeamForUser, GetPostsForChannel, GetPost, GetPostThread, CreatePost, PatchPost, and
-// DeletePost, GetReactions, SaveReaction, and DeleteReaction, all marked x-auth-user with the bearerAuth
-// security scheme). A kChat instance's base URL is
-// always the team's own name as the one DNS label directly below kchat.infomaniak.com, never an arbitrary
-// host: the MCP server builds every request from exactly that shape,
-// https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider accepts no other host, see parseInstance.
+// DeletePost, GetReactions, SaveReaction, and DeleteReaction, GetUser, GetUserByUsername, GetUsers,
+// SearchUsers, GetTeamMembersByIds, and GetUsersStatusesByIds, all marked x-auth-user with the bearerAuth
+// security scheme). A kChat instance's base URL is always the team's own name as the one DNS label directly
+// below kchat.infomaniak.com, never an arbitrary host: the MCP server builds every request from exactly that
+// shape, https://TEAM.kchat.infomaniak.com/api/v4/..., and this provider accepts no other host, see
+// parseInstance.
 //
 // A connection binds exactly one kChat instance, through its configured base URL, and one or more teams of
 // it (team/TEAM_ID, repeatable) plus, optionally, a narrower allow-list of channels of those teams
@@ -18,26 +19,33 @@
 // reason: a single kChat token can reach several teams, which matters for a person who holds tokens, or is
 // a member of teams, of several customers. A channel_id argument outside a configured channel allow-list is
 // refused locally, before any request is sent; every operation that names a channel_id directly
-// (messages.list, messages.send) also confirms with kChat's own channel detail endpoint, in one extra
-// request, that the channel actually belongs to one of the bound teams, and is refused before the matching
-// endpoint is reached when it does not. Every operation that names a post_id (messages.thread,
-// messages.get, messages.update, messages.delete, and the reactions tools) reads the post first and binds
-// it to its channel the same way, see verifyPostScope; a message reply additionally confirms that its root post belongs to the same
-// channel before it is ever sent. Rejecting an out-of-scope channel or post never carries a message's text
-// into an error or a log.
+// (messages.list, messages.send, users.list, users.search) also confirms with kChat's own channel detail
+// endpoint, in one extra request, that the channel actually belongs to one of the bound teams, and is
+// refused before the matching endpoint is reached when it does not. Every operation that names a post_id
+// (messages.thread, messages.get, messages.update, messages.delete, and the reactions tools) reads the post
+// first and binds it to its channel the same way, see verifyPostScope; a message reply additionally
+// confirms that its root post belongs to the same channel before it is ever sent. Rejecting an out-of-scope
+// channel or post never carries a message's text into an error or a log.
+//
+// A user is reachable only as the token's own user or as a live member of a bound team, see
+// verifyUsersScope; every operation that names, lists, or searches users applies it before a profile or a
+// presence status is returned, so users of other teams of the same instance are never shown. Users are
+// reduced to a fixed allow-list of profile fields.
 //
 // kChat is deliberately the only Infomaniak surface this provider reaches: Mail, CalDAV/CardDAV, and kDrive
 // are separate Infomaniak products with their own authentication and their own providers, see the kDrive
 // provider's package doc for why they are not bundled together.
 //
-// Channel and team management, file attachments, the custom emoji catalog, and webhooks are deliberately
-// out of scope: this provider lists the teams and channels a connection may reach, reads channel posts,
-// single posts, threads, and reactions, sends or replies with exactly one confirmed message, changes the
-// text of one confirmed message, adds one confirmed reaction of the token's own user, and, only when a
-// connection's tools list names it, deletes one confirmed message or removes one own reaction.
-// kChat renders Markdown and mentions such as @channel in a message, so the text is sent as written. Every value a listing or a
-// read answers with arrives from the provider and is treated as untrusted data: normalised into a stable
-// envelope, passed through the output encoders, and never rendered, executed, or stored.
+// Channel and team management, membership changes, direct messages, user changes, profile pictures, file
+// attachments, the custom emoji catalog, and webhooks are deliberately out of scope: this provider lists the
+// teams and channels a connection may reach, reads channel posts, single posts, threads, and reactions,
+// reads, lists, and searches the users of the bound teams and reads their presence, sends or replies with
+// exactly one confirmed message, changes the text of one confirmed message, adds one confirmed reaction of
+// the token's own user, and, only when a connection's tools list names it, deletes one confirmed message or
+// removes one own reaction. kChat renders Markdown and mentions such as @channel in a message, so the text
+// is sent as written. Every value a listing or a read answers with arrives from the provider and is treated
+// as untrusted data: normalised into a stable envelope, passed through the output encoders, and never
+// rendered, executed, or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
 // no proactive spacing of its own; a 429 kChat itself reports is still classified and, when it names a
@@ -378,7 +386,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat team messaging: read, send, edit, and delete messages and read, add, and remove reactions through its Mattermost-compatible REST API",
+		Description:        "Infomaniak kChat team messaging: read, send, edit, and delete messages, read, add, and remove reactions, and read users and presence of the bound teams through its Mattermost-compatible REST API",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -415,18 +423,20 @@ func Register(reg *capability.Registry) error {
 			ValidateSet: func(values []string) error { _, err := parseScope(values); return err },
 		},
 		Profiles: []config.ToolProfile{{
-			ID: "read", Title: "Read teams, channels, and messages", Recommended: true,
-			Description: "lists the bound teams and their channels, and reads channel messages, single messages, " +
-				"threads, and reactions; changes nothing",
+			ID: "read", Title: "Read teams, channels, messages, and users", Recommended: true,
+			Description: "lists the bound teams and their channels, reads channel messages, single messages, " +
+				"threads, and reactions, and reads, lists, and searches the users of the bound teams and their " +
+				"presence; changes nothing",
 			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID,
-				reactionsList.ID},
+				reactionsList.ID, usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also sends a confirmed message, or a confirmed reply to an existing thread, to a " +
 				"channel of a bound team, edits the text of a confirmed message, and adds a confirmed own " +
 				"reaction; deleting a message or removing a reaction is never part of a profile",
 			Tools: []string{teamsList.ID, channelsList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID,
-				messagesSend.ID, messagesUpdate.ID, reactionsList.ID, reactionsAdd.ID},
+				messagesSend.ID, messagesUpdate.ID, reactionsList.ID, reactionsAdd.ID, usersGet.ID, usersList.ID,
+				usersSearch.ID, usersStatus.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -443,6 +453,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(reactionsList), Handler: capability.Handler(invokeReactionsList)},
 		capability.Operation{Descriptor: withGroup(reactionsAdd), Handler: capability.Handler(invokeReactionsAdd)},
 		capability.Operation{Descriptor: withGroup(reactionsRemove), Handler: capability.Handler(invokeReactionsRemove)},
+		capability.Operation{Descriptor: withGroup(usersGet), Handler: capability.Handler(invokeUsersGet)},
+		capability.Operation{Descriptor: withGroup(usersList), Handler: capability.Handler(invokeUsersList)},
+		capability.Operation{Descriptor: withGroup(usersSearch), Handler: capability.Handler(invokeUsersSearch)},
+		capability.Operation{Descriptor: withGroup(usersStatus), Handler: capability.Handler(invokeUsersStatus)},
 	)
 }
 
