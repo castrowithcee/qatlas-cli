@@ -23,6 +23,9 @@ type SalesVoucher struct {
 	VoucherDate      string           `json:"voucher_date,omitempty"`
 	ExpirationDate   string           `json:"expiration_date,omitempty"`
 	DeliveryTerms    string           `json:"delivery_terms,omitempty"`
+	DueDate          string           `json:"due_date,omitempty"`
+	ClosingInvoiceID string           `json:"closing_invoice_id,omitempty"`
+	DunnedInvoice    *RelatedVoucher  `json:"dunned_invoice,omitempty"`
 	CreatedDate      string           `json:"created_date,omitempty"`
 	UpdatedDate      string           `json:"updated_date,omitempty"`
 	Version          int              `json:"version,omitempty"`
@@ -61,6 +64,9 @@ type RelatedVoucher struct {
 type salesVoucherKind struct {
 	path, resource, op, tool  string
 	expiration, deliveryTerms bool
+	dueDate                   bool // dunning and down payment invoice
+	closingInvoice            bool // down payment invoice only
+	dunnedInvoice             bool // dunning only
 }
 
 var (
@@ -72,13 +78,34 @@ var (
 		op: "get credit note", tool: "creditnotes"}
 	deliveryNoteKind = salesVoucherKind{path: "/v1/delivery-notes/", resource: "delivery note",
 		op: "get delivery note", tool: "deliverynotes"}
+	dunningKind = salesVoucherKind{path: "/v1/dunnings/", resource: "dunning", op: "get dunning",
+		tool: "dunnings", dueDate: true, dunnedInvoice: true}
+	downPaymentInvoiceKind = salesVoucherKind{path: "/v1/down-payment-invoices/", resource: "down payment invoice",
+		op: "get down payment invoice", tool: "downpaymentinvoices", dueDate: true, closingInvoice: true}
 )
 
 var (
-	quotationsGet         = salesVoucherDescriptor(quotationKind)
-	orderConfirmationsGet = salesVoucherDescriptor(orderConfirmationKind)
-	creditNotesGet        = salesVoucherDescriptor(creditNoteKind)
-	deliveryNotesGet      = salesVoucherDescriptor(deliveryNoteKind)
+	quotationsGet          = salesVoucherDescriptor(quotationKind)
+	orderConfirmationsGet  = salesVoucherDescriptor(orderConfirmationKind)
+	creditNotesGet         = salesVoucherDescriptor(creditNoteKind)
+	deliveryNotesGet       = salesVoucherDescriptor(deliveryNoteKind)
+	dunningsGet            = salesVoucherDescriptor(dunningKind)
+	downPaymentInvoicesGet = salesVoucherDescriptor(downPaymentInvoiceKind)
+)
+
+// Schema fragments the sales voucher tools and the recurring template tools share.
+const (
+	voucherContactSchema = `{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
+		`"supplement":{"type":"string"},"street":{"type":"string"},"zip":{"type":"string"},` +
+		`"city":{"type":"string"},"country_code":{"type":"string"}},"additionalProperties":false}`
+	shippingSchema = `{"type":"object","properties":{"shipping_type":{"type":"string"},` +
+		`"shipping_date":{"type":"string"},"shipping_end_date":{"type":"string"}},"additionalProperties":false}`
+	lineItemsSchema = `{"type":"array","items":{"type":"object","properties":{` +
+		`"type":{"type":"string"},"name":{"type":"string"},"description":{"type":"string"},` +
+		`"quantity":{"type":"number"},"unit_name":{"type":"string"},` +
+		`"unit_net_amount":{"type":"number"},"unit_gross_amount":{"type":"number"},` +
+		`"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"},` +
+		`"amount":{"type":"number"}},"additionalProperties":false}}`
 )
 
 // salesVoucherDescriptor builds the read tool of one voucher type. Output schema and fields differ only in
@@ -101,24 +128,29 @@ func salesVoucherDescriptor(kind salesVoucherKind) capability.Descriptor {
 		properties += `"delivery_terms":{"type":"string"},`
 		fields = append(fields, capability.Field{Name: "delivery_terms", Description: "Delivery terms, untrusted data"})
 	}
+	if kind.dueDate {
+		properties += `"due_date":{"type":"string"},`
+		fields = append(fields, capability.Field{Name: "due_date", Description: "Payment due date of the " + name})
+	}
+	if kind.closingInvoice {
+		properties += `"closing_invoice_id":{"type":"string"},`
+		fields = append(fields, capability.Field{Name: "closing_invoice_id", Description: "Identifier of the closing invoice; absent until one exists"})
+	}
+	if kind.dunnedInvoice {
+		properties += `"dunned_invoice":{"type":"object","properties":{"id":{"type":"string"},` +
+			`"voucher_number":{"type":"string"},"voucher_type":{"type":"string"}},"additionalProperties":false},`
+		fields = append(fields, capability.Field{Name: "dunned_invoice", Description: "The invoice this dunning refers to: id, voucher_number, voucher_type; its content is not read"})
+	}
 	properties += `"created_date":{"type":"string"},"updated_date":{"type":"string"},"version":{"type":"integer"},` +
 		`"archived":{"type":"boolean"},"language":{"type":"string"},"title":{"type":"string"},` +
 		`"introduction":{"type":"string"},"remark":{"type":"string"},"tax_type":{"type":"string"},` +
 		`"currency":{"type":"string"},"total_net_amount":{"type":"number"},"total_gross_amount":{"type":"number"},` +
 		`"total_tax_amount":{"type":"number"},` +
-		`"contact":{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},` +
-		`"supplement":{"type":"string"},"street":{"type":"string"},"zip":{"type":"string"},` +
-		`"city":{"type":"string"},"country_code":{"type":"string"}},"additionalProperties":false},` +
-		`"shipping":{"type":"object","properties":{"shipping_type":{"type":"string"},` +
-		`"shipping_date":{"type":"string"},"shipping_end_date":{"type":"string"}},"additionalProperties":false},` +
+		`"contact":` + voucherContactSchema + `,` +
+		`"shipping":` + shippingSchema + `,` +
 		`"related_vouchers":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},` +
 		`"voucher_number":{"type":"string"},"voucher_type":{"type":"string"}},"additionalProperties":false}},` +
-		`"line_items":{"type":"array","items":{"type":"object","properties":{` +
-		`"type":{"type":"string"},"name":{"type":"string"},"description":{"type":"string"},` +
-		`"quantity":{"type":"number"},"unit_name":{"type":"string"},` +
-		`"unit_net_amount":{"type":"number"},"unit_gross_amount":{"type":"number"},` +
-		`"tax_rate_percentage":{"type":"number"},"discount_percentage":{"type":"number"},` +
-		`"amount":{"type":"number"}},"additionalProperties":false}}`
+		`"line_items":` + lineItemsSchema
 	fields = append(fields,
 		capability.Field{Name: "created_date", Description: "Creation timestamp"},
 		capability.Field{Name: "updated_date", Description: "Last change timestamp"},
@@ -201,6 +233,16 @@ func (c *Client) GetDeliveryNote(ctx context.Context, id string) (*SalesVoucher,
 	return c.getSalesVoucher(ctx, deliveryNoteKind, id)
 }
 
+// GetDunning reads exactly the dunning of a validated identifier.
+func (c *Client) GetDunning(ctx context.Context, id string) (*SalesVoucher, error) {
+	return c.getSalesVoucher(ctx, dunningKind, id)
+}
+
+// GetDownPaymentInvoice reads exactly the down payment invoice of a validated identifier.
+func (c *Client) GetDownPaymentInvoice(ctx context.Context, id string) (*SalesVoucher, error) {
+	return c.getSalesVoucher(ctx, downPaymentInvoiceKind, id)
+}
+
 func (c *Client) getSalesVoucher(ctx context.Context, kind salesVoucherKind, id string) (*SalesVoucher, error) {
 	if !validUUID(id) {
 		return nil, providerError(kind.op, "the "+kind.resource+" identifier must be a UUID")
@@ -222,6 +264,22 @@ func (c *Client) getSalesVoucher(ctx context.Context, kind salesVoucherKind, id 
 	}
 	if !kind.deliveryTerms {
 		voucher.DeliveryTerms = ""
+	}
+	if kind.dueDate {
+		voucher.DueDate = raw.DueDate
+	}
+	// Identifiers of the answer are provider data: only a well-formed UUID is passed on.
+	if kind.closingInvoice && validUUID(raw.ClosingInvoiceID) {
+		voucher.ClosingInvoiceID = raw.ClosingInvoiceID
+	}
+	if kind.dunnedInvoice {
+		for _, related := range raw.RelatedVouchers {
+			if related.VoucherType == "invoice" && validUUID(related.ID) {
+				dunned := RelatedVoucher(related)
+				voucher.DunnedInvoice = &dunned
+				break
+			}
+		}
 	}
 	return voucher, nil
 }
