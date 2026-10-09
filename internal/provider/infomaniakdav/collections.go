@@ -6,12 +6,10 @@ import (
 	"encoding/xml"
 	"regexp"
 	"sort"
-	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
@@ -19,24 +17,6 @@ import (
 const (
 	maxNameLength        = 256
 	maxDescriptionLength = 1024
-)
-
-// The fixed request bodies. Each asks for exactly the properties the result is built from.
-const (
-	principalBody = `<?xml version="1.0" encoding="UTF-8"?>` +
-		`<d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`
-	calendarHomeBody = `<?xml version="1.0" encoding="UTF-8"?>` +
-		`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"><d:prop>` +
-		`<c:calendar-home-set/></d:prop></d:propfind>`
-	addressbookHomeBody = `<?xml version="1.0" encoding="UTF-8"?>` +
-		`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav"><d:prop>` +
-		`<c:addressbook-home-set/></d:prop></d:propfind>`
-	calendarsBody = `<?xml version="1.0" encoding="UTF-8"?>` +
-		`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:a="http://apple.com/ns/ical/">` +
-		`<d:prop><d:displayname/><d:resourcetype/><c:calendar-description/><a:calendar-color/></d:prop></d:propfind>`
-	addressbooksBody = `<?xml version="1.0" encoding="UTF-8"?>` +
-		`<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav"><d:prop>` +
-		`<d:displayname/><d:resourcetype/><c:addressbook-description/></d:prop></d:propfind>`
 )
 
 var readRisk = capability.Risk{
@@ -124,26 +104,26 @@ func invokeList(ctx context.Context, resolved *config.Resolved, secrets *secret.
 
 // discoverPrincipal runs the first discovery step and returns the segments of the principal.
 func (c *Client) discoverPrincipal(ctx context.Context, op string) ([]string, error) {
-	resources, err := c.propfind(ctx, op, nil, "0", principalBody)
+	resources, err := c.propfind(ctx, op, nil, "0", dav.PrincipalBody)
 	if err != nil {
 		return nil, err
 	}
-	return singleLink(op, resources, propPrincipal)
+	return singleLink(op, resources, dav.PropPrincipal)
 }
 
 // singleLink reads the one location a discovery property must carry.
-func singleLink(op string, resources []resource, property xml.Name) ([]string, error) {
+func singleLink(op string, resources []dav.Resource, property xml.Name) ([]string, error) {
 	var hrefs []string
 	for i := range resources {
-		if resources[i].failure(op) != nil {
+		if failure(&resources[i], op) != nil {
 			continue
 		}
-		hrefs = append(hrefs, resources[i].links[property]...)
+		hrefs = append(hrefs, resources[i].Links[property]...)
 	}
 	if len(hrefs) != 1 {
 		return nil, invalidResponse(op, "Infomaniak did not name exactly one location during discovery")
 	}
-	segments, err := segmentsOf(op, hrefs[0])
+	segments, err := server.Segments(op, hrefs[0])
 	if err != nil {
 		return nil, err
 	}
@@ -155,11 +135,11 @@ func singleLink(op string, resources []resource, property xml.Name) ([]string, e
 
 // list runs the discovery chain and reports the allow-listed collections of one kind.
 func (c *Client) list(ctx context.Context, calendars bool) (*CollectionsPage, error) {
-	op, allowed, homeProp, homeBody, body := "list address books", c.scope.addressbooks, propBookHome,
-		addressbookHomeBody, addressbooksBody
+	op, allowed, homeProp, homeBody, body := "list address books", c.scope.addressbooks, dav.PropBookHome,
+		dav.AddressbookHomeBody, dav.AddressbooksBody
 	if calendars {
-		op, allowed, homeProp, homeBody, body = "list calendars", c.scope.calendars, propCalHome,
-			calendarHomeBody, calendarsBody
+		op, allowed, homeProp, homeBody, body = "list calendars", c.scope.calendars, dav.PropCalHome,
+			dav.CalendarHomeBody, dav.CalendarsBody
 	}
 	principal, err := c.discoverPrincipal(ctx, op)
 	if err != nil {
@@ -181,20 +161,20 @@ func (c *Client) list(ctx context.Context, calendars bool) (*CollectionsPage, er
 	page := &CollectionsPage{Collections: []Collection{}}
 	seen := map[string]bool{}
 	for i := range resources {
-		segments, err := segmentsOf(op, resources[i].href)
+		segments, err := server.Segments(op, resources[i].Href)
 		if err != nil {
 			return nil, err
 		}
 		if len(segments) < len(home) || !equalSegments(segments[:len(home)], home) || len(segments) > len(home)+1 {
 			return nil, invalidResponse(op, "Infomaniak answered with a node outside the discovered home set")
 		}
-		if len(segments) == len(home) || resources[i].failure(op) != nil {
+		if len(segments) == len(home) || failure(&resources[i], op) != nil {
 			continue
 		}
 		id := segments[len(segments)-1]
-		kindOK := resources[i].addressbook
+		kindOK := resources[i].Addressbook
 		if calendars {
-			kindOK = resources[i].calendar
+			kindOK = resources[i].Calendar
 		}
 		if !kindOK || !contains(allowed, id) || seen[id] {
 			continue
@@ -202,9 +182,9 @@ func (c *Client) list(ctx context.Context, calendars bool) (*CollectionsPage, er
 		seen[id] = true
 		page.Collections = append(page.Collections, Collection{
 			ID:          id,
-			Name:        clean(resources[i].text[keyName], maxNameLength),
-			Description: clean(resources[i].text[keyDescription], maxDescriptionLength),
-			Color:       colorOf(resources[i].text[keyColor], calendars),
+			Name:        dav.Clean(resources[i].Text[dav.KeyName], maxNameLength),
+			Description: dav.Clean(resources[i].Text[dav.KeyDescription], maxDescriptionLength),
+			Color:       colorOf(resources[i].Text[dav.KeyColor], calendars),
 		})
 	}
 	sort.Slice(page.Collections, func(i, j int) bool { return page.Collections[i].ID < page.Collections[j].ID })
@@ -232,32 +212,4 @@ func colorOf(value string, calendars bool) string {
 		return value
 	}
 	return ""
-}
-
-// clean replaces control characters and caps a provider string at max bytes on a rune boundary.
-func clean(value string, max int) string { return cleanText(value, max, false) }
-
-// cleanText is clean; with lines set it keeps line breaks and tabs, so a multi-line text stays readable.
-func cleanText(value string, max int, lines bool) string {
-	if lines {
-		value = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(value)
-	}
-	value = strings.Map(func(r rune) rune {
-		if lines && (r == '\n' || r == '\t') {
-			return r
-		}
-		if unicode.IsControl(r) || r == utf8.RuneError {
-			return ' '
-		}
-		return r
-	}, strings.ToValidUTF8(value, " "))
-	value = strings.TrimSpace(value)
-	if len(value) <= max {
-		return value
-	}
-	cut := max
-	for cut > 0 && !utf8.RuneStart(value[cut]) {
-		cut--
-	}
-	return value[:cut]
 }
