@@ -15,6 +15,8 @@ import (
 const (
 	davNS = "DAV:"
 	ocNS  = "http://owncloud.org/ns"
+	// ncNS carries the trash bin properties.
+	ncNS = "http://nextcloud.org/ns"
 )
 
 // The elements of a multi-status answer this parser navigates by.
@@ -39,19 +41,25 @@ const (
 	propFileID        = "fileid"
 	propSize          = "size"
 	propPermissions   = "permissions"
+	propTrashName     = "trashname"
+	propTrashOrigin   = "trashorigin"
+	propTrashDeleted  = "trashdeleted"
 )
 
 // wantedProps maps the requested properties to their keys. Every other property of an answer is dropped,
 // so a server cannot widen the result by returning more than it was asked for.
 var wantedProps = map[xml.Name]string{
-	{Space: davNS, Local: "displayname"}:      propDisplayName,
-	{Space: davNS, Local: "getcontenttype"}:   propContentType,
-	{Space: davNS, Local: "getcontentlength"}: propContentLength,
-	{Space: davNS, Local: "getlastmodified"}:  propLastModified,
-	{Space: davNS, Local: "getetag"}:          propETag,
-	{Space: ocNS, Local: "fileid"}:            propFileID,
-	{Space: ocNS, Local: "size"}:              propSize,
-	{Space: ocNS, Local: "permissions"}:       propPermissions,
+	{Space: davNS, Local: "displayname"}:               propDisplayName,
+	{Space: davNS, Local: "getcontenttype"}:            propContentType,
+	{Space: davNS, Local: "getcontentlength"}:          propContentLength,
+	{Space: davNS, Local: "getlastmodified"}:           propLastModified,
+	{Space: davNS, Local: "getetag"}:                   propETag,
+	{Space: ocNS, Local: "fileid"}:                     propFileID,
+	{Space: ocNS, Local: "size"}:                       propSize,
+	{Space: ocNS, Local: "permissions"}:                propPermissions,
+	{Space: ncNS, Local: "trashbin-filename"}:          propTrashName,
+	{Space: ncNS, Local: "trashbin-original-location"}: propTrashOrigin,
+	{Space: ncNS, Local: "trashbin-deletion-time"}:     propTrashDeleted,
 }
 
 // resource is one d:response of a multi-status answer, reduced to what this adapter reads: where the node
@@ -83,6 +91,12 @@ func (r *resource) failure(op string) error {
 // and text length are all capped, and anything that does not match the documented shape is refused before
 // a single value is handed on.
 func parseMultiStatus(op string, body []byte) ([]resource, error) {
+	return parseMultiStatusMax(op, body, maxEntries)
+}
+
+// parseMultiStatusMax is parseMultiStatus with the number of nodes it accepts; the trash bin lists
+// entries of the whole account before they are filtered to the root folder.
+func parseMultiStatusMax(op string, body []byte, limit int) ([]resource, error) {
 	decoder := xml.NewDecoder(bytes.NewReader(body))
 	decoder.Strict = true
 
@@ -116,7 +130,7 @@ func parseMultiStatus(op string, body []byte) ([]resource, error) {
 			case len(stack) == 1 && element.Name != elemMultistatus:
 				return nil, invalidResponse(op, "Nextcloud did not answer with a multi-status document")
 			case len(stack) == 2 && element.Name == elemResponse:
-				if len(resources) >= maxEntries {
+				if len(resources) >= limit {
 					return nil, invalidResponse(op,
 						"this Nextcloud folder holds more entries than one read may report")
 				}
@@ -185,6 +199,11 @@ func statusCodeOf(line string) (int, bool) {
 // untrusted: it is compared segment by segment against the origin, the installation path, the identity,
 // and the fixed root of this connection, so a server cannot hand back a node outside them.
 func (c *Client) relativeOf(op, href string) ([]string, error) {
+	return c.segmentsBelow(op, href, append(append([]string{}, c.prefix...), c.root...))
+}
+
+// segmentsBelow is relativeOf for any fixed bound: it returns the segments of href below bound.
+func (c *Client) segmentsBelow(op, href string, bound []string) ([]string, error) {
 	trimmed := strings.TrimSpace(href)
 	if trimmed == "" {
 		return nil, invalidResponse(op, "Nextcloud answered with a node without a location")
@@ -205,7 +224,7 @@ func (c *Client) relativeOf(op, href string) ([]string, error) {
 	// The escaped form is split before it is decoded, so a percent-encoded separator inside a name stays
 	// inside that one segment instead of silently becoming a new path component.
 	raw := strings.Split(strings.TrimSuffix(escaped, "/"), "/")[1:]
-	if len(raw) > len(c.prefix)+len(c.root)+maxSegments {
+	if len(raw) > len(bound)+maxSegments {
 		return nil, invalidResponse(op, "Nextcloud answered with a node location that is too deep")
 	}
 
@@ -221,7 +240,6 @@ func (c *Client) relativeOf(op, href string) ([]string, error) {
 		segments = append(segments, decoded)
 	}
 
-	bound := append(append([]string{}, c.prefix...), c.root...)
 	if len(segments) < len(bound) || !equalSegments(segments[:len(bound)], bound) {
 		return nil, invalidResponse(op, messageForeignEntry)
 	}
