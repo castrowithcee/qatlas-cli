@@ -189,8 +189,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 31 {
-		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, three activity link, and three workflow read operations", len(operations))
+	if len(operations) != 34 {
+		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, three activity link, three workflow read operations, and three data model metadata operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -218,17 +218,19 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		operations[4].ID != "twentycrm.companies.delete" || operations[5].ID != "twentycrm.companies.destroy" ||
 		operations[6].ID != "twentycrm.companies.get" || operations[7].ID != "twentycrm.companies.list" ||
 		operations[8].ID != "twentycrm.companies.restore" || operations[9].ID != "twentycrm.companies.update" ||
-		operations[10].ID != "twentycrm.objects.get" || operations[11].ID != "twentycrm.objects.list" ||
-		operations[12].ID != "twentycrm.records.batchcreate" || operations[13].ID != "twentycrm.records.batchdelete" ||
-		operations[14].ID != "twentycrm.records.batchupdate" || operations[15].ID != "twentycrm.records.create" ||
-		operations[16].ID != "twentycrm.records.delete" || operations[17].ID != "twentycrm.records.destroy" ||
-		operations[18].ID != "twentycrm.records.duplicates" || operations[19].ID != "twentycrm.records.get" ||
-		operations[20].ID != "twentycrm.records.groupby" || operations[21].ID != "twentycrm.records.list" ||
-		operations[22].ID != "twentycrm.records.merge" || operations[23].ID != "twentycrm.records.mergepreview" ||
-		operations[24].ID != "twentycrm.records.restore" || operations[25].ID != "twentycrm.records.search" ||
-		operations[26].ID != "twentycrm.records.searchall" ||
-		operations[27].ID != "twentycrm.records.update" || operations[28].ID != "twentycrm.workflowruns.list" ||
-		operations[29].ID != "twentycrm.workflows.get" || operations[30].ID != "twentycrm.workflows.list" {
+		operations[10].ID != "twentycrm.metafields.get" || operations[11].ID != "twentycrm.metaobjects.get" ||
+		operations[12].ID != "twentycrm.metaobjects.list" ||
+		operations[13].ID != "twentycrm.objects.get" || operations[14].ID != "twentycrm.objects.list" ||
+		operations[15].ID != "twentycrm.records.batchcreate" || operations[16].ID != "twentycrm.records.batchdelete" ||
+		operations[17].ID != "twentycrm.records.batchupdate" || operations[18].ID != "twentycrm.records.create" ||
+		operations[19].ID != "twentycrm.records.delete" || operations[20].ID != "twentycrm.records.destroy" ||
+		operations[21].ID != "twentycrm.records.duplicates" || operations[22].ID != "twentycrm.records.get" ||
+		operations[23].ID != "twentycrm.records.groupby" || operations[24].ID != "twentycrm.records.list" ||
+		operations[25].ID != "twentycrm.records.merge" || operations[26].ID != "twentycrm.records.mergepreview" ||
+		operations[27].ID != "twentycrm.records.restore" || operations[28].ID != "twentycrm.records.search" ||
+		operations[29].ID != "twentycrm.records.searchall" ||
+		operations[30].ID != "twentycrm.records.update" || operations[31].ID != "twentycrm.workflowruns.list" ||
+		operations[32].ID != "twentycrm.workflows.get" || operations[33].ID != "twentycrm.workflows.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1125,6 +1127,9 @@ func wantSensitivity(id string) string {
 	}
 	if strings.HasPrefix(id, Provider+".workflow") {
 		return workflowDataSensitivity
+	}
+	if strings.HasPrefix(id, Provider+".meta") {
+		return metadataSensitivity
 	}
 	return dataSensitivity
 }

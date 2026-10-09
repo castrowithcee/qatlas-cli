@@ -2,8 +2,8 @@
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
   objects, count by field), record write (create, update, batches), duplicate search and merge, record
-  trash (delete, restore, destroy), note and task link operations, workflow read, object targets, connection
-  permissions, and safety boundaries.
+  trash (delete, restore, destroy), note and task link operations, workflow read, data model read, object
+  targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -106,9 +106,8 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
   | boolean | `eq`, `is` |
   | identifier, relation identifier | `eq`, `neq`, `in`, `is` |
 
-- `is` takes `NULL` or `NOT_NULL`; `in` takes a list of at most 20 values of one type. Dates are
-  `YYYY-MM-DD`, date-times `YYYY-MM-DDTHH:MM:SSZ`, numbers plain decimals. Text is at most 64 characters of
-  letters, digits, spaces, and `. _ + @ & -`.
+- `is` takes `NULL` or `NOT_NULL`; `in` takes at most 20 values of one type. Text is limited to a safe
+  character set.
 - A refused field, operator, or value is refused after the schema was read and before any record is read,
   and the refusal names neither field nor value. The enum values of the schema serve only this check and
   never appear in a result, including `objects.get`.
@@ -126,8 +125,7 @@ passes the checked arguments only as variables; no argument becomes part of a qu
 GraphQL. Twenty reports a failed query as an answer with errors; Qatlas maps it to a class and shows no
 text of it.
 
-- `text` has 1 to 64 characters of letters, digits, spaces, and `. _ ' + @ & -`. `limit` is 1 to 100.
-  `objects` limits the search to a subset of the reachable objects; an object outside the connection is
+- `objects` limits the search to a subset of the reachable objects; an object outside the connection is
   ignored, and an empty remaining set is refused before the search is sent.
 - The searched objects are always named explicitly: the bound objects with targets, otherwise the
   non-system objects of the workspace catalog, each cut with `objects`. Hits of any other object are
@@ -142,14 +140,24 @@ failed runs. They work only on a connection without object targets and are refus
 otherwise. `workflow`, `workflowVersion`, and `workflowRun` are system objects, so the record tools never reach
 them; these tools use fixed routes and a fixed field selection.
 
-- `workflows.list` returns per workflow name, statuses, the last published version, and timestamps.
-  `workflows.get` adds the 50 newest versions with name, status, trigger type, step types, and number of
-  steps. `workflowruns.list` returns the runs of one workflow, newest first, optionally of one status, with
-  status, version, and timestamps.
+- `workflows.get` adds the 50 newest versions; `workflowruns.list` reads the runs of one workflow.
 - Step and trigger settings, run outputs, context, state, and error texts are never read out. Status,
   trigger, and step types come from fixed lists; any other value is shown as `unknown`.
 - Starting a workflow run is not possible with an API key: Twenty refuses it for keys, and Qatlas does not
   work around that.
+
+## Reading the data model
+
+`metaobjects.list`, `metaobjects.get`, and `metafields.get` (`read`) read object and field metadata
+(identifiers, labels, flags, select options) as a basis for schema and permission work. `objects.list` and
+`objects.get` show what the key can reach; these read Twenty's metadata API for the whole workspace.
+
+- Twenty requires the settings right "Data model" for them, and that right also allows changing and deleting
+  objects and fields. Give it only to a dedicated connection with its own API key; a 403 names the right.
+- Names, labels, descriptions, and options are untrusted workspace data of their own data class. Default
+  values, settings, and relation details are never read out. Field types come from a fixed list; any other
+  value is shown as `unknown`. Lists are capped, and a cut is marked.
+- No profile ticks them.
 
 ## Writing records
 
@@ -182,9 +190,6 @@ every field from the workspace catalog and builds the request body from the chec
   duplicate record; search the object first.
 - A 403 means the role of the API key lacks the right to write the object or one of the fields; Twenty's own
   text is never shown.
-
-The setup profile `write` ticks the read tools, these two record tools, and the link create tool. It adds no
-company change and no deletion or restore.
 
 ## Linking notes and tasks
 

@@ -284,6 +284,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(workflowsList, workflowsGroup), Handler: capability.Handler(invokeWorkflowsList)},
 		capability.Operation{Descriptor: inGroup(workflowsGet, workflowsGroup), Handler: capability.Handler(invokeWorkflowsGet)},
 		capability.Operation{Descriptor: inGroup(workflowRunsList, workflowsGroup), Handler: capability.Handler(invokeWorkflowRunsList)},
+		capability.Operation{Descriptor: inGroup(metaObjectsList, metadataGroup), Handler: capability.Handler(invokeMetaObjectsList)},
+		capability.Operation{Descriptor: inGroup(metaObjectsGet, metadataGroup), Handler: capability.Handler(invokeMetaObjectsGet)},
+		capability.Operation{Descriptor: inGroup(metaFieldsGet, metadataGroup), Handler: capability.Handler(invokeMetaFieldsGet)},
 		capability.Operation{Descriptor: inGroup(recordsDelete, recordsGroup), Handler: capability.Handler(invokeRecordsDelete)},
 		capability.Operation{Descriptor: inGroup(recordsRestore, recordsGroup), Handler: capability.Handler(invokeRecordsRestore)},
 		capability.Operation{Descriptor: inGroup(recordsDestroy, recordsGroup), Handler: capability.Handler(invokeRecordsDestroy)},
@@ -928,6 +931,12 @@ func primaryDomain(raw json.RawMessage) string {
 
 // get performs one bounded read against the configured origin and decodes the response into out.
 func (c *Client) get(ctx context.Context, op, path string, query url.Values, limit int64, out any) error {
+	return c.getWith(ctx, op, path, query, limit, out, defaultStatusTexts)
+}
+
+// getWith is get with the texts of a failed status chosen by the caller.
+func (c *Client) getWith(ctx context.Context, op, path string, query url.Values, limit int64, out any,
+	texts provider.StatusTexts) error {
 	if err := c.limiter.Wait(ctx); err != nil {
 		return provider.Waited(op, "Twenty", err)
 	}
@@ -950,7 +959,7 @@ func (c *Client) get(ctx context.Context, op, path string, query url.Values, lim
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		return c.responseError(op, response)
+		return c.responseErrorWith(op, response, texts)
 	}
 	if failure := provider.ReadJSON(op, "Twenty", response.Body, limit, out); failure != nil {
 		return failure
@@ -1011,16 +1020,22 @@ func (c *Client) changeWith(ctx context.Context, op, uncertain, method, path str
 // request and record detail into it, and the class plus the status is what a caller can act on. A 429
 // holds the rate limit of the key for the time Twenty asks for.
 func (c *Client) responseError(op string, response *http.Response) *provider.Error {
+	return c.responseErrorWith(op, response, defaultStatusTexts)
+}
+
+var defaultStatusTexts = provider.StatusTexts{
+	Subject: "Twenty",
+	Auth:    "Twenty rejected the API key",
+	Permission: "the workspace role of this API key may not perform this operation; check the role of " +
+		"the API key in Twenty",
+	NotFound: "this Twenty workspace does not hold this record or object",
+}
+
+func (c *Client) responseErrorWith(op string, response *http.Response, texts provider.StatusTexts) *provider.Error {
 	if response.StatusCode == http.StatusTooManyRequests {
 		c.limiter.HoldFor(provider.RetryAfter(response.Header))
 	}
-	return provider.ClassifyStatus(op, response.StatusCode, provider.StatusTexts{
-		Subject: "Twenty",
-		Auth:    "Twenty rejected the API key",
-		Permission: "the workspace role of this API key may not perform this operation; check the role of " +
-			"the API key in Twenty",
-		NotFound: "this Twenty workspace does not hold this record or object",
-	})
+	return provider.ClassifyStatus(op, response.StatusCode, texts)
 }
 
 func providerError(op, message string) error {

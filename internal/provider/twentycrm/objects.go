@@ -22,6 +22,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: recordsGroup, Title: "Records", Description: "Records of the reachable objects of the workspace"},
 	{ID: activityGroup, Title: "Notes and tasks", Description: "Links of notes and tasks to records"},
 	{ID: workflowsGroup, Title: "Workflows", Description: "Workflows of the workspace, their versions and runs"},
+	{ID: metadataGroup, Title: "Data model", Description: "Object and field metadata of the workspace; needs the Data model permission"},
 }
 
 func inGroup(d capability.Descriptor, group string) capability.Descriptor {
