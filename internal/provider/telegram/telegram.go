@@ -127,6 +127,7 @@ var messagesDelete = capability.Descriptor{
 var toolGroups = []config.ToolGroup{
 	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the bound chats"},
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
+	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -180,6 +181,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
 		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
+		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},
+		capability.Operation{Descriptor: filesDownload, Handler: capability.Handler(invokeFilesDownload)},
 	)
 }
 
