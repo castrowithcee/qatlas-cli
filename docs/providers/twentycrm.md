@@ -2,8 +2,8 @@
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
   objects, count by field), record write (create, update, batches), duplicate search and merge, record
-  trash (delete, restore, destroy), note and task link operations, workflow, member, and role read,
-  webhook operations, object targets, connection permissions, and safety boundaries.
+  trash (delete, restore, destroy), note and task link operations, workflow, member, role, and data model
+  read, webhook operations, object targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -46,12 +46,10 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
 - Workspace-wide tools work only on a connection without object targets; on any other connection they are
   refused before the key is read.
 
-`objects.list` and `objects.get` (`read`) show the reachable objects and, per object, each field with its
-JSON type, subfields of composite fields, whether a value is required or can be written, and the reachable
-object a relation points to. Relations to objects the connection does not reach are left out. The catalog is
-read from the workspace's generated API document (`/open-api/core`), which needs no right beyond the API
-key's ordinary access, not from the metadata API, which needs the settings right. Only names, types, and
-flags leave Qatlas; descriptions and options of the document never do.
+`objects.list` and `objects.get` (`read`) show the reachable objects and their fields; relations to objects the
+connection does not reach are left out. The catalog comes from the workspace's generated API document
+(`/open-api/core`), which needs no settings right, unlike the metadata API (see Reading the data model). Only
+names, types, and flags leave Qatlas; descriptions and options of the document never do.
 
 ## Reading records
 
@@ -72,8 +70,7 @@ Relation, array, and rich-text fields cannot be sorted by.
   only as `markdown`, never as its block document.
 - A cursor is bound to the connection, object, sort, and field selection that produced it; any other use is
   refused before a request is sent.
-- A value above the bounds (64 KiB per string, 4 levels of nesting, 100 entries per array) or an answer
-  above the response limit is an invalid response; Qatlas does not cut it.
+- A value or an answer above the bounds is an invalid response; Qatlas does not cut it.
 - Record values are untrusted workspace content and often personal data (names, emails, phone numbers,
   notes). They appear only in a result, never in errors, logs, or audit entries, and carry their own data
   class. Set `object/` targets to keep a connection away from objects whose records it does not need.
@@ -149,13 +146,19 @@ record tools never reach them; these tools use fixed routes and a fixed field se
 ## Reading members and roles
 
 `workspacemembers.list`, `workspacemembers.get`, and `roles.list` (`read`) are workspace-wide and show who can
-be assigned work and which roles exist, with a fixed field selection.
+be assigned work and which roles exist, with a fixed field selection. Members are personal data with their own
+data class; avatars and user identifiers are never read, and member values never appear in errors.
 
-- Members are personal data with their own data class; avatars and user identifiers are never read, and
-  member values never appear in errors.
 - `roles.list` sends one fixed query to the metadata API and reduces assigned members and API keys to counts;
   their names are never read. It needs the Twenty right "Roles", which also allows changing roles and
   permissions: use a connection with an API key of its own for it. No profile ticks it.
+
+## Reading the data model
+
+`metaobjects.list`, `metaobjects.get`, and `metafields.get` (`read`) are workspace-wide and read Twenty's
+metadata API for all objects and fields, as a basis for schema and permission work; default values, settings,
+and relation details are never read. They need the Twenty right "Data model", which also allows changing and
+deleting the schema: use a connection with an API key of its own for it. No profile ticks them.
 
 ## Writing records
 
@@ -253,16 +256,14 @@ tool to create a webhook or to change its target or signing key.
 Duplicates and merges act on records of one reachable object; there is no merge across objects. The
 identifiers are distinct UUIDs of that object.
 
-- `records.duplicates` takes 1 to 20 identifiers and reports, for each, the possible duplicates by the
-  criteria Twenty defines for the object, with their total count. It reads and changes nothing. Twenty
-  answers only for records it finds, so an identifier that does not exist makes the whole call fail.
-- `records.mergepreview` takes 2 to 9 identifiers and the position of the record that wins conflicts
-  (`conflict_priority_index`, counted from 0). It shows the record the merge would leave and changes nothing;
-  Twenty computes the preview in a dry run that no argument controls.
-- `records.merge` takes the same arguments and merges for real: the other records are deleted and their
-  relations are moved to the remaining record. Whether the deleted records can be restored is not promised.
-  It is offered only by a connection whose `tools` list names it, requires confirmation, and no profile ticks
-  it. Preview first, then merge.
+- `records.duplicates` reports the possible duplicates of each given record by the criteria Twenty defines
+  for the object and changes nothing. An identifier that does not exist makes the whole call fail.
+- `records.mergepreview` shows the record a merge would leave and changes nothing; Twenty computes the
+  preview in a dry run that no argument controls.
+- `records.merge` takes the arguments of the preview and merges for real: the other records are deleted and
+  their relations are moved to the remaining record. Whether the deleted records can be restored is not
+  promised. It is offered only by a connection whose `tools` list names it, and no profile ticks it. Preview
+  first, then merge.
 
 Duplicates and results are records like those of `records.get` (depth 0, rich text as markdown, relations
 only as identifier fields) and are untrusted workspace data. The answer of a merge must name one of the given
