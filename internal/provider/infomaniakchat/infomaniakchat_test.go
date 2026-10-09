@@ -219,6 +219,16 @@ func coreConfig() *config.Config {
 			"catdel": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
 				Tools:       []string{categoriesDelete.ID}},
+			// The webhook connections: "hooker" lists all four tools, "hookch" narrows teamA to chanA, "hookno"
+			// holds the permissions without listing them.
+			"hooker": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
+				Tools:       hookToolIDs},
+			"hookch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
+				Tools:       hookToolIDs},
+			"hookno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete}},
 			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete, config.PermissionUpdate}},
 		},
@@ -284,8 +294,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 56 {
-		t.Fatalf("tools = %+v, want 56", metadata.Tools)
+	if len(metadata.Tools) != 60 {
+		t.Fatalf("tools = %+v, want 60", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -350,6 +360,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		if has(id, messagesDelete.ID) || has(id, reactionsRemove.ID) {
 			t.Fatalf("profile %s selects a delete tool", id)
 		}
+		for _, hook := range hookTools {
+			if has(id, hook.ID) {
+				t.Fatalf("profile %s selects webhook tool %s", id, hook.ID)
+			}
+		}
 	}
 	for _, id := range []string{threadsList.ID, threadsGet.ID} {
 		if !has("read", id) || !has("messaging", id) {
@@ -398,6 +413,10 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 		if (tool.ID == categoriesList.ID || tool.ID == categoriesCreate.ID || tool.ID == categoriesUpdate.ID ||
 			tool.ID == channelNotificationsUpdate.ID) && (tool.RequiresToolAllowList || tool.Group != "channels") {
+			t.Fatalf("%s metadata = %+v", tool.ID, tool)
+		}
+		if strings.HasPrefix(tool.ID, Provider+".incomingwebhooks.") &&
+			(!tool.RequiresToolAllowList || tool.Group != "integrations") {
 			t.Fatalf("%s metadata = %+v", tool.ID, tool)
 		}
 		if tool.ID == reactionsRemove.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
