@@ -13,6 +13,8 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 )
 
+const closingInvoiceID = "5e6f7a8b-1c2d-4e3f-9a0b-1c2d3e4f5a6b"
+
 const salesVoucherID = "0c1b2a39-4d5e-4f60-8a71-92b3c4d5e6f7"
 
 // salesBody builds a voucher answer; extra members are appended to the shared base.
@@ -53,6 +55,10 @@ func salesCases() []salesCase {
 			(*Client).GetCreditNote, salesBody(pricedExtra), "", "", true},
 		{"delivery note", "lexware.deliverynotes.get", "/v1/delivery-notes/", "delivery note",
 			(*Client).GetDeliveryNote, salesBody(unpricedExtra), "", "", false},
+		{"dunning", "lexware.dunnings.get", "/v1/dunnings/", "dunning",
+			(*Client).GetDunning, salesBody(`"dueDate":"2026-06-30T00:00:00.000+02:00",` + pricedExtra), "", "", true},
+		{"down payment invoice", "lexware.downpaymentinvoices.get", "/v1/down-payment-invoices/", "down payment invoice",
+			(*Client).GetDownPaymentInvoice, salesBody(`"dueDate":"2026-06-30T00:00:00.000+02:00","closingInvoiceId":"` + closingInvoiceID + `",` + pricedExtra), "", "", true},
 	}
 }
 
@@ -208,5 +214,40 @@ func TestSalesVoucherToolsSatisfyTheirContractThroughTheApplicationCore(t *testi
 				}
 			}
 		})
+	}
+}
+
+func TestDunningAndDownPaymentInvoiceCarryTheirOwnMembers(t *testing.T) {
+	body := salesBody(`"dueDate":"2026-06-30T00:00:00.000+02:00","closingInvoiceId":"` + closingInvoiceID + `",` + pricedExtra)
+	serve(t, func(*http.Request) (*http.Response, error) { return jsonResponse(http.StatusOK, body), nil })
+	c, _ := client(t)
+	dunning, err := c.GetDunning(context.Background(), salesVoucherID)
+	if err != nil || dunning.DueDate != "2026-06-30T00:00:00.000+02:00" || dunning.ClosingInvoiceID != "" ||
+		dunning.DunnedInvoice == nil || *dunning.DunnedInvoice != (RelatedVoucher{ID: invoiceID, VoucherNumber: "RE1012", VoucherType: "invoice"}) {
+		t.Errorf("dunning = %#v, %v", dunning, err)
+	}
+	down, err := c.GetDownPaymentInvoice(context.Background(), salesVoucherID)
+	if err != nil || down.DueDate == "" || down.ClosingInvoiceID != closingInvoiceID || down.DunnedInvoice != nil {
+		t.Errorf("down payment invoice = %#v, %v", down, err)
+	}
+	credit, err := c.GetCreditNote(context.Background(), salesVoucherID)
+	if err != nil || credit.DueDate != "" || credit.ClosingInvoiceID != "" || credit.DunnedInvoice != nil {
+		t.Errorf("credit note = %#v, %v", credit, err)
+	}
+}
+
+func TestDunningWithoutInvoiceReferenceAndMalformedClosingIDOmitThem(t *testing.T) {
+	serve(t, func(*http.Request) (*http.Response, error) {
+		return jsonResponse(http.StatusOK, `{"id":"`+salesVoucherID+`","closingInvoiceId":"not-a-uuid",
+ "relatedVouchers":[{"id":"x","voucherType":"invoice"},{"id":"`+invoiceID+`","voucherType":"creditNote"}]}`), nil
+	})
+	c, _ := client(t)
+	dunning, err := c.GetDunning(context.Background(), salesVoucherID)
+	if err != nil || dunning.DunnedInvoice != nil {
+		t.Errorf("dunning = %#v, %v", dunning, err)
+	}
+	down, err := c.GetDownPaymentInvoice(context.Background(), salesVoucherID)
+	if err != nil || down.ClosingInvoiceID != "" {
+		t.Errorf("down payment invoice = %#v, %v", down, err)
 	}
 }

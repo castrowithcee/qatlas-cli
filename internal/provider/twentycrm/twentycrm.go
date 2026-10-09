@@ -1,7 +1,8 @@
 // Package twentycrm implements controlled company access to one Twenty workspace.
 //
 // Twenty generates its REST and GraphQL APIs from the schema of each workspace, so there is no global
-// static field reference. This provider therefore talks to the generated REST core API directly, reads
+// static field reference. This provider therefore talks to the generated REST core API directly (and to
+// fixed GraphQL documents where only that API offers a feature), reads
 // only the conservative core fields every workspace carries, and verifies during the connection test that
 // the workspace schema still offers them. Company names and domains arrive from the provider and are
 // treated as untrusted data: they are normalised into a stable Qatlas shape, passed through the output
@@ -219,7 +220,7 @@ func companyMutationDescriptor(action string, effect capability.Effect, idempote
 
 // readTools are the tools of the read profile; the write profile adds the record writes to them.
 var readTools = []string{companiesList.ID, companiesGet.ID, objectsList.ID, objectsGet.ID,
-	recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsGroupBy.ID, activitytargetsList.ID}
+	recordsList.ID, recordsGet.ID, recordsSearch.ID, recordsSearchAll.ID, recordsGroupBy.ID, activitytargetsList.ID}
 
 // Register adds Twenty metadata, its read-only connection test, and the bounded company operations.
 func Register(reg *capability.Registry) error {
@@ -273,6 +274,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(recordsGet, recordsGroup), Handler: capability.Handler(invokeRecordsGet)},
 		capability.Operation{Descriptor: inGroup(recordsGroupBy, recordsGroup), Handler: capability.Handler(invokeRecordsGroupBy)},
 		capability.Operation{Descriptor: inGroup(recordsSearch, recordsGroup), Handler: capability.Handler(invokeRecordsSearch)},
+		capability.Operation{Descriptor: inGroup(recordsSearchAll, recordsGroup), Handler: capability.Handler(invokeRecordsSearchAll)},
 		capability.Operation{Descriptor: inGroup(recordsCreate, recordsGroup), Handler: capability.Handler(invokeRecordsCreate)},
 		capability.Operation{Descriptor: inGroup(recordsUpdate, recordsGroup), Handler: capability.Handler(invokeRecordsUpdate)},
 		capability.Operation{Descriptor: inGroup(activitytargetsList, activityGroup), Handler: capability.Handler(invokeActivityTargetsList)},
@@ -284,6 +286,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(recordsBatchCreate, recordsGroup), Handler: capability.Handler(invokeRecordsBatchCreate)},
 		capability.Operation{Descriptor: inGroup(recordsBatchUpdate, recordsGroup), Handler: capability.Handler(invokeRecordsBatchUpdate)},
 		capability.Operation{Descriptor: inGroup(recordsBatchDelete, recordsGroup), Handler: capability.Handler(invokeRecordsBatchDelete)},
+		capability.Operation{Descriptor: inGroup(recordsDuplicates, recordsGroup), Handler: capability.Handler(invokeRecordsDuplicates)},
+		capability.Operation{Descriptor: inGroup(recordsMergePreview, recordsGroup), Handler: capability.Handler(invokeRecordsMergePreview)},
+		capability.Operation{Descriptor: inGroup(recordsMerge, recordsGroup), Handler: capability.Handler(invokeRecordsMerge)},
 	)
 }
 
