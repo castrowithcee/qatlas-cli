@@ -15,6 +15,8 @@ import (
 const (
 	davNS = "DAV:"
 	ocNS  = "http://owncloud.org/ns"
+	// ncNS carries the trash bin properties.
+	ncNS = "http://nextcloud.org/ns"
 )
 
 // The elements of a multi-status answer this parser navigates by.
@@ -39,19 +41,25 @@ const (
 	propFileID        = "fileid"
 	propSize          = "size"
 	propPermissions   = "permissions"
+	propTrashName     = "trashname"
+	propTrashOrigin   = "trashorigin"
+	propTrashDeleted  = "trashdeleted"
 )
 
 // wantedProps maps the requested properties to their keys. Every other property of an answer is dropped,
 // so a server cannot widen the result by returning more than it was asked for.
 var wantedProps = map[xml.Name]string{
-	{Space: davNS, Local: "displayname"}:      propDisplayName,
-	{Space: davNS, Local: "getcontenttype"}:   propContentType,
-	{Space: davNS, Local: "getcontentlength"}: propContentLength,
-	{Space: davNS, Local: "getlastmodified"}:  propLastModified,
-	{Space: davNS, Local: "getetag"}:          propETag,
-	{Space: ocNS, Local: "fileid"}:            propFileID,
-	{Space: ocNS, Local: "size"}:              propSize,
-	{Space: ocNS, Local: "permissions"}:       propPermissions,
+	{Space: davNS, Local: "displayname"}:               propDisplayName,
+	{Space: davNS, Local: "getcontenttype"}:            propContentType,
+	{Space: davNS, Local: "getcontentlength"}:          propContentLength,
+	{Space: davNS, Local: "getlastmodified"}:           propLastModified,
+	{Space: davNS, Local: "getetag"}:                   propETag,
+	{Space: ocNS, Local: "fileid"}:                     propFileID,
+	{Space: ocNS, Local: "size"}:                       propSize,
+	{Space: ocNS, Local: "permissions"}:                propPermissions,
+	{Space: ncNS, Local: "trashbin-filename"}:          propTrashName,
+	{Space: ncNS, Local: "trashbin-original-location"}: propTrashOrigin,
+	{Space: ncNS, Local: "trashbin-deletion-time"}:     propTrashDeleted,
 }
 
 // resource is one d:response of a multi-status answer, reduced to what this adapter reads: where the node

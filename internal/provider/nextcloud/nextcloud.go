@@ -60,6 +60,10 @@ var filesRoot = []string{"remote.php", "dav", "files"}
 // uploadsRoot are the fixed path segments of the upload area for chunked uploads; the user ID follows them.
 var uploadsRoot = []string{"remote.php", "dav", "uploads"}
 
+// trashbinRoot are the fixed path segments of the trash bin; the user ID and the collections trash and
+// restore follow them.
+var trashbinRoot = []string{"remote.php", "dav", "trashbin"}
+
 // methodPropfind is the HTTP method of every metadata read. The file operations add only their own fixed
 // methods (GET, PUT, DELETE, and the chunked upload methods); no method comes from a request.
 const methodPropfind = "PROPFIND"
@@ -346,6 +350,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(sharesList, groupShares), Handler: folderBound(invokeSharesList)},
 		capability.Operation{Descriptor: inGroup(sharesGet, groupShares), Handler: folderBound(invokeSharesGet)},
 		capability.Operation{Descriptor: inGroup(shareesSearch, groupShares), Handler: accountBound(invokeShareesSearch)},
+		capability.Operation{Descriptor: grouped(trashList), Handler: folderBound(invokeTrashList)},
+		capability.Operation{Descriptor: grouped(trashRestore), Handler: folderBound(invokeTrashRestore)},
+		capability.Operation{Descriptor: grouped(trashDelete), Handler: folderBound(invokeTrashDelete)},
 	)
 }
 
@@ -559,6 +566,8 @@ type Client struct {
 	// uploads are the decoded segments of the upload area of the same identity, below which chunked
 	// uploads create their one folder.
 	uploads []string
+	// trashbin are the decoded segments of the trash bin of the same identity.
+	trashbin []string
 	// install are the decoded segments of the optional installation path, below which the OCS API lives.
 	install []string
 	// user is the identity, which tells an own share from an incoming one.
@@ -631,8 +640,10 @@ func open(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolv
 	prefix = append(prefix, userID)
 	uploads := append(append([]string{}, install...), uploadsRoot...)
 	uploads = append(uploads, userID)
-	client := &Client{origin: origin, prefix: prefix, uploads: uploads, install: install, user: userID, root: root,
-		auth: header}
+	trashbin := append(append([]string{}, install...), trashbinRoot...)
+	trashbin = append(trashbin, userID)
+	client := &Client{origin: origin, prefix: prefix, uploads: uploads, trashbin: trashbin, install: install,
+		user: userID, root: root, auth: header}
 	client.http = provider.NoRedirectClient(defaultTimeout, transport)
 	return client, nil
 }

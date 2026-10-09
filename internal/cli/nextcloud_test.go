@@ -106,14 +106,14 @@ func TestNextcloudToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[16]{id,title,effect,requires,confirm,reason}:", "nextcloud.files.copy,Copy a Nextcloud file or folder,create,", "nextcloud.files.create,Create a Nextcloud file,create,", "nextcloud.files.delete,Delete a Nextcloud file,delete,", "nextcloud.files.get,Read or download a Nextcloud file,read,", "nextcloud.files.list,List Nextcloud files,read,", "nextcloud.files.move,Move or rename a Nextcloud file or folder,update,", "nextcloud.files.stat,Get Nextcloud file metadata,read,", "nextcloud.files.update,Update a Nextcloud file,update,", "nextcloud.folders.create,Create a Nextcloud folder,create,", "nextcloud.sharees.search,Search Nextcloud recipients,read,", "nextcloud.shares.get,Get a Nextcloud share,read,", "nextcloud.shares.list,List Nextcloud shares,read,", "nextcloud.versions.get,Read or download a Nextcloud file version,read,", "nextcloud.versions.list,List Nextcloud file versions,read,", "nextcloud.versions.restore,Restore a Nextcloud file version,update,",
+		"tools[19]{id,title,effect,requires,confirm,reason}:", "nextcloud.files.copy,Copy a Nextcloud file or folder,create,", "nextcloud.files.create,Create a Nextcloud file,create,", "nextcloud.files.delete,Delete a Nextcloud file,delete,", "nextcloud.files.get,Read or download a Nextcloud file,read,", "nextcloud.files.list,List Nextcloud files,read,", "nextcloud.files.move,Move or rename a Nextcloud file or folder,update,", "nextcloud.files.stat,Get Nextcloud file metadata,read,", "nextcloud.files.update,Update a Nextcloud file,update,", "nextcloud.folders.create,Create a Nextcloud folder,create,", "nextcloud.sharees.search,Search Nextcloud recipients,read,", "nextcloud.shares.get,Get a Nextcloud share,read,", "nextcloud.shares.list,List Nextcloud shares,read,", "nextcloud.trash.delete,Delete a Nextcloud trash item for good,delete,trash_id,true,", "nextcloud.trash.list,List the Nextcloud trash bin,read,", "nextcloud.trash.restore,Restore a Nextcloud trash item,update,trash_id,true,", "nextcloud.versions.get,Read or download a Nextcloud file version,read,", "nextcloud.versions.list,List Nextcloud file versions,read,", "nextcloud.versions.restore,Restore a Nextcloud file version,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--all", "--config", path))); len(got) != 16 {
-		t.Errorf("nextcloud tools = %v, want all sixteen tools", got)
+	if got := toolIDs(t, string(runNextcloudJSON(t, "", "tools", "nextcloud", "--all", "--config", path))); len(got) != 19 {
+		t.Errorf("nextcloud tools = %v, want all nineteen tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -274,8 +274,9 @@ func TestNextcloudMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 16 || searched.Operations[0].ID != "nextcloud.files.copy" ||
-		searched.Operations[15].ID != "nextcloud.versions.restore" {
+	if len(searched.Operations) != 19 || searched.Operations[0].ID != "nextcloud.files.copy" ||
+		searched.Operations[12].ID != "nextcloud.shares.list" || searched.Operations[15].ID != "nextcloud.trash.restore" ||
+		searched.Operations[18].ID != "nextcloud.versions.restore" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 

@@ -3,8 +3,8 @@ description: >
   Describes the Infomaniak kChat provider: token setup, the team and channel allow-list, the binding of direct
   and group channels, the team, channel, message, thread, search, reaction, attachment, and user reads, the
   attachment download and upload, the user scope check, pagination contracts, the confirmed channel create and
-  update, open, send, edit, delete, and reaction tools and their unclear-result contract, redirect handling,
-  and the boundary to kDrive, Mail, and CalDAV/CardDAV.
+  update, channel member, open, send, edit, delete, and reaction tools and their unclear-result contract,
+  redirect handling, and the boundary to kDrive, Mail, and CalDAV/CardDAV.
 type: knowledge
 edit: shared
 created: 2026-09-27
@@ -17,15 +17,16 @@ Infomaniak kChat is Infomaniak's Mattermost-compatible team chat product. This p
 instance and one or more of its teams, optionally narrowed to specific channels: it lists the bound teams,
 their channels, and the direct and group channels with their members, shows channel details and the public
 channels of a team, creates one confirmed channel and changes a channel's display name, purpose, header, or
-handle, opens one confirmed direct or group channel with members of the bound teams, reads messages and
-threads page by page, and sends or replies with exactly one confirmed message, which can carry uploaded files,
-reads, edits, and deletes single messages, reads, adds, and removes reactions, lists the attachments of a
-message, downloads one to a released local directory, uploads a released local file or small inline content to
-a channel, searches messages, files, and public channels of a bound team, and reads, lists, and searches the
-users of the bound teams and their presence, all through the instance's own `/api/v4/...` REST surface. kChat
-renders Markdown and mentions such as `@channel` in a message; Qatlas sends the text as written. It manages no
-team or membership, neither archives nor changes the visibility of a channel, changes no user, offers no
-previews or thumbnails, offers no custom emoji catalog, and configures no webhook.
+handle, lists, adds, removes, and re-roles the members of a channel, opens one confirmed direct or group
+channel with members of the bound teams, reads messages and threads page by page, and sends or replies with
+exactly one confirmed message, which can carry uploaded files, reads, edits, and deletes single messages,
+reads, adds, and removes reactions, lists the attachments of a message, downloads one to a released local
+directory, uploads a released local file or small inline content to a channel, searches messages, files, and
+public channels of a bound team, and reads, lists, and searches the users of the bound teams and their
+presence, all through the instance's own `/api/v4/...` REST surface. kChat renders Markdown and mentions such
+as `@channel` in a message; Qatlas sends the text as written. It manages no team, neither archives nor changes
+the visibility of a channel, changes no user, offers no previews or thumbnails, offers no custom emoji
+catalog, and configures no webhook.
 
 ## Configuration
 
@@ -96,6 +97,9 @@ channels of a bound team and drops channels of other teams and outside the allow
 its channel with the live channel check first and refuses direct and group channels and archived channels.
 `channels.create` works only in a bound team and only on a connection without a channel allow-list, because a
 channel that does not exist yet cannot be inside one; the refusal is local, before any secret is read.
+The `channelmembers` tools bind their `channel_id` the same way and additionally refuse direct and group
+channels; `channelmembers.add` proves each user a current member of the channel's own team, not merely of
+some bound team, with the user check below.
 
 A `post_id` (`messages.thread`, `messages.get`, `messages.update`, `messages.delete`, and the `reactions` tools) is
 bound through its channel: Qatlas reads the post, refuses an answer for another post or a deleted post, applies the
@@ -155,6 +159,10 @@ not that every team or channel on a narrower allow-list exists, is reachable, or
 | `infomaniakchat.channels.search` | read | public channels of one bound team matching a `term`, limited to the token's own reachable channels |
 | `infomaniakchat.channels.create` | create, confirmed | one public or private channel in a bound team |
 | `infomaniakchat.channels.update` | update, confirmed | display name, purpose, header, or handle of one channel |
+| `infomaniakchat.channelmembers.list` | read | the members of one public or private channel with `roles` and `scheme_admin`, page by page |
+| `infomaniakchat.channelmembers.add` | create, confirmed | 1 to 20 users, each the token's own user or a member of the channel's team, to one channel |
+| `infomaniakchat.channelmembers.remove` | delete, confirmed, tools list only | one user from one channel |
+| `infomaniakchat.channelmembers.roles` | update, confirmed, tools list only | the role of one member: `channel_user` or `channel_user channel_admin` |
 | `infomaniakchat.direct.list` | read | the token's proven direct and group channels kChat reports under one bound team, page by page |
 | `infomaniakchat.direct.open` | create, confirmed | the direct channel with one member of a bound team |
 | `infomaniakchat.groupmessages.open` | create, confirmed | the group channel with 2 to 7 members of the bound teams |
@@ -178,14 +186,20 @@ not that every team or channel on a narrower allow-list exists, is reachable, or
 | `infomaniakchat.users.search` | read | users of one bound team or channel matching a `term` |
 | `infomaniakchat.users.status` | read | the presence of 1 to 100 reachable users |
 
-The tools sort into the groups `teams`, `channels`, `messages` (with the `direct` and `groupmessages` tools),
-`files`, `reactions`, and `users`. The reads need no confirmation; channel create and update, the opens, send,
-update, delete, and the reaction changes always do, through the same confirmation mechanism every other
-confirmed Qatlas tool uses. The terminal editor starts a new connection on the setup profile `read`, which
-ticks the read tools, the channel, user, and attachment tools, the three searches, and `direct.list` included;
-`messaging` adds `direct.open`, `groupmessages.open`, `messages.send`, `messages.update`, `files.upload`, and
-`reactions.add` for a connection that should also open chats, post, edit, upload, and react; `channel-admin`
-reads teams and channels and adds `channels.create` and `channels.update`.
+The tools sort into the groups `teams`, `channels` (with the `channelmembers` tools), `messages` (with the
+`direct` and `groupmessages` tools), `files`, `reactions`, and `users`. The reads need no confirmation;
+channel create and update, the member changes, the opens, send, update, delete, and the reaction changes
+always do, through the same confirmation mechanism every other confirmed Qatlas tool uses. The terminal editor
+starts a new connection on the setup profile `read`, which ticks the read tools, the channel, user, and
+attachment tools, the three searches, and `direct.list` included; `messaging` adds `direct.open`,
+`groupmessages.open`, `messages.send`, `messages.update`, `files.upload`, and `reactions.add` for a connection
+that should also open chats, post, edit, upload, and react; `channel-admin` reads teams and channels and adds
+`channels.create`, `channels.update`, and `channelmembers.add`.
+
+`channelmembers.list` reports only `user_id`, `roles`, and `scheme_admin`. `channelmembers.remove` and
+`channelmembers.roles` are in no profile and are offered only to a connection whose tools list names them;
+the role change alters rights, and `roles` accepts exactly the two values above, checked locally. Adding an
+existing member changes nothing, and kChat notifies added users.
 
 `channels.create` takes `team_id`, `name`, `display_name`, `type` (`O` public or `P` private), and optionally
 `purpose` and `header`; `channels.update` takes `channel_id` and at least one of `display_name`, `purpose`,
@@ -260,6 +274,8 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
   may be lower than `limit` because hits outside the reachable channels are dropped. kChat documents the
   paging of its search as working only with Elasticsearch. `channels.search` has no paging. Searches never
   include archived channels.
+- `infomaniakchat.channelmembers.list` pages kChat's own `page` and `per_page` (`limit` 1 to 200); `has_more` is
+  true when the page was full.
 - `infomaniakchat.reactions.list` reads kChat's complete reaction array for the post and pages it itself like
   the team listing, reporting only `user_id`, `emoji_name`, and `created_at` per reaction.
 - `infomaniakchat.users.list` pages kChat's own `page` and `per_page`: `page` (1-based) and `limit` select one
@@ -277,14 +293,15 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 
 ## Confirmation and unclear results
 
-`infomaniakchat.channels.create`, `channels.update`, `direct.open`, `groupmessages.open`, `messages.send`,
-`.update`, `.delete`, `files.upload`, `reactions.add`, and `reactions.remove` require confirmation in their
-own request and change kChat with exactly one request, sent after the binding reads: Qatlas never repeats it
-automatically. An open answered with another channel type or, for a direct channel, other participants, an
-edit answered with another post or channel, or a reaction answered with another user, post, or emoji than the
-one addressed, is an unreadable answer. A failure whose request may nonetheless have reached kChat, such as a
-timeout, a connection reset, or a 5xx response, says so in its message and is reported as-is; the caller
-decides whether to check before repeating it, never Qatlas on its own.
+`infomaniakchat.channels.create`, `channels.update`, `channelmembers.add`, `.remove`, `.roles`, `direct.open`,
+`groupmessages.open`, `messages.send`, `.update`, `.delete`, `files.upload`, `reactions.add`, and
+`reactions.remove` require confirmation in their own request and change kChat with exactly one request, sent
+after the binding reads: Qatlas never repeats it automatically. An open answered with another channel type or,
+for a direct channel, other participants, an edit answered with another post or channel, or a reaction
+answered with another user, post, or emoji than the one addressed, is an unreadable answer. A failure whose
+request may nonetheless have reached kChat, such as a timeout, a connection reset, or a 5xx response, says so
+in its message and is reported as-is; the caller decides whether to check before repeating it, never Qatlas on
+its own.
 
 ## Errors
 
@@ -304,7 +321,8 @@ which may echo request content back at the caller:
 
 A `channel_id` or `post_id` outside the connection's allow-list, one the live check finds belongs to another
 team or to a direct or group channel with a participant outside the bound teams, a deleted post, a reply
-whose root post belongs to a different channel, an open naming a user outside the bound teams, and an open
+whose root post belongs to a different channel, an open naming a user outside the bound teams, a member add
+naming a user outside the channel's team, a role outside the two allowed, and an open
 on a connection with a channel allow-list are invalid requests, never provider errors, so a scope refusal
 is never mistaken for a missing channel or message. None names the refused user or channel.
 
@@ -319,10 +337,10 @@ them, including a message's own text.
 This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV are separate Infomaniak
 products with their own authentication, none of them the token this provider uses; see the `infomaniakdrive`
 provider's documentation for why each is its own sibling provider rather than one shared Infomaniak provider.
-Within kChat itself, this provider offers no team management, channel membership, visibility change,
-archiving, or deletion, no user change, no profile picture, no preview or thumbnail, no custom emoji catalog,
-no removal of another user's reaction, and no webhook configuration, and an edit changes only a message's
-text, never its attachments, pin state, or properties.
+Within kChat itself, this provider offers no team management, no membership of a direct or group channel, no
+visibility change, archiving, or deletion, no user change, no profile picture, no preview or thumbnail, no
+custom emoji catalog, no removal of another user's reaction, and no webhook configuration, and an edit changes
+only a message's text, never its attachments, pin state, or properties.
 
 ## Live test scenario
 
@@ -333,9 +351,11 @@ and by name, and browse the public channels across two pages; search messages, f
 hits from a channel outside the allow-list, a direct message, and another team are absent; create a disposable
 channel from a connection without a channel allow-list, change its header, and confirm the same call is
 refused on a connection with one; read `messages.list` of one channel across two pages and confirm `has_more`
-turns false on the last one; send one confirmed message to a disposable test channel and confirm exactly one
-message appears; upload one small file to it, send a message with the returned `file_id` and without `text`,
-and confirm the message carries the file; attempt to attach a file that is already attached, one uploaded by
+turns false on the last one; add a team member to it, list the members, change that member's role, and remove
+the member from connections that list the tools, and confirm a user who is only in another team is refused
+before the add; send one confirmed message to a disposable test channel and confirm exactly one message
+appears; upload one small file to it, send a message with the returned `file_id` and without `text`, and
+confirm the message carries the file; attempt to attach a file that is already attached, one uploaded by
 another user, and one uploaded for another channel, and confirm each is refused before a message is posted;
 send one confirmed reply with `root_id` and confirm it threads under the original message; read it with
 `messages.get`; edit its text and confirm only the text and the edit time change; delete the reply from a
