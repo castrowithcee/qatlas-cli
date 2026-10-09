@@ -304,7 +304,7 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 		"bookstack": {"default", "read", "create", "update", "delete"},
 		"lexware":   {"default", "read", "create", "update"},
 		"nextcloud": {"default", "read", "create", "update", "delete"},
-		"telegram":  {"default", "create", "update", "delete"},
+		"telegram":  {"default", "read", "create", "update", "delete"},
 		"twentycrm": {"default", "read", "create", "update", "delete"},
 	}
 	for provider, want := range providers {
