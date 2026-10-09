@@ -156,8 +156,20 @@ func newRecordWrite(resolved *config.Resolved, op string, raw json.RawMessage, c
 			return nil, invalidRequest(errWriteNone)
 		}
 	}
-	write := &recordWrite{Object: args.Object, ID: args.ID, Create: create, Values: make(map[string]any, len(args.Fields))}
-	for name, value := range args.Fields {
+	values, err := decodeWriteFields(args.Fields)
+	if err != nil {
+		return nil, err
+	}
+	return &recordWrite{Object: args.Object, ID: args.ID, Create: create, Values: values}, nil
+}
+
+// decodeWriteFields checks the names and the bounds of the values of one record and decodes them.
+func decodeWriteFields(fields map[string]json.RawMessage) (map[string]any, error) {
+	if len(fields) > maxWriteFields {
+		return nil, invalidRequest(errWriteLimit)
+	}
+	values := make(map[string]any, len(fields))
+	for name, value := range fields {
 		if !fieldNamePattern.MatchString(name) || systemWriteFields[name] {
 			return nil, invalidRequest(errWriteField)
 		}
@@ -168,9 +180,9 @@ func newRecordWrite(resolved *config.Resolved, op string, raw json.RawMessage, c
 		if checkValue(decoded, 0) != nil {
 			return nil, invalidRequest(errWriteLimit)
 		}
-		write.Values[name] = decoded
+		values[name] = decoded
 	}
-	return write, nil
+	return values, nil
 }
 
 func invokeRecordsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
