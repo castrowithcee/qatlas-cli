@@ -3,7 +3,7 @@ description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
   articles, the organization profile and reference data, voucher document downloads, invoice, quotation, order
   confirmation, credit note, delivery note and dunning drafts, issuing of sales vouchers, contact and article
-  writes, permissions, and credentials.
+  writes, article deletion, permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -58,6 +58,11 @@ delete the voucher afterwards; a credit note linked to an invoice reduces its op
 the inputs of its draft tool; invoices and credit notes may also be issued as the follow-up of another voucher
 with `preceding_voucher_id`, order confirmations and delivery notes not. A connection offers an issue tool
 only when its `tools` list names it, in addition to `create` in `permissions`; no profile ticks it.
+
+`lexware.articles.delete` deletes one article for good (`delete`), always with confirmation. Like the issue
+tools it is offered only when a connection's `tools` list names it, in addition to `delete` in `permissions`;
+no profile ticks it. A repeated call reports the article as missing; after an unclear outcome the error says
+that the article may have been deleted.
 
 `lexware.quotations.create` (with a required `expiration_date`), `lexware.orderconfirmations.create`,
 `lexware.creditnotes.create`, `lexware.deliverynotes.create` and `lexware.dunnings.create` create a quotation,
