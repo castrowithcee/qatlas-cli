@@ -644,7 +644,7 @@ func TestTokensSectionWithoutAVault(t *testing.T) {
 	if !strings.Contains(view, noVault) || !strings.Contains(view, "7 Tokens       -") {
 		t.Errorf("Tokens does not say that there is no vault:\n%s", view)
 	}
-	for _, action := range []string{"n new", "enter show", "x revoke", "d delete", "/ filter"} {
+	for _, action := range []string{"n new", "enter show", "d revoke", "d delete", "/ filter"} {
 		if strings.Contains(view, action) {
 			t.Errorf("Tokens offers %q:\n%s", action, view)
 		}

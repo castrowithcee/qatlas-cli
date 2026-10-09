@@ -257,6 +257,24 @@ func TestPayloadFieldsAreAddedAndRemoved(t *testing.T) {
 		t.Fatalf("focus on %q, want password", h.m.fields[h.m.focus].label)
 	}
 	h.m.Update(ctrlD())
+	if got := len(h.m.payloadRows()); got != 2 {
+		t.Fatalf("ctrl+d removed the field without asking: rows %v", h.m.payloadRows())
+	}
+	if !strings.Contains(h.m.View(), "y remove · n/esc keep") {
+		t.Fatalf("the question is not shown:\n%s", h.m.View())
+	}
+	h.m.Update(ctrlD())
+	h.press(t, "esc")
+	if got := len(h.m.payloadRows()); got != 2 {
+		t.Fatalf("esc removed the field: rows %v", h.m.payloadRows())
+	}
+	h.m.Update(ctrlD())
+	h.press(t, "n")
+	if got := len(h.m.payloadRows()); got != 2 {
+		t.Fatalf("n removed the field: rows %v", h.m.payloadRows())
+	}
+	h.m.Update(ctrlD())
+	h.press(t, "y")
 	if got := len(h.m.payloadRows()); got != 1 || h.m.fields[h.m.payloadRows()[0]].label != "username" {
 		t.Fatalf("after ctrl+d the value rows are %v", h.m.payloadRows())
 	}
@@ -300,6 +318,7 @@ func TestEditingAPayloadSecretKeepsEmptyValuesAndDeletesRemovedFields(t *testing
 	h.typeText(t, canaryPayload)
 	h.press(t, "tab")
 	h.m.Update(ctrlD())
+	h.press(t, "y")
 	h.press(t, "f2")
 	if h.m.fail != "" {
 		t.Fatalf("saving reported %q", h.m.fail)

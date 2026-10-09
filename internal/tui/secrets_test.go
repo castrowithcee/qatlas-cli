@@ -307,10 +307,10 @@ func TestVaultCredentialKeepsItsTypeOnAnUnchangedSave(t *testing.T) {
 		t.Errorf("the typed secret reached the screen:\n%s", screenOf(m))
 	}
 
-	// x removes it again, confirmed first.
-	press(t, m, "x")
+	// d removes it again, confirmed first.
+	press(t, m, "d")
 	if m.screen != screenConfirm {
-		t.Fatalf("x did not ask to confirm: screen %v", m.screen)
+		t.Fatalf("d did not ask to confirm: screen %v", m.screen)
 	}
 	pump(t, m, "y")
 	if m.fail != "" {
@@ -393,7 +393,7 @@ func TestTypeChangeIsRefusedWhileASecretIsStored(t *testing.T) {
 	focusField(t, m, storageLabel)
 	selectChoice(t, m, storageKeyring)
 	focusRole(t, m, "token-secret")
-	press(t, m, "x")
+	press(t, m, "d")
 	if m.screen != screenConfirm {
 		t.Fatalf("removing a stored secret is not confirmed: screen %v", m.screen)
 	}
@@ -530,13 +530,13 @@ func TestRemovingAStoredSecret(t *testing.T) {
 	setSecret(t, m, "token-id", "canary-removed-6a12")
 
 	focusRole(t, m, "token-id")
-	press(t, m, "x")
+	press(t, m, "d")
 	pump(t, m, "n")
 	if source, _ := secrets.Status("reader", config.Credential{Type: config.CredentialTypeKeyring}, "token-id"); source != secret.SourceStore {
 		t.Fatalf("the secret was removed although the answer was no: %q", source)
 	}
 
-	press(t, m, "x")
+	press(t, m, "d")
 	pump(t, m, "y")
 	if m.fail != "" {
 		t.Fatalf("removing reported %q", m.fail)
@@ -1185,7 +1185,7 @@ func TestRowsAreAskedAgainAfterAFailedWrite(t *testing.T) {
 	// The store stops answering, so the delete cannot clear it, even though it still holds the secret.
 	mem.Fail(secret.ErrUnavailable)
 	focusRole(t, m, "token-id")
-	press(t, m, "x")
+	press(t, m, "d")
 	pump(t, m, "y")
 
 	if m.fail == "" {
@@ -1263,7 +1263,7 @@ func TestTheGuardsWayOutReallyLeadsOut(t *testing.T) {
 	focusField(t, m, storageLabel)
 	selectChoice(t, m, storageKeyring)
 	focusRole(t, m, "token-id")
-	press(t, m, "x")
+	press(t, m, "d")
 	pump(t, m, "y")
 	if m.fail != "" {
 		t.Fatalf("the way out failed: %q", m.fail)

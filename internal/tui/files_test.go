@@ -155,7 +155,7 @@ func TestFilesListsAreEditedAndSaved(t *testing.T) {
 	press(t, m, "down", "e")
 	clearField(t, m)
 	typeText(t, m, more+"2")
-	press(t, m, "enter", "up", "x", "y")
+	press(t, m, "enter", "up", "d", "y")
 	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
@@ -168,11 +168,11 @@ func TestFilesListsAreEditedAndSaved(t *testing.T) {
 	// Emptied, both lists leave no key behind.
 	openConnection(t, m, "wiki")
 	openFilesList(t, m, filesReadLabel)
-	press(t, m, "x", "y")
+	press(t, m, "d", "y")
 	pump(t, m, "f2")
 	openConnection(t, m, "wiki")
 	openFilesList(t, m, filesWriteLabel)
-	press(t, m, "x", "y")
+	press(t, m, "d", "y")
 	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("saving no files failed: %s", m.fail)

@@ -16,7 +16,7 @@ import (
 )
 
 // The path list of a connection is edited in a screen of its own, opened from its row like the target list:
-// a adds a path, enter or e edits the selected one, and x or d removes it after asking. F2 keeps the list and
+// a adds a path, enter or e edits the selected one, and d removes it after asking. F2 keeps the list and
 // saves the form in one step, from every state of the screen, the typed path included. esc is one level back:
 // it closes an unchanged list, cancels an unchanged entry, and asks about a changed list or a typed entry,
 // so no change is dropped silently.
@@ -108,7 +108,7 @@ func (m *Model) updatePaths(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.editPath(m.pathList.cursor, path)
-	case "x", "d":
+	case "d":
 		if selected {
 			m.pathRemove = true
 			m.clearMessages()
@@ -336,7 +336,7 @@ func (m *Model) pathFrame() (string, string) {
 	}
 
 	var foot strings.Builder
-	keys := "a add · enter edit · x remove · up/down move · F2 save · esc close"
+	keys := "a add · enter edit · d remove · up/down move · F2 save · esc close"
 	switch {
 	case m.pathEdit >= 0:
 		label := "add path: "
@@ -362,7 +362,7 @@ func (m *Model) pathFrame() (string, string) {
 		// %q keeps control characters visible, but it would also double every backslash of a Windows path.
 		quoted := strings.ReplaceAll(fmt.Sprintf("%q", path), `\\`, `\`)
 		foot.WriteString("\n" + m.wrapped(warningStyle, "Remove "+quoted+" from the list?") + "\n")
-		keys = "y remove · n keep"
+		keys = "y remove · n/esc keep"
 	}
 	foot.WriteString(m.hint(keys))
 	return head.String(), foot.String() + m.notes()

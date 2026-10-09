@@ -117,7 +117,7 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	}
 
 	// Discarding leaves the row as it was, whatever changed in the list.
-	press(t, m, "enter", "x", "y")
+	press(t, m, "enter", "d", "y")
 	addTarget(t, m, "repos/octo/c")
 	press(t, m, "esc", "d")
 	if got := m.field(targetsLabel).entries; len(got) != 3 || got[0] != "repos/octo/a" {
@@ -128,7 +128,7 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	press(t, m, "enter", "down", "enter")
 	clearField(t, m)
 	typeText(t, m, "repos/octo/*")
-	press(t, m, "enter", "up", "x")
+	press(t, m, "enter", "up", "d")
 	if view := screenOf(m); !strings.Contains(view, `Remove "repos/octo/a"`) {
 		t.Fatalf("remove does not ask first:\n%s", view)
 	}
@@ -136,7 +136,7 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	if len(m.targetList.all) != 3 {
 		t.Fatalf("n removed a target: %v", m.targetList.all)
 	}
-	press(t, m, "x", "y", "f2")
+	press(t, m, "d", "y", "f2")
 	if m.fail != "" {
 		t.Fatalf("save failed: %s", m.fail)
 	}
@@ -151,13 +151,13 @@ func TestTheTargetListIsEditedEntryByEntry(t *testing.T) {
 	// One target is written as target, none as neither key.
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "x", "y", "f2")
+	press(t, m, "d", "y", "f2")
 	if saved := savedConnection(t, path, reg, "gh"); saved.Target != "orgs/octo/projects/1" || saved.Targets != nil {
 		t.Fatalf("saved %q / %v, want one target", saved.Target, saved.Targets)
 	}
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
-	press(t, m, "x", "y", "f2")
+	press(t, m, "d", "y", "f2")
 	if m.fail != "" {
 		t.Fatalf("saving no target failed: %s", m.fail)
 	}
@@ -247,7 +247,7 @@ func TestTheGuidedSetupEditsTargetsAlike(t *testing.T) {
 	press(t, m, "enter")
 	clearField(t, m)
 	typeText(t, m, "users/octo/projects/3")
-	press(t, m, "enter", "up", "x", "y", "f2")
+	press(t, m, "enter", "up", "d", "y", "f2")
 	if m.wizard.step != stepPermissions || m.fail != "" {
 		t.Fatalf("F2 in the setup list did not go on to the next step: step %d, error %q", m.wizard.step, m.fail)
 	}
@@ -305,7 +305,7 @@ func TestOneF2SavesTheTargetsFromEveryState(t *testing.T) {
 	openConnection(t, m, "gh")
 	openTargetList(t, m)
 	addTarget(t, m, "repos/octo/b")
-	press(t, m, "x", "f2")
+	press(t, m, "d", "f2")
 	if m.fail != "" || m.screen != screenList {
 		t.Fatalf("F2 at the remove question did not save: screen %v, error %q", m.screen, m.fail)
 	}
