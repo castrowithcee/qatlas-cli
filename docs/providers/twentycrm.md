@@ -1,8 +1,9 @@
 ---
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, count by
-  field), record write (create, update), duplicate search and merge, record trash (delete, restore, destroy),
-  and note and task link operations, object targets, connection permissions, and safety boundaries.
+  field), record write (create, update, batches), duplicate search and merge, record trash (delete,
+  restore, destroy), and note and task link operations, object targets, connection permissions, and
+  safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -14,9 +15,9 @@ updated: 2026-10-09
 A connection binds one API key to one managed or self-hosted workspace and, optionally, to a set of its
 objects (see Object targets). It can list and read companies (`read`), create them (`create`), change their
 name or primary domain (`update`), and delete them (`delete`). It can also create records of any reachable
-object and change their fields (see Writing records), delete, restore, and destroy them (see Deleting and
-restoring), find duplicates and merge records (see Merging records), and link notes and tasks to
-records (see Linking notes and tasks).
+object and change their fields, also up to 60 at a time (see Writing records and Batches), delete, restore,
+and destroy them (see Deleting and restoring), find duplicates and merge records (see Merging records),
+and link notes and tasks to records (see Linking notes and tasks).
 Mutations require confirmation and only use the generated REST routes of the company or of a reachable
 object. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error, unreadable
 answer) it reports the outcome as uncertain and does not repeat the request.
@@ -119,8 +120,8 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
 
 `records.create` and `records.update` (`create`, `update`) write one record of any reachable object. `create`
 posts the given `fields`; `update` patches only the fields named for the record `id` and needs at least one.
-Neither upserts or writes in batches. Qatlas takes the object, its route, and the shape of every
-field from the workspace catalog and builds the request body from the checked values only.
+Neither upserts or writes several records; see Batches. Qatlas takes the object, its route, and the shape of
+every field from the workspace catalog and builds the request body from the checked values only.
 
 - Every field is checked against the schema before the request: a `create` against the create shape of the
   object, with its required fields, an `update` against the update shape, without required fields. The
@@ -171,6 +172,30 @@ from an argument. An object that the schema gives no single link relation cannot
   repeated. A connection offers it only when its `tools` list names it.
 - Identifiers are UUIDs. Links are workspace data of the record data class.
 
+## Batches
+
+`records.batchcreate`, `records.batchupdate`, and `records.batchdelete` act on one reachable object with 1 to
+60 records in one confirmed request that Qatlas sends once.
+
+- `batchcreate` takes a list of records; each is checked like a `create`, and one refused record refuses the
+  batch before anything is written. With `upsert` Twenty matches the entries against existing records by the
+  unique fields of the object and changes the match instead of creating a record. Because `upsert` can change
+  records, the tool carries the effect `update` and is not idempotent: a connection needs the `update`
+  permission for it even without `upsert`.
+- `batchupdate` sets one set of fields, checked like an `update`, on a list of record identifiers. Different
+  values per record need one `update` each.
+- `batchdelete` moves a list of records to the trash like `delete` and is offered only by a connection whose
+  `tools` list names it. Permanent deletion and restore have no batch form.
+- `batchupdate` and `batchdelete` select their records only by the identifier list, sent as a filter on `id`.
+  An empty, duplicated, malformed, or longer list is refused before any request, because Twenty acts on every
+  record when the filter is missing.
+- It is not established whether Twenty applies a batch as a whole when one record fails. An answer that does
+  not name exactly the requested records (another count, a foreign or repeated identifier; for `upsert`,
+  another count) is reported as an uncertain partial effect, not as success, and so is any unclear result.
+  Read the records before repeating a batch.
+- The answer is reduced like a read and capped; limits and error handling otherwise follow Writing records.
+- No setup profile ticks the batch tools.
+
 ## Merging records
 
 Duplicates and merges act on records of one reachable object; there is no merge across objects. The
@@ -206,8 +231,8 @@ Companies and records of any reachable object share one trash contract:
 
 The record tools are `records.delete`, `records.restore`, and `records.destroy`. Each acts on one record of one
 reachable object, identified by its UUID, and sends one fixed route; no argument switches `delete` to permanent
-deletion or adds a filter, so there is no deletion or restore by filter or by list of identifiers. A refused
-object is rejected before the secret is read. Qatlas checks that the answer names the requested record. A 403 on
+deletion or adds a filter, so there is no deletion or restore by filter. A refused object is rejected before
+the secret is read. Qatlas checks that the answer names the requested record. A 403 on
 `records.delete` and `records.destroy` points to the right of the role of the key (Delete Records, Destroy
 Records); Twenty's own text is never shown. Qatlas sends each of them once and reports an unclear result as
 uncertain.

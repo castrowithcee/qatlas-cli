@@ -11,12 +11,21 @@ updated: 2026-10-08
 
 A connection binds one identity to typed targets (see Targets). The Files tools form the tool group `files` and
 work in the bound Files folder: they list and read metadata or up to 4 MiB of file content (`read`), create
-files only when absent (`create`), replace an existing version with an ETag precondition (`update`), delete
-only files with an ETag precondition (`delete`), and organise (see Organising). There is no recursive folder
-deletion.
+files only when absent (`create`), replace an existing version with an ETag precondition (`update`), and
+organise (see Organising). Deleting is separate (see Deleting).
 
 The instance URL must use `https`, without exception. Qatlas follows no redirect: a 3xx answer to any request
 is a clear failure that did not act on the server, and the app password only ever travels to the configured URL.
+
+## Deleting
+
+`nextcloud.files.delete` deletes one file and `nextcloud.folders.delete` one folder with everything in it, each
+bound to the ETag of the version read (`*` is refused) and confirmed. The root folder is never deletable. When
+the `files_trashbin` app is active Nextcloud moves the deleted item to the trash bin, otherwise it deletes it
+for good; Qatlas cannot tell which applies and has no trash control.
+
+Both tools require a tools list: no profile and no permission offers them. A connection without a `tools` list
+therefore offers neither; it no longer offers `nextcloud.files.delete` as before.
 
 ## Targets
 

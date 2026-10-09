@@ -19,8 +19,6 @@ import (
 
 const thirdID = "3c7f1dd0-15cc-4ce9-9f2a-7ffd5b3a1e04"
 
-func idList(ids ...string) string { return `["` + strings.Join(ids, `","`) + `"]` }
-
 func mergeArgs(ids string, index int) string {
 	return `{"object":"person","ids":` + ids + `,"conflict_priority_index":` + strconv.Itoa(index) + `}`
 }
