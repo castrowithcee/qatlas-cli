@@ -49,13 +49,13 @@ var setupLeads = [setupSteps]string{
 	"Permissions limit locally what agents may do through this connection. They never grant more than the " +
 		"credential is allowed at the provider, and they do not take away what it is allowed there. A new " +
 		"connection starts on the provider's recommended profile; every tick stays yours to change.",
-	"Nothing is written yet. enter stores the new secrets first and then the configuration; if the " +
+	"Nothing is written yet. F2 stores the new secrets first and then the configuration; if the " +
 		"configuration cannot be saved, those secrets are removed again.",
 }
 
 const (
 	savedLead = "The connection is saved. t runs the same connection test as the Connections list; " +
-		"enter opens the Connections list."
+		"esc opens the Connections list."
 
 	// The choices that add an entry instead of reusing one. A name cannot start with a parenthesis, so
 	// neither can stand for a configured entry.
@@ -446,8 +446,6 @@ func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 				return nil
 			}
 			return m.finishSetup()
-		case "enter", "q":
-			return m.finishSetup()
 		}
 		return nil
 	}
@@ -456,7 +454,7 @@ func (m *Model) updateSummary(key tea.KeyMsg) tea.Cmd {
 		return m.leaveSetup()
 	case "f3":
 		m.setupBack()
-	case "enter":
+	case "f2":
 		return m.startSetupSave()
 	}
 	return nil
@@ -568,17 +566,17 @@ func (m *Model) setupRebase() {
 // setupError turns a failed save into the way out. The configuration is unchanged in every case.
 func (m *Model) setupError(err error) string {
 	if errors.Is(err, secret.ErrUnavailable) || errors.Is(err, secret.ErrDisabled) {
-		return fmt.Sprintf("%v; nothing was saved. %s, then press enter again, or press F3 to go back "+
+		return fmt.Sprintf("%v; nothing was saved. %s, then press F2 again, or press F3 to go back "+
 			"and choose %s instead", err, secret.StoreAdvice(secret.StoreStateOf(err), platform), storageEnv)
 	}
 	return err.Error() + "; the configuration was not changed"
 }
 
-func setupKeys(step int, next string) string {
+func setupKeys(step int) string {
 	if step == stepProvider {
-		return next + " next · esc cancel setup"
+		return "F2 next · esc cancel setup"
 	}
-	return next + " next · F3 back · esc cancel setup"
+	return "F2 next · F3 back · esc cancel setup"
 }
 
 // setupHeading is the title of the current step and, with withLead, what it decides. The per-field form
@@ -609,14 +607,14 @@ func (m *Model) summaryView() string {
 	if warning := w.candidate.IdleWarning(w.plan.connection); warning != "" {
 		b.WriteString(m.indentedWith(warningStyle, "warning: "+warning) + "\n")
 	}
-	keys := "enter save · F3 back · esc cancel setup"
+	keys := "F2 save · F3 back · esc cancel setup"
 	switch {
 	case w.saving:
 		keys = "ctrl+c quit"
 	case w.saved != "" && m.testing:
-		keys = "esc cancel test · enter done"
+		keys = "esc cancel test"
 	case w.saved != "":
-		keys = "t test connection · enter done"
+		keys = "t test connection · esc connections list"
 	}
 	if w.saved != "" {
 		b.WriteString(m.testLine())

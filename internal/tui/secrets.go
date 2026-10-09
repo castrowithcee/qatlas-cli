@@ -898,9 +898,9 @@ func (m *Model) secretNextStep(credential, role string) string {
 	}
 	switch state := secret.StoreStage(m.checked[key]); state {
 	case secret.StoreEmpty:
-		return "next: press s to store it in " + secret.StoreLabel(platform)
+		return "next: press enter to store it in " + secret.StoreLabel(platform)
 	case secret.StoreLocked, secret.StoreUnavailable, secret.StoreTimedOut:
-		return fmt.Sprintf("next: %s, then press s; or export %s", secret.StoreAdvice(state, platform), env)
+		return fmt.Sprintf("next: %s, then press enter; or export %s", secret.StoreAdvice(state, platform), env)
 	case secret.StoreOff:
 		return fmt.Sprintf("next: %s; or export %s", secret.StoreAdvice(state, platform), env)
 	}
@@ -933,18 +933,19 @@ func (m *Model) secretRowHint(credential, role string, lead, full bool) string {
 	return strings.Join(parts, "; ")
 }
 
-// secretKeys names the keys of a secret row: s stores the value into the place the storage row now names.
+// secretKeys names the keys of a secret row: enter opens the prompt that stores the value into the place
+// the storage row now names.
 func (m *Model) secretKeys() string {
 	if m.credentialType() == config.CredentialTypeVault {
-		return "s store in the " + placeVault + " · x remove"
+		return "enter store in the " + placeVault + " · x remove"
 	}
-	return "s store in " + storageKeyring + " · x remove"
+	return "enter store in " + storageKeyring + " · x remove"
 }
 
 // secretRowKey handles the keys of a focused secret row.
 func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	action := key.String()
-	if action != "s" && action != "x" {
+	if action != "enter" && action != "x" {
 		return nil
 	}
 	if m.editing == "" {
@@ -963,7 +964,7 @@ func (m *Model) secretRowKey(role string, key tea.KeyMsg) tea.Cmd {
 	}
 
 	switch action {
-	case "s":
+	case "enter":
 		m.askSecret(role)
 	case "x":
 		// Removing a stored secret is irreversible, so it is confirmed like every other deletion here. A

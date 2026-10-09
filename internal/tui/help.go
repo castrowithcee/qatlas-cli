@@ -15,21 +15,7 @@ func (m *Model) openHelp() {
 	m.helpFrom = m.screen
 	m.screen = screenHelp
 	m.helpOffset = 0
-	m.helpDetail = ""
 	m.clearMessages()
-}
-
-// openFieldHelp shows the whole hint of the focused row in the help screen. The form shows a short form
-// of it, so that a long text never crowds out the rows and the keys; this is where the rest is read.
-func (m *Model) openFieldHelp() {
-	f := m.fields[m.focus]
-	text := m.fieldDetail(f)
-	if text == "" {
-		text = "this field has no further help"
-	}
-	m.openHelp()
-	m.helpFrom = screenForm
-	m.helpDetail = f.label + "\n\n" + strings.ReplaceAll(text, "; ", ";\n")
 }
 
 func (m *Model) updateHelp(key tea.KeyMsg) tea.Cmd {
@@ -38,16 +24,12 @@ func (m *Model) updateHelp(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "ctrl+c":
 		return m.quit()
-	case "esc", "?", "f1":
-		m.screen, m.helpDetail = m.helpFrom, ""
+	case "esc", "?":
+		m.screen = m.helpFrom
 	case "right", "l", "tab":
-		if m.helpDetail == "" {
-			m.helpTopic, m.helpOffset = wrap(m.helpTopic+1, topics), 0
-		}
+		m.helpTopic, m.helpOffset = wrap(m.helpTopic+1, topics), 0
 	case "left", "h", "shift+tab":
-		if m.helpDetail == "" {
-			m.helpTopic, m.helpOffset = wrap(m.helpTopic-1, topics), 0
-		}
+		m.helpTopic, m.helpOffset = wrap(m.helpTopic-1, topics), 0
 	case "down", "j":
 		m.helpOffset++
 	case "up", "k":
@@ -68,9 +50,6 @@ func (m *Model) updateHelp(key tea.KeyMsg) tea.Cmd {
 // helpLines is the text of the current topic, wrapped into the workspace.
 func (m *Model) helpLines() []string {
 	text := helptopics.All()[m.helpTopic].Text
-	if m.helpDetail != "" {
-		text = m.helpDetail
-	}
 	return strings.Split(helptopics.Wrap(text, m.usable(0)), "\n")
 }
 
@@ -92,18 +71,12 @@ func (m *Model) helpFrame() (string, string, int) {
 		names = append(names, topic.Name)
 	}
 	title := "Help  " + strings.Join(names, "  ")
-	if m.helpDetail != "" {
-		title = "Help  field"
-	}
 	base := m.wrapped(titleStyle, title) + "\n\n"
 	note := m.wrapped(hintStyle, macOSFunctionKeyNote) + "\n\n"
 	lines := len(m.helpLines())
 	keys := "left/right topic · up/down scroll · esc close"
 	if lipgloss.Width(keys) > m.width {
 		keys = "left/right topic · up/down · esc close"
-	}
-	if m.helpDetail != "" {
-		keys = "up/down scroll · esc close"
 	}
 	// layout lays the topic text out under head and reports how many lines of it fit; a topic longer than
 	// that gains the position line, which itself takes one of those lines.
