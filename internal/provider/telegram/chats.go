@@ -328,11 +328,7 @@ type chatBody struct {
 // pinned message content, and every other field never leave this function.
 func (c *Client) GetChat(ctx context.Context) (chatOut, error) {
 	const op = "get chat"
-	if c.target == "" {
-		return chatOut{}, providerError(op, "no chat was selected")
-	}
-	raw, err := c.call(ctx, spec{op: op, method: "getChat", limit: defaultResponseBytes, readOnly: true},
-		chatBody{ChatID: c.target})
+	raw, err := c.getChatRaw(ctx, op)
 	if err != nil {
 		return chatOut{}, err
 	}
@@ -354,6 +350,15 @@ func (c *Client) GetChat(ctx context.Context) (chatOut, error) {
 	out.Username = capText(out.Username, maxNameRunes)
 	out.Description = capText(out.Description, maxMessageLength)
 	return out, nil
+}
+
+// getChatRaw performs the single getChat request shared by every tool that reads a part of the chat.
+func (c *Client) getChatRaw(ctx context.Context, op string) (json.RawMessage, error) {
+	if c.target == "" {
+		return nil, providerError(op, "no chat was selected")
+	}
+	return c.call(ctx, spec{op: op, method: "getChat", limit: defaultResponseBytes, readOnly: true},
+		chatBody{ChatID: c.target})
 }
 
 // GetChatAdministrators reads getChatAdministrators of the selected chat.

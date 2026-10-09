@@ -147,15 +147,15 @@ by a connection whose `tools` list names them; no profile ticks them.
   The version can change between the read and the activation.
 - `retry` runs the steps of the run again, including steps with effects outside Twenty.
 
-## Reading members and roles
+## Members and roles
 
-`workspacemembers.list`, `workspacemembers.get`, and `roles.list` (`read`) are workspace-wide and show who can
-be assigned work and which roles exist, with a fixed field selection. Members are personal data with their own
-data class; avatars and user identifiers are never read, and member values never appear in errors.
+`workspacemembers.list`, `workspacemembers.get`, and `roles.list` (`read`) are workspace-wide. Members are
+personal data with their own data class; avatars, user identifiers, and member and key names are never read.
 
-- `roles.list` sends one fixed query to the metadata API and reduces assigned members and API keys to counts;
-  their names are never read. It needs the Twenty right "Roles", which also allows changing roles and
-  permissions: use a connection with an API key of its own for it. No profile ticks it.
+`roles.create`, `roles.update`, and `roles.delete` are confirmed, need a tools list that names them, and assign
+nothing. A role assigned to an API key or not editable is never changed or deleted: Qatlas reads it first and
+refuses before the change, also when that read is unclear. All five need the Twenty right "Roles", which also
+allows changing roles: use a key of its own. No profile ticks them.
 
 ## Data model
 
