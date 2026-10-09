@@ -238,6 +238,15 @@ A `file_ref` must come from the selected chat itself: one issued for another tar
 for another token, or of another kind is refused before the credential is read, and a raw file identifier is
 never accepted. Its size is not known locally; Telegram enforces the limits for it.
 
+`telegram.livephotos.send` (`create`) sends one live photo through `sendLivePhoto`: a video of at most 10 seconds
+and 10 MB and its still image of up to 10 MB. Each of the two files has its own source and takes exactly one of
+a pair: `local_path` or `file_ref` for the video, `photo_local_path` or `photo_file_ref` for the still image;
+both pairs are required, and the rules above for released directories, neutral names, and bound references
+apply to each. Format, binding, and size of both are checked before the credential is read. The options are
+`caption`, `parse_mode`, `reply_to_message_id`, `message_thread_id`, `disable_notification`, and
+`protect_content`; spoiler, effect, and paid settings are not offered, and a live photo is never part of an
+album. The result is `message_id`, `date`, and the `file_ref` of the video alone.
+
 The result is `message_id`, `date`, and a `file_ref` of the sent file, for an album one such entry per message
 under `messages`. Each tool sends exactly one request and reports an unclear outcome instead of repeating it.
 
@@ -248,7 +257,7 @@ The terminal editor starts a new connection on the setup profile `send`, which t
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
 `[telegram.bot.get]`, and the four chat read tools. The profile `messaging` also ticks `update`,
 `delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
-`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the eight media send
+`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the nine media send
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,

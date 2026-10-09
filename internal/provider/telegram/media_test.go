@@ -68,7 +68,7 @@ func (e *mediaEnv) transport() http.RoundTripper {
 		return response(200, `{"ok":true,"result":{"message_id":7,"date":1700000000,`+
 			`"photo":[{"file_id":"small"},{"file_id":"BIG"}],"document":{"file_id":"DOC"},"video":{"file_id":"VID"},`+
 			`"animation":{"file_id":"ANI"},"video_note":{"file_id":"VNOTE"},"audio":{"file_id":"AUD"},`+
-			`"voice":{"file_id":"VOI"}}}`), nil
+			`"voice":{"file_id":"VOI"},"live_photo":{"file_id":"LIVE","photo":[{"file_id":"STILL"}]}}}`), nil
 	})
 }
 
@@ -97,6 +97,8 @@ func (e *mediaEnv) run(t *testing.T, tool string, arguments any) (any, error) {
 	httpClient.Transport = e.transport()
 	ctx := capability.WithConfirmed(context.Background())
 	switch tool {
+	case kindLivePhoto:
+		return invokeLivePhotosSendWith(ctx, e.resolved, e.secrets, e.red, raw, httpClient)
 	case kindPhoto, kindDocument, kindVideo, kindAnimation, kindVideoNote, kindAudio, kindVoice:
 		return invokeSingleSend(ctx, e.resolved, e.secrets, e.red, raw, httpClient, tool)
 	}
@@ -307,7 +309,7 @@ func TestAlbumKeepsDocumentsApartAndChecksVideoLimits(t *testing.T) {
 // The schemas and argument texts of the media tools state the limits the code enforces.
 func TestMediaSchemaBoundsMatchTheCode(t *testing.T) {
 	for _, d := range []capability.Descriptor{photosSend, documentsSend, videosSend, animationsSend, videoNotesSend,
-		audioSend, voiceSend, mediaGroupsSend} {
+		audioSend, voiceSend, mediaGroupsSend, livePhotosSend} {
 		var schema struct {
 			Properties map[string]struct {
 				MaxLength int `json:"maxLength"`
@@ -340,6 +342,15 @@ func TestMediaSchemaBoundsMatchTheCode(t *testing.T) {
 		voiceSend} {
 		if want := strconv.Itoa(maxUploadBytes>>20) + " MB"; !strings.Contains(d.Description, "up to "+want) {
 			t.Errorf("%s description does not state %s", d.ID, want)
+		}
+	}
+	if want := strconv.Itoa(maxLivePhotoBytes>>20) + " MB"; strings.Count(livePhotosSend.Description, "10 MB") != 2 ||
+		maxLivePhotoBytes>>20 != 10 || !strings.Contains(livePhotosSend.Description, "up to "+want) {
+		t.Errorf("live photo description does not state %s for both files", want)
+	}
+	for _, a := range livePhotosSend.Arguments {
+		if (a.Name == "local_path" || a.Name == "photo_local_path") && !strings.Contains(a.Description, "10 MB") {
+			t.Errorf("%s does not state the limit", a.Name)
 		}
 	}
 	if want := strconv.Itoa(maxPhotoBytes>>20) + " MB"; !strings.Contains(photosSend.Description, "up to "+want) {
@@ -568,7 +579,7 @@ func TestMediaToolsDeclareRiskGroupAndProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, d := range []capability.Descriptor{photosSend, documentsSend, mediaGroupsSend, videosSend, animationsSend,
-		videoNotesSend, audioSend, voiceSend} {
+		videoNotesSend, audioSend, voiceSend, livePhotosSend} {
 		if d.Risk != mediaRisk || d.Group != groupMedia || d.LocalFiles != config.LocalFilesRead || d.RequiresToolAllowList ||
 			d.Risk.Effect != capability.EffectCreate || d.Risk.Idempotency != capability.IdempotencyNonIdempotent ||
 			d.Risk.Confirmation != capability.ConfirmationRequired || !d.Risk.OpenWorld || d.Risk.DataSensitivity == "" {
@@ -579,20 +590,22 @@ func TestMediaToolsDeclareRiskGroupAndProfile(t *testing.T) {
 	found := false
 	for _, profile := range metadata.Profiles {
 		if profile.ID == "media" {
-			found = !profile.Recommended && len(profile.Tools) == 8 && profile.Tools[0] == photosSend.ID &&
+			found = !profile.Recommended && len(profile.Tools) == 9 && profile.Tools[0] == photosSend.ID &&
 				profile.Tools[1] == documentsSend.ID && profile.Tools[2] == mediaGroupsSend.ID &&
 				profile.Tools[3] == videosSend.ID && profile.Tools[4] == animationsSend.ID && profile.Tools[5] == videoNotesSend.ID &&
-				profile.Tools[6] == audioSend.ID && profile.Tools[7] == voiceSend.ID
+				profile.Tools[6] == audioSend.ID && profile.Tools[7] == voiceSend.ID &&
+				profile.Tools[8] == livePhotosSend.ID
 		}
 	}
 	if !found {
-		t.Errorf("profiles = %+v, want media with exactly the eight send tools", metadata.Profiles)
+		t.Errorf("profiles = %+v, want media with exactly the nine send tools", metadata.Profiles)
 	}
 }
 
 func TestToolIDsOfAudioAndVoiceHaveNoPlural(t *testing.T) {
 	for d, id := range map[*capability.Descriptor]string{&audioSend: "telegram.audio.send", &voiceSend: "telegram.voice.send",
-		&photosSend: "telegram.photos.send", &videoNotesSend: "telegram.videonotes.send"} {
+		&photosSend: "telegram.photos.send", &videoNotesSend: "telegram.videonotes.send",
+		&livePhotosSend: "telegram.livephotos.send"} {
 		if d.ID != id {
 			t.Errorf("ID = %s, want %s", d.ID, id)
 		}
@@ -633,5 +646,158 @@ func TestAudioAlbumUsesInputMediaAudioAndRefusesMixing(t *testing.T) {
 	if _, err := c.sendAlbum(context.Background(), []mediaItem{{kind: kindPhoto, fileID: "P"},
 		{kind: kindAudio, fileID: "A"}}, mediaOptions{}); err == nil {
 		t.Error("an album of a photo and audio was accepted")
+	}
+}
+
+func TestLivePhotoSendsOneMultipartRequestWithBothFiles(t *testing.T) {
+	e := newMediaEnv(t)
+	video := e.write(t, "secret-clip.MP4", 12)
+	still := e.write(t, "secret-still.JPG", 7)
+	result, err := e.run(t, kindLivePhoto, map[string]any{"local_path": video, "photo_local_path": still,
+		"caption": "hi", "parse_mode": "HTML", "reply_to_message_id": 5, "message_thread_id": 9,
+		"disable_notification": true, "protect_content": true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(e.requests) != 1 || e.requests[0].path != "POST /bot"+testToken+"/sendLivePhoto" {
+		t.Fatalf("requests = %+v", e.requests)
+	}
+	fields, files := parts(t, e.requests[0])
+	wantFields := map[string]string{"chat_id": mediaChat, "caption": "hi", "parse_mode": "HTML",
+		"reply_parameters": `{"message_id":5}`, "message_thread_id": "9", "disable_notification": "true",
+		"protect_content": "true"}
+	if len(fields) != len(wantFields) {
+		t.Errorf("fields = %v", fields)
+	}
+	for k, v := range wantFields {
+		if fields[k] != v {
+			t.Errorf("field %s = %q, want %q", k, fields[k], v)
+		}
+	}
+	if len(files) != 2 || files["live_photo"] != [2]string{"file-1.MP4", strings.Repeat("x", 12)} ||
+		files["photo"] != [2]string{"file-2.JPG", strings.Repeat("x", 7)} {
+		t.Errorf("files = %v", files)
+	}
+	for _, name := range []string{"secret", e.dir} {
+		if bytes.Contains(e.requests[0].body, []byte(name)) {
+			t.Errorf("request leaks %q", name)
+		}
+	}
+	m := result.(map[string]any)
+	if len(m) != 3 || m["message_id"] != int64(7) || m["date"] != int64(1700000000) ||
+		m["file_ref"] != e.ref(mediaChat, "LIVE") {
+		t.Errorf("result = %v", m)
+	}
+}
+
+func TestLivePhotoMixesLocalAndReferenceSources(t *testing.T) {
+	e := newMediaEnv(t)
+	video := e.write(t, "v.mp4", 5)
+	still := e.write(t, "s.jpg", 3)
+	if _, err := e.run(t, kindLivePhoto, map[string]any{"local_path": video,
+		"photo_file_ref": e.ref(mediaChat, "STILLID")}); err != nil {
+		t.Fatal(err)
+	}
+	fields, files := parts(t, e.requests[0])
+	if fields["photo"] != "STILLID" || fields["live_photo"] != "" || len(files) != 1 ||
+		files["live_photo"] != [2]string{"file-1.mp4", "xxxxx"} {
+		t.Errorf("fields = %v files = %v", fields, files)
+	}
+	if _, err := e.run(t, kindLivePhoto, map[string]any{"file_ref": e.ref(mediaChat, "VIDID"),
+		"photo_local_path": still}); err != nil {
+		t.Fatal(err)
+	}
+	fields, files = parts(t, e.requests[1])
+	if fields["live_photo"] != "VIDID" || fields["photo"] != "" || len(files) != 1 ||
+		files["photo"] != [2]string{"file-2.jpg", "xxx"} {
+		t.Errorf("fields = %v files = %v", fields, files)
+	}
+	if _, err := e.run(t, kindLivePhoto, map[string]any{"file_ref": e.ref(mediaChat, "A"),
+		"photo_file_ref": e.ref(mediaChat, "B")}); err != nil {
+		t.Fatal(err)
+	}
+	fields, files = parts(t, e.requests[2])
+	if fields["live_photo"] != "A" || fields["photo"] != "B" || len(files) != 0 {
+		t.Errorf("fields = %v files = %v", fields, files)
+	}
+}
+
+func TestLivePhotoRejectsSourcesAndSizesBeforeSecretsAndIO(t *testing.T) {
+	outside := t.TempDir()
+	e := newMediaEnv(t, mediaChat, "-1002")
+	video := e.write(t, "v.mp4", 4)
+	still := e.write(t, "s.jpg", 4)
+	bigVideo := e.write(t, "big.mp4", maxLivePhotoBytes+1)
+	bigStill := e.write(t, "big.jpg", maxLivePhotoBytes+1)
+	ref := e.ref(mediaChat, "X")
+	cases := map[string]map[string]any{
+		"no video":          {"photo_local_path": still, "chat": mediaChat},
+		"no still":          {"local_path": video, "chat": mediaChat},
+		"nothing":           {"chat": mediaChat},
+		"both video":        {"local_path": video, "file_ref": ref, "photo_local_path": still, "chat": mediaChat},
+		"both still":        {"local_path": video, "photo_local_path": still, "photo_file_ref": ref, "chat": mediaChat},
+		"video above 10 MB": {"local_path": bigVideo, "photo_local_path": still, "chat": mediaChat},
+		"still above 10 MB": {"local_path": video, "photo_local_path": bigStill, "chat": mediaChat},
+		"raw video id":      {"file_ref": "AgADrawFileId", "photo_local_path": still, "chat": mediaChat},
+		"raw still id":      {"local_path": video, "photo_file_ref": "AgADrawFileId", "chat": mediaChat},
+		"foreign chat":      {"local_path": video, "photo_local_path": still, "chat": "-999"},
+		"several chats":     {"local_path": video, "photo_local_path": still},
+		"other chat video":  {"file_ref": e.ref("-1002", "X"), "photo_local_path": still, "chat": mediaChat},
+		"other chat still":  {"local_path": video, "photo_file_ref": e.ref("-1002", "X"), "chat": mediaChat},
+		"video outside":     {"local_path": filepath.Join(outside, "v.mp4"), "photo_local_path": still, "chat": mediaChat},
+		"still outside":     {"local_path": video, "photo_local_path": filepath.Join(outside, "s.jpg"), "chat": mediaChat},
+		"long caption":      {"local_path": video, "photo_local_path": still, "caption": strings.Repeat("x", 1025), "chat": mediaChat},
+		"parse mode":        {"local_path": video, "photo_local_path": still, "parse_mode": "Markdown", "chat": mediaChat},
+		"unknown argument":  {"local_path": video, "photo_local_path": still, "has_spoiler": true, "chat": mediaChat},
+	}
+	for name, arguments := range cases {
+		_, err := e.run(t, kindLivePhoto, arguments)
+		if err == nil {
+			t.Errorf("%s was accepted", name)
+			continue
+		}
+		for _, leaked := range []string{outside, "-999", e.dir} {
+			if strings.Contains(err.Error(), leaked) {
+				t.Errorf("%s error leaks %q: %v", name, leaked, err)
+			}
+		}
+	}
+	for _, name := range []string{"no still", "both still"} {
+		if _, err := e.run(t, kindLivePhoto, cases[name]); err == nil || !strings.Contains(err.Error(), "photo_local_path") {
+			t.Errorf("%s error = %v, want it to name the still image arguments", name, err)
+		}
+	}
+	if e.lookups != 0 || len(e.requests) != 0 {
+		t.Errorf("secret lookups = %d, requests = %d, want none", e.lookups, len(e.requests))
+	}
+	// Files of exactly 10 MB each stay within the limit.
+	okVideo := e.write(t, "ok.mp4", maxLivePhotoBytes)
+	okStill := e.write(t, "ok.jpg", maxLivePhotoBytes)
+	if _, err := e.run(t, kindLivePhoto, map[string]any{"local_path": okVideo, "photo_local_path": okStill,
+		"chat": mediaChat}); err != nil {
+		t.Errorf("10 MB files: %v", err)
+	}
+}
+
+func TestLivePhotoNeverRetriesAndReportsUncertainty(t *testing.T) {
+	for name, answer := range map[string]func(*http.Request) (*http.Response, error){
+		"timeout": func(*http.Request) (*http.Response, error) { return nil, &timeoutError{} },
+		"server": func(*http.Request) (*http.Response, error) {
+			return response(502, `{"ok":false,"description":"private"}`), nil
+		},
+		"unreadable": func(*http.Request) (*http.Response, error) { return response(200, `not json`), nil },
+		"no message": func(*http.Request) (*http.Response, error) { return response(200, `{"ok":true,"result":{}}`), nil },
+	} {
+		e := newMediaEnv(t)
+		e.answer = answer
+		path := e.write(t, "f.bin", 2)
+		_, err := e.run(t, kindLivePhoto, map[string]any{"local_path": path, "photo_local_path": path})
+		if err == nil || !strings.Contains(err.Error(), "may have taken effect") || strings.Contains(err.Error(), "private") ||
+			strings.Contains(err.Error(), e.dir) {
+			t.Errorf("%s err = %v", name, err)
+		}
+		if len(e.requests) != 1 {
+			t.Errorf("%s requests = %d, want 1", name, len(e.requests))
+		}
 	}
 }

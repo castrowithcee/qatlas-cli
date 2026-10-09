@@ -244,10 +244,11 @@ func Register(reg *capability.Registry) error {
 			Tools:       []string{pinsPin.ID, pinsUnpin.ID},
 		}, {
 			ID: "media", Title: "Send photos, videos, audio, documents, and albums",
-			Description: "sends photos, documents, videos, animations, video notes, audio files, voice messages, and albums " +
+			Description: "sends photos, live photos, documents, videos, animations, video notes, audio files, voice " +
+				"messages, and albums " +
 				"from released local files or file references to the bound chats; earlier messages stay as they are",
 			Tools: []string{photosSend.ID, documentsSend.ID, mediaGroupsSend.ID, videosSend.ID, animationsSend.ID,
-				videoNotesSend.ID, audioSend.ID, voiceSend.ID},
+				videoNotesSend.ID, audioSend.ID, voiceSend.ID, livePhotosSend.ID},
 		}, {
 			ID: "moderation", Title: "Unban members",
 			Description: "lifts bans in the bound chats; a user who is not banned is left untouched",
@@ -306,6 +307,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: videoNotesSend, Handler: capability.Handler(invokeVideoNotesSend)},
 		capability.Operation{Descriptor: audioSend, Handler: capability.Handler(invokeAudioSend)},
 		capability.Operation{Descriptor: voiceSend, Handler: capability.Handler(invokeVoiceSend)},
+		capability.Operation{Descriptor: livePhotosSend, Handler: capability.Handler(invokeLivePhotosSend)},
 	)
 }
 

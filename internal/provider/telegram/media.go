@@ -22,8 +22,10 @@ const (
 
 	// maxPhotoBytes is the Bot API's limit for a photo; maxUploadBytes bounds every other file and a whole album.
 	maxPhotoBytes = 10 << 20
-	minAlbumItems = 2
-	maxAlbumItems = 10
+	// maxLivePhotoBytes is the Bot API's limit for the video and for the still image of a live photo.
+	maxLivePhotoBytes = 10 << 20
+	minAlbumItems     = 2
+	maxAlbumItems     = 10
 	// uploadTimeout replaces the short request timeout for the one request that carries file content.
 	uploadTimeout = 10 * time.Minute
 	// maxAlbumResponseBytes bounds the answer of sendMediaGroup, which carries up to ten messages.
@@ -38,6 +40,9 @@ const (
 	kindVideoNote = "videonote"
 	kindAudio     = "audio"
 	kindVoice     = "voice"
+	// kindLivePhoto is the video of a live photo; kindLiveStill is its still image.
+	kindLivePhoto = "livephoto"
+	kindLiveStill = "livephotostill"
 )
 
 // kindSpecs holds the fixed Bot API method, upload field, display noun, example extension, and tool ID segment
@@ -50,6 +55,8 @@ var kindSpecs = map[string]struct{ method, field, noun, example, segment string 
 	kindVideoNote: {"sendVideoNote", "video_note", "video note", ".mp4", "videonotes"},
 	kindAudio:     {"sendAudio", "audio", "audio file", ".mp3", "audio"},
 	kindVoice:     {"sendVoice", "voice", "voice message", ".ogg", "voice"},
+	kindLivePhoto: {"sendLivePhoto", "live_photo", "live photo", ".mp4", "livephotos"},
+	kindLiveStill: {"sendLivePhoto", "photo", "live photo still", ".jpg", "livephotos"},
 }
 
 var mediaRisk = capability.Risk{
@@ -145,6 +152,44 @@ var videoNotesSend = singleDescriptor(kindVideoNote, "Send a Telegram video note
 var audioSend = singleDescriptor(kindAudio, "Send a Telegram audio file", "50 MB")
 
 var voiceSend = singleDescriptor(kindVoice, "Send a Telegram voice message", "50 MB")
+
+var livePhotosSend = func() capability.Descriptor {
+	arguments := append([]capability.Argument{
+		{Name: "local_path", Description: "Local live photo video to send, absolute or starting with ~/, inside a " +
+			"directory the connection releases for reading, at most 10 seconds and up to 10 MB; instead of file_ref"},
+		{Name: "file_ref", Description: "Signed file reference (media.file_ref) of the live photo video, received in " +
+			"the same bound chat or returned by an earlier send to it; instead of local_path"},
+		{Name: "photo_local_path", Description: "Local still image of the live photo, absolute or starting with ~/, " +
+			"inside a directory the connection releases for reading, up to 10 MB; instead of photo_file_ref"},
+		{Name: "photo_file_ref", Description: "Signed file reference of a photo received in the same bound chat or " +
+			"returned by an earlier send to it; instead of photo_local_path"},
+	}, mediaArguments("Caption of the live photo")...)
+	return capability.Descriptor{
+		ID:      Provider + ".livephotos.send",
+		Version: 1,
+		Title:   "Send a Telegram live photo",
+		Description: "Send one live photo, a video of at most 10 seconds and 10 MB with its still image up to 10 MB, " +
+			"to a bound chat of an explicit Telegram connection. The video comes from exactly one of local_path " +
+			"and file_ref, the still image from exactly one of photo_local_path and photo_file_ref; a local file " +
+			"must lie in a directory the connection releases for reading and is sent under a neutral name without " +
+			"its path. The result file_ref is that of the video. An unclear outcome is never repeated",
+		Tags:       []string{"telegram", "livephotos", "send", "files"},
+		Risk:       mediaRisk,
+		Provider:   Provider,
+		Group:      groupMedia,
+		LocalFiles: config.LocalFilesRead,
+		InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` + sourceProperties + `,` +
+			`"photo_local_path":` + localfile.LocalPathSchema + `,"photo_file_ref":` + fileRefSchema + `,` +
+			mediaOptionSchema + `},"additionalProperties":false}`),
+		OutputSchema: json.RawMessage(sentSchema),
+		Arguments:    arguments,
+		Fields:       sentFields,
+		Examples: []capability.Example{{
+			Description: "Send a live photo from a local video and a local still image",
+			Arguments:   json.RawMessage(`{"local_path":"~/shots/live.mp4","photo_local_path":"~/shots/live.jpg"}`),
+		}},
+	}
+}()
 
 var mediaGroupsSend = capability.Descriptor{
 	ID:      Provider + ".mediagroups.send",
@@ -246,8 +291,11 @@ func prepareSources(ctx context.Context, resolved *config.Resolved, op, chat str
 	for i, source := range sources {
 		kind := kinds[i]
 		limit := int64(maxUploadBytes)
-		if kind == kindPhoto {
+		switch kind {
+		case kindPhoto:
 			limit = maxPhotoBytes
+		case kindLivePhoto, kindLiveStill:
+			limit = maxLivePhotoBytes
 		}
 		hasPath, hasRef := source.LocalPath != nil, source.FileRef != ""
 		if hasPath == hasRef {
@@ -355,6 +403,56 @@ func invokeAudioSend(ctx context.Context, resolved *config.Resolved, secrets *se
 func invokeVoiceSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	return invokeSingleSend(ctx, resolved, secrets, red, raw, newHTTPClient(), kindVoice)
+}
+
+func invokeLivePhotosSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeLivePhotosSendWith(ctx, resolved, secrets, red, raw, newHTTPClient())
+}
+
+func invokeLivePhotosSendWith(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage, httpClient *http.Client) (any, error) {
+	const op = "send live photo"
+	var arguments struct {
+		Chat string `json:"chat"`
+		mediaSource
+		PhotoLocalPath *string `json:"photo_local_path"`
+		PhotoFileRef   string  `json:"photo_file_ref"`
+		mediaOptions
+	}
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if err := arguments.mediaOptions.validate(op); err != nil {
+		return nil, err
+	}
+	if (arguments.PhotoLocalPath != nil) == (arguments.PhotoFileRef != "") {
+		return nil, providerError(op, "exactly one of photo_local_path and photo_file_ref is required")
+	}
+	if resolved == nil {
+		return nil, providerError(op, "no connection was selected")
+	}
+	chat, err := selectChat(resolved, arguments.Chat)
+	if err != nil {
+		return nil, err
+	}
+	// Both pairs are checked, each with its limit, before the credential is resolved.
+	still := mediaSource{LocalPath: arguments.PhotoLocalPath, FileRef: arguments.PhotoFileRef}
+	prepared, err := prepareSources(ctx, resolved, op, chat, []string{kindLivePhoto, kindLiveStill},
+		[]mediaSource{arguments.mediaSource, still})
+	if err != nil {
+		return nil, err
+	}
+	defer closeUploads(prepared)
+	client, err := openChatWithHTTP(ctx, resolved, secrets, red, chat, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	items, err := client.load(op, prepared)
+	if err != nil {
+		return nil, err
+	}
+	return client.sendLivePhoto(ctx, items[0], items[1], arguments.mediaOptions)
 }
 
 func invokeSingleSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -559,6 +657,48 @@ func (c *Client) sendSingle(ctx context.Context, kind string, item mediaItem, o 
 	return sent, nil
 }
 
+// sendLivePhoto performs exactly one multipart request of sendLivePhoto: the video as live_photo and the still
+// image as photo, each as a file part or, for a reference, as a file_id form field.
+func (c *Client) sendLivePhoto(ctx context.Context, video, still mediaItem, o mediaOptions) (map[string]any, error) {
+	const op = "send live photo"
+	if c.target == "" {
+		return nil, providerError(op, "no chat was selected")
+	}
+	if video.kind != kindLivePhoto || still.kind != kindLiveStill {
+		return nil, providerError(op, "the media kind is not supported")
+	}
+	s := spec{op: op, method: kindSpecs[kindLivePhoto].method, limit: defaultResponseBytes}
+	fields := c.commonFields(o)
+	var files []filePart
+	for _, item := range []mediaItem{video, still} {
+		name := kindSpecs[item.kind].field
+		if item.fileID != "" {
+			fields = append(fields, field{name, item.fileID})
+		} else {
+			files = append(files, filePart{field: name, name: item.name, data: item.data})
+		}
+	}
+	if o.Caption != "" {
+		fields = append(fields, field{"caption", o.Caption})
+		if o.ParseMode != "" {
+			fields = append(fields, field{"parse_mode", o.ParseMode})
+		}
+	}
+	client := c
+	if files != nil {
+		client = c.withUploadTimeout()
+	}
+	raw, err := client.callMultipart(ctx, s, fields, files)
+	if err != nil {
+		return nil, err
+	}
+	sent, ok := c.parseSent(raw, kindLivePhoto)
+	if !ok {
+		return nil, withUncertainty(spec{}, invalidResponse(op))
+	}
+	return sent, nil
+}
+
 // commonFields are the plain form fields every multipart media request carries.
 func (c *Client) commonFields(o mediaOptions) []field {
 	fields := []field{{"chat_id", c.target}}
@@ -685,6 +825,7 @@ func (c *Client) parseSent(raw json.RawMessage, kind string) (map[string]any, bo
 		VideoNote *fileIDField  `json:"video_note"`
 		Audio     *fileIDField  `json:"audio"`
 		Voice     *fileIDField  `json:"voice"`
+		LivePhoto *fileIDField  `json:"live_photo"`
 	}
 	if json.Unmarshal(raw, &message) != nil || message.MessageID <= 0 || message.Date <= 0 {
 		return nil, false
@@ -706,6 +847,9 @@ func (c *Client) parseSent(raw json.RawMessage, kind string) (map[string]any, bo
 		fileID = message.Audio.FileID
 	case kind == kindVoice && message.Voice != nil:
 		fileID = message.Voice.FileID
+	case kind == kindLivePhoto && message.LivePhoto != nil:
+		// The file of a live photo is its video; the still image in photo is not returned.
+		fileID = message.LivePhoto.FileID
 	}
 	out := map[string]any{"message_id": message.MessageID, "date": message.Date}
 	if ref := signRef(c.token, refFile, c.target, fileID); ref != "" {
