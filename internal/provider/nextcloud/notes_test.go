@@ -23,7 +23,7 @@ import (
 
 const notesBase = "/index.php/apps/notes/api/v1/"
 
-func jsonResponse(status int, header http.Header, body string) *http.Response {
+func noteResponse(status int, header http.Header, body string) *http.Response {
 	if header == nil {
 		header = http.Header{}
 	}
@@ -51,22 +51,22 @@ func noteServer(t *testing.T, notes map[int]string, cursor string) *[]call {
 				header.Set("X-Notes-Chunk-Cursor", cursor)
 				header.Set("X-Notes-Chunk-Pending", "3")
 			}
-			return jsonResponse(200, header, "["+strings.Join(items, ",")+"]"), nil
+			return noteResponse(200, header, "["+strings.Join(items, ",")+"]"), nil
 		case strings.HasPrefix(path, "notes/"):
 			id, _ := strconv.Atoi(strings.TrimPrefix(path, "notes/"))
 			category, ok := notes[id]
 			if !ok {
-				return jsonResponse(404, nil, bodyCanary), nil
+				return noteResponse(404, nil, bodyCanary), nil
 			}
-			return jsonResponse(200, nil, noteJSON(id, category, "body of "+strconv.Itoa(id))), nil
+			return noteResponse(200, nil, noteJSON(id, category, "body of "+strconv.Itoa(id))), nil
 		case path == "settings":
-			return jsonResponse(200, nil, `{"notesPath":"Notes","fileSuffix":".md","other":"x"}`), nil
+			return noteResponse(200, nil, `{"notesPath":"Notes","fileSuffix":".md","other":"x"}`), nil
 		case strings.HasPrefix(path, "attachment/"):
 			return &http.Response{StatusCode: 200, ContentLength: 3, Header: http.Header{"Content-Type": {"image/png"}},
 				Body: io.NopCloser(strings.NewReader("PNG"))}, nil
 		}
 		t.Errorf("unexpected request %s", r.URL)
-		return jsonResponse(500, nil, ""), nil
+		return noteResponse(500, nil, ""), nil
 	})
 }
 
@@ -164,7 +164,7 @@ func TestNotesListCapsAndReportsTruncation(t *testing.T) {
 	}
 	items[0] = strings.Replace(items[0], `"T1"`, `"`+strings.Repeat("é", 700)+`"`, 1)
 	serve(t, func(*http.Request) (*http.Response, error) {
-		return jsonResponse(200, http.Header{"X-Notes-Chunk-Cursor": {"n"}}, "["+strings.Join(items, ",")+"]"), nil
+		return noteResponse(200, http.Header{"X-Notes-Chunk-Cursor": {"n"}}, "["+strings.Join(items, ",")+"]"), nil
 	})
 	got, err := runNote(invokeNotesList, listed("notes"), `{}`)
 	if err != nil {
@@ -203,7 +203,7 @@ func TestNotesGetAnswersAForeignNoteLikeAMissingOne(t *testing.T) {
 
 func TestNotesGetCapsTheContent(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) {
-		return jsonResponse(200, nil, noteJSON(8, "C", strings.Repeat("ä", maxNoteContent))), nil
+		return noteResponse(200, nil, noteJSON(8, "C", strings.Repeat("ä", maxNoteContent))), nil
 	})
 	got, err := runNote(invokeNotesGet, listed("notes"), `{"id":"8"}`)
 	if err != nil {
@@ -360,7 +360,7 @@ func TestNotesRequestsUseTheInstallationPathAndNeverFollowRedirects(t *testing.T
 						return &http.Response{StatusCode: status, Header: http.Header{"Location": {mainInstance + redirectTarget}},
 							Body: io.NopCloser(strings.NewReader(bodyCanary))}, nil
 					}
-					return jsonResponse(200, nil, noteJSON(1, "", "")), nil
+					return noteResponse(200, nil, noteJSON(1, "", "")), nil
 				})
 				err := run()
 				if err == nil || classOf(err) != provider.ClassProviderError || !strings.Contains(err.Error(), "does not follow") {
@@ -382,7 +382,7 @@ func TestNotesRequestsUseTheInstallationPathAndNeverFollowRedirects(t *testing.T
 
 func TestNotesRequestsKeepTheInstallationPath(t *testing.T) {
 	calls := serve(t, func(*http.Request) (*http.Response, error) {
-		return jsonResponse(200, nil, `{"notesPath":"Notes","fileSuffix":".txt"}`), nil
+		return noteResponse(200, nil, `{"notesPath":"Notes","fileSuffix":".txt"}`), nil
 	})
 	red := &redact.Redactor{}
 	resolved := resolvedConnection("x", "cloud-partner", carolUserEnv, carolTokenEnv, partnerInstance, "")
@@ -432,7 +432,7 @@ func TestNotesRegistrationGroupProfileAndRisk(t *testing.T) {
 
 func TestNotesListDropsPrunedEntries(t *testing.T) {
 	serve(t, func(*http.Request) (*http.Response, error) {
-		return jsonResponse(200, nil, "["+noteJSON(1, "", "")+","+noteJSON(2, "C", "")+`,{"id":3},{"id":4}]`), nil
+		return noteResponse(200, nil, "["+noteJSON(1, "", "")+","+noteJSON(2, "C", "")+`,{"id":3},{"id":4}]`), nil
 	})
 	got, err := runNote(invokeNotesList, listed("notes"), `{}`)
 	if err != nil {

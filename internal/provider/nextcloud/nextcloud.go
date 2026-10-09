@@ -332,6 +332,10 @@ func Register(reg *capability.Registry) error {
 				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID,
 				foldersCreate.ID, filesMove.ID, filesCopy.ID},
 		}, {
+			ID: "deck-read", Title: "Read Deck boards",
+			Description: "lists the bound Deck boards, reads a board with its labels and members, its stacks and cards, and single cards; changes nothing",
+			Tools:       []string{deckBoardsList.ID, deckBoardsGet.ID, deckStacksList.ID, deckCardsGet.ID},
+		}, {
 			ID: "notes-read", Title: "Read notes",
 			Description: "lists and reads notes, their embedded attachments, and the Notes settings; changes nothing",
 			Tools:       []string{notesList.ID, notesGet.ID, notesAttachmentsGet.ID, notesSettingsGet.ID},
@@ -369,6 +373,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(filesSearch), Handler: folderBound(invokeFilesSearch)},
 		capability.Operation{Descriptor: grouped(favoritesList), Handler: folderBound(invokeFavoritesList)},
 		capability.Operation{Descriptor: grouped(filesFavorite), Handler: folderBound(invokeFilesFavorite)},
+		capability.Operation{Descriptor: inGroup(deckBoardsList, groupDeck), Handler: deckBound(invokeDeckBoardsList)},
+		capability.Operation{Descriptor: inGroup(deckBoardsGet, groupDeck), Handler: deckBound(invokeDeckBoardsGet)},
+		capability.Operation{Descriptor: inGroup(deckStacksList, groupDeck), Handler: deckBound(invokeDeckStacksList)},
+		capability.Operation{Descriptor: inGroup(deckCardsGet, groupDeck), Handler: deckBound(invokeDeckCardsGet)},
 		capability.Operation{Descriptor: inGroup(notesList, groupNotes), Handler: notesBound(invokeNotesList)},
 		capability.Operation{Descriptor: inGroup(notesGet, groupNotes), Handler: notesBound(invokeNotesGet)},
 		capability.Operation{Descriptor: inGroup(notesAttachmentsGet, groupNotes), Handler: notesBound(invokeNotesAttachmentsGet)},
