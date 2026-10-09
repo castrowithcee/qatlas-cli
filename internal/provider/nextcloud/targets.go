@@ -43,6 +43,9 @@ var toolGroups = []config.ToolGroup{{
 	ID: groupShares, Title: "Shares",
 	Description: "Shares of and to the identity below the Files root folder, and the recipients of the instance",
 }, {
+	ID: groupDeck, Title: "Deck",
+	Description: "Deck boards, stacks, and cards of the identity that a deck target binds",
+}, {
 	ID: groupTalk, Title: "Talk",
 	Description: "Talk conversations the connection binds, their participants, and their messages",
 }}

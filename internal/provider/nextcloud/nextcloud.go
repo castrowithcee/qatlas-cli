@@ -332,6 +332,10 @@ func Register(reg *capability.Registry) error {
 				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID,
 				foldersCreate.ID, filesMove.ID, filesCopy.ID},
 		}, {
+			ID: "deck-read", Title: "Read Deck boards",
+			Description: "lists the bound Deck boards, reads a board with its labels and members, its stacks and cards, and single cards; changes nothing",
+			Tools:       []string{deckBoardsList.ID, deckBoardsGet.ID, deckStacksList.ID, deckCardsGet.ID},
+		}, {
 			ID: "talk-read", Title: "Read Talk conversations",
 			Description: "lists bound Talk conversations and their participants and reads their messages; changes nothing",
 			Tools:       []string{talkRoomsList.ID, talkRoomsGet.ID, talkParticipantsList.ID, talkMessagesList.ID},
@@ -369,6 +373,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(filesSearch), Handler: folderBound(invokeFilesSearch)},
 		capability.Operation{Descriptor: grouped(favoritesList), Handler: folderBound(invokeFavoritesList)},
 		capability.Operation{Descriptor: grouped(filesFavorite), Handler: folderBound(invokeFilesFavorite)},
+		capability.Operation{Descriptor: inGroup(deckBoardsList, groupDeck), Handler: deckBound(invokeDeckBoardsList)},
+		capability.Operation{Descriptor: inGroup(deckBoardsGet, groupDeck), Handler: deckBound(invokeDeckBoardsGet)},
+		capability.Operation{Descriptor: inGroup(deckStacksList, groupDeck), Handler: deckBound(invokeDeckStacksList)},
+		capability.Operation{Descriptor: inGroup(deckCardsGet, groupDeck), Handler: deckBound(invokeDeckCardsGet)},
 		capability.Operation{Descriptor: inGroup(talkRoomsList, groupTalk), Handler: invokeTalkRoomsList},
 		capability.Operation{Descriptor: inGroup(talkRoomsGet, groupTalk), Handler: invokeTalkRoomsGet},
 		capability.Operation{Descriptor: inGroup(talkParticipantsList, groupTalk), Handler: invokeTalkParticipantsList},
