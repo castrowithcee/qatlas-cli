@@ -13,9 +13,9 @@ updated: 2026-10-09
 
 Infomaniak kChat is Infomaniak's Mattermost-compatible team chat product. This provider binds one kChat
 instance and one or more of its teams, optionally narrowed to specific channels, and reads and changes
-channels, channel members, direct and group channels, messages, threads, reactions, pins, attachments, and
-users through the instance's own `/api/v4/...` REST surface. kChat renders Markdown and mentions such as
-`@channel` in a message; Qatlas sends the text as written.
+channels, channel members, direct and group channels, messages, threads, reactions, pins, attachments,
+users, and incoming webhooks through the instance's own `/api/v4/...` REST surface. kChat renders Markdown
+and mentions such as `@channel` in a message; Qatlas sends the text as written.
 
 ## Configuration
 
@@ -75,9 +75,6 @@ and a `post_id` go through the same two checks `infomaniakdrive` applies to a `d
    its own: the same token can belong to teams of several customers. A channel of another team, or a check
    that failed or came back unreadable, aborts the request; there is no silent fallback.
 
-Refusals are invalid requests, never name the foreign target, and never carry message text into an error or
-a log.
-
 Per tool family:
 
 - `channels.get` takes `channel_id` or `team_id` with `name`; the channel kChat answers with must belong to a
@@ -96,6 +93,8 @@ Per tool family:
   detail is returned or any change is sent. `pins.list` also drops every post kChat reports for another
   channel.
 - A reply confirms, by reading the named `root_id`, that the root post belongs to the same `channel_id`.
+- A `hook_id` (`incomingwebhooks.get`, `.update`, `.delete`) is bound through its channel like a post, but
+  only in a bound team. `.list` keeps webhooks of live channels the token belongs to, inside the allow-list.
 - A file (`files.info`, `files.download`) is bound only through the `post_id` kChat reports in its info:
   Qatlas reads the info first, refuses a file without a `post_id` or a deleted file, and applies the post
   binding before any content is requested. `messages.files` binds its `post_id` the same way.
@@ -124,8 +123,8 @@ live channels inside the allow-list and never direct or group channels, sends on
 every hit outside that set, including a file hit without a `channel_id`. Because the set comes from the
 token's own channels, a public channel the token has not joined yields no hit.
 
-A successful `qatlas connection test` proves only that the token is accepted, not that every team or channel
-of the allow-list exists, is reachable, or belongs to it.
+A successful `qatlas connection test` proves only that the token is accepted, not that a team or channel
+of the allow-list exists or is reachable.
 
 ## Tools
 
@@ -139,6 +138,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | `files` | `files.info`, `.search`, `.download` (writes a local file) | `files.upload` (reads a local file) | |
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
 | `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
+| `integrations` | | | `incomingwebhooks.list`, `.get`, `.update`, `.delete` |
 
 The reads need no confirmation; every other tool always does, through the confirmation mechanism of every
 confirmed Qatlas tool. The tools of the last column are in no profile and offered only to a connection whose
@@ -149,22 +149,19 @@ keeps the channel restorable. kChat's own refusals, for example of the default c
 management rights, stay `permission` or `provider-error`.
 
 The terminal editor starts a new connection on the setup profile `read` (all read tools, `direct.list` and
-the searches included). `messaging` adds `direct.open`, `groupmessages.open`, `messages.send`,
-`messages.update`, `files.upload`, `reactions.add`, `messages.pin`, `messages.unpin`, `status.set`,
-`customstatus.set`, and `customstatus.clear`. `profile.update` is in no profile. `channel-admin`
-reads teams and channels and adds `channels.create`, `channels.update`, and `channelmembers.add`.
+the searches included). `messaging` adds the opens, `messages.send`, `.update`, `.pin`, `.unpin`,
+`files.upload`, `reactions.add`, and the own status tools; `channel-admin` adds `channels.create`,
+`.update`, and `channelmembers.add`. `profile.update` and the webhook tools are in no profile.
 
 Behaviour beyond the schemas:
 
 - `teams.get` and `teammembers.*` take a bound `team_id`, checked locally. `teams.get` never returns the
   invitation ID, email, or allowed domains; `teammembers.roles` changes only a live member of that team.
-- `channels.create` and `channels.update` never create or change a direct or group channel; `update` sends
-  only the given fields. Adding an existing member or reaction changes nothing, and kChat notifies added
-  users.
+- `channels.create` and `.update` never create or change a direct or group channel; `update` sends only the
+  given fields. Re-adding a member or reaction changes nothing; kChat notifies added users.
 - Opening a direct or group channel returns the existing one. Every named user is proven a member of a bound
   team first, the own user is added by Qatlas, and repeated IDs count once. A connection with a channel
-  allow-list opens no channel, refused before any secret is read, because the channel could fall outside
-  the list; name the channel as a target instead.
+  allow-list opens no channel, refused before any secret is read; name the channel as a target instead.
 - `status.set`, `customstatus.set`, `.clear`, and `profile.update` always address the token's own user, read
   from `GET /api/v4/users/me` and never from an argument, and act for it in every team of the instance (for the
   bot with a bot token). `profile.update` sends only `nickname`, `first_name`, `last_name`, and `position`.
@@ -189,6 +186,10 @@ Behaviour beyond the schemas:
   redirect, for example to a storage host, is a `provider-error` and is not followed. Attachment results
   carry the data sensitivity `infomaniak-kchat-files`; file names and media types are untrusted data, and
   `include_deleted` is never sent.
+- `incomingwebhooks.*`, reads included, need a tools list because a webhook's ID is the secret of its post
+  URL; they carry the data sensitivity `infomaniak-kchat-integration-secrets`, `hook_id` is redacted from
+  every error, and only `.list` returns IDs. `.update` takes `display_name` and `description` (at least
+  one) and writes the webhook back as read, so channel, username, picture, and lock stay.
 - A search term may use kChat's `from:`, `in:`, and `ext:` syntax; the reachable-channel filter applies
   afterwards. The term is never part of an error.
 - Users are output through a fixed field allow-list; `email` only when kChat reports one to the token.
@@ -204,11 +205,10 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 - `teams.list`, `channels.list`, `reactions.list`, and `pins.list` read kChat's complete array, which has
   no pagination of its own, and page it themselves: `page` (1-based) and `limit` select a window of the
   already scope-filtered result, and the answer reports `page`, `pages`, `total`, and `count`.
-- `channels.browse`, `archivedchannels.list`, `channelmembers.list`, `teammembers.list`, and `users.list` page
-  kChat's own `page` and `per_page`; `has_more` is true when kChat's page was full. Dropped channels or
-  users can make `count` lower than the limit. `users.search` takes only `limit` and has no further page.
-- `messages.list` pages kChat's own `GetPostsForChannel` pagination, newest first, and reports `has_more`
-  from kChat's `has_next`.
+- `channels.browse`, `archivedchannels.list`, `incomingwebhooks.list`, `channelmembers.list`,
+  `teammembers.list`, and `users.list` page kChat's own `page` and `per_page`; `has_more` is true when
+  kChat's page was full. Dropped channels or users can make `count` lower than the limit. `users.search` takes only `limit` and has no further page.
+- `messages.list` pages kChat's `GetPostsForChannel`, newest first; `has_more` is kChat's `has_next`.
 - `messages.search` and `files.search` pass `page` and `limit` to kChat's own search and read no further
   page; `has_more` is true when kChat's page was full, and `count` may be lower because hits outside the
   reachable channels are dropped. kChat documents the paging of its search as working only with
@@ -225,11 +225,11 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 
 All confirmed tools require confirmation in their own request and change kChat with exactly one request,
 sent after the binding reads: Qatlas never repeats it automatically. An answer that does not match what was
-addressed (another channel type or participants for an open, another post or channel for an edit, no `OK`
-status for a pin, another user, post, or emoji for a reaction) is an unreadable answer. A failure whose
-request may nonetheless have reached kChat, such as a timeout, a connection reset, or a 5xx response, says
-so in its message and is reported as-is; the caller decides whether to check before repeating it, never
-Qatlas on its own.
+addressed (another channel type or participants for an open, another post, channel, or webhook for an edit,
+no `OK` status for a pin or delete, another user, post, or emoji for a reaction) is an unreadable answer. A
+failure whose request may nonetheless have reached kChat, such as a timeout, a connection reset, or a 5xx
+response, says so in its message and is reported as-is; the caller decides whether to check before
+repeating it, never Qatlas on its own.
 
 ## Errors
 
@@ -247,17 +247,17 @@ Errors keep stable classes and never carry the token, a message's text, or a raw
 | `provider-error` | every other rejection, including a redirect on an endpoint that must not answer with one |
 
 Every scope refusal is an invalid request, never a provider error, so it is never mistaken for a missing
-channel or message. This covers a `channel_id` or `post_id` outside the allow-list, one the live check
-finds in another team or in a direct or group channel with a participant outside the bound teams, a deleted
-post, a reply whose root belongs to a different channel, an open or member add naming a user outside the
-bound teams or the channel's team, a role outside the two allowed, and an open on a connection with a
-channel allow-list. None names the refused user or channel.
+channel or message. This covers a `channel_id` or `post_id` outside the allow-list, one the live check finds
+in another team or in a direct or group channel with a participant outside the bound teams, a deleted post,
+a reply whose root belongs to a different channel, an open or member add naming a user outside the bound
+teams or the channel's team, a role outside the two allowed, a webhook outside the bound teams or allow-list,
+and an open on a connection with a channel allow-list. None names the refused user, channel, or hook ID.
 
 ## Untrusted data
 
-Team, channel, message, and user content come from the instance and are untrusted data. Qatlas normalises
-them into a stable envelope and never renders them, follows a link inside them, or executes anything
-derived from them, including a message's own text.
+Team, channel, message, user, and webhook content come from the instance and are untrusted data. Qatlas
+normalises them into a stable envelope and never renders them, follows a link inside them (a webhook's
+picture URL included), or executes anything derived from them.
 
 ## Boundary
 
@@ -267,8 +267,8 @@ provider's documentation for why each is its own sibling provider. Within kChat,
 creation, change, or deletion, no adding or removing of team members, no invitation, no permanent deletion,
 move, scheme, or moderation change of a channel, no membership change of a direct or group channel, no change
 of another user or of other profile fields, no profile picture, no preview or thumbnail, no custom emoji
-catalog, no removal of another user's reaction, and no webhook configuration. An edit changes only a message's
-text, never its attachments, pin state, or properties.
+catalog, no removal of another user's reaction, no creating of webhooks, and no change of where a webhook
+posts. An edit changes only a message's text, never its attachments, pin state, or properties.
 
 ## Live test scenario
 
@@ -287,6 +287,8 @@ A live test against a real kChat instance checks, in order:
 - A reply threads under its root; pin and unpin show in `pins.list` without other channels' messages; an
   edit changes only text and edit time; deleting the reply keeps the root; reactions add, list, remove.
 - A download matches `size`, and a storage-host redirect is a `provider-error`.
+- Webhooks list without those of other teams or outside the allow-list; a disposable one changes name and
+  description, keeps its channel, and stops working once deleted.
 - Status and custom status set and clear, and a profile update, change only the token's own user; the
   profile keeps its other fields.
 - A user only in another team is refused by `users.get` and `users.status` and absent from list and search.

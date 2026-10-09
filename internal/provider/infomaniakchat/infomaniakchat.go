@@ -54,10 +54,10 @@
 // upload that is never attached.
 //
 // Creating, changing, or deleting teams, adding or removing team members, invitations, changes to other
-// users, profile pictures, previews and thumbnails, the custom emoji catalog, and webhooks are deliberately
-// out of scope: this provider lists the teams, channels, and direct and group channels a connection may
-// reach, reads the details and members of a bound team and, only when a connection's tools list names it,
-// sets one current member's team role (the invitation identifier is never read), reads channel details and
+// users, profile pictures, previews and thumbnails, the custom emoji catalog, and creating webhooks or
+// changing where one posts are deliberately out of scope: this provider lists the teams, channels, and
+// direct and group channels a connection may reach, reads the details and members of a bound team and,
+// only when a connection's tools list names it, sets one current member's team role (the invitation identifier is never read), reads channel details and
 // the public channels of a bound team, creates one confirmed channel in a bound team (only for a connection
 // without a channel allow-list, because a new channel cannot be inside one), changes the display name,
 // purpose, header, or handle of one confirmed public or private channel, lists the members of a public or
@@ -71,12 +71,15 @@
 // presence, searches the messages, files, and public channels of a bound team, sends or replies with exactly
 // one confirmed message, optionally with own uploads attached, changes the text of one confirmed message,
 // adds one confirmed reaction of the token's own user, pins or unpins one confirmed message, and, only when a
-// connection's tools list names it, deletes one confirmed message or removes one own reaction. The token's
-// own presence, custom status, and four display profile fields are the only user data it changes, always for
-// the user read from users/me and never taken from an argument. kChat renders Markdown and mentions such as
-// @channel in a message, so the text is sent as written. Every value a listing or a read answers with arrives
-// from the provider and is treated as untrusted data: normalised into a stable envelope, passed through the
-// output encoders, and never rendered, executed, or stored.
+// connection's tools list names it, deletes one confirmed message or removes one own reaction. Only when a
+// connection's tools list names them, it also lists, reads, describes, and deletes the incoming webhooks of
+// bound channels: a webhook's ID is the secret of its post URL, so those tools carry their own data
+// sensitivity, bind every webhook through its channel like a post, and write a webhook back with its target
+// unchanged. The token's own presence, custom status, and four display profile fields are the only user data
+// it changes, always for the user read from users/me and never taken from an argument. kChat renders Markdown
+// and mentions such as @channel in a message, so the text is sent as written. Every value a listing or a read
+// answers with arrives from the provider and is treated as untrusted data: normalised into a stable envelope,
+// passed through the output encoders, and never rendered, executed, or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
 // no proactive spacing of its own; a 429 kChat itself reports is still classified and, when it names a
@@ -485,7 +488,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat for bound teams: messages, search, files, reactions, pins, users, presence, own status and profile, team roles, and channels with members, visibility, and lifecycle",
+		Description:        "Infomaniak kChat for bound teams: messages, search, files, reactions, pins, users, presence, own status and profile, team roles, channels with members, visibility, and lifecycle, and incoming webhooks",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -610,6 +613,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(messagesSearch), Handler: capability.Handler(invokeMessagesSearch)},
 		capability.Operation{Descriptor: withGroup(filesSearch), Handler: capability.Handler(invokeFilesSearch)},
 		capability.Operation{Descriptor: withGroup(channelsSearch), Handler: capability.Handler(invokeChannelsSearch)},
+		capability.Operation{Descriptor: withGroup(incomingWebhooksList), Handler: capability.Handler(invokeIncomingWebhooksList)},
+		capability.Operation{Descriptor: withGroup(incomingWebhooksGet), Handler: capability.Handler(invokeIncomingWebhooksGet)},
+		capability.Operation{Descriptor: withGroup(incomingWebhooksUpdate), Handler: capability.Handler(invokeIncomingWebhooksUpdate)},
+		capability.Operation{Descriptor: withGroup(incomingWebhooksDelete), Handler: capability.Handler(invokeIncomingWebhooksDelete)},
 	)
 }
 
