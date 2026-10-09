@@ -305,7 +305,7 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 		"lexware":   {"default", "read", "create", "update"},
 		"nextcloud": {"default", "read", "create", "update", "delete"},
 		"telegram":  {"default", "read", "create", "update", "delete"},
-		"twentycrm": {"default", "read", "create", "update", "delete"},
+		"twentycrm": {"default", "read", "create", "update", "delete", "execute"},
 	}
 	for provider, want := range providers {
 		if got := m.permissionChoices(provider); !reflect.DeepEqual(got, want) {
