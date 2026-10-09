@@ -54,7 +54,7 @@ func TestVaultTypeChangeRefusedWhileASecretIsStored(t *testing.T) {
 			focusField(t, m, storageLabel)
 			selectChoice(t, m, storageVault)
 			focusRole(t, m, "token-secret")
-			press(t, m, "x")
+			press(t, m, "d")
 			pump(t, m, "y")
 			if m.fail != "" {
 				t.Fatalf("removing the vault secret reported %q", m.fail)

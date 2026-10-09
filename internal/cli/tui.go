@@ -89,7 +89,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"existing one): a name, where its values are kept (system keyring or vault, never environment\n" +
 			"variables), an optional description that discovery publishes, and one masked row per field. Type\n" +
 			"a field name in the new field row and press enter to add its row; ctrl+d removes the focused\n" +
-			"field, and a removed field's stored value is deleted when you save. Each value is typed masked,\n" +
+			"field after asking, and a removed field's stored value is deleted when you save. Each value is typed masked,\n" +
 			"never shown or prefilled, and at least 4 characters; on an existing payload secret an empty row\n" +
 			"keeps the stored value. Saving stores the values and the configuration entry together, in an\n" +
 			"admin session. A connection releases payload secrets with forward_secrets: its form gets a\n" +
@@ -124,7 +124,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"the configuration, unencrypted or encrypted to a passphrase, for a machine without a usable\n" +
 			"keyring; storing its very first secret, here or with 'qatlas credential set', offers one, typed\n" +
 			"masked and twice, and leaving it empty keeps the vault unencrypted. On a role row, enter opens a\n" +
-			"masked prompt that stores the secret in the place the secrets row names; x removes it. On Linux, macOS, and Windows, storing or removing\n" +
+			"masked prompt that stores the secret in the place the secrets row names; d removes it after asking. On Linux, macOS, and Windows, storing or removing\n" +
 			"a vault secret here, or through the guided setup's own save, is handed on to a vault process that\n" +
 			"holds the vault unlocked outside this run, exactly the way 'qatlas credential set' and 'qatlas\n" +
 			"credential delete' already do; elsewhere, or when no such process runs, there is nothing to tell.\n" +
@@ -165,8 +165,8 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"name. Every action on a token needs the admin session above: n creates one from a name, one or\n" +
 			"more connections that read a vault credential, ticked in a picker, and an optional expiry\n" +
 			"(YYYY-MM-DD or an RFC 3339 time), like 'qatlas vault token create'; enter opens its detail, where\n" +
-			"s shows its value and hides it again, only there and only while the session lasts; x revokes it\n" +
-			"after asking. While the vault is unencrypted or locked, the section says so instead of a list.\n\n" +
+			"s shows its value and hides it again, only there and only while the session lasts; d revokes it\n" +
+			"after asking, y confirms and n or esc keeps it. While the vault is unencrypted or locked, the section says so instead of a list.\n\n" +
 			"8 Logs shows the invocation log, read only, the same log 'qatlas vault logs verify' checks. The\n" +
 			"bar on top reads Mode: Day, Range, or All and, for the first two, the date or the range of UTC\n" +
 			"days: tab moves the focus from the rows to the bar's fields and back, left/right change the\n" +
@@ -216,7 +216,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"groups, folded or not, and space on a group row then acts on the matches only. The groups only\n" +
 			"arrange the list: the saved tools are the same IDs as without them.\n\n" +
 			"The targets row of a connection, in its form and in the scope step of the guided setup alike,\n" +
-			"holds a list. enter, space, or / opens it: a adds a target, enter edits the selected one, and x or\n" +
+			"holds a list. enter, space, or / opens it: a adds a target, enter edits the selected one, and\n" +
 			"d removes it after asking. F2 keeps the list and saves the connection in one step, taking a\n" +
 			"target that is still being typed first; in the guided setup it goes on to the next step instead,\n" +
 			"since the setup saves only from its summary. esc closes an unchanged list; after a change, or with\n" +
@@ -241,7 +241,7 @@ func newTUICommand(opts *Options, reg *capability.Registry, buildVersion string)
 			"The paths row of a connection form holds the directories the connection is bound to, each\n" +
 			"absolute or starting with ~/; without paths the connection applies in every project. The row\n" +
 			"opens its list like the targets row, with the same keys: a adds a path, enter or e edits the\n" +
-			"selected one, x or d removes it after asking, F2 keeps the list and saves the connection, and\n" +
+			"selected one, d removes it after asking, F2 keeps the list and saves the connection, and\n" +
 			"esc asks before it drops a changed list or a typed path. While a path is typed, tab takes the\n" +
 			"suggested directory and up/down switch between several; only directories are suggested, and with nothing\n" +
 			"typed the directory the TUI was started in. A path that does not exist yet is taken as typed,\n" +

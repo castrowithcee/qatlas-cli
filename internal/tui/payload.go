@@ -135,7 +135,8 @@ func (m *Model) payloadKey(key tea.KeyMsg) bool {
 		m.addPayloadField()
 		return true
 	case current.kind == fieldMasked && key.String() == "ctrl+d":
-		m.removePayloadField()
+		m.payloadRemoveAsk = true
+		m.clearMessages()
 		return true
 	}
 	return false

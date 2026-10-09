@@ -86,7 +86,7 @@ func TestTokensNeedAnEncryptedVault(t *testing.T) {
 			t.Errorf("the section does not show %q:\n%s", want, view)
 		}
 	}
-	for _, action := range []string{"n new", "enter show", "x revoke", "/ filter"} {
+	for _, action := range []string{"n new", "enter show", "d revoke", "/ filter"} {
 		if strings.Contains(view, action) {
 			t.Errorf("an unencrypted vault's Tokens section offers %q:\n%s", action, view)
 		}
@@ -113,7 +113,7 @@ func TestTokensWhileLocked(t *testing.T) {
 	if !strings.Contains(view, "The vault is locked") || !strings.Contains(view, "enter unlock") {
 		t.Errorf("the section does not explain the locked vault with enter as the way out:\n%s", view)
 	}
-	if strings.Contains(view, "kunde-a-ci") || strings.Contains(view, "x revoke") {
+	if strings.Contains(view, "kunde-a-ci") || strings.Contains(view, "d revoke") {
 		t.Errorf("the locked section lists a token or offers to revoke one:\n%s", view)
 	}
 
@@ -123,7 +123,7 @@ func TestTokensWhileLocked(t *testing.T) {
 		t.Fatalf("Tokens lists %v after unlocking, want kunde-a-ci", m.list.all)
 	}
 	view = m.View()
-	for _, want := range []string{"kunde-a-ci", "personal", "no expiry", "7 Tokens       1", "n new", "x revoke"} {
+	for _, want := range []string{"kunde-a-ci", "personal", "no expiry", "7 Tokens       1", "n new", "d revoke"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the unlocked list does not show %q:\n%s", want, view)
 		}
@@ -299,7 +299,7 @@ func TestTokenValueIsShownOnlyOnRequest(t *testing.T) {
 	}
 }
 
-// x revokes a token only after asking; n keeps it and returns where the question was asked, y revokes it in
+// d revokes a token only after asking; n keeps it and returns where the question was asked, y revokes it in
 // the vault and returns to the list.
 func TestRevokingATokenAsksFirst(t *testing.T) {
 	store, dir, v := newTokenFixture(t)
@@ -308,24 +308,24 @@ func TestRevokingATokenAsksFirst(t *testing.T) {
 	m := openApprovalModel(t, store, dir)
 	openTokensUnlocked(t, m)
 
-	press(t, m, "x")
+	press(t, m, "d")
 	if m.screen != screenConfirm || !strings.Contains(screenOf(m), "Revoke agent token ci?") {
-		t.Fatalf("x on the list = screen %v:\n%s", m.screen, screenOf(m))
+		t.Fatalf("d on the list = screen %v:\n%s", m.screen, screenOf(m))
 	}
 	press(t, m, "n")
 	if m.screen != screenList || len(m.list.all) != 2 {
 		t.Fatalf("n = screen %v list %v, want the list with both tokens", m.screen, m.list.all)
 	}
 
-	pump(t, m, "enter", "x")
+	pump(t, m, "enter", "d")
 	if m.tokenRevoke != "ci" {
-		t.Fatalf("x on the detail asks about %q, want ci", m.tokenRevoke)
+		t.Fatalf("d on the detail asks about %q, want ci", m.tokenRevoke)
 	}
 	press(t, m, "esc")
 	if m.screen != screenConfirm || m.tokenDetail != "ci" || m.tokenRevoke != "" {
 		t.Fatalf("esc on the question = screen %v detail %q, want back on the detail", m.screen, m.tokenDetail)
 	}
-	pump(t, m, "x", "y")
+	pump(t, m, "d", "y")
 	if m.fail != "" {
 		t.Fatalf("revoking reported %q", m.fail)
 	}
@@ -371,4 +371,21 @@ func TestTokenWarningsForLapsedVorbildAndExpiry(t *testing.T) {
 	assertViewFits(t, m.View(), 60, 20)
 	pump(t, m, "esc")
 	assertViewFits(t, m.View(), 60, 20)
+}
+
+// x has no effect on the Tokens list or on a token's detail.
+func TestXDoesNothingOnTokens(t *testing.T) {
+	store, dir, v := newTokenFixture(t)
+	fixtureToken(t, v, "ci", nil, "personal")
+	m := openApprovalModel(t, store, dir)
+	openTokensUnlocked(t, m)
+
+	press(t, m, "x")
+	if m.screen != screenList || m.tokenRevoke != "" {
+		t.Fatalf("x on the list = screen %v revoke %q", m.screen, m.tokenRevoke)
+	}
+	pump(t, m, "enter", "x")
+	if m.tokenRevoke != "" {
+		t.Fatalf("x on the detail asks about %q", m.tokenRevoke)
+	}
 }

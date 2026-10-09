@@ -118,7 +118,7 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	}
 
 	// Discarding leaves the row as it was, whatever changed in the list.
-	press(t, m, "enter", "x", "y")
+	press(t, m, "enter", "d", "y")
 	addPath(t, m, third)
 	press(t, m, "esc", "d")
 	if got := m.field(pathsLabel).entries; !reflect.DeepEqual(got, []string{first, "~/repos"}) {
@@ -129,7 +129,7 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	press(t, m, "enter", "down", "e")
 	clearField(t, m)
 	typeText(t, m, second)
-	press(t, m, "enter", "up", "x")
+	press(t, m, "enter", "up", "d")
 	if view := screenOf(m); !strings.Contains(view, "Remove \""+first+"\"") {
 		t.Fatalf("remove does not ask first:\n%s", view)
 	}
@@ -149,7 +149,7 @@ func TestThePathListIsEditedEntryByEntry(t *testing.T) {
 	// An emptied list is written as no paths at all, which is what makes the connection apply everywhere.
 	openConnection(t, m, "gh")
 	openPathList(t, m)
-	press(t, m, "x", "y")
+	press(t, m, "d", "y")
 	pump(t, m, "f2")
 	if m.fail != "" {
 		t.Fatalf("saving no paths failed: %s", m.fail)

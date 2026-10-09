@@ -11,8 +11,8 @@ import (
 )
 
 // The target list of a connection is edited in a screen of its own, opened from its row like a picker: a is
-// add, which offers known targets and a builder where there are any, enter edits the selected target, and x
-// or d removes it after asking. F2 keeps the list and saves the form in one step, from every state of the
+// add, which offers known targets and a builder where there are any, enter edits the selected target, and d
+// removes it after asking. F2 keeps the list and saves the form in one step, from every state of the
 // screen, the typed target included; in the guided setup it goes on to the next step instead, which saves
 // only from its summary. esc is one level back: it closes an unchanged list, cancels an unchanged entry,
 // and asks about a changed list, a typed entry or a half-built target, so no change is dropped silently. Each target is typed on its own, so none has to be quoted into a line with the others. A
@@ -96,7 +96,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 		metadata := m.targetMetadata()
 		if !metadata.Multiple && len(m.targetList.all) > 0 {
 			m.status = ""
-			m.fail = fmt.Sprintf("this provider takes one %s only; press enter to edit it or x to remove it",
+			m.fail = fmt.Sprintf("this provider takes one %s only; press enter to edit it or d to remove it",
 				metadata.Label)
 			return nil
 		}
@@ -108,7 +108,7 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.editTarget(m.targetList.cursor, target)
-	case "x", "d":
+	case "d":
 		if selected {
 			m.targetRemove = true
 			m.clearMessages()
@@ -260,7 +260,7 @@ func (m *Model) targetFrame() (string, string) {
 		// The guided setup saves only from its summary.
 		save = "F2 next step"
 	}
-	keys := "a add · enter edit · x remove · up/down move · " + save + " · esc close"
+	keys := "a add · enter edit · d remove · up/down move · " + save + " · esc close"
 	switch {
 	case m.targetEdit >= 0:
 		label := "new: "
@@ -275,7 +275,7 @@ func (m *Model) targetFrame() (string, string) {
 	case m.targetRemove:
 		target, _ := m.targetList.selected()
 		foot.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove %q from the list?", target)) + "\n")
-		keys = "y remove · n keep"
+		keys = "y remove · n/esc keep"
 	}
 	foot.WriteString(m.hint(keys))
 	return head.String(), foot.String() + m.notes()

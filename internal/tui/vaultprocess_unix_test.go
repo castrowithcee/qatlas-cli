@@ -139,9 +139,9 @@ func TestVaultRoleWriteAndRemoveSyncTheVaultProcess(t *testing.T) {
 		t.Fatalf("process Get() after s = %q, %v, %v, want the value just stored", got, found, err)
 	}
 
-	press(t, m, "x")
+	press(t, m, "d")
 	if m.screen != screenConfirm {
-		t.Fatalf("x did not ask to confirm: screen %v", m.screen)
+		t.Fatalf("d did not ask to confirm: screen %v", m.screen)
 	}
 	pump(t, m, "y")
 	if m.fail != "" {

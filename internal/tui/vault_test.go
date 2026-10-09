@@ -424,9 +424,9 @@ func TestVaultRoleDeleteUnlocksTheVaultThenRemoves(t *testing.T) {
 	}
 	editEntry(t, m, "reader")
 	focusRole(t, m, "token-id")
-	press(t, m, "x")
+	press(t, m, "d")
 	if m.screen != screenConfirm {
-		t.Fatalf("x did not ask to confirm: screen %v", m.screen)
+		t.Fatalf("d did not ask to confirm: screen %v", m.screen)
 	}
 	press(t, m, "y")
 	if m.screen != screenAdminAuth || m.adminAuth == nil || !m.adminAuth.locked {
@@ -461,7 +461,7 @@ func TestVaultRoleDeleteUnlocksTheVaultThenRemoves(t *testing.T) {
 	}
 
 	// The right passphrase unlocks the vault and admin mode together, then removes the entry at once.
-	press(t, m, "x")
+	press(t, m, "d")
 	press(t, m, "y")
 	typeText(t, m, "hunter2")
 	pump(t, m, "enter")

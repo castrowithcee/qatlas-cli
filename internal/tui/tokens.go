@@ -424,7 +424,7 @@ func (m *Model) updateTokenScreens(key tea.KeyMsg) (tea.Cmd, bool) {
 			m.tokenReveal = true
 			return nil
 		}), true
-	case "x":
+	case "d":
 		m.tokenRevoke = name
 		m.clearMessages()
 	case "esc":
@@ -486,7 +486,7 @@ func (m *Model) tokenDetailView() string {
 	}
 	b.WriteString(m.formRow(false, expiresLabel, expires) + "\n")
 	b.WriteString(m.formRow(false, "created", entry.token.Created.Local().Format("2006-01-02 15:04")) + "\n")
-	b.WriteString(m.hint("s reveal/hide · x revoke · esc back"))
+	b.WriteString(m.hint("s reveal/hide · d revoke · esc back"))
 	return b.String()
 }
 
