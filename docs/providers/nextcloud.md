@@ -1,6 +1,6 @@
 ---
 description: >
-  Describes Nextcloud file operations, share reads, typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud file operations, share reads, Deck reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -144,6 +144,26 @@ Sharing is read through the OCS API of the Sharing app (`/ocs/v2.php/apps/files_
 basic authentication as WebDAV and without redirects. The client in `ocs.go` takes fixed path segments and
 typed query values and accepts an answer only when the envelope reports `ok` and 200; it forwards no message
 of the instance.
+
+## Deck
+
+The tool group `deck` reads Deck boards, stacks, and cards: `nextcloud.deckboards.list`, `nextcloud.deckboards.get`
+(with labels, sharing entries, and members), `nextcloud.deckstacks.list` (with the cards of each stack; `archived`
+lists the archived cards instead), and `nextcloud.deckcards.get`. The setup profile `deck-read` holds exactly these
+four. They need a `deck` target and never a folder target; without one they refuse locally.
+
+The target `deck` binds every board of the identity, `deck/BOARD_ID` only that board. `list` drops every other
+board and every deleted one. A board ID that is not bound is refused locally, before any credential access or
+request, without naming it. Stack and card IDs are accepted only through the board hierarchy: Deck resolves a card
+by its ID alone, so `deckcards.get` first reads the board's stacks (the archived ones if needed) and refuses a card
+that the named stack of the bound board does not hold, as if it did not exist; it also rejects an answer whose card
+or stack differs from the requested one.
+
+Requests go to the Deck REST API below `/index.php/apps/deck/api/v1.1/` with `OCS-APIRequest` and JSON, and follow
+no redirect. A 404, which a missing Deck app causes as well as a missing object, is one clear not-found failure.
+Titles, names, labels, and descriptions are untrusted: strings are cut at a fixed length (descriptions at 8 KiB, at
+1 KiB in a stack listing), lists are capped, and every cut sets `truncated`. Comments and attachments are not read,
+and nothing in Deck can be changed.
 
 ## Versions
 
