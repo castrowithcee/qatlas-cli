@@ -1,9 +1,9 @@
 ---
 description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
-  objects, count by field), record write (create, update, batches), record trash (delete, restore,
-  destroy), and note and task link operations, object targets, connection permissions, and safety
-  boundaries.
+  objects, count by field), record write (create, update, batches), duplicate search and merge, record
+  trash (delete, restore, destroy), and note and task link operations, object targets, connection
+  permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -16,8 +16,8 @@ A connection binds one API key to one managed or self-hosted workspace and, opti
 objects (see Object targets). It can list and read companies (`read`), create them (`create`), change their
 name or primary domain (`update`), and delete them (`delete`). It can also create records of any reachable
 object and change their fields, also up to 60 at a time (see Writing records and Batches), delete, restore,
-and destroy them (see Deleting and restoring), and link notes and tasks to records (see Linking notes and
-tasks).
+and destroy them (see Deleting and restoring), find duplicates and merge records (see Merging records),
+and link notes and tasks to records (see Linking notes and tasks).
 Mutations require confirmation and only use the generated REST routes of the company or of a reachable
 object. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error, unreadable
 answer) it reports the outcome as uncertain and does not repeat the request.
@@ -213,6 +213,27 @@ from an argument. An object that the schema gives no single link relation cannot
   Read the records before repeating a batch.
 - The answer is reduced like a read and capped; limits and error handling otherwise follow Writing records.
 - No setup profile ticks the batch tools.
+
+## Merging records
+
+Duplicates and merges act on records of one reachable object; there is no merge across objects. The
+identifiers are distinct UUIDs of that object.
+
+- `records.duplicates` takes 1 to 20 identifiers and reports, for each, the possible duplicates by the
+  criteria Twenty defines for the object, with their total count. It reads and changes nothing. Twenty
+  answers only for records it finds, so an identifier that does not exist makes the whole call fail.
+- `records.mergepreview` takes 2 to 9 identifiers and the position of the record that wins conflicts
+  (`conflict_priority_index`, counted from 0). It shows the record the merge would leave and changes nothing;
+  Twenty computes the preview in a dry run that no argument controls.
+- `records.merge` takes the same arguments and merges for real: the other records are deleted and their
+  relations are moved to the remaining record. Whether the deleted records can be restored is not promised.
+  It is offered only by a connection whose `tools` list names it, requires confirmation, and no profile ticks
+  it. Preview first, then merge.
+
+Duplicates and results are records like those of `records.get` (depth 0, rich text as markdown, relations
+only as identifier fields) and are untrusted workspace data. The answer of a merge must name one of the given
+records. Qatlas sends each of these requests once; after an unclear result of `records.merge` it reports the
+outcome as uncertain, and a 403 points to the object permissions of the role of the key.
 
 ## Deleting and restoring
 
