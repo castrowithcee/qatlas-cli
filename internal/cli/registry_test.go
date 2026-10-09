@@ -121,7 +121,7 @@ func TestDefaultRegistry(t *testing.T) {
 		t.Errorf("Telegram metadata = %+v, %v", telegram, ok)
 	}
 	operations := reg.Provider("telegram")
-	if len(operations) != 33 || operations[0].ID != "telegram.bot.get" ||
+	if len(operations) != 36 || operations[0].ID != "telegram.bot.get" ||
 		operations[1].ID != "telegram.chatactions.send" || operations[2].ID != "telegram.chats.administrators" ||
 		operations[3].ID != "telegram.chats.deletephoto" || operations[6].ID != "telegram.chats.membercount" ||
 		operations[7].ID != "telegram.chats.setdescription" || operations[8].ID != "telegram.chats.setphoto" ||
@@ -129,12 +129,14 @@ func TestDefaultRegistry(t *testing.T) {
 		operations[11].ID != "telegram.files.download" || operations[12].ID != "telegram.files.get" ||
 		operations[13].ID != "telegram.invitelinks.primary" || operations[14].ID != "telegram.invitelinks.revoke" ||
 		operations[15].ID != "telegram.mediagroups.send" || operations[16].ID != "telegram.members.ban" ||
-		operations[17].ID != "telegram.members.restrict" || operations[18].ID != "telegram.members.unban" ||
-		operations[20].ID != "telegram.messages.deletemany" || operations[23].ID != "telegram.messages.send" ||
-		operations[24].ID != "telegram.photos.send" || operations[25].ID != "telegram.pins.pin" ||
-		operations[27].ID != "telegram.pins.unpinall" || operations[28].ID != "telegram.polls.send" ||
-		operations[29].ID != "telegram.polls.stop" || operations[30].ID != "telegram.reactions.set" ||
-		operations[31].ID != "telegram.updates.list" || operations[32].ID != "telegram.webhook.get" {
+		operations[17].ID != "telegram.members.promote" || operations[18].ID != "telegram.members.restrict" ||
+		operations[19].ID != "telegram.members.setadmintitle" || operations[20].ID != "telegram.members.settag" ||
+		operations[21].ID != "telegram.members.unban" ||
+		operations[23].ID != "telegram.messages.deletemany" || operations[26].ID != "telegram.messages.send" ||
+		operations[27].ID != "telegram.photos.send" || operations[28].ID != "telegram.pins.pin" ||
+		operations[30].ID != "telegram.pins.unpinall" || operations[31].ID != "telegram.polls.send" ||
+		operations[32].ID != "telegram.polls.stop" || operations[33].ID != "telegram.reactions.set" ||
+		operations[34].ID != "telegram.updates.list" || operations[35].ID != "telegram.webhook.get" {
 		t.Errorf("Telegram operations = %v, want the explicit message, member, pin, update, chat, invite link, bot, file, media, and interaction operations",
 			operations)
 	}

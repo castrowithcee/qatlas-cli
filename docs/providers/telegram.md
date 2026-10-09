@@ -81,8 +81,18 @@ positive Unix time) limits the ban, and `revoke_messages` also deletes all messa
 never removed; it invites nobody. `telegram.members.restrict` (`update`) requires a `tools` list and sets the
 complete `permissions` object of a user in a supergroup: every ChatPermissions boolean is required and sent
 explicitly, a missing or unknown field is refused before any request, and Telegram's permission dependencies
-are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. All three
-results are a single boolean. Promoting members, banning sender chats, and join requests are not offered.
+are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. The
+results are a single boolean. Banning sender chats and join requests are not offered.
+
+`telegram.members.promote` (`update`) requires a `tools` list and sets the complete `rights` object of an
+existing member in a supergroup or channel: every administrator right of `promoteChatMember` is required and
+sent explicitly, a missing or unknown field is refused before any request, and all `false` demotes.
+`can_promote_members` and `can_invite_users` widen who may add administrators and members. The default
+administrator rights of the bot are not offered. `telegram.members.setadmintitle` sets the custom `title` of
+an administrator the bot promoted in a supergroup, and `telegram.members.settag` the `tag` of a regular
+member; both are `update`, take 0 to 16 characters (Unicode characters, not bytes) without emoji, check
+this locally, and remove the value when empty. The emoji check is conservative: symbols, joiners,
+variation selectors, and the emoji blocks are refused.
 
 ## Polls, reactions, and chat actions
 
@@ -213,6 +223,7 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
-`telegram.members.restrict`, `telegram.chats.deletephoto`, the interaction tools, and the invite link tools
+`telegram.members.restrict`, `telegram.members.promote`, `telegram.members.setadmintitle`,
+`telegram.members.settag`, `telegram.chats.deletephoto`, the interaction tools, and the invite link tools
 are in no profile. A profile is a visible starting selection, not a role: only the ticked `permissions` and
 `tools` are saved, every tick can be changed before saving, and a saved connection never follows a profile.

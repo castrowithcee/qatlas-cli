@@ -183,7 +183,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot"},
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
 	{ID: groupMedia, Title: "Media", Description: "Send photos, documents, and albums to the bound chats"},
-	{ID: groupMembers, Title: "Members", Description: "Ban, unban, and restrict members of the bound chats"},
+	{ID: groupMembers, Title: "Members", Description: "Ban, unban, restrict, and promote members of the bound chats; set administrator titles and member tags"},
 	{ID: groupInteractions, Title: "Interactions",
 		Description: "Send and stop polls, set reactions, and show chat actions in the bound chats"},
 }
@@ -266,6 +266,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: membersBan, Handler: capability.Handler(invokeMembersBan)},
 		capability.Operation{Descriptor: membersUnban, Handler: capability.Handler(invokeMembersUnban)},
 		capability.Operation{Descriptor: membersRestrict, Handler: capability.Handler(invokeMembersRestrict)},
+		capability.Operation{Descriptor: membersPromote, Handler: capability.Handler(invokeMembersPromote)},
+		capability.Operation{Descriptor: membersSetAdminTitle, Handler: capability.Handler(invokeMembersSetAdminTitle)},
+		capability.Operation{Descriptor: membersSetTag, Handler: capability.Handler(invokeMembersSetTag)},
 
 		capability.Operation{Descriptor: pollsSend, Handler: capability.Handler(invokePollsSend)},
 		capability.Operation{Descriptor: pollsStop, Handler: capability.Handler(invokePollsStop)},
