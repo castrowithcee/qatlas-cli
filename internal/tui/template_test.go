@@ -400,7 +400,7 @@ func TestSetupStartsFromAnExistingConnection(t *testing.T) {
 	if m.screen != screenSummary {
 		t.Fatalf("screen %v fail %q, want the summary", m.screen, m.fail)
 	}
-	pump(t, m, "enter")
+	pump(t, m, "f2")
 	if m.fail != "" || m.wizard == nil || m.wizard.saved != "github-ops-copy" {
 		t.Fatalf("saving failed: fail %q", m.fail)
 	}

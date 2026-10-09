@@ -164,7 +164,7 @@ func TestProviderMetadataDrivesMultipleProviderConnections(t *testing.T) {
 	}
 	lexwareFields := m.buildFields("books-primary")
 	if strings.Contains(lexwareFields[4].hint, "required") ||
-		!strings.Contains(lexwareFields[4].hint, "not used by Lexware") {
+		!strings.Contains(lexwareFields[4].hint, "optionally one organization") {
 		t.Fatalf("Lexware target hint = %q, want an optional target", lexwareFields[4].hint)
 	}
 	for _, name := range []string{"books-primary", "books-audit"} {

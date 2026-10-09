@@ -22,9 +22,16 @@ The credential provides `bot-token`. Connection permissions only reduce what Qat
 they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
 to named tools, for example `[telegram.messages.send]` for a chat that may receive but never lose messages,
 and never admits an effect `permissions` excludes. Mutations are never retried after an ambiguous network
-result, preventing duplicate sends or unplanned repeated changes. The terminal editor starts a new connection
-on the setup profile `send`, which ticks `[create]` and `[telegram.messages.send]`: Telegram offers no read
-tool, and a send reaches only the configured chat, each one after confirmation. The profile `messaging` also
-ticks `update`, `delete`, `telegram.messages.edit`, and `telegram.messages.delete`. A profile is a visible
-starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed
-before saving, and a saved connection never follows a profile.
+result, preventing duplicate sends or unplanned repeated changes.
+
+`telegram.messages.delete` requires a `tools` list: no permission offers it, so a connection without a `tools`
+list no longer offers it. Its reach is that of the Bot API `deleteMessage`: in the configured chat the bot
+deletes its own messages and, as an administrator, those of others; in a private chat it also deletes incoming
+messages.
+
+The terminal editor starts a new connection on the setup profile `send`, which ticks `[create]` and
+`[telegram.messages.send]`: Telegram offers no read tool, and a send reaches only the configured chat, each
+one after confirmation. The profile `messaging` also ticks `update`, `delete`, `telegram.messages.edit`, and
+`telegram.messages.delete`. A profile is a visible starting selection, not a role: only the ticked
+`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
+follows a profile.

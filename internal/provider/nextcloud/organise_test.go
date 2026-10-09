@@ -190,7 +190,7 @@ func TestOrganiseRisksProfileAndPermissions(t *testing.T) {
 			t.Error("write must not be recommended")
 		}
 	}
-	exp := "nextcloud.files.list nextcloud.files.stat nextcloud.files.get nextcloud.folders.create nextcloud.files.move nextcloud.files.copy"
+	exp := "nextcloud.files.list nextcloud.files.stat nextcloud.files.get nextcloud.shares.list nextcloud.shares.get nextcloud.folders.create nextcloud.files.move nextcloud.files.copy"
 	if strings.Join(write, " ") != exp {
 		t.Errorf("write profile = %v", write)
 	}

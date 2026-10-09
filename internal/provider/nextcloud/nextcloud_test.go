@@ -236,20 +236,27 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 			t.Errorf("target kind %+v needs a description and forms", kind)
 		}
 	}
-	if len(metadata.Groups) != 1 || metadata.Groups[0].ID != "files" {
-		t.Fatalf("groups = %+v, want the files group", metadata.Groups)
+	if len(metadata.Groups) != 2 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" {
+		t.Fatalf("groups = %+v, want the files and shares groups", metadata.Groups)
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 10 || descriptors[0].ID != "nextcloud.files.copy" ||
-		descriptors[9].ID != "nextcloud.folders.delete" {
+	if len(descriptors) != 13 || descriptors[0].ID != "nextcloud.files.copy" ||
+		descriptors[9].ID != "nextcloud.folders.delete" || descriptors[12].ID != "nextcloud.shares.list" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
-		if descriptor.Group != "files" {
-			t.Errorf("descriptor %s group = %q, want files", descriptor.ID, descriptor.Group)
+		wantGroup, wantSensitivity := "files", dataSensitivity
+		if strings.HasPrefix(descriptor.ID, "nextcloud.share") {
+			wantGroup, wantSensitivity = "shares", sharesSensitivity
+			if descriptor.ID == shareesSearch.ID {
+				wantSensitivity = shareeSensitivity
+			}
 		}
-		if !descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != dataSensitivity {
+		if descriptor.Group != wantGroup {
+			t.Errorf("descriptor %s group = %q, want %s", descriptor.ID, descriptor.Group, wantGroup)
+		}
+		if !descriptor.Risk.OpenWorld || descriptor.Risk.DataSensitivity != wantSensitivity {
 			t.Errorf("descriptor %s risk = %+v", descriptor.ID, descriptor.Risk)
 		}
 		// Neither instance, nor identity, nor root folder is an argument: all three are configuration.
