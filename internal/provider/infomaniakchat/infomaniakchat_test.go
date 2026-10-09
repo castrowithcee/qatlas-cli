@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -65,6 +66,7 @@ func serve(t *testing.T, calls *[]call, handler func(*http.Request) (*http.Respo
 			buf := make([]byte, 8192)
 			n, _ := request.Body.Read(buf)
 			body = string(buf[:n])
+			request.Body = io.NopCloser(strings.NewReader(body))
 		}
 		*calls = append(*calls, call{
 			method: request.Method, host: request.URL.Host, path: request.URL.Path,
@@ -233,8 +235,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 11 {
-		t.Fatalf("tools = %+v, want 11", metadata.Tools)
+	if len(metadata.Tools) != 15 {
+		t.Fatalf("tools = %+v, want 15", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -252,6 +254,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		has("read", messagesUpdate.ID) || !has("read", reactionsList.ID) || !has("messaging", reactionsList.ID) ||
 		!has("messaging", reactionsAdd.ID) || has("read", reactionsAdd.ID) {
 		t.Fatalf("profiles = %+v", profiles)
+	}
+	for _, id := range []string{usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID} {
+		if !has("read", id) || !has("messaging", id) {
+			t.Fatalf("profiles = %+v, want %s in read and messaging", profiles, id)
+		}
 	}
 	for id := range profiles {
 		if has(id, messagesDelete.ID) || has(id, reactionsRemove.ID) {
