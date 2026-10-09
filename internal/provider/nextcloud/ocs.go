@@ -16,6 +16,7 @@ import (
 var (
 	ocsRoot    = []string{"ocs", "v2.php"}
 	ocsSharing = []string{"apps", "files_sharing", "api", "v1"}
+	ocsCloud   = []string{"cloud"}
 )
 
 // ocsOK is the OCS status code of a successful version 2 answer.
@@ -28,6 +29,9 @@ type ocsRequest struct {
 	app    []string
 	suffix []string
 	query  url.Values
+	// emptyOnNotModified reads a 304 answer as an empty result instead of a redirect; the Talk chat API
+	// answers a page without messages that way.
+	emptyOnNotModified bool
 }
 
 // ocsEnvelope is the answer shape every OCS endpoint shares.
@@ -44,6 +48,12 @@ type ocsEnvelope struct {
 // ocsGet performs one authenticated OCS GET and returns the data member of a successful envelope. The
 // message of the envelope and the body of a failed answer are never read into an error.
 func (c *Client) ocsGet(ctx context.Context, op string, request ocsRequest) (json.RawMessage, error) {
+	data, _, err := c.ocsGetHeader(ctx, op, request)
+	return data, err
+}
+
+// ocsGetHeader is ocsGet that also returns the response headers. The data of an accepted 304 is nil.
+func (c *Client) ocsGetHeader(ctx context.Context, op string, request ocsRequest) (json.RawMessage, http.Header, error) {
 	segments := append(append(append(append([]string{}, c.install...), ocsRoot...), request.app...), request.suffix...)
 	query := url.Values{"format": {"json"}}
 	for name, values := range request.query {
@@ -52,7 +62,7 @@ func (c *Client) ocsGet(ctx context.Context, op string, request ocsRequest) (jso
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
 		c.origin+escapePath(segments)+"?"+query.Encode(), nil)
 	if err != nil {
-		return nil, providerError(op, "the request could not be built")
+		return nil, nil, providerError(op, "the request could not be built")
 	}
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("OCS-APIRequest", "true")
@@ -60,32 +70,35 @@ func (c *Client) ocsGet(ctx context.Context, op string, request ocsRequest) (jso
 
 	response, err := c.http.Do(req)
 	if err != nil {
-		return nil, provider.Transport(op, "Nextcloud", err)
+		return nil, nil, provider.Transport(op, "Nextcloud", err)
 	}
 	defer response.Body.Close()
+	if request.emptyOnNotModified && response.StatusCode == http.StatusNotModified {
+		return nil, response.Header, nil
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, statusError(op, response.StatusCode)
+		return nil, nil, statusError(op, response.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxBodyBytes+1))
 	if err != nil || len(body) > maxBodyBytes {
-		return nil, invalidResponse(op, "the Nextcloud response could not be read within the size limit")
+		return nil, nil, invalidResponse(op, "the Nextcloud response could not be read within the size limit")
 	}
 	var envelope ocsEnvelope
 	if err := json.Unmarshal(body, &envelope); err != nil || envelope.OCS == nil || envelope.OCS.Meta == nil {
-		return nil, invalidResponse(op, "Nextcloud did not answer with an OCS document")
+		return nil, nil, invalidResponse(op, "Nextcloud did not answer with an OCS document")
 	}
 	meta := envelope.OCS.Meta
 	code, err := meta.StatusCode.Int64()
 	if err != nil {
-		return nil, invalidResponse(op, "Nextcloud did not answer with an OCS document")
+		return nil, nil, invalidResponse(op, "Nextcloud did not answer with an OCS document")
 	}
 	if code != ocsOK || !strings.EqualFold(meta.Status, "ok") {
 		// A version 2 answer repeats its failure in the HTTP status; a body that disagrees with a
 		// successful status is classified by its own code and otherwise refused as unusable.
 		if code >= 400 && code < 600 {
-			return nil, statusError(op, int(code))
+			return nil, nil, statusError(op, int(code))
 		}
-		return nil, invalidResponse(op, "Nextcloud answered with an unexpected OCS status")
+		return nil, nil, invalidResponse(op, "Nextcloud answered with an unexpected OCS status")
 	}
-	return envelope.OCS.Data, nil
+	return envelope.OCS.Data, response.Header, nil
 }
