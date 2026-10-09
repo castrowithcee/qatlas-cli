@@ -297,10 +297,12 @@ func (s *Server) serveConn(conn net.Conn) {
 	default:
 		resp = s.answer(req)
 	}
-	_ = writeMessage(conn, resp)
+	// A lock is answered after the server stopped, so a client that was told it is locked finds no listener.
+	// stop leaves the connection to be written to; Serve waits for its handler before it overwrites anything.
 	if req.Op == opLock && resp.Error == "" {
 		s.stop()
 	}
+	_ = writeMessage(conn, resp)
 }
 
 func (s *Server) requestTimeout() time.Duration {

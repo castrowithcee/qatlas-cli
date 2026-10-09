@@ -238,6 +238,9 @@ func (c *Client) ListReactions(ctx context.Context, postID string, page, limit i
 // ownUserID reads the id of the token's own user. It is never taken from an argument, so a reaction can
 // only be set or removed as the token's own user.
 func (c *Client) ownUserID(ctx context.Context, op string) (string, error) {
+	if c.self != "" {
+		return c.self, nil
+	}
 	var me struct {
 		ID string `json:"id"`
 	}
@@ -248,6 +251,7 @@ func (c *Client) ownUserID(ctx context.Context, op string) (string, error) {
 		return "", &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "kChat returned an invalid response"}
 	}
+	c.self = me.ID
 	return me.ID, nil
 }
 

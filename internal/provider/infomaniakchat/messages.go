@@ -20,7 +20,7 @@ import (
 // (*Client).verifyChannelScope before the matching endpoint is ever reached.
 var channelIDArgument = capability.Argument{Name: "channel_id",
 	Description: "Channel identifier; must be inside this connection's channel allow-list when it has one, " +
-		"and is always re-checked against this connection's bound teams with one extra request", Required: true}
+		"and is always re-checked live against this connection's bound teams before use", Required: true}
 
 var messageTextSchema = `{"type":"string","minLength":1,"maxLength":` + itoa(maxMessageLength) +
 	`,"pattern":"^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]+$"}`
@@ -106,10 +106,12 @@ var messagesThread = capability.Descriptor{
 
 var messagesSend = capability.Descriptor{
 	ID:      Provider + ".messages.send",
-	Version: 1,
+	Version: 2,
 	Title:   "Send an Infomaniak kChat message",
 	Description: "Send exactly one confirmed message (kChat renders Markdown and mentions such as @channel) to a " +
-		"channel this connection may reach, or, with root_id, one confirmed reply to an existing thread of that channel",
+		"channel this connection may reach, or, with root_id, one confirmed reply to an existing thread of that " +
+		"channel. With file_ids it attaches own, not yet attached uploads of files.upload to the message; the text " +
+		"may then be left out",
 	Tags: []string{"infomaniak", "kchat", "messages", "send", "reply"},
 	Risk: capability.Risk{
 		Effect: capability.EffectCreate, Idempotency: capability.IdempotencyNonIdempotent,
@@ -117,15 +119,19 @@ var messagesSend = capability.Descriptor{
 	},
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
-		`"channel_id":` + idSchema + `,"text":` + messageTextSchema + `,"root_id":` + idSchema + `},` +
-		`"required":["channel_id","text"],"additionalProperties":false}`),
+		`"channel_id":` + idSchema + `,"text":` + messageTextSchema + `,"root_id":` + idSchema + `,` +
+		`"file_ids":{"type":"array","minItems":1,"maxItems":` + itoa(maxMessageFiles) + `,"uniqueItems":true,` +
+		`"items":` + idSchema + `}},"required":["channel_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"id":` + idSchema + `,"channel_id":` + idSchema + `,"root_id":` + idSchema + `,"created_at":{"type":"string"}},` +
 		`"required":["id","channel_id","created_at"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
 		channelIDArgument,
-		{Name: "text", Description: "Message text, from 1 through " + itoa(maxMessageLength) + " characters", Required: true},
+		{Name: "text", Description: "Message text, from 1 through " + itoa(maxMessageLength) +
+			" characters; required unless file_ids is given"},
 		{Name: "root_id", Description: "Identifier of the thread root to reply to; the root must belong to channel_id"},
+		{Name: "file_ids", Description: "1 to " + itoa(maxMessageFiles) + " distinct file_id values of files.upload " +
+			"to attach; each must be an unattached upload of this token's own user to channel_id"},
 	},
 	Fields: []capability.Field{
 		{Name: "id", Description: "Identifier of the sent message"},
@@ -136,6 +142,10 @@ var messagesSend = capability.Descriptor{
 	Examples: []capability.Example{{
 		Description: "Send one message to a channel of a bound team",
 		Arguments:   json.RawMessage(`{"channel_id":"abc123channel00000000000000","text":"Deployment finished"}`),
+	}, {
+		Description: "Send a message with an uploaded file",
+		Arguments: json.RawMessage(`{"channel_id":"abc123channel00000000000000","text":"Report attached",` +
+			`"file_ids":["abc123file00000000000000000"]}`),
 	}},
 }
 
@@ -331,7 +341,7 @@ func invokeMessagesList(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	if _, err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
+	if err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
 		return nil, err
 	}
 	return client.ListMessages(ctx, input.ChannelID, page, limit)
@@ -407,7 +417,7 @@ func (c *Client) verifyPostScope(ctx context.Context, resolved *config.Resolved,
 	if err := selectChannel(resolved, post.ChannelID); err != nil {
 		return postJSON{}, err
 	}
-	if _, err := c.verifyChannelScope(ctx, op, post.ChannelID); err != nil {
+	if err := c.verifyChannelScope(ctx, op, post.ChannelID); err != nil {
 		return postJSON{}, err
 	}
 	return post, nil
@@ -435,9 +445,10 @@ func (c *Client) ReadThread(ctx context.Context, postID, channelID, cursor strin
 }
 
 type messagesSendArguments struct {
-	ChannelID string `json:"channel_id"`
-	Text      string `json:"text"`
-	RootID    string `json:"root_id"`
+	ChannelID string   `json:"channel_id"`
+	Text      string   `json:"text"`
+	RootID    string   `json:"root_id"`
+	FileIDs   []string `json:"file_ids"`
 }
 
 func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -453,15 +464,18 @@ func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets 
 	if input.RootID != "" && !validMattermostID(input.RootID) {
 		return nil, invalidRequest("root_id must be a kChat-style identifier")
 	}
-	if !validMessageText(input.Text) {
+	if err := checkFileIDs(input.FileIDs); err != nil {
+		return nil, err
+	}
+	if (len(input.FileIDs) == 0 || input.Text != "") && !validMessageText(input.Text) {
 		return nil, invalidRequest("text must be 1 to " + itoa(maxMessageLength) +
-			" characters without unsupported control characters")
+			" characters without unsupported control characters, unless file_ids is given")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
+	if err := client.verifyChannelScope(ctx, op, input.ChannelID); err != nil {
 		return nil, err
 	}
 	if input.RootID != "" {
@@ -474,14 +488,73 @@ func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets 
 			return nil, invalidRequest("root_id does not belong to channel_id")
 		}
 	}
-	return client.SendMessage(ctx, input.ChannelID, input.Text, input.RootID)
+	if err := client.verifyOwnUploads(ctx, op, input.ChannelID, input.FileIDs); err != nil {
+		return nil, err
+	}
+	return client.SendMessage(ctx, input.ChannelID, input.Text, input.RootID, input.FileIDs...)
+}
+
+// maxMessageFiles bounds the files attached to one message.
+const maxMessageFiles = 10
+
+// checkFileIDs validates the attachment identifiers locally: 1 to maxMessageFiles distinct kChat IDs, or none.
+func checkFileIDs(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if len(ids) > maxMessageFiles {
+		return invalidRequest("file_ids takes at most " + itoa(maxMessageFiles) + " files")
+	}
+	seen := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		if !validMattermostID(id) {
+			return invalidRequest("file_ids must be kChat-style identifiers")
+		}
+		if seen[id] {
+			return invalidRequest("file_ids must be distinct")
+		}
+		seen[id] = true
+	}
+	return nil
+}
+
+// verifyOwnUploads makes sure every file is an upload of the token's own user that no message holds yet and
+// that, when kChat reports its channel, was made for the target channel. Any other file, even one of a
+// bound channel, is refused without naming it, so a message never attaches someone else's file.
+func (c *Client) verifyOwnUploads(ctx context.Context, op, channelID string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	own, err := c.ownUserID(ctx, op)
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		var info fileJSON
+		if err := c.do(ctx, op, http.MethodGet, "/api/v4/files/"+url.PathEscape(id)+"/info", nil, nil, &info,
+			false); err != nil {
+			return err
+		}
+		if info.ID != id {
+			return &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+				Message: "kChat returned a different file than the one requested"}
+		}
+		if info.DeleteAt > 0 || info.UserID != own || info.PostID != "" ||
+			(info.ChannelID != "" && info.ChannelID != channelID) {
+			return invalidRequest("file_ids must name own, unattached uploads for channel_id")
+		}
+	}
+	return nil
 }
 
 // SendMessage sends exactly one message, once, and never repeats it: a failure after the request may have
 // reached kChat says so instead, see the uncertain suffix (*Client).do adds for a change request.
-func (c *Client) SendMessage(ctx context.Context, channelID, text, rootID string) (*SentMessage, error) {
+func (c *Client) SendMessage(ctx context.Context, channelID, text, rootID string, fileIDs ...string) (*SentMessage, error) {
 	const op = "send message"
 	body := map[string]any{"channel_id": channelID, "message": text}
+	if len(fileIDs) > 0 {
+		body["file_ids"] = fileIDs
+	}
 	if rootID != "" {
 		body["root_id"] = rootID
 	}
