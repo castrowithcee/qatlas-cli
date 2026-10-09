@@ -84,6 +84,37 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 	}
 }
 
+func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T) {
+	reg := capability.NewRegistry()
+	if err := Register(reg); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range reg.Provider(Provider) {
+		if want := d.ID == messagesDelete.ID; d.RequiresToolAllowList != want {
+			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
+		}
+	}
+	if err := reg.ValidateProfiles(); err != nil {
+		t.Fatalf("ValidateProfiles() = %v", err)
+	}
+	metadata, _ := reg.ProviderMetadata(Provider)
+	found := false
+	for _, profile := range metadata.Profiles {
+		if profile.ID != "messaging" {
+			continue
+		}
+		for _, tool := range profile.Tools {
+			found = found || tool == messagesDelete.ID
+		}
+		if !strings.Contains(profile.Description, "others") || !strings.Contains(profile.Description, "private chats") {
+			t.Errorf("profile description = %q", profile.Description)
+		}
+	}
+	if !found {
+		t.Error("profile messaging lacks telegram.messages.delete")
+	}
+}
+
 func TestEditAndDeleteUseTheFixedTarget(t *testing.T) {
 	const target = "-1001234567890"
 	requests := 0
