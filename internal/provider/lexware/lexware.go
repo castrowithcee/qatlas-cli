@@ -299,8 +299,8 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "write", Title: "Master data and drafts",
 			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile and reference data and " +
-				"creates invoice drafts; issuing an invoice is never part of a profile",
-			Tools: append(append([]string{}, readTools...), invoicesCreate.ID),
+				"creates invoice drafts and creates and changes articles; issuing an invoice is never part of a profile",
+			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, articlesCreate.ID, articlesUpdate.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -314,6 +314,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: contactsGet, Handler: capability.Handler(invokeContactsGet)},
 		capability.Operation{Descriptor: articlesList, Handler: capability.Handler(invokeArticlesList)},
 		capability.Operation{Descriptor: articlesGet, Handler: capability.Handler(invokeArticlesGet)},
+		capability.Operation{Descriptor: articlesCreate, Handler: capability.Handler(invokeArticlesCreate)},
+		capability.Operation{Descriptor: articlesUpdate, Handler: capability.Handler(invokeArticlesUpdate)},
 		capability.Operation{Descriptor: voucherlistList, Handler: capability.Handler(invokeVoucherlistList)},
 		capability.Operation{Descriptor: paymentsGet, Handler: capability.Handler(invokePaymentsGet)},
 		capability.Operation{Descriptor: vouchersGet, Handler: capability.Handler(invokeVouchersGet)},
@@ -1031,6 +1033,11 @@ func (c *Client) post(ctx context.Context, op, resource, path string, query url.
 	return c.send(ctx, op, http.MethodPost, resource, path, query, payload, out, uncertain)
 }
 
+// put replaces one object with its complete new state; uncertain works as for post.
+func (c *Client) put(ctx context.Context, op, resource, path string, payload, out any, uncertain string) error {
+	return c.send(ctx, op, http.MethodPut, resource, path, nil, payload, out, uncertain)
+}
+
 // send is the only place that talks to the gateway. It sends exactly one request and never repeats it. A
 // non-empty uncertain marks a change: it is appended to every failure after the request may have been
 // delivered (timeout, reset, unknown transport cause, 5xx, or an unusable 2xx answer) and never to a failure
@@ -1087,6 +1094,14 @@ func (c *Client) send(ctx context.Context, op, method, resource, path string, qu
 	return nil
 }
 
+// conflictMessage is the fixed text of an HTTP 409: the version sent with a change is no longer current.
+// The class stays provider-error; this text is the stable marker callers and tests match on.
+const conflictMessage = "Lexware reports a conflict: the object was changed in the meantime; read it again before changing it"
+
+// validationMessage is the fixed text of an HTTP 406. Lexware names the offending fields in the response
+// body, which is never copied.
+const validationMessage = "Lexware rejected the data as invalid; check the field values against the tool description"
+
 // statusError maps an HTTP status to a stable class. The provider message is never copied: Lexware echoes
 // request detail into it, and the class plus the status is what a caller can act on.
 //
@@ -1117,7 +1132,11 @@ func statusError(op, resource string, status int) error {
 			Class: provider.ClassNotFound, Op: op,
 			Message: "Lexware does not hold this " + resource + " or does not show it to this API key",
 		}
-	case http.StatusBadRequest, http.StatusNotAcceptable:
+	case http.StatusConflict:
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: conflictMessage}
+	case http.StatusNotAcceptable:
+		return &provider.Error{Class: provider.ClassProviderError, Op: op, Message: validationMessage}
+	case http.StatusBadRequest:
 		return &provider.Error{
 			Class: provider.ClassProviderError, Op: op, Message: "Lexware rejected the request as invalid",
 		}

@@ -1,7 +1,7 @@
 ---
 description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
-  articles, the organization profile and reference data, invoice drafts and issuing, permissions, and
+  articles, the organization profile and reference data, invoice drafts and issuing, article writes, permissions, and
   credentials.
 type: knowledge
 edit: shared
@@ -47,11 +47,21 @@ Each creation or issue sends exactly one request and is never repeated, also not
 outcome is unclear, such as after a timeout, a dropped connection, a server error or an unusable answer, the
 error says that the invoice may have been created or issued; check the voucher list before repeating it.
 
+`lexware.articles.create` creates a product or service (`create`) and `lexware.articles.update` changes
+named fields of one (`update`), both always with confirmation and with closed, length-bounded fields; the price
+is given as the leading amount (`NET` or `GROSS`) with its tax rate, and Lexware derives the other amount.
+An update reads the article, replaces only the given fields, keeps every other member the way Lexware
+returned it, and writes it back with the version it read. If someone else changed the article in between,
+Lexware refuses the write and the error reports a conflict; Qatlas never overwrites it and never retries, so
+read the article again and repeat the change deliberately. A rejection of the data (HTTP 406) is reported
+without the provider's text. A failed read before the write changes nothing. After an unclear outcome of the
+write the error says the article may have been created or changed; read it before repeating.
+
 Lexware's public invoice API does not expose update or delete endpoints, so Qatlas does not invent uniform
 CRUD operations. The credential provides `api-key`; local connection permissions may restrict that key but
 never extend its Lexware contract or organization rights. An optional `tools` list narrows a connection
 further to named tools, for example `[lexware.invoices.get]`, and never admits an effect `permissions`
 excludes. The terminal editor starts a new connection on the recommended setup profile `read`, which ticks
-`[read]` and every list and get tool; the profile `write` adds `create` and `lexware.invoices.create`. A
-profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
+`[read]` and every list and get tool; the profile `write` adds the permissions `create` and `update` and the tools `lexware.invoices.create`,
+`lexware.articles.create` and `lexware.articles.update`. A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
 every tick can be changed before saving, and a saved connection never follows a profile.
