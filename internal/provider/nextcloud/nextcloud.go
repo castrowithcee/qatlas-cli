@@ -324,12 +324,13 @@ func Register(reg *capability.Registry) error {
 			ID: "read", Title: "Read files", Recommended: true,
 			Description: "lists folders, reads file metadata and content; changes nothing below the root folder",
 			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
-				versionsList.ID, filesSearch.ID, favoritesList.ID},
+				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID},
 		}, {
 			ID: "write", Title: "Read and organise files",
 			Description: "lists folders, reads files, creates folders, and moves, renames, or copies files and folders without overwriting",
 			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
-				versionsList.ID, filesSearch.ID, favoritesList.ID, foldersCreate.ID, filesMove.ID, filesCopy.ID},
+				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID,
+				foldersCreate.ID, filesMove.ID, filesCopy.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -351,6 +352,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(sharesList, groupShares), Handler: folderBound(invokeSharesList)},
 		capability.Operation{Descriptor: inGroup(sharesGet, groupShares), Handler: folderBound(invokeSharesGet)},
 		capability.Operation{Descriptor: inGroup(shareesSearch, groupShares), Handler: accountBound(invokeShareesSearch)},
+		capability.Operation{Descriptor: grouped(systemtagsList), Handler: accountBound(invokeSystemTagsList)},
+		capability.Operation{Descriptor: grouped(filesTagsList), Handler: folderBound(invokeFilesTagsList)},
+		capability.Operation{Descriptor: grouped(filesTagsAdd), Handler: folderBound(invokeFilesTagsAdd)},
+		capability.Operation{Descriptor: grouped(filesTagsRemove), Handler: folderBound(invokeFilesTagsRemove)},
 		capability.Operation{Descriptor: grouped(trashList), Handler: folderBound(invokeTrashList)},
 		capability.Operation{Descriptor: grouped(trashRestore), Handler: folderBound(invokeTrashRestore)},
 		capability.Operation{Descriptor: grouped(trashDelete), Handler: folderBound(invokeTrashDelete)},

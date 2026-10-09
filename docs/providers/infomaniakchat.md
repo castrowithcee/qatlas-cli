@@ -138,7 +138,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | `messages` | `messages.list`, `.thread`, `.get`, `.files`, `.search`, `direct.list`, `pins.list` | `direct.open`, `groupmessages.open`, `messages.send`, `.update`, `.pin`, `.unpin` | `messages.delete` |
 | `files` | `files.info`, `.search`, `.download` (writes a local file) | `files.upload` (reads a local file) | |
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
-| `users` | `users.get`, `.list`, `.search`, `.status` | | |
+| `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
 
 The reads need no confirmation; every other tool always does, through the confirmation mechanism of every
 confirmed Qatlas tool. The tools of the last column are in no profile and offered only to a connection whose
@@ -149,7 +149,8 @@ channel or without team management rights, stay `permission` or `provider-error`
 
 The terminal editor starts a new connection on the setup profile `read` (all read tools, `direct.list` and
 the searches included). `messaging` adds `direct.open`, `groupmessages.open`, `messages.send`,
-`messages.update`, `files.upload`, `reactions.add`, `messages.pin`, and `messages.unpin`. `channel-admin`
+`messages.update`, `files.upload`, `reactions.add`, `messages.pin`, `messages.unpin`, `status.set`,
+`customstatus.set`, and `customstatus.clear`. `profile.update` is in no profile. `channel-admin`
 reads teams and channels and adds `channels.create`, `channels.update`, and `channelmembers.add`.
 
 Behaviour beyond the schemas:
@@ -161,6 +162,9 @@ Behaviour beyond the schemas:
   team first, the own user is added by Qatlas, and repeated IDs count once. A connection with a channel
   allow-list opens no channel, refused before any secret is read, because the channel could fall outside
   the list; name the channel as a target instead.
+- `status.set`, `customstatus.set`, `.clear`, and `profile.update` always address the token's own user, read
+  from `GET /api/v4/users/me` and never from an argument, and act for it in every team of the instance (for the
+  bot with a bot token). `profile.update` sends only `nickname`, `first_name`, `last_name`, and `position`.
 - `messages.pin` and `.unpin` take only a `post_id`, are idempotent, change nothing else of the message,
   and report the state kChat confirmed.
 - `messages.delete` soft-deletes the post, which users cannot restore; deleting a thread root also removes
@@ -258,9 +262,9 @@ This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV a
 products with their own authentication, none of them the token this provider uses; see the `infomaniakdrive`
 provider's documentation for why each is its own sibling provider. Within kChat, this provider offers no team
 management, no permanent deletion, move, scheme, or moderation change of a channel, no membership change of a
-direct or group channel, no user change, no profile picture, no preview or thumbnail, no custom emoji catalog,
-no removal of another user's reaction, and no webhook configuration. An edit changes only a message's text,
-never its attachments, pin state, or properties.
+direct or group channel, no change of another user or of other profile fields, no profile picture, no preview
+or thumbnail, no custom emoji catalog, no removal of another user's reaction, and no webhook configuration. An
+edit changes only a message's text, never its attachments, pin state, or properties.
 
 ## Live test scenario
 
@@ -278,6 +282,8 @@ A live test against a real kChat instance checks, in order:
 - A reply threads under its root; pin and unpin show in `pins.list` without other channels' messages; an
   edit changes only text and edit time; deleting the reply keeps the root; reactions add, list, remove.
 - A download matches `size`, and a storage-host redirect is a `provider-error`.
+- Status and custom status set and clear, and a profile update, change only the token's own user; the
+  profile keeps its other fields.
 - A user only in another team is refused by `users.get` and `users.status` and absent from list and search.
 - Direct and group channels open and take messages; `direct.list` shows whether kChat lists them under the
   team at all; a direct channel with a user only in another team is refused.
