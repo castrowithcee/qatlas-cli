@@ -71,14 +71,17 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 3 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "updates" ||
-		metadata.Groups[2].ID != "bot" {
+	if len(metadata.Groups) != 4 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "updates" ||
+		metadata.Groups[2].ID != "bot" || metadata.Groups[3].ID != "files" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
 		want := "messages"
-		if tool.ID == updatesList.ID {
+		switch tool.ID {
+		case updatesList.ID:
 			want = "updates"
+		case filesGet.ID, filesDownload.ID:
+			want = "files"
 		}
 		if tool.ID == botGet.ID || tool.ID == webhookGet.ID {
 			want = "bot"
@@ -88,8 +91,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 7 {
-		t.Fatalf("operation count = %d, want seven", len(operations))
+	if len(operations) != 9 {
+		t.Fatalf("operation count = %d, want nine", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
