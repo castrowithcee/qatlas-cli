@@ -445,8 +445,7 @@ func (f userFilter) confirm(ctx context.Context, c *Client, op string) error {
 	if f.channelID == "" {
 		return nil
 	}
-	_, err := c.verifyChannelScope(ctx, op, f.channelID)
-	return err
+	return c.verifyChannelScope(ctx, op, f.channelID)
 }
 
 type usersListArguments struct {
