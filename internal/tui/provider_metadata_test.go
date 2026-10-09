@@ -302,7 +302,7 @@ func TestConnectionFormOffersProviderPermissionsAndSeaTableScopeGuidance(t *test
 
 	providers := map[string][]string{
 		"bookstack": {"default", "read", "create", "update", "delete"},
-		"lexware":   {"default", "read", "create"},
+		"lexware":   {"default", "read", "create", "update"},
 		"nextcloud": {"default", "read", "create", "update", "delete"},
 		"telegram":  {"default", "create", "update", "delete"},
 		"twentycrm": {"default", "read", "create", "update", "delete"},
