@@ -4,34 +4,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"net/url"
-	"regexp"
-	"strings"
-	"time"
-
-	"github.com/emersion/go-vcard"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
+	"github.com/castrowithcee/qatlas-cli/internal/provider/dav"
 	"github.com/castrowithcee/qatlas-cli/internal/redact"
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-const (
-	vcardVersion  = "3.0"
-	maxPhoneLen   = 32
-	contactIDKind = "contact"
-)
+const contactIDKind = "contact"
 
-var (
-	contactKind  = writeKind{contactIDKind, "address book", "text/vcard; charset=utf-8"}
-	phonePattern = regexp.MustCompile(`^[0-9+()./ -]+$`)
-	// contactTypes is the fixed allow-list of type parameters; "other" writes no type.
-	contactTypes = []string{"home", "work", "cell", "voice", "fax", "other"}
-	// modeledFields are the vCard properties an update can reproduce; a card with any other property is refused.
-	modeledFields = map[string]bool{"VERSION": true, "UID": true, "FN": true, "N": true, "EMAIL": true, "TEL": true,
-		"ADR": true, "ORG": true, "TITLE": true, "BDAY": true, "NOTE": true, "URL": true, "PRODID": true, "REV": true}
-)
+var contactKind = writeKind{contactIDKind, "address book", "text/vcard; charset=utf-8"}
 
 const (
 	typeEnum         = `"type":{"type":"string","enum":["home","work","cell","voice","fax","other"]}`
@@ -166,19 +149,10 @@ type ContactWriteResult struct {
 }
 
 type contactWriteArguments struct {
-	Addressbook    string          `json:"addressbook"`
-	ID             string          `json:"id"`
-	ETag           string          `json:"etag"`
-	Name           string          `json:"name"`
-	StructuredName *ContactName    `json:"structured_name"`
-	Emails         []TypedValue    `json:"emails"`
-	Phones         []TypedValue    `json:"phones"`
-	Addresses      []PostalAddress `json:"addresses"`
-	Organization   string          `json:"organization"`
-	Title          string          `json:"title"`
-	Birthday       string          `json:"birthday"`
-	Note           string          `json:"note"`
-	URLs           []string        `json:"urls"`
+	Addressbook string `json:"addressbook"`
+	ID          string `json:"id"`
+	ETag        string `json:"etag"`
+	dav.ContactInput
 }
 
 func decodeContactWriteArguments(op string, raw json.RawMessage) (contactWriteArguments, error) {
@@ -202,154 +176,11 @@ func contactTarget(op string, resolved *config.Resolved, input contactWriteArgum
 	if !validCollectionID(input.ID) {
 		return "", providerError(op, "the contact id must be one literal path segment as the list tool reports it")
 	}
-	etag, ok := normalETag(input.ETag)
+	etag, ok := dav.NormalETag(input.ETag)
 	if !ok {
 		return "", providerError(op, "etag must be the entity tag of the contact as the read tools report it")
 	}
 	return etag, nil
-}
-
-// component checks one single-line text member; structured members may not hold the ";" separator.
-func component(value string, structured bool) (string, bool) {
-	text, ok := validText(value, maxContactText, false)
-	if !ok || (structured && strings.Contains(text, ";")) {
-		return "", false
-	}
-	return text, true
-}
-
-// typeParams validates a type against the fixed allow-list; "other" and an empty type write none.
-func typeParams(kind string) (vcard.Params, bool) {
-	kind = strings.ToLower(kind)
-	if kind == "" || kind == "other" {
-		return vcard.Params{}, true
-	}
-	for _, allowed := range contactTypes {
-		if kind == allowed {
-			return vcard.Params{vcard.ParamType: {kind}}, true
-		}
-	}
-	return nil, false
-}
-
-func validURL(value string) bool {
-	text, ok := validText(value, maxContactText, false)
-	if !ok || text == "" || strings.ContainsAny(text, " \t") {
-		return false
-	}
-	parsed, err := url.Parse(text)
-	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != "" &&
-		parsed.User == nil
-}
-
-// newContactCard validates every argument without any I/O and returns the card without its UID. No message
-// quotes a value.
-func newContactCard(op string, input contactWriteArguments) (vcard.Card, error) {
-	card := vcard.Card{}
-	card.SetValue(vcard.FieldVersion, vcardVersion)
-	name, ok := validText(input.Name, maxContactText, false)
-	if !ok || strings.TrimSpace(name) == "" {
-		return nil, providerError(op, "name is required, at most 256 bytes, without control characters or line breaks")
-	}
-	card.SetValue(vcard.FieldFormattedName, name)
-	structured := ContactName{}
-	if input.StructuredName != nil {
-		structured = *input.StructuredName
-	}
-	parts := []*string{&structured.Family, &structured.Given, &structured.Additional, &structured.Prefix, &structured.Suffix}
-	for _, part := range parts {
-		if *part, ok = component(*part, true); !ok {
-			return nil, providerError(op, "structured_name parts must be at most 256 bytes without control characters or semicolons")
-		}
-	}
-	card.SetName(&vcard.Name{FamilyName: structured.Family, GivenName: structured.Given,
-		AdditionalName: structured.Additional, HonorificPrefix: structured.Prefix, HonorificSuffix: structured.Suffix})
-	if len(input.Emails) > maxContactEntries || len(input.Phones) > maxContactEntries ||
-		len(input.Addresses) > maxContactEntries || len(input.URLs) > maxContactEntries {
-		return nil, providerError(op, "a contact takes at most 20 e-mail addresses, phone numbers, addresses, and URLs each")
-	}
-	for _, entry := range input.Emails {
-		params, typed := typeParams(entry.Type)
-		if !typed || !validAddress(entry.Value) {
-			return nil, providerError(op, "each e-mail needs a plain e-mail address and a type from home, work, cell, voice, fax, other")
-		}
-		card.Add(vcard.FieldEmail, &vcard.Field{Value: entry.Value, Params: params})
-	}
-	for _, entry := range input.Phones {
-		params, typed := typeParams(entry.Type)
-		digit := strings.ContainsAny(entry.Value, "0123456789")
-		if !typed || !digit || len(entry.Value) > maxPhoneLen || !phonePattern.MatchString(entry.Value) {
-			return nil, providerError(op, "each phone needs digits with + ( ) . / - and spaces, at most 32 bytes, and a type from home, work, cell, voice, fax, other")
-		}
-		card.Add(vcard.FieldTelephone, &vcard.Field{Value: entry.Value, Params: params})
-	}
-	for _, entry := range input.Addresses {
-		params, typed := typeParams(entry.Type)
-		fields := []*string{&entry.POBox, &entry.Extended, &entry.Street, &entry.Locality, &entry.Region,
-			&entry.PostalCode, &entry.Country}
-		empty := true
-		for _, field := range fields {
-			if *field, ok = component(*field, true); !ok {
-				typed = false
-			}
-			empty = empty && *field == ""
-		}
-		if !typed || empty {
-			return nil, providerError(op, "each address needs a type from home, work, cell, voice, fax, other and at least one part of at most 256 bytes without control characters or semicolons")
-		}
-		address := vcard.Address{PostOfficeBox: entry.POBox, ExtendedAddress: entry.Extended, StreetAddress: entry.Street,
-			Locality: entry.Locality, Region: entry.Region, PostalCode: entry.PostalCode, Country: entry.Country}
-		card.AddAddress(&address)
-		card[vcard.FieldAddress][len(card[vcard.FieldAddress])-1].Params = params
-	}
-	if input.Organization != "" {
-		org, ok := component(input.Organization, true)
-		if !ok {
-			return nil, providerError(op, "organization must be at most 256 bytes without control characters or semicolons")
-		}
-		card.SetValue(vcard.FieldOrganization, org)
-	}
-	if input.Title != "" {
-		title, ok := component(input.Title, false)
-		if !ok {
-			return nil, providerError(op, "title must be at most 256 bytes without control characters")
-		}
-		card.SetValue(vcard.FieldTitle, title)
-	}
-	if input.Birthday != "" {
-		if _, err := time.Parse(dateLayout, input.Birthday); err != nil {
-			return nil, providerError(op, "birthday must be a date YYYY-MM-DD")
-		}
-		card.SetValue(vcard.FieldBirthday, input.Birthday)
-	}
-	if input.Note != "" {
-		note, ok := validText(input.Note, maxContactNote, true)
-		if !ok {
-			return nil, providerError(op, "note must be at most 4096 bytes without control characters")
-		}
-		card.SetValue(vcard.FieldNote, note)
-	}
-	for _, entry := range input.URLs {
-		if !validURL(entry) {
-			return nil, providerError(op, "each URL must be an http or https URL without credentials, at most 256 bytes")
-		}
-		card.Add(vcard.FieldURL, &vcard.Field{Value: entry})
-	}
-	if _, err := encodeContact(op, card, "placeholder"); err != nil {
-		return nil, err
-	}
-	return card, nil
-}
-
-// encodeContact renders the card with its UID. The encoder escapes line breaks, backslashes, and commas, and
-// every other value is free of control characters, so no argument can start a property of its own.
-func encodeContact(op string, card vcard.Card, uid string) (string, error) {
-	card.SetValue(vcard.FieldUID, uid)
-	var buf bytes.Buffer
-	if err := vcard.NewEncoder(&buf).Encode(card); err != nil || buf.Len() > maxEventBytes {
-		return "", providerError(op, "the contact could not be encoded within the size limit")
-	}
-	return buf.String(), nil
 }
 
 func invokeContactsCreate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
@@ -365,15 +196,15 @@ func invokeContactsCreate(ctx context.Context, resolved *config.Resolved, secret
 	if _, err := contactTarget(op, resolved, input, false); err != nil {
 		return nil, err
 	}
-	card, err := newContactCard(op, input)
+	card, err := dav.NewContactCard(op, input.ContactInput)
 	if err != nil {
 		return nil, err
 	}
-	uid, err := randomID()
+	uid, err := dav.RandomID()
 	if err != nil {
 		return nil, providerError(op, "a contact id could not be generated")
 	}
-	body, err := encodeContact(op, card, uid)
+	body, err := dav.EncodeContact(op, card, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +222,7 @@ func invokeContactsCreate(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	return &ContactWriteResult{Addressbook: input.Addressbook, ID: id, UID: uid, ETag: etagOf(header.Get("ETag")),
+	return &ContactWriteResult{Addressbook: input.Addressbook, ID: id, UID: uid, ETag: dav.ETagOf(header.Get("ETag")),
 		Created: true}, nil
 }
 
@@ -406,7 +237,7 @@ func invokeContactsUpdate(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	card, err := newContactCard(op, input)
+	card, err := dav.NewContactCard(op, input.ContactInput)
 	if err != nil {
 		return nil, err
 	}
@@ -423,14 +254,14 @@ func invokeContactsUpdate(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	uid, err := storedContactUID(op, data)
+	uid, err := server.StoredContactUID(op, data)
 	if err != nil {
 		return nil, err
 	}
-	if served := header.Get("ETag"); served != "" && etagOf(served) != etag {
+	if served := header.Get("ETag"); served != "" && dav.ETagOf(served) != etag {
 		return nil, errPrecondition(op, contactKind.noun)
 	}
-	body, err := encodeContact(op, card, uid)
+	body, err := dav.EncodeContact(op, card, uid)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +269,7 @@ func invokeContactsUpdate(ctx context.Context, resolved *config.Resolved, secret
 	if err != nil {
 		return nil, err
 	}
-	return &ContactWriteResult{Addressbook: input.Addressbook, ID: input.ID, UID: uid, ETag: etagOf(out.Get("ETag")),
+	return &ContactWriteResult{Addressbook: input.Addressbook, ID: input.ID, UID: uid, ETag: dav.ETagOf(out.Get("ETag")),
 		Updated: true}, nil
 }
 
@@ -466,28 +297,4 @@ func invokeContactsDelete(ctx context.Context, resolved *config.Resolved, secret
 		return nil, err
 	}
 	return &ContactWriteResult{Addressbook: input.Addressbook, ID: input.ID, Deleted: true}, nil
-}
-
-// storedContactUID reads the UID of the stored card. It refuses a card that holds a group kind or any property
-// Qatlas does not model, such as a photo, so an update never silently drops data.
-func storedContactUID(op string, data []byte) (uid string, err error) {
-	defer func() {
-		if recover() != nil {
-			uid, err = "", invalidResponse(op, "Infomaniak returned a contact that is not a valid vCard")
-		}
-	}()
-	card, decodeErr := vcard.NewDecoder(bytes.NewReader(data)).Decode()
-	if decodeErr != nil {
-		return "", invalidResponse(op, "Infomaniak returned a contact that is not a valid vCard")
-	}
-	for key := range card {
-		if !modeledFields[strings.ToUpper(key)] {
-			return "", providerError(op, "this contact holds a photo, a group, or other properties that Qatlas does not write; change it in a contacts application")
-		}
-	}
-	uid, ok := validText(card.Value(vcard.FieldUID), maxContactText, false)
-	if !ok || strings.TrimSpace(uid) == "" {
-		return "", invalidResponse(op, "Infomaniak returned a contact without a usable UID")
-	}
-	return uid, nil
 }
