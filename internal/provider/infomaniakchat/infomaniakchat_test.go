@@ -219,10 +219,10 @@ func coreConfig() *config.Config {
 			// holds the permissions without listing them.
 			"hooker": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
-				Tools:       hookToolIDs},
+				Tools:       webhookToolIDs},
 			"hookch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
-				Tools:       hookToolIDs},
+				Tools:       webhookToolIDs},
 			"hookno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete}},
 			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
@@ -290,8 +290,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 55 {
-		t.Fatalf("tools = %+v, want 55", metadata.Tools)
+	if len(metadata.Tools) != 59 {
+		t.Fatalf("tools = %+v, want 59", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -340,6 +340,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	for id := range profiles {
 		if has(id, channelsArchive.ID) || has(id, channelsRestore.ID) || has(id, channelsPrivacy.ID) {
 			t.Fatalf("profile %s selects an archive, restore, or visibility tool", id)
+		}
+		for _, hook := range webhookToolIDs {
+			if has(id, hook) {
+				t.Fatalf("profile %s selects the webhook tool %s", id, hook)
+			}
 		}
 		if has(id, channelsMembersRemove.ID) || has(id, channelsMembersRoles.ID) || has(id, teamMembersRoles.ID) {
 			t.Fatalf("profile %s selects a member removal or role tool", id)
@@ -395,7 +400,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		if tool.ID == archivedChannelsList.ID && (tool.RequiresToolAllowList || tool.Group != "channels") {
 			t.Fatalf("archivedchannels.list metadata = %+v", tool)
 		}
-		if strings.HasPrefix(tool.ID, Provider+".incomingwebhooks.") &&
+		if (strings.HasPrefix(tool.ID, Provider+".incomingwebhooks.") ||
+			strings.HasPrefix(tool.ID, Provider+".outgoingwebhooks.")) &&
 			(!tool.RequiresToolAllowList || tool.Group != "integrations") {
 			t.Fatalf("%s metadata = %+v", tool.ID, tool)
 		}
