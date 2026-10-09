@@ -3,6 +3,7 @@ package lexware
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"strings"
 
@@ -68,6 +69,10 @@ func (c *Client) updateObject(ctx context.Context, op, resource, base, id, uncer
 			Message: "Lexware returned " + noun + " without a usable version"}
 	}
 	if err := apply(object); err != nil {
+		var refusal *provider.Error
+		if errors.As(err, &refusal) {
+			return nil, refusal // fixed text without provider data, raised before any write
+		}
 		return nil, providerError(op, "the change could not be applied")
 	}
 	var response createResultJSON

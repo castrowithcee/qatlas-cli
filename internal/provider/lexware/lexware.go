@@ -299,8 +299,9 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "write", Title: "Master data and drafts",
 			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile and reference data and " +
-				"creates invoice drafts and creates and changes articles; issuing an invoice is never part of a profile",
-			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, articlesCreate.ID, articlesUpdate.ID),
+				"creates invoice drafts and creates and changes articles and contacts; issuing an invoice is never part of a profile",
+			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, articlesCreate.ID, articlesUpdate.ID,
+				contactsCreate.ID, contactsUpdate.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -316,6 +317,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: articlesGet, Handler: capability.Handler(invokeArticlesGet)},
 		capability.Operation{Descriptor: articlesCreate, Handler: capability.Handler(invokeArticlesCreate)},
 		capability.Operation{Descriptor: articlesUpdate, Handler: capability.Handler(invokeArticlesUpdate)},
+		capability.Operation{Descriptor: contactsCreate, Handler: capability.Handler(invokeContactsCreate)},
+		capability.Operation{Descriptor: contactsUpdate, Handler: capability.Handler(invokeContactsUpdate)},
 		capability.Operation{Descriptor: voucherlistList, Handler: capability.Handler(invokeVoucherlistList)},
 		capability.Operation{Descriptor: paymentsGet, Handler: capability.Handler(invokePaymentsGet)},
 		capability.Operation{Descriptor: vouchersGet, Handler: capability.Handler(invokeVouchersGet)},
