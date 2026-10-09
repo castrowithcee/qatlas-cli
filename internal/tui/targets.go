@@ -113,9 +113,9 @@ func (m *Model) updateTargets(key tea.KeyMsg) tea.Cmd {
 			m.targetRemove = true
 			m.clearMessages()
 		}
-	case "up", "k":
+	case "up":
 		m.targetList.move(-1)
-	case "down", "j":
+	case "down":
 		m.targetList.move(1)
 	case "pgup", "pgdown", "home", "end":
 		start, end := m.targetWindow()
@@ -260,7 +260,7 @@ func (m *Model) targetFrame() (string, string) {
 		// The guided setup saves only from its summary.
 		save = "F2 next step"
 	}
-	keys := "a add · enter edit · d remove · up/down move · " + save + " · esc close"
+	keys := "a add · enter edit · d remove · up/down move · " + save + " · esc close · ? help"
 	switch {
 	case m.targetEdit >= 0:
 		label := "new: "
@@ -275,9 +275,9 @@ func (m *Model) targetFrame() (string, string) {
 	case m.targetRemove:
 		target, _ := m.targetList.selected()
 		foot.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove %q from the list?", target)) + "\n")
-		keys = "y remove · n/esc keep"
+		keys = "y remove · n/esc keep · ? help"
 	}
-	foot.WriteString(m.hint(keys))
+	foot.WriteString(m.keyHint(keys))
 	return head.String(), foot.String() + m.notes()
 }
 

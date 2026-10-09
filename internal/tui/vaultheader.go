@@ -217,7 +217,7 @@ func (m *Model) vaultUnlockPromptView() string {
 	}
 	b.WriteString("  " + m.vaultUnlock.input.View() + "\n")
 	b.WriteString(m.indented(m.vaultUnlockHint()) + "\n")
-	b.WriteString(m.hint("enter unlock · esc cancel"))
+	b.WriteString(m.keyHint("enter unlock · esc cancel"))
 	return b.String()
 }
 
@@ -372,7 +372,7 @@ func (m *Model) vaultLockConfirmView() string {
 	var b strings.Builder
 	b.WriteString(titleStyle.Render("Lock the vault now?") + "\n\n")
 	b.WriteString(m.indented("running invokes stop working until it is unlocked again") + "\n")
-	b.WriteString(m.hint("y lock · n/esc stay unlocked"))
+	b.WriteString(m.keyHint("y lock · n/esc stay unlocked · ? help"))
 	return b.String()
 }
 

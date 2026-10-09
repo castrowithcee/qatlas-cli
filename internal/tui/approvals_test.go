@@ -697,7 +697,7 @@ func TestApprovalDetailNamesTheOrigin(t *testing.T) {
 	// Nothing logged: the configuration file was changed outside qatlas.
 	detail := screenOf(openApprovalDetail(t, dir, passphrase, store))
 	for _, want := range []string{"source", "changed outside qatlas: config.yaml edited directly (last modified ",
-		"an agent or another program may have edited the file", "l logs"} {
+		"an agent or another program may have edited the file", "o logs"} {
 		if !strings.Contains(detail, want) {
 			t.Errorf("detail lacks %q:\n%s", want, detail)
 		}
@@ -725,8 +725,12 @@ func TestApprovalDetailLogsKeyOpensTheFilteredLogs(t *testing.T) {
 	}
 	m := openApprovalDetail(t, dir, passphrase, store)
 	pump(t, m, "l")
+	if m.approvalDetail != "personal" || m.section == sectionLogs {
+		t.Fatalf("l opened the logs; it is a movement key now: section %v detail %q", m.section, m.approvalDetail)
+	}
+	pump(t, m, "o")
 	if m.section != sectionLogs || m.screen != screenLogs || m.approvalDetail != "" {
-		t.Fatalf("after l: section %v screen %v detail %q, want the Logs section", m.section, m.screen, m.approvalDetail)
+		t.Fatalf("after o: section %v screen %v detail %q, want the Logs section", m.section, m.screen, m.approvalDetail)
 	}
 	lv := m.logs
 	today := time.Now().Format(logDateLayout)

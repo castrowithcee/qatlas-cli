@@ -174,6 +174,9 @@ func (m *Model) providerTableFrame() (string, string) {
 		head.WriteString(m.wrapped(hintStyle,
 			fmt.Sprintf("No provider matches %q. esc keeps the current one.", t.list.query())) + "\n")
 	}
+	if t.list.query() == "" {
+		keys += " · ? help"
+	}
 	return head.String(), m.keyHint(keys) + m.notes()
 }
 

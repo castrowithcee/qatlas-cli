@@ -768,6 +768,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, m.interrupt()
 		}
+		if msg.String() == "?" && m.helpReachable() {
+			m.openHelp()
+			return m, nil
+		}
+		msg = m.moveKey(msg)
 		var cmd tea.Cmd
 		switch m.screen {
 		case screenNav:
@@ -821,12 +826,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // updateNav handles the sidebar or, in a narrow terminal, the navigation line in focus. In the sidebar,
-// up/down (k/j, and shift+tab for up) step through the sections with wraparound, and right, enter, or tab
-// move the focus into the workspace. Below the sidebar width the navigation line follows its own layout
-// instead: left/right (h/l) step through the sections with the same wraparound, down, enter, or tab move
-// the focus into the workspace, and up does nothing there, since it has no section above it to go to.
-// Moving through the sections changes the active one at once, so the workspace beside or below it always
-// shows the section the marker stands on.
+// up/down step through the sections with wraparound, and right, enter, or tab move the focus into the
+// workspace. Below the sidebar width the navigation line follows its own layout instead: left/right step
+// through the sections with the same wraparound, down, enter, or tab move the focus into the workspace,
+// and up does nothing there, since it has no section above it to go to. home/end and pgup/pgdown jump to
+// the first or last section. Moving through the sections changes the active one at once, so the workspace
+// beside or below it always shows the section the marker stands on.
 func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	if s, ok := sectionShortcut(key.String()); ok {
 		return m.openSection(s)
@@ -834,32 +839,33 @@ func (m *Model) updateNav(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "q":
 		return m.quit()
-	case "shift+tab":
-		return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
-	case "up", "k":
+	case "pgup", "home":
+		return m.previewSection(0)
+	case "pgdown", "end":
+		return m.previewSection(sectionCount - 1)
+	case "up":
 		if m.sidebarLayout() {
 			return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
 		}
-	case "down", "j":
+	case "down":
 		if m.sidebarLayout() {
 			return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
 		}
 		return m.focusList()
-	case "left", "h":
+	case "left":
 		if !m.sidebarLayout() {
 			return m.previewSection(section(wrap(int(m.section)-1, int(sectionCount))))
 		}
-	case "right", "l":
+	case "right":
 		if !m.sidebarLayout() {
 			return m.previewSection(section(wrap(int(m.section)+1, int(sectionCount))))
 		}
 		return m.focusList()
-	case "enter", "tab":
+	case "enter", "tab", "shift+tab":
+		// The areas are the navigation and the workspace, so next and previous lead to the same one.
 		return m.focusList()
 	case "c":
 		m.askSetupTemplate()
-	case "?":
-		m.openHelp()
 	case "u":
 		m.askUpdate()
 	case "n":
@@ -940,7 +946,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		m.focusNav()
 	case "tab", "shift+tab":
 		m.focusNav()
-	case "left", "h":
+	case "left":
 		if m.sidebarLayout() {
 			m.focusNav()
 		}
@@ -948,15 +954,13 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 		// is where those keys belong instead (see updateNav).
 	case "c":
 		m.askSetupTemplate()
-	case "?":
-		m.openHelp()
 	case "u":
 		m.askUpdate()
 	case "q":
 		return m.quit()
 	case "/":
 		m.list.startFilter()
-	case "up", "k":
+	case "up":
 		if !m.sidebarLayout() {
 			// No wraparound below the sidebar width: the first entry is where the list ends and the
 			// navigation line begins, in an empty list just as much as a full one.
@@ -968,7 +972,7 @@ func (m *Model) updateList(key tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		m.list.move(-1)
-	case "down", "j":
+	case "down":
 		if !m.sidebarLayout() {
 			m.list.jump(1)
 			return nil
@@ -1477,9 +1481,9 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	}
 	switch m.fields[m.focus].kind {
 	case fieldProvider, fieldChoice, fieldMultiChoice, fieldToolList:
-		// Every choice row opens its values on enter, space, and /, the way a provider row opens its table.
+		// Every choice row opens its values on enter and /, the way a provider row opens its table.
 		switch key.String() {
-		case "enter", " ", "/":
+		case "enter", "/":
 			if m.fields[m.focus].kind == fieldProvider {
 				m.openProviderTable()
 			} else {
@@ -1490,24 +1494,24 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 	case fieldTargets, fieldPaths:
 		// A target or path list opens like a choice row, and left/right fold it in the form like a tree.
 		switch key.String() {
-		case "enter", " ", "/":
+		case "enter", "/":
 			if m.fields[m.focus].kind == fieldPaths {
 				m.openPaths()
 			} else {
 				m.openTargets()
 			}
 			return nil
-		case "right", "l":
+		case "right":
 			m.fields[m.focus].expanded = true
 			return nil
-		case "left", "h":
+		case "left":
 			m.fields[m.focus].expanded = false
 			return nil
 		}
 	case fieldVaultAction:
 		// An action row runs at once on enter, never deferred to F2 like the rest of the form.
 		switch key.String() {
-		case "enter", " ":
+		case "enter":
 			return m.runVaultActionField(m.fields[m.focus].action)
 		}
 	case fieldSecret:
@@ -1546,9 +1550,9 @@ func (m *Model) updateForm(key tea.KeyMsg) tea.Cmd {
 		// left/right step through the values in place, a quick way on a row of few values.
 		previous := current.value()
 		switch key.String() {
-		case "left", "h":
+		case "left":
 			current.index = wrap(current.index-1, len(current.choices))
-		case "right", "l":
+		case "right":
 			current.index = wrap(current.index+1, len(current.choices))
 		default:
 			return nil
@@ -2213,13 +2217,13 @@ func (m *Model) updateConfirm(key tea.KeyMsg) tea.Cmd {
 			m.status = "Cancelled"
 		case "e":
 			m.approvalExpanded = !m.approvalExpanded
-		case "l":
+		case "o":
 			return m.openApprovalLogs(name)
-		case "down", "j":
+		case "down":
 			m.scrollApproval(1)
-		case "up", "k":
+		case "up":
 			m.scrollApproval(-1)
-		case "pgdown", " ":
+		case "pgdown":
 			m.scrollApproval(max(m.approvalPage, 1))
 		case "pgup":
 			m.scrollApproval(-max(m.approvalPage, 1))
@@ -3476,18 +3480,18 @@ func (m *Model) editorView() string {
 		if m.section == sectionTokens && m.wizard == nil {
 			b.WriteString(m.tokenFormNotes())
 		}
-		keys := "enter next · tab move · " + formKeys
+		keys := "enter next · tab next field · " + formKeys
 		switch m.fields[m.focus].kind {
 		case fieldChoice:
-			keys = "enter choose · left/right switch · tab move · " + formKeys
+			keys = "enter choose · left/right switch · tab next field · " + formKeys
 		case fieldMultiChoice, fieldToolList:
-			keys = "enter open · tab move · " + formKeys
+			keys = "enter open · tab next field · " + formKeys
 		case fieldProvider:
-			keys = "enter choose provider in the table · tab move · " + formKeys
+			keys = "enter choose provider in the table · tab next field · " + formKeys
 		case fieldTargets, fieldPaths:
-			keys = "enter edit list · right/left expand/collapse · tab move · " + formKeys
+			keys = "enter edit list · right/left expand/collapse · tab next field · " + formKeys
 		case fieldVaultAction:
-			keys = "enter run · tab move · " + formKeys
+			keys = "enter run · tab next field · " + formKeys
 		}
 		if m.isPayloadForm() {
 			if payloadKeys := m.payloadKeys(); payloadKeys != "" {
@@ -3496,9 +3500,9 @@ func (m *Model) editorView() string {
 		}
 		if m.fields[m.focus].kind == fieldSecret {
 			if m.editing == "" {
-				keys = "F2 save credential first · tab move · " + leaveKeys
+				keys = "F2 save credential first · tab next field · " + leaveKeys
 			} else {
-				keys = m.secretKeys() + " · tab move · " + formKeys
+				keys = m.secretKeys() + " · tab next field · " + formKeys
 			}
 		}
 		if m.wizard != nil {
@@ -3510,9 +3514,9 @@ func (m *Model) editorView() string {
 		}
 		if m.payloadRemoveAsk {
 			b.WriteString("\n" + m.wrapped(warningStyle, fmt.Sprintf("Remove the field %q?", m.fields[m.focus].label)) + "\n")
-			keys = "y remove · n/esc keep"
+			keys = "y remove · n/esc keep · ? help"
 		}
-		b.WriteString(m.hint(keys))
+		b.WriteString(m.keyHint(keys))
 	case screenSecret:
 		where := secret.StoreLabel(platform) + " of this machine"
 		if m.credentialType() == config.CredentialTypeVault {
@@ -3522,7 +3526,7 @@ func (m *Model) editorView() string {
 		b.WriteString("  " + m.secretInput.View() + "\n")
 		b.WriteString(m.indented(
 			"the value is masked while you type, is never shown back, and goes into "+where) + "\n")
-		b.WriteString(m.hint("enter store · esc cancel"))
+		b.WriteString(m.keyHint("enter store · esc cancel"))
 	case screenVaultOffer:
 		b.WriteString(m.vaultOfferView())
 	case screenAdminAuth:
@@ -3539,7 +3543,7 @@ func (m *Model) editorView() string {
 			b.WriteString(m.indentedWith(warningStyle,
 				"warning: every secret it holds is written back to disk unencrypted; anyone who can read "+
 					"this machine's files can then read them") + "\n")
-			b.WriteString(m.hint("y turn off · n/esc keep it encrypted"))
+			b.WriteString(m.keyHint("y turn off · n/esc keep it encrypted · ? help"))
 			break
 		}
 		if m.migratePlanConfirm {
@@ -3595,7 +3599,7 @@ func (m *Model) editorView() string {
 						"or later with 'qatlas credential delete'") + "\n")
 			}
 		}
-		b.WriteString(m.hint("y remove · n/esc keep"))
+		b.WriteString(m.keyHint("y remove · n/esc keep · ? help"))
 	case screenSummary:
 		b.WriteString(m.summaryView())
 	case screenLeave:
@@ -3642,7 +3646,7 @@ func (m *Model) leaveView() string {
 		discard = "d discard and quit"
 		why = "Quitting would lose them. Nothing was written yet."
 	}
-	return m.wrapped(warningStyle, warning) + "\n" + m.wrapped(hintStyle, save+" · "+discard+" · esc keep editing") +
+	return m.wrapped(warningStyle, warning) + m.keyHint(save+" · "+discard+" · esc keep editing · ? help") +
 		"\n\n" + m.wrapped(lipgloss.NewStyle(), why)
 }
 
@@ -3803,7 +3807,7 @@ func (m *Model) listFrame() (string, string) {
 // navKeys is the key line while the sidebar, or below its width the navigation line, has the focus.
 func (m *Model) navKeys() string {
 	if m.sidebarLayout() {
-		return "up/down section · enter open · 1-8 open · n new · c setup · ? help · q quit"
+		return "up/down section · enter/tab open · 1-8 open · n new · c setup · ? help · q quit"
 	}
 	// Below the sidebar width the navigation line follows its own keys: left/right step through the
 	// sections, and down (like enter and tab) moves the focus into the workspace below it; up does nothing
@@ -3817,7 +3821,7 @@ func (m *Model) navKeys() string {
 // left/right instead stay inside the list (see updateList).
 func (m *Model) backToSectionsHint() string {
 	if m.sidebarLayout() {
-		return "esc/left sections"
+		return "esc/left/tab sections"
 	}
 	return "esc/tab sections"
 }
@@ -4955,6 +4959,6 @@ func (m *Model) profileConfirmView() string {
 	b.WriteString(fmt.Sprintf("Replace the permission and tool ticks with profile %s?\n", profile.ID))
 	b.WriteString(m.indented(profileText(metadata, profile)) + "\n")
 	b.WriteString(m.indented("every tick stays changeable afterwards; nothing is saved before you save the form") + "\n")
-	b.WriteString(m.hint("y replace the ticks · n/esc keep them"))
+	b.WriteString(m.keyHint("y replace the ticks · n/esc keep them · ? help"))
 	return b.String()
 }

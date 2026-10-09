@@ -179,8 +179,12 @@ func (m *Model) updateTemplate(key tea.KeyMsg) tea.Cmd {
 		case "esc":
 			m.template = nil
 			m.screen = t.from
-		case "up", "k", "down", "j":
+		case "up", "down":
 			t.index = 1 - t.index
+		case "pgup", "home":
+			t.index = 0
+		case "pgdown", "end":
+			t.index = 1
 		case "enter":
 			if t.index == 1 {
 				t.picking = true
@@ -256,7 +260,7 @@ func (m *Model) templateView() string {
 		}
 		b.WriteString(m.indentedHanging(style, mark, row) + "\n")
 	}
-	b.WriteString(m.keyHint("up/down move · enter choose · esc cancel") + m.notes())
+	b.WriteString(m.keyHint("up/down move · enter choose · esc cancel · ? help") + m.notes())
 	return b.String()
 }
 
@@ -285,7 +289,11 @@ func (m *Model) templateFrame() (string, string) {
 		head.WriteString(m.wrapped(hintStyle,
 			fmt.Sprintf("No entry matches %q. esc goes back.", l.query())) + "\n")
 	}
-	return head.String(), m.keyHint("type to search · up/down move · enter choose · esc back") + m.notes()
+	keys := "type to search · up/down move · enter choose · esc back"
+	if l.query() == "" {
+		keys += " · ? help"
+	}
+	return head.String(), m.keyHint(keys) + m.notes()
 }
 
 func (m *Model) templateRow(i int) string {

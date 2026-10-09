@@ -142,14 +142,14 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	selectChoice(t, m, toolsSelected)
 	focusField(t, m, toolListLabel)
 	// The row takes no text: typing a tool ID changes nothing.
-	typeText(t, m, "bookstack.pages.delete")
+	typeText(t, m, "pages.create")
 	if got := m.fieldValue(toolListLabel); got != "" || m.screen != screenForm {
 		t.Fatalf("typing on the tool list gave %q on screen %v", got, m.screen)
 	}
 
-	press(t, m, " ")
+	press(t, m, "enter")
 	if m.screen != screenPicker {
-		t.Fatalf("space on the tool list opened screen %v, want the picker", m.screen)
+		t.Fatalf("enter on the tool list opened screen %v, want the picker", m.screen)
 	}
 	view := screenOf(m)
 	for _, want := range []string{"0/68 ticked", "Content (27)", "Comments (5)", "Files (15)", "Administration (16)", "Imports (5)"} {
@@ -190,7 +190,7 @@ func TestToolsArePickedTickedAndSaved(t *testing.T) {
 	}
 	focusField(t, m, toolListLabel)
 	// The grouped picker starts on its all-groups row: the first space ticks everything, the second clears it.
-	press(t, m, " ", " ", " ", "enter")
+	press(t, m, "enter", " ", " ", "enter")
 	if !strings.Contains(screenOf(m), "none of 68 ticked: no tool is offered") {
 		t.Fatalf("an empty selection does not say that it closes the route:\n%s", screenOf(m))
 	}
@@ -260,7 +260,7 @@ func TestManyToolsStayPickableInASmallTerminal(t *testing.T) {
 	openEntryForm(t, m, sectionConnections, "route")
 	focusField(t, m, toolListLabel)
 	// The connection form itself needs more than twelve lines; the picker it opens does not.
-	press(t, m, " ")
+	press(t, m, "enter")
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: 12})
 	check := func(want string) {
 		t.Helper()
@@ -310,7 +310,7 @@ func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
 	focusField(t, m, toolsLabel)
 	selectChoice(t, m, toolsSelected)
 	focusField(t, m, toolListLabel)
-	press(t, m, " ")
+	press(t, m, "enter")
 	typeText(t, m, "workflowfiles")
 	view := screenOf(m)
 	for _, want := range []string{"github.workflowfiles.get  read  (listed only)",
@@ -320,7 +320,7 @@ func TestThePickerMarksToolsOfferedOnlyWhenTicked(t *testing.T) {
 		}
 	}
 	press(t, m, "esc")
-	press(t, m, " ")
+	press(t, m, "enter")
 	typeText(t, m, "issues.list")
 	if view := screenOf(m); !strings.Contains(view, "github.issues.list  read") || strings.Contains(view, "(listed only)") {
 		t.Fatalf("an ordinary tool is marked:\n%s", view)

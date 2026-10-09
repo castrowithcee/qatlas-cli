@@ -28,7 +28,7 @@ func groupedPicker(t *testing.T, width int) (*Model, string, *capability.Registr
 	focusField(t, m, toolsLabel)
 	selectChoice(t, m, toolsSelected)
 	focusField(t, m, toolListLabel)
-	press(t, m, " ")
+	press(t, m, "enter")
 	if m.screen != screenPicker || m.pickerGroups == nil {
 		t.Fatalf("the GitHub tool list did not open the grouped picker (screen %v)", m.screen)
 	}
@@ -192,7 +192,7 @@ func TestAFlatProviderKeepsTheFlatPicker(t *testing.T) {
 	focusField(t, m, toolsLabel)
 	selectChoice(t, m, toolsSelected)
 	focusField(t, m, toolListLabel)
-	press(t, m, " ")
+	press(t, m, "enter")
 	if m.screen != screenPicker || m.pickerGroups != nil || strings.Contains(screenOf(m), "all groups") {
 		t.Fatalf("a flat provider got a grouped picker:\n%s", screenOf(m))
 	}

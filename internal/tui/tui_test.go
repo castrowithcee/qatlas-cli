@@ -364,7 +364,7 @@ func TestNavigation(t *testing.T) {
 		if m.section != sectionServices {
 			t.Errorf("down = section %v, want Services", m.section)
 		}
-		for _, key := range []string{"j", "k", "shift+tab"} {
+		for _, key := range []string{"j", "k"} {
 			before := m.section
 			press(t, m, key)
 			if m.section == before || m.screen != screenNav {

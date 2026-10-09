@@ -264,9 +264,9 @@ func TestThePickerFitsASmallTerminal(t *testing.T) {
 	}
 }
 
-// Enter, space, and / open the values of every kind of choice row in every editor, the way enter opens the
+// Enter and / open the values of every kind of choice row in every editor, the way enter opens the
 // provider table, and none of them saves the form; esc returns to the row unchanged.
-func TestEveryChoiceRowOpensOnEnterSpaceAndSlash(t *testing.T) {
+func TestEveryChoiceRowOpensOnEnterAndSlash(t *testing.T) {
 	reg := wikiRegistry(t)
 	rows := []struct {
 		section section
@@ -285,7 +285,7 @@ func TestEveryChoiceRowOpensOnEnterSpaceAndSlash(t *testing.T) {
 		{sectionDefaults, "connection"},
 	}
 	for _, row := range rows {
-		for _, key := range []string{"enter", " ", "/"} {
+		for _, key := range []string{"enter", "/"} {
 			m, path := toolsModel(t, reg, map[string]config.Connection{"wiki": {Service: "wiki", Credential: "reader"}})
 			openSectionByName(t, m, row.section)
 			pressNew(t, m)
@@ -323,7 +323,7 @@ func TestF2SavesFromAChoiceRow(t *testing.T) {
 	pressNew(t, m)
 	typeText(t, m, "fresh")
 	focusField(t, m, "permissions")
-	if view := screenOf(m); !strings.Contains(view, "enter open · tab move · F2 save") {
+	if view := screenOf(m); !strings.Contains(view, "enter open · tab next field · F2 save") {
 		t.Errorf("the key line of a multiselect row does not name its keys:\n%s", view)
 	}
 	pump(t, m, "f2")
@@ -376,7 +376,7 @@ func TestThePermissionsAreTickedInThePicker(t *testing.T) {
 	if got := m.fieldValue("permissions"); got != "" {
 		t.Fatalf("default kept explicit permissions: %q", got)
 	}
-	press(t, m, " ")
+	press(t, m, "enter")
 	typeText(t, m, "read")
 	press(t, m, " ", "enter")
 	if got := m.fieldValue("permissions"); got != "read" {
@@ -384,14 +384,14 @@ func TestThePermissionsAreTickedInThePicker(t *testing.T) {
 	}
 }
 
-// In the guided setup enter, space, and / open a choice row and stay on the step; F2 goes on from it.
+// In the guided setup enter and / open a choice row and stay on the step; F2 goes on from it.
 func TestAChoiceRowDoesNotAdvanceTheSetup(t *testing.T) {
 	m, _, _, _, _ := newStoreModel(t)
 	walkSetup(t, m, stepService)
 	if got := m.fields[m.focus].label; got != "service" {
 		t.Fatalf("the service step opened on %q", got)
 	}
-	for _, key := range []string{"enter", " ", "/"} {
+	for _, key := range []string{"enter", "/"} {
 		press(t, m, key)
 		if m.screen != screenPicker || m.wizard.step != stepService {
 			t.Fatalf("%q on the service row opened screen %v at step %d", key, m.screen, m.wizard.step)
@@ -401,7 +401,7 @@ func TestAChoiceRowDoesNotAdvanceTheSetup(t *testing.T) {
 			t.Fatalf("esc in the picker left screen %v at step %d", m.screen, m.wizard.step)
 		}
 	}
-	if view := screenOf(m); !strings.Contains(view, "enter choose · left/right switch · tab move · F2 next") {
+	if view := screenOf(m); !strings.Contains(view, "enter choose · left/right switch · tab next field · F2 next") {
 		t.Errorf("the key line does not name F2 next:\n%s", view)
 	}
 	press(t, m, "tab")

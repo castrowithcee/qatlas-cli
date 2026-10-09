@@ -488,8 +488,6 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "q":
 		return m.quit()
-	case "?":
-		m.openHelp()
 	case "esc":
 		if lv.list.query() != "" {
 			lv.list.clearFilter()
@@ -500,9 +498,9 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 		lv.moveFocus(1)
 	case "shift+tab":
 		lv.moveFocus(-1)
-	case "left", "h", "right", "l":
+	case "left", "right":
 		by := 1
-		if key.String() == "left" || key.String() == "h" {
+		if key.String() == "left" {
 			by = -1
 		}
 		switch lv.focus {
@@ -516,7 +514,7 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 				m.focusNav()
 			}
 		}
-	case "enter", " ":
+	case "enter":
 		switch lv.focus {
 		case logFocusDate:
 			m.openLogDateDialog()
@@ -527,10 +525,10 @@ func (m *Model) updateLogs(key tea.KeyMsg) tea.Cmd {
 				m.clearMessages()
 			}
 		}
-	case "up", "k":
+	case "up":
 		lv.focus = logFocusRows
 		lv.list.move(-1)
-	case "down", "j":
+	case "down":
 		lv.focus = logFocusRows
 		lv.list.move(1)
 	case "pgup", "pgdown", "home", "end":
@@ -590,8 +588,6 @@ func (m *Model) updateLogDetail(key tea.KeyMsg) tea.Cmd {
 	switch key.String() {
 	case "esc":
 		m.screen = screenLogs
-	case "?":
-		m.openHelp()
 	}
 	return nil
 }
@@ -947,17 +943,18 @@ func (lv *logView) hasUnchecked() bool {
 func (m *Model) logKeys() string {
 	lv := m.logs
 	if m.screen != screenNav && m.usable(0) < 60 {
+		// The short form names the same keys with shorter words.
 		switch {
 		case lv.list.editing:
-			return "type to search · enter keep · esc clear"
+			return "type to search · up/down move · enter keep · esc clear"
 		case lv.focus == logFocusMode:
-			return "left/right mode · tab next · f filter · esc back · q quit"
+			return "left/right mode · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
 		case lv.focus == logFocusDate:
-			return "enter date · tab next · f filter · esc back · q quit"
+			return "enter date · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
 		case len(lv.list.matches) == 0:
-			return "tab bar · f filter · / search · esc back · q quit"
+			return "tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
 		}
-		return "enter detail · tab bar · f filter · / search · esc back · q quit"
+		return "enter detail · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
 	}
 	switch {
 	case m.screen == screenNav:
@@ -965,13 +962,13 @@ func (m *Model) logKeys() string {
 	case lv.list.editing:
 		return "type to search · up/down move · enter keep search · esc clear search"
 	case lv.focus == logFocusMode:
-		return "left/right change mode · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
+		return "left/right change mode · tab next field · f filter · / search · 1-8 section · esc back · ? help · q quit"
 	case lv.focus == logFocusDate:
-		return "enter or left/right change the date · tab next · f filter · / search · 1-8 section · esc back · ? help · q quit"
+		return "enter or left/right change the date · tab next field · f filter · / search · 1-8 section · esc back · ? help · q quit"
 	case len(lv.list.matches) == 0:
-		return "tab focus bar · left/right change · f filter · / search · 1-8 section · esc back · ? help · q quit"
+		return "tab next field · left/right change · f filter · / search · 1-8 section · esc back · ? help · q quit"
 	}
-	keys := "enter details · tab focus bar · left/right change · f filter · / search · 1-8 section · esc back · ? help · q quit"
+	keys := "enter details · tab next field · left/right change · f filter · / search · 1-8 section · esc back · ? help · q quit"
 	if lv.list.query() != "" {
 		keys = strings.Replace(keys, "esc back", "esc clear search", 1)
 	}
@@ -1002,7 +999,7 @@ func (m *Model) logsWindow() (int, int) {
 func (m *Model) logDetailView() string {
 	lv := m.logs
 	if lv.detail < 0 || lv.detail >= len(lv.rows) {
-		return m.hint("esc back")
+		return m.keyHint("esc back · ? help")
 	}
 	row := lv.rows[lv.detail]
 	e := row.line.Entry
@@ -1043,7 +1040,7 @@ func (m *Model) logDetailView() string {
 		field("result", orDash(m.logText(e.Result)))
 		field("duration", formatDuration(e.DurationMS))
 	}
-	b.WriteString(m.hint("esc back · 1-8 section"))
+	b.WriteString(m.keyHint("esc back · 1-8 section · ? help"))
 	return b.String()
 }
 
