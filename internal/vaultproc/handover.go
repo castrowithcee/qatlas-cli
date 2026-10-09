@@ -88,8 +88,8 @@ func (s *Server) serveHandover(conn net.Conn, req request) {
 		return
 	case behaviour != vault.UpdateHandover:
 		// The vault asks an update to lock it: the process does so at once, as on a lock request.
-		_ = writeMessage(conn, response{V: Version, Handover: string(vault.UpdateLock)})
 		s.stop()
+		_ = writeMessage(conn, response{V: Version, Handover: string(vault.UpdateLock)})
 		return
 	}
 	if writeMessage(conn, response{V: Version, Handover: string(vault.UpdateHandover)}) != nil {
@@ -145,16 +145,17 @@ func (s *Server) releaseHandover() {
 	s.pending = nil
 }
 
-// failHandover records a handover that did not happen, answers with code, and locks the server. Requests
-// that arrive from here on are answered as locked rather than replaced: no successor holds the vault.
+// failHandover records a handover that did not happen, locks the server, and answers with code, so that no
+// client is told of the failure while the server still accepts connections. Requests that arrive from here
+// on are answered as locked rather than replaced: no successor holds the vault.
 func (s *Server) failHandover(conn net.Conn, code string) {
 	s.logHandover(code)
 	s.mu.Lock()
 	s.handingOver = false
 	s.mu.Unlock()
+	s.stop()
 	_ = conn.SetWriteDeadline(time.Now().Add(s.requestTimeout()))
 	_ = writeMessage(conn, response{V: Version, Error: code})
-	s.stop()
 }
 
 // logHandover appends the outcome of a handover to the invocation log the server keeps, if it keeps one.

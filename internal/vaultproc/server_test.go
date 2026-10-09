@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -622,5 +623,48 @@ func TestServerHandsSecretsOnlyToApprovedConnections(t *testing.T) {
 	if _, err := exchangeOverPipe(t, s, c, request{Op: opGet, Credential: "wiki-reader", Role: "token",
 		Scope: testScope()}); !errors.Is(err, vault.ErrApprovalRequired) {
 		t.Errorf("get after the approval was revoked = %v, want vault.ErrApprovalRequired", err)
+	}
+}
+
+// writeProbe notes whether its server was stopping at the last write to any connection it wraps, which is the
+// answer a client reads last.
+type writeProbe struct {
+	server           *Server
+	stoppingAtAnswer atomic.Bool
+}
+
+func (p *writeProbe) wrap(c net.Conn) net.Conn { return &probeConn{Conn: c, probe: p} }
+
+type probeConn struct {
+	net.Conn
+	probe *writeProbe
+}
+
+func (c *probeConn) Write(b []byte) (int, error) {
+	c.probe.stoppingAtAnswer.Store(c.probe.server.stopping())
+	return c.Conn.Write(b)
+}
+
+// A lock is answered only once the server stopped, so no connection can be made after the client was told.
+func TestLockIsAnsweredAfterTheServerStopped(t *testing.T) {
+	s := testServer()
+	probe := &writeProbe{server: s}
+	clientEnd, serverEnd := net.Pipe()
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		s.serveConn(probe.wrap(serverEnd))
+	}()
+	defer func() {
+		_ = clientEnd.Close()
+		<-served
+	}()
+	c := testClient()
+	ctx := context.Background()
+	if resp, err := c.exchange(ctx, clientEnd, c.deadline(ctx), request{Op: opLock}); err != nil || resp.Error != "" {
+		t.Fatalf("lock = %+v, %v", resp, err)
+	}
+	if !probe.stoppingAtAnswer.Load() {
+		t.Fatalf("the lock was answered before the server stopped")
 	}
 }
