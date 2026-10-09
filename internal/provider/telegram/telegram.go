@@ -184,6 +184,8 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
 	{ID: groupMedia, Title: "Media", Description: "Send photos, documents, and albums to the bound chats"},
 	{ID: groupMembers, Title: "Members", Description: "Ban, unban, and restrict members of the bound chats"},
+	{ID: groupInteractions, Title: "Interactions",
+		Description: "Send and stop polls, set reactions, and show chat actions in the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -259,6 +261,11 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: membersBan, Handler: capability.Handler(invokeMembersBan)},
 		capability.Operation{Descriptor: membersUnban, Handler: capability.Handler(invokeMembersUnban)},
 		capability.Operation{Descriptor: membersRestrict, Handler: capability.Handler(invokeMembersRestrict)},
+
+		capability.Operation{Descriptor: pollsSend, Handler: capability.Handler(invokePollsSend)},
+		capability.Operation{Descriptor: pollsStop, Handler: capability.Handler(invokePollsStop)},
+		capability.Operation{Descriptor: reactionsSet, Handler: capability.Handler(invokeReactionsSet)},
+		capability.Operation{Descriptor: chatActionsSend, Handler: capability.Handler(invokeChatActionsSend)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 		capability.Operation{Descriptor: botGet, Handler: capability.Handler(invokeBotGet)},
 		capability.Operation{Descriptor: webhookGet, Handler: capability.Handler(invokeWebhookGet)},

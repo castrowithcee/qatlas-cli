@@ -133,7 +133,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 
 | Group | Reads | Confirmed changes | Only with a tools list |
 | --- | --- | --- | --- |
-| `teams` | `teams.list` | | |
+| `teams` | `teams.list`, `.get`, `teammembers.list` | | `teammembers.roles` |
 | `channels` | `channels.list`, `.get`, `.browse`, `.search`, `archivedchannels.list`, `channelmembers.list` | `channels.create`, `.update`, `channelmembers.add` | `channels.archive`, `.restore`, `.privacy`, `channelmembers.remove`, `.roles` |
 | `messages` | `messages.list`, `.thread`, `.get`, `.files`, `.search`, `direct.list`, `pins.list` | `direct.open`, `groupmessages.open`, `messages.send`, `.update`, `.pin`, `.unpin` | `messages.delete` |
 | `files` | `files.info`, `.search`, `.download` (writes a local file) | `files.upload` (reads a local file) | |
@@ -143,9 +143,10 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 The reads need no confirmation; every other tool always does, through the confirmation mechanism of every
 confirmed Qatlas tool. The tools of the last column are in no profile and offered only to a connection whose
 tools list names them; `channelmembers.roles` alters rights and accepts exactly `channel_user` and
-`channel_user channel_admin`, `channels.privacy` accepts exactly `O` and `P`, and `channels.archive` is
-kChat's channel delete, which keeps the channel restorable. kChat's own refusals, for example of the default
-channel or without team management rights, stay `permission` or `provider-error`.
+`channel_user channel_admin`, `teammembers.roles` exactly `team_user` and `team_user team_admin`,
+`channels.privacy` accepts exactly `O` and `P`, and `channels.archive` is kChat's channel delete, which
+keeps the channel restorable. kChat's own refusals, for example of the default channel or without team
+management rights, stay `permission` or `provider-error`.
 
 The terminal editor starts a new connection on the setup profile `read` (all read tools, `direct.list` and
 the searches included). `messaging` adds `direct.open`, `groupmessages.open`, `messages.send`,
@@ -155,6 +156,8 @@ reads teams and channels and adds `channels.create`, `channels.update`, and `cha
 
 Behaviour beyond the schemas:
 
+- `teams.get` and `teammembers.*` take a bound `team_id`, checked locally. `teams.get` never returns the
+  invitation ID, email, or allowed domains; `teammembers.roles` changes only a live member of that team.
 - `channels.create` and `channels.update` never create or change a direct or group channel; `update` sends
   only the given fields. Adding an existing member or reaction changes nothing, and kChat notifies added
   users.
@@ -201,9 +204,9 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 - `teams.list`, `channels.list`, `reactions.list`, and `pins.list` read kChat's complete array, which has
   no pagination of its own, and page it themselves: `page` (1-based) and `limit` select a window of the
   already scope-filtered result, and the answer reports `page`, `pages`, `total`, and `count`.
-- `channels.browse`, `archivedchannels.list`, `channelmembers.list`, and `users.list` page kChat's own `page`
-  and `per_page`; `has_more` is true when kChat's page was full. Dropped channels or users can make `count`
-  lower than the limit. `users.search` takes only `limit` and has no further page.
+- `channels.browse`, `archivedchannels.list`, `channelmembers.list`, `teammembers.list`, and `users.list` page
+  kChat's own `page` and `per_page`; `has_more` is true when kChat's page was full. Dropped channels or
+  users can make `count` lower than the limit. `users.search` takes only `limit` and has no further page.
 - `messages.list` pages kChat's own `GetPostsForChannel` pagination, newest first, and reports `has_more`
   from kChat's `has_next`.
 - `messages.search` and `files.search` pass `page` and `limit` to kChat's own search and read no further
@@ -261,10 +264,11 @@ derived from them, including a message's own text.
 This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV are separate Infomaniak
 products with their own authentication, none of them the token this provider uses; see the `infomaniakdrive`
 provider's documentation for why each is its own sibling provider. Within kChat, this provider offers no team
-management, no permanent deletion, move, scheme, or moderation change of a channel, no membership change of a
-direct or group channel, no change of another user or of other profile fields, no profile picture, no preview
-or thumbnail, no custom emoji catalog, no removal of another user's reaction, and no webhook configuration. An
-edit changes only a message's text, never its attachments, pin state, or properties.
+creation, change, or deletion, no adding or removing of team members, no invitation, no permanent deletion,
+move, scheme, or moderation change of a channel, no membership change of a direct or group channel, no change
+of another user or of other profile fields, no profile picture, no preview or thumbnail, no custom emoji
+catalog, no removal of another user's reaction, and no webhook configuration. An edit changes only a message's
+text, never its attachments, pin state, or properties.
 
 ## Live test scenario
 
@@ -273,7 +277,8 @@ A live test against a real kChat instance checks, in order:
 - Team and channel listings match the allow-lists and what the token belongs to; searches show no hit from
   a channel outside the allow-list, a direct message, or another team.
 - Channel create and update work without a channel allow-list and are refused with one; member add, list,
-  role, and remove work on connections that list the tools; a user only in another team is refused.
+  role, and remove work on connections that list the tools; a user only in another team is refused, and team
+  details, members, and role work likewise.
 - A disposable channel switches to private, is archived, shows in `archivedchannels.list`, and is restored
   from a connection that lists the tools; the default channel's refusal is a provider error class.
 - Message list ends with `has_more` false on the last of two pages; one confirmed send appears exactly once;
