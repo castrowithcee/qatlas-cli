@@ -11,7 +11,7 @@ updated: 2026-10-09
 
 A connection binds one bot token to its targets, given as `target` (one) or `targets` (a list). A target is
 a chat (a numeric chat ID, also negative, or an `@username`), `bot`, or `business/<id>`. It can send
-(`create`), edit (`update`, including the inline keyboard), and delete (`delete`) messages in its chats, and
+(`create`), edit (`update`, including the inline keyboard), and delete (`delete`) messages in its chats and pin or unpin them (`update`), and
 every operation requires confirmation. Telegram's own edit and delete restrictions still apply.
 
 `telegram.messages.send` sends text of 1 through 4096 characters. `parse_mode` (`HTML` or `MarkdownV2`)
@@ -42,8 +42,8 @@ combine with chats, and a connection with only `bot` has no chat. A tool that ne
 before the credential is read when the target is missing. Methods that accept only a numeric chat ID refuse an
 `@username` chat locally.
 
-Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the update
-tool to `updates`. A group never changes a tool ID, a permission, or a tools list. The base URL must be a plain
+Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin
+tools to `pins`, the update tool to `updates`. A group never changes a tool ID, a permission, or a tools list. The base URL must be a plain
 `https` URL with a host and without user, query, or fragment, with no exception for local addresses, and
 redirects are never followed. `config validate` rejects any other base URL. Errors never carry Telegram's own
 error text.
@@ -58,6 +58,11 @@ result, preventing duplicate sends or unplanned repeated changes.
 list no longer offers it. Its reach is that of the Bot API `deleteMessage`: in a bound chat the bot
 deletes its own messages and, as an administrator, those of others; in a private chat it also deletes incoming
 messages.
+
+`telegram.pins.pin` pins one message by `message_id`; `disable_notification` pins silently.
+`telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
+`telegram.pins.unpinall` unpins every pinned message of the chat and, like `telegram.messages.delete`,
+requires a `tools` list. Telegram's own pin rights still apply, and topic-specific unpinning is not offered.
 
 ## Reading updates
 
@@ -84,6 +89,7 @@ The terminal editor starts a new connection on the setup profile `send`, which t
 `[telegram.messages.send]`: the read tools expose incoming message content, while a send reaches only a bound
 chat, each one after confirmation. The profile `read` ticks `[read]` and `[telegram.updates.list]`. The
 profile `messaging` also ticks `update`, `delete`, `telegram.messages.edit`, and `telegram.messages.delete`;
-`telegram.messages.editreplymarkup` is in no profile. A profile is a visible starting selection, not a role:
+the profile `pins` ticks `update`, `telegram.pins.pin`, and `telegram.pins.unpin`;
+`telegram.messages.editreplymarkup` and `telegram.pins.unpinall` are in no profile. A profile is a visible starting selection, not a role:
 only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved
 connection never follows a profile.

@@ -176,6 +176,7 @@ var messagesDelete = capability.Descriptor{
 
 var toolGroups = []config.ToolGroup{
 	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the bound chats"},
+	{ID: groupPins, Title: "Pins", Description: "Pin and unpin messages in the bound chats"},
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
 }
 
@@ -221,6 +222,10 @@ func Register(reg *capability.Registry) error {
 			Description: "also edits messages and deletes messages in the bound chats: as admin also those of " +
 				"others, in private chats also incoming ones",
 			Tools: []string{messagesSend.ID, messagesEdit.ID, messagesDelete.ID},
+		}, {
+			ID: "pins", Title: "Pin and unpin messages",
+			Description: "pins and unpins single messages in the bound chats; nothing is sent, edited, or deleted",
+			Tools:       []string{pinsPin.ID, pinsUnpin.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -230,6 +235,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
 		capability.Operation{Descriptor: messagesEditReplyMarkup, Handler: capability.Handler(invokeMessagesEditReplyMarkup)},
 		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
+		capability.Operation{Descriptor: pinsPin, Handler: capability.Handler(invokePinsPin)},
+		capability.Operation{Descriptor: pinsUnpin, Handler: capability.Handler(invokePinsUnpin)},
+		capability.Operation{Descriptor: pinsUnpinAll, Handler: capability.Handler(invokePinsUnpinAll)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 	)
 }

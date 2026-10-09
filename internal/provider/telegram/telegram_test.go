@@ -71,21 +71,25 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 2 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "updates" {
+	if len(metadata.Groups) != 3 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
+		metadata.Groups[2].ID != "updates" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
 		want := "messages"
-		if tool.ID == updatesList.ID {
+		switch {
+		case tool.ID == updatesList.ID:
 			want = "updates"
+		case strings.HasPrefix(tool.ID, "telegram.pins."):
+			want = "pins"
 		}
 		if tool.Group != want {
 			t.Errorf("tool %s group = %q, want %q", tool.ID, tool.Group, want)
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 5 {
-		t.Fatalf("operation count = %d, want five", len(operations))
+	if len(operations) != 8 {
+		t.Fatalf("operation count = %d, want eight", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -106,7 +110,7 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 		t.Fatal(err)
 	}
 	for _, d := range reg.Provider(Provider) {
-		if want := d.ID == messagesDelete.ID; d.RequiresToolAllowList != want {
+		if want := d.ID == messagesDelete.ID || d.ID == pinsUnpinAll.ID; d.RequiresToolAllowList != want {
 			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
 		}
 	}
