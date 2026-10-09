@@ -35,9 +35,16 @@ type graphqlEnvelope struct {
 // other read helper; the provider text of an error is not copied, only its code selects the class.
 func (c *Client) graphql(ctx context.Context, op string, doc graphqlDocument, variables map[string]any,
 	out any) error {
+	return c.graphqlWith(ctx, op, "", doc, variables, out)
+}
+
+// graphqlWith is graphql for a mutation: uncertain is appended to every failure after which the change may have
+// taken effect (transport, 5xx, unreadable answer, errors other than a clear authentication or permission one).
+func (c *Client) graphqlWith(ctx context.Context, op, uncertain string, doc graphqlDocument,
+	variables map[string]any, out any) error {
 	payload := map[string]any{"query": doc.text, "variables": variables}
 	var envelope graphqlEnvelope
-	if err := c.changeWith(ctx, op, "", http.MethodPost, doc.path, payload, &envelope); err != nil {
+	if err := c.changeWith(ctx, op, uncertain, http.MethodPost, doc.path, payload, &envelope); err != nil {
 		return err
 	}
 	if len(envelope.Errors) > 0 {
@@ -50,10 +57,10 @@ func (c *Client) graphql(ctx context.Context, op string, doc graphqlDocument, va
 					"this API key may not perform this operation; check the role of the API key in Twenty"}
 			}
 		}
-		return providerError(op, "Twenty rejected the query")
+		return providerError(op, "Twenty rejected the query"+uncertain)
 	}
 	if len(envelope.Data) == 0 || string(envelope.Data) == "null" || json.Unmarshal(envelope.Data, out) != nil {
-		return provider.InvalidResponse(op, "Twenty returned an invalid response")
+		return provider.InvalidResponse(op, "Twenty returned an invalid response"+uncertain)
 	}
 	return nil
 }

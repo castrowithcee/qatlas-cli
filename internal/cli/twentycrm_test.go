@@ -89,14 +89,14 @@ func TestTwentyToolsAreDiscoverable(t *testing.T) {
 		t.Fatalf("exit=%d stderr=%q", code, stderr)
 	}
 	for _, want := range []string{
-		"tools[35]{id,title,effect,requires,confirm,reason}:", "twentycrm.activitytargets.create,Link a Twenty CRM note or task to a record,create,", "twentycrm.activitytargets.delete,Remove a Twenty CRM note or task link,delete,", "twentycrm.activitytargets.list,List Twenty CRM note and task links,read,", "twentycrm.companies.create,Create a Twenty CRM company,create,", "twentycrm.companies.delete,Delete a Twenty CRM company,delete,", "twentycrm.companies.destroy,Destroy a Twenty CRM company,delete,", "twentycrm.companies.get,Get a Twenty CRM company,read,", "twentycrm.companies.list,List Twenty CRM companies,read,", "twentycrm.companies.restore,Restore a Twenty CRM company,update,", "twentycrm.companies.update,Update a Twenty CRM company,update,", "twentycrm.objects.get,Get a Twenty CRM object,read,", "twentycrm.objects.list,List Twenty CRM objects,read,", "twentycrm.records.batchcreate,Create Twenty CRM records in a batch,update,", "twentycrm.records.batchdelete,Delete Twenty CRM records in a batch,delete,", "twentycrm.records.batchupdate,Update Twenty CRM records in a batch,update,", "twentycrm.records.create,Create a Twenty CRM record,create,", "twentycrm.records.delete,Delete a Twenty CRM record,delete,", "twentycrm.records.destroy,Destroy a Twenty CRM record,delete,", "twentycrm.records.duplicates,Find duplicates of Twenty CRM records,read,", "twentycrm.records.get,Get a Twenty CRM record,read,", "twentycrm.records.groupby,Count Twenty CRM records by field,read,", "twentycrm.records.list,List Twenty CRM records,read,", "twentycrm.records.merge,Merge Twenty CRM records,delete,", "twentycrm.records.mergepreview,Preview the merge of Twenty CRM records,read,", "twentycrm.records.restore,Restore a Twenty CRM record,update,", "twentycrm.records.search,Search Twenty CRM records,read,", "twentycrm.records.searchall,Search all Twenty CRM objects,read,", "twentycrm.records.update,Update a Twenty CRM record,update,", "twentycrm.webhooks.delete,Delete a Twenty CRM webhook,delete,", "twentycrm.webhooks.get,Get a Twenty CRM webhook,read,", "twentycrm.webhooks.list,List Twenty CRM webhooks,read,", "twentycrm.webhooks.update,Update a Twenty CRM webhook,update,", "twentycrm.workflowruns.list,List Twenty CRM workflow runs,read,", "twentycrm.workflows.get,Get a Twenty CRM workflow,read,", "twentycrm.workflows.list,List Twenty CRM workflows,read,",
+		"tools[39]{id,title,effect,requires,confirm,reason}:", "twentycrm.activitytargets.create,Link a Twenty CRM note or task to a record,create,", "twentycrm.activitytargets.delete,Remove a Twenty CRM note or task link,delete,", "twentycrm.activitytargets.list,List Twenty CRM note and task links,read,", "twentycrm.companies.create,Create a Twenty CRM company,create,", "twentycrm.companies.delete,Delete a Twenty CRM company,delete,", "twentycrm.companies.destroy,Destroy a Twenty CRM company,delete,", "twentycrm.companies.get,Get a Twenty CRM company,read,", "twentycrm.companies.list,List Twenty CRM companies,read,", "twentycrm.companies.restore,Restore a Twenty CRM company,update,", "twentycrm.companies.update,Update a Twenty CRM company,update,", "twentycrm.objects.get,Get a Twenty CRM object,read,", "twentycrm.objects.list,List Twenty CRM objects,read,", "twentycrm.records.batchcreate,Create Twenty CRM records in a batch,update,", "twentycrm.records.batchdelete,Delete Twenty CRM records in a batch,delete,", "twentycrm.records.batchupdate,Update Twenty CRM records in a batch,update,", "twentycrm.records.create,Create a Twenty CRM record,create,", "twentycrm.records.delete,Delete a Twenty CRM record,delete,", "twentycrm.records.destroy,Destroy a Twenty CRM record,delete,", "twentycrm.records.duplicates,Find duplicates of Twenty CRM records,read,", "twentycrm.records.get,Get a Twenty CRM record,read,", "twentycrm.records.groupby,Count Twenty CRM records by field,read,", "twentycrm.records.list,List Twenty CRM records,read,", "twentycrm.records.merge,Merge Twenty CRM records,delete,", "twentycrm.records.mergepreview,Preview the merge of Twenty CRM records,read,", "twentycrm.records.restore,Restore a Twenty CRM record,update,", "twentycrm.records.search,Search Twenty CRM records,read,", "twentycrm.records.searchall,Search all Twenty CRM objects,read,", "twentycrm.records.update,Update a Twenty CRM record,update,", "twentycrm.webhooks.delete,Delete a Twenty CRM webhook,delete,", "twentycrm.webhooks.get,Get a Twenty CRM webhook,read,", "twentycrm.webhooks.list,List Twenty CRM webhooks,read,", "twentycrm.webhooks.update,Update a Twenty CRM webhook,update,", "twentycrm.workflowruns.list,List Twenty CRM workflow runs,read,", "twentycrm.workflowruns.retry,Retry a Twenty CRM workflow run,execute,", "twentycrm.workflowruns.stop,Stop a Twenty CRM workflow run,execute,", "twentycrm.workflows.get,Get a Twenty CRM workflow,read,", "twentycrm.workflows.list,List Twenty CRM workflows,read,", "twentycrm.workflowversions.activate,Activate a Twenty CRM workflow version,update,", "twentycrm.workflowversions.deactivate,Deactivate a Twenty CRM workflow version,update,",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("tools output does not contain %q:\n%s", want, stdout)
 		}
 	}
-	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--all", "--config", path))); len(got) != 35 {
-		t.Errorf("twentycrm tools = %v, want all seven company, two object, sixteen record, three activity link, three workflow, and four webhook tools", got)
+	if got := toolIDs(t, string(runTwentyJSON(t, "", "tools", "twentycrm", "--all", "--config", path))); len(got) != 39 {
+		t.Errorf("twentycrm tools = %v, want all seven company, two object, sixteen record, three activity link, three workflow read, four workflow control, and four webhook tools", got)
 	}
 	if reads.Load() != 0 {
 		t.Errorf("secret lookups = %d, want 0", reads.Load())
@@ -243,7 +243,7 @@ func TestTwentyMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		Operations []application.SearchHit `json:"operations"`
 	}
 	decodeRaw(t, search.Structured, &searched)
-	if len(searched.Operations) != 35 || searched.Operations[0].ID != "twentycrm.activitytargets.create" ||
+	if len(searched.Operations) != 39 || searched.Operations[0].ID != "twentycrm.activitytargets.create" ||
 		searched.Operations[3].ID != "twentycrm.companies.create" ||
 		searched.Operations[9].ID != "twentycrm.companies.update" ||
 		searched.Operations[11].ID != "twentycrm.objects.list" ||
@@ -257,7 +257,11 @@ func TestTwentyMCPAndCLIShareTheCoreContracts(t *testing.T) {
 		searched.Operations[27].ID != "twentycrm.records.update" ||
 		searched.Operations[28].ID != "twentycrm.webhooks.delete" ||
 		searched.Operations[32].ID != "twentycrm.workflowruns.list" ||
-		searched.Operations[34].ID != "twentycrm.workflows.list" {
+		searched.Operations[33].ID != "twentycrm.workflowruns.retry" ||
+		searched.Operations[35].ID != "twentycrm.workflows.get" ||
+		searched.Operations[36].ID != "twentycrm.workflows.list" ||
+		searched.Operations[37].ID != "twentycrm.workflowversions.activate" ||
+		searched.Operations[38].ID != "twentycrm.workflowversions.deactivate" {
 		t.Fatalf("search operations = %+v", searched.Operations)
 	}
 
