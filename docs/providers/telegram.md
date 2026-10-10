@@ -112,14 +112,16 @@ Telegram's fixed actions for about five seconds.
 `telegram.topics.create` (`create`, not idempotent, never repeated after an unclear result) creates a forum
 topic with a `name` of 1 to 128 characters and optionally an `icon_color` from Telegram's fixed list of six
 values; its result is limited to `message_thread_id`, `name`, `icon_color`, and `icon_custom_emoji_id`.
-`telegram.topics.edit`, `telegram.topics.close`, and `telegram.topics.reopen` (`update`, idempotent) require
-exactly one of `message_thread_id` and `general: true`; the choice fixes the method, and anything else is
-refused before any request. Editing a topic needs a `name` or an `icon_custom_emoji_id`, and an empty
-`icon_custom_emoji_id` removes the icon; the General topic is only renamed (`name` required, no icon).
-`icon_custom_emoji_id` is accepted only as a string of 1 to 20 digits; `telegram.topics.iconstickers` lists
-the valid values.
-Reopening the General topic also unhides it. These results are a single boolean. Deleting topics and hiding
-the General topic are not offered; the tools are in no profile and need no `tools` list.
+`telegram.topics.edit`, `telegram.topics.close`, `telegram.topics.reopen`, and `telegram.topics.unpinall`
+(`update`, idempotent) require exactly one of `message_thread_id` and `general: true`; the choice fixes the
+method, and anything else is refused before any request. Editing a topic needs a `name` or an
+`icon_custom_emoji_id`, and an empty `icon_custom_emoji_id` removes the icon; the General topic is only
+renamed (`name` required, no icon). `icon_custom_emoji_id` is accepted only as a string of 1 to 20 digits;
+`telegram.topics.iconstickers` lists the valid values. Reopening the General topic also unhides it;
+`telegram.topics.hidegeneral` hides and closes it, and `telegram.topics.unhidegeneral` shows it again (both
+`update`, idempotent, `chat` only). `telegram.topics.unpinall` unpins all messages of a topic, and
+`telegram.topics.delete` (`delete`, idempotent, `message_thread_id` only) removes a topic with all its
+messages; both require a `tools` list. These results are a single boolean.
 
 ## Locations, venues, contacts, and dice
 
