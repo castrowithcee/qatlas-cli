@@ -140,17 +140,18 @@ func TestDefaultRegistry(t *testing.T) {
 		44: "telegram.pins.pin", 45: "telegram.pins.unpin", 46: "telegram.pins.unpinall",
 		47: "telegram.polls.send", 48: "telegram.polls.stop", 49: "telegram.reactions.remove",
 		50: "telegram.reactions.removeall", 51: "telegram.reactions.set", 52: "telegram.senderchats.ban",
-		53: "telegram.senderchats.unban", 54: "telegram.stickers.customemoji", 55: "telegram.stickers.send",
-		56: "telegram.stickers.uploadfile", 57: "telegram.stickersets.addsticker",
-		58: "telegram.stickersets.create", 59: "telegram.stickersets.delete", 60: "telegram.stickersets.get",
-		61: "telegram.topics.close", 62: "telegram.topics.create", 63: "telegram.topics.delete",
-		64: "telegram.topics.edit", 65: "telegram.topics.hidegeneral", 66: "telegram.topics.iconstickers",
-		67: "telegram.topics.reopen", 68: "telegram.topics.unhidegeneral", 69: "telegram.topics.unpinall",
-		70: "telegram.updates.confirm", 71: "telegram.updates.list", 72: "telegram.venues.send",
-		73: "telegram.videonotes.send", 74: "telegram.videos.send", 75: "telegram.voice.send",
-		76: "telegram.webhook.get",
+		53: "telegram.senderchats.unban", 54: "telegram.stickers.customemoji", 55: "telegram.stickers.delete",
+		56: "telegram.stickers.replace", 57: "telegram.stickers.send", 58: "telegram.stickers.setposition",
+		59: "telegram.stickers.uploadfile", 60: "telegram.stickersets.addsticker",
+		61: "telegram.stickersets.create", 62: "telegram.stickersets.delete", 63: "telegram.stickersets.get",
+		64: "telegram.topics.close", 65: "telegram.topics.create", 66: "telegram.topics.delete",
+		67: "telegram.topics.edit", 68: "telegram.topics.hidegeneral", 69: "telegram.topics.iconstickers",
+		70: "telegram.topics.reopen", 71: "telegram.topics.unhidegeneral", 72: "telegram.topics.unpinall",
+		73: "telegram.updates.confirm", 74: "telegram.updates.list", 75: "telegram.venues.send",
+		76: "telegram.videonotes.send", 77: "telegram.videos.send", 78: "telegram.voice.send",
+		79: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 77
+	ok2 := len(operations) == 80
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}

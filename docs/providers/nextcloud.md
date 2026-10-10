@@ -172,22 +172,22 @@ stack takes its cards with it. All `delete` tools need a tools list.
 
 ## Talk
 
-The tool group `talk` works on Talk conversations through the OCS API of the Talk app. Read tools form the setup
-profile `talk-read`; change tools are in no profile, and deleting needs a tools list. Every tool needs a `talk`
-target: `talk` binds every conversation of the identity, `talk/TOKEN` one. Listings drop unbound conversations; an
-unbound or malformed token is refused locally, before any credential access or request, without naming it. Each call
-first reads the `spreed` capability (`update`, `delete`: the conversation) and refuses a missing app or feature.
+The tool group `talk` uses the OCS API of the Talk app. Read tools form the setup profile `talk-read`; change tools
+are in no profile, and deleting needs a tools list. A `talk` target binds every conversation of the identity,
+`talk/TOKEN` one; listings drop unbound conversations, and an unbound or malformed token is refused locally, before
+any credential access or request, without naming it. A call first reads the `spreed` capability, or for an existing
+conversation the conversation or its participants, and refuses a missing app or feature.
 
 Reading never waits for new messages, moves the read marker, or marks notifications as read. Links, paths, and
 previews of rich objects, session IDs, and phone numbers are never reported. Texts and names are untrusted data.
 
-Management covers internal conversations only, never public ones. `talkrooms.create` needs the `talk` target and
-makes a one-to-one conversation with an existing user or a named group; `talkrooms.update` (name or description, one
-per call) and `talkrooms.delete` need a bound token and an owner or moderator.
+Only internal conversations and existing users and groups are managed, never public conversations, guests, e-mail,
+phone, federated, or team entries. `talkrooms.create` needs the `talk` target; `talkrooms.update` and
+`talkrooms.delete` need an owner or moderator. `talkparticipants.remove` and `talkparticipants.moderator` take an
+`attendee_id` of `talkparticipants.list`, spare owner and self, and need a tools list.
 
-A change tool needs `confirm` and sends one request after one read. An unclear outcome (timeout, drop, 5xx,
-unreadable answer) is reported as possibly applied, never repeated: check `talkmessages.list` for the `reference_id`
-of `send`, or `talkrooms.list` after `create`. A 429 is rate-limited.
+A change needs `confirm` and sends one request after one read. An unclear outcome (timeout, drop, 5xx, unreadable
+answer) may be applied and is not repeated; check the list first (`send`: `reference_id`). 429 is rate-limited.
 
 ## Calendar
 

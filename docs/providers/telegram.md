@@ -108,19 +108,14 @@ Telegram's fixed actions for about five seconds.
 
 ## Forum topics
 
-`telegram.topics.create` (`create`, not idempotent, never repeated after an unclear result) creates a forum
-topic with a `name` of 1 to 128 characters and optionally an `icon_color` from Telegram's fixed list of six
-values; its result is limited to `message_thread_id`, `name`, `icon_color`, and `icon_custom_emoji_id`.
-`telegram.topics.edit`, `telegram.topics.close`, `telegram.topics.reopen`, and `telegram.topics.unpinall`
-(`update`, idempotent) require exactly one of `message_thread_id` and `general: true`; the choice fixes the
-method, and anything else is refused before any request. Editing a topic needs a `name` or an
-`icon_custom_emoji_id`, and an empty `icon_custom_emoji_id` removes the icon; the General topic is only
-renamed (`name` required, no icon). `icon_custom_emoji_id` is accepted only as a string of 1 to 20 digits;
-`telegram.topics.iconstickers` lists the valid values. Reopening the General topic also unhides it;
-`telegram.topics.hidegeneral` hides and closes it, and `telegram.topics.unhidegeneral` shows it again (both
-`update`, idempotent, `chat` only). `telegram.topics.unpinall` unpins all messages of a topic, and
-`telegram.topics.delete` (`delete`, idempotent, `message_thread_id` only) removes a topic with all its
-messages; both require a `tools` list. These results are a single boolean.
+`telegram.topics.create` (`create`, never repeated after an unclear result) creates a forum topic with a `name`
+and optionally an `icon_color` from Telegram's fixed list. `telegram.topics.edit`, `telegram.topics.close`,
+`telegram.topics.reopen`, and `telegram.topics.unpinall` (`update`) require exactly one of `message_thread_id`
+and `general: true`, which fixes the method. Editing needs a `name` or an `icon_custom_emoji_id`, a value
+`telegram.topics.iconstickers` lists, and an empty one removes the icon; the General topic is only renamed.
+Reopening the General topic also unhides it; `telegram.topics.hidegeneral` hides and closes it, and
+`telegram.topics.unhidegeneral` shows it again. `telegram.topics.unpinall` unpins all messages of a topic, and
+`telegram.topics.delete` (`delete`) removes a topic with all its messages; both require a `tools` list.
 
 ## Locations, venues, contacts, and dice
 
@@ -269,21 +264,20 @@ under `messages`. Each tool sends exactly one request and reports an unclear out
 
 ## Stickers
 
-`telegram.stickers.send` sends one sticker to a bound chat from a `local_path` or a `file_ref`, never from a
-URL. A local file must be a `.webp`, `.tgs`, or `.webm` file of at most 512 KB in a directory the connection
-releases for reading (`files`) and is sent under a neutral name. A `file_ref` must be bound to the selected chat
-or to `bot`; anything else is refused before the credential is read.
+`telegram.stickers.send` sends one sticker to a bound chat from a `local_path` (a `.webp`, `.tgs`, or `.webm`
+file of at most 512 KB in a released directory, sent under a neutral name) or a `file_ref` bound to the selected
+chat or to `bot`, never from a URL. `telegram.stickersets.get`, `telegram.stickers.customemoji`, and
+`telegram.topics.iconstickers` read public catalog data on every connection and return fixed fields per sticker,
+with a `bot`-bound `file_ref` only on a connection that binds the `bot` target.
 
-`telegram.stickersets.get`, `telegram.stickers.customemoji`, and `telegram.topics.iconstickers` read public
-catalog data on every connection and return a fixed set of fields per sticker; a sticker carries a `file_ref`
-bound to `bot` only on a connection that binds the `bot` target.
-
-`telegram.stickers.uploadfile`, `telegram.stickersets.create`, `telegram.stickersets.addsticker`, and
-`telegram.stickersets.delete` manage sticker sets and need the `bot` target. A set belongs to the given Telegram
-user, not to a chat, and takes files only as `bot`-bound references from `uploadfile`. Only the bot's own sets are
-changed: the name must end in `_by_` and the bot's username, which one `getMe` read checks before the changing
-request. Deleting a set, available only through a tools list, removes it for every user and cannot be undone.
-Each changing sticker tool sends one request and reports an unclear outcome instead of repeating it.
+The set tools `telegram.stickers.uploadfile`, `telegram.stickersets.create`, `telegram.stickersets.addsticker`,
+and `telegram.stickersets.delete` and the sticker tools `telegram.stickers.setposition`,
+`telegram.stickers.replace`, and `telegram.stickers.delete` need the `bot` target. A set belongs to the given
+Telegram user, not to a chat, and takes files only as `bot`-bound references from `uploadfile`. Only the bot's
+own sets change: the name must end in `_by_` and the bot's username, checked with one `getMe` read, and a
+sticker, addressed by the set `name` and a `bot`-bound `file_ref`, must belong to that set, checked with reads.
+Deleting a set or removing a sticker is final and available only through a tools list. Each changing tool sends
+one request and reports an unclear outcome instead of repeating it.
 
 ## Setup profiles
 

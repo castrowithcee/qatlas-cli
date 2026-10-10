@@ -163,6 +163,10 @@ func (c *Client) getFile(ctx context.Context, op string, parsed parsedRef) (file
 	if err != nil {
 		return fileInfo{}, err
 	}
+	return c.getFileByID(ctx, op, fileID)
+}
+
+func (c *Client) getFileByID(ctx context.Context, op, fileID string) (fileInfo, error) {
 	raw, err := c.call(ctx, spec{op: op, method: "getFile", limit: defaultResponseBytes, readOnly: true},
 		struct {
 			FileID string `json:"file_id"`
