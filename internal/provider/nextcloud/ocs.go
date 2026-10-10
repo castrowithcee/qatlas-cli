@@ -19,8 +19,8 @@ var (
 	ocsCloud   = []string{"cloud"}
 )
 
-// ocsOK is the OCS status code of a successful version 2 answer.
-const ocsOK = 200
+// A successful version 2 answer repeats its 2xx HTTP status; Talk answers a created message with 201.
+func ocsSucceeded(code int64) bool { return code >= 200 && code < 300 }
 
 // ocsRequest is one OCS read. The app and the suffix are fixed segments chosen by the calling operation
 // (a validated ID is the only part that may come from a request) and the query holds typed values; nothing
@@ -122,7 +122,7 @@ func (c *Client) ocsDo(ctx context.Context, op, method string, request ocsReques
 	if err != nil {
 		return nil, nil, unclear(invalidResponse(op, "Nextcloud did not answer with an OCS document"))
 	}
-	if code != ocsOK || !strings.EqualFold(meta.Status, "ok") {
+	if !ocsSucceeded(code) || !strings.EqualFold(meta.Status, "ok") {
 		// A version 2 answer repeats its failure in the HTTP status; a body that disagrees with a
 		// successful status is classified by its own code and otherwise refused as unusable.
 		if code >= 400 && code < 600 {

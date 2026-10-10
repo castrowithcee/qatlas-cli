@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Nextcloud file operations, file comments, share reads and management, Deck reads and board, stack,
-  and card management, Talk reads, typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and messages,
+  and notes, with typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -165,47 +165,40 @@ of the instance.
 
 ## Deck
 
-The tool group `deck` reads boards with their labels, sharing entries, and members, their stacks with cards, and
-single cards (setup profile `deck-read`), and manages boards, stacks, and cards (`deckboards.*`, `deckstacks.*`,
-`deckcards.*` changes, in no profile). All need a `deck` target: `deck` binds every board of the identity,
-`deck/BOARD_ID` only that board. A board that is not bound is refused locally, before any credential access or
-request, without naming it; listings drop unbound and deleted boards. Stack and card IDs count only through the
-bound board's hierarchy: Deck resolves a card by its ID alone, so a card is read only after the board's stacks show
-it in the named stack.
+The tool group `deck` reads boards with labels, sharing entries, and members, stacks with cards, and single cards
+(setup profile `deck-read`), and changes boards, stacks, and cards (in no profile). A `deck` target binds every
+board of the identity, `deck/BOARD_ID` one board; an unbound board is refused locally, before any credential access
+or request, without naming it, and listings drop unbound and deleted boards. Deck resolves stacks and cards by ID
+alone, so a stack, card, or target stack counts only when a read of the bound board shows it there. Deck follows no
+redirect, and a 404 means a missing app or object alike. Provider text is untrusted, capped, and marked `truncated`
+when cut; comments and attachments are not read.
 
-Deck follows no redirect, and a 404 means a missing app or object alike. Titles, names, labels, and descriptions
-are untrusted, capped, and marked `truncated` when cut. Comments and attachments are not read.
-
-Board, stack, and card changes need `confirm` and send one request. `deckboards.create` needs the general `deck`
-target, since a `deck/BOARD_ID` binding would not hold the new board. Other changes first read the bound board
-once: stack changes refuse without the manage right on it, card changes leave the edit right to Deck. A named
-stack, card, or target stack must appear in that read, else it is refused like a missing one. `deckcards.update`
-needs the card's `last_modified` as read and refuses a card changed since; an archived card can only be restored.
-Updates keep the fields they were not given; a new stack or card without `order` goes last. Deck deletes boards and
-cards softly, but Qatlas offers no restore; a deleted stack takes its cards with it. All `delete` tools need a
-tools list. An unclear outcome is reported as possibly applied and never repeated.
+Every change needs `confirm` and sends one request after at most one read of the bound board; an unclear outcome is
+reported as possibly applied and never repeated. `deckboards.create` needs the general `deck` target, since a
+`deck/BOARD_ID` binding would not hold the new board. Board and stack changes refuse without the manage right; card
+changes leave the edit right to Deck. `deckcards.update` needs the card's `last_modified` as read and refuses a
+card changed since; an archived card can only be restored. Updates keep the fields they were not given; a new stack
+or card without `order` goes last. Deck deletes boards and cards softly, but Qatlas offers no restore; a deleted
+stack takes its cards with it. All `delete` tools need a tools list.
 
 ## Talk
 
-The tool group `talk` reads Talk conversations through the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`),
-with the same client and limits as sharing: `talkrooms.list`, `talkrooms.get`, `talkparticipants.list`, and
-`talkmessages.list`, all in the setup profile `talk-read` and in no other. They need a `talk` target and refuse
-locally without one. A conversation counts only when the target binds it: `talk` binds every conversation of the
-identity, `talk/TOKEN` one. `talkrooms.list` drops every other conversation. A tool that takes a `token`
-refuses an unbound or malformed one locally, before any credential access or request, and its message names
-no token; the token never reaches a path unvalidated.
+The tool group `talk` works on Talk conversations through the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`)
+with the client of sharing. Its read tools form the setup profile `talk-read`; the change tools are in no profile,
+and deleting needs a tools list naming the tool. Every tool needs a `talk` target: `talk` binds every conversation
+of the identity, `talk/TOKEN` one. Listings drop unbound conversations; an unbound or malformed token is refused
+locally, before any credential access or request, without naming it. Each call first reads the `spreed` capability
+and refuses a missing app or feature instead of assuming a version.
 
-Each call first reads the `spreed` capability of the instance and refuses a missing Talk app or a missing
-feature clearly, instead of assuming a version; this costs one extra request per call. Participants report
-actor type, actor ID, display name, role, and call state; session IDs and phone numbers are not read.
+Reading never waits for new messages, moves the read marker, or marks notifications as read. Placeholders such as
+`{actor}` or `{file}` become the name of their rich object; links, paths, and previews of objects are never
+reported, because a file shared into a conversation carries an access token in them. Session IDs and phone numbers
+of participants are not read. Message texts and names are untrusted data.
 
-`talkmessages.list` reads one page of the history, newest first, with at most 100 messages (default 50) per
-page. The server is asked for no waiting, and not to move the read marker or mark notifications as read. `next_cursor`
-(the `X-Chat-Last-Given` header) continues with the older messages and is absent on the last page. A message
-text is cut at 4 KiB and marked `truncated`. Placeholders such as `{actor}` or `{file}` are replaced by the name
-of the rich object and listed in `objects`; links, paths, previews, and sizes of objects are never reported,
-because a file shared into a conversation carries an access token in them. Message texts and names are untrusted
-data.
+A change tool needs `confirm` and sends exactly one request after the capability read; a message ID only reaches the
+path of the bound conversation. An unclear outcome (timeout, dropped connection, 5xx, unreadable answer) is reported
+as possibly applied and never repeated; `talkmessages.send` reports a random `reference_id` to look for in
+`talkmessages.list` first. A 429 is reported as rate-limited; refusals have fixed messages without provider text.
 
 ## Versions
 
@@ -222,6 +215,13 @@ restore target of the identity with one `MOVE`. The manual documents no conditio
 made between the ETag check and the `MOVE` is not detected. An unclear outcome is reported as possibly
 applied and never repeated. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore`
 are in none.
+
+## Notes
+
+The group `notes` (profile `notes-read`) needs a `notes` target. `notes/CATEGORY` binds that category and all below
+it. The Notes API filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally,
+never shown or counted; a chunk may be empty while a next cursor is present. A foreign note or its attachment reads
+like a missing note. Attachments stay relative to their note; `local_path` follows `files.get`.
 
 ## System tags
 
