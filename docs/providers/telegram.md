@@ -110,11 +110,13 @@ Telegram's fixed actions for about five seconds.
 ## Forum topics
 
 `telegram.topics.create` (`create`, never repeated after an unclear result) creates a forum topic with a `name`
-and optionally an `icon_color` from Telegram's fixed list. `telegram.topics.edit`, `telegram.topics.close`, and
-`telegram.topics.reopen` (`update`) require exactly one of `message_thread_id` and `general: true`, which fixes
-the method. Editing needs a `name` or an `icon_custom_emoji_id`, a value `telegram.topics.iconstickers` lists,
-and an empty one removes the icon; the General topic is only renamed, and reopening it also unhides it. Deleting
-topics and hiding the General topic are not offered; the tools are in no profile and need no `tools` list.
+and optionally an `icon_color` from Telegram's fixed list. `telegram.topics.edit`, `telegram.topics.close`,
+`telegram.topics.reopen`, and `telegram.topics.unpinall` (`update`) require exactly one of `message_thread_id`
+and `general: true`, which fixes the method. Editing needs a `name` or an `icon_custom_emoji_id`, a value
+`telegram.topics.iconstickers` lists, and an empty one removes the icon; the General topic is only renamed.
+Reopening the General topic also unhides it; `telegram.topics.hidegeneral` hides and closes it, and
+`telegram.topics.unhidegeneral` shows it again. `telegram.topics.unpinall` unpins all messages of a topic, and
+`telegram.topics.delete` (`delete`) removes a topic with all its messages; both require a `tools` list.
 
 ## Locations, venues, contacts, and dice
 
