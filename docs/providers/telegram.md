@@ -208,7 +208,7 @@ the boolean rights Telegram returns, `custom_title`, and `until_date`. `telegram
 of administrators and members is classified `telegram-member-data`; the other two tools keep the provider's
 message classification.
 
-## Changing chat title, description, and photo
+## Changing chat settings and leaving
 
 `telegram.chats.settitle` (1 through 128 characters), `telegram.chats.setdescription` (up to 255 characters;
 the argument is required, and an empty string removes the description), `telegram.chats.setphoto` (`update`),
@@ -220,6 +220,18 @@ refuses private chats. Lengths are checked before the credential is read, and ea
 (`files`), never a `file_ref` or URL, and repeating it has an unknown effect. The photo is limited to 10 MB,
 checked from the file before it is read, and sent under a neutral name, so neither path nor file name leaves
 the machine.
+
+`telegram.chats.setpermissions` sets the default member permissions of a bound group or supergroup. Like
+`telegram.members.restrict`, it takes the complete `permissions` object: every boolean is required, a missing
+or unknown field is refused before any request, and all are sent explicitly with independent permissions.
+`telegram.chats.setstickerset` sets the group sticker set by name, never a URL; as a narrower reading than
+Telegram, the name must be 1 through 64 letters, digits, or underscores, checked before the credential is
+read. `telegram.chats.deletestickerset` (`delete`) removes it. The results are `updated: true` or
+`deleted: true`.
+
+`telegram.chats.leave` (`delete`) makes the bot leave a bound chat. The bot then has no access to it, and only
+a human can add it again. `telegram.chats.deletestickerset` and `telegram.chats.leave` require a `tools`
+list.
 
 ## Bot identity and webhook status
 
@@ -302,7 +314,9 @@ ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and 
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
 `telegram.members.restrict`, `telegram.members.promote`, `telegram.members.setadmintitle`,
 `telegram.members.settag`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
-`telegram.chats.deletephoto`, `telegram.messages.forward`, `telegram.messages.copy`, the interaction tools
-including locations, venues, contacts, and dice, and the invite link tools are in no profile. A profile is a
-visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
-changed before saving, and a saved connection never follows a profile.
+`telegram.chats.deletephoto`, `telegram.chats.setpermissions`, `telegram.chats.setstickerset`,
+`telegram.chats.deletestickerset`, `telegram.chats.leave`, `telegram.messages.forward`,
+`telegram.messages.copy`, the interaction tools including locations, venues, contacts, and dice, and the
+invite link tools are in no profile. A profile is a visible starting selection, not a role: only the ticked
+`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
+follows a profile.

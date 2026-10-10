@@ -1,7 +1,7 @@
 ---
 description: >
   Describes Nextcloud file operations, file comments, share reads and management, Deck reads and board and
-  stack management, Talk reads, typed targets, connection permissions, and safety boundaries.
+  stack management, Talk and note reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -219,6 +219,13 @@ restore target of the identity with one `MOVE`. The manual documents no conditio
 made between the ETag check and the `MOVE` is not detected. An unclear outcome is reported as possibly
 applied and never repeated. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore`
 are in none.
+
+## Notes
+
+The group `notes` (profile `notes-read`) needs a `notes` target. `notes/CATEGORY` binds that category and all below
+it. The Notes API filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally,
+never shown or counted; a chunk may be empty while a next cursor is present. A foreign note or its attachment reads
+like a missing note. Attachments stay relative to their note; `local_path` follows `files.get`.
 
 ## System tags
 

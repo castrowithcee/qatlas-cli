@@ -85,14 +85,15 @@
 // token's own user only, lists, creates, and changes the own sidebar categories of a bound team and sets the
 // own notifications of one channel, and, only when a connection's tools list names it, deletes one confirmed
 // message, one custom category, or removes one own reaction. Only when a connection's tools list names them,
-// it also lists, reads, describes, and deletes the incoming webhooks of bound channels: a webhook's ID is the
-// secret of its post URL, so those tools carry their own data sensitivity, bind every webhook through its
-// channel like a post, and write a webhook back with its target unchanged. The token's own presence, custom
-// status, and four display profile fields are the only user data it changes, always for the user read from
-// users/me and never taken from an argument. kChat renders Markdown and mentions such as @channel in a
-// message, so the text is sent as written. Every value a listing or a read answers with arrives from the
-// provider and is treated as untrusted data: normalised into a stable envelope, passed through the output
-// encoders, and never rendered, executed, or stored.
+// it also lists, reads, describes, and deletes the incoming and outgoing webhooks of bound teams and channels:
+// a webhook's ID is a secret, so those tools carry their own data sensitivity, bind every webhook through its
+// team and channel, write a webhook back with its target unchanged, and never return an outgoing webhook's
+// token or more of a callback URL than its origin. The token's own presence, custom status, and four display
+// profile fields are the only user data it changes, always for the user read from users/me and never taken
+// from an argument. kChat renders Markdown and mentions such as @channel in a message, so the text is sent as
+// written. Every value a listing or a read answers with arrives from the provider and is treated as untrusted
+// data: normalised into a stable envelope, passed through the output encoders, and never rendered, executed,
+// or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
 // no proactive spacing of its own; a 429 kChat itself reports is still classified and, when it names a
@@ -649,6 +650,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(incomingWebhooksGet), Handler: capability.Handler(invokeIncomingWebhooksGet)},
 		capability.Operation{Descriptor: withGroup(incomingWebhooksUpdate), Handler: capability.Handler(invokeIncomingWebhooksUpdate)},
 		capability.Operation{Descriptor: withGroup(incomingWebhooksDelete), Handler: capability.Handler(invokeIncomingWebhooksDelete)},
+		capability.Operation{Descriptor: withGroup(outgoingWebhooksList), Handler: capability.Handler(invokeOutgoingWebhooksList)},
+		capability.Operation{Descriptor: withGroup(outgoingWebhooksGet), Handler: capability.Handler(invokeOutgoingWebhooksGet)},
+		capability.Operation{Descriptor: withGroup(outgoingWebhooksUpdate), Handler: capability.Handler(invokeOutgoingWebhooksUpdate)},
+		capability.Operation{Descriptor: withGroup(outgoingWebhooksDelete), Handler: capability.Handler(invokeOutgoingWebhooksDelete)},
 	)
 }
 
