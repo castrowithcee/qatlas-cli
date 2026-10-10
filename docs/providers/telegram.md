@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 # Telegram
@@ -253,7 +253,21 @@ reported instead of repeated.
 (1 through 200 identifiers of digits), and `telegram.topics.iconstickers` (`read`) read public catalog data and
 run on every connection without a `bot` target. They return only a fixed set of fields per sticker, at most 200
 stickers, with texts shortened; a sticker carries a `file_ref` only on a connection that binds the `bot`
-target, signed with the binding `bot`. The stickers tools are in no setup profile.
+target, signed with the binding `bot`.
+
+Sticker sets are managed with four tools that all need the `bot` target and refuse without it before the
+credential is read: `telegram.stickers.uploadfile` (`create`), `telegram.stickersets.create` (`create`),
+`telegram.stickersets.addsticker` (`update`), and `telegram.stickersets.delete` (`delete`, only through a tools
+list). A set belongs to the `user_id` given, a positive Telegram user, and to no chat. Files enter only through
+`uploadfile`, which takes a `local_path` under the rules of `stickers.send` and derives the sticker format from
+the extension; it returns a `file_ref` bound to `bot`, never a file identifier. `create` (1 through 50 stickers)
+and `addsticker` (one) accept only such a reference, a `format` of `static`, `animated`, or `video`, 1 through 20
+emoji, and optional keywords of at most 64 characters in total; there is no URL, mask position, or repainting
+option. Only the bot's own sets are managed: a name must end, case-insensitively, in `_by_` and the bot's
+username, which one `getMe` read supplies before the single changing request; any other name, or a bot without a
+username, is refused without that request. Each call sends one changing request and reports an unclear outcome
+instead of repeating it. Deleting a set removes it for every user of it and cannot be undone. The stickers tools
+are in no setup profile.
 
 ## Setup profiles
 

@@ -36,7 +36,14 @@ const (
 	stickerRefBindingErrorText = "the reference belongs to neither the selected chat nor the bot"
 )
 
-var stickerExtensions = map[string]bool{".webp": true, ".tgs": true, ".webm": true}
+// stickerFormats maps the accepted sticker file extensions to the Bot API sticker format.
+var stickerFormats = map[string]string{".webp": "static", ".tgs": "animated", ".webm": "video"}
+
+// stickerFormatOf derives the sticker format from the file extension; ok is false for any other extension.
+func stickerFormatOf(path string) (format string, ok bool) {
+	format, ok = stickerFormats[strings.ToLower(filepath.Ext(path))]
+	return format, ok
+}
 
 var stickerReadRisk = capability.Risk{
 	Effect: capability.EffectRead, Idempotency: capability.IdempotencySafe,
@@ -213,7 +220,7 @@ func invokeStickersSendWith(ctx context.Context, resolved *config.Resolved, secr
 			return nil, providerError(op, stickerRefBindingErrorText)
 		}
 	} else {
-		if !stickerExtensions[strings.ToLower(filepath.Ext(*arguments.LocalPath))] {
+		if _, ok := stickerFormatOf(*arguments.LocalPath); !ok {
 			return nil, providerError(op, "a sticker file must end in .webp, .tgs, or .webm")
 		}
 		if upload, err = localfile.OpenForUpload(ctx, resolved, *arguments.LocalPath); err != nil {
