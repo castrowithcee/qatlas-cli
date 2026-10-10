@@ -192,7 +192,8 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupStickers, Title: "Stickers",
 		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers; " +
 			"upload sticker files and create, extend, and delete the bot's own sticker sets"},
-	{ID: groupTopics, Title: "Topics", Description: "Create, rename, close, and reopen forum topics of the bound chats"},
+	{ID: groupTopics, Title: "Topics", Description: "Create, rename, close, reopen, delete, and unpin forum topics " +
+		"and hide the General topic of the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -297,6 +298,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: topicsEdit, Handler: capability.Handler(invokeTopicsEdit)},
 		capability.Operation{Descriptor: topicsClose, Handler: capability.Handler(invokeTopicsClose)},
 		capability.Operation{Descriptor: topicsReopen, Handler: capability.Handler(invokeTopicsReopen)},
+		capability.Operation{Descriptor: topicsDelete, Handler: capability.Handler(invokeTopicsDelete)},
+		capability.Operation{Descriptor: topicsUnpinAll, Handler: capability.Handler(invokeTopicsUnpinAll)},
+		capability.Operation{Descriptor: topicsHideGeneral, Handler: capability.Handler(invokeTopicsHideGeneral)},
+		capability.Operation{Descriptor: topicsUnhideGeneral, Handler: capability.Handler(invokeTopicsUnhideGeneral)},
 		capability.Operation{Descriptor: updatesConfirm, Handler: capability.Handler(invokeUpdatesConfirm)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 		capability.Operation{Descriptor: botGet, Handler: capability.Handler(invokeBotGet)},
