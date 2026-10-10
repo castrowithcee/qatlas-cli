@@ -243,7 +243,7 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 65 || descriptors[0].ID != "nextcloud.calendars.list" || descriptors[1].ID != "nextcloud.comments.create" ||
+	if len(descriptors) != 68 || descriptors[0].ID != "nextcloud.calendars.list" || descriptors[1].ID != "nextcloud.comments.create" ||
 		descriptors[3].ID != "nextcloud.comments.list" || descriptors[5].ID != "nextcloud.deckboards.create" ||
 		descriptors[6].ID != "nextcloud.deckboards.delete" || descriptors[7].ID != "nextcloud.deckboards.get" ||
 		descriptors[9].ID != "nextcloud.deckboards.update" ||
@@ -262,10 +262,12 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		descriptors[47].ID != "nextcloud.systemtags.create" || descriptors[49].ID != "nextcloud.systemtags.list" ||
 		descriptors[50].ID != "nextcloud.systemtags.update" || descriptors[51].ID != "nextcloud.talkmessages.delete" ||
 		descriptors[52].ID != "nextcloud.talkmessages.edit" || descriptors[53].ID != "nextcloud.talkmessages.list" ||
-		descriptors[54].ID != "nextcloud.talkmessages.send" || descriptors[56].ID != "nextcloud.talkreactions.set" ||
-		descriptors[58].ID != "nextcloud.talkrooms.list" || descriptors[59].ID != "nextcloud.trash.delete" ||
-		descriptors[61].ID != "nextcloud.trash.restore" || descriptors[62].ID != "nextcloud.versions.get" ||
-		descriptors[64].ID != "nextcloud.versions.restore" {
+		descriptors[54].ID != "nextcloud.talkmessages.send" || descriptors[55].ID != "nextcloud.talkparticipants.add" ||
+		descriptors[56].ID != "nextcloud.talkparticipants.list" || descriptors[57].ID != "nextcloud.talkparticipants.moderator" ||
+		descriptors[58].ID != "nextcloud.talkparticipants.remove" || descriptors[59].ID != "nextcloud.talkreactions.set" ||
+		descriptors[61].ID != "nextcloud.talkrooms.list" || descriptors[62].ID != "nextcloud.trash.delete" ||
+		descriptors[64].ID != "nextcloud.trash.restore" || descriptors[65].ID != "nextcloud.versions.get" ||
+		descriptors[67].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
@@ -298,8 +300,8 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		for _, forbidden := range []string{
 			"base_url", "instance", "user", "password", "root", "href", "depth", "method", "url",
 		} {
-			// The share type enum of a new share names the recipient kind "user".
-			if forbidden == "user" && descriptor.ID == sharesCreate.ID {
+			// The share type enum of a new share and the source enum of a new participant name the kind "user".
+			if forbidden == "user" && (descriptor.ID == sharesCreate.ID || descriptor.ID == talkParticipantsAdd.ID) {
 				continue
 			}
 			if strings.Contains(string(descriptor.InputSchema), forbidden) {
