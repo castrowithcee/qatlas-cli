@@ -39,7 +39,7 @@ func talkServer(t *testing.T, chat func(*http.Request) (*http.Response, error)) 
 		case path == "/ocs/v2.php/apps/spreed/api/v4/room/"+boundRoom:
 			return ocsResponse(http.StatusOK, ocsData(roomJSON(boundRoom, "Team", 2))), nil
 		case path == "/ocs/v2.php/apps/spreed/api/v4/room/"+boundRoom+"/participants":
-			return ocsResponse(http.StatusOK, ocsData(`[{"actorType":"users","actorId":"bob","displayName":"Bob",`+
+			return ocsResponse(http.StatusOK, ocsData(`[{"attendeeId":12,"actorType":"users","actorId":"bob","displayName":"Bob",`+
 				`"participantType":1,"inCall":0,"sessionIds":["`+textCanary+`"],"phoneNumber":"+49"},`+
 				`{"actorType":"guests","actorId":"hash","displayName":"","participantType":4,"inCall":7}]`)), nil
 		case strings.HasPrefix(path, "/ocs/v2.php/apps/spreed/api/v1/chat/"):
@@ -100,7 +100,7 @@ func TestTalkRoomAndParticipantReads(t *testing.T) {
 	response, err = talkInvokeCore(t, []string{"talk/" + boundRoom}, "nextcloud.talkparticipants.list", talkArgs(boundRoom, ""))
 	var result ParticipantsResult
 	if err := json.Unmarshal(response.Result, &result); err != nil || result.Count != 2 ||
-		result.Participants[0] != (Participant{ActorType: "users", ActorID: "bob", DisplayName: "Bob", ParticipantType: "owner"}) ||
+		result.Participants[0] != (Participant{AttendeeID: "12", ActorType: "users", ActorID: "bob", DisplayName: "Bob", ParticipantType: "owner"}) ||
 		!result.Participants[1].InCall || strings.Contains(string(response.Result), textCanary) {
 		t.Errorf("participants = %s, %v", response.Result, err)
 	}
