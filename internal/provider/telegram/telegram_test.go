@@ -71,10 +71,11 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 11 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
+	if len(metadata.Groups) != 12 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
 		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "chats" || metadata.Groups[4].ID != "invitelinks" ||
 		metadata.Groups[5].ID != "bot" || metadata.Groups[6].ID != "files" || metadata.Groups[7].ID != "media" ||
-		metadata.Groups[8].ID != "members" || metadata.Groups[9].ID != "interactions" || metadata.Groups[10].ID != "stickers" {
+		metadata.Groups[8].ID != "members" || metadata.Groups[9].ID != "interactions" ||
+		metadata.Groups[10].ID != "stickers" || metadata.Groups[11].ID != "topics" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
@@ -86,6 +87,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "pins"
 		case strings.HasPrefix(tool.ID, "telegram.members.") || strings.HasPrefix(tool.ID, "telegram.senderchats."):
 			want = "members"
+		case strings.HasPrefix(tool.ID, "telegram.topics.") && tool.ID != topicsIconStickers.ID:
+			want = "topics"
 		case strings.HasPrefix(tool.ID, "telegram.invitelinks."):
 			want = "invitelinks"
 		case strings.HasPrefix(tool.ID, "telegram.chats."):
@@ -110,8 +113,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 54 {
-		t.Fatalf("operation count = %d, want fifty-four", len(operations))
+	if len(operations) != 62 {
+		t.Fatalf("operation count = %d, want sixty-two", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -135,6 +138,7 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 		want := d.ID == messagesDelete.ID || d.ID == messagesDeleteMany.ID || d.ID == pinsUnpinAll.ID ||
 			d.ID == membersBan.ID || d.ID == membersRestrict.ID || d.ID == membersPromote.ID ||
 			d.ID == invitelinksRevoke.ID || d.ID == pollsStop.ID || d.ID == chatsDeletePhoto.ID ||
+			d.ID == chatsDeleteStickerSet.ID || d.ID == chatsLeave.ID ||
 			d.ID == senderchatsBan.ID || d.ID == reactionsRemove.ID || d.ID == reactionsRemoveAll.ID ||
 			d.ID == updatesConfirm.ID
 		if d.RequiresToolAllowList != want {

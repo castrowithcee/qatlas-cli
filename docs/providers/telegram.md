@@ -47,8 +47,9 @@ before the credential is read when the target is missing. Methods that accept on
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
 to `pins`, the member tools to `members`, the update tools to `updates`, the chat tools to `chats`, the invite
 link tools to `invitelinks`, the bot and webhook tools to `bot`, the file tools to `files`, the media tools to
-`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`, the sticker tools to `stickers`. A group
-never changes a tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
+`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`, the
+sticker tools to `stickers`, and the forum topic tools to `topics`. A group never changes a tool ID, a
+permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
 fragment, with no exception for local addresses, and redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
 
@@ -126,6 +127,20 @@ supergroup in which the bot may delete messages, and both tools require a `tools
 an object, never the target. `telegram.chatactions.send` (`create`, idempotent) shows one of Telegram's fixed
 actions for about five seconds.
 
+## Forum topics
+
+`telegram.topics.create` (`create`, not idempotent, never repeated after an unclear result) creates a forum
+topic with a `name` of 1 to 128 characters and optionally an `icon_color` from Telegram's fixed list of six
+values; its result is limited to `message_thread_id`, `name`, `icon_color`, and `icon_custom_emoji_id`.
+`telegram.topics.edit`, `telegram.topics.close`, and `telegram.topics.reopen` (`update`, idempotent) require
+exactly one of `message_thread_id` and `general: true`; the choice fixes the method, and anything else is
+refused before any request. Editing a topic needs a `name` or an `icon_custom_emoji_id`, and an empty
+`icon_custom_emoji_id` removes the icon; the General topic is only renamed (`name` required, no icon).
+`icon_custom_emoji_id` is accepted only as a string of 1 to 20 digits; `telegram.topics.iconstickers` lists
+the valid values.
+Reopening the General topic also unhides it. These results are a single boolean. Deleting topics and hiding
+the General topic are not offered; the tools are in no profile and need no `tools` list.
+
 ## Locations, venues, contacts, and dice
 
 `telegram.locations.send`, `telegram.venues.send`, `telegram.contacts.send`, and `telegram.dice.send`
@@ -193,7 +208,7 @@ the boolean rights Telegram returns, `custom_title`, and `until_date`. `telegram
 of administrators and members is classified `telegram-member-data`; the other two tools keep the provider's
 message classification.
 
-## Changing chat title, description, and photo
+## Changing chat settings and leaving
 
 `telegram.chats.settitle` (1 through 128 characters), `telegram.chats.setdescription` (up to 255 characters;
 the argument is required, and an empty string removes the description), `telegram.chats.setphoto` (`update`),
@@ -205,6 +220,18 @@ refuses private chats. Lengths are checked before the credential is read, and ea
 (`files`), never a `file_ref` or URL, and repeating it has an unknown effect. The photo is limited to 10 MB,
 checked from the file before it is read, and sent under a neutral name, so neither path nor file name leaves
 the machine.
+
+`telegram.chats.setpermissions` sets the default member permissions of a bound group or supergroup. Like
+`telegram.members.restrict`, it takes the complete `permissions` object: every boolean is required, a missing
+or unknown field is refused before any request, and all are sent explicitly with independent permissions.
+`telegram.chats.setstickerset` sets the group sticker set by name, never a URL; as a narrower reading than
+Telegram, the name must be 1 through 64 letters, digits, or underscores, checked before the credential is
+read. `telegram.chats.deletestickerset` (`delete`) removes it. The results are `updated: true` or
+`deleted: true`.
+
+`telegram.chats.leave` (`delete`) makes the bot leave a bound chat. The bot then has no access to it, and only
+a human can add it again. `telegram.chats.deletestickerset` and `telegram.chats.leave` require a `tools`
+list.
 
 ## Bot identity and webhook status
 
@@ -287,7 +314,9 @@ ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and 
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
 `telegram.members.restrict`, `telegram.members.promote`, `telegram.members.setadmintitle`,
 `telegram.members.settag`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
-`telegram.chats.deletephoto`, `telegram.messages.forward`, `telegram.messages.copy`, the interaction tools
-including locations, venues, contacts, and dice, and the invite link tools are in no profile. A profile is a
-visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
-changed before saving, and a saved connection never follows a profile.
+`telegram.chats.deletephoto`, `telegram.chats.setpermissions`, `telegram.chats.setstickerset`,
+`telegram.chats.deletestickerset`, `telegram.chats.leave`, `telegram.messages.forward`,
+`telegram.messages.copy`, the interaction tools including locations, venues, contacts, and dice, and the
+invite link tools are in no profile. A profile is a visible starting selection, not a role: only the ticked
+`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
+follows a profile.
