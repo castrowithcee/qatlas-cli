@@ -138,8 +138,12 @@ refused before any request. Editing a topic needs a `name` or an `icon_custom_em
 `icon_custom_emoji_id` removes the icon; the General topic is only renamed (`name` required, no icon).
 `icon_custom_emoji_id` is accepted only as a string of 1 to 20 digits; `telegram.topics.iconstickers` lists
 the valid values.
-Reopening the General topic also unhides it. These results are a single boolean. Deleting topics and hiding
-the General topic are not offered; the tools are in no profile and need no `tools` list.
+Reopening the General topic also unhides it. `telegram.topics.unpinall` (`update`, idempotent) takes the same
+selector and clears the pinned messages of a topic or the General topic. `telegram.topics.delete` (`delete`,
+idempotent) takes only `message_thread_id` and removes the topic with all its messages; the General topic
+cannot be deleted. `telegram.topics.hidegeneral` hides the General topic and closes it if it was open;
+`telegram.topics.unhidegeneral` shows it again (both `update`, idempotent, `chat` only). These results are a
+single boolean. `telegram.topics.delete` and `telegram.topics.unpinall` require a `tools` list.
 
 ## Locations, venues, contacts, and dice
 
@@ -316,7 +320,7 @@ ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and 
 `telegram.members.settag`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
 `telegram.chats.deletephoto`, `telegram.chats.setpermissions`, `telegram.chats.setstickerset`,
 `telegram.chats.deletestickerset`, `telegram.chats.leave`, `telegram.messages.forward`,
-`telegram.messages.copy`, the interaction tools including locations, venues, contacts, and dice, and the
-invite link tools are in no profile. A profile is a visible starting selection, not a role: only the ticked
-`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
-follows a profile.
+`telegram.messages.copy`, the interaction tools including locations, venues, contacts, and dice, the forum
+topic tools, and the invite link tools are in no profile. A profile is a visible starting selection, not a
+role: only the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a
+saved connection never follows a profile.
