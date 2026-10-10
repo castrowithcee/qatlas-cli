@@ -236,28 +236,30 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 			t.Errorf("target kind %+v needs a description and forms", kind)
 		}
 	}
-	if len(metadata.Groups) != 4 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" ||
-		metadata.Groups[2].ID != "deck" || metadata.Groups[3].ID != "talk" {
-		t.Fatalf("groups = %+v, want the files, shares, deck, and talk groups", metadata.Groups)
+	if len(metadata.Groups) != 5 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" ||
+		metadata.Groups[2].ID != "deck" || metadata.Groups[3].ID != "talk" ||
+		metadata.Groups[4].ID != "contacts" {
+		t.Fatalf("groups = %+v, want the files, shares, deck, talk, and contacts groups", metadata.Groups)
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 50 || descriptors[0].ID != "nextcloud.comments.create" ||
-		descriptors[2].ID != "nextcloud.comments.list" || descriptors[4].ID != "nextcloud.deckboards.create" ||
-		descriptors[5].ID != "nextcloud.deckboards.delete" || descriptors[6].ID != "nextcloud.deckboards.get" ||
-		descriptors[8].ID != "nextcloud.deckboards.update" ||
-		descriptors[10].ID != "nextcloud.deckstacks.create" || descriptors[11].ID != "nextcloud.deckstacks.delete" ||
-		descriptors[13].ID != "nextcloud.deckstacks.update" ||
-		descriptors[12].ID != "nextcloud.deckstacks.list" || descriptors[14].ID != "nextcloud.favorites.list" ||
-		descriptors[18].ID != "nextcloud.files.favorite" || descriptors[22].ID != "nextcloud.files.search" ||
-		descriptors[25].ID != "nextcloud.filetags.add" || descriptors[27].ID != "nextcloud.filetags.remove" ||
-		descriptors[29].ID != "nextcloud.folders.delete" || descriptors[31].ID != "nextcloud.shares.create" ||
-		descriptors[34].ID != "nextcloud.shares.list" || descriptors[35].ID != "nextcloud.shares.update" ||
-		descriptors[36].ID != "nextcloud.systemtags.create" || descriptors[38].ID != "nextcloud.systemtags.list" ||
-		descriptors[39].ID != "nextcloud.systemtags.update" || descriptors[40].ID != "nextcloud.talkmessages.list" ||
-		descriptors[43].ID != "nextcloud.talkrooms.list" || descriptors[44].ID != "nextcloud.trash.delete" ||
-		descriptors[46].ID != "nextcloud.trash.restore" || descriptors[47].ID != "nextcloud.versions.get" ||
-		descriptors[49].ID != "nextcloud.versions.restore" {
+	if len(descriptors) != 53 || descriptors[0].ID != "nextcloud.addressbooks.list" || descriptors[5].ID != "nextcloud.contacts.get" ||
+		descriptors[6].ID != "nextcloud.contacts.list" || descriptors[1].ID != "nextcloud.comments.create" ||
+		descriptors[3].ID != "nextcloud.comments.list" || descriptors[7].ID != "nextcloud.deckboards.create" ||
+		descriptors[8].ID != "nextcloud.deckboards.delete" || descriptors[9].ID != "nextcloud.deckboards.get" ||
+		descriptors[11].ID != "nextcloud.deckboards.update" ||
+		descriptors[13].ID != "nextcloud.deckstacks.create" || descriptors[14].ID != "nextcloud.deckstacks.delete" ||
+		descriptors[16].ID != "nextcloud.deckstacks.update" ||
+		descriptors[15].ID != "nextcloud.deckstacks.list" || descriptors[17].ID != "nextcloud.favorites.list" ||
+		descriptors[21].ID != "nextcloud.files.favorite" || descriptors[25].ID != "nextcloud.files.search" ||
+		descriptors[28].ID != "nextcloud.filetags.add" || descriptors[30].ID != "nextcloud.filetags.remove" ||
+		descriptors[32].ID != "nextcloud.folders.delete" || descriptors[34].ID != "nextcloud.shares.create" ||
+		descriptors[37].ID != "nextcloud.shares.list" || descriptors[38].ID != "nextcloud.shares.update" ||
+		descriptors[39].ID != "nextcloud.systemtags.create" || descriptors[41].ID != "nextcloud.systemtags.list" ||
+		descriptors[42].ID != "nextcloud.systemtags.update" || descriptors[43].ID != "nextcloud.talkmessages.list" ||
+		descriptors[46].ID != "nextcloud.talkrooms.list" || descriptors[47].ID != "nextcloud.trash.delete" ||
+		descriptors[49].ID != "nextcloud.trash.restore" || descriptors[50].ID != "nextcloud.versions.get" ||
+		descriptors[52].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
@@ -273,6 +275,9 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		}
 		if strings.HasPrefix(descriptor.ID, "nextcloud.talk") {
 			wantGroup, wantSensitivity = "talk", talkSensitivity
+		}
+		if descriptor.ID == addressbooksList.ID || strings.HasPrefix(descriptor.ID, "nextcloud.contacts.") {
+			wantGroup, wantSensitivity = "contacts", contactsSensitivity
 		}
 		if descriptor.Group != wantGroup {
 			t.Errorf("descriptor %s group = %q, want %s", descriptor.ID, descriptor.Group, wantGroup)

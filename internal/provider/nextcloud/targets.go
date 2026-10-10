@@ -48,6 +48,9 @@ var toolGroups = []config.ToolGroup{{
 }, {
 	ID: groupTalk, Title: "Talk",
 	Description: "Talk conversations the connection binds, their participants, and their messages",
+}, {
+	ID: groupContacts, Title: "Contacts",
+	Description: "Address books the connection binds and their contacts",
 }}
 
 var targetKinds = []config.TargetKind{{

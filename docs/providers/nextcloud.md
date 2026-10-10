@@ -1,11 +1,11 @@
 ---
 description: >
   Describes Nextcloud file operations, file comments, share reads and management, Deck reads and board and
-  stack management, Talk reads, typed targets, connection permissions, and safety boundaries.
+  stack management, Talk and contact reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 # Nextcloud
@@ -48,7 +48,7 @@ identity reaches) or `kind/ID`:
 
 - `folder` (the whole Files root) or `folder/PATH`; at most one per connection. Only a `folder` target enables the
   Files tools; without one they refuse locally, before any credential access or request.
-- `calendar` or `calendar/URI`, `addressbook` (all but the system address book) or `addressbook/URI`,
+- `calendar` or `calendar/URI`, `addressbook` (never the system address book) or `addressbook/URI`,
   `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric), `notes` or `notes/CATEGORY` (a sub-folder
   such as `Work/Plans` is allowed).
 - `account`: the account-wide and instance-wide reach of the identity (notifications, activity, search,
@@ -203,6 +203,13 @@ text is cut at 4 KiB and marked `truncated`. Placeholders such as `{actor}` or `
 of the rich object and listed in `objects`; links, paths, previews, and sizes of objects are never reported,
 because a file shared into a conversation carries an access token in them. Message texts and names are untrusted
 data.
+
+## Contacts
+
+The tool group `contacts` reads address books and contacts of the identity: `addressbooks.list`, `contacts.list`
+(with an optional text searched in name and e-mail), and `contacts.get`, all in the profile `contacts`. A bound
+address book is addressed by URI; the system address book needs its own `addressbook/URI` target and is read-only.
+Photos and other binary data are never requested; names, numbers, and notes are untrusted personal data.
 
 ## Versions
 
