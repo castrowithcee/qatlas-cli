@@ -340,6 +340,10 @@ func Register(reg *capability.Registry) error {
 			Description: "lists bound Talk conversations and their participants and reads their messages; changes nothing",
 			Tools:       []string{talkRoomsList.ID, talkRoomsGet.ID, talkParticipantsList.ID, talkMessagesList.ID},
 		}, {
+			ID: "notes-read", Title: "Read notes",
+			Description: "lists and reads notes, their embedded attachments, and the Notes settings; changes nothing",
+			Tools:       []string{notesList.ID, notesGet.ID, notesAttachmentsGet.ID, notesSettingsGet.ID},
+		}, {
 			ID: "calendar", Title: "Read calendars",
 			Description: "lists the bound calendars and reads their events in a time range and single events; changes nothing",
 			Tools:       []string{calendarsList.ID, eventsList.ID, eventsGet.ID},
@@ -398,6 +402,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(talkRoomsGet, groupTalk), Handler: invokeTalkRoomsGet},
 		capability.Operation{Descriptor: inGroup(talkParticipantsList, groupTalk), Handler: invokeTalkParticipantsList},
 		capability.Operation{Descriptor: inGroup(talkMessagesList, groupTalk), Handler: invokeTalkMessagesList},
+		capability.Operation{Descriptor: inGroup(notesList, groupNotes), Handler: notesBound(invokeNotesList)},
+		capability.Operation{Descriptor: inGroup(notesGet, groupNotes), Handler: notesBound(invokeNotesGet)},
+		capability.Operation{Descriptor: inGroup(notesAttachmentsGet, groupNotes), Handler: notesBound(invokeNotesAttachmentsGet)},
+		capability.Operation{Descriptor: inGroup(notesSettingsGet, groupNotes), Handler: notesBound(invokeNotesSettingsGet)},
 		capability.Operation{Descriptor: inGroup(calendarsList, groupCalendar), Handler: calendarBound(invokeCalendarsList)},
 		capability.Operation{Descriptor: inGroup(eventsList, groupCalendar), Handler: calendarBound(invokeEventsList)},
 		capability.Operation{Descriptor: inGroup(eventsGet, groupCalendar), Handler: calendarBound(invokeEventsGet)},

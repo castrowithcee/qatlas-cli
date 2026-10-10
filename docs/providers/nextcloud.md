@@ -1,7 +1,7 @@
 ---
 description: >
   Describes Nextcloud file operations, file comments, share reads and management, Deck reads and board and
-  stack management, Talk and calendar reads, typed targets, connection permissions, and safety boundaries.
+  stack management, Talk, note, and calendar reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -35,11 +35,10 @@ identity whose original location lies below the bound root folder (`/` binds all
 bin is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
 naming it. Items inside a deleted folder, emptying the trash bin, and restoring to another place are not offered.
 
-`list` reports at most 500 items, marks a cut list as `truncated`, and refuses an answer larger than 4 MiB.
-`restore` and `delete` take the `trash_id` from `list`, read the item once, and then send one `MOVE` to the
-`restore` collection or one `DELETE`. `restore` puts the item back to its original location. `delete` removes it
-for good and requires a tools list like the delete tools above. No profile contains any of the three tools. An
-unclear outcome is reported as for the file mutations under Local files and never repeated.
+`list` marks a cut list as `truncated`. `restore` and `delete` take the `trash_id` from `list`, read the item once,
+and send one `MOVE` to the `restore` collection or one `DELETE`; `restore` puts the item back to its original
+location, `delete` removes it for good and requires a tools list like the delete tools above. No profile contains
+any of the three tools. An unclear outcome is reported as for the file mutations under Local files, never repeated.
 
 ## Targets
 
@@ -100,18 +99,13 @@ change may have been applied and that source and target, or the folder, must be 
 permission `update`. All three work on the bound folder only; the root itself is never a hit and cannot be
 marked.
 
-The search takes structured filters that combine with AND, and at least one is required (an empty search is
-refused). `name_contains` is a literal, case-insensitive substring: Qatlas masks `%`, `_`, and the escape
-character `\` of Nextcloud's `d:like`. `content_type_prefix` matches the start of the MIME type,
-`modified_after` and `modified_before` take RFC 3339 times (exclusive, to the second), `size_min` and `size_max`
-are inclusive bytes (a folder counts with its subtree), `type` is `file` or `folder`, and `favorite` selects
-favorites or non-favorites. Qatlas writes the whole request XML itself and escapes every value; no caller XML,
-sorting, or offset exists. `limit` is 1 to 200 (default 50), the server picks which matches a limit keeps, and
-`truncated` is true when the limit was reached. The result is sorted by path.
+The search takes structured filters that combine with AND, and at least one is required. `name_contains` is a
+literal, case-insensitive substring: Qatlas masks the wildcards of Nextcloud's `d:like`, writes the whole request
+XML itself, and escapes every value; no caller XML, sorting, or offset exists. The server picks which matches a
+limit keeps, `truncated` says when it was reached, and the result is sorted by path.
 
-The favorites list reads at most 500 favorites below the root; more are cut and `truncated` says so. Every
-answered node is checked against the bound folder again; a node outside it, and a node the server refused,
-is dropped silently.
+Every answered favorite is checked against the bound folder again; a node outside it or refused by the server is
+dropped silently, and a cut list is marked `truncated`.
 
 `files.favorite` takes `path` and `favorite` (both required) and sends exactly one request, without a read
 before it. A `207` answer whose property status is an error is a clear failure. After an unclear outcome
@@ -207,9 +201,9 @@ data.
 ## Calendar
 
 The group `calendar` (profile `calendar`) reads calendars and events through CalDAV and needs a `calendar` target;
-an unbound calendar is refused locally without being named. Only direct children of the calendar home and of a
-bound calendar are read, never subscriptions, the scheduling inbox and outbox, or the trash bin. `read_only` is
-derived conservatively from the privileges, and repeating events keep their rule unexpanded.
+an unbound calendar is refused locally without being named. Only direct children of the calendar home and of a bound
+calendar are read, never subscriptions, the scheduling inbox and outbox, or the trash bin. `read_only` is derived
+conservatively from the privileges, and repeating events keep their rule unexpanded.
 
 ## Versions
 
@@ -226,6 +220,13 @@ restore target of the identity with one `MOVE`. The manual documents no conditio
 made between the ETag check and the `MOVE` is not detected. An unclear outcome is reported as possibly
 applied and never repeated. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore`
 are in none.
+
+## Notes
+
+The group `notes` (profile `notes-read`) needs a `notes` target. `notes/CATEGORY` binds that category and all below
+it. The Notes API filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally,
+never shown or counted; a chunk may be empty while a next cursor is present. A foreign note or its attachment reads
+like a missing note. Attachments stay relative to their note; `local_path` follows `files.get`.
 
 ## System tags
 

@@ -236,13 +236,14 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 			t.Errorf("target kind %+v needs a description and forms", kind)
 		}
 	}
-	if len(metadata.Groups) != 5 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" ||
-		metadata.Groups[2].ID != "deck" || metadata.Groups[3].ID != "talk" || metadata.Groups[4].ID != "calendar" {
-		t.Fatalf("groups = %+v, want the files, shares, deck, talk, and calendar groups", metadata.Groups)
+	if len(metadata.Groups) != 6 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" ||
+		metadata.Groups[2].ID != "deck" || metadata.Groups[3].ID != "talk" || metadata.Groups[4].ID != "notes" ||
+		metadata.Groups[5].ID != "calendar" {
+		t.Fatalf("groups = %+v, want the files, shares, deck, talk, notes, and calendar groups", metadata.Groups)
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 53 || descriptors[0].ID != "nextcloud.calendars.list" || descriptors[1].ID != "nextcloud.comments.create" ||
+	if len(descriptors) != 57 || descriptors[0].ID != "nextcloud.calendars.list" || descriptors[1].ID != "nextcloud.comments.create" ||
 		descriptors[3].ID != "nextcloud.comments.list" || descriptors[5].ID != "nextcloud.deckboards.create" ||
 		descriptors[6].ID != "nextcloud.deckboards.delete" || descriptors[7].ID != "nextcloud.deckboards.get" ||
 		descriptors[9].ID != "nextcloud.deckboards.update" ||
@@ -252,13 +253,15 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		descriptors[16].ID != "nextcloud.events.list" || descriptors[17].ID != "nextcloud.favorites.list" ||
 		descriptors[21].ID != "nextcloud.files.favorite" || descriptors[25].ID != "nextcloud.files.search" ||
 		descriptors[28].ID != "nextcloud.filetags.add" || descriptors[30].ID != "nextcloud.filetags.remove" ||
-		descriptors[32].ID != "nextcloud.folders.delete" || descriptors[34].ID != "nextcloud.shares.create" ||
-		descriptors[37].ID != "nextcloud.shares.list" || descriptors[38].ID != "nextcloud.shares.update" ||
-		descriptors[39].ID != "nextcloud.systemtags.create" || descriptors[41].ID != "nextcloud.systemtags.list" ||
-		descriptors[42].ID != "nextcloud.systemtags.update" || descriptors[43].ID != "nextcloud.talkmessages.list" ||
-		descriptors[46].ID != "nextcloud.talkrooms.list" || descriptors[47].ID != "nextcloud.trash.delete" ||
-		descriptors[49].ID != "nextcloud.trash.restore" || descriptors[50].ID != "nextcloud.versions.get" ||
-		descriptors[52].ID != "nextcloud.versions.restore" {
+		descriptors[32].ID != "nextcloud.folders.delete" || descriptors[33].ID != "nextcloud.noteattachments.get" ||
+		descriptors[35].ID != "nextcloud.notes.list" || descriptors[36].ID != "nextcloud.notesettings.get" ||
+		descriptors[38].ID != "nextcloud.shares.create" ||
+		descriptors[41].ID != "nextcloud.shares.list" || descriptors[42].ID != "nextcloud.shares.update" ||
+		descriptors[43].ID != "nextcloud.systemtags.create" || descriptors[45].ID != "nextcloud.systemtags.list" ||
+		descriptors[46].ID != "nextcloud.systemtags.update" || descriptors[47].ID != "nextcloud.talkmessages.list" ||
+		descriptors[50].ID != "nextcloud.talkrooms.list" || descriptors[51].ID != "nextcloud.trash.delete" ||
+		descriptors[53].ID != "nextcloud.trash.restore" || descriptors[54].ID != "nextcloud.versions.get" ||
+		descriptors[56].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
@@ -274,6 +277,9 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		}
 		if strings.HasPrefix(descriptor.ID, "nextcloud.talk") {
 			wantGroup, wantSensitivity = "talk", talkSensitivity
+		}
+		if strings.HasPrefix(descriptor.ID, "nextcloud.note") {
+			wantGroup, wantSensitivity = "notes", notesSensitivity
 		}
 		if descriptor.ID == calendarsList.ID || strings.HasPrefix(descriptor.ID, "nextcloud.events.") {
 			wantGroup, wantSensitivity = "calendar", calendarSensitivity
