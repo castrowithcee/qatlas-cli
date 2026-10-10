@@ -178,7 +178,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupMessages, Title: "Messages", Description: "Send, forward, copy, edit, and delete messages in the bound chats"},
 	{ID: groupPins, Title: "Pins", Description: "Pin and unpin messages in the bound chats"},
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
-	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats; change their title, description, and photo"},
+	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats; change their title, description, photo, default permissions, and group sticker set; leave a chat"},
 	{ID: groupInviteLinks, Title: "Invite links", Description: "Read the primary invite link and revoke invite links of the bound chats"},
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot"},
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
@@ -190,6 +190,7 @@ var toolGroups = []config.ToolGroup{
 			"venues, contacts, and dice in the bound chats"},
 	{ID: groupStickers, Title: "Stickers",
 		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers"},
+	{ID: groupTopics, Title: "Topics", Description: "Create, rename, close, and reopen forum topics of the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -289,6 +290,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: venuesSend, Handler: capability.Handler(invokeVenuesSend)},
 		capability.Operation{Descriptor: contactsSend, Handler: capability.Handler(invokeContactsSend)},
 		capability.Operation{Descriptor: diceSend, Handler: capability.Handler(invokeDiceSend)},
+		capability.Operation{Descriptor: topicsCreate, Handler: capability.Handler(invokeTopicsCreate)},
+		capability.Operation{Descriptor: topicsEdit, Handler: capability.Handler(invokeTopicsEdit)},
+		capability.Operation{Descriptor: topicsClose, Handler: capability.Handler(invokeTopicsClose)},
+		capability.Operation{Descriptor: topicsReopen, Handler: capability.Handler(invokeTopicsReopen)},
 		capability.Operation{Descriptor: updatesConfirm, Handler: capability.Handler(invokeUpdatesConfirm)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 		capability.Operation{Descriptor: botGet, Handler: capability.Handler(invokeBotGet)},
@@ -301,6 +306,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: chatsSetDescription, Handler: capability.Handler(invokeChatsSetDescription)},
 		capability.Operation{Descriptor: chatsSetPhoto, Handler: capability.Handler(invokeChatsSetPhoto)},
 		capability.Operation{Descriptor: chatsDeletePhoto, Handler: capability.Handler(invokeChatsDeletePhoto)},
+		capability.Operation{Descriptor: chatsSetPermissions, Handler: capability.Handler(invokeChatsSetPermissions)},
+		capability.Operation{Descriptor: chatsSetStickerSet, Handler: capability.Handler(invokeChatsSetStickerSet)},
+		capability.Operation{Descriptor: chatsDeleteStickerSet, Handler: capability.Handler(invokeChatsDeleteStickerSet)},
+		capability.Operation{Descriptor: chatsLeave, Handler: capability.Handler(invokeChatsLeave)},
 		capability.Operation{Descriptor: invitelinksPrimary, Handler: capability.Handler(invokeInviteLinksPrimary)},
 		capability.Operation{Descriptor: invitelinksRevoke, Handler: capability.Handler(invokeInviteLinksRevoke)},
 		capability.Operation{Descriptor: filesGet, Handler: capability.Handler(invokeFilesGet)},

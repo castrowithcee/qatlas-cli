@@ -352,23 +352,26 @@ func (c *Client) boundIncomingHook(ctx context.Context, op, hookID string) (*inc
 	return &hook, nil
 }
 
+// checkHookTexts validates the display name and description of a webhook update before any request.
+func checkHookTexts(in *hookArguments) error {
+	if in.DisplayName == nil && in.Description == nil {
+		return invalidRequest("give at least one of display_name and description")
+	}
+	if in.DisplayName != nil && !validChannelText(*in.DisplayName, 0, maxHookDisplayName, false) {
+		return invalidRequest("display_name must be up to " + itoa(maxHookDisplayName) +
+			" characters without control characters")
+	}
+	if in.Description != nil && !validChannelText(*in.Description, 0, maxHookDescription, false) {
+		return invalidRequest("description must be up to " + itoa(maxHookDescription) +
+			" characters without control characters")
+	}
+	return nil
+}
+
 func invokeIncomingWebhooksUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
 	const op = "update incoming webhook"
-	client, input, err := prepareHook(ctx, resolved, secrets, red, op, raw, func(in *hookArguments) error {
-		if in.DisplayName == nil && in.Description == nil {
-			return invalidRequest("give at least one of display_name and description")
-		}
-		if in.DisplayName != nil && !validChannelText(*in.DisplayName, 0, maxHookDisplayName, false) {
-			return invalidRequest("display_name must be up to " + itoa(maxHookDisplayName) +
-				" characters without control characters")
-		}
-		if in.Description != nil && !validChannelText(*in.Description, 0, maxHookDescription, false) {
-			return invalidRequest("description must be up to " + itoa(maxHookDescription) +
-				" characters without control characters")
-		}
-		return nil
-	})
+	client, input, err := prepareHook(ctx, resolved, secrets, red, op, raw, checkHookTexts)
 	if err != nil {
 		return nil, err
 	}
