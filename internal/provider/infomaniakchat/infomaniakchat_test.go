@@ -294,8 +294,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 60 {
-		t.Fatalf("tools = %+v, want 60", metadata.Tools)
+	if len(metadata.Tools) != 64 {
+		t.Fatalf("tools = %+v, want 64", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -366,12 +366,13 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			}
 		}
 	}
-	for _, id := range []string{threadsList.ID, threadsGet.ID} {
+	for _, id := range []string{threadsList.ID, threadsGet.ID, channelsUnread.ID} {
 		if !has("read", id) || !has("messaging", id) {
 			t.Fatalf("profiles = %+v, want %s in read and messaging", profiles, id)
 		}
 	}
-	for _, id := range []string{threadsFollow.ID, threadsUnfollow.ID} {
+	for _, id := range []string{threadsFollow.ID, threadsUnfollow.ID, channelsMarkRead.ID, messagesMarkUnread.ID,
+		threadsMarkRead.ID} {
 		if has("read", id) || !has("messaging", id) || has("channel-admin", id) {
 			t.Fatalf("profiles = %+v, want %s in messaging only", profiles, id)
 		}
