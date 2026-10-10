@@ -139,16 +139,17 @@ func TestDefaultRegistry(t *testing.T) {
 		42: "telegram.pins.unpinall", 43: "telegram.polls.send", 44: "telegram.polls.stop",
 		45: "telegram.reactions.remove", 46: "telegram.reactions.removeall", 47: "telegram.reactions.set",
 		48: "telegram.senderchats.ban", 49: "telegram.senderchats.unban", 50: "telegram.stickers.customemoji",
-		51: "telegram.stickers.send", 52: "telegram.stickers.uploadfile", 53: "telegram.stickersets.addsticker",
-		54: "telegram.stickersets.create", 55: "telegram.stickersets.delete", 56: "telegram.stickersets.get",
-		57: "telegram.topics.close", 58: "telegram.topics.create", 59: "telegram.topics.delete",
-		60: "telegram.topics.edit", 61: "telegram.topics.hidegeneral", 62: "telegram.topics.iconstickers",
-		63: "telegram.topics.reopen", 64: "telegram.topics.unhidegeneral", 65: "telegram.topics.unpinall",
-		66: "telegram.updates.confirm", 67: "telegram.updates.list", 68: "telegram.venues.send",
-		69: "telegram.videonotes.send", 70: "telegram.videos.send", 71: "telegram.voice.send",
-		72: "telegram.webhook.get",
+		51: "telegram.stickers.delete", 52: "telegram.stickers.replace", 53: "telegram.stickers.send",
+		54: "telegram.stickers.setposition", 55: "telegram.stickers.uploadfile",
+		56: "telegram.stickersets.addsticker", 57: "telegram.stickersets.create",
+		58: "telegram.stickersets.delete", 59: "telegram.stickersets.get", 60: "telegram.topics.close",
+		61: "telegram.topics.create", 62: "telegram.topics.delete", 63: "telegram.topics.edit",
+		64: "telegram.topics.hidegeneral", 65: "telegram.topics.iconstickers", 66: "telegram.topics.reopen",
+		67: "telegram.topics.unhidegeneral", 68: "telegram.topics.unpinall", 69: "telegram.updates.confirm",
+		70: "telegram.updates.list", 71: "telegram.venues.send", 72: "telegram.videonotes.send",
+		73: "telegram.videos.send", 74: "telegram.voice.send", 75: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 73
+	ok2 := len(operations) == 76
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}
