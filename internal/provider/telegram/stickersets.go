@@ -198,6 +198,46 @@ type inputStickerBody struct {
 	Keywords  []string `json:"keywords,omitempty"`
 }
 
+// checkEmojiList validates the emoji of one sticker.
+func checkEmojiList(op string, list []string) error {
+	if len(list) < 1 || len(list) > maxStickerEmojiList {
+		return providerError(op, "a sticker needs from 1 through 20 emoji")
+	}
+	for _, e := range list {
+		if e == "" || !utf8.ValidString(e) || utf8.RuneCountInString(e) > maxStickerEmoji {
+			return providerError(op, "the emoji is not supported")
+		}
+	}
+	return nil
+}
+
+// checkKeywords validates the search keywords of one sticker; an empty list is valid.
+func checkKeywords(op string, list []string) error {
+	// Telegram caps the total length of the keywords, not each one.
+	total := 0
+	if len(list) > maxStickerKeywords {
+		return providerError(op, "a sticker takes at most 20 keywords")
+	}
+	for _, k := range list {
+		if k == "" || !utf8.ValidString(k) {
+			return providerError(op, "a keyword must be non-empty text")
+		}
+		total += utf8.RuneCountInString(k)
+	}
+	if total > maxStickerKeywordsLen {
+		return providerError(op, "the keywords of a sticker may have at most 64 characters in total")
+	}
+	return nil
+}
+
+// checkStickerSetTitle validates a sticker set title.
+func checkStickerSetTitle(op, title string) error {
+	if n := utf8.RuneCountInString(title); !utf8.ValidString(title) || n < 1 || n > maxStickerSetTitle {
+		return providerError(op, "the title must have from 1 through 64 characters")
+	}
+	return nil
+}
+
 // checkInputSticker validates one sticker object and the format of its reference without any credential. The
 // reference must be bound to the bot: a chat's file is not an uploaded sticker file.
 func checkInputSticker(op string, resolved *config.Resolved, s inputStickerArg) (parsedRef, error) {
@@ -206,27 +246,11 @@ func checkInputSticker(op string, resolved *config.Resolved, s inputStickerArg) 
 	default:
 		return parsedRef{}, providerError(op, "the sticker format must be static, animated, or video")
 	}
-	if len(s.EmojiList) < 1 || len(s.EmojiList) > maxStickerEmojiList {
-		return parsedRef{}, providerError(op, "a sticker needs from 1 through 20 emoji")
+	if err := checkEmojiList(op, s.EmojiList); err != nil {
+		return parsedRef{}, err
 	}
-	for _, e := range s.EmojiList {
-		if e == "" || !utf8.ValidString(e) || utf8.RuneCountInString(e) > maxStickerEmoji {
-			return parsedRef{}, providerError(op, "the emoji is not supported")
-		}
-	}
-	// Telegram caps the total length of the keywords, not each one.
-	total := 0
-	if len(s.Keywords) > maxStickerKeywords {
-		return parsedRef{}, providerError(op, "a sticker takes at most 20 keywords")
-	}
-	for _, k := range s.Keywords {
-		if k == "" || !utf8.ValidString(k) {
-			return parsedRef{}, providerError(op, "a keyword must be non-empty text")
-		}
-		total += utf8.RuneCountInString(k)
-	}
-	if total > maxStickerKeywordsLen {
-		return parsedRef{}, providerError(op, "the keywords of a sticker may have at most 64 characters in total")
+	if err := checkKeywords(op, s.Keywords); err != nil {
+		return parsedRef{}, err
 	}
 	ref, err := parseRef(resolved, refFile, s.FileRef)
 	if err != nil {
@@ -253,6 +277,11 @@ func (c *Client) mutateStickerSet(ctx context.Context, op, method string, payloa
 	if err != nil {
 		return err
 	}
+	return requireTrue(op, raw)
+}
+
+// requireTrue turns any answer but true into an unclear outcome.
+func requireTrue(op string, raw json.RawMessage) error {
 	var done bool
 	if json.Unmarshal(raw, &done) != nil || !done {
 		return withUncertainty(spec{}, invalidResponse(op))
@@ -359,8 +388,8 @@ func invokeStickersetsCreateWith(ctx context.Context, resolved *config.Resolved,
 	if !validStickerSetName(arguments.Name) {
 		return nil, providerError(op, "the sticker set name must have from 1 through 64 letters, digits, or underscores")
 	}
-	if n := utf8.RuneCountInString(arguments.Title); !utf8.ValidString(arguments.Title) || n < 1 || n > maxStickerSetTitle {
-		return nil, providerError(op, "the title must have from 1 through 64 characters")
+	if err := checkStickerSetTitle(op, arguments.Title); err != nil {
+		return nil, err
 	}
 	switch arguments.StickerType {
 	case "", "regular", "mask", "custom_emoji":

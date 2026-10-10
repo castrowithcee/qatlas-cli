@@ -141,17 +141,20 @@ func TestDefaultRegistry(t *testing.T) {
 		47: "telegram.polls.send", 48: "telegram.polls.stop", 49: "telegram.reactions.remove",
 		50: "telegram.reactions.removeall", 51: "telegram.reactions.set", 52: "telegram.senderchats.ban",
 		53: "telegram.senderchats.unban", 54: "telegram.stickers.customemoji", 55: "telegram.stickers.delete",
-		56: "telegram.stickers.replace", 57: "telegram.stickers.send", 58: "telegram.stickers.setposition",
-		59: "telegram.stickers.uploadfile", 60: "telegram.stickersets.addsticker",
-		61: "telegram.stickersets.create", 62: "telegram.stickersets.delete", 63: "telegram.stickersets.get",
-		64: "telegram.topics.close", 65: "telegram.topics.create", 66: "telegram.topics.delete",
-		67: "telegram.topics.edit", 68: "telegram.topics.hidegeneral", 69: "telegram.topics.iconstickers",
-		70: "telegram.topics.reopen", 71: "telegram.topics.unhidegeneral", 72: "telegram.topics.unpinall",
-		73: "telegram.updates.confirm", 74: "telegram.updates.list", 75: "telegram.venues.send",
-		76: "telegram.videonotes.send", 77: "telegram.videos.send", 78: "telegram.voice.send",
-		79: "telegram.webhook.get",
+		56: "telegram.stickers.replace", 57: "telegram.stickers.send", 58: "telegram.stickers.setemojilist",
+		59: "telegram.stickers.setkeywords", 60: "telegram.stickers.setmaskposition",
+		61: "telegram.stickers.setposition", 62: "telegram.stickers.uploadfile",
+		63: "telegram.stickersets.addsticker", 64: "telegram.stickersets.create",
+		65: "telegram.stickersets.delete", 66: "telegram.stickersets.get",
+		67: "telegram.stickersets.setcustomemojithumbnail", 68: "telegram.stickersets.setthumbnail",
+		69: "telegram.stickersets.settitle", 70: "telegram.topics.close", 71: "telegram.topics.create",
+		72: "telegram.topics.delete", 73: "telegram.topics.edit", 74: "telegram.topics.hidegeneral",
+		75: "telegram.topics.iconstickers", 76: "telegram.topics.reopen", 77: "telegram.topics.unhidegeneral",
+		78: "telegram.topics.unpinall", 79: "telegram.updates.confirm", 80: "telegram.updates.list",
+		81: "telegram.venues.send", 82: "telegram.videonotes.send", 83: "telegram.videos.send",
+		84: "telegram.voice.send", 85: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 80
+	ok2 := len(operations) == 86
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}
