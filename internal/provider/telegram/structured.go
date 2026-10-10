@@ -238,22 +238,36 @@ func (o LocationOptions) validate() error {
 	if err := validCoordinates(op, o.Latitude, o.Longitude); err != nil {
 		return err
 	}
-	if a := o.HorizontalAccuracy; a != nil && (*a < 0 || *a > maxHorizontalAccuracy) {
-		return providerError(op, "horizontal_accuracy must be from 0 through 1500 meters")
-	}
-	if p := o.LivePeriod; p != nil && (*p < minLivePeriod || (*p > maxLivePeriod && *p != foreverLivePeriod)) {
-		return providerError(op, "live_period must be from 60 through 86400 seconds or 2147483647")
+	if err := validAccuracyAndPeriod(op, o.HorizontalAccuracy, o.LivePeriod); err != nil {
+		return err
 	}
 	if o.LivePeriod == nil && (o.Heading != nil || o.ProximityAlertRadius != nil) {
 		return providerError(op, "heading and proximity_alert_radius need a live_period")
 	}
-	if h := o.Heading; h != nil && (*h < minHeading || *h > maxHeading) {
-		return providerError(op, "heading must be from 1 through 360 degrees")
-	}
-	if r := o.ProximityAlertRadius; r != nil && (*r < minProximityRadius || *r > maxProximityRadius) {
-		return providerError(op, "proximity_alert_radius must be from 1 through 100000 meters")
+	if err := validHeadingAndRadius(op, o.Heading, o.ProximityAlertRadius); err != nil {
+		return err
 	}
 	return o.SendCommon.validate(op)
+}
+
+func validAccuracyAndPeriod(op string, accuracy *float64, period *int64) error {
+	if accuracy != nil && (*accuracy < 0 || *accuracy > maxHorizontalAccuracy) {
+		return providerError(op, "horizontal_accuracy must be from 0 through 1500 meters")
+	}
+	if period != nil && (*period < minLivePeriod || (*period > maxLivePeriod && *period != foreverLivePeriod)) {
+		return providerError(op, "live_period must be from 60 through 86400 seconds or 2147483647")
+	}
+	return nil
+}
+
+func validHeadingAndRadius(op string, heading, radius *int64) error {
+	if heading != nil && (*heading < minHeading || *heading > maxHeading) {
+		return providerError(op, "heading must be from 1 through 360 degrees")
+	}
+	if radius != nil && (*radius < minProximityRadius || *radius > maxProximityRadius) {
+		return providerError(op, "proximity_alert_radius must be from 1 through 100000 meters")
+	}
+	return nil
 }
 
 // VenueOptions are the options of one sendVenue request.

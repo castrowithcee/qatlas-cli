@@ -175,7 +175,7 @@ var messagesDelete = capability.Descriptor{
 }
 
 var toolGroups = []config.ToolGroup{
-	{ID: groupMessages, Title: "Messages", Description: "Send, forward, copy, edit, and delete messages in the bound chats"},
+	{ID: groupMessages, Title: "Messages", Description: "Send, forward, copy, edit (text, caption, media), and delete messages in the bound chats"},
 	{ID: groupPins, Title: "Pins", Description: "Pin and unpin messages in the bound chats"},
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
 	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats; change their title, description, photo, default permissions, and group sticker set; leave a chat"},
@@ -269,6 +269,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: messagesSend, Handler: capability.Handler(invokeMessagesSend)},
 		capability.Operation{Descriptor: messagesEdit, Handler: capability.Handler(invokeMessagesEdit)},
 		capability.Operation{Descriptor: messagesEditReplyMarkup, Handler: capability.Handler(invokeMessagesEditReplyMarkup)},
+		capability.Operation{Descriptor: messagesEditCaption, Handler: capability.Handler(invokeMessagesEditCaption)},
+		capability.Operation{Descriptor: messagesEditMedia, Handler: capability.Handler(invokeMessagesEditMedia)},
 		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
 		capability.Operation{Descriptor: messagesDeleteMany, Handler: capability.Handler(invokeMessagesDeleteMany)},
 		capability.Operation{Descriptor: messagesForward, Handler: capability.Handler(invokeMessagesForward)},
@@ -292,6 +294,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: senderchatsUnban, Handler: capability.Handler(invokeSenderChatsUnban)},
 		capability.Operation{Descriptor: chatActionsSend, Handler: capability.Handler(invokeChatActionsSend)},
 		capability.Operation{Descriptor: locationsSend, Handler: capability.Handler(invokeLocationsSend)},
+		capability.Operation{Descriptor: locationsEditLive, Handler: capability.Handler(invokeLocationsEditLive)},
+		capability.Operation{Descriptor: locationsStopLive, Handler: capability.Handler(invokeLocationsStopLive)},
 		capability.Operation{Descriptor: venuesSend, Handler: capability.Handler(invokeVenuesSend)},
 		capability.Operation{Descriptor: contactsSend, Handler: capability.Handler(invokeContactsSend)},
 		capability.Operation{Descriptor: diceSend, Handler: capability.Handler(invokeDiceSend)},
