@@ -132,13 +132,11 @@ func readDeckWriteArguments(op string, raw json.RawMessage, mode string) (deckWr
 	} else if err := checkDeckID(op, input.BoardID); err != nil {
 		return input, err
 	}
-	if input.Title != nil {
-		title := strings.TrimSpace(*input.Title)
-		if title == "" || utf8.RuneCountInString(title) > maxDeckBoardTitle || hasControl(title) || !utf8.ValidString(title) {
-			return input, providerError(op, "the title must be 1 to 100 characters without control characters")
-		}
-		input.Title = &title
+	title, err := cleanDeckTitle(op, input.Title)
+	if err != nil {
+		return input, err
 	}
+	input.Title = title
 	if input.Color != nil && !validTagColor(*input.Color) {
 		return input, providerError(op, "the color must be six hex digits without #")
 	}
@@ -152,6 +150,18 @@ func readDeckWriteArguments(op string, raw json.RawMessage, mode string) (deckWr
 	return input, nil
 }
 
+// cleanDeckTitle trims and validates an optional board or stack title.
+func cleanDeckTitle(op string, raw *string) (*string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	title := strings.TrimSpace(*raw)
+	if title == "" || utf8.RuneCountInString(title) > maxDeckBoardTitle || hasControl(title) || !utf8.ValidString(title) {
+		return nil, providerError(op, "the title must be 1 to 100 characters without control characters")
+	}
+	return &title, nil
+}
+
 // deckBoardState is the body of a board write; json.Marshal does the escaping.
 type deckBoardState struct {
 	Title    string `json:"title"`
@@ -162,7 +172,7 @@ type deckBoardState struct {
 // deckSend sends one authenticated JSON change below the fixed REST root. A refusal of a client error or a
 // redirect is clear; any other failure, including an unreadable answer, leaves the outcome open and carries
 // the hint. It never repeats the request and never reads the body of a failed answer into an error.
-func (c *Client) deckSend(ctx context.Context, op, method string, payload any, suffix ...string) (json.RawMessage, error) {
+func (c *Client) deckSend(ctx context.Context, op, hint, method string, payload any, suffix ...string) (json.RawMessage, error) {
 	var body io.Reader
 	if payload != nil {
 		encoded, err := json.Marshal(payload)
@@ -184,7 +194,7 @@ func (c *Client) deckSend(ctx context.Context, op, method string, payload any, s
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		return nil, sentTransportError(op, err, uncertainDeckBoard)
+		return nil, sentTransportError(op, err, hint)
 	}
 	defer response.Body.Close()
 	switch {
@@ -193,11 +203,11 @@ func (c *Client) deckSend(ctx context.Context, op, method string, payload any, s
 	case response.StatusCode == http.StatusNotFound:
 		return nil, &provider.Error{Class: provider.ClassNotFound, Op: op, Message: messageDeckNotFound}
 	case response.StatusCode < 200 || response.StatusCode >= 300:
-		return nil, sentStatusError(op, response.StatusCode, uncertainDeckBoard)
+		return nil, sentStatusError(op, response.StatusCode, hint)
 	}
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxBodyBytes+1))
 	if err != nil || len(raw) > maxBodyBytes {
-		return nil, withUncertainty(invalidResponse(op, "the Nextcloud response could not be read within the size limit"), uncertainDeckBoard)
+		return nil, withUncertainty(invalidResponse(op, "the Nextcloud response could not be read within the size limit"), hint)
 	}
 	return raw, nil
 }
@@ -242,7 +252,7 @@ func (c *Client) createDeckBoard(ctx context.Context, op string, input deckWrite
 	if input.Color != nil {
 		color = *input.Color
 	}
-	raw, err := c.deckSend(ctx, op, http.MethodPost, deckBoardState{Title: *input.Title, Color: color}, "boards")
+	raw, err := c.deckSend(ctx, op, uncertainDeckBoard, http.MethodPost, deckBoardState{Title: *input.Title, Color: color}, "boards")
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +282,7 @@ func (c *Client) updateDeckBoard(ctx context.Context, op string, input deckWrite
 	if !validTagColor(state.Color) {
 		return nil, providerError(op, "the current color of the board is unusable; pass a color")
 	}
-	raw, err := c.deckSend(ctx, op, http.MethodPut, state, "boards", input.BoardID)
+	raw, err := c.deckSend(ctx, op, uncertainDeckBoard, http.MethodPut, state, "boards", input.BoardID)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +297,7 @@ func (c *Client) deleteDeckBoard(ctx context.Context, op string, input deckWrite
 	if _, err := c.manageBoard(ctx, op, input.BoardID); err != nil {
 		return nil, err
 	}
-	raw, err := c.deckSend(ctx, op, http.MethodDelete, nil, "boards", input.BoardID)
+	raw, err := c.deckSend(ctx, op, uncertainDeckBoard, http.MethodDelete, nil, "boards", input.BoardID)
 	if err != nil {
 		return nil, err
 	}
