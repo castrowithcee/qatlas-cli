@@ -47,8 +47,9 @@ before the credential is read when the target is missing. Methods that accept on
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
 to `pins`, the member tools to `members`, the update tools to `updates`, the chat tools to `chats`, the invite
 link tools to `invitelinks`, the bot and webhook tools to `bot`, the file tools to `files`, the media tools to
-`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`, the sticker tools to `stickers`. A group
-never changes a tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
+`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`, the
+sticker tools to `stickers`, and the forum topic tools to `topics`. A group never changes a tool ID, a
+permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
 fragment, with no exception for local addresses, and redirects are never followed.
 `config validate` rejects any other base URL. Errors never carry Telegram's own error text.
 
@@ -125,6 +126,20 @@ reactions of that user or chat across the whole chat. Exactly one actor is requi
 supergroup in which the bot may delete messages, and both tools require a `tools` list. The actor chat is only
 an object, never the target. `telegram.chatactions.send` (`create`, idempotent) shows one of Telegram's fixed
 actions for about five seconds.
+
+## Forum topics
+
+`telegram.topics.create` (`create`, not idempotent, never repeated after an unclear result) creates a forum
+topic with a `name` of 1 to 128 characters and optionally an `icon_color` from Telegram's fixed list of six
+values; its result is limited to `message_thread_id`, `name`, `icon_color`, and `icon_custom_emoji_id`.
+`telegram.topics.edit`, `telegram.topics.close`, and `telegram.topics.reopen` (`update`, idempotent) require
+exactly one of `message_thread_id` and `general: true`; the choice fixes the method, and anything else is
+refused before any request. Editing a topic needs a `name` or an `icon_custom_emoji_id`, and an empty
+`icon_custom_emoji_id` removes the icon; the General topic is only renamed (`name` required, no icon).
+`icon_custom_emoji_id` is accepted only as a string of 1 to 20 digits; `telegram.topics.iconstickers` lists
+the valid values.
+Reopening the General topic also unhides it. These results are a single boolean. Deleting topics and hiding
+the General topic are not offered; the tools are in no profile and need no `tools` list.
 
 ## Locations, venues, contacts, and dice
 
