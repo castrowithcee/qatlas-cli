@@ -220,6 +220,8 @@ type rawBoard struct {
 	Labels    []rawLabel  `json:"labels"`
 	ACL       []rawACL    `json:"acl"`
 	Users     []rawPerson `json:"users"`
+	// Stacks is nil when the board answer carries no stack list, which differs from an empty one.
+	Stacks *[]rawStack `json:"stacks"`
 }
 
 type rawAssignment struct {
@@ -244,10 +246,11 @@ type rawCard struct {
 }
 
 type rawStack struct {
-	ID    flexString `json:"id"`
-	Title string     `json:"title"`
-	Order int64      `json:"order"`
-	Cards []rawCard  `json:"cards"`
+	ID        flexString `json:"id"`
+	Title     string     `json:"title"`
+	Order     int64      `json:"order"`
+	DeletedAt int64      `json:"deletedAt"`
+	Cards     []rawCard  `json:"cards"`
 }
 
 func labelsOf(c *cutter, raw []rawLabel) []DeckLabel {
