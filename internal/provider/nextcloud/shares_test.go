@@ -383,7 +383,7 @@ func TestProfilesOfferTheShareReadsButNotTheRecipientSearch(t *testing.T) {
 	reg := registry(t)
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
-		if profile.ID == "deck-read" || profile.ID == "talk-read" || profile.ID == "notes-read" || profile.ID == "calendar" || profile.ID == "events" {
+		if profile.ID == "deck-read" || profile.ID == "talk-read" || profile.ID == "notes-read" || profile.ID == "calendar" || profile.ID == "contacts" || profile.ID == "events" {
 			continue
 		}
 		has := map[string]bool{}

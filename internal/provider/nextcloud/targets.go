@@ -54,6 +54,9 @@ var toolGroups = []config.ToolGroup{{
 }, {
 	ID: groupCalendar, Title: "Calendar",
 	Description: "Calendars and events of the identity that a calendar target binds",
+}, {
+	ID: groupContacts, Title: "Contacts",
+	Description: "Address books the connection binds and their contacts",
 }}
 
 var targetKinds = []config.TargetKind{{
