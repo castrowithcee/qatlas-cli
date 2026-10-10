@@ -159,7 +159,7 @@ func TestConnectionTestWithoutAFolderReadsTheFilesRoot(t *testing.T) {
 		return xmlResponse(http.StatusMultiStatus, multistatus(folderXML(r.URL.EscapedPath(), "alice", "1", "1"))), nil
 	})
 	red := &redact.Redactor{}
-	class, err := TestConnection(context.Background(), listed("calendar", "account"), resolver(red), red)
+	class, err := TestConnection(context.Background(), listed("deck", "account"), resolver(red), red)
 	if err != nil || class != provider.ClassOK {
 		t.Fatalf("TestConnection = %q, %v", class, err)
 	}

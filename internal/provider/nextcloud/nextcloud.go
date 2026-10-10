@@ -344,6 +344,10 @@ func Register(reg *capability.Registry) error {
 			Description: "lists and reads notes, their embedded attachments, and the Notes settings; changes nothing",
 			Tools:       []string{notesList.ID, notesGet.ID, notesAttachmentsGet.ID, notesSettingsGet.ID},
 		}, {
+			ID: "calendar", Title: "Read calendars",
+			Description: "lists the bound calendars and reads their events in a time range and single events; changes nothing",
+			Tools:       []string{calendarsList.ID, eventsList.ID, eventsGet.ID},
+		}, {
 			ID: "contacts", Title: "Read contacts",
 			Description: "lists bound address books and their contacts and reads single contacts; changes nothing",
 			Tools:       []string{addressbooksList.ID, contactsList.ID, contactsGet.ID},
@@ -414,6 +418,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(notesGet, groupNotes), Handler: notesBound(invokeNotesGet)},
 		capability.Operation{Descriptor: inGroup(notesAttachmentsGet, groupNotes), Handler: notesBound(invokeNotesAttachmentsGet)},
 		capability.Operation{Descriptor: inGroup(notesSettingsGet, groupNotes), Handler: notesBound(invokeNotesSettingsGet)},
+		capability.Operation{Descriptor: inGroup(calendarsList, groupCalendar), Handler: calendarBound(invokeCalendarsList)},
+		capability.Operation{Descriptor: inGroup(eventsList, groupCalendar), Handler: calendarBound(invokeEventsList)},
+		capability.Operation{Descriptor: inGroup(eventsGet, groupCalendar), Handler: calendarBound(invokeEventsGet)},
 		capability.Operation{Descriptor: inGroup(addressbooksList, groupContacts), Handler: addressbookBound(invokeAddressbooksList)},
 		capability.Operation{Descriptor: inGroup(contactsList, groupContacts), Handler: addressbookBound(invokeContactsList)},
 		capability.Operation{Descriptor: inGroup(contactsGet, groupContacts), Handler: addressbookBound(invokeContactsGet)},
@@ -851,7 +858,8 @@ var transport http.RoundTripper
 // TestConnection performs the smallest safe authenticated read: one PROPFIND of depth 0 on the fixed root
 // folder, or on the Files root of the identity when the connection binds no folder. It proves that the
 // instance answers Files WebDAV, that the app password is accepted, and, with a folder, that the identity
-// may read it. Nothing is written, no content is read, and no metadata is reported.
+// may read it. Nothing is written, no content is read, and no metadata is reported. A connection that binds
+// calendars also reads each bound calendar, or the calendar home, with a PROPFIND of depth 0.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
 	client, err := open(ctx, resolved, secrets, red, false)
@@ -862,7 +870,15 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 		}
 		return "", err
 	}
-	return client.testConnection(ctx)
+	class, err := client.testConnection(ctx)
+	if err != nil || class != provider.ClassOK {
+		return class, err
+	}
+	// open has parsed the targets, so the scope is valid here.
+	if bound, err := scopeOf(resolved); err == nil && bound.calendars.bound() {
+		return client.testCalendars(ctx, bound.calendars)
+	}
+	return class, nil
 }
 
 func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
