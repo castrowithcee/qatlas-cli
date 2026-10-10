@@ -237,15 +237,15 @@ longer than the reported size is rejected. The download URL carries the bot toke
 ## Sending media
 
 `telegram.photos.send`, `telegram.documents.send`, `telegram.videos.send`, `telegram.animations.send`,
-`telegram.videonotes.send`, and `telegram.mediagroups.send` (`create`) send a photo, a document, a video, an
-animation, a video note, or an album. An album has 2 through 10 items: photos and videos may be mixed, with an
-optional `type` per item, documents are never mixed with them. Each file comes from exactly one of `local_path`
-or `file_ref`; an album takes the choice per item. A URL is never a source. The tools are offered only on a
-connection that releases a directory for reading (`files`), and the options of `telegram.messages.send` that
-apply (`parse_mode`, `reply_to_message_id`, `message_thread_id`, `disable_notification`, `protect_content`)
-carry over, plus a `caption` of at most 1024 characters. An album caption goes on its first item. A video note
-has no caption and no `parse_mode`, as the Bot API gives it none. Duration, size, thumbnail, streaming, and
-spoiler settings are not offered; Telegram reads them from the file.
+`telegram.videonotes.send`, `telegram.audio.send`, `telegram.voice.send`, and `telegram.mediagroups.send`
+(`create`) send one file of that kind or an album of 2 through 10 items. Photos and videos may be mixed in an
+album, with an optional `type` per item; documents and audio files form albums of their own, and a voice message
+is never part of one. Each file comes from exactly one of `local_path` or `file_ref`, an album takes the choice
+per item, and a URL is never a source. The tools are offered only on a connection that releases a directory for
+reading (`files`). The options of `telegram.messages.send` that apply (`parse_mode`, `reply_to_message_id`,
+`message_thread_id`, `disable_notification`, `protect_content`) carry over, plus a `caption` of at most 1024
+characters, which an album shows on its first item; a video note takes neither caption nor `parse_mode`.
+Duration, performer, title, thumbnail, streaming, and spoiler settings are not offered.
 
 A `local_path` outside the released directories is refused before the credential is read. A photo is limited
 to 10 MB, any other file, videos included, to 50 MB, and the files of one album together to 50 MB; the size is
@@ -255,6 +255,11 @@ plus the plain extension), so neither the path nor the file name leaves the mach
 A `file_ref` must come from the selected chat itself: one issued for another target, even another bound chat,
 for another token, or of another kind is refused before the credential is read, and a raw file identifier is
 never accepted. Its size is not known locally; Telegram enforces the limits for it.
+
+`telegram.livephotos.send` (`create`) sends a live photo: a video of at most 10 seconds and 10 MB from
+`local_path` or `file_ref`, and its still image of up to 10 MB from `photo_local_path` or `photo_file_ref`. Both
+are required and follow the rules above; the options are those of the other media tools, and a live photo is
+never part of an album. Its result `file_ref` is that of the video.
 
 The result is `message_id`, `date`, and a `file_ref` of the sent file, for an album one such entry per message
 under `messages`. Each tool sends exactly one request and reports an unclear outcome instead of repeating it.
@@ -284,7 +289,7 @@ The terminal editor starts a new connection on the setup profile `send`, which t
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
 `[telegram.bot.get]`, and the four chat read tools. The profile `messaging` also ticks `update`,
 `delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
-`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the six media send
+`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the nine media send
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 Every other Telegram tool is in no profile. A profile is a visible starting selection, not a role: only the

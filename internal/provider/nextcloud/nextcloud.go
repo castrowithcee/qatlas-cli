@@ -347,6 +347,10 @@ func Register(reg *capability.Registry) error {
 			ID: "calendar", Title: "Read calendars",
 			Description: "lists the bound calendars and reads their events in a time range and single events; changes nothing",
 			Tools:       []string{calendarsList.ID, eventsList.ID, eventsGet.ID},
+		}, {
+			ID: "contacts", Title: "Read contacts",
+			Description: "lists bound address books and their contacts and reads single contacts; changes nothing",
+			Tools:       []string{addressbooksList.ID, contactsList.ID, contactsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -404,6 +408,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(deckCardsDelete, groupDeck), Handler: deckBound(invokeDeckCardsDelete)},
 		capability.Operation{Descriptor: inGroup(talkRoomsList, groupTalk), Handler: invokeTalkRoomsList},
 		capability.Operation{Descriptor: inGroup(talkRoomsGet, groupTalk), Handler: invokeTalkRoomsGet},
+		capability.Operation{Descriptor: inGroup(talkRoomsCreate, groupTalk), Handler: invokeTalkRoomsCreate},
+		capability.Operation{Descriptor: inGroup(talkRoomsUpdate, groupTalk), Handler: invokeTalkRoomsUpdate},
+		capability.Operation{Descriptor: inGroup(talkRoomsDelete, groupTalk), Handler: invokeTalkRoomsDelete},
 		capability.Operation{Descriptor: inGroup(talkParticipantsList, groupTalk), Handler: invokeTalkParticipantsList},
 		capability.Operation{Descriptor: inGroup(talkMessagesList, groupTalk), Handler: invokeTalkMessagesList},
 		capability.Operation{Descriptor: inGroup(talkParticipantsAdd, groupTalk), Handler: invokeTalkParticipantsAdd},
@@ -420,6 +427,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(calendarsList, groupCalendar), Handler: calendarBound(invokeCalendarsList)},
 		capability.Operation{Descriptor: inGroup(eventsList, groupCalendar), Handler: calendarBound(invokeEventsList)},
 		capability.Operation{Descriptor: inGroup(eventsGet, groupCalendar), Handler: calendarBound(invokeEventsGet)},
+		capability.Operation{Descriptor: inGroup(addressbooksList, groupContacts), Handler: addressbookBound(invokeAddressbooksList)},
+		capability.Operation{Descriptor: inGroup(contactsList, groupContacts), Handler: addressbookBound(invokeContactsList)},
+		capability.Operation{Descriptor: inGroup(contactsGet, groupContacts), Handler: addressbookBound(invokeContactsGet)},
 	)
 }
 
