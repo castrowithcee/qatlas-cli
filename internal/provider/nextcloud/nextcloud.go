@@ -339,6 +339,10 @@ func Register(reg *capability.Registry) error {
 			ID: "talk-read", Title: "Read Talk conversations",
 			Description: "lists bound Talk conversations and their participants and reads their messages; changes nothing",
 			Tools:       []string{talkRoomsList.ID, talkRoomsGet.ID, talkParticipantsList.ID, talkMessagesList.ID},
+		}, {
+			ID: "notes-read", Title: "Read notes",
+			Description: "lists and reads notes, their embedded attachments, and the Notes settings; changes nothing",
+			Tools:       []string{notesList.ID, notesGet.ID, notesAttachmentsGet.ID, notesSettingsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -394,6 +398,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(talkRoomsGet, groupTalk), Handler: invokeTalkRoomsGet},
 		capability.Operation{Descriptor: inGroup(talkParticipantsList, groupTalk), Handler: invokeTalkParticipantsList},
 		capability.Operation{Descriptor: inGroup(talkMessagesList, groupTalk), Handler: invokeTalkMessagesList},
+		capability.Operation{Descriptor: inGroup(notesList, groupNotes), Handler: notesBound(invokeNotesList)},
+		capability.Operation{Descriptor: inGroup(notesGet, groupNotes), Handler: notesBound(invokeNotesGet)},
+		capability.Operation{Descriptor: inGroup(notesAttachmentsGet, groupNotes), Handler: notesBound(invokeNotesAttachmentsGet)},
+		capability.Operation{Descriptor: inGroup(notesSettingsGet, groupNotes), Handler: notesBound(invokeNotesSettingsGet)},
 	)
 }
 
