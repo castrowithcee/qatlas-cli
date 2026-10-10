@@ -135,10 +135,10 @@ func TestDefaultRegistry(t *testing.T) {
 		36: "telegram.reactions.remove", 37: "telegram.reactions.removeall", 38: "telegram.reactions.set",
 		39: "telegram.senderchats.ban", 40: "telegram.senderchats.unban", 41: "telegram.stickers.customemoji",
 		42: "telegram.stickers.send", 43: "telegram.stickersets.get", 44: "telegram.topics.iconstickers",
-		45: "telegram.updates.list", 46: "telegram.venues.send", 47: "telegram.videonotes.send",
-		48: "telegram.videos.send", 49: "telegram.webhook.get",
+		45: "telegram.updates.confirm", 46: "telegram.updates.list", 47: "telegram.venues.send",
+		48: "telegram.videonotes.send", 49: "telegram.videos.send", 50: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 50
+	ok2 := len(operations) == 51
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}

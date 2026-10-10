@@ -6,7 +6,8 @@
 // GetTeamsForUser, GetChannel, GetChannelMembers, GetChannelsForTeamForUser, CreateDirectChannel,
 // CreateGroupChannel, GetPostsForChannel, GetPost, GetPostThread, CreatePost, PatchPost, and DeletePost,
 // GetReactions, SaveReaction, and DeleteReaction, GetPinnedPosts, PinPost, and UnpinPost, GetUserThreads,
-// GetUserThread, StartFollowingThread, and StopFollowingThread, GetUser,
+// GetUserThread, StartFollowingThread, and StopFollowingThread, GetChannelUnread, ViewChannel, SetPostUnread,
+// and UpdateThreadReadForUser, GetUser,
 // GetUserByUsername, GetUsers, SearchUsers, GetTeamMembersByIds, and GetUsersStatusesByIds,
 // GetFileInfosForPost, GetFileInfo, and GetFile, SearchPosts, SearchFiles, and SearchChannels, all marked
 // x-auth-user with the bearerAuth security scheme). A kChat instance's base URL is always the team's own name
@@ -22,12 +23,13 @@
 // token can reach several teams, which matters for a person who holds tokens, or is a member of teams, of
 // several customers. A channel_id argument outside a configured channel allow-list is refused locally, before
 // any request is sent; every operation that names a channel_id directly (messages.list, messages.send,
-// users.list, users.search, pins.list) also confirms live, see verifyChannelScope, that the channel belongs to
-// a bound team or is a direct or group channel with their members only, and is refused before the matching
-// endpoint is reached when it does not. Every operation that names a post_id (messages.thread, messages.get,
-// messages.files, messages.update, messages.delete, messages.pin, messages.unpin, the reactions tools, and
-// the threads tools, which also require the root post's channel to be a reachable channel of the named team)
-// reads the post first and binds it to its channel the same way, see verifyPostScope; the searches
+// users.list, users.search, pins.list, channels.unread, channels.markread) also confirms live, see
+// verifyChannelScope, that the channel belongs to a bound team or is a direct or group channel with their
+// members only, and is refused before the matching endpoint is reached when it does not. Every operation that
+// names a post_id (messages.thread, messages.get, messages.files, messages.update, messages.delete,
+// messages.pin, messages.unpin, messages.markunread, the reactions tools, and the threads tools, which also
+// require the root post's channel to be a reachable channel of the named team) reads the post first and binds
+// it to its channel the same way, see verifyPostScope; the searches
 // (messages.search, files.search, channels.search) read the token's channels of the team once, see
 // reachableChannels, and drop every hit outside that set, so direct and group messages, other teams, and
 // channels outside the allow-list never show up; a message reply additionally confirms that its root post
@@ -78,18 +80,20 @@
 // presence, searches the messages, files, and public channels of a bound team, sends or replies with exactly
 // one confirmed message, optionally with own uploads attached, changes the text of one confirmed message,
 // adds one confirmed reaction of the token's own user, pins or unpins one confirmed message, lists and reads
-// the threads the token's own user follows and follows or unfollows one confirmed thread, lists, creates, and
-// changes the own sidebar categories of a bound team and sets the own notifications of one channel, and, only
-// when a connection's tools list names it, deletes one confirmed message, one custom category, or removes one
-// own reaction. Only when a connection's tools list names them, it also lists, reads, describes, and deletes
-// the incoming and outgoing webhooks of bound teams and channels: a webhook's ID is a secret, so those tools
-// carry their own data sensitivity, bind every webhook through its team and channel, write a webhook back with
-// its target unchanged, and never return an outgoing webhook's token or more of a callback URL than its
-// origin. The token's own presence, custom status, and four display profile fields are the only user data it
-// changes, always for the user read from users/me and never taken from an argument. kChat renders Markdown and
-// mentions such as @channel in a message, so the text is sent as written. Every value a listing or a read
-// answers with arrives from the provider and is treated as untrusted data: normalised into a stable envelope,
-// passed through the output encoders, and never rendered, executed, or stored.
+// the threads the token's own user follows and follows or unfollows one confirmed thread, reads the unread
+// counts of a reachable channel and marks one confirmed channel, message, or thread as read or unread for the
+// token's own user only, lists, creates, and changes the own sidebar categories of a bound team and sets the
+// own notifications of one channel, and, only when a connection's tools list names it, deletes one confirmed
+// message, one custom category, or removes one own reaction. Only when a connection's tools list names them,
+// it also lists, reads, describes, and deletes the incoming and outgoing webhooks of bound teams and channels:
+// a webhook's ID is a secret, so those tools carry their own data sensitivity, bind every webhook through its
+// team and channel, write a webhook back with its target unchanged, and never return an outgoing webhook's
+// token or more of a callback URL than its origin. The token's own presence, custom status, and four display
+// profile fields are the only user data it changes, always for the user read from users/me and never taken
+// from an argument. kChat renders Markdown and mentions such as @channel in a message, so the text is sent as
+// written. Every value a listing or a read answers with arrives from the provider and is treated as untrusted
+// data: normalised into a stable envelope, passed through the output encoders, and never rendered, executed,
+// or stored.
 //
 // kChat publishes no documented request budget the way kDrive's shared API does, so this provider applies
 // no proactive spacing of its own; a 429 kChat itself reports is still classified and, when it names a
@@ -541,29 +545,31 @@ func Register(reg *capability.Registry) error {
 			Description: "lists the bound teams and their channels, reads team details and members, reads channel details and the public " +
 				"channels of a bound team, lists the direct and group channels, searches messages, files, and " +
 				"channels, lists the members of a channel and the archived channels of a team, reads channel " +
-				"messages, single messages, threads, followed threads, reactions, pinned messages, and attachments " +
-				"(metadata and download to a released local directory), reads, lists, and searches the users of the " +
-				"bound teams and their presence, and lists the own sidebar categories; changes nothing",
+				"messages, single messages, threads, followed threads, unread counts, reactions, pinned messages, " +
+				"and attachments (metadata and download to a released local directory), reads, lists, and searches " +
+				"the users of the bound teams and their presence, and lists the own sidebar categories; changes nothing",
 			Tools: []string{teamsList.ID, teamsGet.ID, teamMembersList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID,
 				channelsMembersList.ID, directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
 				filesDownload.ID, reactionsList.ID, pinsList.ID, usersGet.ID, usersList.ID, usersSearch.ID,
 				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID,
-				threadsList.ID, threadsGet.ID, categoriesList.ID},
+				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
 				"a confirmed message, or a confirmed reply to an existing thread, to a reachable channel, " +
 				"uploads a confirmed file to such a channel, edits the text of a confirmed message, adds a " +
 				"confirmed own reaction, pins or unpins a confirmed message, follows or unfollows a confirmed thread, " +
-				"sets the own presence and custom status or clears the custom status, and creates or changes a " +
-				"confirmed own sidebar category or the notifications of a channel; deleting a message, a category, " +
-				"or removing a reaction is never part of a profile",
+				"marks a confirmed channel, message, or thread as read or unread, sets the own presence and custom " +
+				"status or clears the custom status, and creates or changes a confirmed own sidebar category or the " +
+				"notifications of a channel; deleting a message, a category, or removing a reaction is never part " +
+				"of a profile",
 			Tools: []string{teamsList.ID, channelsList.ID, directList.ID, directOpen.ID, groupMessagesOpen.ID,
 				messagesList.ID, messagesThread.ID, messagesGet.ID, messagesSend.ID, messagesUpdate.ID,
 				messagesFiles.ID, filesInfo.ID, filesDownload.ID, filesUpload.ID, reactionsList.ID, reactionsAdd.ID,
 				pinsList.ID, messagesPin.ID, messagesUnpin.ID, usersGet.ID, usersList.ID, usersSearch.ID,
 				usersStatus.ID, statusSet.ID, customStatusSet.ID, customStatusClear.ID, messagesSearch.ID,
 				filesSearch.ID, channelsSearch.ID, threadsList.ID, threadsGet.ID, threadsFollow.ID, threadsUnfollow.ID,
+				channelsUnread.ID, channelsMarkRead.ID, messagesMarkUnread.ID, threadsMarkRead.ID,
 				categoriesList.ID, categoriesCreate.ID, categoriesUpdate.ID, channelNotificationsUpdate.ID},
 		}, {
 			ID: "channel-admin", Title: "Manage channels",
@@ -636,6 +642,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(threadsGet), Handler: capability.Handler(invokeThreadsGet)},
 		capability.Operation{Descriptor: withGroup(threadsFollow), Handler: capability.Handler(invokeThreadsFollow)},
 		capability.Operation{Descriptor: withGroup(threadsUnfollow), Handler: capability.Handler(invokeThreadsUnfollow)},
+		capability.Operation{Descriptor: withGroup(channelsUnread), Handler: capability.Handler(invokeChannelsUnread)},
+		capability.Operation{Descriptor: withGroup(channelsMarkRead), Handler: capability.Handler(invokeChannelsMarkRead)},
+		capability.Operation{Descriptor: withGroup(messagesMarkUnread), Handler: capability.Handler(invokeMessagesMarkUnread)},
+		capability.Operation{Descriptor: withGroup(threadsMarkRead), Handler: capability.Handler(invokeThreadsMarkRead)},
 		capability.Operation{Descriptor: withGroup(incomingWebhooksList), Handler: capability.Handler(invokeIncomingWebhooksList)},
 		capability.Operation{Descriptor: withGroup(incomingWebhooksGet), Handler: capability.Handler(invokeIncomingWebhooksGet)},
 		capability.Operation{Descriptor: withGroup(incomingWebhooksUpdate), Handler: capability.Handler(invokeIncomingWebhooksUpdate)},

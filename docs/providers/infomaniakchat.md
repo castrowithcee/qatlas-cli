@@ -14,18 +14,17 @@ updated: 2026-10-09
 Infomaniak kChat is Infomaniak's Mattermost-compatible team chat product. This provider binds one kChat
 instance and one or more of its teams, optionally narrowed to specific channels, and reads and changes
 channels and their members, direct and group channels, messages, threads, the threads the token follows,
-reactions, pins, attachments, users, the own sidebar categories, channel notifications, and webhooks through
-the instance's own `/api/v4/...` REST surface. kChat renders Markdown and mentions such as `@channel` in a
-message; Qatlas sends the text as written.
+read state, reactions, pins, attachments, users, the own sidebar categories, channel notifications, and
+webhooks through the instance's own `/api/v4/...` REST surface. kChat renders Markdown and mentions such as
+`@channel` in a message; Qatlas sends the text as written.
 
 ## Configuration
 
 Unlike kDrive, kChat has no shared Infomaniak-wide API root: every team has its own instance host, always
-`https://TEAM.kchat.infomaniak.com` (confirmed by Infomaniak's own
-[mcp-server-kchat](https://github.com/Infomaniak/mcp-server-kchat), which builds its requests from that host).
-`base_url` must be exactly that shape: `https`, no port, no path, no user, no query, no fragment. Qatlas
-refuses any other host, label count, or scheme before a secret is read, lowercases the host, and never follows
-a redirect away from it.
+`https://TEAM.kchat.infomaniak.com` (as Infomaniak's own
+[mcp-server-kchat](https://github.com/Infomaniak/mcp-server-kchat) builds its requests). `base_url` must be
+exactly that shape: `https`, no port, no path, no user, no query, no fragment. Qatlas refuses any other host,
+label count, or scheme before a secret is read, lowercases the host, and never follows a redirect from it.
 
 The credential provides `token`, sent as a bearer token: an Infomaniak Manager API token with the kChat scope
 (valid account-wide), or a bot token created in the kChat interface, as the `mcp-server-kchat` README
@@ -91,14 +90,14 @@ Per tool family:
   `channelnotifications.update` binds its channel like `channels.update`.
 - `channels.create` works only in a bound team and only on a connection without a channel allow-list,
   because a channel that does not exist yet cannot be inside one; the refusal is local.
-- A `post_id` (`messages.thread`, `.get`, `.update`, `.delete`, `.pin`, `.unpin`, `pins`, and the `reactions`
-  tools) is bound through its channel: Qatlas reads the post, refuses an answer for another post or a deleted
-  post, applies the allow-list to the post's channel, and runs the live check, all before any detail is
-  returned or any change is sent. `pins.list` also drops every post kChat reports for another channel.
+- A `post_id` (`messages.thread`, `.get`, `.update`, `.delete`, `.pin`, `.unpin`, `.markunread`, `pins`, and
+  the `reactions` tools) is bound through its channel: Qatlas reads the post, refuses an answer for another
+  post or a deleted post, applies the allow-list to the post's channel, and runs the live check, all before
+  any detail is returned or any change is sent. `pins.list` also drops posts kChat reports for another channel.
 - A reply confirms, by reading the named `root_id`, that the root post belongs to the same `channel_id`.
-- A `thread_id` (`threads.get`, `.follow`, `.unfollow`) is a root `post_id`: it is bound like one, must not be
-  a reply, and its channel must also be in the reachable set of the bound `team_id` described below, so a
-  thread of another bound team is refused.
+- A `thread_id` (`threads.get`, `.follow`, `.unfollow`, `.markread`) is a root `post_id`: it is bound like
+  one, must not be a reply, and its channel must be in the reachable set of the bound `team_id` described
+  below, so a thread of another bound team is refused.
 - A `hook_id` (`incomingwebhooks.*`, `outgoingwebhooks.get`, `.update`, `.delete`) is bound through its
   channel like a post, but only in a bound team. A list keeps webhooks of live channels the token belongs to,
   inside the allow-list. An outgoing webhook without a channel watches every public channel of its team and is
@@ -141,10 +140,10 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | Group | Reads | Confirmed changes | Only with a tools list |
 | --- | --- | --- | --- |
 | `teams` | `teams.list`, `.get`, `teammembers.list` | | `teammembers.roles` |
-| `channels` | `channels.list`, `.get`, `.browse`, `.search`, `archivedchannels.list`, `channelmembers.list`, `categories.list` | `channels.create`, `.update`, `channelmembers.add`, `categories.create`, `.update`, `channelnotifications.update` | `channels.archive`, `.restore`, `.privacy`, `channelmembers.remove`, `.roles`, `categories.delete` |
-| `messages` | `messages.list`, `.thread`, `.get`, `.files`, `.search`, `direct.list`, `pins.list` | `direct.open`, `groupmessages.open`, `messages.send`, `.update`, `.pin`, `.unpin` | `messages.delete` |
+| `channels` | `channels.list`, `.get`, `.browse`, `.search`, `.unread`, `archivedchannels.list`, `channelmembers.list`, `categories.list` | `channels.create`, `.update`, `.markread`, `channelmembers.add`, `categories.create`, `.update`, `channelnotifications.update` | `channels.archive`, `.restore`, `.privacy`, `channelmembers.remove`, `.roles`, `categories.delete` |
+| `messages` | `messages.list`, `.thread`, `.get`, `.files`, `.search`, `direct.list`, `pins.list` | `direct.open`, `groupmessages.open`, `messages.send`, `.update`, `.pin`, `.unpin`, `.markunread` | `messages.delete` |
 | `files` | `files.info`, `.search`, `.download` (writes a local file) | `files.upload` (reads a local file) | |
-| `threads` | `threads.list`, `.get` | `threads.follow`, `.unfollow` | |
+| `threads` | `threads.list`, `.get` | `threads.follow`, `.unfollow`, `.markread` | |
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
 | `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
 | `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*` (`list`, `.get`, `.update`, `.delete`) |
@@ -155,10 +154,10 @@ and offered only to a connection whose tools list names them; the role tools alt
 example of the default channel or without team management rights, stay `permission` or `provider-error`.
 
 The terminal editor starts a new connection on the setup profile `read` (all read tools). `messaging` adds
-the opens, `messages.send`, `.update`, `.pin`, `.unpin`, `files.upload`, `reactions.add`, `threads.follow`,
-`.unfollow`, `categories.create`, `.update`, `channelnotifications.update`, and the own status tools;
-`channel-admin` adds `channels.create`, `.update`, and `channelmembers.add`. `profile.update` and the
-webhook tools are in no profile.
+the opens, `messages.send`, `.update`, `.pin`, `.unpin`, `.markunread`, `channels.markread`, `files.upload`,
+`reactions.add`, `threads.follow`, `.unfollow`, `.markread`, `categories.create`, `.update`,
+`channelnotifications.update`, and the own status tools; `channel-admin` adds `channels.create`, `.update`,
+and `channelmembers.add`. `profile.update` and the webhook tools are in no profile.
 
 Behaviour beyond the schemas:
 
@@ -183,6 +182,10 @@ Behaviour beyond the schemas:
 - `messages.pin`, `.unpin`, `threads.follow`, and `.unfollow` are idempotent, send no body, change nothing
   else, and report the state kChat confirmed. Threads never include deleted threads or participants' user
   data.
+- Read state is always the token's own, never an argument, and the marks are idempotent. `channels.unread`
+  returns only the counts of the bound channel. `channels.markread` is kChat's channel view, so it also
+  clears push notifications for the channel; its body holds `channel_id` only. `threads.markread` takes an
+  optional RFC 3339 `timestamp` (now when omitted; refused locally when in the future or before 1970).
 - `messages.delete` soft-deletes the post, which users cannot restore; deleting a thread root also removes
   its replies. Whether a token may edit or delete another author's message is kChat's decision (`permission`).
 - `files.upload` and `files.download` follow the local file contracts of `infomaniakdrive.files.upload` and
@@ -231,9 +234,9 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 
 All confirmed tools require confirmation in their own request and change kChat with exactly one request,
 sent after the binding reads, never repeated automatically. An answer that does not match what was
-addressed, such as another post or a missing `OK` status, is an unreadable answer. A failure whose request
-may nonetheless have reached kChat, such as a timeout, a reset, or a 5xx response, says so in its message;
-only the caller decides whether to repeat it.
+addressed, such as another post or thread or a missing `OK` status, is an unreadable answer. A failure whose
+request may nonetheless have reached kChat, such as a timeout, a reset, or a 5xx response, says so in its
+message; only the caller decides whether to repeat it.
 
 ## Errors
 
@@ -268,7 +271,7 @@ provider's documentation for why each is its own sibling provider. Within kChat,
 creation, change, or deletion, no adding or removing of team members, no invitation, no permanent deletion,
 move, scheme, or moderation change of a channel, no membership change of a direct or group channel, no change
 of another user or of other profile fields, no profile picture, no preview or thumbnail, no custom emoji
-catalog, no removal of another user's reaction, no change of a thread's read state, no creating of webhooks,
+catalog, no removal of another user's reaction, no read state of another user, no creating of webhooks,
 and no change of a webhook beyond its name and description. An edit changes only a message's text, never its
 attachments, pin state, or properties.
 
@@ -283,15 +286,14 @@ A live test against a real kChat instance checks, in order:
 - A disposable channel switches to private, is archived, shows in `archivedchannels.list`, and is restored
   from a connection that lists the tools; the default channel's refusal is a provider error class.
 - Message list ends with `has_more` false on the last of two pages; one confirmed send appears exactly once;
-  an upload is sent by `file_id` without `text`; an already attached file, another user's upload, and an
-  upload for another channel are refused before posting.
-- A reply threads under its root; pin and unpin show in `pins.list` without other channels' messages; an edit
-  changes only text and edit time; deleting the reply keeps the root; reactions add, list, remove.
-- Follow and unfollow show in `threads.list` and `threads.get` and change only the token's own state; a
-  thread of another team or a reply is refused, and no thread of an unreachable channel is listed.
-- A download matches `size`, and a storage-host redirect is a `provider-error`.
-- Webhooks list without those of other teams or outside the allow-list (channelless outgoing ones included);
-  a disposable one changes name and description only, then is deleted.
+  an upload is sent by `file_id` without `text`; an attached file, another user's upload, and an upload for
+  another channel are refused before posting; a download matches `size`; a storage redirect is refused.
+- A reply threads under its root; pin and unpin show in `pins.list` without other channels' messages; an
+  edit changes only text and edit time; deleting the reply keeps the root; reactions add, list, remove.
+- Follow, unfollow, and read marks change only the token's own state, visible in `threads.list`, `.get`, and
+  the unread counts; a thread of another team, a reply, and a future timestamp are refused.
+- Webhooks list without those of other teams or outside the allow-list (channelless outgoing ones
+  included); a disposable one changes name and description only, then is deleted.
 - Status, custom status, and profile changes affect only the token's own user and keep other fields; a user
   only in another team is refused by `users.get` and `users.status` and absent from list and search.
 - A custom category is created, filled, renamed, and deleted; channels outside the allow-list stay in it;
