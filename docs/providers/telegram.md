@@ -26,8 +26,11 @@ and reply keyboards are not offered. The limits are checked before the credentia
 
 `telegram.messages.edit` accepts `parse_mode`, `disable_link_preview`, and `inline_keyboard` besides the text;
 reply, topic, silent, and protect do not apply to edits. An edit without `inline_keyboard` removes an existing
-keyboard. `telegram.messages.editreplymarkup` changes only the keyboard of a message: it sets
-`inline_keyboard` or, when that is omitted or empty, removes the keyboard.
+keyboard. `telegram.messages.editreplymarkup` changes only the keyboard of a message: it sets `inline_keyboard`
+or, when that is omitted or empty, removes the keyboard. `telegram.messages.editcaption` (`update`) sets the
+caption of a media message; the required `caption` (up to 1024 characters) removes it when empty.
+`telegram.messages.editmedia` (`update`) replaces the media with a photo, video, animation, or document (`type`)
+from `local_path` or `file_ref` under the rules of the media send tools and returns the new `file_ref`.
 
 The chat tools take an optional `chat` argument, the forward and copy tools also `from_chat`. It must equal a
 bound chat target exactly: an `@username` never matches a numeric ID, and `bot` or `business/<id>` is no chat.
@@ -40,14 +43,10 @@ combine with chats, and a connection with only `bot` has no chat. A tool that ne
 before the credential is read when the target is missing. Methods that accept only a numeric chat ID refuse an
 `@username` chat locally.
 
-Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
-to `pins`, the member tools to `members`, the update tools to `updates`, the chat tools to `chats`, the invite
-link tools to `invitelinks`, the bot and webhook tools to `bot`, the file tools to `files`, the media tools to
-`media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`, the
-sticker tools to `stickers`, and the forum topic tools to `topics`. A group never changes a tool ID, a
-permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
-fragment, with no exception for local addresses, and redirects are never followed.
-`config validate` rejects any other base URL. Errors never carry Telegram's own error text.
+Telegram's tools are sorted into tool groups for display; a group never changes a tool ID, a permission, or a
+tools list. The base URL must be a plain `https` URL with a host and without user, query, or fragment, with no
+exception for local addresses, and redirects are never followed. `config validate` rejects any other base URL.
+Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
 they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
@@ -120,13 +119,15 @@ Reopening the General topic also unhides it; `telegram.topics.hidegeneral` hides
 
 ## Locations, venues, contacts, and dice
 
-`telegram.locations.send`, `telegram.venues.send`, `telegram.contacts.send`, and `telegram.dice.send`
-(`create`) send one structured value to a bound chat, checked against the Bot API limits before the credential
-is read. A live location can be sent but not updated or stopped; place identifiers and vCards are not offered.
-The tools share `reply_to_message_id`, `message_thread_id`, `disable_notification`, and `protect_content`;
-keyboards and paid broadcasts are not offered. Locations, venues, and contacts carry the data class
-`telegram-personal-data` and appear only in the request, never in errors, logs, or the audit trail. The result
-is only `message_id` and `date`.
+`telegram.locations.send`, `telegram.venues.send`, `telegram.contacts.send`, and `telegram.dice.send` (`create`)
+send one structured value to a bound chat, checked against the Bot API limits before the credential is read;
+place identifiers and vCards are not offered. The tools share `reply_to_message_id`, `message_thread_id`,
+`disable_notification`, and `protect_content`; keyboards and paid broadcasts are not offered. Locations, venues,
+and contacts carry the data class `telegram-personal-data` and appear only in the request, never in errors,
+logs, or the audit trail. The result is only `message_id` and `date`. `telegram.locations.editlive` (`update`)
+moves a live location within these limits, and omitted optional values keep their setting;
+`telegram.locations.stoplive` (`update`, idempotent) ends it through a `tools` list only. Both return only
+`message_id`.
 
 ## Invite links
 
