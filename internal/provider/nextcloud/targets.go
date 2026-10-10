@@ -49,6 +49,9 @@ var toolGroups = []config.ToolGroup{{
 	ID: groupTalk, Title: "Talk",
 	Description: "Talk conversations the connection binds, their participants, and their messages",
 }, {
+	ID: groupNotes, Title: "Notes",
+	Description: "Notes of the identity in the bound categories, their embedded attachments, and the Notes settings",
+}, {
 	ID: groupContacts, Title: "Contacts",
 	Description: "Address books the connection binds and their contacts",
 }}
@@ -264,6 +267,9 @@ func checkBoardID(id string) error {
 }
 
 func checkCategory(category string) error {
+	if category == "" {
+		return errors.New("a notes category must not be empty")
+	}
 	_, err := splitRelative(category)
 	return err
 }

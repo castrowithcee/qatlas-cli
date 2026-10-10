@@ -1,7 +1,7 @@
 ---
 description: >
   Describes Nextcloud file operations, file comments, share reads and management, Deck reads and board and
-  stack management, Talk and contact reads, typed targets, connection permissions, and safety boundaries.
+  stack management, Talk, note, and contact reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -67,27 +67,23 @@ refusal changes the behaviour of such existing values.
 The connection test reads the bound folder, or the Files root of the identity when the connection binds none;
 it reports no metadata.
 
-Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound
-folder. Connection permissions independently hide and block operations, while the identity's WebDAV rights
-remain the provider-side ceiling. An optional `tools` list narrows a connection further to named tools, for
-example `[nextcloud.files.list, nextcloud.files.stat]` for metadata without file content, and never admits
-an effect `permissions` excludes. File content is carried as base64 and never written to audit records. The
-terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and
-`[nextcloud.files.list, nextcloud.files.stat, nextcloud.files.get]`; the profile `write` adds
-`nextcloud.folders.create`, `nextcloud.files.move`, and `nextcloud.files.copy`. A profile is a visible starting
-selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
-saving, and a saved connection never follows a profile.
+Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound folder.
+Connection permissions independently hide and block operations, while the identity's WebDAV rights remain the
+provider-side ceiling. An optional `tools` list narrows a connection further to named tools, for example
+`[nextcloud.files.list, nextcloud.files.stat]` for metadata without file content, and never admits an effect
+`permissions` excludes. File content is carried as base64 and never written to audit records. The terminal editor
+starts a new connection on the setup profile `read`. A profile is a visible starting selection, not a role: only
+the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection
+never follows a profile.
 
 ## Organising
 
-`nextcloud.folders.create` (`MKCOL`, effect `create`), `nextcloud.files.move` (`MOVE`, effect `update`; a
-rename is a move within one folder), and `nextcloud.files.copy` (`COPY`, effect `create`) work on files and
-folders inside the bound folder and need `confirm`. A connection without `create` can run neither
-`folders.create` nor `files.copy`; without `update` it cannot run `files.move`. Parent folders must already
-exist (no automatic creation), and an existing destination is never overwritten (`Overwrite: F`). Source and
-destination are paths below the root: the root itself is neither, they must differ, and a folder cannot go
-into itself or a descendant. Qatlas checks this locally before any credential access, and builds the
-`Destination` URL on the configured origin from the validated segments.
+`nextcloud.folders.create`, `nextcloud.files.move` (a rename is a move within one folder), and
+`nextcloud.files.copy` work on files and folders inside the bound folder and need `confirm` and the permission of
+their effect. Parent folders must already exist, and an existing destination is never overwritten. Source and
+destination are paths below the root: the root itself is neither, they must differ, and a folder cannot go into
+itself or a descendant. Qatlas checks this locally before any credential access and builds the destination on the
+configured origin from the validated segments.
 
 Each tool sends exactly one request. A taken destination, an existing folder, or a missing parent is a clear
 failure that names no path. After an unclear outcome (timeout, aborted connection, a 5xx answer) the error says the
@@ -206,10 +202,9 @@ data.
 
 ## Contacts
 
-The tool group `contacts` reads address books and contacts of the identity: `addressbooks.list`, `contacts.list`
-(with an optional text searched in name and e-mail), and `contacts.get`, all in the profile `contacts`. A bound
-address book is addressed by URI; the system address book needs its own `addressbook/URI` target and is read-only.
-Photos and other binary data are never requested; names, numbers, and notes are untrusted personal data.
+The group `contacts` (profile `contacts`) reads address books and contacts, optionally searched by name and e-mail.
+The system address book needs its own `addressbook/URI` target and is read-only. Photos and other binary data are
+never requested; contact fields are untrusted personal data.
 
 ## Versions
 
@@ -226,6 +221,13 @@ restore target of the identity with one `MOVE`. The manual documents no conditio
 made between the ETag check and the `MOVE` is not detected. An unclear outcome is reported as possibly
 applied and never repeated. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore`
 are in none.
+
+## Notes
+
+The group `notes` (profile `notes-read`) needs a `notes` target. `notes/CATEGORY` binds that category and all below
+it. The Notes API filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally,
+never shown or counted; a chunk may be empty while a next cursor is present. A foreign note or its attachment reads
+like a missing note. Attachments stay relative to their note; `local_path` follows `files.get`.
 
 ## System tags
 
