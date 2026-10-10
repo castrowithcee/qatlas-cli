@@ -190,7 +190,9 @@ var toolGroups = []config.ToolGroup{
 		Description: "Send and stop polls, set and remove reactions, show chat actions, and send locations, " +
 			"venues, contacts, and dice in the bound chats"},
 	{ID: groupStickers, Title: "Stickers",
-		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers"},
+		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers; " +
+			"upload sticker files and create, extend, and delete the bot's own sticker sets"},
+	{ID: groupTopics, Title: "Topics", Description: "Create, rename, close, and reopen forum topics of the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -291,6 +293,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: venuesSend, Handler: capability.Handler(invokeVenuesSend)},
 		capability.Operation{Descriptor: contactsSend, Handler: capability.Handler(invokeContactsSend)},
 		capability.Operation{Descriptor: diceSend, Handler: capability.Handler(invokeDiceSend)},
+		capability.Operation{Descriptor: topicsCreate, Handler: capability.Handler(invokeTopicsCreate)},
+		capability.Operation{Descriptor: topicsEdit, Handler: capability.Handler(invokeTopicsEdit)},
+		capability.Operation{Descriptor: topicsClose, Handler: capability.Handler(invokeTopicsClose)},
+		capability.Operation{Descriptor: topicsReopen, Handler: capability.Handler(invokeTopicsReopen)},
 		capability.Operation{Descriptor: updatesConfirm, Handler: capability.Handler(invokeUpdatesConfirm)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 		capability.Operation{Descriptor: botGet, Handler: capability.Handler(invokeBotGet)},
@@ -324,6 +330,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: stickersetsGet, Handler: capability.Handler(invokeStickersetsGet)},
 		capability.Operation{Descriptor: stickersCustomEmoji, Handler: capability.Handler(invokeStickersCustomEmoji)},
 		capability.Operation{Descriptor: topicsIconStickers, Handler: capability.Handler(invokeTopicsIconStickers)},
+		capability.Operation{Descriptor: stickersUploadFile, Handler: capability.Handler(invokeStickersUploadFile)},
+		capability.Operation{Descriptor: stickersetsCreate, Handler: capability.Handler(invokeStickersetsCreate)},
+		capability.Operation{Descriptor: stickersetsAddSticker, Handler: capability.Handler(invokeStickersetsAddSticker)},
+		capability.Operation{Descriptor: stickersetsDelete, Handler: capability.Handler(invokeStickersetsDelete)},
 	)
 }
 

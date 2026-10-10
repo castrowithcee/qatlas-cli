@@ -343,6 +343,10 @@ func Register(reg *capability.Registry) error {
 			ID: "notes-read", Title: "Read notes",
 			Description: "lists and reads notes, their embedded attachments, and the Notes settings; changes nothing",
 			Tools:       []string{notesList.ID, notesGet.ID, notesAttachmentsGet.ID, notesSettingsGet.ID},
+		}, {
+			ID: "calendar", Title: "Read calendars",
+			Description: "lists the bound calendars and reads their events in a time range and single events; changes nothing",
+			Tools:       []string{calendarsList.ID, eventsList.ID, eventsGet.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -394,14 +398,25 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(deckStacksCreate, groupDeck), Handler: deckBound(invokeDeckStacksCreate)},
 		capability.Operation{Descriptor: inGroup(deckStacksUpdate, groupDeck), Handler: deckBound(invokeDeckStacksUpdate)},
 		capability.Operation{Descriptor: inGroup(deckStacksDelete, groupDeck), Handler: deckBound(invokeDeckStacksDelete)},
+		capability.Operation{Descriptor: inGroup(deckCardsCreate, groupDeck), Handler: deckBound(invokeDeckCardsCreate)},
+		capability.Operation{Descriptor: inGroup(deckCardsUpdate, groupDeck), Handler: deckBound(invokeDeckCardsUpdate)},
+		capability.Operation{Descriptor: inGroup(deckCardsMove, groupDeck), Handler: deckBound(invokeDeckCardsMove)},
+		capability.Operation{Descriptor: inGroup(deckCardsDelete, groupDeck), Handler: deckBound(invokeDeckCardsDelete)},
 		capability.Operation{Descriptor: inGroup(talkRoomsList, groupTalk), Handler: invokeTalkRoomsList},
 		capability.Operation{Descriptor: inGroup(talkRoomsGet, groupTalk), Handler: invokeTalkRoomsGet},
 		capability.Operation{Descriptor: inGroup(talkParticipantsList, groupTalk), Handler: invokeTalkParticipantsList},
 		capability.Operation{Descriptor: inGroup(talkMessagesList, groupTalk), Handler: invokeTalkMessagesList},
+		capability.Operation{Descriptor: inGroup(talkMessagesSend, groupTalk), Handler: invokeTalkMessagesSend},
+		capability.Operation{Descriptor: inGroup(talkMessagesEdit, groupTalk), Handler: invokeTalkMessagesEdit},
+		capability.Operation{Descriptor: inGroup(talkMessagesDelete, groupTalk), Handler: invokeTalkMessagesDelete},
+		capability.Operation{Descriptor: inGroup(talkReactionsSet, groupTalk), Handler: invokeTalkReactionsSet},
 		capability.Operation{Descriptor: inGroup(notesList, groupNotes), Handler: notesBound(invokeNotesList)},
 		capability.Operation{Descriptor: inGroup(notesGet, groupNotes), Handler: notesBound(invokeNotesGet)},
 		capability.Operation{Descriptor: inGroup(notesAttachmentsGet, groupNotes), Handler: notesBound(invokeNotesAttachmentsGet)},
 		capability.Operation{Descriptor: inGroup(notesSettingsGet, groupNotes), Handler: notesBound(invokeNotesSettingsGet)},
+		capability.Operation{Descriptor: inGroup(calendarsList, groupCalendar), Handler: calendarBound(invokeCalendarsList)},
+		capability.Operation{Descriptor: inGroup(eventsList, groupCalendar), Handler: calendarBound(invokeEventsList)},
+		capability.Operation{Descriptor: inGroup(eventsGet, groupCalendar), Handler: calendarBound(invokeEventsGet)},
 	)
 }
 
@@ -836,7 +851,8 @@ var transport http.RoundTripper
 // TestConnection performs the smallest safe authenticated read: one PROPFIND of depth 0 on the fixed root
 // folder, or on the Files root of the identity when the connection binds no folder. It proves that the
 // instance answers Files WebDAV, that the app password is accepted, and, with a folder, that the identity
-// may read it. Nothing is written, no content is read, and no metadata is reported.
+// may read it. Nothing is written, no content is read, and no metadata is reported. A connection that binds
+// calendars also reads each bound calendar, or the calendar home, with a PROPFIND of depth 0.
 func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor) (provider.Class, error) {
 	client, err := open(ctx, resolved, secrets, red, false)
@@ -847,7 +863,15 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 		}
 		return "", err
 	}
-	return client.testConnection(ctx)
+	class, err := client.testConnection(ctx)
+	if err != nil || class != provider.ClassOK {
+		return class, err
+	}
+	// open has parsed the targets, so the scope is valid here.
+	if bound, err := scopeOf(resolved); err == nil && bound.calendars.bound() {
+		return client.testCalendars(ctx, bound.calendars)
+	}
+	return class, nil
 }
 
 func (c *Client) testConnection(ctx context.Context) (provider.Class, error) {
