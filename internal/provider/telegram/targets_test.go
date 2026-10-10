@@ -223,9 +223,9 @@ func TestChatArgumentIsDeclared(t *testing.T) {
 		membersSetAdminTitle, membersSetTag, chatsSetTitle,
 		chatsSetDescription, chatsSetPhoto, chatsDeletePhoto, chatsGet, chatsAdministrators, chatsMemberCount,
 		chatsMember, senderchatsBan, senderchatsUnban, reactionsRemove, reactionsRemoveAll, photosSend, documentsSend,
-		videosSend, animationsSend, videoNotesSend, mediaGroupsSend, messagesEditCaption, messagesEditMedia,
-		locationsEditLive, locationsStopLive, chatsSetPermissions, chatsSetStickerSet, chatsDeleteStickerSet,
-		chatsLeave} {
+		videosSend, animationsSend, videoNotesSend, audioSend, voiceSend, livePhotosSend, mediaGroupsSend,
+		messagesEditCaption, messagesEditMedia, locationsEditLive, locationsStopLive, chatsSetPermissions,
+		chatsSetStickerSet, chatsDeleteStickerSet, chatsLeave, topicsCreate, topicsEdit, topicsClose, topicsReopen} {
 		found := false
 		for _, a := range d.Arguments {
 			found = found || (a.Name == "chat" && !a.Required)

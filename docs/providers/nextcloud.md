@@ -1,11 +1,11 @@
 ---
 description: >
-  Describes Nextcloud files, file comments, shares, Deck boards and stacks, Talk conversations and messages, and
-  notes, with typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and messages,
+  notes, calendars, and contacts, with typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 # Nextcloud
@@ -35,11 +35,10 @@ identity whose original location lies below the bound root folder (`/` binds all
 bin is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
 naming it. Items inside a deleted folder, emptying the trash bin, and restoring to another place are not offered.
 
-`list` reports at most 500 items, marks a cut list as `truncated`, and refuses an answer larger than 4 MiB.
-`restore` and `delete` take the `trash_id` from `list`, read the item once, and then send one `MOVE` to the
-`restore` collection or one `DELETE`. `restore` puts the item back to its original location. `delete` removes it
-for good and requires a tools list like the delete tools above. No profile contains any of the three tools. An
-unclear outcome is reported as for the file mutations under Local files and never repeated.
+`list` marks a cut list as `truncated`. `restore` and `delete` take the `trash_id` from `list`, read the item once,
+and send one `MOVE` to the `restore` collection or one `DELETE`; `restore` puts the item back to its original
+location, `delete` removes it for good and requires a tools list like the delete tools above. No profile contains
+any of the three tools. An unclear outcome is reported as for the file mutations under Local files, never repeated.
 
 ## Targets
 
@@ -48,7 +47,7 @@ identity reaches) or `kind/ID`:
 
 - `folder` (the whole Files root) or `folder/PATH`; at most one per connection. Only a `folder` target enables the
   Files tools; without one they refuse locally, before any credential access or request.
-- `calendar` or `calendar/URI`, `addressbook` (all but the system address book) or `addressbook/URI`,
+- `calendar` or `calendar/URI`, `addressbook` (never the system address book) or `addressbook/URI`,
   `talk` or `talk/TOKEN`, `deck` or `deck/BOARD_ID` (numeric), `notes` or `notes/CATEGORY` (a sub-folder
   such as `Work/Plans` is allowed).
 - `account`: the account-wide and instance-wide reach of the identity (notifications, activity, search,
@@ -64,30 +63,26 @@ Files root) bind exactly as before, and a bare value in the `targets` list is re
 refused, because it could mean a folder or a typed target; write it as `folder/PATH` in `targets`. This
 refusal changes the behaviour of such existing values.
 
-The connection test reads the bound folder, or the Files root of the identity when the connection binds none;
-it reports no metadata.
+The connection test reads the bound folder, or the Files root of the identity when the connection binds none, and
+each bound calendar, or the calendar home for `calendar`; it reports no metadata.
 
-Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound
-folder. Connection permissions independently hide and block operations, while the identity's WebDAV rights
-remain the provider-side ceiling. An optional `tools` list narrows a connection further to named tools, for
-example `[nextcloud.files.list, nextcloud.files.stat]` for metadata without file content, and never admits
-an effect `permissions` excludes. File content is carried as base64 and never written to audit records. The
-terminal editor starts a new connection on the setup profile `read`, which ticks `[read]` and
-`[nextcloud.files.list, nextcloud.files.stat, nextcloud.files.get]`; the profile `write` adds
-`nextcloud.folders.create`, `nextcloud.files.move`, and `nextcloud.files.copy`. A profile is a visible starting
-selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
-saving, and a saved connection never follows a profile.
+Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound folder.
+Connection permissions independently hide and block operations, while the identity's WebDAV rights remain the
+provider-side ceiling. An optional `tools` list narrows a connection further to named tools, for example
+`[nextcloud.files.list, nextcloud.files.stat]` for metadata without file content, and never admits an effect
+`permissions` excludes. File content is carried as base64 and never written to audit records. The terminal editor
+starts a new connection on the setup profile `read`. A profile is a visible starting selection, not a role: only
+the ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection
+never follows a profile.
 
 ## Organising
 
-`nextcloud.folders.create` (`MKCOL`, effect `create`), `nextcloud.files.move` (`MOVE`, effect `update`; a
-rename is a move within one folder), and `nextcloud.files.copy` (`COPY`, effect `create`) work on files and
-folders inside the bound folder and need `confirm`. A connection without `create` can run neither
-`folders.create` nor `files.copy`; without `update` it cannot run `files.move`. Parent folders must already
-exist (no automatic creation), and an existing destination is never overwritten (`Overwrite: F`). Source and
-destination are paths below the root: the root itself is neither, they must differ, and a folder cannot go
-into itself or a descendant. Qatlas checks this locally before any credential access, and builds the
-`Destination` URL on the configured origin from the validated segments.
+`nextcloud.folders.create`, `nextcloud.files.move` (a rename is a move within one folder), and
+`nextcloud.files.copy` work on files and folders inside the bound folder and need `confirm` and the permission of
+their effect. Parent folders must already exist, and an existing destination is never overwritten. Source and
+destination are paths below the root: the root itself is neither, they must differ, and a folder cannot go into
+itself or a descendant. Qatlas checks this locally before any credential access and builds the destination on the
+configured origin from the validated segments.
 
 Each tool sends exactly one request. A taken destination, an existing folder, or a missing parent is a clear
 failure that names no path. After an unclear outcome (timeout, aborted connection, a 5xx answer) the error says the
@@ -100,23 +95,17 @@ change may have been applied and that source and target, or the folder, must be 
 permission `update`. All three work on the bound folder only; the root itself is never a hit and cannot be
 marked.
 
-The search takes structured filters that combine with AND, and at least one is required (an empty search is
-refused). `name_contains` is a literal, case-insensitive substring: Qatlas masks `%`, `_`, and the escape
-character `\` of Nextcloud's `d:like`. `content_type_prefix` matches the start of the MIME type,
-`modified_after` and `modified_before` take RFC 3339 times (exclusive, to the second), `size_min` and `size_max`
-are inclusive bytes (a folder counts with its subtree), `type` is `file` or `folder`, and `favorite` selects
-favorites or non-favorites. Qatlas writes the whole request XML itself and escapes every value; no caller XML,
-sorting, or offset exists. `limit` is 1 to 200 (default 50), the server picks which matches a limit keeps, and
-`truncated` is true when the limit was reached. The result is sorted by path.
+The search takes structured filters that combine with AND, and at least one is required. `name_contains` is a
+literal, case-insensitive substring: Qatlas masks the wildcards of Nextcloud's `d:like`, writes the whole request
+XML itself, and escapes every value; no caller XML, sorting, or offset exists. The server picks which matches a
+limit keeps, `truncated` says when it was reached, and the result is sorted by path.
 
-The favorites list reads at most 500 favorites below the root; more are cut and `truncated` says so. Every
-answered node is checked against the bound folder again; a node outside it, and a node the server refused,
-is dropped silently.
+Every answered favorite is checked against the bound folder again; a node outside it or refused by the server is
+dropped silently, and a cut list is marked `truncated`.
 
-`files.favorite` takes `path` and `favorite` (both required) and sends exactly one request, without a read
-before it. A `207` answer whose property status is an error is a clear failure. After an unclear outcome
-(timeout, aborted connection, a 5xx or unreadable answer) the error says the flag may have been changed and
-that the path must be stat-ed and the favorites listed before repeating; Qatlas never repeats the request.
+`files.favorite` sends exactly one request without a read before it; a `207` answer with an error property status
+is a clear failure. After an unclear outcome the error says the flag may have changed and that the path must be
+stat-ed and the favorites listed before repeating; Qatlas never repeats the request.
 
 ## Shares
 
@@ -165,22 +154,21 @@ of the instance.
 
 ## Deck
 
-The tool group `deck` reads boards with their labels, sharing entries, and members, their stacks with cards, and
-single cards (setup profile `deck-read`), and manages boards and stacks (`deckboards.*` and `deckstacks.*` changes,
-in no profile). All need a `deck` target: `deck` binds every board of the identity, `deck/BOARD_ID` only that
-board. A board that is not bound is refused locally, before any credential access or request, without naming it;
-listings drop unbound and deleted boards. Stack and card IDs count only through the bound board's hierarchy: Deck
-resolves a card by its ID alone, so a card is read only after the board's stacks show it in the named stack.
+The tool group `deck` reads boards with labels, sharing entries, and members, stacks with cards, and single cards
+(setup profile `deck-read`), and changes boards, stacks, and cards (in no profile). A `deck` target binds every
+board of the identity, `deck/BOARD_ID` one board; an unbound board is refused locally, before any credential access
+or request, without naming it, and listings drop unbound and deleted boards. Deck resolves stacks and cards by ID
+alone, so a stack, card, or target stack counts only when a read of the bound board shows it there. Deck follows no
+redirect, and a 404 means a missing app or object alike. Provider text is untrusted, capped, and marked `truncated`
+when cut; comments and attachments are not read.
 
-Deck follows no redirect, and a 404 means a missing app or object alike. Titles, names, labels, and descriptions
-are untrusted, capped, and marked `truncated` when cut. Comments and attachments are not read.
-
-Board and stack changes need `confirm` and send one request. `deckboards.create` needs the general `deck` target,
-since a `deck/BOARD_ID` binding would not hold the new board. All other changes read the bound board once and
-refuse without the manage right on it; a stack must be listed by that read, else it is refused like a missing one.
-`update` keeps the fields it was not given; a new stack without `order` goes last. Deck deletes boards softly, but
-Qatlas offers no restore; a deleted stack takes its cards with it. Both `delete` tools are reachable only through a
-tools list. An unclear outcome is reported as possibly applied and never repeated.
+Every change needs `confirm` and sends one request after at most one read of the bound board; an unclear outcome is
+reported as possibly applied and never repeated. `deckboards.create` needs the general `deck` target, since a
+`deck/BOARD_ID` binding would not hold the new board. Board and stack changes refuse without the manage right; card
+changes leave the edit right to Deck. `deckcards.update` needs the card's `last_modified` as read and refuses a
+card changed since; an archived card can only be restored. Updates keep the fields they were not given; a new stack
+or card without `order` goes last. Deck deletes boards and cards softly, but Qatlas offers no restore; a deleted
+stack takes its cards with it. All `delete` tools need a tools list.
 
 ## Talk
 
@@ -201,14 +189,26 @@ path of the bound conversation. An unclear outcome (timeout, dropped connection,
 as possibly applied and never repeated; `talkmessages.send` reports a random `reference_id` to look for in
 `talkmessages.list` first. A 429 is reported as rate-limited; refusals have fixed messages without provider text.
 
+## Calendar
+
+The group `calendar` (profile `calendar`) reads calendars and events through CalDAV and needs a `calendar` target;
+an unbound calendar is refused locally without being named. Only direct children of the calendar home and of a bound
+calendar are read, never subscriptions, the scheduling inbox and outbox, or the trash bin. `read_only` is derived
+conservatively from the privileges, and repeating events keep their rule unexpanded.
+
+## Contacts
+
+The group `contacts` (profile `contacts`) reads address books and contacts, optionally searched by name and e-mail.
+The system address book needs its own `addressbook/URI` target and is read-only. Photos and other binary data are
+never requested; contact fields are untrusted personal data.
+
 ## Versions
 
 `nextcloud.versions.list`, `nextcloud.versions.get`, and `nextcloud.versions.restore` read and restore older
-versions of one file below the connection root (developer manual, WebDAV versions: `remote.php/dav/versions/<user>/`
-of the same instance). The argument is always the file path; a file ID is never accepted. Qatlas stats the
-path first, refuses a folder, and addresses the versions only under the file ID of that answer. A `version_id`
-is a timestamp name from `versions.list`, digits only. `versions.list` reports at most 100 versions, newest
-first, and marks a cut with `truncated`; a node outside that file's version folder fails the call.
+versions of one file below the connection root through the WebDAV versions endpoint of the same instance. The
+argument is always the file path; a file ID is never accepted. Qatlas stats the path first, refuses a folder, and
+addresses the versions only under the file ID of that answer. `versions.list` reports the newest first and marks a
+cut with `truncated`; a node outside that file's version folder fails the call.
 
 `versions.get` returns up to 4 MiB inline or writes to `local_path` exactly as `files.get` does.
 `versions.restore` needs `confirm` and the `etag` of the current file and moves the version onto the
@@ -234,13 +234,13 @@ argument is always the path, never the root itself and never a file ID: Qatlas s
 addresses the relations (`remote.php/dav/systemtags-relations/files/<file_id>`) only under the file ID of that
 answer. A `tag_id` is digits only, as `systemtags.list` reports it.
 
-Only visible tags are ever listed or touched; a listing reports at most 200 tags and marks a cut with
-`truncated`. `assignable` is true when the identity may assign the tag. The `filetags` tools only assign and
-remove tags; they never create, change, or delete one. `filetags.add` and `filetags.remove` need `confirm`, read the tag
-once after the stat, and refuse an invisible or non-assignable tag without a change request; then they send
-exactly one `PUT` or `DELETE`. A tag that is already assigned, or not assigned on removal, is a clear error. An
-unclear outcome is reported as possibly applied, to be checked with `filetags.list`, and never repeated.
-`filetags.list` is in the setup profiles `read` and `write`; `systemtags.list`, `add`, and `remove` are in none.
+Only visible tags are ever listed or touched, and a cut listing is marked `truncated`. `assignable` is true when
+the identity may assign the tag. The `filetags` tools only assign and remove tags; they never create, change, or
+delete one. `filetags.add` and `filetags.remove` need `confirm`, read the tag once after the stat, and refuse an
+invisible or non-assignable tag without a change request; then they send exactly one `PUT` or `DELETE`. A tag that
+is already assigned, or not assigned on removal, is a clear error. An unclear outcome is reported as possibly
+applied, to be checked with `filetags.list`, and never repeated. `filetags.list` is in the setup profiles `read`
+and `write`; `systemtags.list`, `add`, and `remove` are in none.
 
 `nextcloud.systemtags.create`, `systemtags.update`, and `systemtags.delete` administer the catalog, need an
 `account` target and `confirm`, and are in no setup profile; `systemtags.delete` is reachable only through a
