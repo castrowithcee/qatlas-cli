@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 # Telegram
@@ -16,17 +16,13 @@ a chat (a numeric chat ID, also negative, or an `@username`), `bot`, or `busines
 or unpin them (`update`), and every operation requires confirmation. Telegram's own edit and delete
 restrictions still apply.
 
-`telegram.messages.send` sends text of 1 through 4096 characters. `parse_mode` (`HTML` or `MarkdownV2`)
-formats it; Telegram's parser decides whether the markup is valid, and its rejection surfaces as a provider
-error without Telegram's text. `reply_to_message_id` replies to a message of the same chat (never another
-chat), `message_thread_id` sends into a forum topic, `disable_notification` sends silently,
-`protect_content` forbids forwarding and saving, and `disable_link_preview` hides the link preview.
+`telegram.messages.send` sends text; `parse_mode` (`HTML` or `MarkdownV2`) formats it, and Telegram's parser
+decides whether the markup is valid. `reply_to_message_id` replies only within the same chat; `message_thread_id`,
+`disable_notification`, `protect_content`, and `disable_link_preview` set topic, silence, protection, and preview.
 
-`inline_keyboard` attaches an inline keyboard of at most 8 rows with 1 through 8 buttons each. A button has
-`text` (1 through 64 characters) and exactly one of `url` (a plain `https://` link with a host, or a `tg://`
-link, without control characters, at most 2048 characters) or `callback_data` (1 through 64 bytes). Web-app,
-login, pay, and `switch_inline_query` buttons and reply keyboards are not offered. The limits are checked
-before the credential is read.
+`inline_keyboard` attaches an inline keyboard whose buttons carry exactly one of `url` (a plain `https://`
+link with a host, or a `tg://` link) or `callback_data`. Web-app, login, pay, and `switch_inline_query` buttons
+and reply keyboards are not offered. The limits are checked before the credential is read.
 
 `telegram.messages.edit` accepts `parse_mode`, `disable_link_preview`, and `inline_keyboard` besides the text;
 reply, topic, silent, and protect do not apply to edits. An edit without `inline_keyboard` removes an existing
@@ -64,21 +60,16 @@ list no longer offers it. Its reach is that of the Bot API `deleteMessage`: in a
 deletes its own messages and, as an administrator, those of others; in a private chat it also deletes incoming
 messages.
 
-`telegram.messages.deletemany` deletes from 1 through 100 messages of one chat in a single request and also
-requires a `tools` list. Its reach is that of `telegram.messages.delete`. Repeated identifiers count once.
-Telegram skips missing or undeletable identifiers without any notice, so success reports only that Telegram
-accepted the request, not which messages are gone.
+`telegram.messages.deletemany` deletes up to 100 messages of one chat in one request, with the reach of
+`telegram.messages.delete` and also only through a `tools` list. Telegram skips missing or undeletable
+identifiers silently, so success does not say which messages are gone.
 
-`telegram.messages.forward` and `telegram.messages.copy` (`create`) move messages between two bound chats of the
-connection. `from_chat` names the source and `chat` the target; both follow the rule for `chat` above and may be
-the same chat. The source is one `message_id`, which uses `forwardMessage` or `copyMessage`, or `message_ids`, from
-2 through 100 distinct positive identifiers in strictly ascending order, which uses `forwardMessages` or
-`copyMessages`; exactly one of the two is required, and another order is refused rather than sorted. `copy`
-leaves out the link to the original. Its optional `caption` (1 through 1024 characters, with `parse_mode`)
-replaces the original caption of a single message and is refused with `message_ids`, since `copyMessages` has
-none. `message_thread_id`, `disable_notification`, and `protect_content` apply as for `telegram.messages.send`.
-The result is `message_id` for one source and `message_ids` for a list, nothing else. Telegram skips sources it
-cannot find or transfer without notice, so `message_ids` can be shorter than the request.
+`telegram.messages.forward` and `telegram.messages.copy` (`create`) move messages from `from_chat` to `chat`,
+two bound chats that follow the rule for `chat` above and may be the same. The source is one `message_id` or
+`message_ids` in strictly ascending order; another order is refused rather than sorted. `copy` leaves out the
+link to the original, and its `caption` replaces the caption of a single message and is refused with
+`message_ids`. The result is only `message_id` or `message_ids`; Telegram skips sources it cannot transfer
+without notice, so the list can be shorter than the request.
 
 `telegram.pins.pin` pins one message by `message_id`; `disable_notification` pins silently.
 `telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
@@ -87,45 +78,34 @@ requires a `tools` list. Telegram's own pin rights still apply, and topic-specif
 
 ## Moderating members
 
-`telegram.members.ban` bans one user by `user_id` (`delete`) and requires a `tools` list; `until_date` (a
-positive Unix time) limits the ban, and `revoke_messages` also deletes all messages of the user in the chat.
-`telegram.members.unban` lifts a ban (`update`) and always sends `only_if_banned`, so a current member is
-never removed; it invites nobody. `telegram.members.restrict` (`update`) requires a `tools` list and sets the
-complete `permissions` object of a user in a supergroup: every ChatPermissions boolean is required and sent
-explicitly, a missing or unknown field is refused before any request, and Telegram's permission dependencies
-are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. All
-three results are a single boolean. `telegram.senderchats.ban` (`delete`) bans a channel as a sender by
-`sender_chat_id` and requires a `tools` list; `telegram.senderchats.unban` (`update`) lifts it. The channel
-identifier is only the object of the call, never the target. Join requests are not offered.
+`telegram.members.ban` (`delete`) bans one user and requires a `tools` list; `until_date` limits the ban, and
+`revoke_messages` also deletes the user's messages. `telegram.members.unban` (`update`) always sends
+`only_if_banned`, so a current member is never removed and nobody is invited. `telegram.members.restrict`
+(`update`) requires a `tools` list and sets the complete `permissions` object of a user in a supergroup: every
+ChatPermissions boolean is required and sent explicitly, a missing or unknown field is refused before any
+request, and permissions are independent (`use_independent_chat_permissions`). `telegram.senderchats.ban`
+(`delete`, `tools` list) and `telegram.senderchats.unban` (`update`) act on a channel as sender; it is only the
+object of the call, never the target. Join requests are not offered.
 
 `telegram.members.promote` (`update`) requires a `tools` list and sets the complete `rights` object of an
-existing member in a supergroup or channel: every administrator right of `promoteChatMember` is required and
-sent explicitly, a missing or unknown field is refused before any request, and all `false` demotes. The
-membership is checked beforehand with `getChatMember`; a non-member or an unclear status is refused before
-any change.
-`can_promote_members` and `can_invite_users` widen who may add administrators and members. The default
-administrator rights of the bot are not offered. `telegram.members.setadmintitle` sets the custom `title` of
-an administrator the bot promoted in a supergroup, and `telegram.members.settag` the `tag` of a regular
-member; both are `update`, take 0 to 16 characters (Unicode characters, not bytes) without emoji, check
-this locally, and remove the value when empty. The emoji check is conservative: symbols, joiners,
-variation selectors, and the emoji blocks are refused.
+existing member the way `restrict` sets permissions; all `false` demotes. Membership is checked with
+`getChatMember` first, and a non-member or an unclear status is refused before any change. `can_promote_members`
+and `can_invite_users` widen who may add administrators and members; the bot's default administrator rights are
+not offered. `telegram.members.setadmintitle` (an administrator the bot promoted) and `telegram.members.settag`
+(a regular member) set a value of up to 16 characters without emoji, checked locally and conservatively; an
+empty value removes it.
 
 ## Polls, reactions, and chat actions
 
-`telegram.polls.send` (`create`, not idempotent) sends one poll or quiz as plain text: no entities, no
-media, no paid or business parameters. A quiz requires `correct_option_ids`, which regular polls refuse,
-as they refuse an `explanation`. `open_period` and `close_date` exclude each other; everything Telegram's
-limits fix is checked locally before the credential is read. The result is `message_id`, `date`, and
-`poll_id`. `telegram.polls.stop` (`update`, idempotent) closes a poll of the bot for good and, like
-`telegram.messages.delete`, requires a `tools` list; it reports only `stopped`, never counts or voters.
-`telegram.reactions.set` (`update`, idempotent) sets at most one reaction of the bot from Telegram's
-fixed emoji list or a numeric `custom_emoji_id`; an empty `reactions` list removes it. Paid reactions are
-not offered. `telegram.reactions.remove` (`delete`, idempotent) removes the reactions of one user (`user_id`)
-or one chat (`actor_chat_id`) from one message; `telegram.reactions.removeall` removes up to 10000 recent
-reactions of that user or chat across the whole chat. Exactly one actor is required, the chat is a group or
-supergroup in which the bot may delete messages, and both tools require a `tools` list. The actor chat is only
-an object, never the target. `telegram.chatactions.send` (`create`, idempotent) shows one of Telegram's fixed
-actions for about five seconds.
+`telegram.polls.send` (`create`) sends one poll or quiz as plain text, without entities, media, or paid or
+business parameters; Telegram's limits are checked before the credential is read. `telegram.polls.stop`
+(`update`) closes a poll of the bot for good, requires a `tools` list, and reports only `stopped`, never counts
+or voters. `telegram.reactions.set` (`update`) sets at most one reaction of the bot from Telegram's fixed emoji
+list or a `custom_emoji_id`; an empty list removes it, and paid reactions are not offered.
+`telegram.reactions.remove` and `telegram.reactions.removeall` (`delete`) require a `tools` list and remove the
+reactions of exactly one user or actor chat from one message or, up to 10000 recent ones, from the whole group;
+the actor chat is only an object, never the target. `telegram.chatactions.send` (`create`) shows one of
+Telegram's fixed actions for about five seconds.
 
 ## Forum topics
 
@@ -144,16 +124,12 @@ the General topic are not offered; the tools are in no profile and need no `tool
 ## Locations, venues, contacts, and dice
 
 `telegram.locations.send`, `telegram.venues.send`, `telegram.contacts.send`, and `telegram.dice.send`
-(`create`, not idempotent) send one structured value to a bound chat. Every value is checked against the Bot
-API limits before the credential is read: coordinates, `horizontal_accuracy` (0 through 1500), `live_period`
-(60 through 86400, or 2147483647), `heading` (1 through 360), and `proximity_alert_radius` (1 through 100000).
-`heading` and `proximity_alert_radius` need a `live_period`; a live location can be sent but not updated or
-stopped. A venue needs `title` and `address`; place identifiers are not offered. A contact needs
-`phone_number` and `first_name`, `last_name` is optional, and no vCard is accepted. The dice `emoji` is one of
-🎲 (default), 🎯, 🏀, ⚽, 🎳, 🎰. The tools share the optional `reply_to_message_id`, `message_thread_id`,
-`disable_notification`, and `protect_content`; keyboards and paid broadcasts are not offered. Locations,
-venues, and contacts carry the data class `telegram-personal-data` and appear only in the request, never in
-errors, logs, or the audit trail. The result is only `message_id` and `date`.
+(`create`) send one structured value to a bound chat, checked against the Bot API limits before the credential
+is read. A live location can be sent but not updated or stopped; place identifiers and vCards are not offered.
+The tools share `reply_to_message_id`, `message_thread_id`, `disable_notification`, and `protect_content`;
+keyboards and paid broadcasts are not offered. Locations, venues, and contacts carry the data class
+`telegram-personal-data` and appear only in the request, never in errors, logs, or the audit trail. The result
+is only `message_id` and `date`.
 
 ## Invite links
 
@@ -285,21 +261,21 @@ under `messages`. Each tool sends exactly one request and reports an unclear out
 
 ## Stickers
 
-`telegram.stickers.send` (`create`) sends one sticker to a bound chat, from exactly one of a `local_path` or a
-`file_ref`; a URL is never a source. A `local_path` must end in `.webp`, `.tgs`, or `.webm` (checked before
-anything else), lie in a directory the connection releases for reading (`files`), and be at most 512 KB; it is
-sent under a neutral name, with an optional `emoji`. A `file_ref` is accepted when it is bound to the selected
-chat or to `bot`, the binding of every sticker the read tools return; any other binding, token, or kind is
-refused before the credential is read, and `emoji` is refused with it. The options `reply_to_message_id`,
-`message_thread_id`, `disable_notification`, and `protect_content` carry over; there is no reply markup and no
-business or paid option. The result is `message_id` and `date`. One request is sent, and an unclear outcome is
-reported instead of repeated.
+`telegram.stickers.send` sends one sticker to a bound chat from a `local_path` or a `file_ref`, never from a
+URL. A local file must be a `.webp`, `.tgs`, or `.webm` file of at most 512 KB in a directory the connection
+releases for reading (`files`) and is sent under a neutral name. A `file_ref` must be bound to the selected chat
+or to `bot`; anything else is refused before the credential is read.
 
-`telegram.stickersets.get` (name of 1 through 64 letters, digits, or underscores), `telegram.stickers.customemoji`
-(1 through 200 identifiers of digits), and `telegram.topics.iconstickers` (`read`) read public catalog data and
-run on every connection without a `bot` target. They return only a fixed set of fields per sticker, at most 200
-stickers, with texts shortened; a sticker carries a `file_ref` only on a connection that binds the `bot`
-target, signed with the binding `bot`. The stickers tools are in no setup profile.
+`telegram.stickersets.get`, `telegram.stickers.customemoji`, and `telegram.topics.iconstickers` read public
+catalog data on every connection and return a fixed set of fields per sticker; a sticker carries a `file_ref`
+bound to `bot` only on a connection that binds the `bot` target.
+
+`telegram.stickers.uploadfile`, `telegram.stickersets.create`, `telegram.stickersets.addsticker`, and
+`telegram.stickersets.delete` manage sticker sets and need the `bot` target. A set belongs to the given Telegram
+user, not to a chat, and takes files only as `bot`-bound references from `uploadfile`. Only the bot's own sets are
+changed: the name must end in `_by_` and the bot's username, which one `getMe` read checks before the changing
+request. Deleting a set, available only through a tools list, removes it for every user and cannot be undone.
+Each changing sticker tool sends one request and reports an unclear outcome instead of repeating it.
 
 ## Setup profiles
 
@@ -311,12 +287,6 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 `telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the six media send
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
-`telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
-`telegram.members.restrict`, `telegram.members.promote`, `telegram.members.setadmintitle`,
-`telegram.members.settag`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
-`telegram.chats.deletephoto`, `telegram.chats.setpermissions`, `telegram.chats.setstickerset`,
-`telegram.chats.deletestickerset`, `telegram.chats.leave`, `telegram.messages.forward`,
-`telegram.messages.copy`, the interaction tools including locations, venues, contacts, and dice, and the
-invite link tools are in no profile. A profile is a visible starting selection, not a role: only the ticked
-`permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection never
-follows a profile.
+Every other Telegram tool is in no profile. A profile is a visible starting selection, not a role: only the
+ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection
+never follows a profile.

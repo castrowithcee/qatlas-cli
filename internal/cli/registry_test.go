@@ -136,13 +136,14 @@ func TestDefaultRegistry(t *testing.T) {
 		38: "telegram.pins.pin", 40: "telegram.pins.unpinall", 41: "telegram.polls.send",
 		42: "telegram.polls.stop", 43: "telegram.reactions.remove", 44: "telegram.reactions.removeall",
 		45: "telegram.reactions.set", 46: "telegram.senderchats.ban", 47: "telegram.senderchats.unban",
-		48: "telegram.stickers.customemoji", 49: "telegram.stickers.send", 50: "telegram.stickersets.get",
-		51: "telegram.topics.close", 52: "telegram.topics.create", 53: "telegram.topics.edit",
-		54: "telegram.topics.iconstickers", 55: "telegram.topics.reopen", 56: "telegram.updates.confirm",
-		57: "telegram.updates.list", 58: "telegram.venues.send", 59: "telegram.videonotes.send",
-		60: "telegram.videos.send", 61: "telegram.webhook.get",
+		48: "telegram.stickers.customemoji", 49: "telegram.stickers.send", 50: "telegram.stickers.uploadfile",
+		51: "telegram.stickersets.addsticker", 52: "telegram.stickersets.create", 53: "telegram.stickersets.delete",
+		54: "telegram.stickersets.get", 55: "telegram.topics.close", 56: "telegram.topics.create",
+		57: "telegram.topics.edit", 58: "telegram.topics.iconstickers", 59: "telegram.topics.reopen",
+		60: "telegram.updates.confirm", 61: "telegram.updates.list", 62: "telegram.venues.send",
+		63: "telegram.videonotes.send", 64: "telegram.videos.send", 65: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 62
+	ok2 := len(operations) == 66
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}

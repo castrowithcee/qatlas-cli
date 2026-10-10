@@ -189,7 +189,8 @@ var toolGroups = []config.ToolGroup{
 		Description: "Send and stop polls, set and remove reactions, show chat actions, and send locations, " +
 			"venues, contacts, and dice in the bound chats"},
 	{ID: groupStickers, Title: "Stickers",
-		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers"},
+		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers; " +
+			"upload sticker files and create, extend, and delete the bot's own sticker sets"},
 	{ID: groupTopics, Title: "Topics", Description: "Create, rename, close, and reopen forum topics of the bound chats"},
 }
 
@@ -324,6 +325,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: stickersetsGet, Handler: capability.Handler(invokeStickersetsGet)},
 		capability.Operation{Descriptor: stickersCustomEmoji, Handler: capability.Handler(invokeStickersCustomEmoji)},
 		capability.Operation{Descriptor: topicsIconStickers, Handler: capability.Handler(invokeTopicsIconStickers)},
+		capability.Operation{Descriptor: stickersUploadFile, Handler: capability.Handler(invokeStickersUploadFile)},
+		capability.Operation{Descriptor: stickersetsCreate, Handler: capability.Handler(invokeStickersetsCreate)},
+		capability.Operation{Descriptor: stickersetsAddSticker, Handler: capability.Handler(invokeStickersetsAddSticker)},
+		capability.Operation{Descriptor: stickersetsDelete, Handler: capability.Handler(invokeStickersetsDelete)},
 	)
 }
 
