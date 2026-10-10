@@ -212,6 +212,23 @@ func coreConfig() *config.Config {
 			"teamroles2": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate},
 				Tools:       []string{teamMembersRoles.ID}},
+			// "editor2" may update in both teams, so a thread of teamB can be named with teamA.
+			"editor2": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
+			// "catdel" lists the category delete tool; "nodelete" holds the permission without it.
+			"catdel": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete},
+				Tools:       []string{categoriesDelete.ID}},
+			// The webhook connections: "hooker" lists all four tools, "hookch" narrows teamA to chanA, "hookno"
+			// holds the permissions without listing them.
+			"hooker": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
+				Tools:       hookToolIDs},
+			"hookch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete},
+				Tools:       hookToolIDs},
+			"hookno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete}},
 			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete, config.PermissionUpdate}},
 		},
@@ -277,8 +294,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 47 {
-		t.Fatalf("tools = %+v, want 47", metadata.Tools)
+	if len(metadata.Tools) != 64 {
+		t.Fatalf("tools = %+v, want 64", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -324,7 +341,16 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	if !has("read", archivedChannelsList.ID) || has("channel-admin", archivedChannelsList.ID) {
 		t.Fatalf("profiles = %+v, want archivedchannels.list in read", profiles)
 	}
+	if !has("read", categoriesList.ID) || !has("messaging", categoriesList.ID) ||
+		!has("messaging", categoriesCreate.ID) || !has("messaging", categoriesUpdate.ID) ||
+		!has("messaging", channelNotificationsUpdate.ID) || has("read", categoriesCreate.ID) ||
+		has("read", categoriesUpdate.ID) || has("read", channelNotificationsUpdate.ID) {
+		t.Fatalf("profiles = %+v, want the category and notification tools in the specified profiles", profiles)
+	}
 	for id := range profiles {
+		if has(id, categoriesDelete.ID) {
+			t.Fatalf("profile %s selects the category delete tool", id)
+		}
 		if has(id, channelsArchive.ID) || has(id, channelsRestore.ID) || has(id, channelsPrivacy.ID) {
 			t.Fatalf("profile %s selects an archive, restore, or visibility tool", id)
 		}
@@ -333,6 +359,22 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 		if has(id, messagesDelete.ID) || has(id, reactionsRemove.ID) {
 			t.Fatalf("profile %s selects a delete tool", id)
+		}
+		for _, hook := range hookTools {
+			if has(id, hook.ID) {
+				t.Fatalf("profile %s selects webhook tool %s", id, hook.ID)
+			}
+		}
+	}
+	for _, id := range []string{threadsList.ID, threadsGet.ID, channelsUnread.ID} {
+		if !has("read", id) || !has("messaging", id) {
+			t.Fatalf("profiles = %+v, want %s in read and messaging", profiles, id)
+		}
+	}
+	for _, id := range []string{threadsFollow.ID, threadsUnfollow.ID, channelsMarkRead.ID, messagesMarkUnread.ID,
+		threadsMarkRead.ID} {
+		if has("read", id) || !has("messaging", id) || has("channel-admin", id) {
+			t.Fatalf("profiles = %+v, want %s in messaging only", profiles, id)
 		}
 	}
 	groups := map[string]bool{}
@@ -347,6 +389,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 			tool.ID == pinsList.ID) &&
 			tool.Group != "messages" {
 			t.Fatalf("tool %s group = %q, want messages", tool.ID, tool.Group)
+		}
+		if strings.HasPrefix(tool.ID, Provider+".threads.") && tool.Group != "threads" {
+			t.Fatalf("tool %s group = %q, want threads", tool.ID, tool.Group)
 		}
 		if tool.ID == messagesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
 			t.Fatalf("messages.delete metadata = %+v", tool)
@@ -363,6 +408,17 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 		if tool.ID == archivedChannelsList.ID && (tool.RequiresToolAllowList || tool.Group != "channels") {
 			t.Fatalf("archivedchannels.list metadata = %+v", tool)
+		}
+		if tool.ID == categoriesDelete.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
+			t.Fatalf("categories.delete metadata = %+v", tool)
+		}
+		if (tool.ID == categoriesList.ID || tool.ID == categoriesCreate.ID || tool.ID == categoriesUpdate.ID ||
+			tool.ID == channelNotificationsUpdate.ID) && (tool.RequiresToolAllowList || tool.Group != "channels") {
+			t.Fatalf("%s metadata = %+v", tool.ID, tool)
+		}
+		if strings.HasPrefix(tool.ID, Provider+".incomingwebhooks.") &&
+			(!tool.RequiresToolAllowList || tool.Group != "integrations") {
+			t.Fatalf("%s metadata = %+v", tool.ID, tool)
 		}
 		if tool.ID == reactionsRemove.ID && (!tool.RequiresToolAllowList || tool.Effect != config.PermissionDelete) {
 			t.Fatalf("reactions.remove metadata = %+v", tool)

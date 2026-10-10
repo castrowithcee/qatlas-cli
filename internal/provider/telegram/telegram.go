@@ -175,18 +175,20 @@ var messagesDelete = capability.Descriptor{
 }
 
 var toolGroups = []config.ToolGroup{
-	{ID: groupMessages, Title: "Messages", Description: "Send, edit, and delete messages in the bound chats"},
+	{ID: groupMessages, Title: "Messages", Description: "Send, forward, copy, edit, and delete messages in the bound chats"},
 	{ID: groupPins, Title: "Pins", Description: "Pin and unpin messages in the bound chats"},
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
 	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats; change their title, description, photo, default permissions, and group sticker set; leave a chat"},
 	{ID: groupInviteLinks, Title: "Invite links", Description: "Read the primary invite link and revoke invite links of the bound chats"},
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot"},
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
-	{ID: groupMedia, Title: "Media", Description: "Send photos, documents, and albums to the bound chats"},
-	{ID: groupMembers, Title: "Members", Description: "Ban, unban, and restrict members of the bound chats"},
+	{ID: groupMedia, Title: "Media", Description: "Send photos, documents, videos, animations, video notes, and albums to the bound chats"},
+	{ID: groupMembers, Title: "Members", Description: "Ban, unban, and restrict members and sender chats of the bound chats"},
 	{ID: groupInteractions, Title: "Interactions",
-		Description: "Send and stop polls, set reactions, show chat actions, and send locations, venues, " +
-			"contacts, and dice in the bound chats"},
+		Description: "Send and stop polls, set and remove reactions, show chat actions, and send locations, " +
+			"venues, contacts, and dice in the bound chats"},
+	{ID: groupStickers, Title: "Stickers",
+		Description: "Send stickers to the bound chats; read sticker sets, custom emoji, and forum topic icon stickers"},
 }
 
 const groupMessages = "messages"
@@ -243,10 +245,11 @@ func Register(reg *capability.Registry) error {
 			Description: "pins and unpins single messages in the bound chats; nothing is sent, edited, or deleted",
 			Tools:       []string{pinsPin.ID, pinsUnpin.ID},
 		}, {
-			ID: "media", Title: "Send photos, documents, and albums",
-			Description: "sends photos, documents, and albums from released local files or file references to the " +
-				"bound chats; earlier messages stay as they are",
-			Tools: []string{photosSend.ID, documentsSend.ID, mediaGroupsSend.ID},
+			ID: "media", Title: "Send photos, videos, documents, and albums",
+			Description: "sends photos, documents, videos, animations, video notes, and albums from released local " +
+				"files or file references to the bound chats; earlier messages stay as they are",
+			Tools: []string{photosSend.ID, documentsSend.ID, mediaGroupsSend.ID, videosSend.ID, animationsSend.ID,
+				videoNotesSend.ID},
 		}, {
 			ID: "moderation", Title: "Unban members",
 			Description: "lifts bans in the bound chats; a user who is not banned is left untouched",
@@ -261,6 +264,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: messagesEditReplyMarkup, Handler: capability.Handler(invokeMessagesEditReplyMarkup)},
 		capability.Operation{Descriptor: messagesDelete, Handler: capability.Handler(invokeMessagesDelete)},
 		capability.Operation{Descriptor: messagesDeleteMany, Handler: capability.Handler(invokeMessagesDeleteMany)},
+		capability.Operation{Descriptor: messagesForward, Handler: capability.Handler(invokeMessagesForward)},
+		capability.Operation{Descriptor: messagesCopy, Handler: capability.Handler(invokeMessagesCopy)},
 		capability.Operation{Descriptor: pinsPin, Handler: capability.Handler(invokePinsPin)},
 		capability.Operation{Descriptor: pinsUnpin, Handler: capability.Handler(invokePinsUnpin)},
 		capability.Operation{Descriptor: pinsUnpinAll, Handler: capability.Handler(invokePinsUnpinAll)},
@@ -271,11 +276,16 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: pollsSend, Handler: capability.Handler(invokePollsSend)},
 		capability.Operation{Descriptor: pollsStop, Handler: capability.Handler(invokePollsStop)},
 		capability.Operation{Descriptor: reactionsSet, Handler: capability.Handler(invokeReactionsSet)},
+		capability.Operation{Descriptor: reactionsRemove, Handler: capability.Handler(invokeReactionsRemove)},
+		capability.Operation{Descriptor: reactionsRemoveAll, Handler: capability.Handler(invokeReactionsRemoveAll)},
+		capability.Operation{Descriptor: senderchatsBan, Handler: capability.Handler(invokeSenderChatsBan)},
+		capability.Operation{Descriptor: senderchatsUnban, Handler: capability.Handler(invokeSenderChatsUnban)},
 		capability.Operation{Descriptor: chatActionsSend, Handler: capability.Handler(invokeChatActionsSend)},
 		capability.Operation{Descriptor: locationsSend, Handler: capability.Handler(invokeLocationsSend)},
 		capability.Operation{Descriptor: venuesSend, Handler: capability.Handler(invokeVenuesSend)},
 		capability.Operation{Descriptor: contactsSend, Handler: capability.Handler(invokeContactsSend)},
 		capability.Operation{Descriptor: diceSend, Handler: capability.Handler(invokeDiceSend)},
+		capability.Operation{Descriptor: updatesConfirm, Handler: capability.Handler(invokeUpdatesConfirm)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 		capability.Operation{Descriptor: botGet, Handler: capability.Handler(invokeBotGet)},
 		capability.Operation{Descriptor: webhookGet, Handler: capability.Handler(invokeWebhookGet)},
@@ -298,6 +308,13 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: photosSend, Handler: capability.Handler(invokePhotosSend)},
 		capability.Operation{Descriptor: documentsSend, Handler: capability.Handler(invokeDocumentsSend)},
 		capability.Operation{Descriptor: mediaGroupsSend, Handler: capability.Handler(invokeMediaGroupsSend)},
+		capability.Operation{Descriptor: videosSend, Handler: capability.Handler(invokeVideosSend)},
+		capability.Operation{Descriptor: animationsSend, Handler: capability.Handler(invokeAnimationsSend)},
+		capability.Operation{Descriptor: videoNotesSend, Handler: capability.Handler(invokeVideoNotesSend)},
+		capability.Operation{Descriptor: stickersSend, Handler: capability.Handler(invokeStickersSend)},
+		capability.Operation{Descriptor: stickersetsGet, Handler: capability.Handler(invokeStickersetsGet)},
+		capability.Operation{Descriptor: stickersCustomEmoji, Handler: capability.Handler(invokeStickersCustomEmoji)},
+		capability.Operation{Descriptor: topicsIconStickers, Handler: capability.Handler(invokeTopicsIconStickers)},
 	)
 }
 
