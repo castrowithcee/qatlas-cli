@@ -45,7 +45,7 @@ before the credential is read when the target is missing. Methods that accept on
 `@username` chat locally.
 
 Telegram's tools are sorted into tool groups for display; the message tools belong to `messages`, the pin tools
-to `pins`, the member tools to `members`, the update tool to `updates`, the chat tools to `chats`, the invite
+to `pins`, the member tools to `members`, the update tools to `updates`, the chat tools to `chats`, the invite
 link tools to `invitelinks`, the bot and webhook tools to `bot`, the file tools to `files`, the media tools to
 `media`, the poll, reaction, chat action, location, venue, contact, and dice tools to `interactions`, the sticker tools to `stickers`. A group
 never changes a tool ID, a permission, or a tools list. The base URL must be a plain `https` URL with a host and without user, query, or
@@ -95,8 +95,19 @@ explicitly, a missing or unknown field is refused before any request, and Telegr
 are switched off (`use_independent_chat_permissions`). An optional `until_date` ends the restriction. All
 three results are a single boolean. `telegram.senderchats.ban` (`delete`) bans a channel as a sender by
 `sender_chat_id` and requires a `tools` list; `telegram.senderchats.unban` (`update`) lifts it. The channel
-identifier is only the object of the call, never the target. Promoting members and join requests are not
-offered.
+identifier is only the object of the call, never the target. Join requests are not offered.
+
+`telegram.members.promote` (`update`) requires a `tools` list and sets the complete `rights` object of an
+existing member in a supergroup or channel: every administrator right of `promoteChatMember` is required and
+sent explicitly, a missing or unknown field is refused before any request, and all `false` demotes. The
+membership is checked beforehand with `getChatMember`; a non-member or an unclear status is refused before
+any change.
+`can_promote_members` and `can_invite_users` widen who may add administrators and members. The default
+administrator rights of the bot are not offered. `telegram.members.setadmintitle` sets the custom `title` of
+an administrator the bot promoted in a supergroup, and `telegram.members.settag` the `tag` of a regular
+member; both are `update`, take 0 to 16 characters (Unicode characters, not bytes) without emoji, check
+this locally, and remove the value when empty. The emoji check is conservative: symbols, joiners,
+variation selectors, and the emoji blocks are refused.
 
 ## Polls, reactions, and chat actions
 
@@ -151,10 +162,18 @@ or type, is only counted in `skipped`, and `last_update_id` names the highest up
 included. An `@username` target is matched through a fixed `getChat` call on the configured name; the ID that
 returns is used for matching only. A long poll (`wait_seconds`) waits for a new update.
 
-The tool acknowledges nothing and stores no offset: the same updates appear again on the next call until
-Telegram drops them, which it does after at most 24 hours. Telegram allows one consumer per bot. The call
-fails with a conflict while a webhook is active or another `getUpdates` consumer runs, and a long poll
+`telegram.updates.list` acknowledges nothing and stores no offset: the same updates appear again on the next
+call until Telegram drops them, which it does after at most 24 hours. Telegram allows one consumer per bot. The
+call fails with a conflict while a webhook is active or another `getUpdates` consumer runs, and a long poll
 interrupts the long poll of another consumer of the same bot.
+
+`telegram.updates.confirm` (`delete`, confirmation required) makes Telegram drop all updates up to and
+including `update_id`, so the next `telegram.updates.list` shows only newer ones. It needs the target `bot`, is
+released only through the connection's tools list, and belongs to no profile. Its effect is bot-wide: it
+confirms the updates of every chat of the bot, including chats this connection does not bind, and it is
+the only way an update leaves the list before Telegram drops it. It fails with a conflict while a webhook is
+active, and another poller of the same bot loses the confirmed updates or competes for the offset. A failure
+whose outcome is unknown is reported as such and never repeated. The result contains only `confirmed_through`.
 
 Identifiers that belong to no chat (a file, a callback query, a join request) are returned only as signed
 references, never as Telegram's raw identifier. A reference is bound to the target it came from and to the
@@ -266,7 +285,8 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 `telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
-`telegram.members.restrict`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
+`telegram.members.restrict`, `telegram.members.promote`, `telegram.members.setadmintitle`,
+`telegram.members.settag`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
 `telegram.chats.deletephoto`, `telegram.messages.forward`, `telegram.messages.copy`, the interaction tools
 including locations, venues, contacts, and dice, and the invite link tools are in no profile. A profile is a
 visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
