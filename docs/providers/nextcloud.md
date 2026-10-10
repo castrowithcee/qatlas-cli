@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and messages,
-  notes, and calendars, with typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and
+  messages, notes, calendars, and events, with typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -35,10 +35,9 @@ identity whose original location lies below the bound root folder (`/` binds all
 bin is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
 naming it. Items inside a deleted folder, emptying the trash bin, and restoring to another place are not offered.
 
-`list` marks a cut list as `truncated`. `restore` and `delete` take the `trash_id` from `list`, read the item once,
-and send one `MOVE` to the `restore` collection or one `DELETE`; `restore` puts the item back to its original
-location, `delete` removes it for good and requires a tools list like the delete tools above. No profile contains
-any of the three tools. An unclear outcome is reported as for the file mutations under Local files, never repeated.
+`restore` puts an item from `list` back to its original location and `delete` removes it for good, each after one
+read with one request; `delete` requires a tools list, and no profile contains any of the three tools. An unclear
+outcome is reported as for the file mutations under Local files, never repeated.
 
 ## Targets
 
@@ -163,9 +162,8 @@ The tool group `deck` reads boards with labels, sharing entries, and members, st
 (setup profile `deck-read`), and changes boards, stacks, and cards (in no profile). A `deck` target binds every
 board of the identity, `deck/BOARD_ID` one board; an unbound board is refused locally, before any credential access
 or request, without naming it, and listings drop unbound and deleted boards. Deck resolves stacks and cards by ID
-alone, so a stack, card, or target stack counts only when a read of the bound board shows it there. Deck follows no
-redirect, and a 404 means a missing app or object alike. Provider text is untrusted, capped, and marked `truncated`
-when cut; comments and attachments are not read.
+alone, so a stack, card, or target stack counts only when a read of the bound board shows it there. Provider text
+is untrusted, capped, and marked `truncated` when cut; comments and attachments are not read.
 
 Every change needs `confirm` and sends one request after at most one read of the bound board; an unclear outcome is
 reported as possibly applied and never repeated. `deckboards.create` needs the general `deck` target, since a
@@ -177,29 +175,31 @@ stack takes its cards with it. All `delete` tools need a tools list.
 
 ## Talk
 
-The tool group `talk` works on Talk conversations through the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`)
-with the client of sharing. Its read tools form the setup profile `talk-read`; the change tools are in no profile,
-and deleting needs a tools list naming the tool. Every tool needs a `talk` target: `talk` binds every conversation
-of the identity, `talk/TOKEN` one. Listings drop unbound conversations; an unbound or malformed token is refused
-locally, before any credential access or request, without naming it. Each call first reads the `spreed` capability
-and refuses a missing app or feature instead of assuming a version.
+The tool group `talk` works on Talk conversations through the OCS API of the Talk app. Its read tools form the
+setup profile `talk-read`; the change tools are in no profile, and deleting needs a tools list naming the tool.
+Every tool needs a `talk` target: `talk` binds every conversation of the identity, `talk/TOKEN` one. Listings drop
+unbound conversations; an unbound or malformed token is refused locally, before any credential access or request,
+without naming it. Each call first reads the `spreed` capability and refuses a missing app or feature.
 
 Reading never waits for new messages, moves the read marker, or marks notifications as read. Placeholders such as
 `{actor}` or `{file}` become the name of their rich object; links, paths, and previews of objects are never
 reported, because a file shared into a conversation carries an access token in them. Session IDs and phone numbers
 of participants are not read. Message texts and names are untrusted data.
 
-A change tool needs `confirm` and sends exactly one request after the capability read; a message ID only reaches the
-path of the bound conversation. An unclear outcome (timeout, dropped connection, 5xx, unreadable answer) is reported
-as possibly applied and never repeated; `talkmessages.send` reports a random `reference_id` to look for in
-`talkmessages.list` first. A 429 is reported as rate-limited; refusals have fixed messages without provider text.
+A change tool needs `confirm` and sends exactly one request after the capability read; a message ID only reaches
+the path of the bound conversation. An unclear outcome is reported as possibly applied and never repeated;
+`talkmessages.send` reports a random `reference_id` to look for in `talkmessages.list` first.
 
 ## Calendar
 
-The group `calendar` (profile `calendar`) reads calendars and events through CalDAV and needs a `calendar` target;
-an unbound calendar is refused locally without being named. Only direct children of the calendar home and of a bound
-calendar are read, never subscriptions, the scheduling inbox and outbox, or the trash bin. `read_only` is derived
-conservatively from the privileges, and repeating events keep their rule unexpanded.
+The group `calendar` works through CalDAV and needs a `calendar` target; an unbound calendar is refused locally
+without being named. Only direct children of the calendar home and of a bound calendar count, never subscriptions,
+the scheduling inbox and outbox, or the trash bin. Profile `calendar` reads; `read_only` is derived conservatively
+from the privileges, and repeating events keep their rule unexpanded. Profile `events` also creates events and
+replaces one bound to its `etag`, each built from structured fields with UID and resource ID from Qatlas; an event
+with overrides of single occurrences is not replaced. `events.delete` needs a tools list. A change needs `confirm`,
+reads the calendar or the event once, refuses a read-only calendar unchanged, and sends one request, never repeated
+after an unclear outcome. With attendees, Nextcloud sends them invitations, updates, or cancellations by e-mail.
 
 ## Versions
 
