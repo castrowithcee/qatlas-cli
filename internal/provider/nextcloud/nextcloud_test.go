@@ -242,7 +242,7 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 58 || descriptors[0].ID != "nextcloud.comments.create" ||
+	if len(descriptors) != 61 || descriptors[0].ID != "nextcloud.comments.create" ||
 		descriptors[2].ID != "nextcloud.comments.list" || descriptors[4].ID != "nextcloud.deckboards.create" ||
 		descriptors[5].ID != "nextcloud.deckboards.delete" || descriptors[6].ID != "nextcloud.deckboards.get" ||
 		descriptors[8].ID != "nextcloud.deckboards.update" ||
@@ -259,9 +259,10 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		descriptors[43].ID != "nextcloud.systemtags.update" || descriptors[44].ID != "nextcloud.talkmessages.delete" ||
 		descriptors[45].ID != "nextcloud.talkmessages.edit" || descriptors[46].ID != "nextcloud.talkmessages.list" ||
 		descriptors[47].ID != "nextcloud.talkmessages.send" || descriptors[49].ID != "nextcloud.talkreactions.set" ||
-		descriptors[51].ID != "nextcloud.talkrooms.list" || descriptors[52].ID != "nextcloud.trash.delete" ||
-		descriptors[54].ID != "nextcloud.trash.restore" || descriptors[55].ID != "nextcloud.versions.get" ||
-		descriptors[57].ID != "nextcloud.versions.restore" {
+		descriptors[50].ID != "nextcloud.talkrooms.create" || descriptors[51].ID != "nextcloud.talkrooms.delete" ||
+		descriptors[53].ID != "nextcloud.talkrooms.list" || descriptors[54].ID != "nextcloud.talkrooms.update" ||
+		descriptors[55].ID != "nextcloud.trash.delete" || descriptors[57].ID != "nextcloud.trash.restore" ||
+		descriptors[58].ID != "nextcloud.versions.get" || descriptors[60].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
