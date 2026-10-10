@@ -351,6 +351,12 @@ func Register(reg *capability.Registry) error {
 			ID: "contacts", Title: "Read contacts",
 			Description: "lists bound address books and their contacts and reads single contacts; changes nothing",
 			Tools:       []string{addressbooksList.ID, contactsList.ID, contactsGet.ID},
+		}, {
+			ID: "events", Title: "Read and write calendar events",
+			Description: "also creates events in bound writable calendars and replaces one event given its etag, with " +
+				"confirmation; attendees receive invitations by e-mail from Nextcloud; never deletes, which only a " +
+				"tools list naming events.delete allows",
+			Tools: []string{calendarsList.ID, eventsList.ID, eventsGet.ID, eventsCreate.ID, eventsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -427,6 +433,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(calendarsList, groupCalendar), Handler: calendarBound(invokeCalendarsList)},
 		capability.Operation{Descriptor: inGroup(eventsList, groupCalendar), Handler: calendarBound(invokeEventsList)},
 		capability.Operation{Descriptor: inGroup(eventsGet, groupCalendar), Handler: calendarBound(invokeEventsGet)},
+		capability.Operation{Descriptor: inGroup(eventsCreate, groupCalendar), Handler: calendarBound(invokeEventsCreate)},
+		capability.Operation{Descriptor: inGroup(eventsUpdate, groupCalendar), Handler: calendarBound(invokeEventsUpdate)},
+		capability.Operation{Descriptor: inGroup(eventsDelete, groupCalendar), Handler: calendarBound(invokeEventsDelete)},
 		capability.Operation{Descriptor: inGroup(addressbooksList, groupContacts), Handler: addressbookBound(invokeAddressbooksList)},
 		capability.Operation{Descriptor: inGroup(contactsList, groupContacts), Handler: addressbookBound(invokeContactsList)},
 		capability.Operation{Descriptor: inGroup(contactsGet, groupContacts), Handler: addressbookBound(invokeContactsGet)},

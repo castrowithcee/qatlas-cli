@@ -1,7 +1,7 @@
 ---
 description: >
   Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and messages,
-  notes, calendars, and contacts, with typed targets, connection permissions, and safety boundaries.
+  notes, calendars and events, and contacts, with typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -35,10 +35,9 @@ identity whose original location lies below the bound root folder (`/` binds all
 bin is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
 naming it. Items inside a deleted folder, emptying the trash bin, and restoring to another place are not offered.
 
-`list` marks a cut list as `truncated`. `restore` and `delete` take the `trash_id` from `list`, read the item once,
-and send one `MOVE` to the `restore` collection or one `DELETE`; `restore` puts the item back to its original
-location, `delete` removes it for good and requires a tools list like the delete tools above. No profile contains
-any of the three tools. An unclear outcome is reported as for the file mutations under Local files, never repeated.
+`restore` puts an item from `list` back to its original location and `delete` removes it for good, each after one
+read with one request; `delete` requires a tools list, and no profile contains any of the three tools. An unclear
+outcome is reported as for the file mutations under Local files, never repeated.
 
 ## Targets
 
@@ -158,9 +157,8 @@ The tool group `deck` reads boards with labels, sharing entries, and members, st
 (setup profile `deck-read`), and changes boards, stacks, and cards (in no profile). A `deck` target binds every
 board of the identity, `deck/BOARD_ID` one board; an unbound board is refused locally, before any credential access
 or request, without naming it, and listings drop unbound and deleted boards. Deck resolves stacks and cards by ID
-alone, so a stack, card, or target stack counts only when a read of the bound board shows it there. Deck follows no
-redirect, and a 404 means a missing app or object alike. Provider text is untrusted, capped, and marked `truncated`
-when cut; comments and attachments are not read.
+alone, so a stack, card, or target stack counts only when a read of the bound board shows it there. Provider text
+is untrusted, capped, and marked `truncated` when cut; comments and attachments are not read.
 
 Every change needs `confirm` and sends one request after at most one read of the bound board; an unclear outcome is
 reported as possibly applied and never repeated. `deckboards.create` needs the general `deck` target, since a
@@ -191,10 +189,12 @@ answer) may be applied and is not repeated; check the list first (`send`: `refer
 
 ## Calendar
 
-The group `calendar` (profile `calendar`) reads calendars and events through CalDAV and needs a `calendar` target;
-an unbound calendar is refused locally without being named. Only direct children of the calendar home and of a bound
-calendar are read, never subscriptions, the scheduling inbox and outbox, or the trash bin. `read_only` is derived
-conservatively from the privileges, and repeating events keep their rule unexpanded.
+The CalDAV group `calendar` needs a `calendar` target; an unbound calendar is refused locally, unnamed. Only direct
+children of the calendar home and of a bound calendar count, never subscriptions or the scheduling and trash
+collections. Profile `calendar` reads; `read_only` is derived conservatively, and repeating events keep their rule
+unexpanded. Profile `events` also creates events and replaces one by `etag`, never one with overrides of single
+occurrences; `events.delete` needs a tools list. A change needs `confirm`, refuses a read-only calendar, and is
+never repeated after an unclear outcome. Nextcloud e-mails attendees invitations, updates, and cancellations.
 
 ## Contacts
 
