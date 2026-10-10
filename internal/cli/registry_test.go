@@ -136,14 +136,16 @@ func TestDefaultRegistry(t *testing.T) {
 		38: "telegram.pins.pin", 40: "telegram.pins.unpinall", 41: "telegram.polls.send",
 		42: "telegram.polls.stop", 43: "telegram.reactions.remove", 44: "telegram.reactions.removeall",
 		45: "telegram.reactions.set", 46: "telegram.senderchats.ban", 47: "telegram.senderchats.unban",
-		48: "telegram.stickers.customemoji", 49: "telegram.stickers.send", 50: "telegram.stickers.uploadfile",
-		51: "telegram.stickersets.addsticker", 52: "telegram.stickersets.create", 53: "telegram.stickersets.delete",
-		54: "telegram.stickersets.get", 55: "telegram.topics.close", 56: "telegram.topics.create",
-		57: "telegram.topics.edit", 58: "telegram.topics.iconstickers", 59: "telegram.topics.reopen",
-		60: "telegram.updates.confirm", 61: "telegram.updates.list", 62: "telegram.venues.send",
-		63: "telegram.videonotes.send", 64: "telegram.videos.send", 65: "telegram.webhook.get",
+		48: "telegram.stickers.customemoji", 49: "telegram.stickers.delete", 50: "telegram.stickers.replace",
+		51: "telegram.stickers.send", 52: "telegram.stickers.setposition", 53: "telegram.stickers.uploadfile",
+		54: "telegram.stickersets.addsticker", 55: "telegram.stickersets.create",
+		56: "telegram.stickersets.delete", 57: "telegram.stickersets.get", 58: "telegram.topics.close",
+		59: "telegram.topics.create", 60: "telegram.topics.edit", 61: "telegram.topics.iconstickers",
+		62: "telegram.topics.reopen", 63: "telegram.updates.confirm", 64: "telegram.updates.list",
+		65: "telegram.venues.send", 66: "telegram.videonotes.send", 67: "telegram.videos.send",
+		68: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 66
+	ok2 := len(operations) == 69
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}

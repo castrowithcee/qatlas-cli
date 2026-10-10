@@ -275,6 +275,9 @@ bound to `bot` only on a connection that binds the `bot` target.
 user, not to a chat, and takes files only as `bot`-bound references from `uploadfile`. Only the bot's own sets are
 changed: the name must end in `_by_` and the bot's username, which one `getMe` read checks before the changing
 request. Deleting a set, available only through a tools list, removes it for every user and cannot be undone.
+`telegram.stickers.setposition`, `telegram.stickers.replace`, and `telegram.stickers.delete` change one sticker
+of such a set, addressed by the set `name` and a `bot`-bound `file_ref` from `stickersets.get`; reads first
+confirm that the sticker belongs to that set. Removing a sticker, available only through a tools list, is final.
 Each changing sticker tool sends one request and reports an unclear outcome instead of repeating it.
 
 ## Setup profiles
