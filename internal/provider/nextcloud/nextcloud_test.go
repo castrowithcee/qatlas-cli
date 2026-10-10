@@ -243,7 +243,7 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 68 || descriptors[0].ID != "nextcloud.addressbooks.list" || descriptors[1].ID != "nextcloud.calendars.list" || descriptors[2].ID != "nextcloud.comments.create" ||
+	if len(descriptors) != 71 || descriptors[0].ID != "nextcloud.addressbooks.list" || descriptors[1].ID != "nextcloud.calendars.list" || descriptors[2].ID != "nextcloud.comments.create" ||
 		descriptors[4].ID != "nextcloud.comments.list" || descriptors[6].ID != "nextcloud.contacts.get" ||
 		descriptors[7].ID != "nextcloud.contacts.list" || descriptors[8].ID != "nextcloud.deckboards.create" ||
 		descriptors[9].ID != "nextcloud.deckboards.delete" || descriptors[10].ID != "nextcloud.deckboards.get" ||
@@ -264,9 +264,10 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		descriptors[53].ID != "nextcloud.systemtags.update" || descriptors[54].ID != "nextcloud.talkmessages.delete" ||
 		descriptors[55].ID != "nextcloud.talkmessages.edit" || descriptors[56].ID != "nextcloud.talkmessages.list" ||
 		descriptors[57].ID != "nextcloud.talkmessages.send" || descriptors[59].ID != "nextcloud.talkreactions.set" ||
-		descriptors[61].ID != "nextcloud.talkrooms.list" || descriptors[62].ID != "nextcloud.trash.delete" ||
-		descriptors[64].ID != "nextcloud.trash.restore" || descriptors[65].ID != "nextcloud.versions.get" ||
-		descriptors[67].ID != "nextcloud.versions.restore" {
+		descriptors[60].ID != "nextcloud.talkrooms.create" || descriptors[61].ID != "nextcloud.talkrooms.delete" ||
+		descriptors[63].ID != "nextcloud.talkrooms.list" || descriptors[64].ID != "nextcloud.talkrooms.update" ||
+		descriptors[65].ID != "nextcloud.trash.delete" || descriptors[67].ID != "nextcloud.trash.restore" ||
+		descriptors[68].ID != "nextcloud.versions.get" || descriptors[70].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {

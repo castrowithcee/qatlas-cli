@@ -138,6 +138,95 @@ var topicsReopen = capability.Descriptor{
 	}},
 }
 
+var topicsDelete = capability.Descriptor{
+	ID:      Provider + ".topics.delete",
+	Version: 1,
+	Title:   "Delete a Telegram forum topic",
+	Description: "Delete a forum topic together with all its messages in a bound forum supergroup of an explicit " +
+		"Telegram connection; the General topic cannot be deleted",
+	Tags:     []string{"telegram", "topics", "delete"},
+	Risk:     chatAdminRisk(capability.EffectDelete, capability.IdempotencyIdempotent),
+	Provider: Provider, RequiresToolAllowList: true,
+	Group: groupTopics,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` +
+		`"message_thread_id":{"type":"integer","minimum":1}},` +
+		`"required":["message_thread_id"],"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
+		`"required":["deleted"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{chatArgument,
+		{Name: "message_thread_id", Description: "Thread identifier of the forum topic to delete", Required: true}},
+	Fields: []capability.Field{{Name: "deleted", Description: "True when Telegram accepted the change"}},
+	Examples: []capability.Example{{
+		Description: "Delete a topic and its messages",
+		Arguments:   json.RawMessage(`{"message_thread_id":12}`),
+	}},
+}
+
+var topicsUnpinAll = capability.Descriptor{
+	ID:      Provider + ".topics.unpinall",
+	Version: 1,
+	Title:   "Unpin all messages of a Telegram forum topic",
+	Description: "Unpin all pinned messages of a forum topic or, with general: true, of the General topic of a " +
+		"bound forum supergroup of an explicit Telegram connection",
+	Tags:     []string{"telegram", "topics", "unpin"},
+	Risk:     chatAdminRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider, RequiresToolAllowList: true,
+	Group: groupTopics,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `,` + topicSelectorSchema + `},` +
+		`"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"unpinned":{"type":"boolean"}},` +
+		`"required":["unpinned"],"additionalProperties":false}`),
+	Arguments: append([]capability.Argument{chatArgument}, topicSelectorArguments...),
+	Fields:    []capability.Field{{Name: "unpinned", Description: "True when Telegram accepted the change"}},
+	Examples: []capability.Example{{
+		Description: "Unpin all messages of a topic",
+		Arguments:   json.RawMessage(`{"message_thread_id":12}`),
+	}},
+}
+
+var topicsHideGeneral = capability.Descriptor{
+	ID:      Provider + ".topics.hidegeneral",
+	Version: 1,
+	Title:   "Hide the General topic of a Telegram forum",
+	Description: "Hide the General topic of a bound forum supergroup of an explicit Telegram connection; an open " +
+		"General topic is closed",
+	Tags:     []string{"telegram", "topics", "hide"},
+	Risk:     chatAdminRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider: Provider,
+	Group:    groupTopics,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `},` +
+		`"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"hidden":{"type":"boolean"}},` +
+		`"required":["hidden"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{chatArgument},
+	Fields:    []capability.Field{{Name: "hidden", Description: "True when Telegram accepted the change"}},
+	Examples: []capability.Example{{
+		Description: "Hide the General topic of this connection's chat",
+		Arguments:   json.RawMessage(`{}`),
+	}},
+}
+
+var topicsUnhideGeneral = capability.Descriptor{
+	ID:          Provider + ".topics.unhidegeneral",
+	Version:     1,
+	Title:       "Unhide the General topic of a Telegram forum",
+	Description: "Unhide the General topic of a bound forum supergroup of an explicit Telegram connection",
+	Tags:        []string{"telegram", "topics", "unhide"},
+	Risk:        chatAdminRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
+	Provider:    Provider,
+	Group:       groupTopics,
+	InputSchema: json.RawMessage(`{"type":"object","properties":{` + chatSchema + `},` +
+		`"additionalProperties":false}`),
+	OutputSchema: json.RawMessage(`{"type":"object","properties":{"unhidden":{"type":"boolean"}},` +
+		`"required":["unhidden"],"additionalProperties":false}`),
+	Arguments: []capability.Argument{chatArgument},
+	Fields:    []capability.Field{{Name: "unhidden", Description: "True when Telegram accepted the change"}},
+	Examples: []capability.Example{{
+		Description: "Unhide the General topic of this connection's chat",
+		Arguments:   json.RawMessage(`{}`),
+	}},
+}
+
 type topicSelector struct {
 	Chat            string `json:"chat"`
 	MessageThreadID int64  `json:"message_thread_id"`
@@ -234,6 +323,75 @@ func invokeTopicState(ctx context.Context, resolved *config.Resolved, secrets *s
 		return client.CloseTopic(ctx, arguments.MessageThreadID, arguments.General)
 	}
 	return client.ReopenTopic(ctx, arguments.MessageThreadID, arguments.General)
+}
+
+func invokeTopicsDelete(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "delete forum topic"
+	var arguments topicSelector
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if arguments.General || arguments.MessageThreadID <= 0 {
+		return nil, providerError(op, "a positive message_thread_id is required; the General topic cannot be deleted")
+	}
+	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	if err != nil {
+		return nil, err
+	}
+	return client.DeleteTopic(ctx, arguments.MessageThreadID)
+}
+
+func invokeTopicsUnpinAll(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	const op = "unpin forum topic messages"
+	var arguments topicSelector
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if err := arguments.check(op); err != nil {
+		return nil, err
+	}
+	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	if err != nil {
+		return nil, err
+	}
+	return client.UnpinAllTopicMessages(ctx, arguments.MessageThreadID, arguments.General)
+}
+
+func invokeTopicsHideGeneral(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeGeneralVisibility(ctx, resolved, secrets, red, raw, true)
+}
+
+func invokeTopicsUnhideGeneral(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeGeneralVisibility(ctx, resolved, secrets, red, raw, false)
+}
+
+func invokeGeneralVisibility(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage, hide bool) (any, error) {
+	var arguments struct {
+		Chat string `json:"chat"`
+	}
+	if err := decodeStrict(raw, &arguments); err != nil {
+		return nil, providerError(generalVisibilityOp(hide), "the validated arguments could not be read")
+	}
+	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	if err != nil {
+		return nil, err
+	}
+	if hide {
+		return client.HideGeneralTopic(ctx)
+	}
+	return client.UnhideGeneralTopic(ctx)
+}
+
+func generalVisibilityOp(hide bool) string {
+	if hide {
+		return "hide General forum topic"
+	}
+	return "unhide General forum topic"
 }
 
 func topicStateOp(closing bool) string {
@@ -390,6 +548,64 @@ func (c *Client) ReopenTopic(ctx context.Context, threadID int64, general bool) 
 		return nil, err
 	}
 	return map[string]any{"reopened": true}, nil
+}
+
+// DeleteTopic performs exactly one deleteForumTopic request; Telegram deletes the topic's messages with it.
+func (c *Client) DeleteTopic(ctx context.Context, threadID int64) (map[string]any, error) {
+	const op = "delete forum topic"
+	if c.target == "" {
+		return nil, providerError(op, "no chat was selected")
+	}
+	if threadID <= 0 {
+		return nil, providerError(op, "a positive message_thread_id is required")
+	}
+	err := c.confirmed(ctx, spec{op: op, method: "deleteForumTopic", limit: defaultResponseBytes}, struct {
+		ChatID          string `json:"chat_id"`
+		MessageThreadID int64  `json:"message_thread_id"`
+	}{c.target, threadID})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"deleted": true}, nil
+}
+
+// UnpinAllTopicMessages performs exactly one request; general selects unpinAllGeneralForumTopicMessages.
+func (c *Client) UnpinAllTopicMessages(ctx context.Context, threadID int64, general bool) (map[string]any, error) {
+	err := c.topicState(ctx, "unpin forum topic messages", "unpinAllForumTopicMessages",
+		"unpinAllGeneralForumTopicMessages", threadID, general)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"unpinned": true}, nil
+}
+
+// HideGeneralTopic performs exactly one hideGeneralForumTopic request.
+func (c *Client) HideGeneralTopic(ctx context.Context) (map[string]any, error) {
+	if err := c.generalVisibility(ctx, true); err != nil {
+		return nil, err
+	}
+	return map[string]any{"hidden": true}, nil
+}
+
+// UnhideGeneralTopic performs exactly one unhideGeneralForumTopic request.
+func (c *Client) UnhideGeneralTopic(ctx context.Context) (map[string]any, error) {
+	if err := c.generalVisibility(ctx, false); err != nil {
+		return nil, err
+	}
+	return map[string]any{"unhidden": true}, nil
+}
+
+func (c *Client) generalVisibility(ctx context.Context, hide bool) error {
+	op, method := generalVisibilityOp(hide), "unhideGeneralForumTopic"
+	if hide {
+		method = "hideGeneralForumTopic"
+	}
+	if c.target == "" {
+		return providerError(op, "no chat was selected")
+	}
+	return c.confirmed(ctx, spec{op: op, method: method, limit: defaultResponseBytes}, struct {
+		ChatID string `json:"chat_id"`
+	}{c.target})
 }
 
 func (c *Client) topicState(ctx context.Context, op, method, generalMethod string, threadID int64, general bool) error {

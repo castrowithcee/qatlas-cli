@@ -28,10 +28,9 @@ and reply keyboards are not offered. The limits are checked before the credentia
 reply, topic, silent, and protect do not apply to edits. An edit without `inline_keyboard` removes an existing
 keyboard. `telegram.messages.editreplymarkup` changes only the keyboard of a message: it sets `inline_keyboard`
 or, when that is omitted or empty, removes the keyboard. `telegram.messages.editcaption` (`update`) sets the
-caption of a media message; `caption` (up to 1024 characters) is required, and an empty one removes it.
+caption of a media message; the required `caption` (up to 1024 characters) removes it when empty.
 `telegram.messages.editmedia` (`update`) replaces the media with a photo, video, animation, or document (`type`)
-from `local_path` or `file_ref` under the rules of the media send tools, with an optional `caption` for the new
-media. Both address the message only by chat and `message_id`; `editmedia` also returns the new `file_ref`.
+from `local_path` or `file_ref` under the rules of the media send tools and returns the new `file_ref`.
 
 The chat tools take an optional `chat` argument, the forward and copy tools also `from_chat`. It must equal a
 bound chat target exactly: an `@username` never matches a numeric ID, and `bot` or `business/<id>` is no chat.
@@ -112,14 +111,16 @@ Telegram's fixed actions for about five seconds.
 `telegram.topics.create` (`create`, not idempotent, never repeated after an unclear result) creates a forum
 topic with a `name` of 1 to 128 characters and optionally an `icon_color` from Telegram's fixed list of six
 values; its result is limited to `message_thread_id`, `name`, `icon_color`, and `icon_custom_emoji_id`.
-`telegram.topics.edit`, `telegram.topics.close`, and `telegram.topics.reopen` (`update`, idempotent) require
-exactly one of `message_thread_id` and `general: true`; the choice fixes the method, and anything else is
-refused before any request. Editing a topic needs a `name` or an `icon_custom_emoji_id`, and an empty
-`icon_custom_emoji_id` removes the icon; the General topic is only renamed (`name` required, no icon).
-`icon_custom_emoji_id` is accepted only as a string of 1 to 20 digits; `telegram.topics.iconstickers` lists
-the valid values.
-Reopening the General topic also unhides it. These results are a single boolean. Deleting topics and hiding
-the General topic are not offered; the tools are in no profile and need no `tools` list.
+`telegram.topics.edit`, `telegram.topics.close`, `telegram.topics.reopen`, and `telegram.topics.unpinall`
+(`update`, idempotent) require exactly one of `message_thread_id` and `general: true`; the choice fixes the
+method, and anything else is refused before any request. Editing a topic needs a `name` or an
+`icon_custom_emoji_id`, and an empty `icon_custom_emoji_id` removes the icon; the General topic is only
+renamed (`name` required, no icon). `icon_custom_emoji_id` is accepted only as a string of 1 to 20 digits;
+`telegram.topics.iconstickers` lists the valid values. Reopening the General topic also unhides it;
+`telegram.topics.hidegeneral` hides and closes it, and `telegram.topics.unhidegeneral` shows it again (both
+`update`, idempotent, `chat` only). `telegram.topics.unpinall` unpins all messages of a topic, and
+`telegram.topics.delete` (`delete`, idempotent, `message_thread_id` only) removes a topic with all its
+messages; both require a `tools` list. These results are a single boolean.
 
 ## Locations, venues, contacts, and dice
 
@@ -129,10 +130,9 @@ place identifiers and vCards are not offered. The tools share `reply_to_message_
 `disable_notification`, and `protect_content`; keyboards and paid broadcasts are not offered. Locations, venues,
 and contacts carry the data class `telegram-personal-data` and appear only in the request, never in errors,
 logs, or the audit trail. The result is only `message_id` and `date`. `telegram.locations.editlive` (`update`)
-moves a live location within the same limits and may change `horizontal_accuracy`, `heading`,
-`proximity_alert_radius`, and `live_period`; omitted values keep their setting. `telegram.locations.stoplive`
-(`update`, idempotent) ends it and requires a `tools` list. Both address the message only by chat and
-`message_id` and return only `message_id`.
+moves a live location within these limits, and omitted optional values keep their setting;
+`telegram.locations.stoplive` (`update`, idempotent) ends it through a `tools` list only. Both return only
+`message_id`.
 
 ## Invite links
 

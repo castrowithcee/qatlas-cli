@@ -172,22 +172,22 @@ stack takes its cards with it. All `delete` tools need a tools list.
 
 ## Talk
 
-The tool group `talk` works on Talk conversations through the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`)
-with the client of sharing. Its read tools form the setup profile `talk-read`; the change tools are in no profile,
-and deleting needs a tools list naming the tool. Every tool needs a `talk` target: `talk` binds every conversation
-of the identity, `talk/TOKEN` one. Listings drop unbound conversations; an unbound or malformed token is refused
-locally, before any credential access or request, without naming it. Each call first reads the `spreed` capability
-and refuses a missing app or feature instead of assuming a version.
+The tool group `talk` works on Talk conversations through the OCS API of the Talk app. Read tools form the setup
+profile `talk-read`; change tools are in no profile, and deleting needs a tools list. Every tool needs a `talk`
+target: `talk` binds every conversation of the identity, `talk/TOKEN` one. Listings drop unbound conversations; an
+unbound or malformed token is refused locally, before any credential access or request, without naming it. Each call
+first reads the `spreed` capability (`update`, `delete`: the conversation) and refuses a missing app or feature.
 
-Reading never waits for new messages, moves the read marker, or marks notifications as read. Placeholders such as
-`{actor}` or `{file}` become the name of their rich object; links, paths, and previews of objects are never
-reported, because a file shared into a conversation carries an access token in them. Session IDs and phone numbers
-of participants are not read. Message texts and names are untrusted data.
+Reading never waits for new messages, moves the read marker, or marks notifications as read. Links, paths, and
+previews of rich objects, session IDs, and phone numbers are never reported. Texts and names are untrusted data.
 
-A change tool needs `confirm` and sends exactly one request after the capability read; a message ID only reaches the
-path of the bound conversation. An unclear outcome (timeout, dropped connection, 5xx, unreadable answer) is reported
-as possibly applied and never repeated; `talkmessages.send` reports a random `reference_id` to look for in
-`talkmessages.list` first. A 429 is reported as rate-limited; refusals have fixed messages without provider text.
+Management covers internal conversations only, never public ones. `talkrooms.create` needs the `talk` target and
+makes a one-to-one conversation with an existing user or a named group; `talkrooms.update` (name or description, one
+per call) and `talkrooms.delete` need a bound token and an owner or moderator.
+
+A change tool needs `confirm` and sends one request after one read. An unclear outcome (timeout, drop, 5xx,
+unreadable answer) is reported as possibly applied, never repeated: check `talkmessages.list` for the `reference_id`
+of `send`, or `talkrooms.list` after `create`. A 429 is rate-limited.
 
 ## Calendar
 
