@@ -97,7 +97,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "media"
 		case strings.HasPrefix(tool.ID, "telegram.polls.") || strings.HasPrefix(tool.ID, "telegram.reactions.") ||
 			strings.HasPrefix(tool.ID, "telegram.chatactions.") || tool.ID == locationsSend.ID ||
-			tool.ID == venuesSend.ID || tool.ID == contactsSend.ID || tool.ID == diceSend.ID:
+			tool.ID == venuesSend.ID || tool.ID == contactsSend.ID || tool.ID == diceSend.ID ||
+			tool.ID == locationsEditLive.ID || tool.ID == locationsStopLive.ID:
 			want = "interactions"
 		case tool.ID == stickersSend.ID || tool.ID == stickersetsGet.ID || tool.ID == stickersCustomEmoji.ID ||
 			tool.ID == topicsIconStickers.ID:
@@ -110,8 +111,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 54 {
-		t.Fatalf("operation count = %d, want fifty-four", len(operations))
+	if len(operations) != 58 {
+		t.Fatalf("operation count = %d, want fifty-eight", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -136,7 +137,7 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 			d.ID == membersBan.ID || d.ID == membersRestrict.ID || d.ID == membersPromote.ID ||
 			d.ID == invitelinksRevoke.ID || d.ID == pollsStop.ID || d.ID == chatsDeletePhoto.ID ||
 			d.ID == senderchatsBan.ID || d.ID == reactionsRemove.ID || d.ID == reactionsRemoveAll.ID ||
-			d.ID == updatesConfirm.ID
+			d.ID == updatesConfirm.ID || d.ID == locationsStopLive.ID
 		if d.RequiresToolAllowList != want {
 			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
 		}

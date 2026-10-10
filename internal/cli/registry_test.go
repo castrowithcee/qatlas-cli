@@ -127,19 +127,21 @@ func TestDefaultRegistry(t *testing.T) {
 		8: "telegram.chats.setdescription", 9: "telegram.chats.setphoto", 10: "telegram.chats.settitle",
 		11: "telegram.contacts.send", 12: "telegram.dice.send", 13: "telegram.documents.send",
 		14: "telegram.files.download", 15: "telegram.files.get", 16: "telegram.invitelinks.primary",
-		17: "telegram.invitelinks.revoke", 18: "telegram.locations.send", 19: "telegram.mediagroups.send",
-		20: "telegram.members.ban", 21: "telegram.members.promote", 22: "telegram.members.restrict",
-		23: "telegram.members.setadmintitle", 24: "telegram.members.settag", 25: "telegram.members.unban",
-		26: "telegram.messages.copy", 28: "telegram.messages.deletemany", 31: "telegram.messages.forward",
-		32: "telegram.messages.send", 33: "telegram.photos.send", 34: "telegram.pins.pin",
-		36: "telegram.pins.unpinall", 37: "telegram.polls.send", 38: "telegram.polls.stop",
-		39: "telegram.reactions.remove", 40: "telegram.reactions.removeall", 41: "telegram.reactions.set",
-		42: "telegram.senderchats.ban", 43: "telegram.senderchats.unban", 44: "telegram.stickers.customemoji",
-		45: "telegram.stickers.send", 46: "telegram.stickersets.get", 47: "telegram.topics.iconstickers",
-		48: "telegram.updates.confirm", 49: "telegram.updates.list", 50: "telegram.venues.send",
-		51: "telegram.videonotes.send", 52: "telegram.videos.send", 53: "telegram.webhook.get",
+		17: "telegram.invitelinks.revoke", 18: "telegram.locations.editlive", 19: "telegram.locations.send",
+		20: "telegram.locations.stoplive", 21: "telegram.mediagroups.send", 22: "telegram.members.ban",
+		23: "telegram.members.promote", 24: "telegram.members.restrict", 25: "telegram.members.setadmintitle",
+		26: "telegram.members.settag", 27: "telegram.members.unban", 28: "telegram.messages.copy",
+		30: "telegram.messages.deletemany", 32: "telegram.messages.editcaption",
+		33: "telegram.messages.editmedia", 35: "telegram.messages.forward", 36: "telegram.messages.send",
+		37: "telegram.photos.send", 38: "telegram.pins.pin", 41: "telegram.polls.send",
+		42: "telegram.polls.stop", 43: "telegram.reactions.remove", 44: "telegram.reactions.removeall",
+		45: "telegram.reactions.set", 46: "telegram.senderchats.ban", 47: "telegram.senderchats.unban",
+		48: "telegram.stickers.customemoji", 49: "telegram.stickers.send", 50: "telegram.stickersets.get",
+		51: "telegram.topics.iconstickers", 52: "telegram.updates.confirm", 53: "telegram.updates.list",
+		54: "telegram.venues.send", 55: "telegram.videonotes.send", 56: "telegram.videos.send",
+		57: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 54
+	ok2 := len(operations) == 58
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}

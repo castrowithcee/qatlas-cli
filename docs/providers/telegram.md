@@ -33,6 +33,16 @@ reply, topic, silent, and protect do not apply to edits. An edit without `inline
 keyboard. `telegram.messages.editreplymarkup` changes only the keyboard of a message: it sets
 `inline_keyboard` or, when that is omitted or empty, removes the keyboard.
 
+`telegram.messages.editcaption` (`update`, unknown idempotency) replaces the caption of a media message
+(`caption` of 0 through 1024 characters, optional `parse_mode`); an empty caption removes it. The caption is
+required, so an omitted one never silently clears it. `telegram.messages.editmedia` (`update`, unknown
+idempotency) replaces the media of a message with a photo, video, animation, or document (`type`), from
+exactly one of `local_path` and `file_ref` as for the media send tools and with the same size limits and
+neutral upload name. Its optional `caption` and `parse_mode` apply to the new media; without a caption the
+message has none. Both tools address a message only by the selected chat and `message_id`: `inline_message_id`,
+keyboards, URL media, and Business messages are not offered. Their results are `message_id`, for
+`editmedia` also the `file_ref` of the new file.
+
 The chat tools take an optional `chat` argument, the forward and copy tools also `from_chat`. It must equal a
 bound chat target exactly: an `@username` never matches a numeric ID, and `bot` or `business/<id>` is no chat.
 Without `chat`, the tool uses the one bound chat and refuses when the connection binds none or several. A chat
@@ -128,17 +138,23 @@ actions for about five seconds.
 
 ## Locations, venues, contacts, and dice
 
-`telegram.locations.send`, `telegram.venues.send`, `telegram.contacts.send`, and `telegram.dice.send`
-(`create`, not idempotent) send one structured value to a bound chat. Every value is checked against the Bot
-API limits before the credential is read: coordinates, `horizontal_accuracy` (0 through 1500), `live_period`
-(60 through 86400, or 2147483647), `heading` (1 through 360), and `proximity_alert_radius` (1 through 100000).
-`heading` and `proximity_alert_radius` need a `live_period`; a live location can be sent but not updated or
-stopped. A venue needs `title` and `address`; place identifiers are not offered. A contact needs
-`phone_number` and `first_name`, `last_name` is optional, and no vCard is accepted. The dice `emoji` is one of
-🎲 (default), 🎯, 🏀, ⚽, 🎳, 🎰. The tools share the optional `reply_to_message_id`, `message_thread_id`,
-`disable_notification`, and `protect_content`; keyboards and paid broadcasts are not offered. Locations,
-venues, and contacts carry the data class `telegram-personal-data` and appear only in the request, never in
-errors, logs, or the audit trail. The result is only `message_id` and `date`.
+`telegram.locations.send`, `telegram.venues.send`, `telegram.contacts.send`, and `telegram.dice.send` (`create`,
+not idempotent) send one structured value to a bound chat. Every value is checked against the Bot API limits
+before the credential is read: coordinates, `horizontal_accuracy` (0 through 1500), `live_period` (60 through
+86400, or 2147483647), `heading` (1 through 360), and `proximity_alert_radius` (1 through 100000). `heading` and
+`proximity_alert_radius` need a `live_period`. A venue needs `title` and `address`; place identifiers are not
+offered. A contact needs `phone_number` and `first_name`, `last_name` is optional, and no vCard is accepted. The
+dice `emoji` is one of 🎲 (default), 🎯, 🏀, ⚽, 🎳, 🎰. The tools share the optional `reply_to_message_id`,
+`message_thread_id`, `disable_notification`, and `protect_content`; keyboards and paid broadcasts are not
+offered. Locations, venues, and contacts carry the data class `telegram-personal-data` and appear only in the
+request, never in errors, logs, or the audit trail. The result is only `message_id` and `date`.
+
+`telegram.locations.editlive` (`update`, unknown idempotency) moves a live location of a bound chat to new
+`latitude` and `longitude` with the same limits and optional `horizontal_accuracy`, `heading`,
+`proximity_alert_radius`, and, to change the duration, `live_period`; the other values keep their current
+setting. `telegram.locations.stoplive` (`update`, idempotent) stops a live location before it expires and
+requires a `tools` list. Both address the message by the selected chat and `message_id` only, carry the data
+class `telegram-personal-data`, and return only `message_id`.
 
 ## Invite links
 
@@ -279,15 +295,16 @@ target, signed with the binding `bot`. The stickers tools are in no setup profil
 The terminal editor starts a new connection on the setup profile `send`, which ticks `[create]` and
 `[telegram.messages.send]`: the read tools expose incoming message content, while a send reaches only a bound
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
-`[telegram.bot.get]`, and the four chat read tools. The profile `messaging` also ticks `update`,
-`delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
-`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the six media send
-tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
-ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
-`telegram.messages.editreplymarkup`, `telegram.pins.unpinall`, `telegram.members.ban`,
-`telegram.members.restrict`, `telegram.members.promote`, `telegram.members.setadmintitle`,
-`telegram.members.settag`, `telegram.senderchats.ban`, `telegram.senderchats.unban`,
-`telegram.chats.deletephoto`, `telegram.messages.forward`, `telegram.messages.copy`, the interaction tools
-including locations, venues, contacts, and dice, and the invite link tools are in no profile. A profile is a
-visible starting selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be
-changed before saving, and a saved connection never follows a profile.
+`[telegram.bot.get]`, and the four chat read tools. The profile `messaging` also ticks `update`, `delete`,
+`telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
+`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the six media send tools;
+the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin` ticks `update`,
+`telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
+`telegram.messages.editreplymarkup`, `telegram.messages.editcaption`, `telegram.messages.editmedia`,
+`telegram.pins.unpinall`, `telegram.members.ban`, `telegram.members.restrict`, `telegram.members.promote`,
+`telegram.members.setadmintitle`, `telegram.members.settag`, `telegram.senderchats.ban`,
+`telegram.senderchats.unban`, `telegram.chats.deletephoto`, `telegram.messages.forward`,
+`telegram.messages.copy`, the interaction tools including locations (also editing and stopping live locations),
+venues, contacts, and dice, and the invite link tools are in no profile. A profile is a visible starting
+selection, not a role: only the ticked `permissions` and `tools` are saved, every tick can be changed before
+saving, and a saved connection never follows a profile.
