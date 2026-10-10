@@ -236,21 +236,28 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 			t.Errorf("target kind %+v needs a description and forms", kind)
 		}
 	}
-	if len(metadata.Groups) != 3 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" ||
-		metadata.Groups[2].ID != "deck" {
-		t.Fatalf("groups = %+v, want the files, shares, and deck groups", metadata.Groups)
+	if len(metadata.Groups) != 4 || metadata.Groups[0].ID != "files" || metadata.Groups[1].ID != "shares" ||
+		metadata.Groups[2].ID != "deck" || metadata.Groups[3].ID != "talk" {
+		t.Fatalf("groups = %+v, want the files, shares, deck, and talk groups", metadata.Groups)
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 33 || descriptors[0].ID != "nextcloud.deckboards.get" ||
-		descriptors[3].ID != "nextcloud.deckstacks.list" || descriptors[4].ID != "nextcloud.favorites.list" ||
-		descriptors[8].ID != "nextcloud.files.favorite" || descriptors[12].ID != "nextcloud.files.search" ||
-		descriptors[15].ID != "nextcloud.filetags.add" || descriptors[17].ID != "nextcloud.filetags.remove" ||
-		descriptors[19].ID != "nextcloud.folders.delete" || descriptors[22].ID != "nextcloud.shares.list" ||
-		descriptors[23].ID != "nextcloud.systemtags.create" || descriptors[25].ID != "nextcloud.systemtags.list" ||
-		descriptors[26].ID != "nextcloud.systemtags.update" || descriptors[27].ID != "nextcloud.trash.delete" ||
-		descriptors[29].ID != "nextcloud.trash.restore" || descriptors[30].ID != "nextcloud.versions.get" ||
-		descriptors[32].ID != "nextcloud.versions.restore" {
+	if len(descriptors) != 50 || descriptors[0].ID != "nextcloud.comments.create" ||
+		descriptors[2].ID != "nextcloud.comments.list" || descriptors[4].ID != "nextcloud.deckboards.create" ||
+		descriptors[5].ID != "nextcloud.deckboards.delete" || descriptors[6].ID != "nextcloud.deckboards.get" ||
+		descriptors[8].ID != "nextcloud.deckboards.update" ||
+		descriptors[10].ID != "nextcloud.deckstacks.create" || descriptors[11].ID != "nextcloud.deckstacks.delete" ||
+		descriptors[13].ID != "nextcloud.deckstacks.update" ||
+		descriptors[12].ID != "nextcloud.deckstacks.list" || descriptors[14].ID != "nextcloud.favorites.list" ||
+		descriptors[18].ID != "nextcloud.files.favorite" || descriptors[22].ID != "nextcloud.files.search" ||
+		descriptors[25].ID != "nextcloud.filetags.add" || descriptors[27].ID != "nextcloud.filetags.remove" ||
+		descriptors[29].ID != "nextcloud.folders.delete" || descriptors[31].ID != "nextcloud.shares.create" ||
+		descriptors[34].ID != "nextcloud.shares.list" || descriptors[35].ID != "nextcloud.shares.update" ||
+		descriptors[36].ID != "nextcloud.systemtags.create" || descriptors[38].ID != "nextcloud.systemtags.list" ||
+		descriptors[39].ID != "nextcloud.systemtags.update" || descriptors[40].ID != "nextcloud.talkmessages.list" ||
+		descriptors[43].ID != "nextcloud.talkrooms.list" || descriptors[44].ID != "nextcloud.trash.delete" ||
+		descriptors[46].ID != "nextcloud.trash.restore" || descriptors[47].ID != "nextcloud.versions.get" ||
+		descriptors[49].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
@@ -264,6 +271,9 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 				wantSensitivity = shareeSensitivity
 			}
 		}
+		if strings.HasPrefix(descriptor.ID, "nextcloud.talk") {
+			wantGroup, wantSensitivity = "talk", talkSensitivity
+		}
 		if descriptor.Group != wantGroup {
 			t.Errorf("descriptor %s group = %q, want %s", descriptor.ID, descriptor.Group, wantGroup)
 		}
@@ -274,6 +284,10 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		for _, forbidden := range []string{
 			"base_url", "instance", "user", "password", "root", "href", "depth", "method", "url",
 		} {
+			// The share type enum of a new share names the recipient kind "user".
+			if forbidden == "user" && descriptor.ID == sharesCreate.ID {
+				continue
+			}
 			if strings.Contains(string(descriptor.InputSchema), forbidden) {
 				t.Errorf("the input schema of %s offers %q: %s", descriptor.ID, forbidden, descriptor.InputSchema)
 			}

@@ -324,17 +324,21 @@ func Register(reg *capability.Registry) error {
 			ID: "read", Title: "Read files", Recommended: true,
 			Description: "lists folders, reads file metadata and content; changes nothing below the root folder",
 			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
-				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID},
+				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID, commentsList.ID},
 		}, {
 			ID: "write", Title: "Read and organise files",
 			Description: "lists folders, reads files, creates folders, and moves, renames, or copies files and folders without overwriting",
 			Tools: []string{filesList.ID, filesStat.ID, filesGet.ID, sharesList.ID, sharesGet.ID,
-				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID,
+				versionsList.ID, filesSearch.ID, favoritesList.ID, filesTagsList.ID, commentsList.ID,
 				foldersCreate.ID, filesMove.ID, filesCopy.ID},
 		}, {
 			ID: "deck-read", Title: "Read Deck boards",
 			Description: "lists the bound Deck boards, reads a board with its labels and members, its stacks and cards, and single cards; changes nothing",
 			Tools:       []string{deckBoardsList.ID, deckBoardsGet.ID, deckStacksList.ID, deckCardsGet.ID},
+		}, {
+			ID: "talk-read", Title: "Read Talk conversations",
+			Description: "lists bound Talk conversations and their participants and reads their messages; changes nothing",
+			Tools:       []string{talkRoomsList.ID, talkRoomsGet.ID, talkParticipantsList.ID, talkMessagesList.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -355,6 +359,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(versionsRestore), Handler: folderBound(invokeVersionsRestore)},
 		capability.Operation{Descriptor: inGroup(sharesList, groupShares), Handler: folderBound(invokeSharesList)},
 		capability.Operation{Descriptor: inGroup(sharesGet, groupShares), Handler: folderBound(invokeSharesGet)},
+		capability.Operation{Descriptor: sharesCreate, Handler: folderBound(invokeSharesCreate)},
+		capability.Operation{Descriptor: sharesUpdate, Handler: folderBound(invokeSharesUpdate)},
+		capability.Operation{Descriptor: sharesDelete, Handler: folderBound(invokeSharesDelete)},
 		capability.Operation{Descriptor: inGroup(shareesSearch, groupShares), Handler: accountBound(invokeShareesSearch)},
 		capability.Operation{Descriptor: grouped(systemtagsList), Handler: accountBound(invokeSystemTagsList)},
 		capability.Operation{Descriptor: grouped(systemtagsCreate), Handler: accountBound(invokeSystemTagsCreate)},
@@ -363,6 +370,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: grouped(filesTagsList), Handler: folderBound(invokeFilesTagsList)},
 		capability.Operation{Descriptor: grouped(filesTagsAdd), Handler: folderBound(invokeFilesTagsAdd)},
 		capability.Operation{Descriptor: grouped(filesTagsRemove), Handler: folderBound(invokeFilesTagsRemove)},
+		capability.Operation{Descriptor: grouped(commentsList), Handler: folderBound(invokeCommentsList)},
+		capability.Operation{Descriptor: grouped(commentsCreate), Handler: folderBound(invokeCommentsCreate)},
+		capability.Operation{Descriptor: grouped(commentsUpdate), Handler: folderBound(invokeCommentsUpdate)},
+		capability.Operation{Descriptor: grouped(commentsDelete), Handler: folderBound(invokeCommentsDelete)},
 		capability.Operation{Descriptor: grouped(trashList), Handler: folderBound(invokeTrashList)},
 		capability.Operation{Descriptor: grouped(trashRestore), Handler: folderBound(invokeTrashRestore)},
 		capability.Operation{Descriptor: grouped(trashDelete), Handler: folderBound(invokeTrashDelete)},
@@ -373,6 +384,16 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(deckBoardsGet, groupDeck), Handler: deckBound(invokeDeckBoardsGet)},
 		capability.Operation{Descriptor: inGroup(deckStacksList, groupDeck), Handler: deckBound(invokeDeckStacksList)},
 		capability.Operation{Descriptor: inGroup(deckCardsGet, groupDeck), Handler: deckBound(invokeDeckCardsGet)},
+		capability.Operation{Descriptor: inGroup(deckBoardsCreate, groupDeck), Handler: deckBound(invokeDeckBoardsCreate)},
+		capability.Operation{Descriptor: inGroup(deckBoardsUpdate, groupDeck), Handler: deckBound(invokeDeckBoardsUpdate)},
+		capability.Operation{Descriptor: inGroup(deckBoardsDelete, groupDeck), Handler: deckBound(invokeDeckBoardsDelete)},
+		capability.Operation{Descriptor: inGroup(deckStacksCreate, groupDeck), Handler: deckBound(invokeDeckStacksCreate)},
+		capability.Operation{Descriptor: inGroup(deckStacksUpdate, groupDeck), Handler: deckBound(invokeDeckStacksUpdate)},
+		capability.Operation{Descriptor: inGroup(deckStacksDelete, groupDeck), Handler: deckBound(invokeDeckStacksDelete)},
+		capability.Operation{Descriptor: inGroup(talkRoomsList, groupTalk), Handler: invokeTalkRoomsList},
+		capability.Operation{Descriptor: inGroup(talkRoomsGet, groupTalk), Handler: invokeTalkRoomsGet},
+		capability.Operation{Descriptor: inGroup(talkParticipantsList, groupTalk), Handler: invokeTalkParticipantsList},
+		capability.Operation{Descriptor: inGroup(talkMessagesList, groupTalk), Handler: invokeTalkMessagesList},
 	)
 }
 

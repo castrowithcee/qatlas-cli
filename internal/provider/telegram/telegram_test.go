@@ -71,23 +71,23 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 11 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
+	if len(metadata.Groups) != 12 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
 		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "chats" || metadata.Groups[4].ID != "invitelinks" ||
 		metadata.Groups[5].ID != "bot" || metadata.Groups[6].ID != "files" || metadata.Groups[7].ID != "media" ||
 		metadata.Groups[8].ID != "members" || metadata.Groups[9].ID != "interactions" ||
-		metadata.Groups[10].ID != "topics" {
+		metadata.Groups[10].ID != "stickers" || metadata.Groups[11].ID != "topics" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
 		want := "messages"
 		switch {
-		case tool.ID == updatesList.ID:
+		case tool.ID == updatesList.ID || tool.ID == updatesConfirm.ID:
 			want = "updates"
 		case strings.HasPrefix(tool.ID, "telegram.pins."):
 			want = "pins"
 		case strings.HasPrefix(tool.ID, "telegram.members.") || strings.HasPrefix(tool.ID, "telegram.senderchats."):
 			want = "members"
-		case strings.HasPrefix(tool.ID, "telegram.topics."):
+		case strings.HasPrefix(tool.ID, "telegram.topics.") && tool.ID != topicsIconStickers.ID:
 			want = "topics"
 		case strings.HasPrefix(tool.ID, "telegram.invitelinks."):
 			want = "invitelinks"
@@ -95,12 +95,16 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "chats"
 		case tool.ID == filesGet.ID || tool.ID == filesDownload.ID:
 			want = "files"
-		case tool.ID == photosSend.ID || tool.ID == documentsSend.ID || tool.ID == mediaGroupsSend.ID:
+		case tool.ID == photosSend.ID || tool.ID == documentsSend.ID || tool.ID == mediaGroupsSend.ID ||
+			tool.ID == videosSend.ID || tool.ID == animationsSend.ID || tool.ID == videoNotesSend.ID:
 			want = "media"
 		case strings.HasPrefix(tool.ID, "telegram.polls.") || strings.HasPrefix(tool.ID, "telegram.reactions.") ||
 			strings.HasPrefix(tool.ID, "telegram.chatactions.") || tool.ID == locationsSend.ID ||
 			tool.ID == venuesSend.ID || tool.ID == contactsSend.ID || tool.ID == diceSend.ID:
 			want = "interactions"
+		case tool.ID == stickersSend.ID || tool.ID == stickersetsGet.ID || tool.ID == stickersCustomEmoji.ID ||
+			tool.ID == topicsIconStickers.ID:
+			want = "stickers"
 		case tool.ID == botGet.ID || tool.ID == webhookGet.ID:
 			want = "bot"
 		}
@@ -109,8 +113,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 45 {
-		t.Fatalf("operation count = %d, want forty-five", len(operations))
+	if len(operations) != 58 {
+		t.Fatalf("operation count = %d, want fifty-eight", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -132,9 +136,10 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 	}
 	for _, d := range reg.Provider(Provider) {
 		want := d.ID == messagesDelete.ID || d.ID == messagesDeleteMany.ID || d.ID == pinsUnpinAll.ID ||
-			d.ID == membersBan.ID || d.ID == membersRestrict.ID || d.ID == invitelinksRevoke.ID || d.ID == pollsStop.ID ||
-			d.ID == chatsDeletePhoto.ID ||
-			d.ID == senderchatsBan.ID || d.ID == reactionsRemove.ID || d.ID == reactionsRemoveAll.ID
+			d.ID == membersBan.ID || d.ID == membersRestrict.ID || d.ID == membersPromote.ID ||
+			d.ID == invitelinksRevoke.ID || d.ID == pollsStop.ID || d.ID == chatsDeletePhoto.ID ||
+			d.ID == senderchatsBan.ID || d.ID == reactionsRemove.ID || d.ID == reactionsRemoveAll.ID ||
+			d.ID == updatesConfirm.ID
 		if d.RequiresToolAllowList != want {
 			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
 		}
