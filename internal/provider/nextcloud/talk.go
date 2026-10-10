@@ -101,6 +101,7 @@ type RoomsResult struct {
 
 // Participant is one member of a conversation.
 type Participant struct {
+	AttendeeID      string `json:"attendee_id,omitempty"`
 	ActorType       string `json:"actor_type"`
 	ActorID         string `json:"actor_id"`
 	DisplayName     string `json:"display_name,omitempty"`
@@ -162,6 +163,7 @@ type rawRoom struct {
 }
 
 type rawParticipant struct {
+	AttendeeID      json.Number `json:"attendeeId"`
 	ActorType       string      `json:"actorType"`
 	ActorID         string      `json:"actorId"`
 	DisplayName     string      `json:"displayName"`
@@ -391,7 +393,7 @@ func (c *Client) ListParticipants(ctx context.Context, token string) (*Participa
 		}
 		call, _ := item.InCall.Int64()
 		result.Participants = append(result.Participants, Participant{
-			ActorType: bounded(item.ActorType), ActorID: bounded(item.ActorID), DisplayName: bounded(item.DisplayName),
+			AttendeeID: bounded(item.AttendeeID.String()), ActorType: bounded(item.ActorType), ActorID: bounded(item.ActorID), DisplayName: bounded(item.DisplayName),
 			ParticipantType: nameOf(participantTypes, item.ParticipantType), InCall: call != 0,
 		})
 	}
@@ -511,7 +513,7 @@ const (
 		`"unread_messages":{"type":"integer"},"unread_mention":{"type":"boolean"},"last_activity":{"type":"string"}},` +
 		`"required":["token","type","read_only","has_password","participant_type","unread_messages","unread_mention"],` +
 		`"additionalProperties":false}`
-	participantSchema = `{"type":"object","properties":{"actor_type":{"type":"string"},"actor_id":{"type":"string"},` +
+	participantSchema = `{"type":"object","properties":{"attendee_id":{"type":"string"},"actor_type":{"type":"string"},"actor_id":{"type":"string"},` +
 		`"display_name":{"type":"string"},"participant_type":{"type":"string"},"in_call":{"type":"boolean"}},` +
 		`"required":["actor_type","actor_id","participant_type","in_call"],"additionalProperties":false}`
 	messageSchema = `{"type":"object","properties":{"id":{"type":"string"},"time":{"type":"string"},` +
@@ -583,7 +585,7 @@ var talkParticipantsList = talkDescriptor("talkparticipants.list", "List Nextclo
 		`"count":{"type":"integer"},"truncated":{"type":"boolean"}},"required":["participants","count"],"additionalProperties":false}`,
 	[]capability.Argument{talkTokenArgument},
 	[]capability.Field{
-		{Name: "participants", Description: "Participants with actor type, actor ID, display name (untrusted data), role, and call state"},
+		{Name: "participants", Description: "Participants with attendee_id (for remove and moderator), actor type, actor ID, display name (untrusted data), role, and call state"},
 		{Name: "count", Description: "Number of reported participants"},
 		{Name: "truncated", Description: "True when more participants exist than are reported"},
 	},
