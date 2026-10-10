@@ -1,7 +1,7 @@
 ---
 description: >
-  Describes Nextcloud file operations, file comments, share reads and management, Deck reads and board and
-  stack management, Talk reads and messages, typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud files, file comments, shares, Deck boards and stacks, Talk conversations and messages, and
+  notes, with typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -185,22 +185,21 @@ tools list. An unclear outcome is reported as possibly applied and never repeate
 ## Talk
 
 The tool group `talk` works on Talk conversations through the OCS API of the Talk app (`/ocs/v2.php/apps/spreed`)
-with the client of sharing. Its read tools form the setup profile `talk-read`; the change tools are in no
-profile, and deleting needs a tools list that names the tool. Every tool needs a `talk` target: `talk` binds
-every conversation of the identity, `talk/TOKEN` one. Listings drop unbound conversations, and an unbound or
-malformed token is refused locally, before any credential access or request, without naming it. Each call first
-reads the `spreed` capability and refuses a missing Talk app or feature clearly instead of assuming a version.
+with the client of sharing. Its read tools form the setup profile `talk-read`; the change tools are in no profile,
+and deleting needs a tools list naming the tool. Every tool needs a `talk` target: `talk` binds every conversation
+of the identity, `talk/TOKEN` one. Listings drop unbound conversations; an unbound or malformed token is refused
+locally, before any credential access or request, without naming it. Each call first reads the `spreed` capability
+and refuses a missing app or feature instead of assuming a version.
 
-Reading never waits for new messages, moves the read marker, or marks notifications as read. Placeholders such
-as `{actor}` or `{file}` become the name of their rich object; links, paths, and previews of objects are never
-reported, because a file shared into a conversation carries an access token in them. Session IDs and phone
-numbers of participants are not read. Message texts and names are untrusted data.
+Reading never waits for new messages, moves the read marker, or marks notifications as read. Placeholders such as
+`{actor}` or `{file}` become the name of their rich object; links, paths, and previews of objects are never
+reported, because a file shared into a conversation carries an access token in them. Session IDs and phone numbers
+of participants are not read. Message texts and names are untrusted data.
 
-A change tool needs `confirm` and sends exactly one request after the capability read; a message ID only ever
-reaches the path of the bound conversation. An unclear outcome (timeout, dropped connection, 5xx, unreadable
-answer) is reported as possibly applied and never repeated; `talkmessages.send` reports a random `reference_id`
-to look for in `talkmessages.list` before sending again. A 429 is reported as rate-limited. Refusals have fixed
-messages without provider text.
+A change tool needs `confirm` and sends exactly one request after the capability read; a message ID only reaches the
+path of the bound conversation. An unclear outcome (timeout, dropped connection, 5xx, unreadable answer) is reported
+as possibly applied and never repeated; `talkmessages.send` reports a random `reference_id` to look for in
+`talkmessages.list` first. A 429 is reported as rate-limited; refusals have fixed messages without provider text.
 
 ## Versions
 
@@ -217,6 +216,13 @@ restore target of the identity with one `MOVE`. The manual documents no conditio
 made between the ETag check and the `MOVE` is not detected. An unclear outcome is reported as possibly
 applied and never repeated. `versions.list` is in the setup profiles `read` and `write`; `get` and `restore`
 are in none.
+
+## Notes
+
+The group `notes` (profile `notes-read`) needs a `notes` target. `notes/CATEGORY` binds that category and all below
+it. The Notes API filters categories exactly, so the list is read unfiltered and foreign notes are dropped locally,
+never shown or counted; a chunk may be empty while a next cursor is present. A foreign note or its attachment reads
+like a missing note. Attachments stay relative to their note; `local_path` follows `files.get`.
 
 ## System tags
 
