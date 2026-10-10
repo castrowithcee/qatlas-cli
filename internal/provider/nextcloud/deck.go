@@ -238,6 +238,9 @@ type rawCard struct {
 	Archived     bool            `json:"archived"`
 	Done         *string         `json:"done"`
 	DueDate      *string         `json:"duedate"`
+	StartDate    *string         `json:"startdate"`
+	Type         string          `json:"type"`
+	Color        *string         `json:"color"`
 	Owner        rawPerson       `json:"owner"`
 	Labels       []rawLabel      `json:"labels"`
 	Assigned     []rawAssignment `json:"assignedUsers"`

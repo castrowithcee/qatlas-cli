@@ -1,11 +1,11 @@
 ---
 description: >
-  Describes Nextcloud files, file comments, shares, Deck boards and stacks, Talk conversations and messages, and
-  notes, with typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud files, file comments, shares, Deck boards, stacks, and cards, Talk conversations and messages,
+  notes, and calendars, with typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 # Nextcloud
@@ -35,11 +35,10 @@ identity whose original location lies below the bound root folder (`/` binds all
 bin is neither listed nor touched, and `restore` and `delete` answer such an item like a missing one without
 naming it. Items inside a deleted folder, emptying the trash bin, and restoring to another place are not offered.
 
-`list` reports at most 500 items, marks a cut list as `truncated`, and refuses an answer larger than 4 MiB.
-`restore` and `delete` take the `trash_id` from `list`, read the item once, and then send one `MOVE` to the
-`restore` collection or one `DELETE`. `restore` puts the item back to its original location. `delete` removes it
-for good and requires a tools list like the delete tools above. No profile contains any of the three tools. An
-unclear outcome is reported as for the file mutations under Local files and never repeated.
+`list` marks a cut list as `truncated`. `restore` and `delete` take the `trash_id` from `list`, read the item once,
+and send one `MOVE` to the `restore` collection or one `DELETE`; `restore` puts the item back to its original
+location, `delete` removes it for good and requires a tools list like the delete tools above. No profile contains
+any of the three tools. An unclear outcome is reported as for the file mutations under Local files, never repeated.
 
 ## Targets
 
@@ -64,8 +63,8 @@ Files root) bind exactly as before, and a bare value in the `targets` list is re
 refused, because it could mean a folder or a typed target; write it as `folder/PATH` in `targets`. This
 refusal changes the behaviour of such existing values.
 
-The connection test reads the bound folder, or the Files root of the identity when the connection binds none;
-it reports no metadata.
+The connection test reads the bound folder, or the Files root of the identity when the connection binds none, and
+each bound calendar, or the calendar home for `calendar`; it reports no metadata.
 
 Credentials provide `user-id` and a revocable `app-password`. Relative paths cannot escape the bound
 folder. Connection permissions independently hide and block operations, while the identity's WebDAV rights
@@ -100,18 +99,13 @@ change may have been applied and that source and target, or the folder, must be 
 permission `update`. All three work on the bound folder only; the root itself is never a hit and cannot be
 marked.
 
-The search takes structured filters that combine with AND, and at least one is required (an empty search is
-refused). `name_contains` is a literal, case-insensitive substring: Qatlas masks `%`, `_`, and the escape
-character `\` of Nextcloud's `d:like`. `content_type_prefix` matches the start of the MIME type,
-`modified_after` and `modified_before` take RFC 3339 times (exclusive, to the second), `size_min` and `size_max`
-are inclusive bytes (a folder counts with its subtree), `type` is `file` or `folder`, and `favorite` selects
-favorites or non-favorites. Qatlas writes the whole request XML itself and escapes every value; no caller XML,
-sorting, or offset exists. `limit` is 1 to 200 (default 50), the server picks which matches a limit keeps, and
-`truncated` is true when the limit was reached. The result is sorted by path.
+The search takes structured filters that combine with AND, and at least one is required. `name_contains` is a
+literal, case-insensitive substring: Qatlas masks the wildcards of Nextcloud's `d:like`, writes the whole request
+XML itself, and escapes every value; no caller XML, sorting, or offset exists. The server picks which matches a
+limit keeps, `truncated` says when it was reached, and the result is sorted by path.
 
-The favorites list reads at most 500 favorites below the root; more are cut and `truncated` says so. Every
-answered node is checked against the bound folder again; a node outside it, and a node the server refused,
-is dropped silently.
+Every answered favorite is checked against the bound folder again; a node outside it or refused by the server is
+dropped silently, and a cut list is marked `truncated`.
 
 `files.favorite` takes `path` and `favorite` (both required) and sends exactly one request, without a read
 before it. A `207` answer whose property status is an error is a clear failure. After an unclear outcome
@@ -165,22 +159,21 @@ of the instance.
 
 ## Deck
 
-The tool group `deck` reads boards with their labels, sharing entries, and members, their stacks with cards, and
-single cards (setup profile `deck-read`), and manages boards and stacks (`deckboards.*` and `deckstacks.*` changes,
-in no profile). All need a `deck` target: `deck` binds every board of the identity, `deck/BOARD_ID` only that
-board. A board that is not bound is refused locally, before any credential access or request, without naming it;
-listings drop unbound and deleted boards. Stack and card IDs count only through the bound board's hierarchy: Deck
-resolves a card by its ID alone, so a card is read only after the board's stacks show it in the named stack.
+The tool group `deck` reads boards with labels, sharing entries, and members, stacks with cards, and single cards
+(setup profile `deck-read`), and changes boards, stacks, and cards (in no profile). A `deck` target binds every
+board of the identity, `deck/BOARD_ID` one board; an unbound board is refused locally, before any credential access
+or request, without naming it, and listings drop unbound and deleted boards. Deck resolves stacks and cards by ID
+alone, so a stack, card, or target stack counts only when a read of the bound board shows it there. Deck follows no
+redirect, and a 404 means a missing app or object alike. Provider text is untrusted, capped, and marked `truncated`
+when cut; comments and attachments are not read.
 
-Deck follows no redirect, and a 404 means a missing app or object alike. Titles, names, labels, and descriptions
-are untrusted, capped, and marked `truncated` when cut. Comments and attachments are not read.
-
-Board and stack changes need `confirm` and send one request. `deckboards.create` needs the general `deck` target,
-since a `deck/BOARD_ID` binding would not hold the new board. All other changes read the bound board once and
-refuse without the manage right on it; a stack must be listed by that read, else it is refused like a missing one.
-`update` keeps the fields it was not given; a new stack without `order` goes last. Deck deletes boards softly, but
-Qatlas offers no restore; a deleted stack takes its cards with it. Both `delete` tools are reachable only through a
-tools list. An unclear outcome is reported as possibly applied and never repeated.
+Every change needs `confirm` and sends one request after at most one read of the bound board; an unclear outcome is
+reported as possibly applied and never repeated. `deckboards.create` needs the general `deck` target, since a
+`deck/BOARD_ID` binding would not hold the new board. Board and stack changes refuse without the manage right; card
+changes leave the edit right to Deck. `deckcards.update` needs the card's `last_modified` as read and refuses a
+card changed since; an archived card can only be restored. Updates keep the fields they were not given; a new stack
+or card without `order` goes last. Deck deletes boards and cards softly, but Qatlas offers no restore; a deleted
+stack takes its cards with it. All `delete` tools need a tools list.
 
 ## Talk
 
@@ -200,6 +193,13 @@ A change tool needs `confirm` and sends exactly one request after the capability
 path of the bound conversation. An unclear outcome (timeout, dropped connection, 5xx, unreadable answer) is reported
 as possibly applied and never repeated; `talkmessages.send` reports a random `reference_id` to look for in
 `talkmessages.list` first. A 429 is reported as rate-limited; refusals have fixed messages without provider text.
+
+## Calendar
+
+The group `calendar` (profile `calendar`) reads calendars and events through CalDAV and needs a `calendar` target;
+an unbound calendar is refused locally without being named. Only direct children of the calendar home and of a bound
+calendar are read, never subscriptions, the scheduling inbox and outbox, or the trash bin. `read_only` is derived
+conservatively from the privileges, and repeating events keep their rule unexpanded.
 
 ## Versions
 

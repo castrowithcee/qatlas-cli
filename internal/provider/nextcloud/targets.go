@@ -51,6 +51,9 @@ var toolGroups = []config.ToolGroup{{
 }, {
 	ID: groupNotes, Title: "Notes",
 	Description: "Notes of the identity in the bound categories, their embedded attachments, and the Notes settings",
+}, {
+	ID: groupCalendar, Title: "Calendar",
+	Description: "Calendars and events of the identity that a calendar target binds",
 }}
 
 var targetKinds = []config.TargetKind{{
@@ -342,6 +345,32 @@ func accountBound(handler capability.Handler) capability.Handler {
 	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 		red *redact.Redactor, raw json.RawMessage) (any, error) {
 		if err := requireAccount(resolved); err != nil {
+			return nil, err
+		}
+		return handler(ctx, resolved, secrets, red, raw)
+	}
+}
+
+// requireCalendar refuses a connection without a calendar target locally, before any credential access or
+// request, and names no other target.
+func requireCalendar(resolved *config.Resolved) (selection, error) {
+	s, err := scopeOf(resolved)
+	if err != nil {
+		return selection{}, err
+	}
+	if !s.calendars.bound() {
+		return selection{}, &provider.Error{
+			Class: provider.ClassPermission, Op: "open", Message: "this connection is not bound to calendars",
+		}
+	}
+	return s.calendars, nil
+}
+
+// calendarBound is folderBound for the calendar tools.
+func calendarBound(handler capability.Handler) capability.Handler {
+	return func(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+		red *redact.Redactor, raw json.RawMessage) (any, error) {
+		if _, err := requireCalendar(resolved); err != nil {
 			return nil, err
 		}
 		return handler(ctx, resolved, secrets, red, raw)
