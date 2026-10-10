@@ -40,7 +40,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 	found := 0
 	for _, d := range reg.Provider(Provider) {
 		if d.ID != filesDelete.ID && d.ID != foldersDelete.ID && d.ID != trashDelete.ID && d.ID != systemtagsDelete.ID &&
-			d.ID != sharesCreate.ID && d.ID != sharesUpdate.ID && d.ID != sharesDelete.ID && d.ID != commentsDelete.ID && d.ID != deckBoardsDelete.ID && d.ID != deckStacksDelete.ID {
+			d.ID != sharesCreate.ID && d.ID != sharesUpdate.ID && d.ID != sharesDelete.ID && d.ID != commentsDelete.ID && d.ID != deckBoardsDelete.ID && d.ID != deckStacksDelete.ID && d.ID != deckCardsDelete.ID {
 			if d.RequiresToolAllowList {
 				t.Errorf("%s requires a tools list", d.ID)
 			}
@@ -52,7 +52,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 			t.Errorf("%s = %+v", d.ID, d)
 		}
 	}
-	if found != 10 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
+	if found != 11 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
 		t.Fatalf("found = %d, versions = %d/%d", found, filesDelete.Version, foldersDelete.Version)
 	}
 	if !strings.Contains(foldersDelete.Description, "files_trashbin") || !strings.Contains(foldersDelete.Description, "together with everything") {
@@ -62,7 +62,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 	for _, p := range metadata.Profiles {
 		for _, id := range p.Tools {
 			if id == filesDelete.ID || id == foldersDelete.ID || id == trashDelete.ID || id == systemtagsDelete.ID || id == commentsDelete.ID ||
-				id == deckBoardsDelete.ID || id == deckStacksDelete.ID {
+				id == deckBoardsDelete.ID || id == deckStacksDelete.ID || id == deckCardsDelete.ID {
 				t.Errorf("profile %s contains %s", p.ID, id)
 			}
 		}

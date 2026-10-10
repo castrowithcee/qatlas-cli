@@ -1,11 +1,11 @@
 ---
 description: >
-  Describes Nextcloud file operations, file comments, share reads and management, Deck reads and board and
-  stack management, Talk reads, typed targets, connection permissions, and safety boundaries.
+  Describes Nextcloud file operations, file comments, share reads and management, Deck reads and board, stack,
+  and card management, Talk reads, typed targets, connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 # Nextcloud
@@ -166,20 +166,23 @@ of the instance.
 ## Deck
 
 The tool group `deck` reads boards with their labels, sharing entries, and members, their stacks with cards, and
-single cards (setup profile `deck-read`), and manages boards and stacks (`deckboards.*` and `deckstacks.*` changes,
-in no profile). All need a `deck` target: `deck` binds every board of the identity, `deck/BOARD_ID` only that
-board. A board that is not bound is refused locally, before any credential access or request, without naming it;
-listings drop unbound and deleted boards. Stack and card IDs count only through the bound board's hierarchy: Deck
-resolves a card by its ID alone, so a card is read only after the board's stacks show it in the named stack.
+single cards (setup profile `deck-read`), and manages boards, stacks, and cards (`deckboards.*`, `deckstacks.*`,
+`deckcards.*` changes, in no profile). All need a `deck` target: `deck` binds every board of the identity,
+`deck/BOARD_ID` only that board. A board that is not bound is refused locally, before any credential access or
+request, without naming it; listings drop unbound and deleted boards. Stack and card IDs count only through the
+bound board's hierarchy: Deck resolves a card by its ID alone, so a card is read only after the board's stacks show
+it in the named stack.
 
 Deck follows no redirect, and a 404 means a missing app or object alike. Titles, names, labels, and descriptions
 are untrusted, capped, and marked `truncated` when cut. Comments and attachments are not read.
 
-Board and stack changes need `confirm` and send one request. `deckboards.create` needs the general `deck` target,
-since a `deck/BOARD_ID` binding would not hold the new board. All other changes read the bound board once and
-refuse without the manage right on it; a stack must be listed by that read, else it is refused like a missing one.
-`update` keeps the fields it was not given; a new stack without `order` goes last. Deck deletes boards softly, but
-Qatlas offers no restore; a deleted stack takes its cards with it. Both `delete` tools are reachable only through a
+Board, stack, and card changes need `confirm` and send one request. `deckboards.create` needs the general `deck`
+target, since a `deck/BOARD_ID` binding would not hold the new board. Other changes first read the bound board
+once: stack changes refuse without the manage right on it, card changes leave the edit right to Deck. A named
+stack, card, or target stack must appear in that read, else it is refused like a missing one. `deckcards.update`
+needs the card's `last_modified` as read and refuses a card changed since; an archived card can only be restored.
+Updates keep the fields they were not given; a new stack or card without `order` goes last. Deck deletes boards and
+cards softly, but Qatlas offers no restore; a deleted stack takes its cards with it. All `delete` tools need a
 tools list. An unclear outcome is reported as possibly applied and never repeated.
 
 ## Talk
