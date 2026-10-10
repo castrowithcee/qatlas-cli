@@ -109,17 +109,12 @@ Telegram's fixed actions for about five seconds.
 
 ## Forum topics
 
-`telegram.topics.create` (`create`, not idempotent, never repeated after an unclear result) creates a forum
-topic with a `name` of 1 to 128 characters and optionally an `icon_color` from Telegram's fixed list of six
-values; its result is limited to `message_thread_id`, `name`, `icon_color`, and `icon_custom_emoji_id`.
-`telegram.topics.edit`, `telegram.topics.close`, and `telegram.topics.reopen` (`update`, idempotent) require
-exactly one of `message_thread_id` and `general: true`; the choice fixes the method, and anything else is
-refused before any request. Editing a topic needs a `name` or an `icon_custom_emoji_id`, and an empty
-`icon_custom_emoji_id` removes the icon; the General topic is only renamed (`name` required, no icon).
-`icon_custom_emoji_id` is accepted only as a string of 1 to 20 digits; `telegram.topics.iconstickers` lists
-the valid values.
-Reopening the General topic also unhides it. These results are a single boolean. Deleting topics and hiding
-the General topic are not offered; the tools are in no profile and need no `tools` list.
+`telegram.topics.create` (`create`, never repeated after an unclear result) creates a forum topic with a `name`
+and optionally an `icon_color` from Telegram's fixed list. `telegram.topics.edit`, `telegram.topics.close`, and
+`telegram.topics.reopen` (`update`) require exactly one of `message_thread_id` and `general: true`, which fixes
+the method. Editing needs a `name` or an `icon_custom_emoji_id`, a value `telegram.topics.iconstickers` lists,
+and an empty one removes the icon; the General topic is only renamed, and reopening it also unhides it. Deleting
+topics and hiding the General topic are not offered; the tools are in no profile and need no `tools` list.
 
 ## Locations, venues, contacts, and dice
 
@@ -237,15 +232,15 @@ longer than the reported size is rejected. The download URL carries the bot toke
 ## Sending media
 
 `telegram.photos.send`, `telegram.documents.send`, `telegram.videos.send`, `telegram.animations.send`,
-`telegram.videonotes.send`, and `telegram.mediagroups.send` (`create`) send a photo, a document, a video, an
-animation, a video note, or an album. An album has 2 through 10 items: photos and videos may be mixed, with an
-optional `type` per item, documents are never mixed with them. Each file comes from exactly one of `local_path`
-or `file_ref`; an album takes the choice per item. A URL is never a source. The tools are offered only on a
-connection that releases a directory for reading (`files`), and the options of `telegram.messages.send` that
-apply (`parse_mode`, `reply_to_message_id`, `message_thread_id`, `disable_notification`, `protect_content`)
-carry over, plus a `caption` of at most 1024 characters. An album caption goes on its first item. A video note
-has no caption and no `parse_mode`, as the Bot API gives it none. Duration, size, thumbnail, streaming, and
-spoiler settings are not offered; Telegram reads them from the file.
+`telegram.videonotes.send`, `telegram.audio.send`, `telegram.voice.send`, and `telegram.mediagroups.send`
+(`create`) send one file of that kind or an album of 2 through 10 items. Photos and videos may be mixed in an
+album, with an optional `type` per item; documents and audio files form albums of their own, and a voice message
+is never part of one. Each file comes from exactly one of `local_path` or `file_ref`, an album takes the choice
+per item, and a URL is never a source. The tools are offered only on a connection that releases a directory for
+reading (`files`). The options of `telegram.messages.send` that apply (`parse_mode`, `reply_to_message_id`,
+`message_thread_id`, `disable_notification`, `protect_content`) carry over, plus a `caption` of at most 1024
+characters, which an album shows on its first item; a video note takes neither caption nor `parse_mode`.
+Duration, performer, title, thumbnail, streaming, and spoiler settings are not offered.
 
 A `local_path` outside the released directories is refused before the credential is read. A photo is limited
 to 10 MB, any other file, videos included, to 50 MB, and the files of one album together to 50 MB; the size is
@@ -256,29 +251,30 @@ A `file_ref` must come from the selected chat itself: one issued for another tar
 for another token, or of another kind is refused before the credential is read, and a raw file identifier is
 never accepted. Its size is not known locally; Telegram enforces the limits for it.
 
+`telegram.livephotos.send` (`create`) sends a live photo: a video of at most 10 seconds and 10 MB from
+`local_path` or `file_ref`, and its still image of up to 10 MB from `photo_local_path` or `photo_file_ref`. Both
+are required and follow the rules above; the options are those of the other media tools, and a live photo is
+never part of an album. Its result `file_ref` is that of the video.
+
 The result is `message_id`, `date`, and a `file_ref` of the sent file, for an album one such entry per message
 under `messages`. Each tool sends exactly one request and reports an unclear outcome instead of repeating it.
 
 ## Stickers
 
-`telegram.stickers.send` sends one sticker to a bound chat from a `local_path` or a `file_ref`, never from a
-URL. A local file must be a `.webp`, `.tgs`, or `.webm` file of at most 512 KB in a directory the connection
-releases for reading (`files`) and is sent under a neutral name. A `file_ref` must be bound to the selected chat
-or to `bot`; anything else is refused before the credential is read.
+`telegram.stickers.send` sends one sticker to a bound chat from a `local_path` (a `.webp`, `.tgs`, or `.webm`
+file of at most 512 KB in a released directory, sent under a neutral name) or a `file_ref` bound to the selected
+chat or to `bot`, never from a URL. `telegram.stickersets.get`, `telegram.stickers.customemoji`, and
+`telegram.topics.iconstickers` read public catalog data on every connection and return fixed fields per sticker,
+with a `bot`-bound `file_ref` only on a connection that binds the `bot` target.
 
-`telegram.stickersets.get`, `telegram.stickers.customemoji`, and `telegram.topics.iconstickers` read public
-catalog data on every connection and return a fixed set of fields per sticker; a sticker carries a `file_ref`
-bound to `bot` only on a connection that binds the `bot` target.
-
-`telegram.stickers.uploadfile`, `telegram.stickersets.create`, `telegram.stickersets.addsticker`, and
-`telegram.stickersets.delete` manage sticker sets and need the `bot` target. A set belongs to the given Telegram
-user, not to a chat, and takes files only as `bot`-bound references from `uploadfile`. Only the bot's own sets are
-changed: the name must end in `_by_` and the bot's username, which one `getMe` read checks before the changing
-request. Deleting a set, available only through a tools list, removes it for every user and cannot be undone.
-`telegram.stickers.setposition`, `telegram.stickers.replace`, and `telegram.stickers.delete` change one sticker
-of such a set, addressed by the set `name` and a `bot`-bound `file_ref` from `stickersets.get`; reads first
-confirm that the sticker belongs to that set. Removing a sticker, available only through a tools list, is final.
-Each changing sticker tool sends one request and reports an unclear outcome instead of repeating it.
+The set tools `telegram.stickers.uploadfile`, `telegram.stickersets.create`, `telegram.stickersets.addsticker`,
+and `telegram.stickersets.delete` and the sticker tools `telegram.stickers.setposition`,
+`telegram.stickers.replace`, and `telegram.stickers.delete` need the `bot` target. A set belongs to the given
+Telegram user, not to a chat, and takes files only as `bot`-bound references from `uploadfile`. Only the bot's
+own sets change: the name must end in `_by_` and the bot's username, checked with one `getMe` read, and a
+sticker, addressed by the set `name` and a `bot`-bound `file_ref`, must belong to that set, checked with reads.
+Deleting a set or removing a sticker is final and available only through a tools list. Each changing tool sends
+one request and reports an unclear outcome instead of repeating it.
 
 ## Setup profiles
 
@@ -287,7 +283,7 @@ The terminal editor starts a new connection on the setup profile `send`, which t
 chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
 `[telegram.bot.get]`, and the four chat read tools. The profile `messaging` also ticks `update`,
 `delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
-`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the six media send
+`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the nine media send
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
 Every other Telegram tool is in no profile. A profile is a visible starting selection, not a role: only the
