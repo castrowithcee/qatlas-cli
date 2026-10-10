@@ -275,8 +275,12 @@ and `telegram.stickersets.delete` and the sticker tools `telegram.stickers.setpo
 Telegram user, not to a chat, and takes files only as `bot`-bound references from `uploadfile`. Only the bot's
 own sets change: the name must end in `_by_` and the bot's username, checked with one `getMe` read, and a
 sticker, addressed by the set `name` and a `bot`-bound `file_ref`, must belong to that set, checked with reads.
-Deleting a set or removing a sticker is final and available only through a tools list. Each changing tool sends
-one request and reports an unclear outcome instead of repeating it.
+Deleting a set or removing a sticker is final and available only through a tools list. The setters
+`telegram.stickers.setemojilist`, `telegram.stickers.setkeywords`, `telegram.stickers.setmaskposition`,
+`telegram.stickersets.settitle`, `telegram.stickersets.setthumbnail`, and
+`telegram.stickersets.setcustomemojithumbnail` follow the same rules; a thumbnail comes only from a local file in
+a released directory, and an omitted mask position or thumbnail or an empty keyword list removes the value. Each
+changing tool sends one request and reports an unclear outcome instead of repeating it.
 
 ## Setup profiles
 
