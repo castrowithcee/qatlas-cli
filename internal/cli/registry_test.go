@@ -129,17 +129,18 @@ func TestDefaultRegistry(t *testing.T) {
 		14: "telegram.documents.send", 15: "telegram.files.download", 16: "telegram.files.get",
 		17: "telegram.invitelinks.primary", 18: "telegram.invitelinks.revoke", 19: "telegram.livephotos.send",
 		20: "telegram.locations.send", 21: "telegram.mediagroups.send", 22: "telegram.members.ban",
-		23: "telegram.members.restrict", 24: "telegram.members.unban", 25: "telegram.messages.copy",
-		27: "telegram.messages.deletemany", 30: "telegram.messages.forward", 31: "telegram.messages.send",
-		32: "telegram.photos.send", 33: "telegram.pins.pin", 35: "telegram.pins.unpinall", 36: "telegram.polls.send",
-		37: "telegram.polls.stop", 38: "telegram.reactions.remove", 39: "telegram.reactions.removeall",
-		40: "telegram.reactions.set", 41: "telegram.senderchats.ban", 42: "telegram.senderchats.unban",
-		43: "telegram.stickers.customemoji", 44: "telegram.stickers.send", 45: "telegram.stickersets.get",
-		46: "telegram.topics.iconstickers", 47: "telegram.updates.confirm", 48: "telegram.updates.list",
-		49: "telegram.venues.send", 50: "telegram.videonotes.send", 51: "telegram.videos.send",
-		52: "telegram.voice.send", 53: "telegram.webhook.get",
+		23: "telegram.members.promote", 24: "telegram.members.restrict", 25: "telegram.members.setadmintitle",
+		26: "telegram.members.settag", 27: "telegram.members.unban", 28: "telegram.messages.copy",
+		30: "telegram.messages.deletemany", 33: "telegram.messages.forward", 34: "telegram.messages.send",
+		35: "telegram.photos.send", 36: "telegram.pins.pin", 38: "telegram.pins.unpinall", 39: "telegram.polls.send",
+		40: "telegram.polls.stop", 41: "telegram.reactions.remove", 42: "telegram.reactions.removeall",
+		43: "telegram.reactions.set", 44: "telegram.senderchats.ban", 45: "telegram.senderchats.unban",
+		46: "telegram.stickers.customemoji", 47: "telegram.stickers.send", 48: "telegram.stickersets.get",
+		49: "telegram.topics.iconstickers", 50: "telegram.updates.confirm", 51: "telegram.updates.list",
+		52: "telegram.venues.send", 53: "telegram.videonotes.send", 54: "telegram.videos.send",
+		55: "telegram.voice.send", 56: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 54
+	ok2 := len(operations) == 57
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}
