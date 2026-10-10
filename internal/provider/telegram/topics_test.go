@@ -39,6 +39,16 @@ func TestTopicMethodSelectionAndBodies(t *testing.T) {
 			"reopenForumTopic", `{"chat_id":"-1001","message_thread_id":7}`, "reopened"},
 		{func() (map[string]any, error) { return client.ReopenTopic(ctx, 0, true) },
 			"reopenGeneralForumTopic", `{"chat_id":"-1001"}`, "reopened"},
+		{func() (map[string]any, error) { return client.DeleteTopic(ctx, 7) },
+			"deleteForumTopic", `{"chat_id":"-1001","message_thread_id":7}`, "deleted"},
+		{func() (map[string]any, error) { return client.UnpinAllTopicMessages(ctx, 7, false) },
+			"unpinAllForumTopicMessages", `{"chat_id":"-1001","message_thread_id":7}`, "unpinned"},
+		{func() (map[string]any, error) { return client.UnpinAllTopicMessages(ctx, 0, true) },
+			"unpinAllGeneralForumTopicMessages", `{"chat_id":"-1001"}`, "unpinned"},
+		{func() (map[string]any, error) { return client.HideGeneralTopic(ctx) },
+			"hideGeneralForumTopic", `{"chat_id":"-1001"}`, "hidden"},
+		{func() (map[string]any, error) { return client.UnhideGeneralTopic(ctx) },
+			"unhideGeneralForumTopic", `{"chat_id":"-1001"}`, "unhidden"},
 	}
 	for i, c := range calls {
 		got, err := c.run()
@@ -74,6 +84,16 @@ func TestTopicArgumentsRejectedBeforeIO(t *testing.T) {
 		{invokeTopicsClose, `{"general":true,"message_thread_id":3}`},
 		{invokeTopicsReopen, `{}`},
 		{invokeTopicsReopen, `{"general":true,"message_thread_id":3}`},
+		{invokeTopicsDelete, `{}`},
+		{invokeTopicsDelete, `{"general":true}`},
+		{invokeTopicsDelete, `{"general":true,"message_thread_id":3}`},
+		{invokeTopicsDelete, `{"chat":"-2002","message_thread_id":3}`},
+		{invokeTopicsUnpinAll, `{}`},
+		{invokeTopicsUnpinAll, `{"general":false}`},
+		{invokeTopicsUnpinAll, `{"general":true,"message_thread_id":3}`},
+		{invokeTopicsUnpinAll, `{"chat":"-2002","general":true}`},
+		{invokeTopicsHideGeneral, `{"chat":"-2002"}`},
+		{invokeTopicsUnhideGeneral, `{"chat":"-2002"}`},
 		{invokeTopicsCreate, `{"name":""}`},
 		{invokeTopicsCreate, `{"name":"` + long + `"}`},
 		{invokeTopicsCreate, `{"name":"x","icon_color":1}`},
@@ -150,6 +170,13 @@ func TestTopicSingleRequestAndUncertaintyAfterFailure(t *testing.T) {
 		},
 		"close":  func(c *Client) error { _, err := c.CloseTopic(context.Background(), 3, false); return err },
 		"reopen": func(c *Client) error { _, err := c.ReopenTopic(context.Background(), 0, true); return err },
+		"delete": func(c *Client) error { _, err := c.DeleteTopic(context.Background(), 3); return err },
+		"unpinall": func(c *Client) error {
+			_, err := c.UnpinAllTopicMessages(context.Background(), 0, true)
+			return err
+		},
+		"hidegeneral":   func(c *Client) error { _, err := c.HideGeneralTopic(context.Background()); return err },
+		"unhidegeneral": func(c *Client) error { _, err := c.UnhideGeneralTopic(context.Background()); return err },
 	}
 	for opName, op := range ops {
 		for _, status := range []int{500, 502} {
@@ -171,7 +198,8 @@ func TestTopicDescriptorsRiskAndGroup(t *testing.T) {
 		t.Errorf("idempotency = %v, %v", topicsCreate.Risk.Idempotency, topicsEdit.Risk.Idempotency)
 	}
 	for _, id := range []bool{topicsCreate.RequiresToolAllowList, topicsEdit.RequiresToolAllowList,
-		topicsClose.RequiresToolAllowList, topicsReopen.RequiresToolAllowList} {
+		topicsClose.RequiresToolAllowList, topicsReopen.RequiresToolAllowList,
+		topicsHideGeneral.RequiresToolAllowList, topicsUnhideGeneral.RequiresToolAllowList} {
 		if id {
 			t.Error("topic tool requires a tool allow list")
 		}

@@ -141,12 +141,14 @@ func TestDefaultRegistry(t *testing.T) {
 		48: "telegram.senderchats.ban", 49: "telegram.senderchats.unban", 50: "telegram.stickers.customemoji",
 		51: "telegram.stickers.send", 52: "telegram.stickers.uploadfile", 53: "telegram.stickersets.addsticker",
 		54: "telegram.stickersets.create", 55: "telegram.stickersets.delete", 56: "telegram.stickersets.get",
-		57: "telegram.topics.close", 58: "telegram.topics.create", 59: "telegram.topics.edit",
-		60: "telegram.topics.iconstickers", 61: "telegram.topics.reopen", 62: "telegram.updates.confirm",
-		63: "telegram.updates.list", 64: "telegram.venues.send", 65: "telegram.videonotes.send",
-		66: "telegram.videos.send", 67: "telegram.voice.send", 68: "telegram.webhook.get",
+		57: "telegram.topics.close", 58: "telegram.topics.create", 59: "telegram.topics.delete",
+		60: "telegram.topics.edit", 61: "telegram.topics.hidegeneral", 62: "telegram.topics.iconstickers",
+		63: "telegram.topics.reopen", 64: "telegram.topics.unhidegeneral", 65: "telegram.topics.unpinall",
+		66: "telegram.updates.confirm", 67: "telegram.updates.list", 68: "telegram.venues.send",
+		69: "telegram.videonotes.send", 70: "telegram.videos.send", 71: "telegram.voice.send",
+		72: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 69
+	ok2 := len(operations) == 73
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}
