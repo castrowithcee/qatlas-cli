@@ -1,9 +1,11 @@
 package makeapi
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -19,6 +21,7 @@ type recordsEnv struct {
 	status    int
 	records   string
 	deleted   string
+	answerKey string
 }
 
 func newRecordsEnv(t *testing.T) *recordsEnv {
@@ -33,6 +36,16 @@ func newRecordsEnv(t *testing.T) *recordsEnv {
 		switch {
 		case r.Method == http.MethodGet && path == "/data-stores/"+storeID:
 			return jsonResponse(200, `{"dataStore":`+dataStoreJSONOf(storeID, h.storeTeam, "Own")+`}`), nil
+		case strings.HasPrefix(path, "/data-stores/"+storeID+"/data/") &&
+			(r.Method == http.MethodPut || r.Method == http.MethodPatch):
+			if h.status != 0 {
+				return jsonResponse(h.status, `{"message":"`+foreignCanary+`"}`), nil
+			}
+			key := h.answerKey
+			if key == "" {
+				key = strings.TrimPrefix(path, "/data-stores/"+storeID+"/data/")
+			}
+			return jsonResponse(200, `{"key":"`+key+`","data":{"title":"x"}}`), nil
 		case path != "/data-stores/"+storeID+"/data":
 			t.Fatalf("unexpected request %s %s", r.Method, path)
 		case r.Method == http.MethodGet:
@@ -255,13 +268,126 @@ func TestRecordsAnswersAreCheckedAndCapped(t *testing.T) {
 }
 
 func TestRecordToolsDeclareACompleteRisk(t *testing.T) {
-	for _, d := range []capability.Descriptor{dataStoreRecordsList, dataStoreRecordsCreate, dataStoreRecordsDelete} {
+	for _, d := range []capability.Descriptor{dataStoreRecordsList, dataStoreRecordsCreate, dataStoreRecordsReplace,
+		dataStoreRecordsUpdate, dataStoreRecordsDelete} {
 		r := d.Risk
 		if r.Effect == "" || r.Idempotency == "" || !r.OpenWorld || r.DataSensitivity == "" {
 			t.Fatalf("%s has an incomplete risk: %+v", d.ID, r)
 		}
 		if d.ID != dataStoreRecordsList.ID && r.Confirmation != capability.ConfirmationRequired {
 			t.Fatalf("%s needs confirmation: %+v", d.ID, r)
+		}
+	}
+}
+
+var recordChangeTools = []struct{ id, method string }{
+	{dataStoreRecordsReplace.ID, http.MethodPut},
+	{dataStoreRecordsUpdate.ID, http.MethodPatch},
+}
+
+func TestRecordsReplaceAndUpdateSendTheDataAsBodyToTheKeyPath(t *testing.T) {
+	for _, tool := range recordChangeTools {
+		args := `{"datastore_id":7,"key":"a:b.c-1","data":{"title":"x","n":[1]}}`
+		h := newRecordsEnv(t)
+		if _, err := h.invoke(tool.id, "open", args); !isConfirmationRequired(err) || len(h.calls) != 0 {
+			t.Fatalf("%s without confirm: err = %v, calls = %d", tool.id, err, len(h.calls))
+		}
+		result, err := h.confirmed(tool.id, "open", args)
+		if err != nil || h.changing() != 1 || h.calls[0].method != http.MethodGet {
+			t.Fatalf("%s: %v, calls = %+v", tool.id, err, h.calls)
+		}
+		last := h.calls[len(h.calls)-1]
+		if last.method != tool.method || last.path != apiPath+"/data-stores/"+storeID+"/data/"+url.PathEscape("a:b.c-1") ||
+			h.bodies[len(h.bodies)-1] != `{"title":"x","n":[1]}` {
+			t.Fatalf("%s sent %+v %q", tool.id, last, h.bodies[len(h.bodies)-1])
+		}
+		if !strings.Contains(result, `"key":"a:b.c-1"`) {
+			t.Fatalf("%s result = %s", tool.id, result)
+		}
+	}
+}
+
+func TestRecordsReplaceAndUpdateRefuseForeignStoreAndAllowListBeforeTheChange(t *testing.T) {
+	for _, tool := range recordChangeTools {
+		h := newRecordsEnv(t)
+		h.storeTeam = foreignTeam
+		_, err := h.confirmed(tool.id, "open", `{"datastore_id":7,"key":"k","data":{"a":1}}`)
+		if !isInvalidRequest(err) || strings.Contains(err.Error(), itoa64(foreignTeam)) || len(h.calls) != 1 ||
+			h.changing() != 0 {
+			t.Fatalf("%s foreign err = %v, calls = %+v", tool.id, err, h.calls)
+		}
+		h = newRecordsEnv(t)
+		_, err = h.confirmed(tool.id, "scenario", `{"datastore_id":7,"key":"k","data":{"a":1}}`)
+		if err == nil || len(h.calls) != 0 {
+			t.Fatalf("%s allow-list err = %v, calls = %+v", tool.id, err, h.calls)
+		}
+	}
+}
+
+func TestRecordsReplaceAndUpdateInputIsBoundedBeforeAnyRequest(t *testing.T) {
+	big := `{"x":"` + strings.Repeat("a", maxRecordDataBytes) + `"}`
+	deep := strings.Repeat(`{"a":`, maxRecordDataDepth+1) + `1` + strings.Repeat(`}`, maxRecordDataDepth+1)
+	for _, tool := range recordChangeTools {
+		for _, args := range []string{
+			`{"datastore_id":7,"key":"k","data":` + big + `}`,
+			`{"datastore_id":7,"key":"k","data":` + deep + `}`,
+			`{"datastore_id":7,"key":"k","data":[1]}`,
+			`{"datastore_id":7,"key":"k","data":{}}`,
+			`{"datastore_id":7,"key":"k"}`,
+			`{"datastore_id":7,"data":{"a":1}}`,
+			`{"datastore_id":7,"key":"../x","data":{"a":1}}`,
+			`{"datastore_id":7,"key":".hidden","data":{"a":1}}`,
+			`{"datastore_id":7,"key":"` + strings.Repeat("k", 129) + `","data":{"a":1}}`,
+			`{"datastore_id":7,"key":"a b","data":{"a":1}}`,
+			`{"datastore_id":7,"key":"k","data":{"a":1},"url":"https://x"}`,
+		} {
+			h := newRecordsEnv(t)
+			if _, err := h.confirmed(tool.id, "open", args); !isInvalidRequest(err) || len(h.calls) != 0 {
+				t.Fatalf("%s %.60s: err = %v, calls = %d", tool.id, args, err, len(h.calls))
+			}
+		}
+	}
+}
+
+func TestRecordsReplaceAndUpdateAreNeverRetriedAndCheckTheKey(t *testing.T) {
+	for _, tool := range recordChangeTools {
+		args := `{"datastore_id":7,"key":"mine","data":{"a":1}}`
+		h := newRecordsEnv(t)
+		h.status = 500
+		_, err := h.confirmed(tool.id, "open", args)
+		if err == nil || h.changing() != 1 || strings.Contains(err.Error(), foreignCanary) ||
+			!strings.Contains(err.Error(), "may have taken effect") {
+			t.Fatalf("%s 5xx err = %v, changing = %d", tool.id, err, h.changing())
+		}
+		h = newRecordsEnv(t)
+		h.status = 403
+		if _, err = h.confirmed(tool.id, "open", args); err == nil || !strings.Contains(err.Error(), "datastores:write") {
+			t.Fatalf("%s 403 err = %v", tool.id, err)
+		}
+		for name, failure := range map[string]func() (*http.Response, error){
+			"timeout": func() (*http.Response, error) { return nil, context.DeadlineExceeded },
+			"garbled": func() (*http.Response, error) { return jsonResponse(200, `not json`), nil },
+		} {
+			var calls []call
+			mutations := 0
+			env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+				if r.Method == http.MethodGet {
+					return jsonResponse(200, `{"dataStore":`+dataStoreJSONOf(storeID, ownTeam, "S")+`}`), nil
+				}
+				mutations++
+				return failure()
+			})
+			_, err := env.confirmed(tool.id, "open", args)
+			if err == nil || mutations != 1 || !strings.Contains(err.Error(), "may have taken effect") {
+				t.Fatalf("%s %s err = %v, mutations = %d", tool.id, name, err, mutations)
+			}
+		}
+		h = newRecordsEnv(t)
+		h.answerKey = "other"
+		_, err = h.confirmed(tool.id, "open", args)
+		if classOf(err) != provider.ClassInvalidResponse || !strings.Contains(err.Error(), "may have taken effect") ||
+			h.changing() != 1 {
+			t.Fatalf("%s mismatched key err = %v", tool.id, err)
 		}
 	}
 }
