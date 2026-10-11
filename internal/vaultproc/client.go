@@ -147,13 +147,16 @@ func (c *Client) Delete(ctx context.Context, credential, role string) error {
 //
 // A vault process of another protocol version, one left from before an update, cannot be asked; it is ended
 // with SIGTERM instead, on which it closes and overwrites its secrets just as on a lock, and on Windows,
-// which has no such signal, with TerminateProcess, which takes its memory with it. That process was checked
-// before its version was read, as this user's own (Linux) or this program (macOS, Windows), and its id comes
-// from the kernel's credentials of the socket, or the pipe's record of the process that serves it.
+// which has no such signal, with TerminateProcess, which takes its memory with it. So is a process that
+// still answers replaced after call asked again for replacedLimit: its program was replaced and no successor
+// took over. That process was checked before its version was read, as
+// this user's own (Linux) or this program (macOS, Windows), and its id comes from the kernel's credentials
+// of the socket, or the pipe's record of the process that serves it.
 func (c *Client) Lock(ctx context.Context) error {
 	_, err := c.call(ctx, request{Op: opLock})
 	var peer *PeerError
-	if errors.Is(err, ErrVersion) && errors.As(err, &peer) && terminate(peer.PID) == nil {
+	ended := errors.Is(err, ErrVersion) || errors.Is(err, ErrReplaced)
+	if ended && errors.As(err, &peer) && terminate(peer.PID) == nil {
 		return nil
 	}
 	return err
