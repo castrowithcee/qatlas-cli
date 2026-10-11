@@ -157,14 +157,14 @@ sorts, and groups. Only views visible to the whole workspace are read: a persona
 answers it like an unknown view, although Twenty serves it by identifier. Widget views are not read. Filter and
 group values are untrusted workspace data of their own data class.
 
-`views.create`, `update`, `delete`, `viewfields.*`, `viewsorts.*`, and `viewfilters`/`viewgroups.delete` are
-confirmed, need a `tools` entry and the Twenty right "Views", which also covers personal views of other users
-(use a key of its own), and no profile ticks them. Each reads the view first (through the column, sort, filter,
-or group for part tools) and refuses what `get` would not read and standard or index views. A new view is
-visible to the whole workspace and starts empty; `update` changes name and icon only. Every `delete` is
-permanent for every member and cannot be restored; the result names the view, or the part with its kind, view,
-and field, as read. Column and sort `create` refuse a field of another object, an inactive, system, or
-unsortable field, and one already shown or sorted; their answer names that item, view, and field.
+`views.create`, `update`, `delete`, `viewfields.*`, `viewsorts.*`, `viewfilters.*`, and `viewgroups.delete` are
+confirmed, need a `tools` entry and the Twenty right "Views" (it also covers other users' personal views; use a key of
+its own), and no profile ticks them. Each reads the view first (via the part for part tools) and refuses what `get` would
+not read and standard or index views. A new view is visible to the whole workspace and starts empty; `update` changes
+name and icon only. Every `delete` is permanent for all members. A result names the view, or the part with kind, view,
+and field. Column, sort, and filter `create` refuse a field of another object and an inactive or system one; column and
+sort also an unsortable one and one already shown or sorted. `viewfilters.create` and `update` write simple filters (no
+group, relation, or sub field), operand and value checked by field type (tool description); `update` keeps the field.
 
 ## Writing records
 

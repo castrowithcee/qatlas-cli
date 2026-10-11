@@ -307,6 +307,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(viewfieldsUpdate, viewsGroup), Handler: capability.Handler(invokeViewFieldsUpdate)},
 		capability.Operation{Descriptor: inGroup(viewsortsCreate, viewsGroup), Handler: capability.Handler(invokeViewSortsCreate)},
 		capability.Operation{Descriptor: inGroup(viewsortsUpdate, viewsGroup), Handler: capability.Handler(invokeViewSortsUpdate)},
+		capability.Operation{Descriptor: inGroup(viewfiltersCreate, viewsGroup), Handler: capability.Handler(invokeViewFiltersCreate)},
+		capability.Operation{Descriptor: inGroup(viewfiltersUpdate, viewsGroup), Handler: capability.Handler(invokeViewFiltersUpdate)},
 		capability.Operation{Descriptor: inGroup(viewsDelete, viewsGroup), Handler: capability.Handler(invokeViewsDelete)},
 		capability.Operation{Descriptor: inGroup(viewfieldsDelete, viewsGroup), Handler: capability.Handler(viewPartDeleteKinds[0].invoke)},
 		capability.Operation{Descriptor: inGroup(viewsortsDelete, viewsGroup), Handler: capability.Handler(viewPartDeleteKinds[1].invoke)},
