@@ -65,6 +65,11 @@ type Argument struct {
 	// argument must be a string of the input schema, and its tool requires an allow-list entry and
 	// confirmation; see MergeSecretFields and ResolveSecretRef.
 	SecretRef bool `json:"secret_ref,omitempty"`
+	// Target marks an optional argument that picks one target of the connection and that the connection
+	// supplies itself when it binds exactly one. It names the TargetKind of the provider that the argument
+	// selects, or "*" for a provider without kinds. Discovery then shows the argument as a hit's target
+	// where a connection does not fix it; the field is not part of the published contract.
+	Target string `json:"-"`
 }
 
 // Field is CLI projection metadata for one named result value. OutputSchema is the operation contract.

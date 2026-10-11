@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
 
 // Adding a target opens a menu instead of an empty line whenever there is something to offer: the targets
@@ -40,37 +42,6 @@ type targetAdd struct {
 	forms   [][]string
 	chosen  []string
 	history []int
-}
-
-// placeholder reports whether a segment of a form is a placeholder such as OWNER.
-func placeholder(segment string) bool {
-	if segment == "" {
-		return false
-	}
-	for _, r := range segment {
-		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
-			return false
-		}
-	}
-	return segment[0] >= 'A' && segment[0] <= 'Z'
-}
-
-// fitsForm reports whether the segments of a target are spelled in the form.
-func fitsForm(segments, form []string) bool {
-	if len(segments) != len(form) {
-		return false
-	}
-	for i, part := range form {
-		switch {
-		case placeholder(part):
-			if segments[i] == "" || segments[i] == "*" {
-				return false
-			}
-		case segments[i] != part:
-			return false
-		}
-	}
-	return true
 }
 
 // formService is the service the form binds: the service row of a connection form, or the service the
@@ -208,7 +179,7 @@ func (a *targetAdd) step() (names, fixed []string, done bool) {
 		switch {
 		case len(form) == i:
 			done = true
-		case placeholder(form[i]):
+		case config.Placeholder(form[i]):
 			if !slices.Contains(names, form[i]) {
 				names = append(names, form[i])
 			}
@@ -235,7 +206,7 @@ func (a *targetAdd) choose(value string, done bool) (string, bool) {
 		_, fixed, _ := a.step()
 		literal := slices.Contains(fixed, value)
 		for _, form := range a.forms {
-			if len(form) > i && ((literal && form[i] == value) || (!literal && placeholder(form[i]))) {
+			if len(form) > i && ((literal && form[i] == value) || (!literal && config.Placeholder(form[i]))) {
 				forms = append(forms, form)
 			}
 		}
@@ -284,7 +255,7 @@ func (m *Model) targetSuggestions(names []string) []string {
 			continue
 		}
 		for _, form := range forms {
-			if fitsForm(segments, form) && slices.Contains(names, form[i]) {
+			if config.FitsForm(segments, form) && slices.Contains(names, form[i]) {
 				values = append(values, segments[i])
 				break
 			}
@@ -336,7 +307,7 @@ func (m *Model) stepBack() {
 // fitsPrefix reports whether chosen values fit the first segments of a form.
 func fitsPrefix(form, chosen []string) bool {
 	for i, part := range form {
-		if placeholder(part) {
+		if config.Placeholder(part) {
 			if chosen[i] == "*" {
 				return false
 			}

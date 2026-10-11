@@ -43,9 +43,9 @@ var transferFields = []capability.Field{
 func transferArguments() []capability.Argument {
 	return []capability.Argument{
 		{Name: "chat", Description: "Bound chat that receives the messages; optional when the connection binds " +
-			"exactly one chat"},
+			"exactly one chat", Target: "chat"},
 		{Name: "from_chat", Description: "Bound chat that holds the source messages; may equal chat; optional when " +
-			"the connection binds exactly one chat"},
+			"the connection binds exactly one chat", Target: "chat"},
 		{Name: "message_id", Description: "One source message identifier; exactly one of message_id and message_ids"},
 		{Name: "message_ids", Description: "From 2 through 100 distinct positive source message identifiers in " +
 			"strictly ascending order; instead of message_id"},

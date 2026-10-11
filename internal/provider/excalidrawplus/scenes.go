@@ -55,7 +55,7 @@ var scenesList = capability.Descriptor{
 	Tags:     []string{"excalidrawplus", "scenes", "list", "whiteboard"},
 	Risk:     readRisk,
 	Provider: Provider,
-	InputSchema: json.RawMessage(`{"type":"object","properties":{"collection_id":` + idSchema + `,` +
+	InputSchema: json.RawMessage(`{"type":"object","properties":{"collection_id":` + collectionIDSchema + `,` +
 		`"name":{"type":"string","minLength":1,"maxLength":` + strconv.Itoa(maxQueryLength) + `},` + pageSchema + `},` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{` +
@@ -65,7 +65,8 @@ var scenesList = capability.Descriptor{
 		`"required":["scenes","offset","limit","has_next_page","count"],"additionalProperties":false}`),
 	Arguments: append([]capability.Argument{
 		{Name: "collection_id", Description: "Only scenes of this collection; required when this connection " +
-			"allows several collections, defaults to the only allowed one, and optional with the * wildcard"},
+			"allows several collections, defaults to the only allowed one, and optional with the * wildcard",
+			Target: "collection"},
 		{Name: "name", Description: "When set, keep only scenes of the page whose name contains this text, " +
 			"case-insensitive; applied by Qatlas to the page, so a later page may still match"},
 	}, pageArguments...),

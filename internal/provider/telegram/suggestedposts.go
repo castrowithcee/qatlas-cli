@@ -28,7 +28,7 @@ var suggestedMessageArgument = capability.Argument{
 
 var suggestedChatArgument = capability.Argument{
 	Name: "chat", Description: "Bound direct messages chat as numeric chat ID; optional when the connection " +
-		"binds exactly one chat",
+		"binds exactly one chat", Target: "chat",
 }
 
 func suggestedRisk(effect capability.Effect) capability.Risk {

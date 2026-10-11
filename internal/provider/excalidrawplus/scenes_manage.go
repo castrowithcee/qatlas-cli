@@ -38,13 +38,13 @@ var scenesCreate = capability.Descriptor{
 	Risk:     manageRisk(capability.EffectCreate),
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"name":` + nameSchema + `,"collection_id":` +
-		idSchema + `},"required":["name"],"additionalProperties":false}`),
+		collectionIDSchema + `},"required":["name"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(sceneSchema),
 	Arguments: []capability.Argument{
 		{Name: "name", Required: true, Description: "Scene name, 1 to 250 characters, no control characters"},
 		{Name: "collection_id", Description: "Allowed collection to create the scene in; required unless this " +
 			"connection allows exactly one collection, which is then the default. A scene is never created " +
-			"outside the allowed collections, and the private collection is not offered"},
+			"outside the allowed collections, and the private collection is not offered", Target: "collection"},
 	},
 	Fields:   sceneFields,
 	Examples: []capability.Example{{Description: "Create a scene", Arguments: json.RawMessage(`{"name":"Roadmap","collection_id":"abc123"}`)}},

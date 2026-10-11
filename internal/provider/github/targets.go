@@ -24,11 +24,11 @@ const (
 
 var repositoryArgument = capability.Argument{Name: "repository", Description: "Repository as OWNER/REPO; " +
 	"optional when the connection's targets allow exactly one repository; must lie inside the targets when the " +
-	"connection lists any"}
+	"connection lists any", Target: "repository"}
 
 var projectArgument = capability.Argument{Name: "project", Description: "Project as users/LOGIN/projects/NUMBER " +
 	"or orgs/LOGIN/projects/NUMBER; optional when the connection's targets allow exactly one project; must lie " +
-	"inside the targets when the connection lists any"}
+	"inside the targets when the connection lists any", Target: "project"}
 
 var ownerArgument = capability.Argument{Name: "owner", Description: "Owner as users/LOGIN for a user or " +
 	"orgs/LOGIN for an organization; optional when the connection's targets name exactly one owner; must lie " +

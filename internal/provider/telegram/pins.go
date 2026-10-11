@@ -15,7 +15,7 @@ const groupPins = "pins"
 const chatSchema = `"chat":{"type":"string","minLength":1,"maxLength":128}`
 
 var chatArgument = capability.Argument{
-	Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat",
+	Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat", Target: "chat",
 }
 
 func pinRisk() capability.Risk {

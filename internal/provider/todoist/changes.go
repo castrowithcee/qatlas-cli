@@ -109,7 +109,7 @@ var tasksCreate = changing(capability.EffectCreate, capability.IdempotencyNonIde
 	append([]capability.Argument{
 		{Name: "content", Description: "Task title, at most 500 characters on one line", Required: true},
 		{Name: "project_id", Description: "Project of the connection; the connection's only project when omitted, " +
-			"the Inbox on a * connection"},
+			"the Inbox on a * connection", Target: "*"},
 		{Name: "section_id", Description: "Section of a project of the connection; excludes parent_id"},
 		{Name: "parent_id", Description: "Task of the connection the new task becomes a subtask of; excludes section_id"},
 	}, taskFieldArguments...),
