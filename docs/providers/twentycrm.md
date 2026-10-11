@@ -7,7 +7,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 # Twenty CRM
@@ -114,9 +114,8 @@ checked arguments as variables only; there is no free GraphQL. A failed query sh
 
 ## Controlling workflows
 
-`workflowversions.activate`, `workflowversions.deactivate` (`update`), `workflowruns.stop`, and
-`workflowruns.retry` (`execute`) are workspace-wide, need the settings right Workflows, and are offered only
-by a connection whose `tools` list names them; no profile ticks them.
+`workflowversions.activate`, `deactivate` (`update`), `workflowruns.stop`, and `retry` (`execute`) are
+workspace-wide, need the settings right Workflows and a `tools` entry; no profile ticks them.
 
 - `activate` reads the version first and activates it only if it opens no lasting path to the outside through
   Qatlas: a webhook trigger or a step that can send data out or run code is refused before any change. The
@@ -139,9 +138,9 @@ are replaced as a whole. All need "Roles", so use a key of its own; no profile t
 `metaobjects.list`, `metaobjects.get`, and `metafields.get` (`read`) are workspace-wide and read Twenty's
 metadata API for all objects and fields; default values, settings, and relation details are never read.
 
-`metaobjects.create`, `update`, `delete` and `metafields.create`, `update`, `delete` change the schema for every
-user and integration of the workspace. All nine tools need the Twenty right "Data model": use an API key of its
-own. The writers are offered only by a connection whose `tools` list names them; no profile ticks them.
+`metaobjects.create`, `update`, `delete` and `metafields.create`, `update`, `delete` change the schema for
+every user and integration of the workspace. All nine tools need the Twenty right "Data model": use a
+connection with an API key of its own. The writers need a `tools` entry; no profile ticks them.
 
 ## Views
 
@@ -149,27 +148,28 @@ own. The writers are offered only by a connection whose `tools` list names them;
 sorts, and groups. Only views visible to the whole workspace are read; `get` answers a personal or widget view
 like an unknown one. Filter and group values are untrusted workspace data of their own data class.
 
-All view writers (`views.create`, `update`, `delete`, `viewfields.*`, `viewsorts.*`, `viewfilters.*`,
-`viewgroups.update`, `delete`) are confirmed, need a `tools` entry and the Twenty right "Views" (also for other
-users' personal views; use a key of its own), and no profile ticks them. Each first reads the view (or the part's
-view) and refuses what `get` would not read and standard and index views. `update` changes name, icon, and the
-grouping field of a TABLE or KANBAN view (active SELECT only; Twenty recreates all groups, losing their
-visibility and order); `viewgroups.update` changes visibility and position. New views are workspace-wide and
-empty; `delete` is permanent. Column, sort, and filter `create` refuse a field of another object and an inactive
-or system one, column and sort also an unsortable or used one. Filters are simple (no group, relation, or sub
-field), checked by field type as the tool help lists; `update` keeps the field.
+`views.create`, `update`, `delete`, `viewfields.*`, `viewsorts.*`, `viewfilters.*`, `viewgroups.update`, and
+`delete` are confirmed, need a `tools` entry and the Twenty right "Views" (also for other users' personal views;
+use a key of its own); no profile ticks them. Each first reads its view and refuses what `get` would not read and
+standard and index views. `update` changes name, icon, and the grouping field of a TABLE or KANBAN view (active
+SELECT only; Twenty recreates all groups, losing visibility and order); `viewgroups.update` changes visibility
+and position. New views are workspace-wide and empty; `delete` is permanent. Column, sort, and filter `create`
+refuse a foreign, inactive, or system field, column and sort also an unsortable or used one. Filters are simple
+(no group, relation, or sub field) and checked by field type per the tool help; their `update` keeps the field.
 
 ## Dashboards
 
-`pagelayouts.list` and `pagelayouts.get` (`read`) are workspace-wide and read dashboard layouts with their tabs
-and widgets. A layout of another type or a trashed one is not listed, and `get` answers it like an unknown
-layout, although Twenty serves it by identifier. Titles are untrusted workspace data of their own data class.
+`pagelayouts.list` and `pagelayouts.get` (`read`) are workspace-wide and read dashboard layouts with tabs and
+widgets. A layout of another type or a trashed one is not listed, and `get` answers it like an unknown one,
+although Twenty serves it by identifier. Titles are untrusted workspace data of their own data class.
 
-- A widget is reduced to type, title, position, object, and chart type; a type Qatlas does not know is
-  `unknown`. Configurations, rich-text content, filters, and chart data are never read, and an embedded page
-  appears only as scheme, host, and port.
+- A widget is reduced to type, title, position, object, and chart type (`unknown` for an unknown type).
+  Configurations, rich text, filters, and chart data are never read; an embedded page shows only its origin.
 - On the object `dashboard`, `records.create` and `records.batchcreate` without a layout identifier also create
-  a layout with one tab, and `records.destroy` also destroys the layouts of the dashboard. `delete` leaves them.
+  a layout with one tab, and `records.destroy` also destroys its layouts. `delete` leaves them.
+
+`pagelayouttabs.create` is confirmed, needs a `tools` entry and the Twenty right "Layouts"; no profile ticks it.
+It reads the layout first, refuses what `get` would not read, and adds an empty grid tab for all members.
 
 ## Writing records
 

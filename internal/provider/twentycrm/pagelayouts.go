@@ -404,10 +404,9 @@ func (c *Client) ListPageLayouts(ctx context.Context, connection string, limit i
 	return result, nil
 }
 
-// GetPageLayout reads one dashboard layout with its tabs and widgets. A layout of another type reads exactly
-// like an unknown one.
-func (c *Client) GetPageLayout(ctx context.Context, connection, id string) (*PageLayout, error) {
-	const op = "get dashboard layout"
+// readDashboardLayout reads one layout record. A layout of another type, and a deleted one, read exactly like
+// an unknown one. The write tools use it to check the target before they send anything.
+func (c *Client) readDashboardLayout(ctx context.Context, op, id string) (*pageLayoutRecord, error) {
 	if !validUUID(id) {
 		return nil, invalidRequest("the layout id must be a UUID")
 	}
@@ -426,6 +425,16 @@ func (c *Client) GetPageLayout(ctx context.Context, connection, id string) (*Pag
 	}
 	if !record.readable() {
 		return nil, provider.ClassifyStatus(op, 404, pageLayoutStatusTexts)
+	}
+	return &record, nil
+}
+
+// GetPageLayout reads one dashboard layout with its tabs and widgets.
+func (c *Client) GetPageLayout(ctx context.Context, connection, id string) (*PageLayout, error) {
+	const op = "get dashboard layout"
+	record, err := c.readDashboardLayout(ctx, op, id)
+	if err != nil {
+		return nil, err
 	}
 	// Object names are a convenience; a catalog that cannot be read leaves the identifiers.
 	objects, _ := c.objectCatalog(ctx, connection)
