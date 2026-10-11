@@ -77,10 +77,10 @@ var (
 		Description: "List chapters of a knowledge base or of one book",
 		Tags:        []string{"knowledge", "chapters", "bookstack"},
 		Risk:        bookstackReadRisk, Provider: Provider,
-		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
+		InputSchema:  json.RawMessage(`{"type":"object","properties":{"book_id":{"type":"integer","minimum":1,"x-form":"BOOK_ID"},"limit":{"type":"integer","minimum":0},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`),
 		OutputSchema: json.RawMessage(`{"type":"array","items":{"type":"object","properties":{"id":{"type":"integer"},"book_id":{"type":"integer"},"name":{"type":"string"},"slug":{"type":"string"},"description":{"type":"string"},"created_at":{"type":"string"},"updated_at":{"type":"string"}},"required":["id","book_id","name","slug","description","created_at","updated_at"]}}`),
 		Arguments: []capability.Argument{
-			{Name: "book_id", Description: "Only chapters of this book; required for a connection bound to several books"},
+			{Name: "book_id", Description: "Only chapters of this book; required for a connection bound to several books", Target: "book"},
 			{Name: "limit", Description: "Maximum number of chapters to return; 0 returns all"},
 			{Name: "offset", Description: "Number of chapters to skip"},
 		},

@@ -32,7 +32,7 @@ var contentSearch = capability.Descriptor{
 	Risk:     bookstackReadRisk,
 	Provider: Provider,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string","minLength":1,"maxLength":1000},` +
-		`"book_id":{"type":"integer","minimum":1},"chapter_id":{"type":"integer","minimum":1},` +
+		`"book_id":{"type":"integer","minimum":1,"x-form":"BOOK_ID"},"chapter_id":{"type":"integer","minimum":1},` +
 		`"page":{"type":"integer","minimum":1},"count":{"type":"integer","minimum":1,"maximum":100}},` +
 		`"required":["query"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"results":{"type":"array","items":{"type":"object","properties":{` +
@@ -42,7 +42,7 @@ var contentSearch = capability.Descriptor{
 		`"preview_name":{"type":"string"},"preview_content":{"type":"string"}}}},"total":{"type":"integer"}},"required":["results","total"]}`),
 	Arguments: []capability.Argument{
 		{Name: "query", Description: "Search text, 1 to 1000 characters; the BookStack search syntax is allowed", Required: true},
-		{Name: "book_id", Description: "Search only in this book; mutually exclusive with chapter_id; required for a connection bound to several books unless chapter_id is given"},
+		{Name: "book_id", Description: "Search only in this book; mutually exclusive with chapter_id; required for a connection bound to several books unless chapter_id is given", Target: "book"},
 		{Name: "chapter_id", Description: "Search only in this chapter; mutually exclusive with book_id"},
 		{Name: "page", Description: "Page number from 1; 1 when omitted"},
 		{Name: "count", Description: "Results per page, 1 to 100; 20 when omitted"},

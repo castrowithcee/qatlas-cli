@@ -336,13 +336,15 @@ defaults:
 		if code != 0 {
 			t.Fatalf("exit %d, stderr %q", code, stderr)
 		}
-		if !strings.HasPrefix(stdout, "connections[2]: archive,primary\ntools[27]{id,title,effect,requires}:\n") {
+		if !strings.HasPrefix(stdout, "connections[2]: archive,primary\ntools[27]{id,title,effect,requires,target}:\n") {
 			t.Errorf("stdout = %q, want a TOON listing of the offered BookStack tools", stdout)
 		}
-		for _, want := range []string{"  bookstack.books.get,Get a BookStack book,read,id\n", "  bookstack.chapters.list,List BookStack chapters,read,\"\"\n",
-			"  bookstack.content.search,Search BookStack content,read,query\n", "  bookstack.pages.get,Get a BookStack page,read,id\n",
-			"  bookstack.pages.list,List BookStack pages,read,\"\"\n",
-			"  bookstack.shelves.get,Get a BookStack shelf,read,id\n", "  bookstack.shelves.list,List BookStack shelves,read,\"\"\n"} {
+		for _, want := range []string{"  bookstack.books.get,Get a BookStack book,read,id,\"\"\n",
+			"  bookstack.chapters.list,List BookStack chapters,read,\"\",\"book_id:BOOK_ID\"\n",
+			"  bookstack.content.search,Search BookStack content,read,query,\"book_id:BOOK_ID\"\n",
+			"  bookstack.pages.get,Get a BookStack page,read,id,\"\"\n",
+			"  bookstack.pages.list,List BookStack pages,read,\"\",\"book_id:BOOK_ID\"\n",
+			"  bookstack.shelves.get,Get a BookStack shelf,read,id,\"\"\n", "  bookstack.shelves.list,List BookStack shelves,read,\"\",\"\"\n"} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout = %q, want it to contain %q", stdout, want)
 			}

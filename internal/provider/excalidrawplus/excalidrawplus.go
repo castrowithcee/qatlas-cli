@@ -437,6 +437,10 @@ var readRisk = capability.Risk{
 	DataSensitivity: dataSensitivity,
 }
 
+// collectionIDSchema is idSchema with the written form, for the collection arguments that discovery shows as
+// the target a connection leaves open.
+var collectionIDSchema = strings.TrimSuffix(idSchema, "}") + `,"x-form":"COLLECTION_ID"}`
+
 const idSchema = `{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9_-]+$"}`
 
 // pageSchema is the shared offset and limit contract of both list tools.

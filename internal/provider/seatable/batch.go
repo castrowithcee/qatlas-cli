@@ -53,7 +53,7 @@ var rowsBatchCreate = batchDescriptor("batch_create", "Create up to 100 SeaTable
 	"Create up to 100 rows in one table allowed by an explicit SeaTable connection with one request",
 	batchInput(`"rows":{"type":"array",`+batchRowsSchema+`,"items":{"type":"object","minProperties":1}}`, `"rows"`),
 	[]capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
 		{Name: "rows", Description: "1 to 100 objects of column name to value; link columns are refused", Required: true},
 	})
 var rowsBatchUpdate = batchDescriptor("batch_update", "Update up to 100 SeaTable rows", capability.EffectUpdate,
@@ -62,7 +62,7 @@ var rowsBatchUpdate = batchDescriptor("batch_update", "Update up to 100 SeaTable
 	batchInput(`"rows":{"type":"array",`+batchRowsSchema+`,"items":{"type":"object","properties":{"row_id":`+rowIDSchema+
 		`,"values":{"type":"object","minProperties":1}},"required":["row_id","values"],"additionalProperties":false}}`, `"rows"`),
 	[]capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
 		{Name: "rows", Description: "1 to 100 objects with a distinct row_id of 22 characters and the values to change", Required: true},
 	})
 var rowsBatchDelete = batchDescriptor("batch_delete", "Delete up to 100 SeaTable rows", capability.EffectDelete,
@@ -70,7 +70,7 @@ var rowsBatchDelete = batchDescriptor("batch_delete", "Delete up to 100 SeaTable
 	"Delete up to 100 rows by row identifier in one table allowed by an explicit SeaTable connection with one request",
 	batchInput(`"row_ids":{"type":"array",`+batchRowsSchema+`,"items":`+rowIDSchema+`}`, `"row_ids"`),
 	[]capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
 		{Name: "row_ids", Description: "1 to 100 distinct row identifiers of 22 characters", Required: true},
 	})
 
