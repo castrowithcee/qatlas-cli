@@ -191,9 +191,9 @@ The CalDAV group `calendar` needs a `calendar` target; an unbound calendar is re
 children of the calendar home and of a bound calendar count, never subscriptions or the scheduling and trash
 collections. Profile `calendar` reads events, and tasks (VTODO) of calendars that take them; profile `events` also
 creates events and replaces one by `etag`. A change needs `confirm` and is never repeated after an unclear outcome;
-deleting needs a tools list. Managing calendars and `calendartrash.*` are in no profile; the latter cover deleted
-events and tasks of bound calendars only: an entry of another calendar is neither listed nor counted and is refused
-like a missing one, and whole deleted calendars are not restored.
+deleting needs a tools list. Writing tasks, managing calendars, and `calendartrash.*` are in no profile; a task is
+replaced only while it holds nothing Qatlas cannot write, and the trash covers bound calendars only: an entry of
+another calendar is neither listed nor counted and is refused like a missing one; whole calendars are not restored.
 
 ## Contacts
 

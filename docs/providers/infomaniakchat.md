@@ -93,8 +93,8 @@ Per tool family:
 - `channels.create` works only in a bound team and only on a connection without a channel allow-list,
   because a channel that does not exist yet cannot be inside one; the refusal is local.
 - A `post_id` (`messages.thread`, `.get`, `.update`, `.delete`, `.pin`, `.unpin`, `.flag`, `.unflag`,
-  `.markunread`, and the `reactions` tools) is bound through its channel: Qatlas reads the post, refuses
-  another or a deleted post, applies the allow-list, and runs the live check before returning or sending.
+  `.remind`, `.markunread`, and the `reactions` tools) is bound through its channel: Qatlas reads the post,
+  refuses another or a deleted post, applies the allow-list, and runs the live check first.
 - `pins.list` and `flagged.list` bind `channel_id` like a channel tool and drop posts of another channel.
 - A reply confirms, by reading the named `root_id`, that the root post belongs to the same `channel_id`.
 - A `thread_id` (`threads.get`, `.follow`, `.unfollow`, `.markread`) is a root `post_id`: it is bound like
@@ -147,7 +147,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | --- | --- | --- | --- |
 | `teams` | `teams.list`, `.get`, `teammembers.list` | | `teammembers.roles` |
 | `channels` | `channels.list`, `.get`, `.browse`, `.search`, `.unread`, `archivedchannels.list`, `channelmembers.list`, `categories.list` | `channels.create`, `.update`, `.markread`, `channelmembers.add`, `categories.create`, `.update`, `channelnotifications.update` | `channels.archive`, `.restore`, `.privacy`, `channelmembers.remove`, `.roles`, `categories.delete` |
-| `messages` | `messages.list`, `.thread`, `.get`, `.files`, `.search`, `direct.list`, `pins.list`, `flagged.list` | `direct.open`, `groupmessages.open`, `messages.send`, `.update`, `.pin`, `.unpin`, `.flag`, `.unflag`, `.markunread` | `messages.delete` |
+| `messages` | `messages.list`, `.thread`, `.get`, `.files`, `.search`, `direct.list`, `pins.list`, `flagged.list` | `direct.open`, `groupmessages.open`, `messages.send`, `.update`, `.pin`, `.unpin`, `.flag`, `.unflag`, `.remind`, `.markunread` | `messages.delete` |
 | `files` | `files.info`, `.search`, `.download` (writes a local file) | `files.upload` (reads a local file) | |
 | `threads` | `threads.list`, `.get` | `threads.follow`, `.unfollow`, `.markread` | |
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
@@ -160,9 +160,9 @@ and offered only to a connection whose tools list names them; the role tools alt
 `channels.archive` is kChat's channel delete, which keeps the channel restorable.
 
 The terminal editor starts a new connection on the setup profile `read` (all read tools). `messaging` adds
-the opens, sends, edits, pins, flags, read marks, uploads, reactions, thread following, category and
-notification changes, and the own status tools; `channel-admin` adds `channels.create`, `.update`, and
-`channelmembers.add`. `profile.update`, the integration tools, and the bot tools are in no profile.
+the opens, sends, edits, pins, flags, reminders, read marks, uploads, reactions, thread following, category
+and notification changes, and the own status tools; `channel-admin` adds `channels.create`, `.update`,
+and `channelmembers.add`. `profile.update`, the integration tools, and the bot tools are in no profile.
 
 Behaviour beyond the schemas:
 
@@ -185,17 +185,17 @@ Behaviour beyond the schemas:
 - `channelnotifications.update` sends only the given fields and no direct or group channel.
 - `messages.pin`, `.unpin`, `threads.follow`, and `.unfollow` are idempotent, send no body, change nothing
   else, and report the state kChat confirmed; `messages.flag` and `.unflag` send one fixed `flagged_post`
-  preference entry, no other. Threads never include deleted threads or participants' user data.
+  preference entry, no other; `messages.remind` (not idempotent) sends just `target_time` in Unix seconds,
+  from an RFC 3339 time within a year. Threads never include deleted threads or participants' user data.
 - Read state is always the token's own, never an argument, and the marks are idempotent. `channels.unread`
   returns only the counts of the bound channel. `channels.markread` is kChat's channel view, so it also
   clears push notifications for the channel; its body holds `channel_id` only.
 - `messages.delete` soft-deletes the post, which users cannot restore; deleting a thread root also removes
   its replies. Whether a token may edit or delete another author's message is kChat's decision (`permission`).
 - `files.upload` and `files.download` follow the local file contracts of `infomaniakdrive.files.upload` and
-  `.download` (released directories, fixed size limits, no partial file, content never returned). The
-  upload's multipart body holds only `channel_id` and the file, and kChat cannot list or remove an upload
-  no message holds, so an unattached upload stays. A download redirect, for example to a storage host, is a
-  `provider-error` and is not followed.
+  `.download` (released directories, fixed size limits, no partial file, content never returned). The upload's
+  multipart body holds only `channel_id` and the file; kChat cannot list or remove an upload no message holds,
+  so it stays. A download redirect, for example to storage, is a `provider-error`.
 - The webhook and slash command tools, reads included, need a tools list because an incoming webhook's ID is
   the secret of its post URL and a command carries a token; their IDs are redacted from every error, `.update`
   writes the object back as read, no token ever appears, and a callback URL only as scheme and host.
@@ -288,8 +288,8 @@ A live test against a real kChat instance checks, in order:
   another channel are refused before posting; a download matches `size`; a storage redirect is refused.
 - A reply threads under its root; pin and unpin show in `pins.list` without other channels' messages; an edit
   changes only text and edit time; deleting the reply keeps the root; reactions add, list, remove.
-- Follow, unfollow, flag, and read marks change only the token's own state; another team's thread or post, a
-  reply, and a future timestamp are refused; `flagged.list` shows kChat's answer shape.
+- Follow, unfollow, flag, remind, and read marks change only own state; foreign posts and threads, replies,
+  and a future read mark are refused; `flagged.list` shows kChat's answer shape; a reminder fires on time.
 - Webhooks and slash commands list without those of other teams or outside the allow-list, channelless
   outgoing webhooks included; a disposable one changes its texts only, then is deleted.
 - Bot tools and `emoji.list` are refused with a channel target or an unbound token team; otherwise both list;
