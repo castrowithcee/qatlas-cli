@@ -2,8 +2,8 @@
 description: >
   Describes Twenty CRM company, object catalog, record read, write, duplicate and merge, and trash
   operations, note and task links, attachment read and download, workflow read and control, member, role,
-  view, and data model read and write, webhooks, object targets, connection permissions, and safety
-  boundaries.
+  view, dashboard, and data model read and write, webhooks, object targets, connection permissions, and
+  safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -14,14 +14,12 @@ updated: 2026-10-11
 
 A connection binds one API key to one managed or self-hosted workspace and, optionally, to a set of its
 objects (see Object targets). It can list, read, create, change (name or primary domain), and delete
-companies, and work with records of any reachable object: write, also up to 60 at a time (see Writing records
-and Batches), delete, restore, destroy (see Deleting and restoring), find duplicates, merge (see Merging
-records), link notes and tasks (see Linking notes and tasks), and download attachments (see Attachments).
-It also covers webhooks (see Webhooks), workflows (see Controlling workflows), and the data model (see
-Data model). Mutations require confirmation and only use the generated REST routes of the company or of a
-reachable object, or fixed metadata, webhook, and workflow routes. Qatlas sends each mutation once; after an
-unclear result (timeout, reset, server error, unreadable answer) it reports the outcome as uncertain and does
-not repeat the request. Qatlas spaces the requests of one key to Twenty's limit of 100 per minute.
+companies, and work with records of any reachable object, also up to 60 at a time, plus notes, tasks,
+attachments, webhooks, workflows, dashboards, and the data model; each has its own section. Mutations require
+confirmation and only use the generated REST routes of the company or of a reachable object, or fixed
+metadata, webhook, and workflow routes. Qatlas sends each mutation once; after an unclear result (timeout,
+reset, server error, unreadable answer) it reports the outcome as uncertain and does not repeat it. Requests
+of one key are spaced to Twenty's limit of 100 per minute.
 
 A `domain` sets the primary link `https://<domain>` with the domain as label; an empty value clears both.
 
@@ -44,17 +42,16 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
   refused before the key is read.
 
 `objects.list` and `objects.get` (`read`) show the reachable objects and their fields; relations to objects the
-connection does not reach are left out. The catalog comes from the workspace's generated API document
-(`/open-api/core`), which needs no settings right, unlike the metadata API (see Data model). Only
-names, types, and flags leave Qatlas; descriptions and options of the document never do.
+connection does not reach are left out. The catalog comes from the generated API document, which needs no
+settings right, unlike the metadata API (see Data model). Only names, types, and flags leave Qatlas.
 
 ## Reading records
 
 `records.list` and `records.get` (`read`) read the records of any reachable object, standard or custom, by its
 singular API name. Qatlas takes the REST path of an object only from the workspace catalog, never from an
 argument. A list returns one page without filters (see Filtering and counting records for conditions), 1 to
-100 records, with an opaque `next_cursor`. `order_by` sorts by one field, or by `field.subfield` of a
-composite field, in direction `asc` or `desc`. Relation, array, and rich-text fields cannot be sorted by.
+100 records, with an opaque `next_cursor`, sorted by one field or `field.subfield` of a composite field.
+Relation, array, and rich-text fields cannot be sorted by.
 
 - Qatlas checks `fields` and `order_by` against the response shape of the object in the workspace document,
   so an unknown field is refused before any record is read, and the refusal does not name it.
@@ -74,9 +71,9 @@ composite field, in direction `asc` or `desc`. Relation, array, and rich-text fi
 conditions and Qatlas builds Twenty's filter from checked parts only: Twenty's grammar has no escaping, so no
 value may carry a quote, bracket, colon, comma, backslash, parenthesis, or percent sign.
 
-- `records.search` reads a page like `records.list` (page size, sort, `fields`, cursor) for 1 to 5 AND-linked
-  conditions `{field, operator, value}`. The cursor is also bound to the normalized conditions, whose order
-  and repeats do not matter.
+- `records.search` reads a page like `records.list` for 1 to 5 AND-linked conditions
+  `{field, operator, value}`. The cursor is also bound to the normalized conditions, whose order and repeats
+  do not matter.
 - `records.groupby` counts the records per value of 1 or 2 different fields, optionally limited by the same
   conditions.
 - A condition field is a top-level field of the object's response shape or `field.subfield` of a composite
@@ -85,9 +82,8 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
   searched.
 - A relation identifier (`<relation>Id`) is accepted only when the relation field names a target object that
   the connection reaches; otherwise the condition could probe objects outside the targets.
-- The operators follow the field kind, which Qatlas derives from the schema (enum values make a selection, a
-  format makes an identifier or date, otherwise the JSON type decides); the tool help lists them. A selection
-  value must be an enum value of the schema.
+- The operators follow the field kind, which Qatlas derives from the schema; the tool help lists them. A
+  selection value must be an enum value of the schema.
 - A refused field, operator, or value is refused after the schema was read and before any record is read,
   and the refusal names neither field nor value. The enum values of the schema serve only this check and
   never appear in a result, including `objects.get`.
@@ -99,10 +95,8 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
 ## Searching across objects
 
 `records.searchall` (`read`) finds records by full-text search over all reachable objects in one call and
-returns per hit `object`, `id`, and `label` (display name, capped), plus `omitted`. Read a hit with
-`records.get`. Qatlas sends one fixed query and passes the checked arguments only as variables; there is no
-free GraphQL. Twenty reports a failed query as an answer with errors; Qatlas maps it to a class and shows no
-text of it.
+returns per hit `object`, `id`, and a capped `label`, plus `omitted`. Qatlas sends one fixed query with the
+checked arguments as variables only; there is no free GraphQL. A failed query shows no text of Twenty.
 
 - `objects` limits the search to a subset of the reachable objects; an object outside the connection is
   ignored, and an empty remaining set is refused before the search is sent.
@@ -145,10 +139,10 @@ are replaced as a whole. All need "Roles", so use a key of its own; no profile t
 `metaobjects.list`, `metaobjects.get`, and `metafields.get` (`read`) are workspace-wide and read Twenty's
 metadata API for all objects and fields; default values, settings, and relation details are never read.
 
-`metaobjects.create`, `metaobjects.update`, `metafields.create`, `metafields.update` (`create`, `update`),
-`metaobjects.delete`, and `metafields.delete` (`delete`) change the schema for every user and integration of
-the workspace. All nine tools need the Twenty right "Data model": use a connection with an API key of its own.
-The writers are offered only by a connection whose `tools` list names them; no profile ticks them.
+`metaobjects.create`, `update`, `delete` and `metafields.create`, `update`, `delete` (`create`, `update`,
+`delete`) change the schema for every user and integration of the workspace. All nine tools need the Twenty
+right "Data model": use a connection with an API key of its own. The writers are offered only by a connection
+whose `tools` list names them; no profile ticks them.
 
 ## Views
 
@@ -158,13 +152,24 @@ answers it like an unknown view, although Twenty serves it by identifier. Widget
 group values are untrusted workspace data of their own data class.
 
 `views.create`, `update`, `delete`, `viewfields.*`, `viewsorts.*`, `viewfilters.*`, and `viewgroups.delete` are
-confirmed, need a `tools` entry and the Twenty right "Views" (it also covers other users' personal views; use a key of
-its own), and no profile ticks them. Each reads the view first (via the part for part tools) and refuses what `get` would
-not read and standard or index views. A new view is visible to the whole workspace and starts empty; `update` changes
-name and icon only. Every `delete` is permanent for all members. A result names the view, or the part with kind, view,
-and field. Column, sort, and filter `create` refuse a field of another object and an inactive or system one; column and
-sort also an unsortable one and one already shown or sorted. `viewfilters.create` and `update` write simple filters (no
-group, relation, or sub field), operand and value checked by field type (tool description); `update` keeps the field.
+confirmed, need a `tools` entry and the Twenty right "Views" (also for other users' personal views; use a key of
+its own), and no profile ticks them. Each reads the view, or the part and its view, first and refuses what `get`
+would not read and standard or index views. A new view is workspace-wide and starts empty; `update` changes name
+and icon only. Every `delete` is permanent for all members. Column, sort, and filter `create` refuse a field of
+another object and an inactive or system one, column and sort also an unsortable or used one. Filters are simple
+(no group, relation, or sub field), checked by field type as the tool help lists; `update` keeps the field.
+
+## Dashboards
+
+`pagelayouts.list` and `pagelayouts.get` (`read`) are workspace-wide and read dashboard layouts with their tabs
+and widgets. A layout of another type or a trashed one is not listed, and `get` answers it like an unknown
+layout, although Twenty serves it by identifier. Titles are untrusted workspace data of their own data class.
+
+- A widget is reduced to type, title, position, object, and chart type; a type Qatlas does not know is
+  `unknown`. Configurations, rich-text content, filters, and chart data are never read, and an embedded page
+  appears only as scheme, host, and port.
+- On the object `dashboard`, `records.create` and `records.batchcreate` without a layout identifier also create
+  a layout with one tab, and `records.destroy` also destroys the layouts of the dashboard. `delete` leaves them.
 
 ## Writing records
 
@@ -192,9 +197,8 @@ every field from the workspace catalog and builds the request body from the chec
 ## Linking notes and tasks
 
 `activitytargets.list`, `activitytargets.create`, and `activitytargets.delete` (`read`, `create`, `delete`)
-read, set, and remove the links between a note or a task and a record of any reachable object, standard or
-custom. The argument `activity` (`note` or `task`) selects the link object. The agent names the object and the
-record identifier; the field that carries the link comes from the workspace schema of the link object, never
+read, set, and remove the links between a note or a task (`activity`) and a record of any reachable object,
+standard or custom. The field that carries the link comes from the workspace schema of the link object, never
 from an argument. An object that the schema gives no single link relation cannot be linked.
 
 - The note or task and the object must both be reachable through the connection, so with targets both
@@ -218,24 +222,23 @@ without a file or without exactly one reachable target in `omitted`. Labels and 
 - The content is returned inline up to 4 MiB, or written to `local_path` in a directory the connection
   releases for writing (an existing file only with confirmation); the result then holds only metadata.
 - Qatlas fetches the download address Twenty reports only if it is https on exactly the host and port of the
-  connection, with the path `/file/files-field/<fileId>` of the attachment's file and the signed `token` as
-  its only query. The request carries no API key and follows no redirect; the token appears in no result or
-  error. An instance that serves files from external storage (another host, or a redirect) is not supported.
+  connection, with the path of the attachment's file and the signed `token` as its only query. The request
+  carries no API key and follows no redirect; the token appears in no result or error. An instance that
+  serves files from external storage (another host, or a redirect) is not supported.
 
 ## Webhooks
 
-`webhooks.list`, `webhooks.get`, `webhooks.update`, and `webhooks.delete` (`read`, `read`, `update`, `delete`)
-show where the workspace reports events, change which events it reports, and remove a webhook. There is no
-tool to create a webhook or to change its target or signing key.
+`webhooks.list`, `get` (`read`), `update`, and `delete` show where the workspace reports events, change which
+events it reports, and remove a webhook. There is no tool to create a webhook or to change its target or
+signing key.
 
-- The tools are workspace-wide. Twenty requires the settings right API keys and webhooks for the key; a 403
-  points to it.
+- The tools are workspace-wide. Twenty requires the settings right API keys and webhooks; a 403 points to it.
 - The signing key is never shown, and the target is reduced to scheme, host with port, and path: query,
   fragment, and credentials are dropped, because they often carry tokens. The path stays visible, so webhook
   configuration has its own data class.
 - `update` replaces the whole event list and/or the description. The input is checked before any request is
-  sent, and the request contains nothing but these two fields.
-- `delete` is offered only by a connection whose `tools` list names it.
+  sent, and the request contains nothing but these two fields. `delete` is offered only by a connection whose
+  `tools` list names it.
 
 ## Batches
 
@@ -252,9 +255,9 @@ tool to create a webhook or to change its target or signing key.
   `tools` list names it. Permanent deletion and restore have no batch form.
 - `batchupdate` and `batchdelete` select their records only by the identifier list, sent as a filter on `id`.
   An invalid list is refused before any request, because Twenty acts on every record without a filter.
-- It is not established whether Twenty applies a batch as a whole when one record fails. An answer that does
-  not name exactly the requested records (for `upsert`, another count) is reported as an uncertain partial
-  effect, not as success, and so is any unclear result. Read the records before repeating a batch.
+- It is not established whether Twenty applies a batch as a whole when one record fails. An unclear result, or an
+  answer that does not name exactly the requested records (for `upsert`, another count), is reported as an
+  uncertain partial effect, not as success. Read the records before repeating a batch.
 
 ## Merging records
 
@@ -269,9 +272,8 @@ identifiers are distinct UUIDs of that object.
   their relations are moved to the remaining record. Whether the deleted records can be restored is not
   promised. It is offered only by a connection whose `tools` list names it, and no profile ticks it. Preview
   first, then merge.
-
-Results are untrusted records; a merge answer must name one of the given records, and a 403 points to the
-object permissions of the role of the key.
+- Results are untrusted records; a merge answer must name one of the given records, and a 403 points to the
+  object permissions of the role of the key.
 
 ## Deleting and restoring
 
@@ -279,9 +281,8 @@ Companies and records of any reachable object share one trash contract:
 
 - `delete` moves one company or record to Twenty's trash. It stays recoverable.
 - `restore` brings one company or record back from the trash.
-- `destroy` deletes one company or record permanently. It cannot be undone, and `restore` cannot bring it
-  back. Twenty's answer does not tell soft from permanent deletion, so the result only confirms that Twenty
-  accepted the request.
+- `destroy` deletes one company or record permanently. It cannot be undone or restored. Twenty's answer
+  does not tell soft from permanent deletion, so the result only confirms that Twenty accepted the request.
 - `list` with `deleted` set to `true` lists only what is in the trash; this holds for `companies.list` and
   `records.list`, not for `records.search`.
 
@@ -289,10 +290,9 @@ Companies and records of any reachable object share one trash contract:
 identified by its UUID, and send one fixed route; no argument switches `delete` to permanent deletion or adds
 a filter, so there is no deletion or restore by filter. A refused object is rejected before the secret is
 read, and the answer must name the requested record. A 403 on `delete` and `destroy` points to the right of
-the role of the key (Delete Records, Destroy Records); Twenty's own text is never shown.
-
-`delete` and `destroy`, for companies and records, are offered only by a connection whose `tools` list names
-them; `permissions` alone does not admit them. No profile ticks them or `records.restore`.
+the role of the key (Delete Records, Destroy Records); Twenty's own text is never shown. `delete` and
+`destroy`, for companies and records, are offered only by a connection whose `tools` list names them;
+`permissions` alone does not admit them. No profile ticks them or `records.restore`.
 
 The credential provides `api-key`. The key's workspace role remains the provider-side ceiling; the
 connection's local `permissions` list can only narrow it, and an optional `tools` list narrows it further to
@@ -300,4 +300,4 @@ named tools without admitting an effect `permissions` excludes. The `companies.*
 fields only; custom fields are written through `records.create` and `records.update`. Invocation arguments
 never replace the configured origin. The terminal editor starts a new connection on the setup profile `read`.
 A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
-every tick can be changed before saving, and a saved connection never follows a profile.
+and a saved connection never follows a profile.
