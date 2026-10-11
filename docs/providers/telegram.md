@@ -10,11 +10,10 @@ updated: 2026-10-11
 
 # Telegram
 
-A connection binds one bot token to its targets, given as `target` (one) or `targets` (a list). A target is
-a chat (a numeric chat ID, also negative, or an `@username`), `bot`, or `business/<id>`. It can send
-(`create`), edit (`update`, including the inline keyboard), and delete (`delete`) messages in its chats and pin
-or unpin them (`update`), and every operation requires confirmation. Telegram's own edit and delete
-restrictions still apply.
+A connection binds one bot token to its targets, given as `target` (one) or `targets` (a list). A target is a chat
+(a numeric chat ID, also negative, or an `@username`), `bot`, or `business/<id>`. It can send (`create`), edit
+(`update`, including the inline keyboard), and delete (`delete`) messages in its chats and pin or unpin them
+(`update`), and every operation requires confirmation. Telegram's own edit and delete restrictions still apply.
 
 `telegram.messages.send` sends text; `parse_mode` (`HTML` or `MarkdownV2`) formats it, and Telegram's parser
 decides whether the markup is valid. `reply_to_message_id` replies only within the same chat; `message_thread_id`,
@@ -47,11 +46,10 @@ Tool groups only sort tools for display. The base URL must be a plain `https` UR
 query, or fragment, with no exception for local addresses, and redirects are never followed. `config validate`
 rejects any other base URL. Errors never carry Telegram's own error text.
 
-The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
-they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
-to named tools, for example `[telegram.messages.send]` for a chat that may receive but never lose messages,
-and never admits an effect `permissions` excludes. Mutations are never retried after an ambiguous network
-result.
+The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes; they do
+not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further to named tools,
+for example `[telegram.messages.send]` for a chat that may receive but never lose messages, and never admits an
+effect `permissions` excludes. Mutations are never retried after an ambiguous network result.
 
 `telegram.messages.delete` is offered only through a `tools` list, since no permission offers it. Its reach is
 that of the Bot API `deleteMessage`: in a bound chat the bot deletes its own messages and, as an administrator,
@@ -204,7 +202,7 @@ read. `telegram.chats.deletestickerset` (`delete`) removes it.
 `telegram.chats.leave` (`delete`) makes the bot leave a bound chat; only a human can add it again. It and
 `telegram.chats.deletestickerset` require a `tools` list.
 
-## Bot identity and webhook status
+## Bot identity and settings
 
 `telegram.bot.get` (`read`) shows the identity of the bot behind the token: `id`, `username`, `first_name`,
 `can_join_groups`, `can_read_all_group_messages`, and `supports_inline_queries`. It runs on every connection
@@ -212,8 +210,7 @@ and needs no `bot` target, since it concerns only the connection's own token.
 
 `telegram.webhook.get` (`read`) shows whether a webhook is active (`has_webhook`), the number of updates
 waiting (`pending_update_count`), and, when present, the time of the last delivery error (`last_error_date`).
-It needs the `bot` target and is refused before the credential is read without it. The webhook URL and every
-other field of Telegram's answer are never returned. It is part of no setup profile.
+It needs the `bot` target. The webhook URL and every other field of Telegram's answer are never returned.
 
 `telegram.commands.get` (`read`) shows at most 100 `command` and `description` pairs of one `scope` and
 `language_code`. `telegram.commands.set` (`update`) replaces them with 1 through 100 commands, each a `command`
@@ -224,19 +221,23 @@ lowercase letters. `telegram.menubutton.get` (`read`) shows only `type` and `tex
 `telegram.menubutton.set` (`update`) sets `commands` or `default`, never a web app. Both address the default
 button or, with a bound `chat` given by numeric ID, that private chat. All five need the `bot` target.
 
+`telegram.profile.get` (`read`) shows `name`, `description`, and `short_description` for one `language_code`;
+`telegram.profile.setname`, `.setdescription`, and `.setshortdescription` (`update`) set them to at most 64, 512,
+and 120 characters, and an empty value removes that language's version. All four need the `bot` target.
+
 ## Files
 
 `telegram.files.get` (`read`) returns the size and `file_unique_id` of one file; `telegram.files.download`
 (`read`) writes it to `local_path`. Both take only a `file_ref` from `media.file_ref` of `telegram.updates.list`:
 a raw file identifier, a reference bound to another target, one signed with another token, or one of another
-kind is refused. Neither tool is part of a setup profile.
+kind is refused.
 
-`telegram.files.download` is offered only on a connection that releases a directory for writing (`files`).
-A `local_path` outside it is refused before the credential is read. An existing file is replaced only with
+`telegram.files.download` is offered only on a connection that releases a directory for writing (`files`). A
+`local_path` outside it is refused before the credential is read. An existing file is replaced only with
 confirmation, and a failed or incomplete transfer leaves no file. The result carries size and SHA-256, never the
-content. Files above 20 MB, the Bot API's limit for bots, are refused before the download, and a response
-longer than the reported size is rejected. The download URL carries the bot token; it and Telegram's
-`file_path` appear in no output, error, or log, and a redirect is never followed.
+content. Files above 20 MB, the Bot API's limit for bots, are refused before the download, and a longer response
+than reported is rejected. The download URL carries the bot token; it and Telegram's `file_path` appear in no
+output, error, or log, and a redirect is never followed.
 
 ## Sending media
 
