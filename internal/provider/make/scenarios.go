@@ -433,15 +433,17 @@ func (c *Client) GetBlueprint(ctx context.Context, scenarioID int64, draft bool,
 		query.Set("blueprintId", strconv.FormatInt(blueprintID, 10))
 	}
 	var wrapper struct {
-		Blueprint json.RawMessage `json:"blueprint"`
+		Response struct {
+			Blueprint json.RawMessage `json:"blueprint"`
+		} `json:"response"`
 	}
 	if err := c.get(ctx, op, "/scenarios/"+strconv.FormatInt(scenarioID, 10)+"/blueprint", query, &wrapper, needRead); err != nil {
 		return nil, err
 	}
-	if len(wrapper.Blueprint) == 0 {
+	if len(wrapper.Response.Blueprint) == 0 {
 		return nil, invalidResponse(op, "Make did not report a blueprint")
 	}
-	return &Blueprint{ScenarioID: scenarioID, Blueprint: wrapper.Blueprint}, nil
+	return &Blueprint{ScenarioID: scenarioID, Blueprint: wrapper.Response.Blueprint}, nil
 }
 
 // schedulingWriteSchema is the JSON Schema of a scheduling argument scenarios.create and scenarios.update
