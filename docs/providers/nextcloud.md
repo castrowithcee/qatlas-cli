@@ -189,12 +189,11 @@ answer) may be applied and is not repeated; check the list first (`send`: `refer
 
 The CalDAV group `calendar` needs a `calendar` target; an unbound calendar is refused locally, unnamed. Only direct
 children of the calendar home and of a bound calendar count, never subscriptions or the scheduling and trash
-collections. Profile `calendar` reads events, and tasks (VTODO) of calendars that take them; repeating events keep
-their rule unexpanded. Profile `events` also creates events and replaces one by `etag`, never one with overrides of
-single occurrences. A change needs `confirm`, refuses a read-only calendar, and is never repeated after an unclear
-outcome; deleting needs a tools list. Nextcloud e-mails attendees invitations, updates, and cancellations. Managing
-calendars is in no profile; `calendars.create` needs the general `calendar` target to reach the generated id, and
-`calendars.update` and `calendars.delete` refuse a calendar the identity does not own, such as a shared one.
+collections. Profile `calendar` reads events, and tasks (VTODO) of calendars that take them; profile `events` also
+creates events and replaces one by `etag`. A change needs `confirm` and is never repeated after an unclear outcome;
+deleting needs a tools list. Managing calendars and `calendartrash.*` are in no profile; the latter cover deleted
+events and tasks of bound calendars only: an entry of another calendar is neither listed nor counted and is refused
+like a missing one, and whole deleted calendars are not restored.
 
 ## Contacts
 
