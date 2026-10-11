@@ -153,7 +153,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
 | `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
 | `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*`, `commands.*` |
-| `administration` | `emoji.list` | | `bots.list`, `.get`, `.update` |
+| `administration` | `emoji.list` | | `bots.list`, `.get`, `.update`, `.disable`, `.enable` |
 
 The reads need no confirmation; every other tool always does. The tools of the last column are in no profile
 and offered only to a connection whose tools list names them; the role tools alter rights, and
@@ -200,7 +200,7 @@ Behaviour beyond the schemas:
   the secret of its post URL and a command carries a token; their IDs are redacted from every error, `.update`
   writes the object back as read, no token ever appears, and a callback URL only as scheme and host.
 - The `bots` tools return a fixed field set without any token; `bots.update` sends only the given fields of
-  `username`, `display_name`, and `description`.
+  `username`, `display_name`, `description`; `.disable` stops the bot's integrations at once.
 - A search term may use kChat's `from:`, `in:`, and `ext:` syntax; the reachable-channel filter applies
   afterwards. The term is never part of an error.
 - Users are output through a fixed field allow-list; `email` only when kChat reports one to the token. Roles,
@@ -292,8 +292,8 @@ A live test against a real kChat instance checks, in order:
   future timestamp are refused.
 - Webhooks and slash commands list without those of other teams or outside the allow-list, channelless
   outgoing webhooks included; a disposable one changes its texts only, then is deleted.
-- Bot tools and `emoji.list` are refused with a channel target or an unbound token team; otherwise both list,
-  and a bot is renamed and changes only its description, showing whether kChat needs `username` there.
+- Bot tools and `emoji.list` are refused with a channel target or an unbound token team; otherwise both list;
+  a bot is renamed, changes only its description (with or without `username`), and is disabled and enabled.
 - Status, custom status, and profile changes affect only the token's own user and keep other fields; a user
   only in another team is refused by `users.get` and `users.status` and absent from list and search.
 - A custom category is created, filled, renamed, and deleted; channels outside the allow-list stay in it;
