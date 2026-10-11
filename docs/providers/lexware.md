@@ -3,7 +3,7 @@ description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
   articles, the organization profile and reference data, voucher document downloads, invoice, quotation, order
   confirmation, credit note, delivery note and dunning drafts, issuing of sales vouchers, contact and article
-  writes, article deletion, receipt file uploads, permissions, and credentials.
+  writes, article deletion, receipt file uploads, recording of vouchers to check, permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -43,6 +43,13 @@ request without a retry. The upload type is fixed to `voucher`. Lexware recogniz
 then reports the identifiers that already exist; a new voucher has the status `blank` until the text
 recognition has finished. After an unclear outcome the error says that the file may have been uploaded or
 attached. An unaccepted file (HTTP 406) is reported without the provider's text.
+
+`lexware.vouchers.create` records a bookkeeping voucher with the fixed status `unchecked` (`create`, always with
+confirmation) and sends exactly one request without a retry. It takes only the schema fields: type, number,
+dates, totals, tax type, either `contact_id` or `use_collective_contact`, and up to 100 positions with
+`category_id` from `lexware.postingcategories.list`. Lexware forbids net vouchers in this status, so
+`tax_type` `net` is refused before any request. After an unclear outcome the error says that the voucher may
+have been created.
 
 A connection may carry one optional target `organization/<uuid>` (the `organizationId` of the profile). It
 protects connections whose keys belong to different customers: before the first request of a tool, Qatlas
@@ -123,6 +130,7 @@ excludes. The terminal editor starts a new connection on the recommended setup p
 tools `lexware.invoices.create`, `lexware.quotations.create`, `lexware.orderconfirmations.create`,
 `lexware.creditnotes.create`, `lexware.deliverynotes.create`, `lexware.dunnings.create`,
 `lexware.articles.create`, `lexware.articles.update`, `lexware.contacts.create`, `lexware.contacts.update`,
-`lexware.files.upload` and `lexware.vouchers.attach`; the last two take effect only with a `files.read` release.
+`lexware.files.upload`, `lexware.vouchers.attach` and `lexware.vouchers.create`; the upload and attach tools
+take effect only with a `files.read` release.
 A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
 every tick can be changed before saving, and a saved connection never follows a profile.
