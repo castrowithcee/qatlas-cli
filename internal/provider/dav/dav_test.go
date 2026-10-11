@@ -85,7 +85,8 @@ func TestEventDraftRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	body, err := draft.Encode("t", "uid-1", 2, time.Now())
-	if err != nil || !strings.Contains(body, "PRODID:-//Test//EN") || !strings.Contains(body, "SEQUENCE;VALUE=TEXT:2") {
+	if err != nil || !strings.Contains(body, "PRODID:-//Test//EN") || !strings.Contains(body, "\r\nSEQUENCE:2\r\n") ||
+		strings.Contains(body, "VALUE=TEXT") {
 		t.Fatalf("body = %q, err = %v", body, err)
 	}
 	event, err := ParseEvent(body, true)
@@ -96,6 +97,11 @@ func TestEventDraftRoundTrip(t *testing.T) {
 	existing, err := testServer.ExistingEventOf("t", []byte(body))
 	if err != nil || existing.UID != "uid-1" || existing.Sequence != 2 {
 		t.Errorf("existing = %+v, err = %v", existing, err)
+	}
+	legacy := strings.Replace(body, "\r\nSEQUENCE:2\r\n", "\r\nSEQUENCE;VALUE=TEXT:2\r\n", 1)
+	existing, err = testServer.ExistingEventOf("t", []byte(legacy))
+	if err != nil || existing.Sequence != 2 {
+		t.Errorf("legacy existing = %+v, err = %v", existing, err)
 	}
 }
 
