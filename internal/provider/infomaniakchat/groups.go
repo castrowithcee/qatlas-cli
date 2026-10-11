@@ -17,8 +17,8 @@ var toolGroups = []config.ToolGroup{
 	{ID: "reactions", Title: "Reactions", Description: "Reactions on messages: reading, adding, and removing the own"},
 	{ID: "files", Title: "Files", Description: "Message attachments: listing, metadata, upload from a released local file, and download to a released local directory"},
 	{ID: "users", Title: "Users", Description: "Users of the bound teams, their presence, and the own status and profile"},
-	{ID: "integrations", Title: "Integrations", Description: "Incoming and outgoing webhooks of bound teams and channels: listing, " +
-		"reading, describing, and deleting; their IDs are secrets"},
+	{ID: "integrations", Title: "Integrations", Description: "Incoming and outgoing webhooks of bound teams and channels and custom slash commands of " +
+		"bound teams: listing, reading, describing, and deleting; webhook IDs are secrets"},
 	{ID: "administration", Title: "Administration", Description: "Instance-wide bot accounts: listing, reading, and changing; " +
 		"only on a connection that binds every team of its token and has no channel target"},
 }
@@ -41,7 +41,7 @@ func groupOf(id string) string {
 		return "teams"
 	case "direct", "groupmessages", "pins", "flagged":
 		return "messages"
-	case "incomingwebhooks", "outgoingwebhooks":
+	case "incomingwebhooks", "outgoingwebhooks", "commands":
 		return "integrations"
 	case "bots":
 		return "administration"

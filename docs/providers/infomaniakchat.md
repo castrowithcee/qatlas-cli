@@ -15,10 +15,10 @@ updated: 2026-10-11
 Infomaniak kChat is Infomaniak's Mattermost-compatible team chat product. This provider binds one kChat
 instance and one or more of its teams, optionally narrowed to specific channels, and reads and changes
 channels and their members, direct and group channels, messages, threads, the threads the token follows,
-read state, reactions, pins, flags, attachments, users, the own sidebar categories, channel notifications, and
-webhooks through the instance's own `/api/v4/...` REST surface; an instance-wide connection also reaches bot
-accounts. kChat renders Markdown and mentions such as `@channel` in a message; Qatlas sends the text as
-written.
+read state, reactions, pins, flags, attachments, users, the own sidebar categories, channel notifications,
+webhooks, and slash commands through the instance's own `/api/v4/...` REST surface; an instance-wide
+connection also reaches bot accounts. kChat renders Markdown and mentions such as `@channel` in a message;
+Qatlas sends the text as written.
 
 ## Configuration
 
@@ -102,8 +102,8 @@ Per tool family:
   below, so a thread of another bound team is refused.
 - A `hook_id` (`incomingwebhooks.*`, `outgoingwebhooks.get`, `.update`, `.delete`) is bound through its
   channel like a post, but only in a bound team. A list keeps webhooks of live channels the token belongs to,
-  inside the allow-list. An outgoing webhook without a channel watches every public channel of its team and is
-  neither listed nor reachable with a channel allow-list.
+  inside the allow-list. An outgoing webhook without a channel watches every public channel of its team, and
+  a `command_id` is bound through its team only; both are refused with a channel allow-list.
 - A file (`files.info`, `files.download`) is bound only through the `post_id` kChat reports in its info:
   Qatlas reads the info first, refuses a file without a `post_id` or a deleted file, and applies the post
   binding before any content is requested. `messages.files` binds its `post_id` the same way.
@@ -152,7 +152,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | `threads` | `threads.list`, `.get` | `threads.follow`, `.unfollow`, `.markread` | |
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
 | `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
-| `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*` (`list`, `.get`, `.update`, `.delete`) |
+| `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*`, `commands.*` |
 | `administration` | | | `bots.list`, `.get`, `.update` |
 
 The reads need no confirmation; every other tool always does. The tools of the last column are in no profile
@@ -162,7 +162,7 @@ and offered only to a connection whose tools list names them; the role tools alt
 The terminal editor starts a new connection on the setup profile `read` (all read tools). `messaging` adds
 the opens, sends, edits, pins, flags, read marks, uploads, reactions, thread following, category and
 notification changes, and the own status tools; `channel-admin` adds `channels.create`, `.update`, and
-`channelmembers.add`. `profile.update`, the webhook tools, and the bot tools are in no profile.
+`channelmembers.add`. `profile.update`, the integration tools, and the bot tools are in no profile.
 
 Behaviour beyond the schemas:
 
@@ -196,9 +196,9 @@ Behaviour beyond the schemas:
   upload's multipart body holds only `channel_id` and the file, and kChat cannot list or remove an upload
   no message holds, so an unattached upload stays. A download redirect, for example to a storage host, is a
   `provider-error` and is not followed.
-- The webhook tools, reads included, need a tools list because an incoming webhook's ID is the secret of its
-  post URL; `hook_id` is redacted from every error, and `.update` writes the webhook back as read. An
-  outgoing webhook's token is never decoded or sent, and a callback URL appears only as scheme and host.
+- The webhook and slash command tools, reads included, need a tools list because an incoming webhook's ID is
+  the secret of its post URL and a command carries a token; their IDs are redacted from every error, `.update`
+  writes the object back as read, no token ever appears, and a callback URL only as scheme and host.
 - The `bots` tools return a fixed field set without any token; `bots.update` sends only the given fields of
   `username`, `display_name`, and `description`.
 - A search term may use kChat's `from:`, `in:`, and `ext:` syntax; the reachable-channel filter applies
@@ -212,9 +212,9 @@ Behaviour beyond the schemas:
 
 Every list is bounded and paginated, and Qatlas never follows a further page on its own:
 
-- `teams.list`, `channels.list`, `reactions.list`, and `pins.list` read kChat's complete array, which has no
-  pagination of its own, and page it themselves: `page` (1-based) and `limit` select a window of the already
-  scope-filtered result, and the answer reports `page`, `pages`, `total`, and `count`.
+- `teams.list`, `channels.list`, `reactions.list`, `pins.list`, and `commands.list` read kChat's complete
+  array, which has no pagination of its own, and page it themselves: `page` (1-based) and `limit` select a
+  window of the already scope-filtered result, and the answer reports `page`, `pages`, `total`, and `count`.
 - `channels.browse`, `archivedchannels.list`, the webhook lists, `bots.list`, `channelmembers.list`,
   `teammembers.list`, and `users.list` page kChat's own `page` and `per_page`; `has_more` is true when kChat's
   page was full, and dropped entries can make `count` lower. `users.search` takes only `limit`, one page.
@@ -259,8 +259,8 @@ error or a log.
 
 ## Untrusted data
 
-Team, channel, message, category, user, bot, and webhook content is untrusted data: Qatlas normalises it and
-never renders it, follows a link in it, or executes anything derived from it.
+Team, channel, message, category, user, bot, webhook, and command content is untrusted data: Qatlas normalises
+it and never renders it, follows a link in it, or executes anything derived from it.
 
 ## Boundary
 
@@ -271,8 +271,8 @@ creation, change, or deletion, no adding or removing of team members, no invitat
 move, scheme, or moderation change of a channel, no membership change of a direct or group channel, no change
 of another user or of other profile fields, no profile picture, no preview or thumbnail, no custom emoji
 catalog, no removal of another user's reaction, no read state of another user, no creating of webhooks,
-bots, or bot tokens, and no change of a webhook beyond its name and description. An edit changes only a
-message's text, never its attachments, pin state, or properties.
+commands, bots, or bot tokens, no executing of a command, and no change of a webhook or command beyond its
+texts. An edit changes only a message's text, never its attachments, pin state, or properties.
 
 ## Live test scenario
 
@@ -290,8 +290,8 @@ A live test against a real kChat instance checks, in order:
   changes only text and edit time; deleting the reply keeps the root; reactions add, list, remove.
 - Follow, unfollow, flag, and read marks change only the token's own state; another team's thread or post, a
   reply, and a future timestamp are refused; `flagged.list` shows kChat's answer shape.
-- Webhooks list without those of other teams or outside the allow-list, channelless outgoing ones included; a
-  disposable one changes name and description only, then is deleted.
+- Webhooks and slash commands list without those of other teams or outside the allow-list, channelless
+  outgoing webhooks included; a disposable one changes its texts only, then is deleted.
 - Bot tools are refused with a channel target or an unbound token team; otherwise they list a bot, rename it,
   and change only its description, which shows whether kChat accepts an update without `username`.
 - Status, custom status, and profile changes affect only the token's own user and keep other fields; a user
