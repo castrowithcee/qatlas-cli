@@ -10,7 +10,7 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/config"
 )
 
-// A reference carries an identifier that Telegram scopes to no chat (a file, a callback query, a join request)
+// A reference carries an identifier that Telegram scopes to no chat (a file, a callback query, a join request query)
 // together with the target it came from. It is signed, not encrypted: it stops a model from forging or
 // redirecting an identifier, and Qatlas stores nothing.
 //
@@ -25,8 +25,11 @@ type refKind byte
 const (
 	refFile refKind = iota + 1
 	refCallback
-	refJoinRequest
+	// refRetired was the join request reference that carried a user ID no tool consumes; its value stays
+	// reserved so no older reference changes its meaning.
+	refRetired
 	refInlineQuery
+	refJoinRequestQuery
 )
 
 const (
@@ -46,7 +49,7 @@ type parsedRef struct {
 	tag     []byte
 }
 
-func (k refKind) valid() bool { return k >= refFile && k <= refInlineQuery }
+func (k refKind) valid() bool { return k >= refFile && k <= refJoinRequestQuery && k != refRetired }
 
 func refKey(token string) []byte {
 	// HKDF-SHA256 with a 32-byte output cannot fail.

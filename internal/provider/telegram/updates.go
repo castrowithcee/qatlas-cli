@@ -271,6 +271,8 @@ type tgEvent struct {
 	Date      int64   `json:"date"`
 	From      *tgUser `json:"from"`
 	User      *tgUser `json:"user"`
+	// QueryID is set on chat_join_request only, and only for bots assigned to process join requests.
+	QueryID string `json:"query_id"`
 }
 
 type tgCallback struct {
@@ -306,7 +308,7 @@ type candidate struct {
 	chat       int64
 	fileID     string
 	callbackID string
-	joinUser   int64
+	joinQuery  string
 }
 
 func capText(value string, limit int) string {
@@ -399,9 +401,7 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		return event("removed_chat_boost", u.RemovedChatBoost)
 	case u.ChatJoinRequest != nil:
 		c, _ = event("chat_join_request", u.ChatJoinRequest)
-		if c.out.From != nil {
-			c.joinUser = c.out.From.ID
-		}
+		c.joinQuery = u.ChatJoinRequest.QueryID
 		return c, true
 	case u.CallbackQuery != nil:
 		q := u.CallbackQuery
@@ -496,8 +496,8 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 		if cand.callbackID != "" {
 			cand.out.CallbackRef = signRef(c.token, refCallback, binding, cand.callbackID)
 		}
-		if cand.joinUser != 0 {
-			cand.out.JoinRequestRef = signRef(c.token, refJoinRequest, binding, strconv.FormatInt(cand.joinUser, 10))
+		if cand.joinQuery != "" {
+			cand.out.JoinRequestRef = signRef(c.token, refJoinRequestQuery, binding, cand.joinQuery)
 		}
 		updates = append(updates, cand.out)
 	}
