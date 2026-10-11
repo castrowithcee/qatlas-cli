@@ -541,10 +541,10 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "write", Title: "Master data and drafts",
 			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile, reference data and webhook subscriptions and " +
-				"creates invoice, quotation, order confirmation, credit note, delivery note and dunning drafts and creates and changes articles and contacts and uploads receipt files; issuing a voucher is never part of a profile",
+				"creates invoice, quotation, order confirmation, credit note, delivery note and dunning drafts and creates and changes articles and contacts, uploads receipt files and records vouchers to check; issuing a voucher is never part of a profile",
 			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, quotationsCreate.ID,
 				orderConfirmationsCreate.ID, creditNotesCreate.ID, deliveryNotesCreate.ID, dunningsCreate.ID, articlesCreate.ID, articlesUpdate.ID,
-				contactsCreate.ID, contactsUpdate.ID, filesUpload.ID, vouchersAttach.ID),
+				contactsCreate.ID, contactsUpdate.ID, filesUpload.ID, vouchersAttach.ID, vouchersCreate.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -598,6 +598,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: filesDownload, Handler: capability.Handler(invokeFilesDownload)},
 		capability.Operation{Descriptor: filesUpload, Handler: capability.Handler(invokeFilesUpload)},
 		capability.Operation{Descriptor: vouchersAttach, Handler: capability.Handler(invokeVouchersAttach)},
+		capability.Operation{Descriptor: vouchersCreate, Handler: capability.Handler(invokeVouchersCreate)},
 	)
 }
 
