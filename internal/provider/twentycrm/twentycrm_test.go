@@ -189,8 +189,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 72 {
-		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, three activity link, two attachment read, three workflow read, four workflow control, four webhook, two member read, seven role, nine view, and nine data model operations", len(operations))
+	if len(operations) != 74 {
+		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, three activity link, two attachment read, three workflow read, four workflow control, four webhook, two member read, seven role, nine view, nine data model, and two dashboard operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -249,55 +249,57 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		operations[20].ID != "twentycrm.metaobjects.update" ||
 		operations[21].ID != "twentycrm.objects.get" ||
 		operations[22].ID != "twentycrm.objects.list" ||
-		operations[23].ID != "twentycrm.records.batchcreate" ||
-		operations[24].ID != "twentycrm.records.batchdelete" ||
-		operations[25].ID != "twentycrm.records.batchupdate" ||
-		operations[26].ID != "twentycrm.records.create" ||
-		operations[27].ID != "twentycrm.records.delete" ||
-		operations[28].ID != "twentycrm.records.destroy" ||
-		operations[29].ID != "twentycrm.records.duplicates" ||
-		operations[30].ID != "twentycrm.records.get" ||
-		operations[31].ID != "twentycrm.records.groupby" ||
-		operations[32].ID != "twentycrm.records.list" ||
-		operations[33].ID != "twentycrm.records.merge" ||
-		operations[34].ID != "twentycrm.records.mergepreview" ||
-		operations[35].ID != "twentycrm.records.restore" ||
-		operations[36].ID != "twentycrm.records.search" ||
-		operations[37].ID != "twentycrm.records.searchall" ||
-		operations[38].ID != "twentycrm.records.update" ||
-		operations[39].ID != "twentycrm.roles.create" ||
-		operations[40].ID != "twentycrm.roles.delete" ||
-		operations[41].ID != "twentycrm.roles.list" ||
-		operations[42].ID != "twentycrm.roles.setfieldpermissions" ||
-		operations[43].ID != "twentycrm.roles.setobjectpermissions" ||
-		operations[44].ID != "twentycrm.roles.setpermissionflags" ||
-		operations[45].ID != "twentycrm.roles.update" ||
-		operations[46].ID != "twentycrm.viewfields.create" ||
-		operations[47].ID != "twentycrm.viewfields.delete" ||
-		operations[48].ID != "twentycrm.viewfields.update" ||
-		operations[49].ID != "twentycrm.viewfilters.delete" ||
-		operations[50].ID != "twentycrm.viewgroups.delete" ||
-		operations[51].ID != "twentycrm.views.create" ||
-		operations[52].ID != "twentycrm.views.delete" ||
-		operations[53].ID != "twentycrm.views.get" ||
-		operations[54].ID != "twentycrm.views.list" ||
-		operations[55].ID != "twentycrm.views.update" ||
-		operations[56].ID != "twentycrm.viewsorts.create" ||
-		operations[57].ID != "twentycrm.viewsorts.delete" ||
-		operations[58].ID != "twentycrm.viewsorts.update" ||
-		operations[59].ID != "twentycrm.webhooks.delete" ||
-		operations[60].ID != "twentycrm.webhooks.get" ||
-		operations[61].ID != "twentycrm.webhooks.list" ||
-		operations[62].ID != "twentycrm.webhooks.update" ||
-		operations[63].ID != "twentycrm.workflowruns.list" ||
-		operations[64].ID != "twentycrm.workflowruns.retry" ||
-		operations[65].ID != "twentycrm.workflowruns.stop" ||
-		operations[66].ID != "twentycrm.workflows.get" ||
-		operations[67].ID != "twentycrm.workflows.list" ||
-		operations[68].ID != "twentycrm.workflowversions.activate" ||
-		operations[69].ID != "twentycrm.workflowversions.deactivate" ||
-		operations[70].ID != "twentycrm.workspacemembers.get" ||
-		operations[71].ID != "twentycrm.workspacemembers.list" {
+		operations[23].ID != "twentycrm.pagelayouts.get" ||
+		operations[24].ID != "twentycrm.pagelayouts.list" ||
+		operations[25].ID != "twentycrm.records.batchcreate" ||
+		operations[26].ID != "twentycrm.records.batchdelete" ||
+		operations[27].ID != "twentycrm.records.batchupdate" ||
+		operations[28].ID != "twentycrm.records.create" ||
+		operations[29].ID != "twentycrm.records.delete" ||
+		operations[30].ID != "twentycrm.records.destroy" ||
+		operations[31].ID != "twentycrm.records.duplicates" ||
+		operations[32].ID != "twentycrm.records.get" ||
+		operations[33].ID != "twentycrm.records.groupby" ||
+		operations[34].ID != "twentycrm.records.list" ||
+		operations[35].ID != "twentycrm.records.merge" ||
+		operations[36].ID != "twentycrm.records.mergepreview" ||
+		operations[37].ID != "twentycrm.records.restore" ||
+		operations[38].ID != "twentycrm.records.search" ||
+		operations[39].ID != "twentycrm.records.searchall" ||
+		operations[40].ID != "twentycrm.records.update" ||
+		operations[41].ID != "twentycrm.roles.create" ||
+		operations[42].ID != "twentycrm.roles.delete" ||
+		operations[43].ID != "twentycrm.roles.list" ||
+		operations[44].ID != "twentycrm.roles.setfieldpermissions" ||
+		operations[45].ID != "twentycrm.roles.setobjectpermissions" ||
+		operations[46].ID != "twentycrm.roles.setpermissionflags" ||
+		operations[47].ID != "twentycrm.roles.update" ||
+		operations[48].ID != "twentycrm.viewfields.create" ||
+		operations[49].ID != "twentycrm.viewfields.delete" ||
+		operations[50].ID != "twentycrm.viewfields.update" ||
+		operations[51].ID != "twentycrm.viewfilters.delete" ||
+		operations[52].ID != "twentycrm.viewgroups.delete" ||
+		operations[53].ID != "twentycrm.views.create" ||
+		operations[54].ID != "twentycrm.views.delete" ||
+		operations[55].ID != "twentycrm.views.get" ||
+		operations[56].ID != "twentycrm.views.list" ||
+		operations[57].ID != "twentycrm.views.update" ||
+		operations[58].ID != "twentycrm.viewsorts.create" ||
+		operations[59].ID != "twentycrm.viewsorts.delete" ||
+		operations[60].ID != "twentycrm.viewsorts.update" ||
+		operations[61].ID != "twentycrm.webhooks.delete" ||
+		operations[62].ID != "twentycrm.webhooks.get" ||
+		operations[63].ID != "twentycrm.webhooks.list" ||
+		operations[64].ID != "twentycrm.webhooks.update" ||
+		operations[65].ID != "twentycrm.workflowruns.list" ||
+		operations[66].ID != "twentycrm.workflowruns.retry" ||
+		operations[67].ID != "twentycrm.workflowruns.stop" ||
+		operations[68].ID != "twentycrm.workflows.get" ||
+		operations[69].ID != "twentycrm.workflows.list" ||
+		operations[70].ID != "twentycrm.workflowversions.activate" ||
+		operations[71].ID != "twentycrm.workflowversions.deactivate" ||
+		operations[72].ID != "twentycrm.workspacemembers.get" ||
+		operations[73].ID != "twentycrm.workspacemembers.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1209,6 +1211,9 @@ func wantSensitivity(id string) string {
 		strings.HasPrefix(id, Provider+".viewfilters.") || strings.HasPrefix(id, Provider+".viewgroups.") ||
 		strings.HasPrefix(id, Provider+".viewsorts.") {
 		return viewDataSensitivity
+	}
+	if strings.HasPrefix(id, Provider+".pagelayouts.") {
+		return layoutDataSensitivity
 	}
 	if strings.HasPrefix(id, Provider+".meta") {
 		return metadataSensitivity
