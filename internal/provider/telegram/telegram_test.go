@@ -89,7 +89,7 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		case strings.HasPrefix(tool.ID, "telegram.members.") || strings.HasPrefix(tool.ID, "telegram.senderchats.") ||
 			tool.ID == joinrequestsDecline.ID:
 			want = "members"
-		case tool.ID == callbacksAnswer.ID || tool.ID == joinrequestqueriesAnswer.ID:
+		case tool.ID == callbacksAnswer.ID || tool.ID == joinrequestqueriesAnswer.ID || tool.ID == inlineAnswer.ID:
 			want = "queries"
 		case strings.HasPrefix(tool.ID, "telegram.suggestedposts."):
 			want = "suggestedposts"
@@ -123,8 +123,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 104 {
-		t.Fatalf("operation count = %d, want one hundred and four", len(operations))
+	if len(operations) != 105 {
+		t.Fatalf("operation count = %d, want one hundred and five", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -152,7 +152,7 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 			d.ID == senderchatsBan.ID || d.ID == reactionsRemove.ID || d.ID == reactionsRemoveAll.ID ||
 			d.ID == updatesConfirm.ID || d.ID == locationsStopLive.ID || d.ID == topicsDelete.ID ||
 			d.ID == topicsUnpinAll.ID || d.ID == suggestedpostsDecline.ID || d.ID == commandsDelete.ID ||
-			d.ID == profileRemovePhoto.ID || d.ID == defaultAdminRightsSet.ID
+			d.ID == profileRemovePhoto.ID || d.ID == defaultAdminRightsSet.ID || d.ID == inlineAnswer.ID
 		if d.RequiresToolAllowList != want {
 			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
 		}
