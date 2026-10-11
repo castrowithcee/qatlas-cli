@@ -167,7 +167,7 @@ func invokeFilesUpload(ctx context.Context, resolved *config.Resolved, secrets *
 	if size > maxUploadBytes {
 		return nil, invalidRequest("the file is larger than the upload limit of " + itoa(maxUploadBytes>>20) + " MiB")
 	}
-	multipartBody, err := buildMultipart(input.ChannelID, name, size, body)
+	multipartBody, err := buildMultipart("channel_id", input.ChannelID, "files", name, "application/octet-stream", size, body)
 	if err != nil {
 		return nil, invalidRequest("the file name cannot be sent")
 	}
@@ -182,20 +182,20 @@ func invokeFilesUpload(ctx context.Context, resolved *config.Resolved, secrets *
 	return client.upload(ctx, op, input.ChannelID, size, stream, multipartBody)
 }
 
-// buildMultipart frames the one file as a multipart/form-data body with exactly the two parts kChat takes:
-// channel_id first, then the file. The content is streamed between the fixed prefix and suffix.
-func buildMultipart(channelID, name string, size int64, content io.Reader) (rawBody, error) {
-	disposition := mime.FormatMediaType("form-data", map[string]string{"name": "files", "filename": name})
+// buildMultipart frames one file as a multipart/form-data body with exactly two parts: the named field
+// first, then the file. The content is streamed between the fixed prefix and suffix.
+func buildMultipart(field, value, fileField, name, fileType string, size int64, content io.Reader) (rawBody, error) {
+	disposition := mime.FormatMediaType("form-data", map[string]string{"name": fileField, "filename": name})
 	if disposition == "" {
 		return rawBody{}, io.ErrUnexpectedEOF
 	}
 	var head bytes.Buffer
 	writer := multipart.NewWriter(&head)
-	if err := writer.WriteField("channel_id", channelID); err != nil {
+	if err := writer.WriteField(field, value); err != nil {
 		return rawBody{}, err
 	}
 	if _, err := writer.CreatePart(map[string][]string{"Content-Disposition": {disposition},
-		"Content-Type": {"application/octet-stream"}}); err != nil {
+		"Content-Type": {fileType}}); err != nil {
 		return rawBody{}, err
 	}
 	prefix := append([]byte(nil), head.Bytes()...)
