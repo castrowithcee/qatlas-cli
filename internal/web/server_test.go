@@ -102,8 +102,7 @@ func (s *Server) postForm(t *testing.T, target, host string, cookie *http.Cookie
 }
 
 // recordHandler drives h directly with a POST built the same way postForm builds one, for tests that
-// exercise a guard not wired into the server's own mux (withAdminGuard has no production route yet; see
-// internal/web/admin.go).
+// exercise a guard around a test-owned handler instead of one of the server's own routes.
 func recordHandler(h http.HandlerFunc, method, target, host string, cookie *http.Cookie, origin string, form url.Values) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, target, strings.NewReader(form.Encode()))
 	req.Host = host
@@ -183,7 +182,7 @@ func TestCouplingThenOverview(t *testing.T) {
 	}
 	for k, want := range map[string]string{
 		"Cache-Control":   "no-store",
-		"Referrer-Policy": "no-referrer",
+		"Referrer-Policy": "same-origin",
 	} {
 		if got := overview.Header().Get(k); got != want {
 			t.Fatalf("header %s = %q, want %q", k, got, want)
@@ -216,7 +215,7 @@ func TestStylesheetServedToCoupledSession(t *testing.T) {
 	for k, want := range map[string]string{
 		"X-Content-Type-Options": "nosniff",
 		"Cache-Control":          "no-store",
-		"Referrer-Policy":        "no-referrer",
+		"Referrer-Policy":        "same-origin",
 	} {
 		if got := rec.Header().Get(k); got != want {
 			t.Fatalf("stylesheet header %s = %q, want %q", k, got, want)
