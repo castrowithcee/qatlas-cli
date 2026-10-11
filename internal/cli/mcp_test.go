@@ -631,7 +631,7 @@ func TestMCPSearchPagesMatchTheCLIIndex(t *testing.T) {
 }
 
 // A qatlas.search hit carries what a call needs, in the order of the CLI index: id, title, effect, and the
-// columns some hit uses (requires, confirm, connections, reason); the connections are named once beside the
+// fields it uses (requires, confirm, connections, reason); the connections are named once beside the
 // hits. Description, version, tags, and provider stay one describe away.
 func TestMCPSearchHitsAreCompact(t *testing.T) {
 	t.Setenv("QATLAS_CONFIG", "")
@@ -655,7 +655,7 @@ func TestMCPSearchHitsAreCompact(t *testing.T) {
 		`"offered"`: `{"connections":["wiki"],"operations":[{"id":"bookstack.pages.get","title":"Read one page",` +
 			`"effect":"read"}],"has_more":false}`,
 		`"all"`: `{"connections":["wiki"],"operations":[{"id":"bookstack.pages.get","title":"Read one page",` +
-			`"effect":"read","reason":""},{"id":"bookstack.pages.list","title":"List pages","effect":"read",` +
+			`"effect":"read"},{"id":"bookstack.pages.list","title":"List pages","effect":"read",` +
 			`"reason":"not-in-tools-list"}],"has_more":false}`,
 	} {
 		result := toolResultFrom(t, responses[id])

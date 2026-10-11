@@ -1723,12 +1723,25 @@ func TestSearchHitsShareOneFieldSet(t *testing.T) {
 	if want := []string{"effect", "id", "title"}; !reflect.DeepEqual(names(plain), want) {
 		t.Errorf("unused columns are present: %s", plain)
 	}
-	mixed, _ := json.Marshal(Hits{
+	page := Hits{
 		{ID: "a.b", Title: "t", Effect: capability.EffectRead},
 		{ID: "a.c", Title: "u", Effect: capability.EffectDelete, Requires: "id", Confirm: true, Connections: "x"},
-	})
-	if want := []string{"confirm", "connections", "effect", "id", "requires", "title"}; !reflect.DeepEqual(names(mixed), want) {
-		t.Errorf("mixed entries: %s", mixed)
+	}
+	mixed, _ := json.Marshal(page)
+	var entries []map[string]any
+	if err := json.Unmarshal(mixed, &entries); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(entries[0]); got != 3 {
+		t.Errorf("empty fields are present in the first entry: %s", mixed)
+	}
+	if got := len(entries[1]); got != 6 {
+		t.Errorf("second entry = %s, want six fields", mixed)
+	}
+	// The TOON view shares one field set across the page.
+	table, _ := json.Marshal(tableHits(page))
+	if want := []string{"confirm", "connections", "effect", "id", "requires", "title"}; !reflect.DeepEqual(names(table), want) {
+		t.Errorf("table view: %s", table)
 	}
 }
 
