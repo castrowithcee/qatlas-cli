@@ -205,12 +205,12 @@ read. `telegram.chats.deletestickerset` (`delete`) removes it.
 ## Bot identity and settings
 
 `telegram.bot.get` (`read`) shows the identity of the bot behind the token: `id`, `username`, `first_name`,
-`can_join_groups`, `can_read_all_group_messages`, and `supports_inline_queries`. It runs on every connection
-and needs no `bot` target, since it concerns only the connection's own token.
+`can_join_groups`, `can_read_all_group_messages`, and `supports_inline_queries`. It runs on every connection,
+since it concerns only the connection's own token; every other tool of this section needs the `bot` target.
 
 `telegram.webhook.get` (`read`) shows whether a webhook is active (`has_webhook`), the number of updates
 waiting (`pending_update_count`), and, when present, the time of the last delivery error (`last_error_date`).
-It needs the `bot` target. The webhook URL and every other field of Telegram's answer are never returned.
+The webhook URL and every other field of Telegram's answer are never returned.
 
 `telegram.commands.get` (`read`) shows at most 100 `command` and `description` pairs of one `scope` and
 `language_code`. `telegram.commands.set` (`update`) replaces them with 1 through 100 commands, each a `command`
@@ -219,11 +219,15 @@ of `a-z`, `0-9`, or `_` (up to 32) and a `description` of 1 through 256 characte
 positive `user_id`) require a named bound `chat`, which other scopes refuse; `language_code` is empty or two
 lowercase letters. `telegram.menubutton.get` (`read`) shows only `type` and `text`, never a web app URL;
 `telegram.menubutton.set` (`update`) sets `commands` or `default`, never a web app. Both address the default
-button or, with a bound `chat` given by numeric ID, that private chat. All five need the `bot` target.
+button or, with a bound `chat` given by numeric ID, that private chat.
 
 `telegram.profile.get` (`read`) shows `name`, `description`, and `short_description` for one `language_code`;
 `telegram.profile.setname`, `.setdescription`, and `.setshortdescription` (`update`) set them to at most 64, 512,
-and 120 characters, and an empty value removes that language's version. All four need the `bot` target.
+and 120 characters, and an empty value removes that language's version. `telegram.profile.setphoto` (`update`)
+replaces the profile photo with a static JPEG of up to 10 MB from a `local_path` released for reading (`files`);
+`telegram.profile.removephoto` (`delete`, `tools` list) removes it. `telegram.defaultadminrights.get` (`read`)
+shows the administrator rights the bot requests when added, and `telegram.defaultadminrights.set` (`update`,
+`tools` list) replaces them with every right given explicitly; both take `for_channels`.
 
 ## Files
 
@@ -291,13 +295,9 @@ a released directory, and an omitted mask position or thumbnail or an empty keyw
 
 ## Setup profiles
 
-The terminal editor starts a new connection on the setup profile `send`, which ticks `[create]` and
-`[telegram.messages.send]`: the read tools expose incoming message content, while a send reaches only a bound
-chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram.updates.list]`,
-`[telegram.bot.get]`, and the four chat read tools. The profile `messaging` also ticks `update`,
-`delete`, `telegram.messages.edit`, and `telegram.messages.delete`; the profile `pins` ticks `update`,
-`telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the nine media send
-tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
-ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
-Every other Telegram tool is in no profile. A profile is only a visible starting selection: every tick can be
-changed before saving, and a saved connection never follows a profile.
+The terminal editor starts a new connection on the setup profile `send` (`[create]`, `[telegram.messages.send]`):
+the read tools expose incoming message content, while a send reaches only a bound chat after confirmation. The
+profiles `read`, `messaging` (also `telegram.messages.delete`), `pins`, `media`, `moderation` (only
+`telegram.members.unban`), and `chat-admin` tick the tools their titles name. Every other Telegram tool is in no
+profile. A profile is only a visible starting selection: every tick can be changed before saving, and a saved
+connection never follows a profile.
