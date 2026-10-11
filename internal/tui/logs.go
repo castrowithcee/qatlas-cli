@@ -857,9 +857,7 @@ func (m *Model) logsFrame() (string, string) {
 	switch {
 	case lv.list.editing:
 		prefix, room := m.fit("  search: ")
-		in := lv.list.input
-		in.Width = max(room-1, 1)
-		search = prefix + in.View()
+		search = prefix + fitInput(lv.list.input, room).View()
 	case lv.list.query() != "":
 		prefix, room := m.fit("  search: ")
 		search = prefix + truncateCells(lv.list.query(), room)
