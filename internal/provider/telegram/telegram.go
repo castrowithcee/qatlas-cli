@@ -185,7 +185,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupMedia, Title: "Media", Description: "Send photos, live photos, documents, videos, animations, video " +
 		"notes, audio files, voice messages, and albums to the bound chats"},
 	{ID: groupMembers, Title: "Members", Description: "Ban, unban, restrict, and promote members of the bound " +
-		"chats, ban and unban sender chats, and set administrator titles and member tags"},
+		"chats, ban and unban sender chats, set administrator titles and member tags, and decline join requests"},
 	{ID: groupInteractions, Title: "Interactions",
 		Description: "Send and stop polls, set and remove reactions, show chat actions, and send locations, " +
 			"venues, contacts, and dice in the bound chats"},
@@ -195,6 +195,8 @@ var toolGroups = []config.ToolGroup{
 			"remove their stickers, and change the emoji, keywords, mask positions, titles, and thumbnails"},
 	{ID: groupTopics, Title: "Topics", Description: "Create, rename, close, reopen, delete, and unpin forum topics " +
 		"and hide the General topic of the bound chats"},
+	{ID: groupSuggestedPosts, Title: "Suggested posts", Description: "Approve and decline suggested posts in the " +
+		"direct messages chats of bound channels"},
 }
 
 const groupMessages = "messages"
@@ -285,6 +287,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: membersSetAdminTitle, Handler: capability.Handler(invokeMembersSetAdminTitle)},
 		capability.Operation{Descriptor: membersSetTag, Handler: capability.Handler(invokeMembersSetTag)},
 
+		capability.Operation{Descriptor: joinrequestsDecline, Handler: capability.Handler(invokeJoinRequestsDecline)},
+		capability.Operation{Descriptor: suggestedpostsApprove, Handler: capability.Handler(invokeSuggestedPostsApprove)},
+		capability.Operation{Descriptor: suggestedpostsDecline, Handler: capability.Handler(invokeSuggestedPostsDecline)},
 		capability.Operation{Descriptor: pollsSend, Handler: capability.Handler(invokePollsSend)},
 		capability.Operation{Descriptor: pollsStop, Handler: capability.Handler(invokePollsStop)},
 		capability.Operation{Descriptor: reactionsSet, Handler: capability.Handler(invokeReactionsSet)},
