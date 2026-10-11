@@ -233,6 +233,12 @@ func (s *mcpServer) serve(ctx context.Context, input io.Reader) error {
 			s.wg.Wait()
 			return s.outputError()
 		case errors.Is(err, errMCPMessageTooLarge):
+			var tooLarge *mcpMessageTooLargeError
+			if errors.As(err, &tooLarge) && len(tooLarge.ID) > 0 {
+				s.writeResponse(mcpErrorResponse(tooLarge.ID, mcpInvalidRequest,
+					fmt.Sprintf("MCP message exceeds %d bytes; pass large file content as local_path", maxRequestBytes), nil))
+				continue
+			}
 			s.writeResponse(mcpErrorResponse(nil, mcpParseError,
 				fmt.Sprintf("MCP message exceeds %d bytes", maxRequestBytes), nil))
 		default:
@@ -243,20 +249,33 @@ func (s *mcpServer) serve(ctx context.Context, input io.Reader) error {
 	}
 }
 
+// mcpMessageTooLargeError carries the request id found while the oversized line was discarded.
+type mcpMessageTooLargeError struct{ ID json.RawMessage }
+
+func (e *mcpMessageTooLargeError) Error() string        { return errMCPMessageTooLarge.Error() }
+func (e *mcpMessageTooLargeError) Is(target error) bool { return target == errMCPMessageTooLarge }
+
 func readMCPLine(reader *bufio.Reader) ([]byte, error) {
 	var line []byte
-	tooLarge := false
+	var scan *mcpIDScanner
 	for {
 		fragment, prefix, err := reader.ReadLine()
-		if len(line)+len(fragment) > maxRequestBytes {
-			tooLarge = true
-		} else if !tooLarge {
+		if scan == nil && len(line)+len(fragment) > maxRequestBytes {
+			// The id is often behind large params, so the scan covers the kept prefix and all discarded data.
+			scan = &mcpIDScanner{}
+			scan.feed(line)
+			line = nil
+		}
+		if scan != nil {
+			scan.feed(fragment)
+		} else {
 			line = append(line, fragment...)
 		}
+		tooLarge := scan != nil
 		if err != nil {
 			if errors.Is(err, io.EOF) && (len(line) > 0 || tooLarge) {
 				if tooLarge {
-					return nil, errMCPMessageTooLarge
+					return nil, &mcpMessageTooLargeError{ID: scan.ID()}
 				}
 				return line, nil
 			}
@@ -264,7 +283,7 @@ func readMCPLine(reader *bufio.Reader) ([]byte, error) {
 		}
 		if !prefix {
 			if tooLarge {
-				return nil, errMCPMessageTooLarge
+				return nil, &mcpMessageTooLargeError{ID: scan.ID()}
 			}
 			return line, nil
 		}
