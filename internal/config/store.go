@@ -188,7 +188,7 @@ func (s *Store) replace(data []byte) error {
 	if err := os.Chmod(name, fileMode); err != nil {
 		return fmt.Errorf("cannot set the permissions of %s: %w", name, err)
 	}
-	if err := os.Rename(name, target); err != nil {
+	if err := retryFile(func() error { return os.Rename(name, target) }); err != nil {
 		return fmt.Errorf("cannot replace %s: %w", target, err)
 	}
 	moved = true

@@ -5,6 +5,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -320,16 +321,15 @@ func Path(explicit string) (string, error) {
 
 // Load reads and validates the configuration at path.
 func Load(path string, providers ...ProviderCatalog) (*Config, error) {
-	f, err := os.Open(path)
+	data, err := readFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, &NotFoundError{Path: path}
 		}
 		return nil, fmt.Errorf("cannot read %s: %w", path, err)
 	}
-	defer f.Close()
 
-	cfg, err := Decode(f, providers...)
+	cfg, err := Decode(bytes.NewReader(data), providers...)
 	if err != nil {
 		return nil, &InvalidError{Path: path, Err: err}
 	}
