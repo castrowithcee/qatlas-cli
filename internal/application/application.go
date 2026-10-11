@@ -1042,7 +1042,7 @@ func (c *Core) Invoke(ctx context.Context, request InvokeRequest) (response Invo
 		return InvokeResponse{}, &InvalidProviderResponseError{Operation: descriptor.ID}
 	}
 	normalized = redactValue(c.redactor, normalized)
-	if err := validateValue(descriptor.OutputSchema, normalized); err != nil {
+	if err := validateValue(descriptor.OutputSchema, normalized, false); err != nil {
 		return InvokeResponse{}, &InvalidProviderResponseError{Operation: descriptor.ID}
 	}
 	// Only what passed the output schema is compacted: empty values are dropped afterwards, for every
