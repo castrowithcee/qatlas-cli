@@ -24,6 +24,7 @@ const (
 	caldavNS = "urn:ietf:params:xml:ns:caldav"
 	carddavN = "urn:ietf:params:xml:ns:carddav"
 	appleNS  = "http://apple.com/ns/ical/"
+	ownerNS  = "http://owncloud.org/ns"
 )
 
 var (
@@ -42,6 +43,7 @@ var (
 	PropPrincipal    = xml.Name{Space: davNS, Local: "current-user-principal"}
 	PropCalHome      = xml.Name{Space: caldavNS, Local: "calendar-home-set"}
 	PropBookHome     = xml.Name{Space: carddavN, Local: "addressbook-home-set"}
+	PropOwner        = xml.Name{Space: ownerNS, Local: "owner-principal"}
 	propCalendarData = xml.Name{Space: caldavNS, Local: "calendar-data"}
 	propAddressData  = xml.Name{Space: carddavN, Local: "address-data"}
 	typeCalendar     = xml.Name{Space: caldavNS, Local: "calendar"}
@@ -197,7 +199,7 @@ func (s Server) ParseMultiStatus(op string, body []byte) ([]Resource, error) {
 				pending = nil
 			case len(stack) == 6 && pending != nil && element.Name == elemHref && stack[3] == elemProp:
 				name := stack[4]
-				if name == PropPrincipal || name == PropCalHome || name == PropBookHome {
+				if name == PropPrincipal || name == PropCalHome || name == PropBookHome || name == PropOwner {
 					if len(pending.Links[name]) >= maxLinks {
 						return nil, provider.InvalidResponse(op, s.Name+" answered with too many locations")
 					}
