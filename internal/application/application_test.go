@@ -838,6 +838,68 @@ func TestObjectBoundsAndUniqueItemsStopInvokeBeforeTheProvider(t *testing.T) {
 	}
 }
 
+func TestUnionsAndAdditionalPropertySchemasStopInvokeBeforeTheProvider(t *testing.T) {
+	calls := 0
+	scalar := `{"anyOf":[{"type":"string","maxLength":4},{"type":"number"},{"type":"boolean"}]}`
+	input := `{"type":"object","properties":{` +
+		`"rows":{"type":"array","items":{"type":"object","properties":{"email":` + scalar + `}}},` +
+		`"pair":{"anyOf":[{"type":"string"},{"type":"array","items":{"type":"string"}}]},` +
+		`"either":{"anyOf":[{"type":"string"},{"type":"null"},{"type":"array"}]},` +
+		`"fields":{"type":"object","additionalProperties":` + scalar + `},` +
+		`"operations":{"type":"array"},"description":{"type":"string"},"note":{"type":"string"}},` +
+		`"anyOf":[{"required":["operations"]},{"required":["description"]},{"required":["note"]}],` +
+		`"additionalProperties":false}`
+	response := `{"type":"object","properties":{"count":` + scalar + `,` +
+		`"fields":{"type":"object","additionalProperties":{"type":"number"}}}}`
+	descriptor := testDescriptor("fake.rows.create", capability.EffectCreate, capability.ConfirmationNone)
+	descriptor.InputSchema = json.RawMessage(input)
+	descriptor.OutputSchema = json.RawMessage(response)
+	handler := capability.Handler(func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+		json.RawMessage) (any, error) {
+		calls++
+		return map[string]any{"count": []any{1}, "fields": map[string]any{"a": "text"}}, nil
+	})
+	registry := capability.NewRegistry()
+	if err := registry.Register("fake", capability.Operation{Descriptor: descriptor, Handler: handler}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.New()
+	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["key"] = config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{"token": "T"}}
+	cfg.Connections["books"] = config.Connection{
+		Service: "service", Credential: "key", Permissions: []config.Permission{config.PermissionCreate},
+	}
+	core := New(registry, cfg, secret.NewWith(func(string) string { return "token" }, nil, nil, nil), nil)
+
+	for _, tt := range []struct{ name, arguments, want string }{
+		{"no type fits", `{"note":"n","rows":[{"email":null}]}`, "$.rows[0].email must be string, number, or boolean"},
+		{"two types", `{"note":"n","pair":7}`, "$.pair must be string or array"},
+		{"null among types", `{"note":"n","either":{}}`, "$.either must be string, null, or array"},
+		{"one type fits", `{"note":"n","rows":[{"email":"abcde"}]}`, "$.rows[0].email is longer than 4 characters"},
+		{"required set", `{}`, "$.operations, $.description, or $.note is required"},
+		{"additional schema", `{"note":"n","fields":{"a":1,"b":{}}}`, "$.fields.b must be string, number, or boolean"},
+		{"additional schema branch", `{"note":"n","fields":{"b":"abcde"}}`, "$.fields.b is longer than 4 characters"},
+	} {
+		before := calls
+		_, err := core.Invoke(context.Background(), InvokeRequest{Operation: descriptor.ID, Arguments: json.RawMessage(tt.arguments)})
+		var invalid *InvalidRequestError
+		if !errors.As(err, &invalid) || invalid.Message != tt.want {
+			t.Errorf("%s: Invoke() = %v, want %q", tt.name, err, tt.want)
+		}
+		if calls != before {
+			t.Errorf("%s: provider ran", tt.name)
+		}
+	}
+	// A response is not held to unions or to a schema for its other members.
+	if _, err := core.Invoke(context.Background(), InvokeRequest{Operation: descriptor.ID,
+		Arguments: json.RawMessage(`{"description":"d","rows":[{"email":"abc"}],"fields":{"a":true},"pair":["x"],"either":null}`)}); err != nil {
+		t.Fatalf("valid input: Invoke() = %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("provider calls = %d, want 1", calls)
+	}
+}
+
 func TestInvokeDispatchesReadAndConfirmedMutation(t *testing.T) {
 	core, calls := testCore(t, []string{"primary"}, nil, true)
 	requests := []InvokeRequest{
