@@ -64,7 +64,8 @@ const (
 	codeTokensTampered = "tokens-tampered"
 	codeTokenFailed    = "token-failed"
 	// codeReplaced answers a request the process no longer serves because it was replaced: it hands, or
-	// handed, the vault over to a successor, or an update replaced its own program. A client asks again.
+	// handed, the vault over to a successor, or an update replaced its own program while it prepares one.
+	// A client asks again.
 	codeReplaced = "replaced"
 	// The codes of a handover that did not happen. The process locked itself with each of them.
 	codeReleaseUnverified = "release-unverified"
