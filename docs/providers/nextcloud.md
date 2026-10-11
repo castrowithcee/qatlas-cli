@@ -196,6 +196,12 @@ unexpanded. Profile `events` also creates events and replaces one by `etag`, nev
 occurrences; `events.delete` needs a tools list. A change needs `confirm`, refuses a read-only calendar, and is
 never repeated after an unclear outcome. Nextcloud e-mails attendees invitations, updates, and cancellations.
 
+Calendar management is in no profile. `calendars.create` needs the general `calendar` target, as the new calendar
+gets a generated id that a single-URI binding could not reach. `calendars.update` (name, colour) and
+`calendars.delete` need a bound calendar and refuse one the identity does not own, such as a shared one, after a read.
+Nextcloud moves a deleted calendar to its trash bin; `calendars.delete` needs a tools list and offers no restore.
+Subscriptions, publishing, and sharing are out of scope.
+
 ## Contacts
 
 The group `contacts` (profile `contacts`) reads address books and contacts, optionally searched by name and e-mail.
