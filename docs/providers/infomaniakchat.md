@@ -132,9 +132,9 @@ inside the allow-list and never direct or group channels, sends one request, and
 outside that set, including a file hit without a `channel_id` and a thread whose root is deleted. Because the
 set comes from the token's own channels, a public channel the token has not joined yields no hit.
 
-The `bots` tools need an instance-wide connection: every team of its token bound and no `channel/` target. A
-channel target refuses them before any secret is read; otherwise each call reads `GET /api/v4/users/me/teams`
-and refuses, naming no team, on an unbound, empty, or unreadable answer, so a team joined later locks them.
+The `bots` tools and `emoji.list` need an instance-wide connection: all token teams bound, no `channel/`
+target. A channel target refuses before any secret is read; otherwise each call reads `/api/v4/users/me/teams`
+and refuses, naming no team, on an unbound, empty, or unreadable answer, so a later-joined team locks them.
 
 A successful `qatlas connection test` proves only that the token is accepted, not that a team or channel
 of the allow-list exists or is reachable.
@@ -153,7 +153,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
 | `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
 | `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*`, `commands.*` |
-| `administration` | | | `bots.list`, `.get`, `.update` |
+| `administration` | `emoji.list` | | `bots.list`, `.get`, `.update` |
 
 The reads need no confirmation; every other tool always does. The tools of the last column are in no profile
 and offered only to a connection whose tools list names them; the role tools alter rights, and
@@ -215,9 +215,9 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 - `teams.list`, `channels.list`, `reactions.list`, `pins.list`, and `commands.list` read kChat's complete
   array, which has no pagination of its own, and page it themselves: `page` (1-based) and `limit` select a
   window of the already scope-filtered result, and the answer reports `page`, `pages`, `total`, and `count`.
-- `channels.browse`, `archivedchannels.list`, the webhook lists, `bots.list`, `channelmembers.list`,
-  `teammembers.list`, and `users.list` page kChat's own `page` and `per_page`; `has_more` is true when kChat's
-  page was full, and dropped entries can make `count` lower. `users.search` takes only `limit`, one page.
+- `channels.browse`, `archivedchannels.list`, the webhook lists, `bots.list`, `emoji.list`,
+  `channelmembers.list`, `teammembers.list`, and `users.list` page kChat's `page`/`per_page`; `has_more` is
+  true for a full page; dropped entries can lower `count`. `users.search` takes only `limit`, one page.
 - `messages.list` pages kChat's `GetPostsForChannel`, newest first; `has_more` is kChat's `has_next`.
 - `messages.search`, `files.search`, `flagged.list`, and `threads.list` pass `page` and `limit` (at most 100)
   to kChat's own paging and read no further page; `has_more` is true when kChat's page was full, and `count`
@@ -270,8 +270,8 @@ provider's documentation for why each is its own sibling provider. Within kChat,
 creation, change, or deletion, no adding or removing of team members, no invitation, no permanent deletion,
 move, scheme, or moderation change of a channel, no membership change of a direct or group channel, no change
 of another user or of other profile fields, no profile picture, no preview or thumbnail, no custom emoji
-catalog, no removal of another user's reaction, no read state of another user, no creating of webhooks,
-commands, bots, or bot tokens, no executing of a command, and no change of a webhook or command beyond its
+image, creation, or deletion, no removal of another user's reaction, no read state of another user, no new
+webhook, command, bot, or bot token, no command execution, and no change of a webhook or command beyond its
 texts. An edit changes only a message's text, never its attachments, pin state, or properties.
 
 ## Live test scenario
@@ -292,8 +292,8 @@ A live test against a real kChat instance checks, in order:
   reply, and a future timestamp are refused; `flagged.list` shows kChat's answer shape.
 - Webhooks and slash commands list without those of other teams or outside the allow-list, channelless
   outgoing webhooks included; a disposable one changes its texts only, then is deleted.
-- Bot tools are refused with a channel target or an unbound token team; otherwise they list a bot, rename it,
-  and change only its description, which shows whether kChat accepts an update without `username`.
+- Bot tools and `emoji.list` are refused with a channel target or an unbound token team; otherwise both list,
+  and a bot is renamed and changes only its description, showing whether kChat needs `username` there.
 - Status, custom status, and profile changes affect only the token's own user and keep other fields; a user
   only in another team is refused by `users.get` and `users.status` and absent from list and search.
 - A custom category is created, filled, renamed, and deleted; channels outside the allow-list stay in it;
