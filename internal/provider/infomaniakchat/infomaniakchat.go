@@ -52,6 +52,13 @@
 // of its channels writes the channels it may not reach back unchanged. The notification tool refuses direct
 // and group channels, whose participants it would otherwise have to prove, see boundChannel.
 //
+// The bot tools (GetBots, GetBot, and PatchBot) act on accounts no team or channel target can bound, so they
+// are instance-wide: requireInstanceScope refuses a connection with a channel target before any secret is
+// read, and a live read of the token's teams, see (*Client).requireInstanceTeams, refuses unless every one of
+// them is a bound team. That read runs on every call, so a token that later joins another team locks the
+// tools instead of widening them. Bot output is reduced to a fixed field set; bot tokens and creating bots
+// are deliberately not offered.
+//
 // kChat is deliberately the only Infomaniak surface this provider reaches: Mail, CalDAV/CardDAV, and kDrive
 // are separate Infomaniak products with their own authentication and their own providers, see the kDrive
 // provider's package doc for why they are not bundled together.
@@ -502,7 +509,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status, profile, and sidebar, team roles, channels with members and notifications, and webhooks",
+		Description:        "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status and profile, channels, team roles, webhooks, and instance-wide administration",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -654,6 +661,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(outgoingWebhooksGet), Handler: capability.Handler(invokeOutgoingWebhooksGet)},
 		capability.Operation{Descriptor: withGroup(outgoingWebhooksUpdate), Handler: capability.Handler(invokeOutgoingWebhooksUpdate)},
 		capability.Operation{Descriptor: withGroup(outgoingWebhooksDelete), Handler: capability.Handler(invokeOutgoingWebhooksDelete)},
+		capability.Operation{Descriptor: withGroup(botsList), Handler: capability.Handler(invokeBotsList)},
+		capability.Operation{Descriptor: withGroup(botsGet), Handler: capability.Handler(invokeBotsGet)},
+		capability.Operation{Descriptor: withGroup(botsUpdate), Handler: capability.Handler(invokeBotsUpdate)},
 	)
 }
 
