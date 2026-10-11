@@ -22,15 +22,11 @@ import (
 
 const eventProductID = "-//Qatlas//Nextcloud//EN"
 
-// objectKind names what a calendar write changes, for the shared write path of events and tasks.
-type objectKind struct{ noun, component, uncertain string }
+// objectKind names what a calendar write changes, for the write path that calendar objects share.
+type objectKind struct{ article, noun, component, uncertain string }
 
-var (
-	eventKind = objectKind{"event", "VEVENT", "; the change may have been applied, check the calendar with " +
-		"events.list or events.get before repeating it"}
-	taskKind = objectKind{"task", "VTODO", "; the change may have been applied, check the calendar with " +
-		"tasks.list or tasks.get before repeating it"}
-)
+var eventKind = objectKind{"an", "event", "VEVENT", "; the change may have been applied, check the calendar with " +
+	"events.list or events.get before repeating it"}
 
 // eventCalendarProbeBody reads what decides whether a calendar takes a new or changed event.
 const eventCalendarProbeBody = `<?xml version="1.0" encoding="UTF-8"?>` +
@@ -241,7 +237,7 @@ func invokeEventsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 		return nil, err
 	}
 	id := uid + ".ics"
-	header, err := client.calendarSend(ctx, op, eventKind, http.MethodPut, input.Calendar, id, "", body)
+	header, err := client.objectSend(ctx, op, eventKind, http.MethodPut, input.Calendar, id, "", body)
 	if err != nil {
 		return nil, err
 	}
@@ -276,7 +272,7 @@ func invokeEventsUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	header, err := client.calendarSend(ctx, op, eventKind, http.MethodPut, input.Calendar, input.ID, etag, body)
+	header, err := client.objectSend(ctx, op, eventKind, http.MethodPut, input.Calendar, input.ID, etag, body)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +298,7 @@ func invokeEventsDelete(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := client.calendarWritable(ctx, op, input.Calendar, eventKind); err != nil {
 		return nil, err
 	}
-	if _, err := client.calendarSend(ctx, op, eventKind, http.MethodDelete, input.Calendar, input.ID, etag, ""); err != nil {
+	if _, err := client.objectSend(ctx, op, eventKind, http.MethodDelete, input.Calendar, input.ID, etag, ""); err != nil {
 		return nil, err
 	}
 	return &EventWriteResult{Calendar: input.Calendar, ID: input.ID, Deleted: true}, nil
@@ -335,7 +331,8 @@ func (c *Client) eventOnlyNode(op string, data []byte, segments []string) (*dav.
 }
 
 // calendarWritable is the pre-check of a create or delete: one PROPFIND of depth 0 on the bound calendar.
-// A node that is no calendar, holds no such objects, or is read-only for the identity is refused without a change.
+// A node that is no calendar, holds no objects of the kind, or is read-only for the identity is refused without
+// a change.
 func (c *Client) calendarWritable(ctx context.Context, op, calendar string, kind objectKind) error {
 	base := c.calendarHome(calendar)
 	data, _, err := c.calendarRequest(ctx, op, methodPropfind, base, true, depthSelf, eventCalendarProbeBody,
@@ -386,11 +383,11 @@ func (c *Client) eventCurrent(ctx context.Context, op, calendar, id, etag string
 	return c.davServer().ExistingEventOf(op, []byte(stored))
 }
 
-// calendarSend is the single write path of events and tasks. It sends exactly one PUT or DELETE to the object
-// in the bound calendar and never repeats it. Without a match the request carries If-None-Match: *, otherwise If-Match with the
-// validated entity tag. A failure that leaves the outcome open carries the uncertainty hint of the kind; a refusal or a
-// redirect is clear.
-func (c *Client) calendarSend(ctx context.Context, op string, kind objectKind, method, calendar, id, match,
+// objectSend is the single write path of calendar objects. It sends exactly one PUT or DELETE to the object in
+// the bound calendar and never repeats it. Without a match the request carries If-None-Match: *, otherwise
+// If-Match with the validated entity tag. A failure that leaves the outcome open carries the uncertainty hint of
+// the kind; a refusal or a redirect is clear.
+func (c *Client) objectSend(ctx context.Context, op string, kind objectKind, method, calendar, id, match,
 	body string) (http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.origin+escapePath(c.calendarHome(calendar, id)),
 		strings.NewReader(body))
@@ -413,7 +410,7 @@ func (c *Client) calendarSend(ctx context.Context, op string, kind objectKind, m
 	defer response.Body.Close()
 	switch status := response.StatusCode; {
 	case status == http.StatusPreconditionFailed && match == "":
-		return nil, providerError(op, "a "+kind.noun+" with this id already exists, nothing was written")
+		return nil, providerError(op, kind.article+" "+kind.noun+" with this id already exists, nothing was written")
 	case status == http.StatusPreconditionFailed:
 		return nil, objectPrecondition(op, kind)
 	case status == http.StatusForbidden:

@@ -19,6 +19,9 @@ import (
 
 const taskProductID = eventProductID
 
+var taskKind = objectKind{"a", "task", "VTODO", "; the change may have been applied, check the calendar with " +
+	"tasks.list or tasks.get before repeating it"}
+
 const taskFieldSchemas = `"title":{"type":"string","minLength":1,"maxLength":256},` +
 	`"description":{"type":"string","maxLength":4096},` +
 	`"status":{"type":"string","enum":["NEEDS-ACTION","IN-PROCESS","COMPLETED","CANCELLED"]},` +
@@ -164,7 +167,7 @@ func invokeTasksCreate(ctx context.Context, resolved *config.Resolved, secrets *
 		return nil, err
 	}
 	id := uid + ".ics"
-	header, err := client.calendarSend(ctx, op, taskKind, http.MethodPut, input.Calendar, id, "", body)
+	header, err := client.objectSend(ctx, op, taskKind, http.MethodPut, input.Calendar, id, "", body)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +209,7 @@ func invokeTasksUpdate(ctx context.Context, resolved *config.Resolved, secrets *
 	if err != nil {
 		return nil, err
 	}
-	header, err := client.calendarSend(ctx, op, taskKind, http.MethodPut, input.Calendar, input.ID, etag, body)
+	header, err := client.objectSend(ctx, op, taskKind, http.MethodPut, input.Calendar, input.ID, etag, body)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +242,7 @@ func invokeTasksDelete(ctx context.Context, resolved *config.Resolved, secrets *
 		}
 		return nil, invalidResponse(op, "Nextcloud returned a task that is not a valid iCalendar object")
 	}
-	if _, err := client.calendarSend(ctx, op, taskKind, http.MethodDelete, input.Calendar, input.ID, etag, ""); err != nil {
+	if _, err := client.objectSend(ctx, op, taskKind, http.MethodDelete, input.Calendar, input.ID, etag, ""); err != nil {
 		return nil, err
 	}
 	return &TaskWriteResult{Calendar: input.Calendar, ID: input.ID, Deleted: true}, nil

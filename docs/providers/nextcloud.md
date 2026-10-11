@@ -191,13 +191,12 @@ answer) may be applied and is not repeated; check the list first (`send`: `refer
 
 The CalDAV group `calendar` needs a `calendar` target; an unbound calendar is refused locally, unnamed. Only direct
 children of the calendar home and of a bound calendar count, never subscriptions or the scheduling and trash
-collections. Profile `calendar` reads events and tasks (VTODO) from a calendar that names the component; `read_only`
-is derived conservatively, repeating events keep their rule unexpanded, and subtasks are not resolved into a tree.
-Profile `events` also creates events and replaces one by `etag`, never one with overrides of single occurrences. Tasks
-are written only through a tools list: create (optionally under a parent of the same calendar), replace by `etag`
-(this completes one), and delete; a task with content Qatlas does not write, such as recurrence, is never replaced.
-Both delete tools need a tools list. A change needs `confirm`, is refused for a read-only calendar, and is never
-repeated after an unclear outcome. Nextcloud e-mails attendees invitations, updates, and cancellations.
+collections. Profile `calendar` reads events, and tasks (VTODO) of calendars that take them; repeating events keep
+their rule unexpanded. Profile `events` also creates events and replaces one by `etag`, never one with overrides of
+single occurrences. A change needs `confirm`, refuses a read-only calendar, and is never repeated after an unclear
+outcome; deleting needs a tools list. Nextcloud e-mails attendees invitations, updates, and cancellations. Writing
+tasks and managing calendars are in no profile; a task is replaced only while it holds nothing Qatlas cannot write.
+`calendars.create` needs the general `calendar` target; `calendars.update` and `.delete` refuse one not owned.
 
 ## Contacts
 

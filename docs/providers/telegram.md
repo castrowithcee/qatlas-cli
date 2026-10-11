@@ -10,11 +10,10 @@ updated: 2026-10-11
 
 # Telegram
 
-A connection binds one bot token to its targets, given as `target` (one) or `targets` (a list). A target is
-a chat (a numeric chat ID, also negative, or an `@username`), `bot`, or `business/<id>`. It can send
-(`create`), edit (`update`, including the inline keyboard), and delete (`delete`) messages in its chats and pin
-or unpin them (`update`), and every operation requires confirmation. Telegram's own edit and delete
-restrictions still apply.
+A connection binds one bot token to its targets, given as `target` (one) or `targets` (a list). A target is a chat
+(a numeric chat ID, also negative, or an `@username`), `bot`, or `business/<id>`. It can send (`create`), edit
+(`update`, including the inline keyboard), and delete (`delete`) messages in its chats and pin or unpin them
+(`update`), and every operation requires confirmation. Telegram's own edit and delete restrictions still apply.
 
 `telegram.messages.send` sends text; `parse_mode` (`HTML` or `MarkdownV2`) formats it, and Telegram's parser
 decides whether the markup is valid. `reply_to_message_id` replies only within the same chat; `message_thread_id`,
@@ -47,16 +46,14 @@ Tool groups only sort tools for display. The base URL must be a plain `https` UR
 query, or fragment, with no exception for local addresses, and redirects are never followed. `config validate`
 rejects any other base URL. Errors never carry Telegram's own error text.
 
-The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
-they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
-to named tools, for example `[telegram.messages.send]` for a chat that may receive but never lose messages,
-and never admits an effect `permissions` excludes. Mutations are never retried after an ambiguous network
-result.
+The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes; they do
+not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further to named tools,
+for example `[telegram.messages.send]` for a chat that may receive but never lose messages, and never admits an
+effect `permissions` excludes. Mutations are never retried after an ambiguous network result.
 
-`telegram.messages.delete` requires a `tools` list: no permission offers it, so a connection without a `tools`
-list no longer offers it. Its reach is that of the Bot API `deleteMessage`: in a bound chat the bot
-deletes its own messages and, as an administrator, those of others; in a private chat it also deletes incoming
-messages.
+`telegram.messages.delete` is offered only through a `tools` list, since no permission offers it. Its reach is
+that of the Bot API `deleteMessage`: in a bound chat the bot deletes its own messages and, as an administrator,
+those of others; in a private chat it also deletes incoming messages.
 
 `telegram.messages.deletemany` deletes up to 100 messages of one chat in one request, with the reach of
 `telegram.messages.delete` and also only through a `tools` list. Telegram skips missing or undeletable
@@ -117,11 +114,11 @@ Telegram's fixed actions for about five seconds.
 `telegram.topics.create` (`create`) creates a forum topic with a `name` and optionally an `icon_color` from
 Telegram's fixed list. `telegram.topics.edit`, `telegram.topics.close`, `telegram.topics.reopen`, and
 `telegram.topics.unpinall` (`update`) require exactly one of `message_thread_id` and `general: true`, which fixes
-the method. Editing needs a `name` or an `icon_custom_emoji_id`, a value
-`telegram.topics.iconstickers` lists, and an empty one removes the icon; the General topic is only renamed.
-Reopening the General topic also unhides it; `telegram.topics.hidegeneral` hides and closes it, and
-`telegram.topics.unhidegeneral` shows it again. `telegram.topics.unpinall` unpins all messages of a topic, and
-`telegram.topics.delete` (`delete`) removes a topic with all its messages; both require a `tools` list.
+the method. Editing needs a `name` or an `icon_custom_emoji_id`, a value `telegram.topics.iconstickers` lists,
+and an empty one removes the icon; the General topic is only renamed. Reopening the General topic also unhides
+it; `telegram.topics.hidegeneral` hides and closes it, and `telegram.topics.unhidegeneral` shows it again.
+`telegram.topics.unpinall` unpins all messages of a topic, and `telegram.topics.delete` (`delete`) removes a
+topic with all its messages; both require a `tools` list.
 
 ## Locations, venues, contacts, and dice
 
@@ -132,8 +129,7 @@ place identifiers and vCards are not offered. The tools share `reply_to_message_
 and contacts carry the data class `telegram-personal-data` and appear only in the request, never in errors,
 logs, or the audit trail. The result is only `message_id` and `date`. `telegram.locations.editlive` (`update`)
 moves a live location within these limits, and omitted optional values keep their setting;
-`telegram.locations.stoplive` (`update`, idempotent) ends it through a `tools` list only. Both return only
-`message_id`.
+`telegram.locations.stoplive` (`update`, idempotent) ends it through a `tools` list only.
 
 ## Invite links
 
@@ -145,9 +141,8 @@ that is not a `t.me` invite link is dropped.
 `telegram.invitelinks.revoke` revokes one link of the bound chat and requires a `tools` list. It accepts only
 `https://t.me/+TOKEN` or `https://t.me/joinchat/TOKEN` with the exact host `t.me`, checked before the
 credential is read. The request carries only the bound chat and the link, so Telegram refuses links of other
-chats. The result is only `revoked: true`, never the link. When the primary link is revoked, Telegram
-generates a new primary link by itself; the result does not contain it, and creating, exporting, or editing
-invite links is not offered.
+chats. The result is only `revoked: true`, never the link. Revoking the primary link makes Telegram generate a
+new one that the result does not contain; creating, exporting, or editing invite links is not offered.
 
 ## Reading updates
 
@@ -157,24 +152,22 @@ or type, is only counted in `skipped`, and `last_update_id` names the highest up
 included. An `@username` target is matched through a fixed `getChat` call on the configured name; the ID that
 returns is used for matching only. A long poll (`wait_seconds`) waits for a new update.
 
-`telegram.updates.list` acknowledges nothing and stores no offset: the same updates appear again on the next
-call until Telegram drops them, which it does after at most 24 hours. Telegram allows one consumer per bot. The
-call fails with a conflict while a webhook is active or another `getUpdates` consumer runs, and a long poll
-interrupts the long poll of another consumer of the same bot.
+`telegram.updates.list` acknowledges nothing and stores no offset: the same updates appear again until Telegram
+drops them after at most 24 hours. Telegram allows one consumer per bot. The call fails with a conflict while a
+webhook is active or another `getUpdates` consumer runs, and a long poll interrupts that of another consumer.
 
 `telegram.updates.confirm` (`delete`, confirmation required) makes Telegram drop all updates up to and
 including `update_id`, so the next `telegram.updates.list` shows only newer ones. It needs the target `bot`, is
 released only through the connection's tools list, and belongs to no profile. Its effect is bot-wide: it
 confirms the updates of every chat of the bot, including chats this connection does not bind, and it is
 the only way an update leaves the list before Telegram drops it. It fails with a conflict while a webhook is
-active, and another poller of the same bot loses the confirmed updates or competes for the offset. A failure
-whose outcome is unknown is reported as such and never repeated. The result contains only `confirmed_through`.
+active, and another poller of the same bot loses the confirmed updates or competes for the offset. The result
+contains only `confirmed_through`.
 
 Identifiers that belong to no chat (a file, a callback query, a join request) are returned only as signed
-references, never as Telegram's raw identifier. A reference is bound to the target it came from and to the
-bot token, so rotating the token invalidates every earlier reference. It is signed, not secret. A tool that
-accepts a reference checks its format and target before the credential is read and its signature before any
-request.
+references, never as Telegram's raw identifier. A reference is bound to its target and the bot token, so
+rotating the token invalidates earlier ones; it is signed, not secret. A tool that accepts one checks format
+and target before the credential is read and the signature before any request.
 
 ## Reading chats and members
 
@@ -184,9 +177,8 @@ The four chat read tools address a bound chat through `chat` as above and return
 (a number only, never a target). `telegram.chats.administrators` lists at most 200 administrators and
 `telegram.chats.member` shows one member by `user_id`: identity (`id`, `is_bot`, names, `username`), `status`,
 the boolean rights Telegram returns, `custom_title`, and `until_date`. `telegram.chats.membercount` shows
-`count`. The invite link and every other field are never returned. Strings are length-capped. Member data
-of administrators and members is classified `telegram-member-data`; the other two tools keep the provider's
-message classification.
+`count`. The invite link and every other field are never returned; strings are length-capped. Member data of
+administrators and members is classified `telegram-member-data`, the rest keeps the message classification.
 
 ## Changing chat settings and leaving
 
@@ -198,22 +190,19 @@ refuses private chats. Lengths are checked before the credential is read, and ea
 
 `telegram.chats.setphoto` takes only a `local_path` inside a directory the connection releases for reading
 (`files`), never a `file_ref` or URL, and repeating it has an unknown effect. The photo is limited to 10 MB,
-checked from the file before it is read, and sent under a neutral name, so neither path nor file name leaves
-the machine.
+checked before it is read, and sent under a neutral name, so neither path nor file name leaves the machine.
 
 `telegram.chats.setpermissions` sets the default member permissions of a bound group or supergroup. Like
 `telegram.members.restrict`, it takes the complete `permissions` object: every boolean is required, a missing
 or unknown field is refused before any request, and all are sent explicitly with independent permissions.
 `telegram.chats.setstickerset` sets the group sticker set by name, never a URL; as a narrower reading than
 Telegram, the name must be 1 through 64 letters, digits, or underscores, checked before the credential is
-read. `telegram.chats.deletestickerset` (`delete`) removes it. The results are `updated: true` or
-`deleted: true`.
+read. `telegram.chats.deletestickerset` (`delete`) removes it.
 
-`telegram.chats.leave` (`delete`) makes the bot leave a bound chat. The bot then has no access to it, and only
-a human can add it again. `telegram.chats.deletestickerset` and `telegram.chats.leave` require a `tools`
-list.
+`telegram.chats.leave` (`delete`) makes the bot leave a bound chat; only a human can add it again. It and
+`telegram.chats.deletestickerset` require a `tools` list.
 
-## Bot identity and webhook status
+## Bot identity and settings
 
 `telegram.bot.get` (`read`) shows the identity of the bot behind the token: `id`, `username`, `first_name`,
 `can_join_groups`, `can_read_all_group_messages`, and `supports_inline_queries`. It runs on every connection
@@ -221,22 +210,34 @@ and needs no `bot` target, since it concerns only the connection's own token.
 
 `telegram.webhook.get` (`read`) shows whether a webhook is active (`has_webhook`), the number of updates
 waiting (`pending_update_count`), and, when present, the time of the last delivery error (`last_error_date`).
-It needs the `bot` target and is refused before the credential is read without it. The webhook URL and every
-other field of Telegram's answer are never returned. It is part of no setup profile.
+It needs the `bot` target. The webhook URL and every other field of Telegram's answer are never returned.
+
+`telegram.commands.get` (`read`) shows at most 100 `command` and `description` pairs of one `scope` and
+`language_code`. `telegram.commands.set` (`update`) replaces them with 1 through 100 commands, each a `command`
+of `a-z`, `0-9`, or `_` (up to 32) and a `description` of 1 through 256 characters; `telegram.commands.delete`
+(`delete`, `tools` list) removes them. The scopes `chat`, `chat_administrators`, and `chat_member` (with a
+positive `user_id`) require a named bound `chat`, which other scopes refuse; `language_code` is empty or two
+lowercase letters. `telegram.menubutton.get` (`read`) shows only `type` and `text`, never a web app URL;
+`telegram.menubutton.set` (`update`) sets `commands` or `default`, never a web app. Both address the default
+button or, with a bound `chat` given by numeric ID, that private chat. All five need the `bot` target.
+
+`telegram.profile.get` (`read`) shows `name`, `description`, and `short_description` for one `language_code`;
+`telegram.profile.setname`, `.setdescription`, and `.setshortdescription` (`update`) set them to at most 64, 512,
+and 120 characters, and an empty value removes that language's version. All four need the `bot` target.
 
 ## Files
 
 `telegram.files.get` (`read`) returns the size and `file_unique_id` of one file; `telegram.files.download`
 (`read`) writes it to `local_path`. Both take only a `file_ref` from `media.file_ref` of `telegram.updates.list`:
 a raw file identifier, a reference bound to another target, one signed with another token, or one of another
-kind is refused. Neither tool is part of a setup profile.
+kind is refused.
 
-`telegram.files.download` is offered only on a connection that releases a directory for writing (`files`).
-A `local_path` outside it is refused before the credential is read. An existing file is replaced only with
+`telegram.files.download` is offered only on a connection that releases a directory for writing (`files`). A
+`local_path` outside it is refused before the credential is read. An existing file is replaced only with
 confirmation, and a failed or incomplete transfer leaves no file. The result carries size and SHA-256, never the
-content. Files above 20 MB, the Bot API's limit for bots, are refused before the download, and a response
-longer than the reported size is rejected. The download URL carries the bot token; it and Telegram's
-`file_path` appear in no output, error, or log, and a redirect is never followed.
+content. Files above 20 MB, the Bot API's limit for bots, are refused before the download, and a longer response
+than reported is rejected. The download URL carries the bot token; it and Telegram's `file_path` appear in no
+output, error, or log, and a redirect is never followed.
 
 ## Sending media
 

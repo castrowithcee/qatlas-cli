@@ -52,11 +52,11 @@
 // of its channels writes the channels it may not reach back unchanged. The notification tool refuses direct
 // and group channels, whose participants it would otherwise have to prove, see boundChannel.
 //
-// The bot tools (GetBots, GetBot, and PatchBot) act on accounts no team or channel target can bound, so they
-// are instance-wide: requireInstanceScope refuses a connection with a channel target before any secret is
-// read, and a live read of the token's teams, see (*Client).requireInstanceTeams, refuses unless every one of
+// The bot tools (GetBots, GetBot, and PatchBot) and the custom emoji list act on data no team or channel
+// target can bound, so they are instance-wide: requireInstanceScope refuses a connection with a channel target
+// before any secret is read, and a live read of the token's teams, see (*Client).requireInstanceTeams, refuses unless every one of
 // them is a bound team. That read runs on every call, so a token that later joins another team locks the
-// tools instead of widening them. Bot output is reduced to a fixed field set; bot tokens and creating bots
+// tools instead of widening them. Their output is reduced to a fixed field set; bot tokens and creating bots
 // are deliberately not offered.
 //
 // kChat is deliberately the only Infomaniak surface this provider reaches: Mail, CalDAV/CardDAV, and kDrive
@@ -70,10 +70,10 @@
 // upload that is never attached.
 //
 // Creating, changing, or deleting teams, adding or removing team members, invitations, changes to other
-// users, profile pictures, previews and thumbnails, the custom emoji catalog, and creating webhooks or
-// changing where one posts are deliberately out of scope: this provider lists the teams, channels, and
-// direct and group channels a connection may reach, reads the details and members of a bound team and,
-// only when a connection's tools list names it, sets one current member's team role (the invitation identifier is never read), reads channel details and
+// users, profile pictures, previews and thumbnails, custom emoji images, creation, and deletion, and creating
+// webhooks or slash commands or changing where one posts or calls are deliberately out of scope: this provider
+// lists the teams, channels, and direct and group channels a connection may reach, reads the details and
+// members of a bound team and, only when a connection's tools list names it, sets one current member's team role (the invitation identifier is never read), reads channel details and
 // the public channels of a bound team, creates one confirmed channel in a bound team (only for a connection
 // without a channel allow-list, because a new channel cannot be inside one), changes the display name,
 // purpose, header, or handle of one confirmed public or private channel, lists the members of a public or
@@ -92,10 +92,11 @@
 // token's own user only, lists, creates, and changes the own sidebar categories of a bound team and sets the
 // own notifications of one channel, and, only when a connection's tools list names it, deletes one confirmed
 // message, one custom category, or removes one own reaction. Only when a connection's tools list names them,
-// it also lists, reads, describes, and deletes the incoming and outgoing webhooks of bound teams and channels:
-// a webhook's ID is a secret, so those tools carry their own data sensitivity, bind every webhook through its
-// team and channel, write a webhook back with its target unchanged, and never return an outgoing webhook's
-// token or more of a callback URL than its origin. The token's own presence, custom status, and four display
+// it also lists, reads, describes, and deletes the incoming and outgoing webhooks of bound teams and channels
+// and, only for a connection without a channel allow-list, the custom slash commands of bound teams: a
+// webhook's ID is a secret, so those tools carry their own data sensitivity, bind every webhook through its
+// team and channel and every command through its team, write one back with its target unchanged, and never
+// return a token or more of a callback URL than its origin. The token's own presence, custom status, and four display
 // profile fields are the only user data it changes, always for the user read from users/me and never taken
 // from an argument. kChat renders Markdown and mentions such as @channel in a message, so the text is sent as
 // written. Every value a listing or a read answers with arrives from the provider and is treated as untrusted
@@ -509,7 +510,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status and profile, channels, team roles, webhooks, and instance-wide administration",
+		Description:        "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status and profile, channels, team roles, webhooks, slash commands, and instance-wide administration",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -554,12 +555,13 @@ func Register(reg *capability.Registry) error {
 				"channels, lists the members of a channel and the archived channels of a team, reads channel " +
 				"messages, single messages, threads, followed threads, unread counts, reactions, pinned messages, " +
 				"and attachments (metadata and download to a released local directory), reads, lists, and searches " +
-				"the users of the bound teams and their presence, and lists the own sidebar categories; changes nothing",
+				"the users of the bound teams and their presence, lists the own sidebar categories, and lists the " +
+				"custom emoji of an instance-wide connection; changes nothing",
 			Tools: []string{teamsList.ID, teamsGet.ID, teamMembersList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID,
 				channelsMembersList.ID, directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
 				filesDownload.ID, reactionsList.ID, pinsList.ID, usersGet.ID, usersList.ID, usersSearch.ID,
 				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID,
-				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID},
+				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID, emojiList.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
@@ -661,9 +663,14 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(outgoingWebhooksGet), Handler: capability.Handler(invokeOutgoingWebhooksGet)},
 		capability.Operation{Descriptor: withGroup(outgoingWebhooksUpdate), Handler: capability.Handler(invokeOutgoingWebhooksUpdate)},
 		capability.Operation{Descriptor: withGroup(outgoingWebhooksDelete), Handler: capability.Handler(invokeOutgoingWebhooksDelete)},
+		capability.Operation{Descriptor: withGroup(commandsList), Handler: capability.Handler(invokeCommandsList)},
+		capability.Operation{Descriptor: withGroup(commandsGet), Handler: capability.Handler(invokeCommandsGet)},
+		capability.Operation{Descriptor: withGroup(commandsUpdate), Handler: capability.Handler(invokeCommandsUpdate)},
+		capability.Operation{Descriptor: withGroup(commandsDelete), Handler: capability.Handler(invokeCommandsDelete)},
 		capability.Operation{Descriptor: withGroup(botsList), Handler: capability.Handler(invokeBotsList)},
 		capability.Operation{Descriptor: withGroup(botsGet), Handler: capability.Handler(invokeBotsGet)},
 		capability.Operation{Descriptor: withGroup(botsUpdate), Handler: capability.Handler(invokeBotsUpdate)},
+		capability.Operation{Descriptor: withGroup(emojiList), Handler: capability.Handler(invokeEmojiList)},
 	)
 }
 
