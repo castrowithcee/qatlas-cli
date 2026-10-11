@@ -45,7 +45,7 @@ func TestOversizedInvokeStopsBeforeHandler(t *testing.T) {
 	}
 
 	base := `{"id":1}`
-	input := base + strings.Repeat(" ", maxAgentRequestBytes-len(base)+1)
+	input := base + strings.Repeat(" ", maxRequestBytes-len(base)+1)
 	var stdout, stderr bytes.Buffer
 	opts := &Options{Input: strings.NewReader(input)}
 	code := run(newRootCommand(opts, registry), opts,
