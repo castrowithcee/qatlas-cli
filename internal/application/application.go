@@ -142,14 +142,13 @@ type SearchRequest struct {
 // SearchHit is the bounded discovery view of one descriptor, and the entry of both discovery answers: it
 // carries what an ordinary call needs, so describe is only one step away when the contract is unclear.
 //
-// Every value is a scalar, so the entries of an answer share one field set and TOON prints them as a table
-// with one row per tool. Requires names the required arguments separated by "; ", each as name:form where
+// Every value is a scalar. Requires names the required arguments separated by "; ", each as name:form where
 // the compact contract of describe gives a written form or the allowed values, and as the bare name
 // otherwise; optional arguments and members of object arguments stay with describe. Confirm is true for a
 // tool that needs confirmation. Connections names, separated by spaces, the connections that offer the tool
 // only where they differ from those the answer names once at its top. Reason is set only by a request with
 // All, on a tool the request's connections do not offer; a tool with a reason and no connections is offered
-// by none. Hits marshals only the columns some entry uses.
+// by none. The JSON encoding leaves out the empty fields of each entry.
 type SearchHit struct {
 	ID          string            `json:"id"`
 	Title       string            `json:"title"`
@@ -160,13 +159,22 @@ type SearchHit struct {
 	Reason      config.Refusal    `json:"reason"`
 }
 
-// Hits is the list of entries of a discovery answer. It marshals every entry with the same fields: id, title,
-// and effect always, and requires, confirm, connections, and reason only when at least one entry has a
-// value there, so an unused column costs nothing and the entries still form one table.
+// Hits is the list of entries of a discovery answer. Each entry marshals only its non-empty fields (id,
+// title, and effect always), in the order of the fields of SearchHit.
 type Hits []SearchHit
 
-// MarshalJSON writes the entries with a common field set, in the order of the fields of SearchHit.
-func (h Hits) MarshalJSON() ([]byte, error) {
+// MarshalJSON writes every entry with its non-empty fields only.
+func (h Hits) MarshalJSON() ([]byte, error) { return marshalHits(h, false) }
+
+// tableHits marshals like Hits, except that all entries share one field set: requires, confirm,
+// connections, and reason appear when at least one entry has a value there. TOON prints entries of one
+// field set as a table with one row per tool, so the TOON rendering uses it.
+type tableHits Hits
+
+// MarshalJSON writes the entries with a common field set.
+func (h tableHits) MarshalJSON() ([]byte, error) { return marshalHits(Hits(h), true) }
+
+func marshalHits(h Hits, common bool) ([]byte, error) {
 	var requires, confirm, connections, reason bool
 	for _, hit := range h {
 		requires = requires || hit.Requires != ""
@@ -185,8 +193,10 @@ func (h Hits) MarshalJSON() ([]byte, error) {
 			value any
 		}{
 			{"id", true, hit.ID}, {"title", true, hit.Title}, {"effect", true, hit.Effect},
-			{"requires", requires, hit.Requires}, {"confirm", confirm, hit.Confirm},
-			{"connections", connections, hit.Connections}, {"reason", reason, hit.Reason},
+			{"requires", requires && (common || hit.Requires != ""), hit.Requires},
+			{"confirm", confirm && (common || hit.Confirm), hit.Confirm},
+			{"connections", connections && (common || hit.Connections != ""), hit.Connections},
+			{"reason", reason && (common || hit.Reason != ""), hit.Reason},
 		}
 		out = append(out, '{')
 		first := true
@@ -237,6 +247,19 @@ func (r SearchResponse) MarshalJSON() ([]byte, error) {
 	}
 	type plain SearchResponse
 	return json.Marshal(plain(r))
+}
+
+// TOONPayload returns the answer with its entries in the common field set, which TOON prints as a table.
+func (r SearchResponse) TOONPayload() any {
+	if len(r.Groups) > 0 {
+		return r
+	}
+	return struct {
+		Connections []string  `json:"connections,omitempty"`
+		Operations  tableHits `json:"operations"`
+		HasMore     bool      `json:"has_more"`
+		NextCursor  string    `json:"next_cursor,omitempty"`
+	}{r.Connections, tableHits(r.Operations), r.HasMore, r.NextCursor}
 }
 
 // ToolGroupHit is one tool group of an answer that lists groups before tools. Tools counts the matches of
@@ -642,6 +665,17 @@ func (r ToolsResponse) MarshalJSON() ([]byte, error) {
 	}
 	type plain ToolsResponse
 	return json.Marshal(plain(r))
+}
+
+// TOONPayload returns the answer with its entries in the common field set, which TOON prints as a table.
+func (r ToolsResponse) TOONPayload() any {
+	if len(r.Groups) > 0 {
+		return r
+	}
+	return struct {
+		Connections []string  `json:"connections,omitempty"`
+		Tools       tableHits `json:"tools"`
+	}{r.Connections, tableHits(r.Tools)}
 }
 
 // Tools is the second step of discovery: the tools of one namespace, or of one targeted query. It applies
