@@ -191,16 +191,12 @@ answer) may be applied and is not repeated; check the list first (`send`: `refer
 
 The CalDAV group `calendar` needs a `calendar` target; an unbound calendar is refused locally, unnamed. Only direct
 children of the calendar home and of a bound calendar count, never subscriptions or the scheduling and trash
-collections. Profile `calendar` reads events and tasks (VTODO, as the Nextcloud Tasks app manages them); `read_only`
-is derived conservatively, and repeating events keep their rule unexpanded. Tasks are read only from a calendar that
-names VTODO among its components, filtered by open or completed state and by a due range, which leaves out tasks
-without a due date; subtasks are not resolved into a tree, a task only reports the UID of its parent. Profile
-`events` also creates events and replaces one by `etag`, never one with overrides of single occurrences;
-`events.delete` needs a tools list. A change needs `confirm`, refuses a read-only calendar, and is never repeated
-after an unclear outcome. Nextcloud e-mails attendees invitations, updates, and cancellations. Managing calendars is
-in no profile: `calendars.create` needs the general `calendar` target, as a single-URI binding could not reach the
-generated id; `calendars.update` (name, colour) and `calendars.delete` refuse a calendar the identity does not own,
-such as a shared one. Deleting needs a tools list; Nextcloud keeps the calendar in its trash bin.
+collections. Profile `calendar` reads events, and tasks (VTODO) of calendars that take them; repeating events keep
+their rule unexpanded. Profile `events` also creates events and replaces one by `etag`, never one with overrides of
+single occurrences. A change needs `confirm`, refuses a read-only calendar, and is never repeated after an unclear
+outcome; deleting needs a tools list. Nextcloud e-mails attendees invitations, updates, and cancellations. Managing
+calendars is in no profile; `calendars.create` needs the general `calendar` target to reach the generated id, and
+`calendars.update` and `calendars.delete` refuse a calendar the identity does not own, such as a shared one.
 
 ## Contacts
 
