@@ -215,7 +215,7 @@ func (m *Model) vaultUnlockPromptView() string {
 	if m.restartNote != "" {
 		b.WriteString(m.indented(m.restartNote) + "\n\n")
 	}
-	b.WriteString("  " + m.vaultUnlock.input.View() + "\n")
+	b.WriteString(m.inputLine("  ", m.vaultUnlock.input) + "\n")
 	b.WriteString(m.indented(m.vaultUnlockHint()) + "\n")
 	b.WriteString(m.keyHint("enter unlock · esc cancel"))
 	return b.String()

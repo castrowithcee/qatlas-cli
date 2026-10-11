@@ -344,8 +344,7 @@ func (m *Model) pathFrame() (string, string) {
 			label = "edit path: "
 		}
 		prefix, width := m.fit(label)
-		in := m.pathInput
-		in.Width = max(width-1, 1)
+		in := fitInput(m.pathInput, width)
 		// The text input pads to its width without counting the completion it draws after the cursor, so
 		// the line is cut back to the room there is.
 		foot.WriteString("\n" + prefix + lipgloss.NewStyle().MaxWidth(width).Render(in.View()) + "\n")

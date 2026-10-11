@@ -3523,7 +3523,7 @@ func (m *Model) editorView() string {
 			where = "the vault"
 		}
 		b.WriteString(titleStyle.Render(fmt.Sprintf("Secret for %s.%s", m.editing, m.secretRole)) + "\n\n")
-		b.WriteString("  " + m.secretInput.View() + "\n")
+		b.WriteString(m.inputLine("  ", m.secretInput) + "\n")
 		b.WriteString(m.indented(
 			"the value is masked while you type, is never shown back, and goes into "+where) + "\n")
 		b.WriteString(m.keyHint("enter store · esc cancel"))
@@ -3835,9 +3835,29 @@ func (m *Model) searchLine(l *filterList, label string) string {
 	if !l.editing {
 		return prefix + truncateCells(l.query(), width)
 	}
-	in := l.input
+	return prefix + fitInput(l.input, width).View()
+}
+
+// fitInput returns in scrolling horizontally inside width cells, the cell of the cursor included. The
+// scroll state of a text input is only computed when it is edited or its cursor is set, so the cursor is
+// set again here: a width given to a copy alone would still draw the whole value. The value itself is
+// never cut, only what is drawn of it.
+func fitInput(in textinput.Model, width int) textinput.Model {
+	if lipgloss.Width(in.Value()) < width {
+		// Nothing scrolls, and a width would only pad the line with blanks behind the cursor.
+		return in
+	}
 	in.Width = max(width-1, 1)
-	return prefix + in.View()
+	pos := in.Position()
+	in.CursorEnd()
+	in.SetCursor(pos)
+	return in
+}
+
+// inputLine draws in behind prefix on one line of the room the terminal leaves.
+func (m *Model) inputLine(prefix string, in textinput.Model) string {
+	prefix, width := m.fit(prefix)
+	return prefix + fitInput(in, width).View()
 }
 
 // listRows draws the shown entry at index i of the list as a row of its table, with the columns laid out
@@ -4738,7 +4758,7 @@ func (m *Model) renderField(f field, focused bool) string {
 		value = "(" + m.roleState(m.editing, f.label, m.credentialType()) + ")"
 	case f.kind == fieldMasked && focused:
 		// The input draws one mask character per typed character and never the characters themselves.
-		value = f.input.View()
+		value = fitInput(f.input, m.valueRoom(f.label)).View()
 	case f.kind == fieldMasked && f.input.Value() != "":
 		value = "(entered, masked)"
 	case f.kind == fieldMasked && f.stored:
@@ -4808,10 +4828,11 @@ func (m *Model) renderField(f field, focused bool) string {
 		}
 		value = strings.Join(lines, "\n")
 	case focused && !f.readOnly:
-		value = f.input.View()
+		source := ""
 		if f.kind == fieldEnvName && f.value() != "" {
-			value += " (" + m.envSource(f.value()) + ")"
+			source = " (" + m.envSource(f.value()) + ")"
 		}
+		value = fitInput(f.input, m.valueRoom(f.label)-lipgloss.Width(source)).View() + source
 	case f.kind == fieldEnvName && value != "":
 		value += " (" + m.envSource(value) + ")"
 	case value == "":
@@ -4823,14 +4844,30 @@ func (m *Model) renderField(f field, focused bool) string {
 // formIndent is where the value of a form row starts: the focus marker and the label column.
 const formIndent = 15
 
+// formHead is the focus marker and the label of a form row. A label longer than its column pushes the value
+// further right.
+func formHead(active bool, label string) string {
+	marker := "  "
+	if active {
+		marker = "> "
+	}
+	return fmt.Sprintf("%s%-12s ", marker, label)
+}
+
+// valueRoom is the room a form row with the given label leaves for its value.
+func (m *Model) valueRoom(label string) int {
+	_, width := m.fit(strings.Repeat(" ", lipgloss.Width(formHead(false, label))))
+	return width
+}
+
 // formRow draws one form row: the focus marker, the label, and the value, which continues under itself
 // when it does not fit instead of pushing past the right edge.
 func (m *Model) formRow(active bool, label, value string) string {
-	marker, style := "  ", lipgloss.NewStyle()
+	style := lipgloss.NewStyle()
 	if active {
-		marker, style = "> ", activeStyle
+		style = activeStyle
 	}
-	head := fmt.Sprintf("%s%-12s ", marker, label)
+	head := formHead(active, label)
 	indent, width := m.fit(strings.Repeat(" ", lipgloss.Width(head)))
 	lines := strings.Split(render(style, width, value), "\n")
 	lines[0] = style.Render(head) + lines[0]

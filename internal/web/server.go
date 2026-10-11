@@ -321,14 +321,15 @@ func (s *Server) withSession(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // withSecurityHeaders adds the headers every response of this server carries, whatever it answers:
-// nothing is ever cached, no referrer ever leaves this response, and a content security policy keeps a
+// nothing is ever cached, no referrer ever leaves for another origin, and a content security policy keeps a
 // browser from loading anything but the document itself and its own stylesheet, and from submitting
 // forms anywhere but back to it, since the page ships no external asset and no script.
 func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Cache-Control", "no-store")
-		h.Set("Referrer-Policy", "no-referrer")
+		// same-origin, not no-referrer: no-referrer makes a browser send "Origin: null" on form POSTs.
+		h.Set("Referrer-Policy", "same-origin")
 		h.Set("Content-Security-Policy",
 			"default-src 'none'; style-src 'self'; script-src 'none'; img-src 'none'; "+
 				"base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
