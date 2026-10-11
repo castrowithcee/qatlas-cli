@@ -33,14 +33,12 @@ var memberRights = []string{
 	"can_delete_stories", "can_post_messages", "can_edit_messages", "can_pin_messages", "can_manage_topics",
 	"can_send_messages", "can_send_audios", "can_send_documents", "can_send_photos", "can_send_videos",
 	"can_send_video_notes", "can_send_voice_notes", "can_send_polls", "can_send_other_messages",
-	"can_add_web_page_previews",
+	"can_add_web_page_previews", "can_react_to_messages", "can_edit_tag", "can_manage_direct_messages",
+	"can_manage_tags", "can_send_welcome_messages",
 }
 
-var permissionNames = []string{
-	"can_send_messages", "can_send_audios", "can_send_documents", "can_send_photos", "can_send_videos",
-	"can_send_video_notes", "can_send_voice_notes", "can_send_polls", "can_send_other_messages",
-	"can_add_web_page_previews", "can_change_info", "can_invite_users", "can_pin_messages", "can_manage_topics",
-}
+// permissionNames shares one list with members.restrict so the chat rights shown and set cannot diverge.
+var permissionNames = restrictPermissionNames
 
 func booleanProperties(names []string) string {
 	var b strings.Builder
@@ -174,6 +172,8 @@ type permissionsOut struct {
 	CanInviteUsers        *bool `json:"can_invite_users,omitempty"`
 	CanPinMessages        *bool `json:"can_pin_messages,omitempty"`
 	CanManageTopics       *bool `json:"can_manage_topics,omitempty"`
+	CanReactToMessages    *bool `json:"can_react_to_messages,omitempty"`
+	CanEditTag            *bool `json:"can_edit_tag,omitempty"`
 }
 
 type chatOut struct {
@@ -233,6 +233,12 @@ type memberOut struct {
 	CanSendPolls          *bool `json:"can_send_polls,omitempty"`
 	CanSendOtherMessages  *bool `json:"can_send_other_messages,omitempty"`
 	CanAddWebPagePreviews *bool `json:"can_add_web_page_previews,omitempty"`
+
+	CanReactToMessages      *bool `json:"can_react_to_messages,omitempty"`
+	CanEditTag              *bool `json:"can_edit_tag,omitempty"`
+	CanManageDirectMessages *bool `json:"can_manage_direct_messages,omitempty"`
+	CanManageTags           *bool `json:"can_manage_tags,omitempty"`
+	CanSendWelcomeMessages  *bool `json:"can_send_welcome_messages,omitempty"`
 }
 
 func (m *memberOut) capped() {
