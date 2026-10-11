@@ -511,7 +511,8 @@ func Register(reg *capability.Registry) error {
 		articlesList.ID, articlesGet.ID, voucherlistList.ID, paymentsGet.ID, vouchersGet.ID,
 		quotationsGet.ID, orderConfirmationsGet.ID, creditNotesGet.ID, deliveryNotesGet.ID,
 		dunningsGet.ID, downPaymentInvoicesGet.ID, recurringTemplatesList.ID, recurringTemplatesGet.ID,
-		profileGet.ID, countriesList.ID, paymentConditionsList.ID, postingCategoriesList.ID, printLayoutsList.ID}
+		profileGet.ID, countriesList.ID, paymentConditionsList.ID, postingCategoriesList.ID, printLayoutsList.ID,
+		eventSubscriptionsList.ID, eventSubscriptionsGet.ID}
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Lexware Office", DefaultBaseURL: gateway,
 		Description:        "Online accounting and invoicing service for small businesses",
@@ -534,12 +535,12 @@ func Register(reg *capability.Registry) error {
 		},
 		Profiles: []config.ToolProfile{{
 			ID: "read", Title: "Read invoices, vouchers, contacts, articles and reference data", Recommended: true,
-			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile and reference data; creates " +
+			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile, reference data and webhook subscriptions; creates " +
 				"nothing in Lexware Office",
 			Tools: readTools,
 		}, {
 			ID: "write", Title: "Master data and drafts",
-			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile and reference data and " +
+			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile, reference data and webhook subscriptions and " +
 				"creates invoice, quotation, order confirmation, credit note, delivery note and dunning drafts and creates and changes articles and contacts and uploads receipt files; issuing a voucher is never part of a profile",
 			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, quotationsCreate.ID,
 				orderConfirmationsCreate.ID, creditNotesCreate.ID, deliveryNotesCreate.ID, dunningsCreate.ID, articlesCreate.ID, articlesUpdate.ID,
@@ -590,6 +591,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: downPaymentInvoicesGet, Handler: salesVoucherHandler(downPaymentInvoiceKind)},
 		capability.Operation{Descriptor: recurringTemplatesList, Handler: capability.Handler(invokeRecurringTemplatesList)},
 		capability.Operation{Descriptor: recurringTemplatesGet, Handler: capability.Handler(invokeRecurringTemplatesGet)},
+		capability.Operation{Descriptor: eventSubscriptionsList, Handler: capability.Handler(invokeEventSubscriptionsList)},
+		capability.Operation{Descriptor: eventSubscriptionsGet, Handler: invokeEventSubscriptionsGet},
+		capability.Operation{Descriptor: eventSubscriptionsDelete, Handler: invokeEventSubscriptionsDelete},
 		capability.Operation{Descriptor: documentsDownload, Handler: capability.Handler(invokeDocumentsDownload)},
 		capability.Operation{Descriptor: filesDownload, Handler: capability.Handler(invokeFilesDownload)},
 		capability.Operation{Descriptor: filesUpload, Handler: capability.Handler(invokeFilesUpload)},
