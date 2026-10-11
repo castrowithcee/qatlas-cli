@@ -189,8 +189,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 57 {
-		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, three activity link, three workflow read, four workflow control, four webhook, two member read, seven role, and nine data model operations", len(operations))
+	if len(operations) != 59 {
+		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, three activity link, three workflow read, four workflow control, four webhook, two member read, seven role, two view, and nine data model operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -264,19 +264,21 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		operations[41].ID != "twentycrm.roles.setobjectpermissions" ||
 		operations[42].ID != "twentycrm.roles.setpermissionflags" ||
 		operations[43].ID != "twentycrm.roles.update" ||
-		operations[44].ID != "twentycrm.webhooks.delete" ||
-		operations[45].ID != "twentycrm.webhooks.get" ||
-		operations[46].ID != "twentycrm.webhooks.list" ||
-		operations[47].ID != "twentycrm.webhooks.update" ||
-		operations[48].ID != "twentycrm.workflowruns.list" ||
-		operations[49].ID != "twentycrm.workflowruns.retry" ||
-		operations[50].ID != "twentycrm.workflowruns.stop" ||
-		operations[51].ID != "twentycrm.workflows.get" ||
-		operations[52].ID != "twentycrm.workflows.list" ||
-		operations[53].ID != "twentycrm.workflowversions.activate" ||
-		operations[54].ID != "twentycrm.workflowversions.deactivate" ||
-		operations[55].ID != "twentycrm.workspacemembers.get" ||
-		operations[56].ID != "twentycrm.workspacemembers.list" {
+		operations[44].ID != "twentycrm.views.get" ||
+		operations[45].ID != "twentycrm.views.list" ||
+		operations[46].ID != "twentycrm.webhooks.delete" ||
+		operations[47].ID != "twentycrm.webhooks.get" ||
+		operations[48].ID != "twentycrm.webhooks.list" ||
+		operations[49].ID != "twentycrm.webhooks.update" ||
+		operations[50].ID != "twentycrm.workflowruns.list" ||
+		operations[51].ID != "twentycrm.workflowruns.retry" ||
+		operations[52].ID != "twentycrm.workflowruns.stop" ||
+		operations[53].ID != "twentycrm.workflows.get" ||
+		operations[54].ID != "twentycrm.workflows.list" ||
+		operations[55].ID != "twentycrm.workflowversions.activate" ||
+		operations[56].ID != "twentycrm.workflowversions.deactivate" ||
+		operations[57].ID != "twentycrm.workspacemembers.get" ||
+		operations[58].ID != "twentycrm.workspacemembers.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1182,6 +1184,9 @@ func wantSensitivity(id string) string {
 	}
 	if strings.HasPrefix(id, Provider+".roles.") {
 		return roleDataSensitivity
+	}
+	if strings.HasPrefix(id, Provider+".views.") {
+		return viewDataSensitivity
 	}
 	if strings.HasPrefix(id, Provider+".meta") {
 		return metadataSensitivity
