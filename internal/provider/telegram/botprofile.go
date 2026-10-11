@@ -3,7 +3,6 @@ package telegram
 import (
 	"context"
 	"encoding/json"
-	"regexp"
 	"strconv"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -18,8 +17,6 @@ const (
 	maxBotDescriptionRunes      = 512
 	maxBotShortDescriptionRunes = 120
 )
-
-var languageCodePattern = regexp.MustCompile(`^[a-z]{2}$`)
 
 const languageCodeSchema = `"language_code":{"type":"string","pattern":"^([a-z]{2})?$"}`
 
@@ -102,7 +99,7 @@ type profileOut struct {
 }
 
 func checkLanguage(op, code string) error {
-	if code != "" && !languageCodePattern.MatchString(code) {
+	if !validLanguageCode(code) {
 		return providerError(op, "language_code must be empty or two lowercase letters")
 	}
 	return nil
@@ -117,14 +114,14 @@ func invokeProfileGet(ctx context.Context, resolved *config.Resolved, secrets *s
 	if err := decodeStrict(raw, &arguments); err != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
-	client, err := openBot(ctx, resolved, secrets, red, op, arguments.LanguageCode)
+	client, err := openBotProfile(ctx, resolved, secrets, red, op, arguments.LanguageCode)
 	if err != nil {
 		return nil, err
 	}
 	return client.GetProfile(ctx, arguments.LanguageCode)
 }
 
-func openBot(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+func openBotProfile(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
 	op, language string) (*Client, error) {
 	if resolved == nil {
 		return nil, providerError(op, "no connection was selected")
@@ -157,7 +154,7 @@ func invokeProfileSet(op, method, field string, limit int) capability.Handler {
 		if err := checkRunes(op, field, *value, 0, limit); err != nil {
 			return nil, err
 		}
-		client, err := openBot(ctx, resolved, secrets, red, op, code)
+		client, err := openBotProfile(ctx, resolved, secrets, red, op, code)
 		if err != nil {
 			return nil, err
 		}
