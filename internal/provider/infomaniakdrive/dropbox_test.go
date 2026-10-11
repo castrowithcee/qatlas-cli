@@ -31,12 +31,6 @@ func dropboxPathOf(fileID int64) string {
 
 func dropboxCases() []linkCase {
 	return []linkCase{
-		{"create", dropboxCreate.ID, dropboxArgs(fmt.Sprintf(`,"alias":"Invoices","password":%q,"valid_until":%q,`+
-			`"limit_file_size":1048576,"email_when_finished":true`, passwordCanary, expiryText)), http.MethodPost,
-			fmt.Sprintf(`{"alias":"Invoices","email_when_finished":true,"limit_file_size":1048576,"password":%q,"valid_until":%d}`,
-				passwordCanary, expiryUnix), envelopeSuccess(dropboxJSONOf(dropboxURL))},
-		{"update", dropboxUpdate.ID, dropboxArgs(`,"limit_file_size":2048`), http.MethodPut, `{"limit_file_size":2048}`,
-			envelopeSuccess(`true`)},
 		{"delete", dropboxDelete.ID, dropboxArgs(""), http.MethodDelete, "", envelopeSuccess(`true`)},
 	}
 }
@@ -45,9 +39,8 @@ func TestDropboxDescriptors(t *testing.T) {
 	want := map[string]struct {
 		effect  capability.Effect
 		confirm bool
-	}{dropboxGet.ID: {capability.EffectRead, false}, dropboxCreate.ID: {capability.EffectCreate, true},
-		dropboxUpdate.ID: {capability.EffectUpdate, true}, dropboxDelete.ID: {capability.EffectDelete, true}}
-	for _, d := range []capability.Descriptor{dropboxGet, dropboxCreate, dropboxUpdate, dropboxDelete} {
+	}{dropboxGet.ID: {capability.EffectRead, false}, dropboxDelete.ID: {capability.EffectDelete, true}}
+	for _, d := range []capability.Descriptor{dropboxGet, dropboxDelete} {
 		w := want[d.ID]
 		r := d.Risk
 		if r.Effect != w.effect || !d.RequiresToolAllowList || !r.OpenWorld || r.DataSensitivity != dropboxSensitivity {
@@ -68,7 +61,6 @@ func TestDropboxDescriptors(t *testing.T) {
 }
 
 func TestDropboxChangesSendExactlyOneRequest(t *testing.T) {
-	fixLinkClock(t)
 	for _, tt := range dropboxCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []call
@@ -94,14 +86,8 @@ func TestDropboxChangesSendExactlyOneRequest(t *testing.T) {
 				out.DriveID != ownDrive || out.FileID != childFileID {
 				t.Fatalf("result = %s, %v", result, err)
 			}
-			if tt.name == "create" && (out.Dropbox == nil || out.Dropbox.URL != dropboxURL || !out.Dropbox.HasPassword) {
-				t.Fatalf("result = %s, want the created dropbox", result)
-			}
-			if tt.name != "create" && out.Dropbox != nil {
+			if out.Dropbox != nil {
 				t.Fatalf("result = %s, want no dropbox", result)
-			}
-			if strings.Contains(result, passwordCanary) {
-				t.Fatalf("result = %s shows the password", result)
 			}
 		})
 	}
@@ -141,7 +127,6 @@ func TestDropboxToolsNeedConfirmationAndToolList(t *testing.T) {
 }
 
 func TestDropboxToolsRefuseForeignDrives(t *testing.T) {
-	fixLinkClock(t)
 	cases := append(dropboxCases(), linkCase{name: "get", tool: dropboxGet.ID, args: dropboxArgs("")})
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -173,28 +158,11 @@ func TestDropboxToolsRefuseForeignDrives(t *testing.T) {
 }
 
 func TestDropboxToolsValidateArguments(t *testing.T) {
-	fixLinkClock(t)
 	cases := []struct{ name, tool, args string }{
 		{"root get", dropboxGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1}`, ownDrive)},
-		{"root create", dropboxCreate.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1}`, ownDrive)},
-		{"root update", dropboxUpdate.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1,"alias":"x"}`, ownDrive)},
 		{"root delete", dropboxDelete.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1}`, ownDrive)},
 		{"zero id", dropboxDelete.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":0}`, ownDrive)},
 		{"string id", dropboxGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":"5/../9"}`, ownDrive)},
-		{"short password", dropboxCreate.ID, dropboxArgs(`,"password":"abc"`)},
-		{"control password", dropboxCreate.ID, dropboxArgs(fmt.Sprintf(`,"password":%q`, "abcdefgh\x07ij"))},
-		{"long alias", dropboxCreate.ID, dropboxArgs(`,"alias":"` + strings.Repeat("a", 101) + `"`)},
-		{"control alias", dropboxCreate.ID, dropboxArgs(`,"alias":"a\u0007b"`)},
-		{"empty alias", dropboxCreate.ID, dropboxArgs(`,"alias":""`)},
-		{"null alias", dropboxUpdate.ID, dropboxArgs(`,"alias":null`)},
-		{"zero size", dropboxCreate.ID, dropboxArgs(`,"limit_file_size":0`)},
-		{"negative size", dropboxCreate.ID, dropboxArgs(`,"limit_file_size":-5`)},
-		{"huge size", dropboxCreate.ID, dropboxArgs(`,"limit_file_size":9999999999999`)},
-		{"past expiry", dropboxCreate.ID, dropboxArgs(`,"valid_until":"2025-06-01T00:00:00Z"`)},
-		{"far expiry", dropboxCreate.ID, dropboxArgs(`,"valid_until":"2040-06-01T00:00:00Z"`)},
-		{"bad expiry", dropboxCreate.ID, dropboxArgs(`,"valid_until":"tomorrow at noon please"`)},
-		{"update empty", dropboxUpdate.ID, dropboxArgs("")},
-		{"extra field", dropboxCreate.ID, dropboxArgs(`,"method":"DELETE"`)},
 		{"extra on get", dropboxGet.ID, dropboxArgs(`,"alias":"x"`)},
 	}
 	for _, tt := range cases {
@@ -215,7 +183,6 @@ func TestDropboxToolsValidateArguments(t *testing.T) {
 }
 
 func TestDropboxErrorsAndUncertainOutcomesAreNeverRepeated(t *testing.T) {
-	fixLinkClock(t)
 	statuses := []struct {
 		status int
 		class  provider.Class
@@ -271,50 +238,6 @@ func TestDropboxErrorsAndUncertainOutcomesAreNeverRepeated(t *testing.T) {
 				t.Fatalf("result = %s, %v, calls = %d, want pending", result, err, len(calls))
 			}
 		})
-	}
-}
-
-func TestDropboxCreateWithUnusableAnswerReportsUncertainty(t *testing.T) {
-	for name, answer := range map[string]string{
-		"flag":  envelopeSuccess(`true`),
-		"no id": envelopeSuccess(`{"uuid":"x"}`),
-	} {
-		t.Run(name, func(t *testing.T) {
-			var calls []call
-			env := newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(*http.Request) (*http.Response, error) {
-				return jsonResponse(200, answer), nil
-			}), nil)
-			_, err := env.invokeConfirmed(dropboxCreate.ID, "dropbox", dropboxArgs(""))
-			if classOf(err) != provider.ClassInvalidResponse || !strings.Contains(err.Error(), "may have been applied") ||
-				len(calls) != 2 {
-				t.Fatalf("err = %v, calls = %d", err, len(calls))
-			}
-		})
-	}
-}
-
-func TestDropboxPasswordNeverAppearsAnywhere(t *testing.T) {
-	fixLinkClock(t)
-	args := dropboxArgs(fmt.Sprintf(`,"password":%q`, passwordCanary))
-	var calls []call
-	echoed := strings.Replace(dropboxJSONOf(dropboxURL), `"name"`, fmt.Sprintf(`"password":%q,"name"`, passwordCanary), 1)
-	env := newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(*http.Request) (*http.Response, error) {
-		return jsonResponse(200, envelopeSuccess(echoed)), nil
-	}), nil)
-	result, err := env.invokeConfirmed(dropboxCreate.ID, "dropbox", args)
-	if err != nil || strings.Contains(result, passwordCanary) {
-		t.Fatalf("result = %s, %v", result, err)
-	}
-	env = newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(*http.Request) (*http.Response, error) {
-		return jsonResponse(500, passwordCanary), nil
-	}), nil)
-	for _, input := range []string{args,
-		fmt.Sprintf(`{"drive_id":%d,"file_id":1,"password":%q}`, ownDrive, passwordCanary),
-		fmt.Sprintf(`{"drive_id":%d,"file_id":%d,"password":%q}`, foreignDrive, childFileID, passwordCanary)} {
-		_, err := env.invokeConfirmed(dropboxCreate.ID, "dropbox", input)
-		if err == nil || strings.Contains(err.Error(), passwordCanary) || strings.Contains(env.red.Error(err), passwordCanary) {
-			t.Fatalf("err = %v", err)
-		}
 	}
 }
 
