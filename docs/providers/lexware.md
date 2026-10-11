@@ -3,8 +3,8 @@ description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
   articles, the organization profile and reference data, voucher document downloads, invoice, quotation, order
   confirmation, credit note, delivery note and dunning drafts, issuing of sales vouchers, contact and article
-  writes, article deletion, receipt file uploads, recording of vouchers to check, reading and deleting webhook
-  subscriptions, permissions, and credentials.
+  writes, article deletion, receipt file uploads, recording, booking and changing of vouchers, reading and
+  deleting webhook subscriptions, permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -49,8 +49,19 @@ attached. An unaccepted file (HTTP 406) is reported without the provider's text.
 confirmation) and sends exactly one request without a retry. It takes only the schema fields: type, number,
 dates, totals, tax type, either `contact_id` or `use_collective_contact`, and up to 100 positions with
 `category_id` from `lexware.postingcategories.list`. Lexware forbids net vouchers in this status, so
-`tax_type` `net` is refused before any request. After an unclear outcome the error says that the voucher may
-have been created.
+`tax_type` `net` is refused before any request; `lexware.vouchers.book` without `id` records them. After an
+unclear outcome the error says that the voucher may have been created.
+
+`lexware.vouchers.book` books a voucher for good (status `open`, no way back through the API) in two exclusive
+forms: with `id` alone it books an existing voucher whose status is `unchecked`; without `id` it records a new
+booked voucher from the fields of `lexware.vouchers.create`, and `tax_type` `net` is allowed. A mix of both is
+refused before any request. `lexware.vouchers.update` replaces the fields of a booked voucher (status `open`)
+with a full set as in create; an omitted optional field is removed, positions are replaced as a whole. Both
+read the voucher first, refuse any other status without a write and send one request with the version they
+read; a conflict is reported as such. Members outside the schema, above all the attached files, stay as read.
+After an unclear outcome the error says that the voucher may have been created or changed. Both tools are
+offered only to a connection whose `tools` list names them and whose `permissions` contain `update`; no
+profile selects them.
 
 A connection may carry one optional target `organization/<uuid>` (the `organizationId` of the profile). It
 protects connections whose keys belong to different customers: before the first request of a tool, Qatlas

@@ -234,3 +234,19 @@ func TestObjectBoundsAndUniqueItemsAreDescribed(t *testing.T) {
 		}
 	}
 }
+
+func TestUnionTypesAreDescribed(t *testing.T) {
+	descriptor := testDescriptor("fake.rows.create", capability.EffectCreate, capability.ConfirmationNone)
+	descriptor.InputSchema = json.RawMessage(`{"type":"object","properties":{` +
+		`"a":{"anyOf":[{"type":"string"},{"type":"number"},{"type":"boolean"}]},` +
+		`"b":{"type":"array","items":{"anyOf":[{"type":"string"},{"type":"number"}]}},` +
+		`"c":{"anyOf":[{"type":"string"},{"type":"array","items":{"type":"string"}},{"type":"null"}]},` +
+		`"d":{"anyOf":[{"required":["x"]}]}}}`)
+	want := map[string]string{"a": "string|number|boolean", "b": "(string|number)[]",
+		"c": "string|string[]|null", "d": "any"}
+	for _, row := range Compact(descriptor).Arguments {
+		if row.Type != want[row.Name] {
+			t.Errorf("%s: type = %q, want %q", row.Name, row.Type, want[row.Name])
+		}
+	}
+}
