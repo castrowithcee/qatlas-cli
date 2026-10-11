@@ -21,10 +21,9 @@ It also covers webhooks (see Webhooks), workflows (see Controlling workflows), a
 Data model). Mutations require confirmation and only use the generated REST routes of the company or of a
 reachable object, or fixed metadata, webhook, and workflow routes. Qatlas sends each mutation once; after an
 unclear result (timeout, reset, server error, unreadable answer) it reports the outcome as uncertain and does
-not repeat the request.
+not repeat the request. Qatlas spaces the requests of one key to Twenty's limit of 100 per minute.
 
-A `domain` value sets the primary link to `https://<domain>` with the domain as its label; an empty value
-clears both. Qatlas spaces the requests of one key to Twenty's limit of 100 per minute.
+A `domain` sets the primary link `https://<domain>` with the domain as label; an empty value clears both.
 
 ## Object targets
 
@@ -57,14 +56,11 @@ argument. A list returns one page without filters (see Filtering and counting re
 100 records, with an opaque `next_cursor`. `order_by` sorts by one field, or by `field.subfield` of a
 composite field, in direction `asc` or `desc`. Relation, array, and rich-text fields cannot be sorted by.
 
-- `fields` names at most 50 top-level fields and is sent to Twenty as its `fields` parameter. Qatlas checks
-  `fields` and `order_by` against the response shape of the object in the workspace document, so an unknown
-  field is refused before any record is read, and the refusal does not name it. The timestamps of a record
-  are always read along.
-- Each record carries `id`, `created_at`, `updated_at`, and `fields` (field name to value). Qatlas always
-  reads at depth 0: a relation appears only as its identifier field (`companyId`), never as an embedded
-  record, and a relation to an object the connection cannot reach stays an identifier. Rich text appears
-  only as `markdown`, never as its block document.
+- Qatlas checks `fields` and `order_by` against the response shape of the object in the workspace document,
+  so an unknown field is refused before any record is read, and the refusal does not name it.
+- Qatlas always reads at depth 0: a relation appears only as its identifier field (`companyId`), never as an
+  embedded record, and a relation to an object the connection cannot reach stays an identifier. Rich text
+  appears only as `markdown`.
 - A cursor is bound to the connection, object, sort, and field selection that produced it; any other use is
   refused before a request is sent.
 - A value or an answer above the bounds is an invalid response; Qatlas does not cut it.
@@ -116,9 +112,8 @@ text of it.
 
 ## Reading workflows
 
-`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) are workspace-wide and let an agent follow
-automations and find failed runs. `workflow`, `workflowVersion`, and `workflowRun` are system objects, so the
-record tools never reach them; these tools use fixed routes and a fixed field selection.
+`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) are workspace-wide. `workflow`,
+`workflowVersion`, and `workflowRun` are system objects, so the record tools never reach them.
 
 - Step and trigger settings, run outputs, context, state, and error texts are never read out.
 - A workflow run cannot be started with an API key: Twenty refuses it, and Qatlas does not work around that.
@@ -213,10 +208,9 @@ from an argument. An object that the schema gives no single link relation cannot
 ## Attachments
 
 `attachments.list` and `attachments.get` (`read`) read the files attached to a record of any reachable object;
-the system object `attachment` is reachable through no other tool. The field that links an attachment to the
-object (`target<Object>Id`) comes from the workspace schema, never from an argument. `list` returns no
-download address; attachments without a file, with several targets, or with an unreachable one are counted
-in `omitted`. Labels and content are untrusted record data.
+the system object `attachment` is reachable through no other tool. The linking field (`target<Object>Id`) comes
+from the workspace schema, never from an argument. `list` returns no download address and counts attachments
+without a file or without exactly one reachable target in `omitted`. Labels and content are untrusted data.
 
 - `get` reads the attachment first and needs exactly one target on a reachable object; otherwise it answers
   as if the attachment did not exist, before a download. An attachment without a file is an error.
