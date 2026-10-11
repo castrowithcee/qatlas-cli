@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"filippo.io/age"
 
@@ -40,9 +41,12 @@ func tokenFixture(t *testing.T) (*Server, *Client, string, string) {
 	}
 	s := NewServer(key, snap.Secrets, snap.Bindings)
 	s.Verify = allow
+	// An approval syncs files and log lines under one lock; on a slow runner that can outlast the 5 s default.
+	// Both sides need the longer limit: a server deadline alone hands the client EOF instead of an answer.
+	s.RequestTimeout = time.Minute
 	s.ApproveWithTokens(v.Dir())
 	s.KeepLog(v.Dir(), 90)
-	return s, &Client{Recipient: key.Recipient().String(), Verify: allow}, token.Value, v.Dir()
+	return s, &Client{Recipient: key.Recipient().String(), Verify: allow, Timeout: time.Minute}, token.Value, v.Dir()
 }
 
 func tokenVorbild() vault.Scope {
