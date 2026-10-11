@@ -211,15 +211,15 @@ func (c *Client) requireInstanceTeams(ctx context.Context, op, what string) erro
 
 // openInstance applies the whole gate and returns a client. The local check runs before the secret is read.
 func openInstance(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
-	op string) (*Client, error) {
-	if err := requireInstanceScope(resolved, botsAdministered); err != nil {
+	op, what string) (*Client, error) {
+	if err := requireInstanceScope(resolved, what); err != nil {
 		return nil, err
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
 		return nil, err
 	}
-	if err := client.requireInstanceTeams(ctx, op, botsAdministered); err != nil {
+	if err := client.requireInstanceTeams(ctx, op, what); err != nil {
 		return nil, err
 	}
 	return client, nil
@@ -247,7 +247,7 @@ func invokeBotsList(ctx context.Context, resolved *config.Resolved, secrets *sec
 	if input.PerPage == 0 {
 		input.PerPage = defaultListLimit
 	}
-	client, err := openInstance(ctx, resolved, secrets, red, op)
+	client, err := openInstance(ctx, resolved, secrets, red, op, botsAdministered)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +289,7 @@ func prepareBot(ctx context.Context, resolved *config.Resolved, secrets *secret.
 			return nil, nil, err
 		}
 	}
-	client, err := openInstance(ctx, resolved, secrets, red, op)
+	client, err := openInstance(ctx, resolved, secrets, red, op, botsAdministered)
 	if err != nil {
 		return nil, nil, err
 	}
