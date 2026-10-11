@@ -60,7 +60,7 @@ const mixedUpdates = `[
  {"update_id":12,"callback_query":{"id":"CBQUERYID","from":{"id":8,"is_bot":false,"first_name":"Bob"},"data":"approve:1","message":{"message_id":9,"date":0,"chat":{"id":-100}}}},
  {"update_id":13,"callback_query":{"id":"FOREIGNCB","from":{"id":8},"data":"x","message":{"message_id":9,"chat":{"id":-999}}}},
  {"update_id":14,"inline_query":{"id":"IQ","from":{"id":1},"query":"FOREIGNQUERY"}},
- {"update_id":15,"chat_join_request":{"chat":{"id":-100},"from":{"id":55,"is_bot":false,"first_name":"Joe"},"user_chat_id":55,"date":200,"bio":"BIO"}},
+ {"update_id":15,"chat_join_request":{"chat":{"id":-100},"from":{"id":55,"is_bot":false,"first_name":"Joe"},"user_chat_id":55,"date":200,"bio":"BIO","query_id":"JOINQUERYID"}},
  {"update_id":16,"document_ignored":true,"edited_channel_post":{"message_id":4,"date":300,"chat":{"id":-100},"document":{"file_id":"DOCFILEID","file_size":5,"mime_type":"text/plain","file_name":"a.txt"}}},
  {"update_id":17,"callback_query":{"id":"INLINECB","from":{"id":8},"data":"x"}}
 ]`
@@ -78,7 +78,7 @@ func TestUpdatesListFiltersBoundChatsAndSignsReferences(t *testing.T) {
 	encoded, _ := json.Marshal(got)
 	text := string(encoded)
 	for _, forbidden := range []string{"FOREIGNTEXT", "FOREIGNCB", "FOREIGNQUERY", "SMALLFILEID", "BIGFILEID", "DOCFILEID",
-		"CBQUERYID", "BIO", "-999", "INLINECB"} {
+		"CBQUERYID", "JOINQUERYID", "BIO", "-999", "INLINECB"} {
 		if strings.Contains(text, forbidden) {
 			t.Errorf("output contains %q: %s", forbidden, text)
 		}
@@ -108,11 +108,11 @@ func TestUpdatesListFiltersBoundChatsAndSignsReferences(t *testing.T) {
 	if id, err := client.checkRef(ref); err != nil || id != "CBQUERYID" || updates[1].CallbackData != "approve:1" {
 		t.Errorf("callback ref = %q, %v", id, err)
 	}
-	ref, err = parseRef(resolved, refJoinRequest, updates[2].JoinRequestRef)
+	ref, err = parseRef(resolved, refJoinRequestQuery, updates[2].JoinRequestRef)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if id, err := client.checkRef(ref); err != nil || id != "55" {
+	if id, err := client.checkRef(ref); err != nil || id != "JOINQUERYID" {
 		t.Errorf("join ref = %q, %v", id, err)
 	}
 	if updates[3].Type != "edited_channel_post" || updates[3].Media.Kind != "document" ||
