@@ -25,6 +25,7 @@ const (
 	carddavN = "urn:ietf:params:xml:ns:carddav"
 	appleNS  = "http://apple.com/ns/ical/"
 	ownerNS  = "http://owncloud.org/ns"
+	ncNS     = "http://nextcloud.com/ns"
 )
 
 var (
@@ -58,16 +59,25 @@ const (
 	KeyETag        = "etag"
 	KeyCalendar    = "calendar-data"
 	KeyAddress     = "address-data"
+	// Keys of the calendar trash bin properties.
+	KeyContentType = "content-type"
+	KeyDeletedAt   = "deleted-at"
+	KeyCalendarURI = "calendar-uri"
+	KeyRetention   = "retention-duration"
 )
 
 var textProps = map[xml.Name]string{
-	{Space: davNS, Local: "displayname"}:                KeyName,
-	{Space: caldavNS, Local: "calendar-description"}:    KeyDescription,
-	{Space: carddavN, Local: "addressbook-description"}: KeyDescription,
-	{Space: appleNS, Local: "calendar-color"}:           KeyColor,
-	{Space: davNS, Local: "getetag"}:                    KeyETag,
-	{Space: caldavNS, Local: "calendar-data"}:           KeyCalendar,
-	{Space: carddavN, Local: "address-data"}:            KeyAddress,
+	{Space: davNS, Local: "displayname"}:                 KeyName,
+	{Space: caldavNS, Local: "calendar-description"}:     KeyDescription,
+	{Space: carddavN, Local: "addressbook-description"}:  KeyDescription,
+	{Space: appleNS, Local: "calendar-color"}:            KeyColor,
+	{Space: davNS, Local: "getetag"}:                     KeyETag,
+	{Space: caldavNS, Local: "calendar-data"}:            KeyCalendar,
+	{Space: carddavN, Local: "address-data"}:             KeyAddress,
+	{Space: davNS, Local: "getcontenttype"}:              KeyContentType,
+	{Space: ncNS, Local: "deleted-at"}:                   KeyDeletedAt,
+	{Space: ncNS, Local: "calendar-uri"}:                 KeyCalendarURI,
+	{Space: ncNS, Local: "trash-bin-retention-duration"}: KeyRetention,
 }
 
 // Bounds of one parsed answer.
