@@ -314,8 +314,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 79 {
-		t.Fatalf("tools = %+v, want 79", metadata.Tools)
+	if len(metadata.Tools) != 80 {
+		t.Fatalf("tools = %+v, want 80", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -335,7 +335,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		!has("messaging", pinsList.ID) || !has("messaging", messagesPin.ID) || !has("messaging", messagesUnpin.ID) ||
 		has("read", messagesPin.ID) || has("read", messagesUnpin.ID) || !has("read", flaggedList.ID) ||
 		!has("messaging", flaggedList.ID) || !has("messaging", messagesFlag.ID) || !has("messaging", messagesUnflag.ID) ||
-		has("read", messagesFlag.ID) || has("read", messagesUnflag.ID) {
+		has("read", messagesFlag.ID) || has("read", messagesUnflag.ID) || !has("messaging", messagesRemind.ID) ||
+		has("read", messagesRemind.ID) {
 		t.Fatalf("profiles = %+v", profiles)
 	}
 	if !has("read", emojiList.ID) || has("messaging", emojiList.ID) || has("channel-admin", emojiList.ID) {

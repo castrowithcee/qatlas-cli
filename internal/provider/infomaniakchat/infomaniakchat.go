@@ -27,7 +27,7 @@
 // verifyChannelScope, that the channel belongs to a bound team or is a direct or group channel with their
 // members only, and is refused before the matching endpoint is reached when it does not. Every operation that
 // names a post_id (messages.thread, messages.get, messages.files, messages.update, messages.delete,
-// messages.pin, messages.unpin, messages.flag, messages.unflag, messages.markunread, the reactions tools, and the threads tools, which also
+// messages.pin, messages.unpin, messages.flag, messages.unflag, messages.remind, messages.markunread, the reactions tools, and the threads tools, which also
 // require the root post's channel to be a reachable channel of the named team) reads the post first and binds
 // it to its channel the same way, see verifyPostScope; flagged.list names a team or a channel and drops every post outside the
 // reachable channels of that team or outside that verified channel, and the flag tools only write the fixed
@@ -569,7 +569,7 @@ func Register(reg *capability.Registry) error {
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
 				"a confirmed message, or a confirmed reply to an existing thread, to a reachable channel, " +
 				"uploads a confirmed file to such a channel, edits the text of a confirmed message, adds a " +
-				"confirmed own reaction, pins, unpins, flags, or unflags a confirmed message, follows or unfollows a confirmed thread, " +
+				"confirmed own reaction, pins, unpins, flags, unflags, or sets a reminder for a confirmed message, follows or unfollows a confirmed thread, " +
 				"marks a confirmed channel, message, or thread as read or unread, sets the own presence and custom " +
 				"status or clears the custom status, and creates or changes a confirmed own sidebar category or the " +
 				"notifications of a channel; deleting a message, a category, or removing a reaction is never part " +
@@ -577,7 +577,7 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{teamsList.ID, channelsList.ID, directList.ID, directOpen.ID, groupMessagesOpen.ID,
 				messagesList.ID, messagesThread.ID, messagesGet.ID, messagesSend.ID, messagesUpdate.ID,
 				messagesFiles.ID, filesInfo.ID, filesDownload.ID, filesUpload.ID, reactionsList.ID, reactionsAdd.ID,
-				pinsList.ID, messagesPin.ID, messagesUnpin.ID, flaggedList.ID, messagesFlag.ID, messagesUnflag.ID,
+				pinsList.ID, messagesPin.ID, messagesUnpin.ID, flaggedList.ID, messagesFlag.ID, messagesUnflag.ID, messagesRemind.ID,
 				usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID, statusSet.ID, customStatusSet.ID, customStatusClear.ID, messagesSearch.ID,
 				filesSearch.ID, channelsSearch.ID, threadsList.ID, threadsGet.ID, threadsFollow.ID, threadsUnfollow.ID,
 				channelsUnread.ID, channelsMarkRead.ID, messagesMarkUnread.ID, threadsMarkRead.ID,
@@ -638,6 +638,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(flaggedList), Handler: capability.Handler(invokeFlaggedList)},
 		capability.Operation{Descriptor: withGroup(messagesFlag), Handler: capability.Handler(invokeFlag)},
 		capability.Operation{Descriptor: withGroup(messagesUnflag), Handler: capability.Handler(invokeUnflag)},
+		capability.Operation{Descriptor: withGroup(messagesRemind), Handler: capability.Handler(invokeRemind)},
 		capability.Operation{Descriptor: withGroup(usersGet), Handler: capability.Handler(invokeUsersGet)},
 		capability.Operation{Descriptor: withGroup(usersList), Handler: capability.Handler(invokeUsersList)},
 		capability.Operation{Descriptor: withGroup(usersSearch), Handler: capability.Handler(invokeUsersSearch)},
