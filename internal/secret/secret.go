@@ -252,10 +252,14 @@ func (e *VaultProcessError) Unwrap() error { return e.Err }
 // VaultProcessRemedy names the way out of err, a failure of a running vault process. A long-running
 // command whose program an update replaced is told to restart (see updatedStep); a process that fails
 // another check or speaks another version cannot be asked to lock either, so it has to be ended by its
-// process id; any other failure is fixed by locking the vault and unlocking it again.
+// process id; any other failure, a vault process whose own program was replaced included, is fixed by
+// locking the vault and unlocking it again, which ends such a process.
 func VaultProcessRemedy(err error) string {
 	if step, ok := updatedStep(err); ok {
 		return "qatlas was updated since this process started; " + step
+	}
+	if errors.Is(err, vaultproc.ErrReplaced) {
+		return EndVaultProcess(err) + ", then 'qatlas vault unlock'"
 	}
 	if errors.Is(err, vaultproc.ErrRefused) || errors.Is(err, vaultproc.ErrVersion) {
 		return EndVaultProcess(err) + ", then run 'qatlas vault unlock'"
@@ -265,11 +269,15 @@ func VaultProcessRemedy(err error) string {
 
 // EndVaultProcess says how to end the vault process err came from: by its id where the error carries one,
 // otherwise by finding it first. Where the vault process only refused this process because an update
-// replaced its program, the step is the restart instead; no kill helps there. On Windows a vault process
-// has no console and no window to close, so it is ended with taskkill, and found by its program.
+// replaced its program, the step is the restart instead; no kill helps there. A vault process whose own
+// program was replaced is ended by 'qatlas vault lock'. On Windows a vault process has no console and no
+// window to close, so it is ended with taskkill, and found by its program.
 func EndVaultProcess(err error) string {
 	if step, ok := updatedStep(err); ok {
 		return step
+	}
+	if errors.Is(err, vaultproc.ErrReplaced) {
+		return "run 'qatlas vault lock'"
 	}
 	var peer *vaultproc.PeerError
 	if runtime.GOOS == "windows" {

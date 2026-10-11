@@ -222,7 +222,7 @@ var ErrProgramRefused = fmt.Errorf("%w: the vault process refused this program",
 // vault over, or handed it over, to a successor, which a new connection reaches in a moment, or an update
 // replaced its own program. It wraps ErrProgramRefused, which a process whose program was replaced answered
 // before.
-var ErrReplaced = fmt.Errorf("%w; it was replaced by a newer one", ErrProgramRefused)
+var ErrReplaced = fmt.Errorf("%w; its own program was replaced since it started", ErrProgramRefused)
 
 // ErrHandover reports a handover that did not happen. The vault process locked itself instead; the error
 // wraps the reason, which never carries a secret or a path.
