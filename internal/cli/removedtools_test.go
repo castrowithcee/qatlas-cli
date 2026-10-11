@@ -22,6 +22,8 @@ var removedToolCases = []struct {
 	{"n8n", "api-key", "https://n8n.example.invalid", "", "n8n.users.list", []string{"n8n.users.invite"}},
 	{"infomaniakdrive", "token", "", "[account/1]", "infomaniakdrive.links.get",
 		[]string{"infomaniakdrive.links.create", "infomaniakdrive.links.update"}},
+	{"infomaniakdrive", "token", "", "[account/1]", "infomaniakdrive.dropbox.get",
+		[]string{"infomaniakdrive.dropbox.create", "infomaniakdrive.dropbox.update"}},
 }
 
 func removedToolsConfig(c int, tools string) string {

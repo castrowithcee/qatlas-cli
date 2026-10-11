@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"time"
-	"unicode/utf8"
 
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
 	"github.com/castrowithcee/qatlas-cli/internal/config"
@@ -30,22 +28,11 @@ const (
 
 // Bounds of the arguments and of an answered link.
 const (
-	// minLinkPassword keeps a password long enough for the redactor to mask it; it ignores shorter values.
-	minLinkPassword = 8
-	maxLinkPassword = 128
-	// maxLinkHorizon is how far ahead a link may be set to expire.
-	maxLinkHorizon = 10 * 365 * 24 * time.Hour
-	maxLinkURL     = 1024
+	maxLinkURL = 1024
 )
 
-// linkNow is the clock the expiry check reads; the package's own tests replace it.
-var linkNow = time.Now
-
 const (
-	linkRightSchema    = `{"type":"string","enum":["inherit","password","public"]}`
-	linkPasswordSchema = `{"type":"string","minLength":8,"maxLength":128}`
-	linkExpirySchema   = `{"type":"string","minLength":20,"maxLength":35}`
-	linkFlagSchema     = `{"type":"boolean"}`
+	linkRightSchema = `{"type":"string","enum":["inherit","password","public"]}`
 )
 
 // linkSchema is one share link as returned; the password is never part of it.
@@ -279,19 +266,6 @@ func linkOf(raw shareLinkJSON) (*Link, bool) {
 }
 
 const linkFileReason = "file_id must be a positive integer other than the drive's root"
-
-// validLinkPassword accepts printable text of the bounded length; the value is never quoted in a refusal.
-func validLinkPassword(password string) bool {
-	if len(password) < minLinkPassword || len(password) > maxLinkPassword || !utf8.ValidString(password) {
-		return false
-	}
-	for _, r := range password {
-		if r < 0x20 || r == 0x7f {
-			return false
-		}
-	}
-	return true
-}
 
 func invokeLinksGet(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {

@@ -4,7 +4,7 @@ description: >
   folder, metadata, and content reads, the download to a local path, the confirmed folder creation, rename,
   move, copy, and file upload or replacement, the trash reads and the confirmed trash, restore, and permanent
   deletion, the share link reads and the confirmed deletion of share links with their
-  URL handling, the dropbox (upload link) read and the confirmed creation, change, and deletion
+  URL handling, the dropbox (upload link) read and the confirmed deletion
   of dropboxes, the access read and the confirmed granting, changing, and revoking of user,
   team, and invitation access with their membership check and personal data handling, pagination and cursor
   contracts, the Business kSuite versus personal my kSuite compatibility cases, redirect handling on downloads,
@@ -27,9 +27,9 @@ trash, deleting a trash entry for good, and emptying the trash are separate tool
 permission and an explicit tools list. It reads the share link of a file or folder and lists the files that have
 one; deleting a share link is a separate, confirmed tool, and all share link tools,
 the reading ones included, need an explicit tools list. Qatlas creates no permanent access or data paths to the
-outside (webhooks, invitations, public links); reading, pausing, revoking, and deleting remain, so no tool creates or
-changes a share link and no tool invites by e-mail. It reads the dropbox (upload link) of a folder and
-creates, changes, or deletes it with separate, confirmed tools that likewise all need an explicit tools list. It reads the access of a file or folder and grants, changes, or revokes the access of users and teams
+outside (webhooks, invitations, public links, dropboxes); reading, pausing, revoking, and deleting remain, so no tool creates or
+changes a share link or a dropbox and no tool invites by e-mail. It reads the dropbox (upload link) of a folder and
+deletes it with a separate, confirmed tool that likewise needs an explicit tools list. It reads the access of a file or folder and grants, changes, or revokes the access of users and teams
 to it; these are separate tools that each need an explicit tools list, and a user or
 team is only named after it is proven to belong to the same drive.
 
@@ -115,8 +115,6 @@ every drive on a narrower allow-list exists, is reachable, or actually belongs t
 | `infomaniakdrive.links.list` | the files and folders of one drive that have a share link, cursor-paginated (`GET /3/drive/{d}/files/links`) |
 | `infomaniakdrive.links.delete` | deletes exactly one share link (`DELETE /2/drive/{d}/files/{id}/link`) |
 | `infomaniakdrive.dropbox.get` | the dropbox of exactly one folder (`GET /2/drive/{d}/files/{id}/dropbox`) |
-| `infomaniakdrive.dropbox.create` | creates exactly one dropbox for a folder (`POST /2/drive/{d}/files/{id}/dropbox`) |
-| `infomaniakdrive.dropbox.update` | changes exactly one dropbox (`PUT /2/drive/{d}/files/{id}/dropbox`) |
 | `infomaniakdrive.dropbox.delete` | deletes exactly one dropbox (`DELETE /2/drive/{d}/files/{id}/dropbox`) |
 | `infomaniakdrive.access.get` | the users, teams, and invited people with access to exactly one file or folder (`GET /2/drive/{d}/files/{id}/access`) |
 | `infomaniakdrive.access.grant` | gives existing users and teams of the drive access in one request (`POST /2/drive/{d}/files/{id}/access`) |
@@ -129,13 +127,12 @@ are `read`, safe, and need no confirmation. `folders.create` and `files.copy` ha
 `delete`, and each of them requires the tool allow-list: no permission alone offers it, a connection must name
 the tool in its `tools` list. `links.delete` has the effect `delete`; a share link is access for whoever holds its
 URL, so it requires the tool allow-list as well, whichever right the link has. `links.get` and `links.list` are
-`read` and safe, but their URLs are that same access, so they require the tool allow-list too. `dropbox.get` is `read` and safe, `dropbox.create` has the
-effect `create`, `dropbox.update` the effect `update`, and `dropbox.delete` the effect `delete`; a dropbox URL lets
-anyone without an account upload into the folder, so all four require the tool allow-list and the three changes
-need `confirm`; all four are `open_world`. `dropbox.create` is non-idempotent, the others are idempotent. `access.get` is `read` and safe, but it discloses people and
+`read` and safe, but their URLs are that same access, so they require the tool allow-list too. `dropbox.get` is `read` and safe and `dropbox.delete` has the effect `delete`; a dropbox URL lets
+anyone without an account upload into the folder, so both require the tool allow-list and the deletion
+needs `confirm`; both are `open_world`, and the deletion is idempotent. `access.get` is `read` and safe, but it discloses people and
 their rights, so it requires the tool allow-list too. `access.grant` has the effect `create`, `access.update` the
 effect `update`, and `access.revoke` the effect `delete`; all three widen or narrow who reaches a file, so all
-three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` is `create` and stays non-idempotent. The provider's default
+three require the tool allow-list and need `confirm`. All changes need `confirm`; they are non-idempotent except `links.delete`, `dropbox.delete`, `access.update`, and `access.revoke`, which are idempotent; `access.grant` is `create` and stays non-idempotent. The provider's default
 permission stays `read`: a connection runs a change only after its permissions name the effect and its tools
 list offers the tool where one is required.
 
@@ -234,32 +231,24 @@ than being refused or silently redirected to a listing.
 ### Dropbox
 
 - A dropbox is a public upload link for one folder: anyone holding its URL can upload files into the folder
-  without an account. The four tools `dropbox.get`, `dropbox.create`, `dropbox.update`, and `dropbox.delete` act
+  without an account. Creating or changing one would open or prolong such an access to the outside, so neither is
+  offered. The tools `dropbox.get` and `dropbox.delete` act
   on exactly one folder (`file_id`, a positive integer other than the drive's root `1`) of one drive, which goes
   through the allow-list check and the live ownership check first; a foreign `drive_id` is refused locally,
-  without naming it, before any secret is read or request is sent. Every one of them, `dropbox.get` included,
-  needs an explicit tools list; the three changes need `confirm`.
-- `dropbox.create` and `dropbox.update` accept only these settings, sent only when given: `alias` (1 to 100
-  bytes, no control character), `password` (8 to 128 characters, no control character), `valid_until` (RFC 3339,
-  in the future, at most ten years ahead, sent as a timestamp), `limit_file_size` (1 to 1099511627776 bytes), and
-  `email_when_finished` (boolean). Infomaniak also accepts `null` for `alias`, `limit_file_size`, `password`, and
-  `valid_until` to clear them; Qatlas does not offer that, so a setting cannot be removed again, and the
-  documented bounds of `alias` and `limit_file_size` are Qatlas's own, since Infomaniak documents none.
-  `dropbox.update` needs at least one setting; `dropbox.create` takes none or any.
-- The password is registered with the redactor before any request, is only ever the request body to Infomaniak,
-  and never appears in a result, an error, or the invocation log; the dropbox reports only `has_password`.
+  without naming it, before any secret is read or request is sent. Both need an explicit tools list; the
+  deletion needs `confirm`.
 - The dropbox has its own sensitivity class, `infomaniak-kdrive-dropboxes`. A dropbox is reported as `id`, `uuid`,
   `name`, `url`, `users_count`, `created_at`, `updated_at`, `last_uploaded_at`, `has_password`, `has_notification`,
   `has_validity`, and `has_size_limit`, all untrusted data and bounded; the `url` is returned only when it is an
   absolute `https` URL without credentials of at most 1024 characters. Other fields Infomaniak documents (the
   creator, the containing directory and user via `with`, and the remaining time, size, and usage figures) are not
-  read. `dropbox.get` answers `not-found` for a folder without a dropbox; `dropbox.update` and `dropbox.delete`
-  answer only their `status`; `dropbox.create` answers the created dropbox.
-- A change sends exactly one request after the ownership check and is never repeated. After a timeout, a dropped
-  connection, a 5xx answer, or an unreadable answer, and also when a created dropbox comes back unreadable, the
-  error says the change may have been applied; read the dropbox before trying again. `asynchronous` is a
-  `pending` change. A 403, for example because the drive's plan does not include dropboxes, is reported as
-  `permission`, and a provider failure as `provider-error`; neither is retried with other settings.
+  read. `dropbox.get` answers `not-found` for a folder without a dropbox; `dropbox.delete`
+  answers only its `status`.
+- The deletion sends exactly one request after the ownership check and is never repeated. After a timeout, a dropped
+  connection, a 5xx answer, or an unreadable answer, the error says the change may have been applied; read the
+  dropbox before trying again. `asynchronous` is a `pending` change. A 403, for example because the drive's plan
+  does not include dropboxes, is reported as `permission`, and a provider failure as `provider-error`; neither is
+  retried.
 
 ### Access
 
@@ -405,6 +394,6 @@ would force a kDrive-only connection to also declare secret roles it never uses.
 later as its own sibling provider without changing this one. Within kDrive itself, this provider offers no
 creation or removal of users or teams of the drive, no invitation to the drive itself, no handling of access
 requests, no synchronisation with the rights of the parent, no resending of an invitation, no access `message`,
-no `none` right, no removal of a dropbox setting, no dropbox invitation (`/dropbox/invite`) and no listing or search of dropboxes, no link statistics, no trashed
+no `none` right, no dropbox creation or change, no dropbox invitation (`/dropbox/invite`) and no listing or search of dropboxes, no link statistics, no trashed
 folder browsing, no restore outside the drive, no copy to another drive, no `version` conflict mode, no search,
 no activity or version history, and no account, settings, or quota administration.
