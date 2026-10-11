@@ -168,7 +168,7 @@ func TestToolGroupsCoverEveryTool(t *testing.T) {
 	for _, tool := range metadata.Tools {
 		got[tool.ID] = tool.Group
 	}
-	if len(got) != 59 {
+	if len(got) != 61 {
 		t.Fatalf("tools = %v", got)
 	}
 	for id, group := range got {
