@@ -107,11 +107,16 @@ var trashRestore = trashChange("restore", "restored", "Restore a Nextcloud trash
 		"the fixed root folder of a connection; there is no other destination",
 	capability.EffectUpdate, organiseRisk(capability.EffectUpdate))
 
-var trashDelete = allowListOnly(trashChange("delete", "deleted", "Delete a Nextcloud trash item for good",
-	"Permanently delete exactly one confirmed trash item whose original location lies below the fixed root folder "+
-		"of a connection; it cannot be restored afterwards",
-	capability.EffectDelete, capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,
-		Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity}))
+var trashDelete = func() capability.Descriptor {
+	d := trashChange("delete", "deleted", "Delete a Nextcloud trash item for good",
+		"Permanently delete exactly one confirmed trash item whose original location lies below the fixed root folder "+
+			"of a connection; it cannot be restored afterwards",
+		capability.EffectDelete, capability.Risk{Effect: capability.EffectDelete, Idempotency: capability.IdempotencyIdempotent,
+			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity})
+	// Reachable only through a tools list, never through a profile.
+	d.RequiresToolAllowList = true
+	return d
+}()
 
 // trashEntry is one deleted item whose original location lies below the connection root.
 type trashEntry struct {
