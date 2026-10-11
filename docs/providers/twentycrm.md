@@ -1,10 +1,9 @@
 ---
 description: >
-  Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
-  objects, count by field), record write (create, update, batches), duplicate search and merge, record
-  trash (delete, restore, destroy), note and task link operations, workflow read and control, member,
-  role, view, and data model read and write, webhook operations, object targets, connection permissions, and
-  safety boundaries.
+  Describes Twenty CRM company, object catalog, record read, write, duplicate and merge, and trash
+  operations, note and task links, attachment read and download, workflow read and control, member, role,
+  view, and data model read and write, webhooks, object targets, connection permissions, and safety
+  boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -17,15 +16,14 @@ A connection binds one API key to one managed or self-hosted workspace and, opti
 objects (see Object targets). It can list, read, create, change (name or primary domain), and delete
 companies, and work with records of any reachable object: write, also up to 60 at a time (see Writing records
 and Batches), delete, restore, destroy (see Deleting and restoring), find duplicates, merge (see Merging
-records), and link notes and tasks (see Linking notes and tasks). It also covers webhooks (see Webhooks),
-workflows (see Controlling workflows), and the data model (see Data model). Mutations require confirmation
-and only use the generated REST routes of the company or of a reachable object, or fixed metadata, webhook,
-and workflow routes. Qatlas sends each mutation once; after an unclear result (timeout, reset, server error,
-unreadable answer) it reports the outcome as uncertain and does not repeat the request.
+records), link notes and tasks (see Linking notes and tasks), and download attachments (see Attachments).
+It also covers webhooks (see Webhooks), workflows (see Controlling workflows), and the data model (see
+Data model). Mutations require confirmation and only use the generated REST routes of the company or of a
+reachable object, or fixed metadata, webhook, and workflow routes. Qatlas sends each mutation once; after an
+unclear result (timeout, reset, server error, unreadable answer) it reports the outcome as uncertain and does
+not repeat the request. Qatlas spaces the requests of one key to Twenty's limit of 100 per minute.
 
-A `domain` value sets the primary link to `https://<domain>` with the domain as its label; an empty value
-clears both. Twenty allows 100 requests per minute for each API key, and Qatlas spaces the requests of one
-key accordingly.
+A `domain` sets the primary link `https://<domain>` with the domain as label; an empty value clears both.
 
 ## Object targets
 
@@ -36,10 +34,11 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
 - Without targets, the connection reaches every non-system object its API key reaches. Set `object/` targets
   on every connection that should not see all of them.
 - System objects (messages, calendar events, attachments, workflows, workspace members, and the like) are
-  never reachable through the object and record tools and cannot be a target; workflows and workspace
-  members have their own read tools. The two link objects of notes and tasks are system objects too; only the
-  link tools touch them. Qatlas keeps them in a fixed list, so an object a later Twenty version marks as a
-  system object stays reachable on a connection without targets until the list is updated.
+  never reachable through the object and record tools and cannot be a target; workflows, workspace
+  members, and attachments have their own read tools. The two link objects of notes and tasks are system
+  objects too; only the link tools touch them. Qatlas keeps them in a fixed list, so an object a later
+  Twenty version marks as a system object stays reachable on a connection without targets until the list
+  is updated.
 - `companies.*` need `company` to be reachable: with targets, `object/company` must be bound.
 - Workspace-wide tools work only on a connection without object targets; on any other connection they are
   refused before the key is read.
@@ -57,14 +56,11 @@ argument. A list returns one page without filters (see Filtering and counting re
 100 records, with an opaque `next_cursor`. `order_by` sorts by one field, or by `field.subfield` of a
 composite field, in direction `asc` or `desc`. Relation, array, and rich-text fields cannot be sorted by.
 
-- `fields` names at most 50 top-level fields and is sent to Twenty as its `fields` parameter. Qatlas checks
-  `fields` and `order_by` against the response shape of the object in the workspace document, so an unknown
-  field is refused before any record is read, and the refusal does not name it. The timestamps of a record
-  are always read along.
-- Each record carries `id`, `created_at`, `updated_at`, and `fields` (field name to value). Qatlas always
-  reads at depth 0: a relation appears only as its identifier field (`companyId`), never as an embedded
-  record, and a relation to an object the connection cannot reach stays an identifier. Rich text appears
-  only as `markdown`, never as its block document.
+- Qatlas checks `fields` and `order_by` against the response shape of the object in the workspace document,
+  so an unknown field is refused before any record is read, and the refusal does not name it.
+- Qatlas always reads at depth 0: a relation appears only as its identifier field (`companyId`), never as an
+  embedded record, and a relation to an object the connection cannot reach stays an identifier. Rich text
+  appears only as `markdown`.
 - A cursor is bound to the connection, object, sort, and field selection that produced it; any other use is
   refused before a request is sent.
 - A value or an answer above the bounds is an invalid response; Qatlas does not cut it.
@@ -89,18 +85,9 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
   searched.
 - A relation identifier (`<relation>Id`) is accepted only when the relation field names a target object that
   the connection reaches; otherwise the condition could probe objects outside the targets.
-- The operator list follows the field kind, which Qatlas derives from the schema (enum values make a
-  selection, a format makes an identifier or date, otherwise the JSON type decides):
-
-  | Kind | Operators |
-  | --- | --- |
-  | text | `eq`, `neq`, `in`, `ilike` (contains), `startsWith`, `endsWith`, `is` |
-  | selection | `eq`, `neq`, `in`, `is`; the value must be an enum value of the schema |
-  | number, date, date-time | `eq`, `neq`, `in`, `gt`, `gte`, `lt`, `lte`, `is` |
-  | boolean | `eq`, `is` |
-  | identifier, relation identifier | `eq`, `neq`, `in`, `is` |
-
-- `is` takes `NULL` or `NOT_NULL`; `in` takes a list of values of one type (see the tool help).
+- The operators follow the field kind, which Qatlas derives from the schema (enum values make a selection, a
+  format makes an identifier or date, otherwise the JSON type decides); the tool help lists them. A selection
+  value must be an enum value of the schema.
 - A refused field, operator, or value is refused after the schema was read and before any record is read,
   and the refusal names neither field nor value. The enum values of the schema serve only this check and
   never appear in a result, including `objects.get`.
@@ -113,25 +100,22 @@ value may carry a quote, bracket, colon, comma, backslash, parenthesis, or perce
 
 `records.searchall` (`read`) finds records by full-text search over all reachable objects in one call and
 returns per hit `object`, `id`, and `label` (display name, capped), plus `omitted`. Read a hit with
-`records.get`. Qatlas sends one fixed query and passes the checked arguments only as variables; no argument
-becomes part of a query, and there is no free GraphQL. Twenty reports a failed query as an answer with errors;
-Qatlas maps it to a class and shows no text of it.
+`records.get`. Qatlas sends one fixed query and passes the checked arguments only as variables; there is no
+free GraphQL. Twenty reports a failed query as an answer with errors; Qatlas maps it to a class and shows no
+text of it.
 
 - `objects` limits the search to a subset of the reachable objects; an object outside the connection is
   ignored, and an empty remaining set is refused before the search is sent.
 - The searched objects are always named explicitly: the bound objects with targets, otherwise the
   non-system objects of the workspace catalog, each cut with `objects`. Hits of any other object are
   dropped and only counted in `omitted`.
-- The cursor is bound to the connection, its targets, `text`, and `objects`.
 
 ## Reading workflows
 
-`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) are workspace-wide and let an agent follow
-automations and find failed runs. `workflow`, `workflowVersion`, and `workflowRun` are system objects, so the
-record tools never reach them; these tools use fixed routes and a fixed field selection.
+`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) are workspace-wide. `workflow`,
+`workflowVersion`, and `workflowRun` are system objects, so the record tools never reach them.
 
-- Step and trigger settings, run outputs, context, state, and error texts are never read out. Status,
-  trigger, and step types come from fixed lists; any other value is shown as `unknown`.
+- Step and trigger settings, run outputs, context, state, and error texts are never read out.
 - A workflow run cannot be started with an API key: Twenty refuses it, and Qatlas does not work around that.
 
 ## Controlling workflows
@@ -194,8 +178,8 @@ every field from the workspace catalog and builds the request body from the chec
   field nor value.
 - Supported are scalar fields, selections (values of the schema), and the composite fields emails, phones,
   links, currency, full name, and address; a composite value may contain only the parts the schema names.
-  Null is refused; send an empty value to clear a text.
-- Rich text takes only `{"markdown": ...}`, as a read reports it.
+  Null is refused; send an empty value to clear a text. Rich text takes only `{"markdown": ...}`, as a read
+  reports it.
 - A relation is set by its identifier field (`<relation>Id`, a UUID) and only when the relation's target is
   reachable through the connection; otherwise the field is refused without naming the target. Identifier
   fields that are not a relation to a reachable object are refused as well.
@@ -220,6 +204,22 @@ from an argument. An object that the schema gives no single link relation cannot
 - `delete` removes only the link, never the note, task, or record. It reads the link first and removes it only
   when both sides are reachable. A connection offers it only when its `tools` list names it. Links are
   workspace data of the record data class.
+
+## Attachments
+
+`attachments.list` and `attachments.get` (`read`) read the files attached to a record of any reachable object;
+the system object `attachment` is reachable through no other tool. The linking field (`target<Object>Id`) comes
+from the workspace schema, never from an argument. `list` returns no download address and counts attachments
+without a file or without exactly one reachable target in `omitted`. Labels and content are untrusted data.
+
+- `get` reads the attachment first and needs exactly one target on a reachable object; otherwise it answers
+  as if the attachment did not exist, before a download. An attachment without a file is an error.
+- The content is returned inline up to 4 MiB, or written to `local_path` in a directory the connection
+  releases for writing (an existing file only with confirmation); the result then holds only metadata.
+- Qatlas fetches the download address Twenty reports only if it is https on exactly the host and port of the
+  connection, with the path `/file/files-field/<fileId>` of the attachment's file and the signed `token` as
+  its only query. The request carries no API key and follows no redirect; the token appears in no result or
+  error. An instance that serves files from external storage (another host, or a redirect) is not supported.
 
 ## Webhooks
 
