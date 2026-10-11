@@ -149,8 +149,7 @@ func (s *Server) withSessionGuard(next http.HandlerFunc) http.HandlerFunc {
 // then requires this run's admin approval to be active right now, and finally serializes the mutation
 // behind writeMu so two concurrent writes from the same coupled session can never interleave. Every check
 // fails before next ever runs, whatever this run's admin approval otherwise looks like: nothing here is
-// merely advisory. No production route uses this yet (see internal/web's own package comment); it exists so
-// a future mutating route only has to wrap itself with it.
+// merely advisory. Every mutating credential and connection route wraps itself with it.
 func (s *Server) withAdminGuard(next http.HandlerFunc) http.HandlerFunc {
 	return s.withSessionGuard(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
