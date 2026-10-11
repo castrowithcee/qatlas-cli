@@ -71,8 +71,8 @@
 //
 // Creating, changing, or deleting teams, adding or removing team members, invitations, changes to other
 // users, profile pictures, previews and thumbnails, the custom emoji catalog, and creating webhooks or
-// changing where one posts are deliberately out of scope: this provider lists the teams, channels, and
-// direct and group channels a connection may reach, reads the details and members of a bound team and,
+// slash commands or changing where one posts or calls are deliberately out of scope: this provider lists the
+// teams, channels, and direct and group channels a connection may reach, reads the details and members of a bound team and,
 // only when a connection's tools list names it, sets one current member's team role (the invitation identifier is never read), reads channel details and
 // the public channels of a bound team, creates one confirmed channel in a bound team (only for a connection
 // without a channel allow-list, because a new channel cannot be inside one), changes the display name,
@@ -92,10 +92,11 @@
 // token's own user only, lists, creates, and changes the own sidebar categories of a bound team and sets the
 // own notifications of one channel, and, only when a connection's tools list names it, deletes one confirmed
 // message, one custom category, or removes one own reaction. Only when a connection's tools list names them,
-// it also lists, reads, describes, and deletes the incoming and outgoing webhooks of bound teams and channels:
-// a webhook's ID is a secret, so those tools carry their own data sensitivity, bind every webhook through its
-// team and channel, write a webhook back with its target unchanged, and never return an outgoing webhook's
-// token or more of a callback URL than its origin. The token's own presence, custom status, and four display
+// it also lists, reads, describes, and deletes the incoming and outgoing webhooks of bound teams and channels
+// and, only for a connection without a channel allow-list, the custom slash commands of bound teams: a
+// webhook's ID is a secret, so those tools carry their own data sensitivity, bind every webhook through its
+// team and channel and every command through its team, write one back with its target unchanged, and never
+// return a token or more of a callback URL than its origin. The token's own presence, custom status, and four display
 // profile fields are the only user data it changes, always for the user read from users/me and never taken
 // from an argument. kChat renders Markdown and mentions such as @channel in a message, so the text is sent as
 // written. Every value a listing or a read answers with arrives from the provider and is treated as untrusted
@@ -509,7 +510,7 @@ func TestConnection(ctx context.Context, resolved *config.Resolved, secrets *sec
 func Register(reg *capability.Registry) error {
 	if err := reg.RegisterProvider(config.ProviderMetadata{
 		ID: Provider, Name: "Infomaniak kChat",
-		Description:        "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status and profile, channels, team roles, webhooks, and instance-wide administration",
+		Description:        "Infomaniak kChat for bound teams: messages, threads, search, files, reactions, pins, users, own status and profile, channels, team roles, webhooks, slash commands, and instance-wide administration",
 		DefaultPermissions: []config.Permission{config.PermissionRead},
 		Groups:             toolGroups,
 		ValidateBaseURL: func(raw string) error {
@@ -661,6 +662,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(outgoingWebhooksGet), Handler: capability.Handler(invokeOutgoingWebhooksGet)},
 		capability.Operation{Descriptor: withGroup(outgoingWebhooksUpdate), Handler: capability.Handler(invokeOutgoingWebhooksUpdate)},
 		capability.Operation{Descriptor: withGroup(outgoingWebhooksDelete), Handler: capability.Handler(invokeOutgoingWebhooksDelete)},
+		capability.Operation{Descriptor: withGroup(commandsList), Handler: capability.Handler(invokeCommandsList)},
+		capability.Operation{Descriptor: withGroup(commandsGet), Handler: capability.Handler(invokeCommandsGet)},
+		capability.Operation{Descriptor: withGroup(commandsUpdate), Handler: capability.Handler(invokeCommandsUpdate)},
+		capability.Operation{Descriptor: withGroup(commandsDelete), Handler: capability.Handler(invokeCommandsDelete)},
 		capability.Operation{Descriptor: withGroup(botsList), Handler: capability.Handler(invokeBotsList)},
 		capability.Operation{Descriptor: withGroup(botsGet), Handler: capability.Handler(invokeBotsGet)},
 		capability.Operation{Descriptor: withGroup(botsUpdate), Handler: capability.Handler(invokeBotsUpdate)},
