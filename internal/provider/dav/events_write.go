@@ -253,7 +253,10 @@ func (d *EventDraft) Encode(op, uid string, sequence int, now time.Time) (string
 		event.Props.Set(rule)
 	}
 	if sequence > 0 {
-		event.Props.SetText(ical.PropSequence, strconv.Itoa(sequence))
+		// SetText would add VALUE=TEXT, but SEQUENCE is an INTEGER.
+		prop := ical.NewProp(ical.PropSequence)
+		prop.Value = strconv.Itoa(sequence)
+		event.Props.Set(prop)
 	}
 	if d.organizer != nil {
 		prop := personProp(ical.PropOrganizer, *d.organizer, false)
