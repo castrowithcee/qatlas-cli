@@ -19,6 +19,13 @@ var emojiSchema = `{"type":"object","properties":{` +
 	`"id":` + idSchema + `,"name":{"type":"string"},"creator_id":{"type":"string"},"created_at":{"type":"string"}},` +
 	`"required":["id","name","creator_id"],"additionalProperties":false}`
 
+var emojiFields = []capability.Field{
+	{Name: "id", Description: "Identifier of the custom emoji"},
+	{Name: "name", Description: "Emoji name, untrusted data"},
+	{Name: "creator_id", Description: "User identifier of the creator"},
+	{Name: "created_at", Description: "Creation time in RFC 3339, when kChat reports one"},
+}
+
 var emojiList = capability.Descriptor{
 	ID:      Provider + ".emoji.list",
 	Version: 1,
@@ -43,17 +50,13 @@ var emojiList = capability.Descriptor{
 		{Name: "per_page", Description: "Emoji per kChat page, 1 to " + itoa(maxListLimit) + "; " +
 			itoa(defaultListLimit) + " when omitted"},
 	},
-	Fields: []capability.Field{
-		{Name: "id", Description: "Identifier of the custom emoji"},
-		{Name: "name", Description: "Emoji name, untrusted data"},
-		{Name: "creator_id", Description: "User identifier of the creator"},
-		{Name: "created_at", Description: "Creation time in RFC 3339, when kChat reports one"},
-		{Name: "page", Description: "Page that was read"},
-		{Name: "per_page", Description: "Page size that was requested"},
-		{Name: "count", Description: "Number of emoji reported on this page"},
-		{Name: "has_more", Description: "True when kChat's page was full, so a further page may " +
+	Fields: append(append([]capability.Field{}, emojiFields...),
+		capability.Field{Name: "page", Description: "Page that was read"},
+		capability.Field{Name: "per_page", Description: "Page size that was requested"},
+		capability.Field{Name: "count", Description: "Number of emoji reported on this page"},
+		capability.Field{Name: "has_more", Description: "True when kChat's page was full, so a further page may " +
 			"exist; pages are never read on by themselves"},
-	},
+	),
 	Examples: []capability.Example{{Description: "List the custom emoji", Arguments: json.RawMessage(`{}`)}},
 }
 
@@ -115,8 +118,7 @@ func (c *Client) ListEmoji(ctx context.Context, page, perPage int) (*EmojiPage, 
 		if !validMattermostID(emoji[i].ID) {
 			continue
 		}
-		entries = append(entries, EmojiEntry{ID: emoji[i].ID, Name: bounded(emoji[i].Name),
-			CreatorID: bounded(emoji[i].CreatorID), CreatedAt: msToRFC3339(emoji[i].CreateAt)})
+		entries = append(entries, *emojiEntryOf(&emoji[i]))
 	}
 	return &EmojiPage{Emoji: entries, Page: page, PerPage: perPage, Count: len(entries),
 		HasMore: len(emoji) >= perPage}, nil

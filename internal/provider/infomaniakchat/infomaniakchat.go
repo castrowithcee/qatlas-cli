@@ -54,12 +54,14 @@
 // of its channels writes the channels it may not reach back unchanged. The notification tool refuses direct
 // and group channels, whose participants it would otherwise have to prove, see boundChannel.
 //
-// The bot tools (GetBots, GetBot, PatchBot, DisableBot, and EnableBot) and the custom emoji list act on data no team or channel
+// The bot tools (GetBots, GetBot, PatchBot, DisableBot, and EnableBot) and the custom emoji tools act on data no team or channel
 // target can bound, so they are instance-wide: requireInstanceScope refuses a connection with a channel target
 // before any secret is read, and a live read of the token's teams, see (*Client).requireInstanceTeams, refuses unless every one of
 // them is a bound team. That read runs on every call, so a token that later joins another team locks the
 // tools instead of widening them. Their output is reduced to a fixed field set; bot tokens and creating bots
-// are deliberately not offered.
+// are deliberately not offered. A custom emoji is created from one local PNG, GIF, or JPEG image of up to
+// 1 MiB whose type and size are checked before the credential is read, as the token's own user, in one
+// multipart request that is never repeated; deleting one reads it first and then sends one DELETE.
 //
 // kChat is deliberately the only Infomaniak surface this provider reaches: Mail, CalDAV/CardDAV, and kDrive
 // are separate Infomaniak products with their own authentication and their own providers, see the kDrive
@@ -72,7 +74,7 @@
 // upload that is never attached.
 //
 // Creating, changing, or deleting teams, adding or removing team members, invitations, changes to other
-// users, profile pictures, previews and thumbnails, custom emoji images, creation, and deletion, and creating
+// users, profile pictures, previews and thumbnails, custom emoji images, and creating
 // webhooks or slash commands or changing where one posts or calls are deliberately out of scope: this provider
 // lists the teams, channels, and direct and group channels a connection may reach, reads the details and
 // members of a bound team and, only when a connection's tools list names it, sets one current member's team role (the invitation identifier is never read), reads channel details and
@@ -679,6 +681,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(botsDisable), Handler: capability.Handler(invokeBotsDisable)},
 		capability.Operation{Descriptor: withGroup(botsEnable), Handler: capability.Handler(invokeBotsEnable)},
 		capability.Operation{Descriptor: withGroup(emojiList), Handler: capability.Handler(invokeEmojiList)},
+		capability.Operation{Descriptor: withGroup(emojiCreate), Handler: capability.Handler(invokeEmojiCreate)},
+		capability.Operation{Descriptor: withGroup(emojiDelete), Handler: capability.Handler(invokeEmojiDelete)},
 	)
 }
 
