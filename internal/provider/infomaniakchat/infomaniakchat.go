@@ -52,11 +52,11 @@
 // of its channels writes the channels it may not reach back unchanged. The notification tool refuses direct
 // and group channels, whose participants it would otherwise have to prove, see boundChannel.
 //
-// The bot tools (GetBots, GetBot, and PatchBot) act on accounts no team or channel target can bound, so they
-// are instance-wide: requireInstanceScope refuses a connection with a channel target before any secret is
-// read, and a live read of the token's teams, see (*Client).requireInstanceTeams, refuses unless every one of
+// The bot tools (GetBots, GetBot, and PatchBot) and the custom emoji list act on data no team or channel
+// target can bound, so they are instance-wide: requireInstanceScope refuses a connection with a channel target
+// before any secret is read, and a live read of the token's teams, see (*Client).requireInstanceTeams, refuses unless every one of
 // them is a bound team. That read runs on every call, so a token that later joins another team locks the
-// tools instead of widening them. Bot output is reduced to a fixed field set; bot tokens and creating bots
+// tools instead of widening them. Their output is reduced to a fixed field set; bot tokens and creating bots
 // are deliberately not offered.
 //
 // kChat is deliberately the only Infomaniak surface this provider reaches: Mail, CalDAV/CardDAV, and kDrive
@@ -70,8 +70,8 @@
 // upload that is never attached.
 //
 // Creating, changing, or deleting teams, adding or removing team members, invitations, changes to other
-// users, profile pictures, previews and thumbnails, the custom emoji catalog, and creating webhooks or
-// changing where one posts are deliberately out of scope: this provider lists the teams, channels, and
+// users, profile pictures, previews and thumbnails, custom emoji images, creation, and deletion, and creating
+// webhooks or changing where one posts are deliberately out of scope: this provider lists the teams, channels, and
 // direct and group channels a connection may reach, reads the details and members of a bound team and,
 // only when a connection's tools list names it, sets one current member's team role (the invitation identifier is never read), reads channel details and
 // the public channels of a bound team, creates one confirmed channel in a bound team (only for a connection
@@ -554,12 +554,13 @@ func Register(reg *capability.Registry) error {
 				"channels, lists the members of a channel and the archived channels of a team, reads channel " +
 				"messages, single messages, threads, followed threads, unread counts, reactions, pinned messages, " +
 				"and attachments (metadata and download to a released local directory), reads, lists, and searches " +
-				"the users of the bound teams and their presence, and lists the own sidebar categories; changes nothing",
+				"the users of the bound teams and their presence, lists the own sidebar categories, and lists the " +
+				"custom emoji of an instance-wide connection; changes nothing",
 			Tools: []string{teamsList.ID, teamsGet.ID, teamMembersList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID,
 				channelsMembersList.ID, directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
 				filesDownload.ID, reactionsList.ID, pinsList.ID, usersGet.ID, usersList.ID, usersSearch.ID,
 				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID,
-				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID},
+				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID, emojiList.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
@@ -664,6 +665,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(botsList), Handler: capability.Handler(invokeBotsList)},
 		capability.Operation{Descriptor: withGroup(botsGet), Handler: capability.Handler(invokeBotsGet)},
 		capability.Operation{Descriptor: withGroup(botsUpdate), Handler: capability.Handler(invokeBotsUpdate)},
+		capability.Operation{Descriptor: withGroup(emojiList), Handler: capability.Handler(invokeEmojiList)},
 	)
 }
 
