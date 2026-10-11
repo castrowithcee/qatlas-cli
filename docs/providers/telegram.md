@@ -169,6 +169,11 @@ references, never as Telegram's raw identifier. A reference is bound to its targ
 rotating the token invalidates earlier ones; it is signed, not secret. A tool that accepts one checks format
 and target before the credential is read and the signature before any request.
 
+`telegram.callbacks.answer` takes a `callback_ref`; `telegram.joinrequestqueries.answer` takes a
+`join_request_ref` and a `result` of `decline` or `queue`, and no tool approves a join request. Both change state
+and need confirmation. Telegram expects a callback answer right after the button press and a join request query
+answer within 10 seconds; a late answer is refused. `join_request_ref` appears only when Telegram sent a query.
+
 ## Reading chats and members
 
 The four chat read tools address a bound chat through `chat` as above and return fixed fields only.

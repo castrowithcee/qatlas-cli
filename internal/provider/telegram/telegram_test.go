@@ -71,12 +71,12 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 13 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
+	if len(metadata.Groups) != 14 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
 		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "chats" || metadata.Groups[4].ID != "invitelinks" ||
 		metadata.Groups[5].ID != "bot" || metadata.Groups[6].ID != "files" || metadata.Groups[7].ID != "media" ||
 		metadata.Groups[8].ID != "members" || metadata.Groups[9].ID != "interactions" ||
 		metadata.Groups[10].ID != "stickers" || metadata.Groups[11].ID != "topics" ||
-		metadata.Groups[12].ID != "suggestedposts" {
+		metadata.Groups[12].ID != "suggestedposts" || metadata.Groups[13].ID != "queries" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
@@ -89,6 +89,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		case strings.HasPrefix(tool.ID, "telegram.members.") || strings.HasPrefix(tool.ID, "telegram.senderchats.") ||
 			tool.ID == joinrequestsDecline.ID:
 			want = "members"
+		case tool.ID == callbacksAnswer.ID || tool.ID == joinrequestqueriesAnswer.ID:
+			want = "queries"
 		case strings.HasPrefix(tool.ID, "telegram.suggestedposts."):
 			want = "suggestedposts"
 		case strings.HasPrefix(tool.ID, "telegram.topics.") && tool.ID != topicsIconStickers.ID:
@@ -120,8 +122,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 98 {
-		t.Fatalf("operation count = %d, want ninety-eight", len(operations))
+	if len(operations) != 100 {
+		t.Fatalf("operation count = %d, want one hundred", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
