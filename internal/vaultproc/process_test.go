@@ -391,6 +391,54 @@ func TestLockEndsAProcessOfAnotherProtocolVersion(t *testing.T) {
 	}
 }
 
+// A vault process whose program was replaced and that still answers replaced after the asking-again window
+// has no successor and never locks itself: Lock ends it, once, and keeps ErrReplaced when that fails.
+func TestLockEndsAProcessThatStaysReplaced(t *testing.T) {
+	path := socketIn(t)
+	prepareSocketDir(t, path)
+	l, err := rawListen(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = l.Close() })
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				return
+			}
+			var h hello
+			_ = readMessage(conn, &h)
+			_ = writeMessage(conn, response{V: Version, Error: codeReplaced})
+			_ = conn.Close()
+		}
+	}()
+	previous := terminate
+	t.Cleanup(func() { terminate = previous })
+	var ended []int
+	terminate = func(pid int) error { ended = append(ended, pid); return nil }
+
+	c := NewClient(path, testRecipient)
+	c.Verify = func(net.Conn) error { return nil }
+	began := time.Now()
+	if err := c.Lock(context.Background()); err != nil {
+		t.Fatalf("Lock() of a replaced process = %v, want it ended", err)
+	}
+	if took := time.Since(began); took < replacedLimit-replacedPause {
+		t.Fatalf("Lock() ended the process after %v, want it asked again for about %v first", took, replacedLimit)
+	}
+	if len(ended) != 1 || ended[0] != os.Getpid() {
+		t.Fatalf("ended = %v, want the process at the socket, %d, once", ended, os.Getpid())
+	}
+
+	terminate = func(int) error { return errors.New("not permitted") }
+	err = c.Lock(context.Background())
+	var peer *PeerError
+	if !errors.Is(err, ErrReplaced) || !errors.As(err, &peer) || peer.PID != os.Getpid() {
+		t.Fatalf("Lock() that cannot end the process = %v, want ErrReplaced naming it", err)
+	}
+}
+
 func TestHarden(t *testing.T) {
 	_, out := helper(t, os.Args[0], "harden", "")
 	if got := line(t, out); got != wantHardened {

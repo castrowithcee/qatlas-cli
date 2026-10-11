@@ -83,6 +83,22 @@ func LockProcess(ctx context.Context, v *vault.Vault) (locked bool, err error) {
 	return true, nil
 }
 
+// EndReplaced ends the vault process that answered replaced (replaced is that error, from Status or any
+// other call) for longer than a handover takes, one whose program was replaced and that has no successor,
+// and waits until it is gone. It returns the id of the process the error names, 0 where it names none. The
+// caller has asked no secret of it; the next unlock asks for the passphrase again.
+func EndReplaced(ctx context.Context, client *Client, replaced error) (pid int, err error) {
+	var peer *PeerError
+	if errors.As(replaced, &peer) {
+		pid = peer.PID
+	}
+	if err := client.Lock(ctx); err != nil && !errors.Is(err, ErrNotRunning) {
+		return pid, err
+	}
+	awaitProcessLocked(ctx, client)
+	return pid, nil
+}
+
 // awaitProcessLocked waits briefly for a vault process that just answered a lock to close its socket, which
 // it does right after answering. It mirrors the CLI's own awaitLocked (internal/cli/vault.go), kept here as
 // its own small copy: both are a handful of lines around client.Status, not worth exporting either just for

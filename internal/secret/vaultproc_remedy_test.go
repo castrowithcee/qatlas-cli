@@ -74,3 +74,19 @@ func TestVaultProcessRemedyAfterAnUpdate(t *testing.T) {
 		}
 	})
 }
+
+// A vault process whose own program was replaced is ended by locking, on every platform, never by its id.
+func TestVaultProcessRemedyForAReplacedProcess(t *testing.T) {
+	t.Cleanup(func() { SetLongRunning("") })
+	SetLongRunning("")
+	err := &vaultproc.PeerError{PID: 4242, Err: vaultproc.ErrReplaced}
+	if got, want := VaultProcessRemedy(err), "run 'qatlas vault lock', then 'qatlas vault unlock'"; got != want {
+		t.Errorf("remedy = %q, want %q", got, want)
+	}
+	if got, want := EndVaultProcess(err), "run 'qatlas vault lock'"; got != want {
+		t.Errorf("end = %q, want %q", got, want)
+	}
+	if got := VaultProcessRemedy(vaultproc.ErrReplaced); strings.Contains(got, "kill") {
+		t.Errorf("remedy without a process id = %q, want no kill", got)
+	}
+}
