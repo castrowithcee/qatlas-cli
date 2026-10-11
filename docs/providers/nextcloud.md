@@ -25,8 +25,7 @@ bound to the ETag of the version read (`*` is refused) and confirmed. The root f
 the `files_trashbin` app is active Nextcloud moves the deleted item to the trash bin, otherwise it deletes it
 for good; Qatlas cannot tell which applies. The trash bin is read and handled with the tools under Trash bin.
 
-Both tools require a tools list: no profile and no permission offers them. A connection without a `tools` list
-therefore offers neither; it no longer offers `nextcloud.files.delete` as before.
+Both tools require a tools list: no profile and no permission offers them, so a connection without one offers neither.
 
 ## Trash bin
 
@@ -59,8 +58,7 @@ IDs are literal single segments without `%`, `\`, or control characters.
 The single field `target` keeps its meaning as the root folder: `Reports`, `Team/Reports`, and `/` (the whole
 Files root) bind exactly as before, and a bare value in the `targets` list is read the same way. A single
 `target` whose first path segment is a kind name (for example `calendar/2026`, or a folder named `talk`) is
-refused, because it could mean a folder or a typed target; write it as `folder/PATH` in `targets`. This
-refusal changes the behaviour of such existing values.
+refused, because it could mean a folder or a typed target; write it as `folder/PATH` in `targets`.
 
 The connection test reads the bound folder, or the Files root of the identity when the connection binds none, and
 each bound calendar, or the calendar home for `calendar`; it reports no metadata.
@@ -200,9 +198,10 @@ calendars is in no profile; `calendars.create` needs the general `calendar` targ
 
 ## Contacts
 
-The group `contacts` (profile `contacts`) reads address books and contacts, optionally searched by name and e-mail.
-The system address book needs its own `addressbook/URI` target and is read-only. Photos and other binary data are
-never requested; contact fields are untrusted personal data.
+The group `contacts` (profile `contacts`) reads address books and contacts; contact fields are untrusted personal data
+and photos are never requested. The system address book needs its own `addressbook/URI` target and is read-only.
+Writing contacts is in no profile: an update replaces by `etag` and refuses a card with a photo, group kind, or other
+property Qatlas does not write; deleting needs a tools list.
 
 ## Versions
 
