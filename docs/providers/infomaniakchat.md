@@ -90,10 +90,10 @@ Per tool family:
   `channelnotifications.update` binds its channel like `channels.update`.
 - `channels.create` works only in a bound team and only on a connection without a channel allow-list,
   because a channel that does not exist yet cannot be inside one; the refusal is local.
-- A `post_id` (`messages.thread`, `.get`, `.update`, `.delete`, `.pin`, `.unpin`, `.markunread`, `pins`, and
-  the `reactions` tools) is bound through its channel: Qatlas reads the post, refuses an answer for another
-  post or a deleted post, applies the allow-list to the post's channel, and runs the live check, all before
-  any detail is returned or any change is sent. `pins.list` also drops posts kChat reports for another channel.
+- A `post_id` (`messages.thread`, `.get`, `.update`, `.delete`, `.pin`, `.unpin`, `.markunread`, and the
+  `reactions` tools) is bound through its channel: Qatlas reads the post, refuses an answer for another or a
+  deleted post, applies the allow-list to its channel, and runs the live check before anything is returned or sent.
+- `pins.list` binds its `channel_id` like every channel tool and drops posts kChat reports for another channel.
 - A reply confirms, by reading the named `root_id`, that the root post belongs to the same `channel_id`.
 - A `thread_id` (`threads.get`, `.follow`, `.unfollow`, `.markread`) is a root `post_id`: it is bound like
   one, must not be a reply, and its channel must be in the reachable set of the bound `team_id` described
