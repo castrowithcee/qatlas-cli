@@ -199,8 +199,8 @@ var toolGroups = []config.ToolGroup{
 		"and hide the General topic of the bound chats"},
 	{ID: groupSuggestedPosts, Title: "Suggested posts", Description: "Approve and decline suggested posts in the " +
 		"direct messages chats of bound channels"},
-	{ID: groupQueries, Title: "Queries", Description: "Answer button presses on inline keyboards and decline " +
-		"or hand on join request queries of the bound chats"},
+	{ID: groupQueries, Title: "Queries", Description: "Answer button presses on inline keyboards and inline " +
+		"queries, and decline or hand on join request queries of the bound chats"},
 }
 
 const groupMessages = "messages"
@@ -293,6 +293,7 @@ func Register(reg *capability.Registry) error {
 
 		capability.Operation{Descriptor: joinrequestsDecline, Handler: capability.Handler(invokeJoinRequestsDecline)},
 		capability.Operation{Descriptor: callbacksAnswer, Handler: capability.Handler(invokeCallbacksAnswer)},
+		capability.Operation{Descriptor: inlineAnswer, Handler: capability.Handler(invokeInlineAnswer)},
 		capability.Operation{Descriptor: joinrequestqueriesAnswer, Handler: capability.Handler(invokeJoinRequestQueriesAnswer)},
 		capability.Operation{Descriptor: suggestedpostsApprove, Handler: capability.Handler(invokeSuggestedPostsApprove)},
 		capability.Operation{Descriptor: suggestedpostsDecline, Handler: capability.Handler(invokeSuggestedPostsDecline)},
