@@ -157,14 +157,14 @@ sorts, and groups. Only views visible to the whole workspace are read: a persona
 answers it like an unknown view, although Twenty serves it by identifier. Widget views are not read. Filter and
 group values are untrusted workspace data of their own data class.
 
-`views.create`, `views.update` (`create`, `update`), and the column tools below are confirmed, need a `tools`
-entry and the Twenty right "Views", which also allows changing personal views of other users (use a key of its
-own), and no profile ticks them. A new view is always visible to the whole workspace and starts empty; `update`
-reads first, changes name and icon only, and refuses what `get` would not read and standard or index views.
+`views.create`, `views.update`, `views.delete`, and `viewfields.*` are confirmed, need a `tools` entry and the
+Twenty right "Views", which also allows changing personal views of other users (use a key of its own), and no
+profile ticks them. A new view is visible to the whole workspace and starts empty.
 
-`viewfields.create` and `viewfields.update` add a column or show, hide, move, or resize one: they read the
-view first (`update` through its column) and refuse the same views; `create` refuses a field of another
-object, an inactive or system field, and one already shown. The answer names column, view, and field.
+`views.delete` is permanent: the view, its columns, filters, sorts, and groups vanish for every member and
+cannot be restored. `permissions` alone does not admit it. It reads the view first and, like `update`, refuses
+standard, index, personal, and widget views. Twenty answers `{"success":true}` without an identifier; the
+result names the view as read.
 
 ## Writing records
 
