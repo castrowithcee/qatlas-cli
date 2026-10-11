@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"regexp"
 	"sort"
 	"strconv"
@@ -28,18 +29,20 @@ func ValidateJSON(schema, raw json.RawMessage) error {
 	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return fmt.Errorf("arguments must contain exactly one JSON value")
 	}
-	return validateValue(schema, value)
+	return validateValue(schema, value, true)
 }
 
-func validateValue(rawSchema json.RawMessage, value any) error {
+// validateValue checks value against rawSchema. Only input is held to the member counts of objects and
+// the uniqueness of arrays; a provider response is not refused for them.
+func validateValue(rawSchema json.RawMessage, value any, input bool) error {
 	var schema map[string]json.RawMessage
 	if err := json.Unmarshal(rawSchema, &schema); err != nil {
 		return fmt.Errorf("schema is invalid")
 	}
-	return validateAt(schema, value, "$")
+	return validateAt(schema, value, "$", input)
 }
 
-func validateAt(schema map[string]json.RawMessage, value any, path string) error {
+func validateAt(schema map[string]json.RawMessage, value any, path string, input bool) error {
 	var kind string
 	if raw := schema["type"]; len(raw) > 0 {
 		if err := json.Unmarshal(raw, &kind); err != nil {
@@ -83,6 +86,23 @@ func validateAt(schema map[string]json.RawMessage, value any, path string) error
 		if raw := schema["additionalProperties"]; len(raw) > 0 {
 			_ = json.Unmarshal(raw, &additional)
 		}
+		if input {
+			if raw := schema["minProperties"]; len(raw) > 0 {
+				var minimum int
+				if json.Unmarshal(raw, &minimum) == nil && len(value) < minimum {
+					if minimum == 1 {
+						return fmt.Errorf("%s must not be empty", path)
+					}
+					return fmt.Errorf("%s must have at least %d members", path, minimum)
+				}
+			}
+			if raw := schema["maxProperties"]; len(raw) > 0 {
+				var maximum int
+				if json.Unmarshal(raw, &maximum) == nil && len(value) > maximum {
+					return fmt.Errorf("%s must have at most %d members", path, maximum)
+				}
+			}
+		}
 		names := make([]string, 0, len(value))
 		for name := range value {
 			names = append(names, name)
@@ -114,7 +134,7 @@ func validateAt(schema map[string]json.RawMessage, value any, path string) error
 			if err := json.Unmarshal(raw, &childSchema); err != nil {
 				return fmt.Errorf("schema at %s.%s is invalid", path, name)
 			}
-			if err := validateAt(childSchema, child, path+"."+name); err != nil {
+			if err := validateAt(childSchema, child, path+"."+name, input); err != nil {
 				return err
 			}
 		}
@@ -134,13 +154,23 @@ func validateAt(schema map[string]json.RawMessage, value any, path string) error
 				return fmt.Errorf("%s must have at most %d items", path, maximum)
 			}
 		}
+		if raw := schema["uniqueItems"]; input && string(raw) == "true" {
+			first := make(map[string]int, len(value))
+			for i, item := range value {
+				key := equalityKey(item)
+				if earlier, ok := first[key]; ok {
+					return fmt.Errorf("%s[%d] repeats %s[%d]", path, i, path, earlier)
+				}
+				first[key] = i
+			}
+		}
 		if raw := schema["items"]; len(raw) > 0 {
 			var itemSchema map[string]json.RawMessage
 			if err := json.Unmarshal(raw, &itemSchema); err != nil {
 				return fmt.Errorf("schema at %s has invalid items", path)
 			}
 			for i, item := range value {
-				if err := validateAt(itemSchema, item, path+"["+strconv.Itoa(i)+"]"); err != nil {
+				if err := validateAt(itemSchema, item, path+"["+strconv.Itoa(i)+"]", input); err != nil {
 					return err
 				}
 			}
@@ -194,6 +224,37 @@ func validateAt(schema map[string]json.RawMessage, value any, path string) error
 		}
 	}
 	return nil
+}
+
+// equalityKey encodes a decoded JSON value so that equal JSON values yield equal keys. Numbers are
+// normalized to their exact value at every level, so 1, 1.0 and 1e0 match; a number never matches a string.
+func equalityKey(value any) string {
+	switch v := value.(type) {
+	case json.Number:
+		if r, ok := new(big.Rat).SetString(string(v)); ok {
+			return "n" + r.String()
+		}
+		return "n" + string(v)
+	case []any:
+		parts := make([]string, len(v))
+		for i, item := range v {
+			parts[i] = equalityKey(item)
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	case map[string]any:
+		names := make([]string, 0, len(v))
+		for name := range v {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		parts := make([]string, len(names))
+		for i, name := range names {
+			parts[i] = strconv.Quote(name) + ":" + equalityKey(v[name])
+		}
+		return "{" + strings.Join(parts, ",") + "}"
+	}
+	encoded, _ := json.Marshal(value)
+	return "v" + string(encoded)
 }
 
 func isType(kind string, value any) bool {
@@ -349,7 +410,9 @@ type schemaNode struct {
 	MaxLength     json.Number            `json:"maxLength"`
 	MinItems      json.Number            `json:"minItems"`
 	MaxItems      json.Number            `json:"maxItems"`
+	MinProperties json.Number            `json:"minProperties"`
 	MaxProperties json.Number            `json:"maxProperties"`
+	UniqueItems   bool                   `json:"uniqueItems"`
 }
 
 // parseSchema reads a schema for the compact contract. A schema it cannot read yields no rows; describe
@@ -470,7 +533,10 @@ func (n schemaNode) limits() string {
 	add("", n.Minimum, n.Maximum)
 	add("len", n.MinLength, n.MaxLength)
 	add("items", n.MinItems, n.MaxItems)
-	add("keys", "", n.MaxProperties)
+	add("keys", n.MinProperties, n.MaxProperties)
+	if n.UniqueItems {
+		parts = append(parts, "unique")
+	}
 	if n.Type == "array" && n.Items != nil && len(n.Items.Properties) == 0 {
 		if each := n.Items.limits(); each != "" {
 			parts = append(parts, "each "+each)

@@ -541,10 +541,10 @@ func Register(reg *capability.Registry) error {
 		}, {
 			ID: "write", Title: "Master data and drafts",
 			Description: "lists and reads invoices, vouchers, payment status, contacts, articles, the organization profile, reference data and webhook subscriptions and " +
-				"creates invoice, quotation, order confirmation, credit note, delivery note and dunning drafts and creates and changes articles and contacts; issuing a voucher is never part of a profile",
+				"creates invoice, quotation, order confirmation, credit note, delivery note and dunning drafts and creates and changes articles and contacts and uploads receipt files; issuing a voucher is never part of a profile",
 			Tools: append(append([]string{}, readTools...), invoicesCreate.ID, quotationsCreate.ID,
 				orderConfirmationsCreate.ID, creditNotesCreate.ID, deliveryNotesCreate.ID, dunningsCreate.ID, articlesCreate.ID, articlesUpdate.ID,
-				contactsCreate.ID, contactsUpdate.ID),
+				contactsCreate.ID, contactsUpdate.ID, filesUpload.ID, vouchersAttach.ID),
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -596,6 +596,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: eventSubscriptionsDelete, Handler: invokeEventSubscriptionsDelete},
 		capability.Operation{Descriptor: documentsDownload, Handler: capability.Handler(invokeDocumentsDownload)},
 		capability.Operation{Descriptor: filesDownload, Handler: capability.Handler(invokeFilesDownload)},
+		capability.Operation{Descriptor: filesUpload, Handler: capability.Handler(invokeFilesUpload)},
+		capability.Operation{Descriptor: vouchersAttach, Handler: capability.Handler(invokeVouchersAttach)},
 	)
 }
 
@@ -1522,7 +1524,14 @@ func (c *Client) sendRaw(ctx context.Context, op, method, resource, path string,
 		return provider.Waited(op, "Lexware", err)
 	}
 	var body io.Reader
-	if payload != nil {
+	contentType := "application/json"
+	if file, ok := payload.(*multipartFile); ok {
+		buf, ctype, err := file.encode()
+		if err != nil {
+			return providerError(op, "the request could not be built")
+		}
+		body, contentType = buf, ctype
+	} else if payload != nil {
 		data, err := json.Marshal(payload)
 		if err != nil || len(data) > maxResponseBytes {
 			return providerError(op, "the request exceeds the size limit")
@@ -1540,7 +1549,7 @@ func (c *Client) sendRaw(ctx context.Context, op, method, resource, path string,
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("Accept", "application/json")
 	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	response, err := c.http.Do(req)
