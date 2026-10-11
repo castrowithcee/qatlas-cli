@@ -164,10 +164,15 @@ func TestDecisionRisksGroupsAndAllowList(t *testing.T) {
 	}{{joinrequestsDecline, capability.EffectUpdate, groupMembers, false},
 		{callbacksAnswer, capability.EffectUpdate, groupQueries, false},
 		{joinrequestqueriesAnswer, capability.EffectUpdate, groupQueries, false},
+		{inlineAnswer, capability.EffectCreate, groupQueries, true},
 		{suggestedpostsApprove, capability.EffectCreate, groupSuggestedPosts, false},
 		{suggestedpostsDecline, capability.EffectUpdate, groupSuggestedPosts, true}} {
 		r := c.d.Risk
-		if r.Effect != c.effect || r.Idempotency != capability.IdempotencyIdempotent ||
+		idem := capability.IdempotencyIdempotent
+		if c.d.ID == inlineAnswer.ID {
+			idem = capability.IdempotencyNonIdempotent
+		}
+		if r.Effect != c.effect || r.Idempotency != idem ||
 			r.Confirmation != capability.ConfirmationRequired || !r.OpenWorld || r.DataSensitivity == "" ||
 			c.d.RequiresToolAllowList != c.list || c.d.Group != c.group {
 			t.Errorf("%s = %+v", c.d.ID, c.d)
@@ -176,7 +181,7 @@ func TestDecisionRisksGroupsAndAllowList(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
 		for _, tool := range profile.Tools {
-			if tool == joinrequestsDecline.ID || tool == callbacksAnswer.ID || tool == joinrequestqueriesAnswer.ID || tool == suggestedpostsApprove.ID || tool == suggestedpostsDecline.ID {
+			if tool == joinrequestsDecline.ID || tool == callbacksAnswer.ID || tool == joinrequestqueriesAnswer.ID || tool == inlineAnswer.ID || tool == suggestedpostsApprove.ID || tool == suggestedpostsDecline.ID {
 				t.Errorf("profile %s contains %s", profile.ID, tool)
 			}
 		}
