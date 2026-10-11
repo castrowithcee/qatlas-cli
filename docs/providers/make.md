@@ -180,6 +180,8 @@ re-read: its own answer carries no scope of its own to re-verify (see "Runs and 
 | `make.datastores.delete` | delete | required | deletes one data store with its records (`DELETE /data-stores`, body `ids` with exactly one id); without `confirm_scenarios_affected` it sends no `confirmed`; offered only through a tools list |
 | `make.datastorerecords.list` | read | none | lists records (key and capped data) of one data store of the bound team after binding the store; at most 50 per page, each record capped; untrusted personal data |
 | `make.datastorerecords.create` | create | required | creates one record (`POST /data-stores/{id}/data`, optional `key` and a bounded `data` object) after binding the store |
+| `make.datastorerecords.replace` | update | required | replaces one record by key (`PUT /data-stores/{id}/data/{key}`, body is the non-empty `data` object) after binding the store |
+| `make.datastorerecords.update` | update | required | changes only the named top-level fields of one record by key (`PATCH`, same path and body form) after binding the store |
 | `make.datastorerecords.delete` | delete | required | deletes explicitly named records (`DELETE /data-stores/{id}/data`, body `keys`, 1 to 50 distinct); never `all`, `exceptKeys`, or `confirmed`; offered only through a tools list |
 | `make.teamvariables.list` | read | none | lists the bound team's custom and system variables (name, type, capped value, `is_system`); values may be secret |
 | `make.teamvariables.create` | create | required | creates one custom variable in the bound team (`POST /teams/{teamId}/variables`) |
@@ -569,15 +571,17 @@ reported as uncertain, and a result outside the bound team after the change as a
 
 ## Data store records
 
-`make.datastorerecords.list`, `.create`, and `.delete` work on the records of one data store of the bound team.
-Tool ids have three segments, so the object is named `datastorerecords`. Every `datastore_id` is read and bound
-to the bound team first (see above), before the list or the one changing request; a store of another team is
-refused without naming it. A connection with a scenario allow-list reaches none of them.
+`make.datastorerecords.list`, `.create`, `.replace`, `.update`, and `.delete` work on the records of one data
+store of the bound team. Tool ids have three segments, so the object is named `datastorerecords`. Every
+`datastore_id` is read and bound to the bound team first (see above), before the list or the one changing
+request; a store of another team is refused without naming it. A connection with a scenario allow-list reaches none of them.
 
 | Tool | Request | Make scope |
 | --- | --- | --- |
 | `make.datastorerecords.list` | `GET /data-stores/{id}/data` (`pg[offset]`, `pg[limit]`) | `datastores:read` |
 | `make.datastorerecords.create` | `POST /data-stores/{id}/data` with `data` and optional `key` | `datastores:write`, `datastores:read` |
+| `make.datastorerecords.replace` | `PUT /data-stores/{id}/data/{key}` with the record data as body | `datastores:write`, `datastores:read` |
+| `make.datastorerecords.update` | `PATCH /data-stores/{id}/data/{key}` with the changed fields as body | `datastores:write`, `datastores:read` |
 | `make.datastorerecords.delete` | `DELETE /data-stores/{id}/data` with body `{"keys":[...]}` | `datastores:write`, `datastores:read` |
 
 Source: developers.make.com API reference, Data stores, Data (checked against the published reference, not a
@@ -590,13 +594,14 @@ against the store's data structure) and an optional `key` of 1 to 128 characters
 without a key Make generates one. `delete` takes 1 to 50 distinct keys of the same form and sends only the
 `keys` form: Make's `all`, `exceptKeys`, and `confirmed` are never sent. It reports the requested keys Make
 names as deleted. It is in no profile and is offered only when a connection's `tools` list names it. The profiles
-are `datastorerecords-read` and `datastorerecords-manage` (list and create). Changes need their own confirmation,
-send exactly one changing request, and are never retried; a timeout, a connection reset, a 5xx, or an unreadable
-answer is reported as uncertain.
+are `datastorerecords-read` and `datastorerecords-manage` (list, create, replace, and update). Changes need their
+own confirmation, send exactly one changing request, and are never retried; a timeout, a connection reset, a 5xx,
+or an unreadable answer is reported as uncertain.
 
-Replacing (`PUT /data-stores/{id}/data/{key}`) and updating (`PATCH`) a single record are not offered: the
-reference documents their body only as having "no predefined body properties" and publishes no request example,
-so whether the body is the record data itself or a `{"data":...}` wrapper is undocumented.
+`replace` and `update` require `key` and a `data` object with at least one property (same ceilings as `create`)
+and send it directly as the body, without a `{"data":...}` wrapper; the reference publishes no request
+example, so this form follows Make's official TypeScript SDK. `replace` leaves exactly the sent fields, `update`
+keeps unnamed top-level fields. Whether Make creates the record for an unknown key is not verified.
 
 ## Team variables
 
