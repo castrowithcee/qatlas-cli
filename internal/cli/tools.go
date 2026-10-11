@@ -453,18 +453,31 @@ func checkInvokeFormat(c *cobra.Command, opts *Options) error {
 		c.CommandPath(), output.FormatJSON, opts.Format, output.FormatJSON)}
 }
 
-// emitDocument writes one discovery document. Both formats render the same JSON encoding of payload, so the
-// TOON default and --output json cannot drift apart: TOON is a rendering of the JSON data model here, not
-// a second contract. Members keep the order of the encoding, which is the declaration order of the Go
-// structs and the written order of a raw schema, so both formats name an entry before they describe it.
+// tablePayload is implemented by a payload whose TOON rendering needs a different encoding than its JSON:
+// entries with empty fields left out cannot form a TOON table, so it returns the same data with entries of
+// one common field set.
+type tablePayload interface{ TOONPayload() any }
+
+// emitDocument writes one discovery document. Both formats render the JSON encoding of payload, TOON from
+// its tablePayload view where it has one, so the TOON default and --output json carry the same data: TOON
+// is a rendering of the JSON data model here, not a second contract. Members keep the order of the
+// encoding, which is the declaration order of the Go structs and the written order of a raw schema, so both
+// formats name an entry before they describe it.
 func emitDocument(c *cobra.Command, format output.Format, payload any) error {
+	if format == output.FormatJSON {
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Errorf("encode discovery document: %w", err)
+		}
+		_, err = c.OutOrStdout().Write(append(encoded, '\n'))
+		return err
+	}
+	if table, ok := payload.(tablePayload); ok {
+		payload = table.TOONPayload()
+	}
 	encoded, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode discovery document: %w", err)
-	}
-	if format == output.FormatJSON {
-		_, err = c.OutOrStdout().Write(append(encoded, '\n'))
-		return err
 	}
 	decoder := json.NewDecoder(bytes.NewReader(encoded))
 	decoder.UseNumber()

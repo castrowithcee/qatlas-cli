@@ -387,8 +387,18 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 		if code != exitOK || stderr != "" {
 			t.Fatalf("exit=%d stderr=%q", code, stderr)
 		}
-		if got := toonOfJSON(t, jsonOut); got != stdout {
-			t.Errorf("TOON output = %q, want the TOON rendering of the JSON data %q", stdout, got)
+		// JSON leaves out empty fields per entry; TOON keeps one table with a row per tool.
+		if strings.Contains(jsonOut, `"requires":""`) {
+			t.Errorf("JSON output has an empty requires: %s", jsonOut)
+		}
+		tools := toolSummaries(t, jsonOut)
+		if want := fmt.Sprintf("tools[%d]{id,title,effect,requires}:", len(tools)); !strings.Contains(stdout, want) {
+			t.Errorf("TOON output lacks the table header %q:\n%s", want, stdout)
+		}
+		for _, tool := range tools {
+			if !strings.Contains(stdout, "\n  "+tool.ID+",") {
+				t.Errorf("TOON output has no row for %s:\n%s", tool.ID, stdout)
+			}
 		}
 		for _, tool := range toolSummaries(t, jsonOut) {
 			if tool.Title == "" {

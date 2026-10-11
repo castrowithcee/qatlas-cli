@@ -373,7 +373,7 @@ func TestVaultUnlockPromptExplainsTheAdminSession(t *testing.T) {
 	m.cfg = cfg
 	syncRevision(t, m)
 	view = screenOf(m)
-	if !strings.Contains(view, "vault.admin_timeout is 0: this asks again on the very next change") {
+	if !strings.Contains(view, "vault.admin_timeout is 0: asks again on every change") {
 		t.Fatalf("unlock dialog with admin_timeout 0 = %q, want the same zero-text admin.go's dialog uses", view)
 	}
 }
