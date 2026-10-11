@@ -226,12 +226,13 @@ func TestOutputsMatchTheirSchemas(t *testing.T) {
 		CanEditMessages: &yes, CanPinMessages: &yes, CanManageTopics: &yes, CanSendMessages: &yes,
 		CanSendAudios: &yes, CanSendDocuments: &yes, CanSendPhotos: &yes, CanSendVideos: &yes,
 		CanSendVideoNotes: &yes, CanSendVoiceNotes: &yes, CanSendPolls: &yes, CanSendOtherMessages: &yes,
-		CanAddWebPagePreviews: &yes}
+		CanAddWebPagePreviews: &yes, CanReactToMessages: &yes, CanEditTag: &yes,
+		CanManageDirectMessages: &yes, CanManageTags: &yes, CanSendWelcomeMessages: &yes}
 	chat := chatOut{ID: 1, Type: "t", Title: "t", Username: "u", IsForum: true, Description: "d",
 		Permissions: &permissionsOut{CanSendMessages: &yes, CanSendAudios: &yes, CanSendDocuments: &yes,
 			CanSendPhotos: &yes, CanSendVideos: &yes, CanSendVideoNotes: &yes, CanSendVoiceNotes: &yes,
 			CanSendPolls: &yes, CanSendOtherMessages: &yes, CanAddWebPagePreviews: &yes, CanChangeInfo: &yes,
-			CanInviteUsers: &yes, CanPinMessages: &yes, CanManageTopics: &yes},
+			CanInviteUsers: &yes, CanPinMessages: &yes, CanManageTopics: &yes, CanReactToMessages: &yes, CanEditTag: &yes},
 		SlowModeDelay: 1, PinnedMessageID: 1, LinkedChatID: 1}
 	for name, tt := range map[string]struct {
 		value  any
@@ -256,5 +257,49 @@ func TestOutputsMatchTheirSchemas(t *testing.T) {
 			value["truncated"] = true
 		}
 		schemaKeys(t, name, value, schema)
+	}
+}
+
+func TestChatsGetOutputsNewPermissions(t *testing.T) {
+	var calls []recorded
+	body := `{"ok":true,"result":{"id":-1001,"type":"supergroup","permissions":` +
+		`{"can_react_to_messages":false,"can_edit_tag":false,"can_unknown":true}}}`
+	client, _ := multiClient(t, testToken, chatsFake(&calls, 200, body), "-1001")
+	got, err := client.GetChat(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(got)
+	want := `{"id":-1001,"type":"supergroup","permissions":{"can_react_to_messages":false,"can_edit_tag":false}}`
+	if string(encoded) != want {
+		t.Errorf("output = %s", encoded)
+	}
+}
+
+func TestChatsMemberOutputsNewRights(t *testing.T) {
+	for name, tt := range map[string]struct{ body, want string }{
+		"restricted": {
+			`"status":"restricted","can_react_to_messages":false,"can_edit_tag":false,"can_unknown":true`,
+			`"status":"restricted","can_react_to_messages":false,"can_edit_tag":false`,
+		},
+		"administrator": {
+			`"status":"administrator","can_manage_direct_messages":false,"can_manage_tags":true,` +
+				`"can_send_welcome_messages":false,"can_unknown":true`,
+			`"status":"administrator","can_manage_direct_messages":false,"can_manage_tags":true,` +
+				`"can_send_welcome_messages":false`,
+		},
+	} {
+		var calls []recorded
+		body := `{"ok":true,"result":{"user":{"id":7,"is_bot":false},` + tt.body + `}}`
+		client, _ := multiClient(t, testToken, chatsFake(&calls, 200, body), "-1001")
+		got, err := client.GetChatMember(context.Background(), 7)
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, _ := json.Marshal(got)
+		want := `{"user":{"id":7,"is_bot":false},` + tt.want + `}`
+		if string(encoded) != want {
+			t.Errorf("%s: output = %s", name, encoded)
+		}
 	}
 }
