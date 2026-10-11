@@ -176,6 +176,10 @@ signature before any request.
 a `join_request_ref`; no tool approves a join request. Telegram expects a callback answer right after the button
 press and a join request query answer within 10 seconds.
 
+`inline_query` and `chosen_inline_result` updates appear only with the target `bot`; only an `inline_query` has
+an `inline_ref`, and a location is never shown. `telegram.inline.answer` (`create`, `tools` list) needs `bot` and
+an `inline_ref` and sends text articles only, never a URL, media, or keyboard.
+
 ## Reading chats and members
 
 The four chat read tools address a bound chat through `chat` as above and return fixed fields only:
@@ -248,9 +252,6 @@ per item, and a URL is never a source. The options of `telegram.messages.send` t
 `caption` of at most 1024 characters, which an album shows on its first item; a video note takes neither caption
 nor `parse_mode`. Duration, performer, title, thumbnail, streaming, and spoiler settings are not offered.
 
-A photo is limited to 10 MB, any other file, videos included, to 50 MB, and the files of one album together to
-50 MB. A local file is named `file` or `file-N` plus the plain extension.
-
 A `file_ref` must come from the selected chat itself: one issued for another target, even another bound chat,
 for another token, or of another kind is refused before the credential is read, and a raw file identifier is
 never accepted. Its size is not known locally; Telegram enforces the limits for it.
@@ -259,9 +260,6 @@ never accepted. Its size is not known locally; Telegram enforces the limits for 
 `local_path` or `file_ref`, and its still image of up to 10 MB from `photo_local_path` or `photo_file_ref`. Both
 are required and follow the rules above; the options are those of the other media tools, and a live photo is
 never part of an album. Its result `file_ref` is that of the video.
-
-The result is `message_id`, `date`, and a `file_ref` of the sent file, for an album one such entry per message
-under `messages`.
 
 ## Stickers
 

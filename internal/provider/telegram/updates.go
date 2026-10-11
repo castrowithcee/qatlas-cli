@@ -35,7 +35,7 @@ var updatesList = capability.Descriptor{
 	ID:          Provider + ".updates.list",
 	Version:     1,
 	Title:       "List Telegram updates",
-	Description: "Read pending incoming messages and events of the bound chats without consuming them",
+	Description: "Read pending incoming messages and events of the bound chats, and inline queries with the bot target, without consuming them",
 	Tags:        []string{"telegram", "updates", "read"},
 	Risk: capability.Risk{
 		Effect:          capability.EffectRead,
@@ -59,7 +59,8 @@ var updatesList = capability.Descriptor{
 		`"text":{"type":"string"},"caption":{"type":"string"},` +
 		`"media":{"type":"object","properties":{"kind":{"type":"string"},"size":{"type":"integer"},` +
 		`"mime_type":{"type":"string"},"file_name":{"type":"string"},"file_ref":{"type":"string"}}},` +
-		`"callback_data":{"type":"string"},"callback_ref":{"type":"string"},"join_request_ref":{"type":"string"}},` +
+		`"callback_data":{"type":"string"},"callback_ref":{"type":"string"},"join_request_ref":{"type":"string"},` +
+		`"query":{"type":"string"},"result_id":{"type":"string"},"inline_ref":{"type":"string"}},` +
 		`"required":["update_id","type","chat"]}},` +
 		`"skipped":{"type":"integer"},"last_update_id":{"type":"integer"}},` +
 		`"required":["updates","skipped"],"additionalProperties":false}`),
@@ -68,7 +69,7 @@ var updatesList = capability.Descriptor{
 		{Name: "wait_seconds", Description: "Seconds to wait for a new update when none is pending, from 0 through 10; default 0"},
 	},
 	Fields: []capability.Field{
-		{Name: "updates", Description: "Updates of the bound chats, oldest first"},
+		{Name: "updates", Description: "Updates of the bound chats and, with the bot target, inline queries and chosen inline results, oldest first"},
 		{Name: "skipped", Description: "Number of fetched updates left out because they belong to no bound chat or have an unsupported type"},
 		{Name: "last_update_id", Description: "Highest update identifier seen, including skipped updates"},
 	},
@@ -221,6 +222,9 @@ type updateOut struct {
 	CallbackData     string     `json:"callback_data,omitempty"`
 	CallbackRef      string     `json:"callback_ref,omitempty"`
 	JoinRequestRef   string     `json:"join_request_ref,omitempty"`
+	Query            string     `json:"query,omitempty"`
+	ResultID         string     `json:"result_id,omitempty"`
+	InlineRef        string     `json:"inline_ref,omitempty"`
 }
 
 // Only the fields below are decoded, so nothing else of an update can reach the output.
@@ -286,6 +290,15 @@ type tgCallback struct {
 	} `json:"message"`
 }
 
+// tgInline covers inline_query and chosen_inline_result. Location, offset, and inline_message_id are not
+// decoded, so they cannot reach the output.
+type tgInline struct {
+	ID       string  `json:"id"`
+	From     *tgUser `json:"from"`
+	Query    string  `json:"query"`
+	ResultID string  `json:"result_id"`
+}
+
 type tgUpdate struct {
 	UpdateID             int64       `json:"update_id"`
 	Message              *tgMessage  `json:"message"`
@@ -295,6 +308,8 @@ type tgUpdate struct {
 	MessageReaction      *tgEvent    `json:"message_reaction"`
 	MessageReactionCount *tgEvent    `json:"message_reaction_count"`
 	CallbackQuery        *tgCallback `json:"callback_query"`
+	InlineQuery          *tgInline   `json:"inline_query"`
+	ChosenInlineResult   *tgInline   `json:"chosen_inline_result"`
 	MyChatMember         *tgEvent    `json:"my_chat_member"`
 	ChatMember           *tgEvent    `json:"chat_member"`
 	ChatJoinRequest      *tgEvent    `json:"chat_join_request"`
@@ -309,6 +324,9 @@ type candidate struct {
 	fileID     string
 	callbackID string
 	joinQuery  string
+	// botOnly marks an update that belongs to no chat; only the bot target binds it.
+	botOnly  bool
+	inlineID string
 }
 
 func capText(value string, limit int) string {
@@ -415,12 +433,27 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		c.out.CallbackData = capText(q.Data, maxCallbackRunes)
 		c.callbackID = q.ID
 		return c, true
+	case u.InlineQuery != nil:
+		q := u.InlineQuery
+		c.out.Type, c.botOnly, c.inlineID = "inline_query", true, q.ID
+		c.out.From = sender(q.From)
+		c.out.Query = capText(q.Query, maxInlineQueryRunes)
+		return c, true
+	case u.ChosenInlineResult != nil:
+		// It carries no query identifier: the query was answered already, so there is nothing to reference.
+		q := u.ChosenInlineResult
+		c.out.Type, c.botOnly = "chosen_inline_result", true
+		c.out.From = sender(q.From)
+		c.out.Query = capText(q.Query, maxInlineQueryRunes)
+		c.out.ResultID = capText(q.ResultID, maxInlineResultRunes)
+		return c, true
 	}
 	return candidate{}, false
 }
 
-// ListUpdates fetches pending updates with one getUpdates request and returns only those of bound chats. It
-// sends neither offset nor allowed_updates, so Telegram keeps every update; nothing is acknowledged.
+// ListUpdates fetches pending updates with one getUpdates request and returns only those of bound chats and,
+// with the bot target, chatless inline updates. It sends neither offset nor allowed_updates, so Telegram keeps
+// every update; nothing is acknowledged.
 func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]any, error) {
 	const op = "list updates"
 	if len(c.set.chats) == 0 {
@@ -460,6 +493,14 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 		}
 		last = max(last, u.UpdateID)
 		cand, ok := classify(u)
+		if ok && cand.botOnly {
+			if !c.set.bot {
+				skipped++
+				continue
+			}
+			candidates = append(candidates, cand)
+			continue
+		}
 		if !ok || cand.chat == 0 {
 			skipped++
 			continue
@@ -484,6 +525,14 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 	}
 	updates := make([]updateOut, 0, len(candidates))
 	for _, cand := range candidates {
+		if cand.botOnly {
+			cand.out.Chat = botTarget
+			if cand.inlineID != "" {
+				cand.out.InlineRef = signRef(c.token, refInlineQuery, botTarget, cand.inlineID)
+			}
+			updates = append(updates, cand.out)
+			continue
+		}
 		binding, known := bound[cand.chat]
 		if !known {
 			skipped++
