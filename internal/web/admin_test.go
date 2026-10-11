@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -269,5 +270,68 @@ func TestStoppingTheProcessDiscardsAdminApproval(t *testing.T) {
 	s.close()
 	if err := s.VerifyAndGrantAdmin(syntheticPassphrase); err == nil {
 		t.Fatal("admin approval survived close()")
+	}
+}
+
+// browserPostOrigin mirrors the Fetch rule for the Origin a browser sends on a same-origin form POST:
+// the no-referrer policy serializes it as "null", every other policy keeps the real origin.
+func browserPostOrigin(t *testing.T, policy, origin string) string {
+	t.Helper()
+	switch policy {
+	case "no-referrer":
+		return "null"
+	case "no-referrer-when-downgrade", "origin", "origin-when-cross-origin", "same-origin",
+		"strict-origin", "strict-origin-when-cross-origin", "unsafe-url":
+		return origin
+	}
+	t.Fatalf("unknown Referrer-Policy %q", policy)
+	return ""
+}
+
+func (s *Server) adminActive() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.adminActiveLocked()
+}
+
+// TestBrowserFormPostKeepsOrigin proves a form POST from a real browser passes the local boundary: the
+// Origin it derives from the served Referrer-Policy must be accepted, while Origin "null" never is.
+func TestBrowserFormPostKeepsOrigin(t *testing.T) {
+	v := encryptedTestVault(t)
+	s, cookie, csrf := coupledServer(t, v, defaultTestAdminTimeout)
+
+	page := s.request(t, http.MethodGet, "/", s.addr, cookie, nil)
+	if page.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", page.Code)
+	}
+	origin := browserPostOrigin(t, page.Header().Get("Referrer-Policy"), "http://"+s.addr)
+
+	post := func(origin, site string) int {
+		form := url.Values{"csrf": {csrf}, "passphrase": {syntheticPassphrase}}
+		req := httptest.NewRequest(http.MethodPost, "/admin", strings.NewReader(form.Encode()))
+		req.Host = s.addr
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Sec-Fetch-Site", site)
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		s.mux().ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	for _, site := range []string{"cross-site", "same-origin"} {
+		if code := post("null", site); code != http.StatusForbidden {
+			t.Fatalf("Origin null with Sec-Fetch-Site %s: status = %d, want 403", site, code)
+		}
+		if s.adminActive() {
+			t.Fatalf("Origin null with Sec-Fetch-Site %s granted admin approval", site)
+		}
+	}
+
+	if code := post(origin, "same-origin"); code != http.StatusSeeOther {
+		t.Fatalf("browser form POST with Origin %q: status = %d, want 303", origin, code)
+	}
+	if !s.adminActive() {
+		t.Fatal("browser form POST did not grant admin approval")
 	}
 }
