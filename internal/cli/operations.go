@@ -60,10 +60,10 @@ func seconds(d time.Duration) string {
 	return fmt.Sprintf("%d seconds", d/time.Second)
 }
 
-// maxAgentRequestBytes bounds the complete stdin input before JSON decoding. One MiB leaves ample room for
-// tool arguments while preventing an untrusted agent from making the short-lived CLI allocate an unbounded
-// request body.
-const maxAgentRequestBytes = 1 << 20
+// maxRequestBytes bounds one complete agent request, stdin input and MCP message alike, before JSON
+// decoding. Eight MiB carries provider inline content of up to 4 MiB base64-encoded plus the envelope and
+// still keeps an untrusted agent from making the process allocate an unbounded request body.
+const maxRequestBytes = 8 << 20
 
 // auditedError carries a completed mutation audit event without changing the wrapped error's public
 // classification. The central runner prints the diagnostic and optional usage before it writes the event.
@@ -168,13 +168,13 @@ func workingProjects() []string {
 // the tool is invoked without arguments; anything else must be exactly one bounded JSON object. The input
 // schema of the tool validates the content afterwards, in the application core.
 func readInvokeArguments(reader io.Reader) (json.RawMessage, error) {
-	input, err := io.ReadAll(io.LimitReader(reader, maxAgentRequestBytes+1))
+	input, err := io.ReadAll(io.LimitReader(reader, maxRequestBytes+1))
 	if err != nil {
 		return nil, &application.InvalidRequestError{Message: "stdin arguments could not be read"}
 	}
-	if len(input) > maxAgentRequestBytes {
+	if len(input) > maxRequestBytes {
 		return nil, &application.InvalidRequestError{
-			Message: fmt.Sprintf("stdin arguments exceed %d bytes", maxAgentRequestBytes),
+			Message: fmt.Sprintf("stdin arguments exceed %d bytes; pass large file content as local_path", maxRequestBytes),
 		}
 	}
 	if len(bytes.TrimSpace(input)) == 0 {

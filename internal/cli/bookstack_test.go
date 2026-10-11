@@ -213,16 +213,16 @@ func TestBookStackInvokeReadsPages(t *testing.T) {
 
 func TestInvokeArgumentsAreBoundedAndValidatedBeforeTheProvider(t *testing.T) {
 	prefix, suffix := `{"padding":"`, `"}`
-	exact := prefix + strings.Repeat("a", maxAgentRequestBytes-len(prefix)-len(suffix)) + suffix
-	if len(exact) != maxAgentRequestBytes {
-		t.Fatalf("fixture size = %d, want %d", len(exact), maxAgentRequestBytes)
+	exact := prefix + strings.Repeat("a", maxRequestBytes-len(prefix)-len(suffix)) + suffix
+	if len(exact) != maxRequestBytes {
+		t.Fatalf("fixture size = %d, want %d", len(exact), maxRequestBytes)
 	}
 	arguments, err := readInvokeArguments(strings.NewReader(exact))
 	if err != nil || string(arguments) != exact {
 		t.Fatalf("readInvokeArguments(at limit) = %q, %v", arguments, err)
 	}
 	if _, err := readInvokeArguments(strings.NewReader(exact + " ")); err == nil ||
-		!strings.Contains(err.Error(), "exceed 1048576 bytes") {
+		!strings.Contains(err.Error(), "exceed "+fmt.Sprint(maxRequestBytes)+" bytes; pass large file content as local_path") {
 		t.Fatalf("readInvokeArguments(limit + 1) = %v", err)
 	}
 	if arguments, err := readInvokeArguments(strings.NewReader("  \n")); err != nil ||
