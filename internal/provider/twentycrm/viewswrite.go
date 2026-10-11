@@ -97,19 +97,25 @@ var viewsCreate = capability.Descriptor{
 
 var viewsUpdate = capability.Descriptor{
 	ID: Provider + ".views.update", Version: 1, Title: "Update a Twenty CRM view",
-	Description: "Rename one custom view of the Twenty workspace of a connection or change its icon; nothing else of " +
-		"the view changes. Standard views, index views, personal views, and widget views are refused, and the last " +
-		"two read like an unknown view. " + viewWriteNote,
+	Description: "Rename one custom view of the Twenty workspace of a connection, change its icon, or change the SELECT " +
+		"field a TABLE or KANBAN view is grouped by; nothing else of the view changes. Changing the grouping field " +
+		"makes Twenty delete all groups of the view and create new ones from the field, so the visibility and order " +
+		"of the old groups are lost; the field is checked against the data model, which needs the permission " +
+		"\"Data model\" as well. Standard views, index views, personal views, and widget views are refused, and the " +
+		"last two read like an unknown view. " + viewWriteNote,
 	Tags:     []string{"twentycrm", "views", "update"},
 	Risk:     viewWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema + `,"name":` + viewNameSchema +
-		`,"icon":` + viewIconSchema + `},"required":["id"],"additionalProperties":false}`),
+		`,"icon":` + viewIconSchema + `,"main_group_by_field_id":` + uuidSchema + `},"required":["id"],` +
+		`"additionalProperties":false}`),
 	OutputSchema: viewResult,
 	Arguments: []capability.Argument{
 		{Name: "id", Required: true, Description: "UUID of the view, as returned by twentycrm.views.list"},
 		{Name: "name", Description: "New view name, same rules as on create"},
 		{Name: "icon", Description: "New icon name, same rules as on create"},
+		{Name: "main_group_by_field_id", Description: "UUID of an active SELECT field of the object; replaces all " +
+			"groups of the TABLE or KANBAN view"},
 	},
 	Examples: []capability.Example{{Description: "Rename a view",
 		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000","name":"Won deals"}`)}},
@@ -206,7 +212,7 @@ func newViewCreate(args *viewWriteArgs) (*viewChange, error) {
 }
 
 func newViewUpdate(args *viewWriteArgs) (*viewChange, error) {
-	if !validUUID(args.ID) || args.ObjectID != "" || args.Type != "" || args.MainGroupByFieldID != "" ||
+	if !validUUID(args.ID) || args.ObjectID != "" || args.Type != "" || !optionalFieldID(args.MainGroupByFieldID) ||
 		args.CalendarLayout != "" || args.CalendarFieldID != "" || args.CalendarEndFieldID != "" ||
 		(args.Name != nil && !validViewName(args.Name)) || (args.Icon != nil && !validViewIcon(args.Icon)) {
 		return nil, invalidRequest(errViewArguments)
@@ -218,10 +224,13 @@ func newViewUpdate(args *viewWriteArgs) (*viewChange, error) {
 	if args.Icon != nil {
 		payload["icon"] = *args.Icon
 	}
-	if len(payload) == 0 {
-		return nil, invalidRequest("nothing to change: pass name or icon")
+	if args.MainGroupByFieldID != "" {
+		payload["mainGroupByFieldMetadataId"] = strings.ToLower(args.MainGroupByFieldID)
 	}
-	return &viewChange{id: args.ID, payload: payload}, nil
+	if len(payload) == 0 {
+		return nil, invalidRequest("nothing to change: pass name, icon, or main_group_by_field_id")
+	}
+	return &viewChange{id: args.ID, payload: payload, main: strings.ToLower(args.MainGroupByFieldID)}, nil
 }
 
 // sendView sends exactly one writing request and returns the entity of the answer. Every failure whose
@@ -270,14 +279,24 @@ func fieldOf(object *MetaObject, id string) *MetaField {
 	return nil
 }
 
+// checkGroupField accepts an active, non-system SELECT field only. Twenty also takes many-to-one relations; they
+// stay out on purpose.
+func checkGroupField(object *MetaObject, id string) error {
+	field := fieldOf(object, id)
+	if field == nil || field.IsActive == nil || !*field.IsActive || isTrue(field.IsSystem) || field.Type != "SELECT" {
+		return invalidRequest("main_group_by_field_id must be an active SELECT field of the object")
+	}
+	return nil
+}
+
 // checkViewFields tests the fields of a new view against the data model of its object.
 func checkViewFields(object *MetaObject, change *viewChange) error {
 	usable := func(field *MetaField) bool {
 		return field != nil && field.IsActive != nil && *field.IsActive && !isTrue(field.IsSystem)
 	}
 	if change.kind == "KANBAN" {
-		if field := fieldOf(object, change.main); !usable(field) || field.Type != "SELECT" {
-			return invalidRequest("main_group_by_field_id must be an active SELECT field of the object")
+		if err := checkGroupField(object, change.main); err != nil {
+			return err
 		}
 	}
 	var first string
@@ -323,12 +342,36 @@ func (c *Client) UpdateView(ctx context.Context, change *viewChange) (*ViewSumma
 	if !isTrue(current.IsCustom) || (current.Key != nil && *current.Key != "") {
 		return nil, invalidRequest("only custom views can be changed; standard and index views are refused")
 	}
+	if change.main != "" {
+		if current.Type != "TABLE" && current.Type != "KANBAN" {
+			return nil, invalidRequest("only TABLE and KANBAN views can change their grouping field")
+		}
+		object, err := c.GetMetaObject(ctx, current.ObjectMetadataID)
+		if err != nil {
+			return nil, err
+		}
+		if err := checkGroupField(object, change.main); err != nil {
+			return nil, err
+		}
+	}
 	path := viewsPath + "/" + url.PathEscape(change.id)
 	entity, err := c.sendView(ctx, op, viewUpdateUncertain, http.MethodPatch, path, change.payload)
 	if err != nil {
 		return nil, err
 	}
-	return projectChangedView(op, viewUpdateUncertain, entity, change.id, current.ObjectMetadataID, "", nil)
+	summary, err := projectChangedView(op, viewUpdateUncertain, entity, change.id, current.ObjectMetadataID, "", nil)
+	if err != nil {
+		return nil, err
+	}
+	if change.main != "" {
+		var answer viewRecord
+		if json.Unmarshal(entity, &answer) != nil || answer.MainGroupByFieldID == nil ||
+			!equalUUID(*answer.MainGroupByFieldID, change.main) {
+			return nil, uncertainly(provider.InvalidResponse(op, "Twenty answered with a different grouping field than "+
+				"the requested one"), viewUpdateUncertain)
+		}
+	}
+	return summary, nil
 }
 
 // invokeViewsWrite gates the connection, checks every argument, and only then opens the client.
