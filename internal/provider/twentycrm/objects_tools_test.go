@@ -168,7 +168,7 @@ func TestToolGroupsCoverEveryTool(t *testing.T) {
 	for _, tool := range metadata.Tools {
 		got[tool.ID] = tool.Group
 	}
-	if len(got) != 61 {
+	if len(got) != 63 {
 		t.Fatalf("tools = %v", got)
 	}
 	for id, group := range got {
@@ -197,7 +197,7 @@ func TestToolGroupsCoverEveryTool(t *testing.T) {
 		if strings.HasPrefix(id, Provider+".meta") {
 			want = metadataGroup
 		}
-		if strings.HasPrefix(id, Provider+".views.") {
+		if strings.HasPrefix(id, Provider+".views.") || strings.HasPrefix(id, Provider+".viewfields.") {
 			want = viewsGroup
 		}
 		if group != want {

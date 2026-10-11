@@ -150,20 +150,19 @@ metadata API for all objects and fields; default values, settings, and relation 
 the workspace. All nine tools need the Twenty right "Data model": use a connection with an API key of its own.
 The writers are offered only by a connection whose `tools` list names them; no profile ticks them.
 
-- Created are custom objects and non-relational fields; relation types are refused. A field is created on a
-  custom object only; its options are required for selections and refused for other types.
-- An update reads first, refuses system and relation fields, and limits standard ones to label changes.
-- A delete is final: all records of an object or all values of a field are lost. Only deactivated custom
-  objects and non-relational custom fields are accepted.
-- Options are replaced as a whole: a left-out option clears its value in all records. Deactivating hides an
-  object or field from everyone.
-
 ## Views
 
 `views.list` and `views.get` (`read`) are workspace-wide and read a view's columns, filters, filter groups,
 sorts, and groups. Only views visible to the whole workspace are read: a personal view is not listed, and `get`
 answers it like an unknown view, although Twenty serves it by identifier. Widget views are not read. Filter and
 group values are untrusted workspace data of their own data class.
+
+`viewfields.create` and `viewfields.update` (`create`, `update`) add a field as a column and show, hide, move, or
+resize a column, for every user of the workspace. They need the Twenty right "Views", are offered only by a
+connection whose `tools` list names them, and no profile ticks them. Both read the view first and refuse a
+personal, widget, standard, or index view; `update` takes the view from the column itself. `create` also reads
+the object ("Data model") and refuses a field of another object, an inactive or system field, and a field that
+is already a column. The answer names the column, its view, and its field.
 
 ## Writing records
 

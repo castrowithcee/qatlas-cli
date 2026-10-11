@@ -189,8 +189,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 	}
 
 	operations := reg.Provider(Provider)
-	if len(operations) != 61 {
-		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, three activity link, two attachment read, three workflow read, four workflow control, four webhook, two member read, seven role, two view, and nine data model operations", len(operations))
+	if len(operations) != 63 {
+		t.Fatalf("operations = %d, want seven company, two object, five record read, two record write, three record removal, three batch, three merge, three activity link, two attachment read, three workflow read, four workflow control, four webhook, two member read, seven role, two view read, two view column, and nine data model operations", len(operations))
 	}
 	for _, descriptor := range operations {
 		wantVersion := 1
@@ -207,7 +207,8 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 			descriptor.ID == "twentycrm.roles.delete" || strings.HasPrefix(descriptor.ID, "twentycrm.roles.set") ||
 			descriptor.ID == "twentycrm.metaobjects.create" || descriptor.ID == "twentycrm.metaobjects.update" ||
 			descriptor.ID == "twentycrm.metafields.create" || descriptor.ID == "twentycrm.metafields.update" ||
-			descriptor.ID == "twentycrm.metaobjects.delete" || descriptor.ID == "twentycrm.metafields.delete"
+			descriptor.ID == "twentycrm.metaobjects.delete" || descriptor.ID == "twentycrm.metafields.delete" ||
+			strings.HasPrefix(descriptor.ID, "twentycrm.viewfields.")
 		if descriptor.RequiresToolAllowList != guarded {
 			t.Errorf("descriptor %s RequiresToolAllowList = %v, want %v", descriptor.ID, descriptor.RequiresToolAllowList, guarded)
 		}
@@ -266,21 +267,23 @@ func TestRegisterPublishesMetadataAndTwoReadOnlyOperations(t *testing.T) {
 		operations[43].ID != "twentycrm.roles.setobjectpermissions" ||
 		operations[44].ID != "twentycrm.roles.setpermissionflags" ||
 		operations[45].ID != "twentycrm.roles.update" ||
-		operations[46].ID != "twentycrm.views.get" ||
-		operations[47].ID != "twentycrm.views.list" ||
-		operations[48].ID != "twentycrm.webhooks.delete" ||
-		operations[49].ID != "twentycrm.webhooks.get" ||
-		operations[50].ID != "twentycrm.webhooks.list" ||
-		operations[51].ID != "twentycrm.webhooks.update" ||
-		operations[52].ID != "twentycrm.workflowruns.list" ||
-		operations[53].ID != "twentycrm.workflowruns.retry" ||
-		operations[54].ID != "twentycrm.workflowruns.stop" ||
-		operations[55].ID != "twentycrm.workflows.get" ||
-		operations[56].ID != "twentycrm.workflows.list" ||
-		operations[57].ID != "twentycrm.workflowversions.activate" ||
-		operations[58].ID != "twentycrm.workflowversions.deactivate" ||
-		operations[59].ID != "twentycrm.workspacemembers.get" ||
-		operations[60].ID != "twentycrm.workspacemembers.list" {
+		operations[46].ID != "twentycrm.viewfields.create" ||
+		operations[47].ID != "twentycrm.viewfields.update" ||
+		operations[48].ID != "twentycrm.views.get" ||
+		operations[49].ID != "twentycrm.views.list" ||
+		operations[50].ID != "twentycrm.webhooks.delete" ||
+		operations[51].ID != "twentycrm.webhooks.get" ||
+		operations[52].ID != "twentycrm.webhooks.list" ||
+		operations[53].ID != "twentycrm.webhooks.update" ||
+		operations[54].ID != "twentycrm.workflowruns.list" ||
+		operations[55].ID != "twentycrm.workflowruns.retry" ||
+		operations[56].ID != "twentycrm.workflowruns.stop" ||
+		operations[57].ID != "twentycrm.workflows.get" ||
+		operations[58].ID != "twentycrm.workflows.list" ||
+		operations[59].ID != "twentycrm.workflowversions.activate" ||
+		operations[60].ID != "twentycrm.workflowversions.deactivate" ||
+		operations[61].ID != "twentycrm.workspacemembers.get" ||
+		operations[62].ID != "twentycrm.workspacemembers.list" {
 		t.Errorf("operation IDs are not sorted: %+v", operations)
 	}
 }
@@ -1188,7 +1191,7 @@ func wantSensitivity(id string) string {
 	if strings.HasPrefix(id, Provider+".roles.") {
 		return roleDataSensitivity
 	}
-	if strings.HasPrefix(id, Provider+".views.") {
+	if strings.HasPrefix(id, Provider+".views.") || strings.HasPrefix(id, Provider+".viewfields.") {
 		return viewDataSensitivity
 	}
 	if strings.HasPrefix(id, Provider+".meta") {
