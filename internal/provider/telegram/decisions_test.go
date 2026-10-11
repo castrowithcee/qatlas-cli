@@ -162,6 +162,8 @@ func TestDecisionRisksGroupsAndAllowList(t *testing.T) {
 		group  string
 		list   bool
 	}{{joinrequestsDecline, capability.EffectUpdate, groupMembers, false},
+		{callbacksAnswer, capability.EffectUpdate, groupQueries, false},
+		{joinrequestqueriesAnswer, capability.EffectUpdate, groupQueries, false},
 		{suggestedpostsApprove, capability.EffectCreate, groupSuggestedPosts, false},
 		{suggestedpostsDecline, capability.EffectUpdate, groupSuggestedPosts, true}} {
 		r := c.d.Risk
@@ -174,7 +176,7 @@ func TestDecisionRisksGroupsAndAllowList(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	for _, profile := range metadata.Profiles {
 		for _, tool := range profile.Tools {
-			if tool == joinrequestsDecline.ID || tool == suggestedpostsApprove.ID || tool == suggestedpostsDecline.ID {
+			if tool == joinrequestsDecline.ID || tool == callbacksAnswer.ID || tool == joinrequestqueriesAnswer.ID || tool == suggestedpostsApprove.ID || tool == suggestedpostsDecline.ID {
 				t.Errorf("profile %s contains %s", profile.ID, tool)
 			}
 		}
