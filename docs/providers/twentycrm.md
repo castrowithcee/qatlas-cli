@@ -269,7 +269,8 @@ identifiers are distinct UUIDs of that object.
   promised. It is offered only by a connection whose `tools` list names it, and no profile ticks it. Preview
   first, then merge.
 
-Results are untrusted records; a 403 points to the object permissions of the role of the key.
+Results are untrusted records; a merge answer must name one of the given records, and a 403 points to the
+object permissions of the role of the key.
 
 ## Deleting and restoring
 
