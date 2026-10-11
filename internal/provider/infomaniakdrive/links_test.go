@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/castrowithcee/qatlas-cli/internal/application"
 	"github.com/castrowithcee/qatlas-cli/internal/capability"
@@ -22,13 +21,6 @@ const (
 	expiryText     = "2026-06-01T00:00:00Z"
 	expiryUnix     = 1780272000
 )
-
-func fixLinkClock(t *testing.T) {
-	t.Helper()
-	previous := linkNow
-	linkNow = func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) }
-	t.Cleanup(func() { linkNow = previous })
-}
 
 func linkJSONOf(fileID int64, right, rawURL string) string {
 	return fmt.Sprintf(`{"url":%q,"file_id":%d,"right":%q,"valid_until":%d,"created_by":7,"created_at":1735689600,`+
@@ -86,7 +78,6 @@ func TestLinkDescriptors(t *testing.T) {
 }
 
 func TestLinkChangesSendExactlyOneRequest(t *testing.T) {
-	fixLinkClock(t)
 	for _, tt := range linkCases() {
 		t.Run(tt.name, func(t *testing.T) {
 			var calls []call
@@ -158,7 +149,6 @@ func TestLinkChangesNeedConfirmationAndToolList(t *testing.T) {
 }
 
 func TestLinkToolsRefuseForeignDrives(t *testing.T) {
-	fixLinkClock(t)
 	cases := append(linkCases(),
 		linkCase{name: "get", tool: linksGet.ID, args: linkArgs("")},
 		linkCase{name: "list", tool: linksList.ID, args: fmt.Sprintf(`{"drive_id":%d}`, ownDrive)})
@@ -193,7 +183,6 @@ func TestLinkToolsRefuseForeignDrives(t *testing.T) {
 }
 
 func TestLinkToolsValidateArguments(t *testing.T) {
-	fixLinkClock(t)
 	valid := fmt.Sprintf(`"password":%q`, "valid-length-value")
 	cases := []struct{ name, tool, args string }{
 		{"root get", linksGet.ID, fmt.Sprintf(`{"drive_id":%d,"file_id":1}`, ownDrive)},
@@ -223,7 +212,6 @@ func TestLinkToolsValidateArguments(t *testing.T) {
 }
 
 func TestLinkChangeErrorsAndUncertainOutcomesAreNeverRepeated(t *testing.T) {
-	fixLinkClock(t)
 	statuses := []struct {
 		status int
 		class  provider.Class
@@ -283,7 +271,6 @@ func TestLinkChangeErrorsAndUncertainOutcomesAreNeverRepeated(t *testing.T) {
 }
 
 func TestLinksGetReadsOneLinkAndDropsUnsafeValues(t *testing.T) {
-	fixLinkClock(t)
 	var calls []call
 	env := newEnvironment(t, &calls, withOwnership(ownDrive, ownAccount, func(*http.Request) (*http.Response, error) {
 		return jsonResponse(200, envelopeSuccess(linkJSONOf(childFileID, "inherit", linkURL))), nil
@@ -359,7 +346,6 @@ func TestLinksGetFailures(t *testing.T) {
 }
 
 func TestLinksListPaginatesAndBoundsStrings(t *testing.T) {
-	fixLinkClock(t)
 	var calls []call
 	long := strings.Repeat("n", 5000)
 	item := func(id int64, name, link string) string {
