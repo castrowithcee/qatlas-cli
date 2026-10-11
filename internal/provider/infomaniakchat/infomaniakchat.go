@@ -27,9 +27,11 @@
 // verifyChannelScope, that the channel belongs to a bound team or is a direct or group channel with their
 // members only, and is refused before the matching endpoint is reached when it does not. Every operation that
 // names a post_id (messages.thread, messages.get, messages.files, messages.update, messages.delete,
-// messages.pin, messages.unpin, messages.markunread, the reactions tools, and the threads tools, which also
+// messages.pin, messages.unpin, messages.flag, messages.unflag, messages.markunread, the reactions tools, and the threads tools, which also
 // require the root post's channel to be a reachable channel of the named team) reads the post first and binds
-// it to its channel the same way, see verifyPostScope; the searches
+// it to its channel the same way, see verifyPostScope; flagged.list names a team or a channel and drops every post outside the
+// reachable channels of that team or outside that verified channel, and the flag tools only write the fixed
+// flagged_post preference of the token's own user; the searches
 // (messages.search, files.search, channels.search) read the token's channels of the team once, see
 // reachableChannels, and drop every hit outside that set, so direct and group messages, other teams, and
 // channels outside the allow-list never show up; a message reply additionally confirms that its root post
@@ -52,11 +54,11 @@
 // of its channels writes the channels it may not reach back unchanged. The notification tool refuses direct
 // and group channels, whose participants it would otherwise have to prove, see boundChannel.
 //
-// The bot tools (GetBots, GetBot, and PatchBot) act on accounts no team or channel target can bound, so they
-// are instance-wide: requireInstanceScope refuses a connection with a channel target before any secret is
-// read, and a live read of the token's teams, see (*Client).requireInstanceTeams, refuses unless every one of
+// The bot tools (GetBots, GetBot, and PatchBot) and the custom emoji list act on data no team or channel
+// target can bound, so they are instance-wide: requireInstanceScope refuses a connection with a channel target
+// before any secret is read, and a live read of the token's teams, see (*Client).requireInstanceTeams, refuses unless every one of
 // them is a bound team. That read runs on every call, so a token that later joins another team locks the
-// tools instead of widening them. Bot output is reduced to a fixed field set; bot tokens and creating bots
+// tools instead of widening them. Their output is reduced to a fixed field set; bot tokens and creating bots
 // are deliberately not offered.
 //
 // kChat is deliberately the only Infomaniak surface this provider reaches: Mail, CalDAV/CardDAV, and kDrive
@@ -70,10 +72,10 @@
 // upload that is never attached.
 //
 // Creating, changing, or deleting teams, adding or removing team members, invitations, changes to other
-// users, profile pictures, previews and thumbnails, the custom emoji catalog, and creating webhooks or
-// slash commands or changing where one posts or calls are deliberately out of scope: this provider lists the
-// teams, channels, and direct and group channels a connection may reach, reads the details and members of a bound team and,
-// only when a connection's tools list names it, sets one current member's team role (the invitation identifier is never read), reads channel details and
+// users, profile pictures, previews and thumbnails, custom emoji images, creation, and deletion, and creating
+// webhooks or slash commands or changing where one posts or calls are deliberately out of scope: this provider
+// lists the teams, channels, and direct and group channels a connection may reach, reads the details and
+// members of a bound team and, only when a connection's tools list names it, sets one current member's team role (the invitation identifier is never read), reads channel details and
 // the public channels of a bound team, creates one confirmed channel in a bound team (only for a connection
 // without a channel allow-list, because a new channel cannot be inside one), changes the display name,
 // purpose, header, or handle of one confirmed public or private channel, lists the members of a public or
@@ -553,20 +555,21 @@ func Register(reg *capability.Registry) error {
 			Description: "lists the bound teams and their channels, reads team details and members, reads channel details and the public " +
 				"channels of a bound team, lists the direct and group channels, searches messages, files, and " +
 				"channels, lists the members of a channel and the archived channels of a team, reads channel " +
-				"messages, single messages, threads, followed threads, unread counts, reactions, pinned messages, " +
+				"messages, single messages, threads, followed threads, unread counts, reactions, pinned and flagged messages, " +
 				"and attachments (metadata and download to a released local directory), reads, lists, and searches " +
-				"the users of the bound teams and their presence, and lists the own sidebar categories; changes nothing",
+				"the users of the bound teams and their presence, lists the own sidebar categories, and lists the " +
+				"custom emoji of an instance-wide connection; changes nothing",
 			Tools: []string{teamsList.ID, teamsGet.ID, teamMembersList.ID, channelsList.ID, channelsGet.ID, channelsBrowse.ID,
 				channelsMembersList.ID, directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
-				filesDownload.ID, reactionsList.ID, pinsList.ID, usersGet.ID, usersList.ID, usersSearch.ID,
-				usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID,
-				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID},
+				filesDownload.ID, reactionsList.ID, pinsList.ID, flaggedList.ID, usersGet.ID, usersList.ID,
+				usersSearch.ID, usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID,
+				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID, emojiList.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
 				"a confirmed message, or a confirmed reply to an existing thread, to a reachable channel, " +
 				"uploads a confirmed file to such a channel, edits the text of a confirmed message, adds a " +
-				"confirmed own reaction, pins or unpins a confirmed message, follows or unfollows a confirmed thread, " +
+				"confirmed own reaction, pins, unpins, flags, or unflags a confirmed message, follows or unfollows a confirmed thread, " +
 				"marks a confirmed channel, message, or thread as read or unread, sets the own presence and custom " +
 				"status or clears the custom status, and creates or changes a confirmed own sidebar category or the " +
 				"notifications of a channel; deleting a message, a category, or removing a reaction is never part " +
@@ -574,8 +577,8 @@ func Register(reg *capability.Registry) error {
 			Tools: []string{teamsList.ID, channelsList.ID, directList.ID, directOpen.ID, groupMessagesOpen.ID,
 				messagesList.ID, messagesThread.ID, messagesGet.ID, messagesSend.ID, messagesUpdate.ID,
 				messagesFiles.ID, filesInfo.ID, filesDownload.ID, filesUpload.ID, reactionsList.ID, reactionsAdd.ID,
-				pinsList.ID, messagesPin.ID, messagesUnpin.ID, usersGet.ID, usersList.ID, usersSearch.ID,
-				usersStatus.ID, statusSet.ID, customStatusSet.ID, customStatusClear.ID, messagesSearch.ID,
+				pinsList.ID, messagesPin.ID, messagesUnpin.ID, flaggedList.ID, messagesFlag.ID, messagesUnflag.ID,
+				usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID, statusSet.ID, customStatusSet.ID, customStatusClear.ID, messagesSearch.ID,
 				filesSearch.ID, channelsSearch.ID, threadsList.ID, threadsGet.ID, threadsFollow.ID, threadsUnfollow.ID,
 				channelsUnread.ID, channelsMarkRead.ID, messagesMarkUnread.ID, threadsMarkRead.ID,
 				categoriesList.ID, categoriesCreate.ID, categoriesUpdate.ID, channelNotificationsUpdate.ID},
@@ -632,6 +635,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(pinsList), Handler: capability.Handler(invokePinsList)},
 		capability.Operation{Descriptor: withGroup(messagesPin), Handler: capability.Handler(invokePin)},
 		capability.Operation{Descriptor: withGroup(messagesUnpin), Handler: capability.Handler(invokeUnpin)},
+		capability.Operation{Descriptor: withGroup(flaggedList), Handler: capability.Handler(invokeFlaggedList)},
+		capability.Operation{Descriptor: withGroup(messagesFlag), Handler: capability.Handler(invokeFlag)},
+		capability.Operation{Descriptor: withGroup(messagesUnflag), Handler: capability.Handler(invokeUnflag)},
 		capability.Operation{Descriptor: withGroup(usersGet), Handler: capability.Handler(invokeUsersGet)},
 		capability.Operation{Descriptor: withGroup(usersList), Handler: capability.Handler(invokeUsersList)},
 		capability.Operation{Descriptor: withGroup(usersSearch), Handler: capability.Handler(invokeUsersSearch)},
@@ -669,6 +675,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(botsList), Handler: capability.Handler(invokeBotsList)},
 		capability.Operation{Descriptor: withGroup(botsGet), Handler: capability.Handler(invokeBotsGet)},
 		capability.Operation{Descriptor: withGroup(botsUpdate), Handler: capability.Handler(invokeBotsUpdate)},
+		capability.Operation{Descriptor: withGroup(emojiList), Handler: capability.Handler(invokeEmojiList)},
 	)
 }
 
