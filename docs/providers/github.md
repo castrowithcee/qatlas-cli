@@ -1857,13 +1857,13 @@ qatlas invoke github.projectitems.get --connection planning --arg item_id=PVTI_.
 
 `github.projectitems.list` (contract version 2) returns compact items: identifier, type, title, number,
 repository, state, Status, the other single-select, multi-select, text, number, date, and iteration values by
-field name, a multi-select value as the list of its option names, assignees, and labels; the URL is left out
-because it is derivable from the repository and the number. It never returns bodies or comments. Without
-`status` and `status_not` it lists at most 30 items whose Status is not `Done`; `status_not: []` lists every
-status. The filters `status`, `status_not`, `type` (`issue`, `pull_request`, `draft_issue`), `repository`
-(`owner/name`), `assignee`, and `labels` (any of) are translated into quoted terms of the project filter
-syntax and applied by GitHub. Qatlas verifies each returned item against the same filters. A `status` value
-must be an option of the project's Status field.
+field name, a multi-select value as the list of its option names, assignees, and labels, but no URL, which
+repository and number give. It never returns bodies or comments. Without `status` and `status_not` it lists at
+most 30 items whose Status is not `Done`; `status_not: []` lists every status. The filters `status`, `status_not`,
+`type` (`issue`, `pull_request`, `draft_issue`), `repository` (`owner/name`), `assignee`, and `labels` (any of)
+become quoted terms of the project filter syntax applied by GitHub; Qatlas verifies each returned item against
+them. A `status` value must be an option of the project's Status field. GitHub indexes this list with a delay, so
+an item added a moment ago can be missing for a few seconds; `github.projectitems.get` reads it by `item_id`.
 
 `github.projectitems.get` reads one item of the chosen project with its fields, its URL, and, for an issue or
 a draft issue, the full body. An item of another project is refused. Bodies and titles are untrusted data.
