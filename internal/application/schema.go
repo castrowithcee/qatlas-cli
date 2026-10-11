@@ -119,6 +119,21 @@ func validateAt(schema map[string]json.RawMessage, value any, path string) error
 			}
 		}
 	case []any:
+		if raw := schema["minItems"]; len(raw) > 0 {
+			var minimum int
+			if json.Unmarshal(raw, &minimum) == nil && len(value) < minimum {
+				if minimum == 1 {
+					return fmt.Errorf("%s must not be empty", path)
+				}
+				return fmt.Errorf("%s must have at least %d items", path, minimum)
+			}
+		}
+		if raw := schema["maxItems"]; len(raw) > 0 {
+			var maximum int
+			if json.Unmarshal(raw, &maximum) == nil && len(value) > maximum {
+				return fmt.Errorf("%s must have at most %d items", path, maximum)
+			}
+		}
 		if raw := schema["items"]; len(raw) > 0 {
 			var itemSchema map[string]json.RawMessage
 			if err := json.Unmarshal(raw, &itemSchema); err != nil {

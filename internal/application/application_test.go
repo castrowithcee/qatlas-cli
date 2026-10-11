@@ -692,7 +692,11 @@ func TestSchemaBoundsAndPatternsAreEnforced(t *testing.T) {
 	schema := json.RawMessage(`{"type":"object","properties":{` +
 		`"size":{"type":"integer","minimum":1,"maximum":100},` +
 		`"date":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},` +
-		`"day":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$","x-form":"YYYY-MM-DD"}},` +
+		`"day":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$","x-form":"YYYY-MM-DD"},` +
+		`"tags":{"type":"array","minItems":1,"maxItems":3,"items":{"type":"string"}},` +
+		`"pair":{"type":"array","minItems":2,"items":{"type":"integer"}},` +
+		`"a":{"type":"array","items":{"type":"object","properties":{"b":{"type":"array","maxItems":1}}}},` +
+		`"free":{"type":"array"}},` +
 		`"additionalProperties":false}`)
 
 	tests := []struct {
@@ -707,6 +711,13 @@ func TestSchemaBoundsAndPatternsAreEnforced(t *testing.T) {
 		{"pattern mismatch", `{"date":"14.05.2026"}`, "$.date does not have the required form"},
 		{"empty string", `{"date":""}`, "$.date does not have the required form"},
 		{"pattern mismatch with a form", `{"day":"14.05.2026"}`, "$.day does not have the required form YYYY-MM-DD"},
+		{"at the lower item bound", `{"tags":["x"],"pair":[1,2]}`, ""},
+		{"at the upper item bound", `{"tags":["x","y","z"]}`, ""},
+		{"empty array with one required item", `{"tags":[]}`, "$.tags must not be empty"},
+		{"above the item maximum", `{"tags":["w","x","y","z"]}`, "$.tags must have at most 3 items"},
+		{"below an item minimum above one", `{"pair":[1]}`, "$.pair must have at least 2 items"},
+		{"nested item bound", `{"a":[{"b":[1,2]}]}`, "$.a[0].b must have at most 1 items"},
+		{"array without bounds", `{"free":[],"a":[{"b":[]}]}`, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -718,6 +729,54 @@ func TestSchemaBoundsAndPatternsAreEnforced(t *testing.T) {
 				t.Fatalf("ValidateJSON() = %v, want %q", err, tt.want)
 			}
 		})
+	}
+}
+
+func TestArrayItemBoundsStopInvokeBeforeTheProvider(t *testing.T) {
+	calls := 0
+	descriptor := testDescriptor("fake.invoices.create", capability.EffectCreate, capability.ConfirmationNone)
+	descriptor.InputSchema = json.RawMessage(`{"type":"object","properties":{"line_items":{"type":"array",` +
+		`"minItems":1,"maxItems":100,"items":{"type":"object","properties":{"name":{"type":"string"}}}}},` +
+		`"required":["line_items"],"additionalProperties":false}`)
+	handler := capability.Handler(func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+		json.RawMessage) (any, error) {
+		calls++
+		return map[string]any{"ok": true}, nil
+	})
+	registry := capability.NewRegistry()
+	if err := registry.Register("fake", capability.Operation{Descriptor: descriptor, Handler: handler}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.New()
+	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["key"] = config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{"token": "T"}}
+	cfg.Connections["books"] = config.Connection{
+		Service: "service", Credential: "key", Permissions: []config.Permission{config.PermissionCreate},
+	}
+	core := New(registry, cfg, secret.NewWith(func(string) string { return "token" }, nil, nil, nil), nil)
+
+	items := func(n int) json.RawMessage {
+		return json.RawMessage(`{"line_items":[` + strings.TrimSuffix(strings.Repeat(`{"name":"x"},`, n), ",") + `]}`)
+	}
+	for _, tt := range []struct {
+		name        string
+		arguments   json.RawMessage
+		wantInvalid bool
+		wantCalls   int
+	}{
+		{"one item", items(1), false, 1},
+		{"the maximum", items(100), false, 2},
+		{"empty", items(0), true, 2},
+		{"one above the maximum", items(101), true, 2},
+	} {
+		_, err := core.Invoke(context.Background(), InvokeRequest{Operation: descriptor.ID, Arguments: tt.arguments})
+		var invalid *InvalidRequestError
+		if errors.As(err, &invalid) != tt.wantInvalid || (!tt.wantInvalid && err != nil) {
+			t.Errorf("%s: Invoke() = %v", tt.name, err)
+		}
+		if calls != tt.wantCalls {
+			t.Errorf("%s: provider calls = %d, want %d", tt.name, calls, tt.wantCalls)
+		}
 	}
 }
 
