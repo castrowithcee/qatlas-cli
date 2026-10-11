@@ -580,9 +580,9 @@ func (c *Client) ListViews(ctx context.Context, connection, object, objectID str
 }
 
 // readView reads one workspace-wide view. A view of another visibility or type reads exactly like an unknown one.
-func (c *Client) readView(ctx context.Context, op, id string) (*viewRecord, error) {
+func (c *Client) readView(ctx context.Context, op, id string, texts provider.StatusTexts) (*viewRecord, error) {
 	var body json.RawMessage
-	if err := c.getWith(ctx, op, viewsPath+"/"+url.PathEscape(id), nil, viewResponseBytes, &body, viewStatusTexts); err != nil {
+	if err := c.getWith(ctx, op, viewsPath+"/"+url.PathEscape(id), nil, viewResponseBytes, &body, texts); err != nil {
 		return nil, err
 	}
 	entity, err := unwrapMeta(op, body, "view")
@@ -595,7 +595,7 @@ func (c *Client) readView(ctx context.Context, op, id string) (*viewRecord, erro
 	}
 	if !record.listed() {
 		// Twenty serves a view of any visibility by identifier; it must read exactly like an unknown one.
-		return nil, provider.ClassifyStatus(op, 404, viewStatusTexts)
+		return nil, provider.ClassifyStatus(op, 404, texts)
 	}
 	return &record, nil
 }
@@ -606,7 +606,7 @@ func (c *Client) GetView(ctx context.Context, connection, id string) (*View, err
 	if !validUUID(id) {
 		return nil, invalidRequest("the view id must be a UUID")
 	}
-	record, err := c.readView(ctx, op, id)
+	record, err := c.readView(ctx, op, id, viewStatusTexts)
 	if err != nil {
 		return nil, err
 	}
