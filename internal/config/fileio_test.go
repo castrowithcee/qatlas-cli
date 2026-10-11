@@ -127,7 +127,10 @@ func TestSaveGivesUpAfterBudgetAndCleansUp(t *testing.T) {
 	path, _ := blockedByDir(t)
 	slept := seamFile(t, true, nil)
 	err := NewStore(path, testProviders).Save(sample(t))
-	if err == nil || !strings.Contains(err.Error(), "cannot replace "+path) {
+	// The message names the resolved target, which differs from path where the temporary directory is
+	// reached through a link (macOS) or a short name (Windows).
+	if err == nil || !strings.HasPrefix(err.Error(), "cannot replace ") ||
+		!strings.Contains(err.Error(), filepath.Base(path)) {
 		t.Fatalf("err = %v, want cannot replace", err)
 	}
 	if *slept != len(fileretry.Delays) {
