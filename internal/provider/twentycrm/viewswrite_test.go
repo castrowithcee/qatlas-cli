@@ -12,13 +12,14 @@ import (
 )
 
 const (
-	vwDateA    = "eeeeeeee-0000-4000-8000-000000000005"
-	vwDateB    = "eeeeeeee-0000-4000-8000-000000000006"
-	vwDay      = "eeeeeeee-0000-4000-8000-000000000007"
-	vwText     = "eeeeeeee-0000-4000-8000-000000000008"
-	vwOff      = "eeeeeeee-0000-4000-8000-000000000009"
-	vwNewView  = "66666666-0000-4000-8000-0000000000f1"
-	vwProvider = "canary-view-write-3377"
+	vwDateA        = "eeeeeeee-0000-4000-8000-000000000005"
+	vwDateB        = "eeeeeeee-0000-4000-8000-000000000006"
+	vwDay          = "eeeeeeee-0000-4000-8000-000000000007"
+	vwText         = "eeeeeeee-0000-4000-8000-000000000008"
+	vwOff          = "eeeeeeee-0000-4000-8000-000000000009"
+	vwNewView      = "66666666-0000-4000-8000-0000000000f1"
+	vwProvider     = "canary-view-write-3377"
+	vwUnknownField = "eeeeeeee-0000-4000-8000-0000000000ff"
 )
 
 func vwField(id, kind string, active bool) string {
@@ -202,6 +203,84 @@ func TestViewsUpdateReadsOnceAndPatchesNameAndIcon(t *testing.T) {
 	}
 	if !strings.Contains(out, viewID) || strings.Contains(out, creatorCn) || strings.Contains(out, appCn) {
 		t.Errorf("result = %s", out)
+	}
+}
+
+// vwGrouped is a view whose answer names the grouping field.
+func vwGrouped(id, kind, field string) string {
+	return strings.Replace(vwView(id, "WORKSPACE", kind, "", true), `"icon":"IconList"`,
+		`"icon":"IconList","mainGroupByFieldMetadataId":"`+field+`"`, 1)
+}
+
+func TestViewsUpdateChangesTheGroupingFieldWithOnePatch(t *testing.T) {
+	path := viewsPath + "/" + viewID
+	for _, kind := range []string{"TABLE", "KANBAN"} {
+		t.Run(kind, func(t *testing.T) {
+			calls := serveMetaWrite(t, vwReads(map[string]string{path: vwView(viewID, "WORKSPACE", kind, "", true)}),
+				metaAnswer(vwGrouped(viewID, kind, metaFieldID)))
+			out, err := runMetaWrite(invokeViewsUpdate, `{"id":"`+viewID+`","main_group_by_field_id":"`+metaFieldID+`"}`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sent := metaWrites(calls)
+			if len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].Path != path ||
+				sent[0].Body != `{"mainGroupByFieldMetadataId":"`+metaFieldID+`"}` {
+				t.Fatalf("calls = %+v", *calls)
+			}
+			if !strings.Contains(out, viewID) || strings.Contains(out, creatorCn) || strings.Contains(out, appCn) {
+				t.Errorf("result = %s", out)
+			}
+		})
+	}
+}
+
+func TestViewsUpdateRefusesAnUnusableGroupingFieldWithoutWriting(t *testing.T) {
+	path := viewsPath + "/" + viewID
+	for name, tt := range map[string]struct{ kind, field string }{
+		"foreign field":  {"TABLE", vwUnknownField},
+		"text field":     {"TABLE", vwText},
+		"inactive field": {"KANBAN", vwOff},
+		"date field":     {"KANBAN", vwDay},
+		"calendar view":  {"CALENDAR", metaFieldID},
+		"list view":      {"LIST", metaFieldID},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := serveMetaWrite(t, vwReads(map[string]string{path: vwView(viewID, "WORKSPACE", tt.kind, "", true)}),
+				metaAnswer(`{}`))
+			_, err := runMetaWrite(invokeViewsUpdate, `{"id":"`+viewID+`","main_group_by_field_id":"`+tt.field+`"}`)
+			if !asInvalidOK(err) || len(metaWrites(calls)) != 0 {
+				t.Errorf("err = %v, writes = %+v", err, metaWrites(calls))
+			}
+		})
+	}
+	t.Run("not a uuid", func(t *testing.T) {
+		refuse(t)
+		if _, err := runMetaWrite(invokeViewsUpdate, `{"id":"`+viewID+`","main_group_by_field_id":"x"}`); !asInvalidOK(err) {
+			t.Errorf("err = %v", err)
+		}
+	})
+	t.Run("standard view", func(t *testing.T) {
+		calls := serveMetaWrite(t, vwReads(map[string]string{path: vwView(viewID, "WORKSPACE", "TABLE", "", false)}), metaAnswer(`{}`))
+		_, err := runMetaWrite(invokeViewsUpdate, `{"id":"`+viewID+`","main_group_by_field_id":"`+metaFieldID+`"}`)
+		if err == nil || len(metaWrites(calls)) != 0 {
+			t.Errorf("err = %v, writes = %+v", err, metaWrites(calls))
+		}
+	})
+}
+
+func TestViewsUpdateAnswerMustNameTheGroupingField(t *testing.T) {
+	path := viewsPath + "/" + viewID
+	for name, answer := range map[string]string{
+		"other field": vwGrouped(viewID, "TABLE", vwOff),
+		"no field":    vwView(viewID, "WORKSPACE", "TABLE", "", true),
+	} {
+		t.Run(name, func(t *testing.T) {
+			serveMetaWrite(t, vwReads(map[string]string{path: vwView(viewID, "WORKSPACE", "TABLE", "", true)}), metaAnswer(answer))
+			_, err := runMetaWrite(invokeViewsUpdate, `{"id":"`+viewID+`","main_group_by_field_id":"`+metaFieldID+`"}`)
+			if err == nil || !strings.Contains(err.Error(), "may have taken effect") {
+				t.Errorf("err = %v", err)
+			}
+		})
 	}
 }
 

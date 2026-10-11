@@ -139,25 +139,25 @@ are replaced as a whole. All need "Roles", so use a key of its own; no profile t
 `metaobjects.list`, `metaobjects.get`, and `metafields.get` (`read`) are workspace-wide and read Twenty's
 metadata API for all objects and fields; default values, settings, and relation details are never read.
 
-`metaobjects.create`, `update`, `delete` and `metafields.create`, `update`, `delete` (`create`, `update`,
-`delete`) change the schema for every user and integration of the workspace. All nine tools need the Twenty
-right "Data model": use a connection with an API key of its own. The writers are offered only by a connection
-whose `tools` list names them; no profile ticks them.
+`metaobjects.create`, `update`, `delete` and `metafields.create`, `update`, `delete` change the schema for every
+user and integration of the workspace. All nine tools need the Twenty right "Data model": use an API key of its
+own. The writers are offered only by a connection whose `tools` list names them; no profile ticks them.
 
 ## Views
 
 `views.list` and `views.get` (`read`) are workspace-wide and read a view's columns, filters, filter groups,
-sorts, and groups. Only views visible to the whole workspace are read: a personal view is not listed, and `get`
-answers it like an unknown view, although Twenty serves it by identifier. Widget views are not read. Filter and
-group values are untrusted workspace data of their own data class.
+sorts, and groups. Only views visible to the whole workspace are read; `get` answers a personal or widget view
+like an unknown one. Filter and group values are untrusted workspace data of their own data class.
 
-`views.create`, `update`, `delete`, `viewfields.*`, `viewsorts.*`, `viewfilters.*`, and `viewgroups.delete` are
-confirmed, need a `tools` entry and the Twenty right "Views" (also for other users' personal views; use a key of
-its own), and no profile ticks them. Each reads the view, or the part and its view, first and refuses what `get`
-would not read and standard or index views. A new view is workspace-wide and starts empty; `update` changes name
-and icon only. Every `delete` is permanent for all members. Column, sort, and filter `create` refuse a field of
-another object and an inactive or system one, column and sort also an unsortable or used one. Filters are simple
-(no group, relation, or sub field), checked by field type as the tool help lists; `update` keeps the field.
+All view writers (`views.create`, `update`, `delete`, `viewfields.*`, `viewsorts.*`, `viewfilters.*`,
+`viewgroups.update`, `delete`) are confirmed, need a `tools` entry and the Twenty right "Views" (also for other
+users' personal views; use a key of its own), and no profile ticks them. Each first reads the view (or the part's
+view) and refuses what `get` would not read and standard and index views. `update` changes name, icon, and the
+grouping field of a TABLE or KANBAN view (active SELECT only; Twenty recreates all groups, losing their
+visibility and order); `viewgroups.update` changes visibility and position. New views are workspace-wide and
+empty; `delete` is permanent. Column, sort, and filter `create` refuse a field of another object and an inactive
+or system one, column and sort also an unsortable or used one. Filters are simple (no group, relation, or sub
+field), checked by field type as the tool help lists; `update` keeps the field.
 
 ## Dashboards
 
