@@ -3,12 +3,12 @@ description: >
   Describes Twenty CRM company, object catalog, record read (list, get, structured search, search across
   objects, count by field), record write (create, update, batches), duplicate search and merge, record
   trash (delete, restore, destroy), note and task link operations, workflow read and control, member,
-  role, and data model read and write, webhook operations, object targets, connection permissions, and safety
-  boundaries.
+  role, view, and data model read and write, webhook operations, object targets, connection permissions, and
+  safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-09
+updated: 2026-10-11
 ---
 
 # Twenty CRM
@@ -70,8 +70,7 @@ composite field, in direction `asc` or `desc`. Relation, array, and rich-text fi
 - A value or an answer above the bounds is an invalid response; Qatlas does not cut it.
 - Record values are untrusted workspace content, often personal data. They appear only in a result, never in
   errors, logs, or audit entries, and carry their own data class.
-- The role of the API key is the ceiling: Twenty returns only the objects and fields the role grants, and
-  Qatlas adds no right. Soft-deleted records are read only by `records.list` with `deleted`.
+- The role of the API key is the ceiling: Twenty returns only what the role grants, and Qatlas adds no right.
 
 ## Filtering and counting records
 
@@ -174,7 +173,13 @@ The writers are offered only by a connection whose `tools` list names them; no p
   objects and non-relational custom fields are accepted.
 - Options are replaced as a whole: a left-out option clears its value in all records. Deactivating hides an
   object or field from everyone.
-- A new custom object is reachable at once without targets, with targets only once entered there.
+
+## Views
+
+`views.list` and `views.get` (`read`) are workspace-wide and read a view's columns, filters, filter groups,
+sorts, and groups. Only views visible to the whole workspace are read: a personal view is not listed, and `get`
+answers it like an unknown view, although Twenty serves it by identifier. Widget views are not read. Filter and
+group values are untrusted workspace data of their own data class.
 
 ## Writing records
 
@@ -196,10 +201,8 @@ every field from the workspace catalog and builds the request body from the chec
   fields that are not a relation to a reachable object are refused as well.
 - Refused fields: system fields, fields the schema does not offer for the operation, files, actor fields,
   free JSON, and lists of plain text. The request size is bounded.
-- The answer is the written record, read at depth 0 and reduced like a read; it must name the requested
-  record.
+- The answer is the written record, reduced like a read; it must name the requested record.
 - For `create` an uncertain report warns that repeating adds a duplicate record; search the object first.
-- A 403 means the role of the API key lacks the right to write the object or a field.
 
 ## Linking notes and tasks
 
@@ -236,7 +239,7 @@ tool to create a webhook or to change its target or signing key.
 ## Batches
 
 `records.batchcreate`, `records.batchupdate`, and `records.batchdelete` act on one reachable object with 1 to
-60 records in one confirmed request that Qatlas sends once.
+60 records in one confirmed request that Qatlas sends once; no profile ticks them.
 
 - `batchcreate` takes a list of records; each is checked like a `create`, and one refused record refuses the
   batch before anything is written. With `upsert` Twenty matches the entries against existing records by the
@@ -251,7 +254,6 @@ tool to create a webhook or to change its target or signing key.
 - It is not established whether Twenty applies a batch as a whole when one record fails. An answer that does
   not name exactly the requested records (for `upsert`, another count) is reported as an uncertain partial
   effect, not as success, and so is any unclear result. Read the records before repeating a batch.
-- The answer is reduced like a read and capped. No setup profile ticks the batch tools.
 
 ## Merging records
 
@@ -267,8 +269,7 @@ identifiers are distinct UUIDs of that object.
   promised. It is offered only by a connection whose `tools` list names it, and no profile ticks it. Preview
   first, then merge.
 
-Results are untrusted records like those of `records.get`; a merge answer must name one of the given records.
-A 403 points to the object permissions of the role of the key.
+Results are untrusted records; a 403 points to the object permissions of the role of the key.
 
 ## Deleting and restoring
 
