@@ -942,7 +942,9 @@ func TestRateLimitHeadersHoldTheNextRequest(t *testing.T) {
 	if _, err := c.ListRows(context.Background(), ListOptions{}); err != nil {
 		t.Fatalf("ListRows() = %v", err)
 	}
-	if len(waited) == 0 || waited[0] < 4*time.Second || waited[0] > 5*time.Second {
+	// The reset is whole seconds, so the hold can fall short of 4s; it was taken before this floor.
+	floor := time.Until(time.Unix(reset, 0))
+	if len(waited) == 0 || waited[0] < floor || waited[0] > 5*time.Second {
 		t.Fatalf("waits = %v, want the reported reset to be honoured", waited)
 	}
 
