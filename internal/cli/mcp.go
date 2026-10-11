@@ -31,7 +31,6 @@ import (
 const (
 	mcpProtocolVersion    = "2026-07-28"
 	mcpCacheTTLMillis     = 60 * 60 * 1000
-	maxMCPMessageBytes    = 1 << 20
 	maxMCPInFlight        = 16
 	mcpParseError         = -32700
 	mcpInvalidRequest     = -32600
@@ -235,7 +234,7 @@ func (s *mcpServer) serve(ctx context.Context, input io.Reader) error {
 			return s.outputError()
 		case errors.Is(err, errMCPMessageTooLarge):
 			s.writeResponse(mcpErrorResponse(nil, mcpParseError,
-				fmt.Sprintf("MCP message exceeds %d bytes", maxMCPMessageBytes), nil))
+				fmt.Sprintf("MCP message exceeds %d bytes", maxRequestBytes), nil))
 		default:
 			s.cancelAll()
 			s.wg.Wait()
@@ -249,7 +248,7 @@ func readMCPLine(reader *bufio.Reader) ([]byte, error) {
 	tooLarge := false
 	for {
 		fragment, prefix, err := reader.ReadLine()
-		if len(line)+len(fragment) > maxMCPMessageBytes {
+		if len(line)+len(fragment) > maxRequestBytes {
 			tooLarge = true
 		} else if !tooLarge {
 			line = append(line, fragment...)
