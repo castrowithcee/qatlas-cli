@@ -774,11 +774,13 @@ func Register(reg *capability.Registry) error {
 				"store); refused on a connection with a scenario allow-list",
 			Tools: []string{dataStoreRecordsList.ID},
 		}, {
-			ID: "datastorerecords-manage", Title: "Create records in the bound team's data stores",
-			Description: "reads what datastorerecords-read reads and creates a record in a data store of the " +
-				"bound team; every creation needs its own confirmation, is never retried, and needs the " +
+			ID: "datastorerecords-manage", Title: "Create, replace, and update records in the bound team's data stores",
+			Description: "reads what datastorerecords-read reads, creates a record in a data store of the " +
+				"bound team, replaces a record's fields, and changes named fields of a record; every change " +
+				"needs its own confirmation, is never retried, and needs the " +
 				"datastores:read and datastores:write scopes. Deleting records is in no profile",
-			Tools: []string{dataStoreRecordsList.ID, dataStoreRecordsCreate.ID},
+			Tools: []string{dataStoreRecordsList.ID, dataStoreRecordsCreate.ID, dataStoreRecordsReplace.ID,
+				dataStoreRecordsUpdate.ID},
 		}, {
 			ID: "teamvariables-read", Title: "Read the bound team's variables",
 			Description: "lists the custom and system variables of the bound team with capped values, which " +
@@ -876,6 +878,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: dataStoresDelete, Handler: capability.Handler(invokeDataStoresDelete)},
 		capability.Operation{Descriptor: dataStoreRecordsList, Handler: capability.Handler(invokeDataStoreRecordsList)},
 		capability.Operation{Descriptor: dataStoreRecordsCreate, Handler: capability.Handler(invokeDataStoreRecordsCreate)},
+		capability.Operation{Descriptor: dataStoreRecordsReplace, Handler: capability.Handler(invokeDataStoreRecordsReplace)},
+		capability.Operation{Descriptor: dataStoreRecordsUpdate, Handler: capability.Handler(invokeDataStoreRecordsUpdate)},
 		capability.Operation{Descriptor: dataStoreRecordsDelete, Handler: capability.Handler(invokeDataStoreRecordsDelete)},
 		capability.Operation{Descriptor: teamVariablesList, Handler: capability.Handler(invokeTeamVariablesList)},
 		capability.Operation{Descriptor: teamVariablesCreate, Handler: capability.Handler(invokeTeamVariablesCreate)},

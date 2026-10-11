@@ -14,9 +14,9 @@ import (
 	"github.com/castrowithcee/qatlas-cli/internal/secret"
 )
 
-// The three tools of this file list, create, and delete records of one data store of the bound team. Every
-// store that is named is read first and bound back to the bound team through openDataStore, before the list
-// or the one changing request. Record contents are untrusted user data, often personal data of third parties.
+// The five tools of this file list, create, replace, update, and delete records of one data store of the bound
+// team. Every store that is named is read first and bound back to the bound team through openDataStore, before
+// the list or the one changing request. Record contents are untrusted user data, often personal data of third parties.
 // API (checked 2026-10-04 against developers.make.com's published API reference, not a live account):
 //   - GET /data-stores/{id}/data (pg[offset], pg[limit]), datastores:read, answering {"records":[{key,data}],
 //     "spec","strict","count","pg"}; spec and strict are ignored.
@@ -25,10 +25,9 @@ import (
 //   - DELETE /data-stores/{id}/data, datastores:write, body {"keys":[...]}, answering {"keys":[...]}. The
 //     reference requires the confirmed query parameter only for the "all" form, which is never sent, and
 //     neither is exceptKeys; only an explicit list of keys is deleted and confirmed is never sent.
-//
-// Replacing (PUT) and updating (PATCH) one record by key are not offered: the reference documents their body
-// only as "no predefined body properties, see the request example", and no request example is published, so
-// whether the body is the record data itself or a {"data":...} wrapper is undocumented.
+//   - PUT and PATCH /data-stores/{id}/data/{key}, datastores:write, body the record data itself without a
+//     {"data":...} wrapper (as Make's official TypeScript SDK sends it; the reference publishes no example),
+//     answering {"key","data"}.
 
 const (
 	recordsSensitivity = "make-data-store-records-personal-data"
@@ -279,6 +278,109 @@ func invokeDataStoreRecordsCreate(ctx context.Context, resolved *config.Resolved
 	}
 	if answer.Key == "" || (input.Key != nil && answer.Key != *input.Key) {
 		return nil, invalidResponse(op, "Make did not report the created record"+recordsUncertain)
+	}
+	return &DataStoreRecordChange{DataStoreID: input.DataStoreID, Record: recordViewOf(answer.Key, answer.Data)}, nil
+}
+
+var dataStoreRecordsReplace = capability.Descriptor{
+	ID: Provider + ".datastorerecords.replace", Version: 1, Title: "Replace a record in a Make data store",
+	Description: "Replace one record of a data store of the bound team by key (PUT): all fields of the record " +
+		"become exactly the given data. The store is read first and must belong to the bound team. data is a " +
+		"non-empty JSON object of at most " + strconv.Itoa(maxRecordDataBytes) + " bytes and " +
+		strconv.Itoa(maxRecordDataDepth) + " levels that must follow the store's data structure; Make " +
+		"validates it. Make may create the record when the key is unknown. Sends one request and never " +
+		"repeats it. Refused on a connection with a scenario allow-list. Needs the datastores:write and " +
+		"datastores:read scopes",
+	Tags: []string{"make", "datastores", "records", "replace", "automation"},
+	Risk: recordsChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent), Provider: Provider,
+	InputSchema: recordChangeInputSchema, OutputSchema: recordChangeOutputSchema,
+	Arguments: recordChangeArguments("Complete new record data as a non-empty JSON object; fields not named are removed"),
+	Fields:    recordChangeFields,
+	Examples: []capability.Example{{Description: "Replace a record",
+		Arguments: json.RawMessage(`{"datastore_id":1,"key":"order-1","data":{"title":"Hello"}}`)}},
+}
+
+var dataStoreRecordsUpdate = capability.Descriptor{
+	ID: Provider + ".datastorerecords.update", Version: 1, Title: "Update fields of a record in a Make data store",
+	Description: "Change only the named top-level fields of one record of a data store of the bound team by key " +
+		"(PATCH); other fields stay as they are. The store is read first and must belong to the bound team. " +
+		"data is a non-empty JSON object of at most " + strconv.Itoa(maxRecordDataBytes) + " bytes and " +
+		strconv.Itoa(maxRecordDataDepth) + " levels; Make validates it against the store's data structure. " +
+		"Make may create the record when the key is unknown. Sends one request and never repeats it. Refused " +
+		"on a connection with a scenario allow-list. Needs the datastores:write and datastores:read scopes",
+	Tags: []string{"make", "datastores", "records", "update", "automation"},
+	Risk: recordsChangeRisk(capability.EffectUpdate, capability.IdempotencyIdempotent), Provider: Provider,
+	InputSchema: recordChangeInputSchema, OutputSchema: recordChangeOutputSchema,
+	Arguments: recordChangeArguments("Top-level fields to set as a non-empty JSON object; fields not named are kept"),
+	Fields:    recordChangeFields,
+	Examples: []capability.Example{{Description: "Update one field of a record",
+		Arguments: json.RawMessage(`{"datastore_id":1,"key":"order-1","data":{"title":"Hello"}}`)}},
+}
+
+var recordChangeInputSchema = json.RawMessage(`{"type":"object","properties":{"datastore_id":` + dataStoreIDSchema +
+	`,"key":` + recordKeySchema + `,"data":{"type":"object","minProperties":1}},` +
+	`"required":["datastore_id","key","data"],"additionalProperties":false}`)
+
+var recordChangeOutputSchema = json.RawMessage(`{"type":"object","properties":{"datastore_id":{"type":"integer"},` +
+	`"record":` + recordSchema + `},"required":["datastore_id","record"],"additionalProperties":false}`)
+
+func recordChangeArguments(dataDescription string) []capability.Argument {
+	return []capability.Argument{dataStoreIDArgument,
+		{Name: "key", Required: true, Description: recordKeyDescription},
+		{Name: "data", Required: true, Description: dataDescription}}
+}
+
+var recordChangeFields = append([]capability.Field{
+	{Name: "datastore_id", Description: "The data store that was changed"},
+	{Name: "record", Description: "The record as Make reports it after the change, capped; fields: key, data, truncated"}},
+	recordFields...)
+
+func invokeDataStoreRecordsReplace(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return changeRecord(ctx, "replace data store record", http.MethodPut, resolved, secrets, red, raw)
+}
+
+func invokeDataStoreRecordsUpdate(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return changeRecord(ctx, "update data store record", http.MethodPatch, resolved, secrets, red, raw)
+}
+
+func changeRecord(ctx context.Context, op, method string, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	var input struct {
+		DataStoreID int64           `json:"datastore_id"`
+		Key         string          `json:"key"`
+		Data        json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return nil, providerError(op, "the validated arguments could not be read")
+	}
+	if !recordKeyPattern.MatchString(input.Key) {
+		return nil, invalidRequest("key must be 1 to " + strconv.Itoa(maxRecordKeyLength) +
+			" letters, digits, underscores, dots, colons, or hyphens, not starting with a dot or hyphen")
+	}
+	if len(input.Data) == 0 || input.Data[0] != '{' {
+		return nil, invalidRequest("data must be a JSON object")
+	}
+	if err := validJSONObject(input.Data, maxRecordDataBytes, maxRecordDataDepth, "data"); err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(input.Data, &fields); err != nil || len(fields) == 0 {
+		return nil, invalidRequest("data must hold at least one property")
+	}
+	client, _, err := openDataStore(ctx, op, resolved, secrets, red, input.DataStoreID)
+	if err != nil {
+		return nil, err
+	}
+	var answer recordJSON
+	// The body is the record data itself; Make does not take a {"data":...} wrapper here.
+	if err := client.change(ctx, op, method, recordsPath(input.DataStoreID)+"/"+url.PathEscape(input.Key), nil,
+		input.Data, &answer, needRecordsWrite, recordsUncertain); err != nil {
+		return nil, err
+	}
+	if answer.Key != input.Key {
+		return nil, invalidResponse(op, "Make did not report the changed record"+recordsUncertain)
 	}
 	return &DataStoreRecordChange{DataStoreID: input.DataStoreID, Record: recordViewOf(answer.Key, answer.Data)}, nil
 }
