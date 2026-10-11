@@ -97,14 +97,7 @@ func TestWebCommandStartsCouplesAndStopsOnSignal(t *testing.T) {
 			&stderr)
 	}()
 
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) && !strings.Contains(stdout.String(), "http://127.0.0.1:") {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !strings.Contains(stdout.String(), "http://127.0.0.1:") {
-		t.Fatalf("'qatlas web' never printed a local coupling URL, stdout: %s, stderr: %s", stdout.String(),
-			stderr.String())
-	}
+	waitForOutput(t, stdout, "http://127.0.0.1:")
 
 	if runtime.GOOS == "windows" {
 		// os.Process.Signal(syscall.SIGINT) is not supported on Windows, so the signal-triggered stop
@@ -208,9 +201,7 @@ func TestWebCommandAdminApprovalBrowserAndTerminal(t *testing.T) {
 
 	couplingURL := waitForURL(t, stdout)
 
-	if !strings.Contains(stdout.String(), "press enter here to approve the coupled browser") {
-		t.Fatalf("no hint printed for the terminal admin path, stdout: %s", stdout.String())
-	}
+	waitForOutput(t, stdout, "press enter here to approve the coupled browser")
 
 	jar, err := cookiejar.New(nil)
 	if err != nil {
@@ -262,13 +253,7 @@ func TestWebCommandAdminApprovalBrowserAndTerminal(t *testing.T) {
 		t.Fatalf("write to stdin pipe: %v", err)
 	}
 
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) && !strings.Contains(stdout.String(), "admin approval granted") {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !strings.Contains(stdout.String(), "admin approval granted") {
-		t.Fatalf("terminal admin path never reported success, stdout: %s", stdout.String())
-	}
+	waitForOutput(t, stdout, "admin approval granted")
 	if strings.Contains(stdout.String(), webAdminSyntheticPassphrase) || strings.Contains(stderr.String(), webAdminSyntheticPassphrase) {
 		t.Fatalf("synthetic passphrase leaked to process output: stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
@@ -300,13 +285,7 @@ func TestRunTerminalAdminWithoutCoupledSession(t *testing.T) {
 		t.Fatalf("write to stdin pipe: %v", err)
 	}
 
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) && !strings.Contains(stdout.String(), "no browser is coupled yet") {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !strings.Contains(stdout.String(), "no browser is coupled yet") {
-		t.Fatalf("terminal admin path never reported the missing session, stdout: %s", stdout.String())
-	}
+	waitForOutput(t, stdout, "no browser is coupled yet")
 }
 
 // TestRunTerminalAdminWrongPassphrase confirms a wrong passphrase on the terminal path is reported as
@@ -350,13 +329,7 @@ func TestRunTerminalAdminWrongPassphrase(t *testing.T) {
 		t.Fatalf("write to stdin pipe: %v", err)
 	}
 
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) && !strings.Contains(stdout.String(), "wrong passphrase") {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !strings.Contains(stdout.String(), "wrong passphrase") {
-		t.Fatalf("terminal admin path never reported the wrong passphrase, stdout: %s", stdout.String())
-	}
+	waitForOutput(t, stdout, "wrong passphrase")
 }
 
 // postAdminForm posts the admin passphrase form the way a real browser would: with the Origin header a
@@ -374,9 +347,25 @@ func postAdminForm(t *testing.T, client *http.Client, adminURL, origin, csrf, pa
 	return client.Do(req)
 }
 
+// webOutputTimeout bounds waits for output that depends on scrypt or on slow CI scheduling.
+const webOutputTimeout = 30 * time.Second
+
+// waitForOutput polls stdout until it contains want and fails with the output so far on timeout.
+func waitForOutput(t *testing.T, stdout *syncBuffer, want string) {
+	t.Helper()
+	deadline := time.Now().Add(webOutputTimeout)
+	for time.Now().Before(deadline) {
+		if strings.Contains(stdout.String(), want) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("output never contained %q, stdout: %s", want, stdout.String())
+}
+
 func waitForURL(t *testing.T, stdout *syncBuffer) string {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(webOutputTimeout)
 	for time.Now().Before(deadline) {
 		if idx := strings.Index(stdout.String(), "http://127.0.0.1:"); idx >= 0 {
 			rest := stdout.String()[idx:]

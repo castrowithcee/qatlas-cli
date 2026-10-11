@@ -76,7 +76,7 @@ func (s *Store) lock() (func(), error) {
 // readVersioned reads the file once and returns the decoded configuration with the revision of the bytes
 // that were decoded. A missing file yields a *NotFoundError and RevisionAbsent.
 func (s *Store) readVersioned() (*Config, Revision, error) {
-	data, err := os.ReadFile(s.path)
+	data, err := readFile(s.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, RevisionAbsent, &NotFoundError{Path: s.path}
@@ -93,7 +93,7 @@ func (s *Store) readVersioned() (*Config, Revision, error) {
 
 // currentRevision returns the revision of the file as it is now.
 func (s *Store) currentRevision() (Revision, error) {
-	data, err := os.ReadFile(s.path)
+	data, err := readFile(s.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return RevisionAbsent, nil
