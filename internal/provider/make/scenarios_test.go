@@ -129,8 +129,8 @@ func TestScenariosBlueprintChecksScopeBeforeContentAndPassesThroughUnmodified(t 
 		case apiPath + "/scenarios/" + strconv.FormatInt(ownScenario, 10):
 			return jsonResponse(200, `{"scenario":`+scenarioJSONOf(ownScenario, ownTeam, "Own")+`}`), nil
 		case apiPath + "/scenarios/" + strconv.FormatInt(ownScenario, 10) + "/blueprint":
-			return jsonResponse(200, `{"blueprint":{"name":"Own","flow":[{"id":1,"module":"http:ActionSendData",`+
-				`"parameters":{"__IMTCONN__":4242}}]}}`), nil
+			return jsonResponse(200, `{"code":"OK","response":{"blueprint":{"name":"Own","flow":[{"id":1,"module":"http:ActionSendData",`+
+				`"parameters":{"__IMTCONN__":4242}}]}}}`), nil
 		default:
 			t.Fatalf("unexpected request to %s", r.URL.Path)
 			return nil, nil
@@ -158,5 +158,45 @@ func TestScenariosBlueprintChecksScopeBeforeContentAndPassesThroughUnmodified(t 
 	_, err = env.invoke(scenariosBlueprint.ID, "open", fmt.Sprintf(`{"scenario_id":%d}`, ownScenario))
 	if !isInvalidRequest(err) || len(calls) != 1 {
 		t.Fatalf("err = %v, calls = %+v, want one refused scope check and no blueprint request", err, calls)
+	}
+}
+
+// A blueprint answer without response.blueprint is an invalid provider response, not an empty blueprint.
+func TestScenariosBlueprintWithoutResponseBlueprintIsInvalid(t *testing.T) {
+	for _, body := range []string{`{"code":"OK","response":{}}`, `{"code":"OK"}`, `{"blueprint":{"name":"Own"}}`} {
+		var calls []call
+		env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+			if strings.HasSuffix(r.URL.Path, "/blueprint") {
+				return jsonResponse(200, body), nil
+			}
+			return jsonResponse(200, `{"scenario":`+scenarioJSONOf(ownScenario, ownTeam, "Own")+`}`), nil
+		})
+		_, err := env.invoke(scenariosBlueprint.ID, "open", fmt.Sprintf(`{"scenario_id":%d}`, ownScenario))
+		if classOf(err) != "invalid-provider-response" {
+			t.Fatalf("body %s: class = %q, want invalid-provider-response", body, classOf(err))
+		}
+	}
+}
+
+// draft and blueprint_id become the draft and blueprintId query parameters; the answer is read from the
+// same response envelope.
+func TestScenariosBlueprintDraftAndBlueprintIDQuery(t *testing.T) {
+	var calls []call
+	env := newEnvironment(t, &calls, func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/blueprint") {
+			return jsonResponse(200, `{"code":"OK","response":{"blueprint":{"name":"Draft"}}}`), nil
+		}
+		return jsonResponse(200, `{"scenario":`+scenarioJSONOf(ownScenario, ownTeam, "Own")+`}`), nil
+	})
+	result, err := env.invoke(scenariosBlueprint.ID, "open", fmt.Sprintf(`{"scenario_id":%d,"draft":true,"blueprint_id":7}`, ownScenario))
+	if err != nil {
+		t.Fatalf("invoke() = %v", err)
+	}
+	if !strings.Contains(result, `"name":"Draft"`) {
+		t.Fatalf("result = %s, want the blueprint read from response.blueprint", result)
+	}
+	q := calls[len(calls)-1].query
+	if q.Get("draft") != "true" || q.Get("blueprintId") != "7" {
+		t.Fatalf("query = %v, want draft=true and blueprintId=7", q)
 	}
 }
