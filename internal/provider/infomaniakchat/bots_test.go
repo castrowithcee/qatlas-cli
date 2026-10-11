@@ -15,7 +15,7 @@ const (
 	botB = "botb0000000000000000000b2"
 )
 
-var botToolIDs = []string{botsList.ID, botsGet.ID, botsUpdate.ID}
+var botToolIDs = []string{botsList.ID, botsGet.ID, botsUpdate.ID, botsDisable.ID, botsEnable.ID}
 
 func botWith(id, name string) string {
 	return `{"user_id":"` + id + `","username":"` + name + `","display_name":"Deploy","description":"old",` +
@@ -35,7 +35,7 @@ func botHandler(t *testing.T, teams string, change func(*http.Request) (*http.Re
 			return jsonResponse(200, botWith(botA, "deploy")), nil
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/bots/"+botB:
 			return jsonResponse(200, botWith(botA, "deploy")), nil
-		case r.Method == http.MethodPut && change != nil:
+		case (r.Method == http.MethodPut || r.Method == http.MethodPost) && change != nil:
 			return change(r)
 		}
 		t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
@@ -208,3 +208,87 @@ type timeoutError struct{}
 func (timeoutError) Error() string   { return "context deadline exceeded" }
 func (timeoutError) Timeout() bool   { return true }
 func (timeoutError) Temporary() bool { return true }
+
+func TestBotStateToolsDescriptors(t *testing.T) {
+	for _, d := range []capability.Descriptor{botsDisable, botsEnable} {
+		r := d.Risk
+		if !d.RequiresToolAllowList || withGroup(d).Group != "administration" || !r.OpenWorld ||
+			r.Effect != capability.EffectUpdate || r.Idempotency != capability.IdempotencyIdempotent ||
+			r.Confirmation != capability.ConfirmationRequired || r.DataSensitivity != administrationSensitivity {
+			t.Fatalf("%s = %+v", d.ID, d)
+		}
+	}
+}
+
+func TestBotStateToolsSendOneBodylessPost(t *testing.T) {
+	for _, c := range []struct {
+		id, action string
+		deleteAt   int
+	}{{botsDisable.ID, "disable", 5}, {botsEnable.ID, "enable", 0}} {
+		var calls []call
+		env := newEnvironment(t, &calls, botHandler(t, bothTeams, func(r *http.Request) (*http.Response, error) {
+			return jsonResponse(200, strings.Replace(botWith(botA, "deploy"), `"delete_at":0`,
+				`"delete_at":`+itoa(c.deleteAt), 1)), nil
+		}))
+		args := `{"bot_user_id":"` + botA + `"}`
+		if _, err := env.invoke(c.id, "botall", args); !isConfirmationRequired(err) || len(calls) != 0 {
+			t.Fatalf("%s: err = %v, calls = %+v", c.id, err, calls)
+		}
+		result, err := env.confirmed(c.id, "botall", args)
+		var got map[string]any
+		last := calls[len(calls)-1]
+		if err != nil || json.Unmarshal([]byte(result), &got) != nil || len(got) != 6 ||
+			got["deleted"] != (c.deleteAt != 0) || strings.Contains(result, "leak-canary") ||
+			changeCount(calls) != 1 || last.method != http.MethodPost ||
+			last.path != "/api/v4/bots/"+botA+"/"+c.action || last.body != "" {
+			t.Fatalf("%s: result = %s, err = %v, calls = %+v", c.id, result, err, calls)
+		}
+	}
+}
+
+func TestBotStateToolsRefuseBeforeAnyChangingRequest(t *testing.T) {
+	for _, id := range []string{botsDisable.ID, botsEnable.ID} {
+		args := `{"bot_user_id":"` + botA + `"}`
+		var calls []call
+		env := newEnvironment(t, &calls, botHandler(t, bothTeams, nil))
+		if _, err := env.confirmed(id, "botch", args); !isInvalidRequest(err) || len(calls) != 0 || *env.reads != 0 {
+			t.Fatalf("%s channel: err = %v, calls = %+v", id, err, calls)
+		}
+		if _, err := env.confirmed(id, "botno", args); err == nil || len(calls) != 0 {
+			t.Fatalf("%s no tools: err = %v, calls = %+v", id, err, calls)
+		}
+		for _, bad := range []string{`{"bot_user_id":"../x"}`, `{"bot_user_id":"` + botA + `/token"}`, `{}`} {
+			if _, err := env.confirmed(id, "botall", bad); err == nil || len(calls) != 0 || *env.reads != 0 {
+				t.Fatalf("%s %s: err = %v, calls = %+v", id, bad, err, calls)
+			}
+		}
+		calls = nil
+		env = newEnvironment(t, &calls, botHandler(t, bothTeams, nil))
+		if _, err := env.confirmed(id, "botone", args); !isInvalidRequest(err) || len(calls) != 1 || changeCount(calls) != 0 {
+			t.Fatalf("%s unbound: err = %v, calls = %+v", id, err, calls)
+		}
+	}
+}
+
+func TestBotStateToolsAreNeverRepeatedAfterAnUncertainResult(t *testing.T) {
+	for _, c := range []struct{ id, want string }{
+		{botsDisable.ID, "the bot may have been disabled, read it before changing"},
+		{botsEnable.ID, "the bot may have been enabled, read it before changing"},
+	} {
+		for name, answer := range map[string]func() (*http.Response, error){
+			"timeout":   func() (*http.Response, error) { return nil, timeoutError{} },
+			"5xx":       func() (*http.Response, error) { return jsonResponse(502, ""), nil },
+			"unusable":  func() (*http.Response, error) { return jsonResponse(200, "not json"), nil },
+			"other bot": func() (*http.Response, error) { return jsonResponse(200, botWith(botB, "x")), nil },
+		} {
+			var calls []call
+			env := newEnvironment(t, &calls, botHandler(t, bothTeams, func(*http.Request) (*http.Response, error) {
+				return answer()
+			}))
+			_, err := env.confirmed(c.id, "botall", `{"bot_user_id":"`+botA+`"}`)
+			if err == nil || !strings.Contains(err.Error(), c.want) || changeCount(calls) != 1 {
+				t.Fatalf("%s %s: err = %v, calls = %+v", c.id, name, err, calls)
+			}
+		}
+	}
+}

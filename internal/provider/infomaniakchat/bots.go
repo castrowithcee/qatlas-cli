@@ -135,6 +135,33 @@ var botsUpdate = capability.Descriptor{
 		Arguments: json.RawMessage(`{"bot_user_id":"abc123bot00000000000000000","description":"Build alerts"}`)}},
 }
 
+func botStateTool(name, title, verb, effectNote string) capability.Descriptor {
+	return capability.Descriptor{
+		ID:      Provider + ".bots." + name,
+		Version: 1,
+		Title:   title,
+		Description: verb + " exactly one existing bot account with one confirmed request. " + effectNote + " " +
+			botScopeNote,
+		Tags:                  []string{"infomaniak", "kchat", "bots", "administration", name},
+		Risk:                  botRisk(capability.EffectUpdate, capability.IdempotencyIdempotent, capability.ConfirmationRequired),
+		Provider:              Provider,
+		RequiresToolAllowList: true,
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"bot_user_id":` + idSchema + `},` +
+			`"required":["bot_user_id"],"additionalProperties":false}`),
+		OutputSchema: json.RawMessage(botSchema),
+		Arguments:    []capability.Argument{botIDArgument},
+		Fields:       botFields,
+		Examples: []capability.Example{{Description: title,
+			Arguments: json.RawMessage(`{"bot_user_id":"abc123bot00000000000000000"}`)}},
+	}
+}
+
+var botsDisable = botStateTool("disable", "Disable an Infomaniak kChat bot", "Disable",
+	"This stops every integration of the bot at once.")
+
+var botsEnable = botStateTool("enable", "Enable an Infomaniak kChat bot", "Enable",
+	"This reactivates a deactivated bot account and its access.")
+
 // botJSON is the subset of the kChat Bot resource this provider reads.
 type botJSON struct {
 	UserID      string `json:"user_id"`
@@ -357,6 +384,41 @@ func (c *Client) UpdateBot(ctx context.Context, input *botArguments) (*Bot, erro
 	if bot.UserID != input.BotUserID {
 		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
 			Message: "kChat returned an invalid response" + uncertainBot}
+	}
+	out := botOf(&bot)
+	return &out, nil
+}
+
+func invokeBotsDisable(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return setBotState(ctx, resolved, secrets, red, "disable bot", "disable", raw)
+}
+
+func invokeBotsEnable(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return setBotState(ctx, resolved, secrets, red, "enable bot", "enable", raw)
+}
+
+func setBotState(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	op, action string, raw json.RawMessage) (any, error) {
+	client, input, err := prepareBot(ctx, resolved, secrets, red, op, raw, nil)
+	if err != nil {
+		return nil, err
+	}
+	return client.SetBotState(ctx, op, action, input.BotUserID)
+}
+
+// SetBotState sends exactly one body-less POST to the disable or enable endpoint and never repeats it: a
+// failure after the request may have reached kChat says so instead.
+func (c *Client) SetBotState(ctx context.Context, op, action, botID string) (*Bot, error) {
+	uncertain := "; the bot may have been " + action + "d, read it before changing it again"
+	var bot botJSON
+	if err := c.doWith(ctx, op, http.MethodPost, botPath(botID)+"/"+action, nil, nil, &bot, uncertain); err != nil {
+		return nil, err
+	}
+	if bot.UserID != botID {
+		return nil, &provider.Error{Class: provider.ClassInvalidResponse, Op: op,
+			Message: "kChat returned an invalid response" + uncertain}
 	}
 	out := botOf(&bot)
 	return &out, nil
