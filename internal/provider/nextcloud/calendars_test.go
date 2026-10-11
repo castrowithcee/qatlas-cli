@@ -458,10 +458,10 @@ func TestCalendarToolsAreGroupedAndProfiled(t *testing.T) {
 			tools = p.Tools
 		}
 	}
-	if strings.Join(tools, " ") != "nextcloud.calendars.list nextcloud.events.list nextcloud.events.get" {
+	if strings.Join(tools, " ") != "nextcloud.calendars.list nextcloud.events.list nextcloud.events.get nextcloud.tasks.list nextcloud.tasks.get" {
 		t.Errorf("profile tools = %v", tools)
 	}
-	for _, d := range []string{calendarsList.ID, eventsList.ID, eventsGet.ID} {
+	for _, d := range []string{calendarsList.ID, eventsList.ID, eventsGet.ID, tasksList.ID, tasksGet.ID} {
 		descriptor, _, ok := reg.Lookup(d)
 		if !ok || descriptor.Group != groupCalendar || descriptor.Risk.DataSensitivity != calendarSensitivity {
 			t.Errorf("%s = %+v, %v", d, descriptor, ok)

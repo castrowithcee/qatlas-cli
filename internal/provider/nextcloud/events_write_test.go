@@ -408,7 +408,7 @@ func TestEventWriteToolsContract(t *testing.T) {
 	metadata, _ := reg.ProviderMetadata(Provider)
 	last := metadata.Profiles[len(metadata.Profiles)-1]
 	if last.ID != "events" || strings.Join(last.Tools, " ") !=
-		"nextcloud.calendars.list nextcloud.events.list nextcloud.events.get nextcloud.events.create nextcloud.events.update" {
+		"nextcloud.calendars.list nextcloud.events.list nextcloud.events.get nextcloud.tasks.list nextcloud.tasks.get nextcloud.events.create nextcloud.events.update" {
 		t.Errorf("profile = %+v", last)
 	}
 	for _, p := range metadata.Profiles {
