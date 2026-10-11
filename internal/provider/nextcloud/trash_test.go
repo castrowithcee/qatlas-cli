@@ -273,6 +273,13 @@ func TestTrashDescriptors(t *testing.T) {
 		trashDelete.Risk.Effect != capability.EffectDelete || !trashDelete.RequiresToolAllowList {
 		t.Fatal("unexpected effects or tool list requirements")
 	}
+	if trashDelete.Version != 1 || strings.Contains(trashDelete.Description, "trash bin") {
+		t.Errorf("trash delete version = %d, description = %q", trashDelete.Version, trashDelete.Description)
+	}
+	if filesDelete.Version != 2 || !filesDelete.RequiresToolAllowList ||
+		!strings.Contains(filesDelete.Description, "moves it to the trash bin when the files_trashbin app is active") {
+		t.Errorf("files delete version = %d, description = %q", filesDelete.Version, filesDelete.Description)
+	}
 	for _, d := range []capability.Descriptor{trashRestore, trashDelete} {
 		if d.Risk.Confirmation != capability.ConfirmationRequired || !d.Risk.OpenWorld ||
 			d.Risk.DataSensitivity == "" || d.Risk.Idempotency == "" {
