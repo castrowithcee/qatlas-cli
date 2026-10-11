@@ -20,10 +20,16 @@ import (
 // replaces, and a DELETE with If-Match removes one event. Each sends exactly one request after one read-only
 // pre-check that refuses a read-only calendar locally.
 
-const (
-	eventProductID = "-//Qatlas//Nextcloud//EN"
-	eventUncertain = "; the change may have been applied, check the calendar with events.list or events.get " +
-		"before repeating it"
+const eventProductID = "-//Qatlas//Nextcloud//EN"
+
+// objectKind names what a calendar write changes, for the shared write path of events and tasks.
+type objectKind struct{ noun, component, uncertain string }
+
+var (
+	eventKind = objectKind{"event", "VEVENT", "; the change may have been applied, check the calendar with " +
+		"events.list or events.get before repeating it"}
+	taskKind = objectKind{"task", "VTODO", "; the change may have been applied, check the calendar with " +
+		"tasks.list or tasks.get before repeating it"}
 )
 
 // eventCalendarProbeBody reads what decides whether a calendar takes a new or changed event.
@@ -231,11 +237,11 @@ func invokeEventsCreate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	if err := client.eventCalendarWritable(ctx, op, input.Calendar); err != nil {
+	if err := client.calendarWritable(ctx, op, input.Calendar, eventKind); err != nil {
 		return nil, err
 	}
 	id := uid + ".ics"
-	header, err := client.eventSend(ctx, op, http.MethodPut, input.Calendar, id, "", body)
+	header, err := client.calendarSend(ctx, op, eventKind, http.MethodPut, input.Calendar, id, "", body)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +276,7 @@ func invokeEventsUpdate(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	header, err := client.eventSend(ctx, op, http.MethodPut, input.Calendar, input.ID, etag, body)
+	header, err := client.calendarSend(ctx, op, eventKind, http.MethodPut, input.Calendar, input.ID, etag, body)
 	if err != nil {
 		return nil, err
 	}
@@ -293,10 +299,10 @@ func invokeEventsDelete(ctx context.Context, resolved *config.Resolved, secrets 
 	if err != nil {
 		return nil, err
 	}
-	if err := client.eventCalendarWritable(ctx, op, input.Calendar); err != nil {
+	if err := client.calendarWritable(ctx, op, input.Calendar, eventKind); err != nil {
 		return nil, err
 	}
-	if _, err := client.eventSend(ctx, op, http.MethodDelete, input.Calendar, input.ID, etag, ""); err != nil {
+	if _, err := client.calendarSend(ctx, op, eventKind, http.MethodDelete, input.Calendar, input.ID, etag, ""); err != nil {
 		return nil, err
 	}
 	return &EventWriteResult{Calendar: input.Calendar, ID: input.ID, Deleted: true}, nil
@@ -307,9 +313,9 @@ func eventReadOnly(op string) error {
 		Message: "this calendar is read-only for this Nextcloud identity, nothing was changed"}
 }
 
-func eventPrecondition(op string) error {
+func objectPrecondition(op string, kind objectKind) error {
 	return &provider.Error{Class: provider.ClassProviderError, Op: op,
-		Message: "the event no longer matches the etag (precondition failed), nothing was changed; read it again"}
+		Message: "the " + kind.noun + " no longer matches the etag (precondition failed), nothing was changed; read it again"}
 }
 
 // eventOnlyNode returns the single node of a depth 0 answer when it is the addressed one.
@@ -328,9 +334,9 @@ func (c *Client) eventOnlyNode(op string, data []byte, segments []string) (*dav.
 	return &resources[0], nil
 }
 
-// eventCalendarWritable is the pre-check of create and delete: one PROPFIND of depth 0 on the bound calendar.
-// A node that is no calendar, holds no events, or is read-only for the identity is refused without a change.
-func (c *Client) eventCalendarWritable(ctx context.Context, op, calendar string) error {
+// calendarWritable is the pre-check of a create or delete: one PROPFIND of depth 0 on the bound calendar.
+// A node that is no calendar, holds no such objects, or is read-only for the identity is refused without a change.
+func (c *Client) calendarWritable(ctx context.Context, op, calendar string, kind objectKind) error {
 	base := c.calendarHome(calendar)
 	data, _, err := c.calendarRequest(ctx, op, methodPropfind, base, true, depthSelf, eventCalendarProbeBody,
 		http.StatusMultiStatus, dav.MaxResponseBytes)
@@ -344,8 +350,8 @@ func (c *Client) eventCalendarWritable(ctx context.Context, op, calendar string)
 	if !node.Calendar {
 		return invalidResponse(op, "Nextcloud did not answer with a calendar")
 	}
-	if len(node.Components) > 0 && !containsString(node.Components, "VEVENT") {
-		return providerError(op, "this calendar holds no events, nothing was changed")
+	if len(node.Components) > 0 && !containsString(node.Components, kind.component) {
+		return providerError(op, "this calendar holds no "+kind.noun+"s, nothing was changed")
 	}
 	if !writable(node.Privileges) {
 		return eventReadOnly(op)
@@ -371,7 +377,7 @@ func (c *Client) eventCurrent(ctx context.Context, op, calendar, id, etag string
 		return dav.ExistingEvent{}, eventReadOnly(op)
 	}
 	if served := node.Text[dav.KeyETag]; served != "" && dav.ETagOf(served) != etag {
-		return dav.ExistingEvent{}, eventPrecondition(op)
+		return dav.ExistingEvent{}, objectPrecondition(op, eventKind)
 	}
 	stored := node.Text[dav.KeyCalendar]
 	if strings.TrimSpace(stored) == "" {
@@ -380,11 +386,12 @@ func (c *Client) eventCurrent(ctx context.Context, op, calendar, id, etag string
 	return c.davServer().ExistingEventOf(op, []byte(stored))
 }
 
-// eventSend is the single write path. It sends exactly one PUT or DELETE to the event in the bound calendar
-// and never repeats it. Without a match the request carries If-None-Match: *, otherwise If-Match with the
-// validated entity tag. A failure that leaves the outcome open carries eventUncertain; a refusal or a
+// calendarSend is the single write path of events and tasks. It sends exactly one PUT or DELETE to the object
+// in the bound calendar and never repeats it. Without a match the request carries If-None-Match: *, otherwise If-Match with the
+// validated entity tag. A failure that leaves the outcome open carries the uncertainty hint of the kind; a refusal or a
 // redirect is clear.
-func (c *Client) eventSend(ctx context.Context, op, method, calendar, id, match, body string) (http.Header, error) {
+func (c *Client) calendarSend(ctx context.Context, op string, kind objectKind, method, calendar, id, match,
+	body string) (http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.origin+escapePath(c.calendarHome(calendar, id)),
 		strings.NewReader(body))
 	if err != nil {
@@ -401,21 +408,21 @@ func (c *Client) eventSend(ctx context.Context, op, method, calendar, id, match,
 	}
 	response, err := c.http.Do(req)
 	if err != nil {
-		return nil, sentTransportError(op, err, eventUncertain)
+		return nil, sentTransportError(op, err, kind.uncertain)
 	}
 	defer response.Body.Close()
 	switch status := response.StatusCode; {
 	case status == http.StatusPreconditionFailed && match == "":
-		return nil, providerError(op, "an event with this id already exists, nothing was written")
+		return nil, providerError(op, "a "+kind.noun+" with this id already exists, nothing was written")
 	case status == http.StatusPreconditionFailed:
-		return nil, eventPrecondition(op)
+		return nil, objectPrecondition(op, kind)
 	case status == http.StatusForbidden:
 		return nil, &provider.Error{Class: provider.ClassPermission, Op: op,
-			Message: "this Nextcloud identity may not change this event, nothing was changed"}
+			Message: "this Nextcloud identity may not change this " + kind.noun + ", nothing was changed"}
 	case status < 200 || status >= 300:
-		return nil, sentStatusError(op, status, eventUncertain)
+		return nil, sentStatusError(op, status, kind.uncertain)
 	case status == http.StatusNoContent, status == http.StatusOK, status == http.StatusCreated && method == http.MethodPut:
 		return response.Header, nil
 	}
-	return nil, invalidResponse(op, "Nextcloud answered the change with an unexpected status"+eventUncertain)
+	return nil, invalidResponse(op, "Nextcloud answered the change with an unexpected status"+kind.uncertain)
 }

@@ -243,7 +243,7 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 	}
 
 	descriptors := reg.Provider(Provider)
-	if len(descriptors) != 79 || descriptors[0].ID != "nextcloud.addressbooks.list" || descriptors[1].ID != "nextcloud.calendars.list" || descriptors[2].ID != "nextcloud.comments.create" ||
+	if len(descriptors) != 82 || descriptors[0].ID != "nextcloud.addressbooks.list" || descriptors[1].ID != "nextcloud.calendars.list" || descriptors[2].ID != "nextcloud.comments.create" ||
 		descriptors[4].ID != "nextcloud.comments.list" || descriptors[6].ID != "nextcloud.contacts.get" ||
 		descriptors[7].ID != "nextcloud.contacts.list" || descriptors[8].ID != "nextcloud.deckboards.create" ||
 		descriptors[9].ID != "nextcloud.deckboards.delete" || descriptors[10].ID != "nextcloud.deckboards.get" ||
@@ -269,9 +269,11 @@ func TestRegisterPublishesMetadataTargetKindsAndFilesTools(t *testing.T) {
 		descriptors[64].ID != "nextcloud.talkparticipants.remove" || descriptors[65].ID != "nextcloud.talkreactions.set" ||
 		descriptors[66].ID != "nextcloud.talkrooms.create" || descriptors[67].ID != "nextcloud.talkrooms.delete" ||
 		descriptors[69].ID != "nextcloud.talkrooms.list" || descriptors[70].ID != "nextcloud.talkrooms.update" ||
-		descriptors[71].ID != "nextcloud.tasks.get" || descriptors[72].ID != "nextcloud.tasks.list" ||
-		descriptors[73].ID != "nextcloud.trash.delete" || descriptors[75].ID != "nextcloud.trash.restore" ||
-		descriptors[76].ID != "nextcloud.versions.get" || descriptors[78].ID != "nextcloud.versions.restore" {
+		descriptors[71].ID != "nextcloud.tasks.create" || descriptors[72].ID != "nextcloud.tasks.delete" ||
+		descriptors[73].ID != "nextcloud.tasks.get" || descriptors[74].ID != "nextcloud.tasks.list" ||
+		descriptors[75].ID != "nextcloud.tasks.update" ||
+		descriptors[76].ID != "nextcloud.trash.delete" || descriptors[78].ID != "nextcloud.trash.restore" ||
+		descriptors[79].ID != "nextcloud.versions.get" || descriptors[81].ID != "nextcloud.versions.restore" {
 		t.Fatalf("descriptors = %+v", descriptors)
 	}
 	for _, descriptor := range descriptors {
