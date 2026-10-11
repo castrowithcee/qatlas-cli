@@ -174,21 +174,31 @@ func (c *Client) fetchChangeableView(ctx context.Context, op, id string, texts p
 
 // columnOf returns the identifier of the live column that shows the field, if there is one.
 func (v *changeableView) columnOf(op, fieldID string) (string, bool, error) {
-	items, err := children(op, v.record.ViewFields)
+	return liveChildOf(op, v.record.ViewFields, fieldID, "column")
+}
+
+// sortOf returns the identifier of the live sort on the field, if there is one.
+func (v *changeableView) sortOf(op, fieldID string) (string, bool, error) {
+	return liveChildOf(op, v.record.ViewSorts, fieldID, "sort")
+}
+
+// liveChildOf finds the live child of a view layout that is bound to the field.
+func liveChildOf(op string, raw json.RawMessage, fieldID, kind string) (string, bool, error) {
+	items, err := children(op, raw)
 	if err != nil {
 		return "", false, err
 	}
 	for _, item := range items {
-		var column struct {
+		var child struct {
 			ID              string  `json:"id"`
 			FieldMetadataID string  `json:"fieldMetadataId"`
 			DeletedAt       *string `json:"deletedAt"`
 		}
-		if json.Unmarshal(item, &column) != nil || !validUUID(column.FieldMetadataID) {
-			return "", false, provider.InvalidResponse(op, "Twenty returned an unusable view column")
+		if json.Unmarshal(item, &child) != nil || !validUUID(child.FieldMetadataID) {
+			return "", false, provider.InvalidResponse(op, "Twenty returned an unusable view "+kind)
 		}
-		if column.DeletedAt == nil && equalUUID(column.FieldMetadataID, fieldID) {
-			return column.ID, true, nil
+		if child.DeletedAt == nil && equalUUID(child.FieldMetadataID, fieldID) {
+			return child.ID, true, nil
 		}
 	}
 	return "", false, nil
