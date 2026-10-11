@@ -25,6 +25,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: workflowsGroup, Title: "Workflows", Description: "Workflows of the workspace, their versions and runs"},
 	{ID: webhooksGroup, Title: "Webhooks", Description: "Where the workspace reports events"},
 	{ID: membersGroup, Title: "Members and roles", Description: "Members and roles of the workspace"},
+	{ID: viewsGroup, Title: "Views", Description: "Workspace-wide views of objects with columns, filters, sorts, and groups"},
 	{ID: metadataGroup, Title: "Data model", Description: "Object and field metadata of the workspace; needs the Data model permission"},
 }
 
