@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/castrowithcee/qatlas-cli/internal/fileretry"
 )
 
 // opsRecorder performs the real operations, records them, and fails the ones the test names.
@@ -238,7 +240,7 @@ func TestReplaceRunningGivesUpOnPermanentLock(t *testing.T) {
 	for _, d := range slept {
 		total += d
 	}
-	if len(slept) != len(renameDelays) || total > 3*time.Second {
+	if len(slept) != len(fileretry.Delays) || total > 3*time.Second {
 		t.Errorf("waits = %v (%v)", slept, total)
 	}
 	assertFile(t, target, "old")

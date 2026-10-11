@@ -1,6 +1,6 @@
 //go:build windows
 
-package selfupdate
+package fileretry
 
 import (
 	"errors"
@@ -13,8 +13,8 @@ const (
 	errorLockViolation    syscall.Errno = 33
 )
 
-// isTransientLock reports the errors a file shows while another process holds it for a moment.
-func isTransientLock(err error) bool {
+// Transient reports the errors a file shows while another process holds it for a moment.
+func Transient(err error) bool {
 	return errors.Is(err, errorSharingViolation) || errors.Is(err, errorLockViolation) ||
 		errors.Is(err, errorAccessDenied)
 }
