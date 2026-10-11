@@ -304,8 +304,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 71 {
-		t.Fatalf("tools = %+v, want 71", metadata.Tools)
+	if len(metadata.Tools) != 74 {
+		t.Fatalf("tools = %+v, want 74", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -323,7 +323,9 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		has("read", messagesUpdate.ID) || !has("read", reactionsList.ID) || !has("messaging", reactionsList.ID) ||
 		!has("messaging", reactionsAdd.ID) || has("read", reactionsAdd.ID) || !has("read", pinsList.ID) ||
 		!has("messaging", pinsList.ID) || !has("messaging", messagesPin.ID) || !has("messaging", messagesUnpin.ID) ||
-		has("read", messagesPin.ID) || has("read", messagesUnpin.ID) {
+		has("read", messagesPin.ID) || has("read", messagesUnpin.ID) || !has("read", flaggedList.ID) ||
+		!has("messaging", flaggedList.ID) || !has("messaging", messagesFlag.ID) || !has("messaging", messagesUnflag.ID) ||
+		has("read", messagesFlag.ID) || has("read", messagesUnflag.ID) {
 		t.Fatalf("profiles = %+v", profiles)
 	}
 	for _, id := range []string{usersGet.ID, usersList.ID, usersSearch.ID, usersStatus.ID} {
