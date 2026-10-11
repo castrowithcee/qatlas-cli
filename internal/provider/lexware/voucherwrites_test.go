@@ -126,7 +126,7 @@ func TestVoucherHandlerRechecksTheRulesWithoutTheSchema(t *testing.T) {
 	good := voucherInput{Type: "purchaseinvoice", VoucherDate: "2026-05-14", TotalGrossAmount: "1", TotalTaxAmount: "0",
 		TaxType: "gross", UseCollectiveContact: true,
 		VoucherItems: []voucherItemData{{Amount: "1", TaxAmount: "0", TaxRatePercent: "0", CategoryID: categoryID}}}
-	if err := good.validate(); err != nil {
+	if err := good.validate(voucherStatusUnchecked); err != nil {
 		t.Fatalf("validate(good) = %v", err)
 	}
 	net := good
@@ -144,8 +144,11 @@ func TestVoucherHandlerRechecksTheRulesWithoutTheSchema(t *testing.T) {
 			t.Errorf("%s: CreateVoucher accepted the input", name)
 		}
 	}
-	if err := net.validate(); err == nil || !strings.Contains(err.Error(), "booked vouchers") {
-		t.Errorf("net err = %v, want the booked-vouchers hint", err)
+	if err := net.validate(voucherStatusUnchecked); err == nil || !strings.Contains(err.Error(), "lexware.vouchers.book") {
+		t.Errorf("net err = %v, want the hint to book", err)
+	}
+	if err := net.validate(voucherStatusOpen); err != nil {
+		t.Errorf("net with the status open = %v", err)
 	}
 }
 
