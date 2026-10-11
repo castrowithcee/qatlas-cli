@@ -37,13 +37,8 @@ var viewColumnStatusTexts = provider.StatusTexts{
 	NotFound:   "this Twenty workspace does not hold this view column",
 }
 
-func viewWriteRisk(effect capability.Effect, idempotency capability.Idempotency) capability.Risk {
-	return capability.Risk{Effect: effect, Idempotency: idempotency, Confirmation: capability.ConfirmationRequired,
-		OpenWorld: true, DataSensitivity: viewDataSensitivity}
-}
-
 const (
-	viewWriteNote = "Changes a view that every user of the whole Twenty workspace sees. Only custom views of the " +
+	viewPartWriteNote = "Changes a view that every user of the whole Twenty workspace sees. Only custom views of the " +
 		"whole workspace can be changed: personal views, standard and index views, and widget views are refused. " +
 		"Needs the Twenty right Views and a connection without object targets, and is offered only by a connection " +
 		"whose tools list names it. Qatlas reads the view first and sends the change once; after an unclear result " +
@@ -69,7 +64,7 @@ var viewfieldsCreate = capability.Descriptor{
 	ID: Provider + ".viewfields.create", Version: 1, Title: "Add a column to a Twenty CRM view",
 	Description: "Add one field as a column to a view of the Twenty workspace of a connection. The field must belong " +
 		"to the object of the view, be active, and not be a system field, and must not be a column of the view yet. " +
-		"The new column is visible unless is_visible is false. " + viewWriteNote,
+		"The new column is visible unless is_visible is false. " + viewPartWriteNote,
 	Tags:     []string{"twentycrm", "views", "columns", "create"},
 	Risk:     viewWriteRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,
@@ -93,7 +88,7 @@ var viewfieldsCreate = capability.Descriptor{
 var viewfieldsUpdate = capability.Descriptor{
 	ID: Provider + ".viewfields.update", Version: 1, Title: "Update a column of a Twenty CRM view",
 	Description: "Show or hide one column of a view of the Twenty workspace of a connection, or change its position " +
-		"or width; only the given values change and at least one is required. " + viewWriteNote,
+		"or width; only the given values change and at least one is required. " + viewPartWriteNote,
 	Tags:     []string{"twentycrm", "views", "columns", "update"},
 	Risk:     viewWriteRisk(capability.EffectUpdate, capability.IdempotencyIdempotent),
 	Provider: Provider, RequiresToolAllowList: true,
@@ -164,25 +159,17 @@ type changeableView struct {
 // not workspace-wide or not of a visible type answers exactly like an unknown one, through texts; a view that
 // is readable but not custom or an index view is refused.
 func (c *Client) fetchChangeableView(ctx context.Context, op, id string, texts provider.StatusTexts) (*changeableView, error) {
-	var body json.RawMessage
-	if err := c.getWith(ctx, op, viewsPath+"/"+url.PathEscape(id), nil, viewResponseBytes, &body, texts); err != nil {
-		return nil, err
-	}
-	entity, err := unwrapMeta(op, body, "view")
+	record, err := c.readView(ctx, op, id, texts)
 	if err != nil {
 		return nil, err
 	}
-	var record viewRecord
-	if json.Unmarshal(entity, &record) != nil || !equalUUID(record.ID, id) || !validUUID(record.ObjectMetadataID) {
+	if !validUUID(record.ObjectMetadataID) {
 		return nil, provider.InvalidResponse(op, "Twenty answered with a different view than the requested one")
-	}
-	if !record.listed() {
-		return nil, provider.ClassifyStatus(op, http.StatusNotFound, texts)
 	}
 	if !isTrue(record.IsCustom) || (record.Key != nil && *record.Key != "") {
 		return nil, invalidRequest(errViewNotChangeable)
 	}
-	return &changeableView{record: record}, nil
+	return &changeableView{record: *record}, nil
 }
 
 // columnOf returns the identifier of the live column that shows the field, if there is one.

@@ -157,12 +157,14 @@ sorts, and groups. Only views visible to the whole workspace are read: a persona
 answers it like an unknown view, although Twenty serves it by identifier. Widget views are not read. Filter and
 group values are untrusted workspace data of their own data class.
 
-`viewfields.create` and `viewfields.update` (`create`, `update`) add a field as a column and show, hide, move, or
-resize a column, for every user of the workspace. They need the Twenty right "Views", are offered only by a
-connection whose `tools` list names them, and no profile ticks them. Both read the view first and refuse a
-personal, widget, standard, or index view; `update` takes the view from the column itself. `create` also reads
-the object ("Data model") and refuses a field of another object, an inactive or system field, and a field that
-is already a column. The answer names the column, its view, and its field.
+`views.create`, `views.update` (`create`, `update`), and the column tools below are confirmed, need a `tools`
+entry and the Twenty right "Views", which also allows changing personal views of other users (use a key of its
+own), and no profile ticks them. A new view is always visible to the whole workspace and starts empty; `update`
+reads first, changes name and icon only, and refuses what `get` would not read and standard or index views.
+
+`viewfields.create` and `viewfields.update` add a column or show, hide, move, or resize one: they read the
+view first (`update` through its column) and refuse the same views; `create` refuses a field of another
+object, an inactive or system field, and one already shown. The answer names column, view, and field.
 
 ## Writing records
 
@@ -293,12 +295,9 @@ the role of the key (Delete Records, Destroy Records); Twenty's own text is neve
 them; `permissions` alone does not admit them. No profile ticks them or `records.restore`.
 
 The credential provides `api-key`. The key's workspace role remains the provider-side ceiling; the
-connection's local `permissions` list can only narrow it, and an optional `tools` list, for example
-`[twentycrm.companies.get]`, narrows it further to named tools without admitting an effect `permissions`
-excludes. The `companies.*` tools expose conservative core company fields and accept no custom-field
-payloads; custom fields are written through `records.create` and `records.update`. Invocation arguments never
-replace the configured origin. The terminal editor starts a new connection on the setup profile `read`, which
-ticks `[read]` and the read tools it lists; the profile `write` adds the two record write tools and the link
-create tool. A profile is a visible starting selection, not a role: only the ticked `permissions` and
-`tools` are saved, every tick can be changed before saving, and a saved connection never follows a
-profile.
+connection's local `permissions` list can only narrow it, and an optional `tools` list narrows it further to
+named tools without admitting an effect `permissions` excludes. The `companies.*` tools expose core company
+fields only; custom fields are written through `records.create` and `records.update`. Invocation arguments
+never replace the configured origin. The terminal editor starts a new connection on the setup profile `read`.
+A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
+every tick can be changed before saving, and a saved connection never follows a profile.

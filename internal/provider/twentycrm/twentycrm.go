@@ -301,6 +301,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(metaFieldsGet, metadataGroup), Handler: capability.Handler(invokeMetaFieldsGet)},
 		capability.Operation{Descriptor: inGroup(viewsList, viewsGroup), Handler: capability.Handler(invokeViewsList)},
 		capability.Operation{Descriptor: inGroup(viewsGet, viewsGroup), Handler: capability.Handler(invokeViewsGet)},
+		capability.Operation{Descriptor: inGroup(viewsCreate, viewsGroup), Handler: capability.Handler(invokeViewsCreate)},
+		capability.Operation{Descriptor: inGroup(viewsUpdate, viewsGroup), Handler: capability.Handler(invokeViewsUpdate)},
 		capability.Operation{Descriptor: inGroup(viewfieldsCreate, viewsGroup), Handler: capability.Handler(invokeViewFieldsCreate)},
 		capability.Operation{Descriptor: inGroup(viewfieldsUpdate, viewsGroup), Handler: capability.Handler(invokeViewFieldsUpdate)},
 		capability.Operation{Descriptor: inGroup(metaObjectsCreate, metadataGroup), Handler: capability.Handler(invokeMetaObjectsCreate)},
