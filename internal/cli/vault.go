@@ -628,7 +628,18 @@ func runVaultUnlock(c *cobra.Command, opts *Options, reg *capability.Registry) e
 				status.PID, formatLocksAt(status.LocksAt))
 			return nil
 		}
-		if !errors.Is(err, vaultproc.ErrNotRunning) {
+		if errors.Is(err, vaultproc.ErrReplaced) {
+			// Its program was replaced and no successor took over, so it cannot be asked to lock; ending it
+			// is what 'vault lock' does.
+			pid, endErr := vaultproc.EndReplaced(ctx, client, err)
+			if endErr != nil {
+				return endErr
+			}
+			if pid > 0 {
+				fmt.Fprintf(c.ErrOrStderr(), "qatlas: ended the vault process (pid %d), whose program was "+
+					"replaced since it started\n", pid)
+			}
+		} else if !errors.Is(err, vaultproc.ErrNotRunning) {
 			return err
 		}
 		// The configuration the process reads its idle timeout from is checked before anything is asked.
