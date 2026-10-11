@@ -579,12 +579,8 @@ func (c *Client) ListViews(ctx context.Context, connection, object, objectID str
 	return result, nil
 }
 
-// GetView reads one workspace-wide view with its layout.
-func (c *Client) GetView(ctx context.Context, connection, id string) (*View, error) {
-	const op = "get view"
-	if !validUUID(id) {
-		return nil, invalidRequest("the view id must be a UUID")
-	}
+// readView reads one workspace-wide view. A view of another visibility or type reads exactly like an unknown one.
+func (c *Client) readView(ctx context.Context, op, id string) (*viewRecord, error) {
 	var body json.RawMessage
 	if err := c.getWith(ctx, op, viewsPath+"/"+url.PathEscape(id), nil, viewResponseBytes, &body, viewStatusTexts); err != nil {
 		return nil, err
@@ -600,6 +596,19 @@ func (c *Client) GetView(ctx context.Context, connection, id string) (*View, err
 	if !record.listed() {
 		// Twenty serves a view of any visibility by identifier; it must read exactly like an unknown one.
 		return nil, provider.ClassifyStatus(op, 404, viewStatusTexts)
+	}
+	return &record, nil
+}
+
+// GetView reads one workspace-wide view with its layout.
+func (c *Client) GetView(ctx context.Context, connection, id string) (*View, error) {
+	const op = "get view"
+	if !validUUID(id) {
+		return nil, invalidRequest("the view id must be a UUID")
+	}
+	record, err := c.readView(ctx, op, id)
+	if err != nil {
+		return nil, err
 	}
 	objects, fields := map[string]string{}, map[string]string{}
 	if validUUID(record.ObjectMetadataID) {
