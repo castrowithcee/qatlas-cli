@@ -95,7 +95,7 @@ func TestEmojiWriteDescriptorsAndProfiles(t *testing.T) {
 	if c.LocalFiles != config.LocalFilesRead || c.Risk.Effect != capability.EffectCreate ||
 		c.Risk.Idempotency != capability.IdempotencyNonIdempotent ||
 		c.Risk.Confirmation != capability.ConfirmationRequired || !c.Risk.OpenWorld ||
-		c.Risk.DataSensitivity != administrationSensitivity || c.RequiresToolAllowList ||
+		c.Risk.DataSensitivity != administrationSensitivity || !c.RequiresToolAllowList ||
 		withGroup(c).Group != "administration" {
 		t.Fatalf("create = %+v", c)
 	}
@@ -234,6 +234,20 @@ func TestEmojiCreateNeedsConfirmationAndBoundTeams(t *testing.T) {
 	if !isInvalidRequest(err) || strings.Contains(err.Error(), teamB) || len(calls) != 1 ||
 		calls[0].path != "/api/v4/users/me/teams" {
 		t.Fatalf("err = %v, calls = %+v, want the refusal after the team read alone", err, calls)
+	}
+}
+
+func TestEmojiCreateIsRefusedWithoutToolsList(t *testing.T) {
+	dir := t.TempDir()
+	path := writeImage(t, dir, "party.png", pngImage)
+	var calls []call
+	env := emojiEnv(t, dir, &calls, emojiWriteHandler(t, bothTeams, func(*http.Request) (*http.Response, error) {
+		t.Fatal("unexpected emoji write")
+		return nil, nil
+	}))
+	_, err := env.confirmed(emojiCreate.ID, "emojinotool", createArgs("party", path))
+	if err == nil || len(calls) != 0 || *env.reads != 0 {
+		t.Fatalf("err = %v, calls = %+v, reads = %d", err, calls, *env.reads)
 	}
 }
 

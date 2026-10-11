@@ -43,6 +43,8 @@ var emojiCreate = capability.Descriptor{
 	Risk:       botRisk(capability.EffectCreate, capability.IdempotencyNonIdempotent, capability.ConfirmationRequired),
 	Provider:   Provider,
 	LocalFiles: config.LocalFilesRead,
+	// Like every emoji mutation, only a connection whose tools list names it offers it.
+	RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{` +
 		`"name":{"type":"string","pattern":"^[a-z0-9_+-]{1,64}$"},` +
 		`"` + localfile.LocalPathArgument + `":` + localfile.LocalPathSchema + `},` +

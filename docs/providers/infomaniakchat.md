@@ -152,7 +152,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
 | `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
 | `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*`, `commands.*` |
-| `administration` | `emoji.list` | `emoji.create` (reads a local file) | `bots.list`, `.get`, `.update`, `.disable`, `.enable`, `emoji.delete` |
+| `administration` | `emoji.list` | | `bots.list`, `.get`, `.update`, `.disable`, `.enable`, `emoji.create` (reads a local file), `.delete` |
 
 The reads need no confirmation; every other tool always does. The tools of the last column are in no profile
 and offered only to a connection whose tools list names them; the role tools alter rights, and
