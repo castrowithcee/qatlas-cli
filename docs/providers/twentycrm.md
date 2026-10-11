@@ -157,14 +157,14 @@ sorts, and groups. Only views visible to the whole workspace are read: a persona
 answers it like an unknown view, although Twenty serves it by identifier. Widget views are not read. Filter and
 group values are untrusted workspace data of their own data class.
 
-`views.create`, `views.update`, and the column and sort tools below are confirmed, need a `tools` entry and the
-Twenty right "Views", which also allows changing personal views of other users (use a key of its own), and no
-profile ticks them. A new view is always visible to the whole workspace and starts empty; `update` reads first,
-changes name and icon only, and refuses what `get` would not read and standard or index views.
-
-`viewfields.*` and `viewsorts.*` add or change a column or sort: they read the view first (`update` through its
-column or sort) and refuse the same views; `create` refuses a field of another object, an inactive, system, or
-unsortable field, and one already shown or sorted. The answer names that item, view, and field.
+`views.create`, `update`, `delete`, `viewfields.*`, and `viewsorts.*` are confirmed, need a `tools` entry and
+the Twenty right "Views", which also covers personal views of other users (use a key of its own), and no
+profile ticks them. Each reads the view first (through the column or sort for their `update`) and refuses what
+`get` would not read and standard or index views. A new view is visible to the whole workspace and starts
+empty; `update` changes name and icon only. `delete` is permanent: the view and its layout vanish for every
+member and cannot be restored; the result names the view as read. Column and sort `create` refuse a field of
+another object, an inactive, system, or unsortable field, and one already shown or sorted; their answer names
+that item, view, and field.
 
 ## Writing records
 
