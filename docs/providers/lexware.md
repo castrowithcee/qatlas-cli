@@ -3,11 +3,11 @@ description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
   articles, the organization profile and reference data, voucher document downloads, invoice, quotation, order
   confirmation, credit note, delivery note and dunning drafts, issuing of sales vouchers, contact and article
-  writes, article deletion, permissions, and credentials.
+  writes, article deletion, receipt file uploads, permissions, and credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
 # Lexware Office
@@ -34,6 +34,15 @@ connection that releases a directory under `files.write`, replace an existing fi
 at 20 MiB, and return only identifier, size and SHA-256. The format `default` takes Lexware's own choice,
 `pdf` and `xml` select a representation; `xml` exists for an XRechnung only. Lexware generates the PDF of an
 XRechnung solely as a preview, not as a valid e-invoice. A draft has no document until it is finalized.
+
+`lexware.files.upload` creates a new bookkeeping voucher in the Lexware folder "Zu prüfen" from a local file;
+`lexware.vouchers.attach` attaches a file to an existing bookkeeping voucher (`create`, always with
+confirmation). Both are offered only to a connection that releases a directory under `files.read`, take only
+`local_path` (and the voucher `id`), accept pdf, jpg, jpeg, png and xml up to 5 MiB, and send exactly one
+request without a retry. The upload type is fixed to `voucher`. Lexware recognizes duplicates by checksum and
+then reports the identifiers that already exist; a new voucher has the status `blank` until the text
+recognition has finished. After an unclear outcome the error says that the file may have been uploaded or
+attached. An unaccepted file (HTTP 406) is reported without the provider's text.
 
 A connection may carry one optional target `organization/<uuid>` (the `organizationId` of the profile). It
 protects connections whose keys belong to different customers: before the first request of a tool, Qatlas
@@ -113,6 +122,7 @@ excludes. The terminal editor starts a new connection on the recommended setup p
 `[read]` and every list and get tool; the profile `write` adds the permissions `create` and `update` and the
 tools `lexware.invoices.create`, `lexware.quotations.create`, `lexware.orderconfirmations.create`,
 `lexware.creditnotes.create`, `lexware.deliverynotes.create`, `lexware.dunnings.create`,
-`lexware.articles.create`, `lexware.articles.update`, `lexware.contacts.create` and `lexware.contacts.update`.
+`lexware.articles.create`, `lexware.articles.update`, `lexware.contacts.create`, `lexware.contacts.update`,
+`lexware.files.upload` and `lexware.vouchers.attach`; the last two take effect only with a `files.read` release.
 A profile is a visible starting selection, not a role: only the ticked `permissions` and `tools` are saved,
 every tick can be changed before saving, and a saved connection never follows a profile.
