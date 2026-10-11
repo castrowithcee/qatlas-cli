@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/castrowithcee/qatlas-cli/internal/fileretry"
 )
 
 // fileOps are the file operations of a replacement, injectable so that the sequence and its rollback are
@@ -23,29 +25,12 @@ type fileOps struct {
 	sleep func(time.Duration)
 }
 
-var osFileOps = fileOps{rename: os.Rename, remove: os.Remove, transient: isTransientLock}
+var osFileOps = fileOps{rename: os.Rename, remove: os.Remove, transient: fileretry.Transient}
 
-// renameDelays are the waits between the attempts of one rename, 2.775 s in all at most.
-var renameDelays = []time.Duration{25 * time.Millisecond, 50 * time.Millisecond, 100 * time.Millisecond,
-	200 * time.Millisecond, 400 * time.Millisecond, 800 * time.Millisecond, 1200 * time.Millisecond}
-
-// renameRetrying renames, and repeats a rename that failed with a transient lock error after a short,
-// growing wait, for a bounded time. A rename that fails changed nothing, so repeating it is safe; any
-// other error is returned at once.
+// renameRetrying renames through fileretry.Do: a rename that fails changed nothing, so repeating it after
+// a transient lock error is safe.
 func (o fileOps) renameRetrying(oldPath, newPath string) error {
-	err := o.rename(oldPath, newPath)
-	for _, delay := range renameDelays {
-		if err == nil || o.transient == nil || !o.transient(err) {
-			return err
-		}
-		if o.sleep != nil {
-			o.sleep(delay)
-		} else {
-			time.Sleep(delay)
-		}
-		err = o.rename(oldPath, newPath)
-	}
-	return err
+	return fileretry.Do(func() error { return o.rename(oldPath, newPath) }, o.transient, o.sleep)
 }
 
 // replaceRunning puts the staged file in place of target, which may be a running Windows executable: such
