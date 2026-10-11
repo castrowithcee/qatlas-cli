@@ -345,8 +345,8 @@ func Register(reg *capability.Registry) error {
 			Tools:       []string{notesList.ID, notesGet.ID, notesAttachmentsGet.ID, notesSettingsGet.ID},
 		}, {
 			ID: "calendar", Title: "Read calendars",
-			Description: "lists the bound calendars and reads their events in a time range and single events; changes nothing",
-			Tools:       []string{calendarsList.ID, eventsList.ID, eventsGet.ID},
+			Description: "lists the bound calendars and reads their events in a time range, single events, and tasks; changes nothing",
+			Tools:       []string{calendarsList.ID, eventsList.ID, eventsGet.ID, tasksList.ID, tasksGet.ID},
 		}, {
 			ID: "contacts", Title: "Read contacts",
 			Description: "lists bound address books and their contacts and reads single contacts; changes nothing",
@@ -356,7 +356,7 @@ func Register(reg *capability.Registry) error {
 			Description: "also creates events in bound writable calendars and replaces one event given its etag, with " +
 				"confirmation; attendees receive invitations by e-mail from Nextcloud; never deletes, which only a " +
 				"tools list naming events.delete allows",
-			Tools: []string{calendarsList.ID, eventsList.ID, eventsGet.ID, eventsCreate.ID, eventsUpdate.ID},
+			Tools: []string{calendarsList.ID, eventsList.ID, eventsGet.ID, tasksList.ID, tasksGet.ID, eventsCreate.ID, eventsUpdate.ID},
 		}},
 	}, TestConnection); err != nil {
 		return err
@@ -433,6 +433,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(calendarsList, groupCalendar), Handler: calendarBound(invokeCalendarsList)},
 		capability.Operation{Descriptor: inGroup(eventsList, groupCalendar), Handler: calendarBound(invokeEventsList)},
 		capability.Operation{Descriptor: inGroup(eventsGet, groupCalendar), Handler: calendarBound(invokeEventsGet)},
+		capability.Operation{Descriptor: inGroup(tasksList, groupCalendar), Handler: calendarBound(invokeTasksList)},
+		capability.Operation{Descriptor: inGroup(tasksGet, groupCalendar), Handler: calendarBound(invokeTasksGet)},
 		capability.Operation{Descriptor: inGroup(eventsCreate, groupCalendar), Handler: calendarBound(invokeEventsCreate)},
 		capability.Operation{Descriptor: inGroup(eventsUpdate, groupCalendar), Handler: calendarBound(invokeEventsUpdate)},
 		capability.Operation{Descriptor: inGroup(eventsDelete, groupCalendar), Handler: calendarBound(invokeEventsDelete)},
