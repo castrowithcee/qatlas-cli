@@ -258,8 +258,7 @@ func (m *Model) savePayload() tea.Cmd {
 	}
 	m.openVaultOffer(
 		"Set a passphrase for the vault?",
-		"this is the vault's very first secret; a passphrase encrypts it, typed masked and twice, or "+
-			"leave this empty and press enter to keep the vault unencrypted",
+		vaultFirstSecretHint,
 		true, true,
 		func(offer vault.PassphraseFunc) tea.Cmd { m.screen = screenForm; return commit(offer) },
 		func() tea.Cmd { m.screen = screenForm; m.status = "Cancelled"; return nil },
