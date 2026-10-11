@@ -218,3 +218,19 @@ func TestFieldsSelectOnlyEntriesOfTheResultList(t *testing.T) {
 		t.Fatalf("selectable fields = %v", got)
 	}
 }
+
+func TestObjectBoundsAndUniqueItemsAreDescribed(t *testing.T) {
+	descriptor := testDescriptor("fake.rows.create", capability.EffectCreate, capability.ConfirmationNone)
+	descriptor.InputSchema = json.RawMessage(`{"type":"object","properties":{` +
+		`"a":{"type":"object","minProperties":1},"b":{"type":"object","maxProperties":5},` +
+		`"c":{"type":"object","minProperties":1,"maxProperties":5},` +
+		`"d":{"type":"array","uniqueItems":true,"maxItems":9,"items":{"type":"string"}},` +
+		`"e":{"type":"array","uniqueItems":false}}}`)
+	want := map[string]string{"a": "keys min 1", "b": "keys max 5", "c": "keys 1..5",
+		"d": "items max 9; unique", "e": ""}
+	for _, row := range Compact(descriptor).Arguments {
+		if row.Limits != want[row.Name] {
+			t.Errorf("%s: limits = %q, want %q", row.Name, row.Limits, want[row.Name])
+		}
+	}
+}

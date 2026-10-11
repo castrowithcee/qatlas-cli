@@ -71,7 +71,6 @@ func TestDataRowsUnknownColumnsAndWrongTypesAreRefusedWithoutMutation(t *testing
 		{"insert type", dataRowsInsert.ID, `{` + tableArg() + `,"rows":[{"email":5}]}`},
 		{"insert null", dataRowsInsert.ID, `{` + tableArg() + `,"rows":[{"email":null}]}`},
 		{"insert object", dataRowsInsert.ID, `{` + tableArg() + `,"rows":[{"email":{"a":1}}]}`},
-		{"insert empty row", dataRowsInsert.ID, `{` + tableArg() + `,"rows":[{}]}`},
 		{"update filter column", dataRowsUpdate.ID, `{` + tableArg() + `,` + bad + `,"data":{"email":"b"}}`},
 		{"update data column", dataRowsUpdate.ID, `{` + tableArg() + `,` + emailEq + `,"data":{"nope":"b"}}`},
 		{"upsert data column", dataRowsUpsert.ID, `{` + tableArg() + `,` + emailEq + `,"data":{"nope":"b"}}`},
@@ -90,6 +89,16 @@ func TestDataRowsUnknownColumnsAndWrongTypesAreRefusedWithoutMutation(t *testing
 				t.Fatalf("err = %v, calls = %+v, mutations = %v", err, calls, mutations)
 			}
 		})
+	}
+}
+
+func TestDataRowsInsertRefusesAnEmptyRowBeforeAnyRequest(t *testing.T) {
+	var calls []call
+	var mutations []string
+	env := newEnvironment(t, &calls, rowServer(t, &mutations, `{"data":[]}`))
+	_, err := env.confirmed(dataRowsInsert.ID, "pdelete", `{`+tableArg()+`,"rows":[{}]}`)
+	if !isInvalidRequest(err) || len(calls) != 0 || len(mutations) != 0 {
+		t.Fatalf("err = %v, calls = %+v, mutations = %v", err, calls, mutations)
 	}
 }
 
