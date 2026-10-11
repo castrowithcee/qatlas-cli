@@ -180,9 +180,6 @@ func TestLongInputStaysOneScrollingLine(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					m, confirm := c.open(t, long)
 					sizedModel(m, size.w, size.h)
-					if strings.Contains(m.View(), "Resize terminal") {
-						t.Skipf("the screen needs more than %dx%d even without a value", size.w, size.h)
-					}
 					if paste {
 						m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(long), Paste: true})
 					} else {
