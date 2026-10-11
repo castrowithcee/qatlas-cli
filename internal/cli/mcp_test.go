@@ -918,7 +918,7 @@ func TestMCPDeadlineReturnsTimeoutToolError(t *testing.T) {
 }
 
 func TestMCPMessageLimitDoesNotDesynchronizeFollowingMessages(t *testing.T) {
-	oversized := strings.Repeat("x", maxMCPMessageBytes+1)
+	oversized := strings.Repeat("x", maxRequestBytes+1)
 	valid := `{"jsonrpc":"2.0","id":2,"method":"server/discover","params":{` + mcpTestMeta + `}}`
 	responses, _ := runMCP(t, fakeRegistry(t), oversized+"\n"+valid+"\n")
 	if responses["null"].Error == nil || responses["null"].Error.Code != mcpParseError {
