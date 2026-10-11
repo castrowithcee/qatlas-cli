@@ -180,7 +180,9 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
 	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats; change their title, description, photo, default permissions, and group sticker set; leave a chat"},
 	{ID: groupInviteLinks, Title: "Invite links", Description: "Read the primary invite link and revoke invite links of the bound chats"},
-	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot; read, set, and delete its command lists, set its menu button, manage its profile photo, and read and set its default administrator rights"},
+	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot; read and set its " +
+		"name, descriptions, and default administrator rights; set and remove its profile photo; read, set, and " +
+		"delete its command lists; and read and set its menu button"},
 	{ID: groupFiles, Title: "Files", Description: "Read and download files of messages in the bound chats"},
 	{ID: groupMedia, Title: "Media", Description: "Send photos, live photos, documents, videos, animations, video " +
 		"notes, audio files, voice messages, and albums to the bound chats"},
@@ -321,6 +323,14 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: commandsDelete, Handler: capability.Handler(invokeCommandsDelete)},
 		capability.Operation{Descriptor: menubuttonGet, Handler: capability.Handler(invokeMenubuttonGet)},
 		capability.Operation{Descriptor: menubuttonSet, Handler: capability.Handler(invokeMenubuttonSet)},
+		capability.Operation{Descriptor: profileGet, Handler: capability.Handler(invokeProfileGet)},
+		capability.Operation{Descriptor: profileSetName,
+			Handler: invokeProfileSet("set bot name", "setMyName", "name", maxBotNameRunes)},
+		capability.Operation{Descriptor: profileSetDescription,
+			Handler: invokeProfileSet("set bot description", "setMyDescription", "description", maxBotDescriptionRunes)},
+		capability.Operation{Descriptor: profileSetShortDescription,
+			Handler: invokeProfileSet("set bot short description", "setMyShortDescription", "short_description",
+				maxBotShortDescriptionRunes)},
 		capability.Operation{Descriptor: profileSetPhoto, Handler: capability.Handler(invokeProfileSetPhoto)},
 		capability.Operation{Descriptor: profileRemovePhoto, Handler: capability.Handler(invokeProfileRemovePhoto)},
 		capability.Operation{Descriptor: defaultAdminRightsGet, Handler: capability.Handler(invokeDefaultAdminRightsGet)},
