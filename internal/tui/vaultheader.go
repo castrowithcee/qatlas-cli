@@ -297,7 +297,11 @@ func (m *Model) handleVaultUnlocked(msg vaultUnlockedMsg) tea.Cmd {
 
 // vaultProcessStartedMsg carries the outcome of handing the vault to a vault process back into the event
 // loop; see startVaultProcess.
-type vaultProcessStartedMsg struct{ err error }
+type vaultProcessStartedMsg struct {
+	err error
+	// ended is the id of a vault process with a replaced program that was ended first, 0 if none was.
+	ended int
+}
 
 // startVaultProcessFn is what startVaultProcess calls to actually hand the vault to a new vault process
 // once none answers yet: vaultproc.StartProcess for a real run, which starts a second copy of the running
@@ -327,6 +331,7 @@ func (m *Model) startVaultProcess() tea.Cmd {
 	}
 	m.busy = "starting the vault process"
 	return func() tea.Msg {
+		ended := 0
 		client, err := vaultproc.ProcessClientOf(v)
 		if err != nil {
 			return vaultProcessStartedMsg{err: err}
@@ -335,6 +340,14 @@ func (m *Model) startVaultProcess() tea.Cmd {
 			// Another window, or another terminal's 'qatlas vault unlock', already started one: nothing more
 			// to do.
 			return vaultProcessStartedMsg{}
+		} else if errors.Is(err, vaultproc.ErrReplaced) {
+			// Its program was replaced and no successor took over: it is ended, as 'qatlas vault lock'
+			// does, and a new one started with the vault unlocked here.
+			pid, endErr := vaultproc.EndReplaced(context.Background(), client, err)
+			if endErr != nil {
+				return vaultProcessStartedMsg{err: endErr}
+			}
+			ended = pid
 		} else if !errors.Is(err, vaultproc.ErrNotRunning) {
 			return vaultProcessStartedMsg{err: err}
 		}
@@ -343,7 +356,7 @@ func (m *Model) startVaultProcess() tea.Cmd {
 			return vaultProcessStartedMsg{err: err}
 		}
 		_, err = startVaultProcessFn(context.Background(), configPath, snap, client)
-		return vaultProcessStartedMsg{err: err}
+		return vaultProcessStartedMsg{err: err, ended: ended}
 	}
 }
 
@@ -352,6 +365,10 @@ func (m *Model) startVaultProcess() tea.Cmd {
 func (m *Model) handleVaultProcessStarted(msg vaultProcessStartedMsg) tea.Cmd {
 	m.vaultBusy, m.busy = false, ""
 	if msg.err == nil {
+		if msg.ended > 0 {
+			m.status = fmt.Sprintf("Ended the vault process (pid %d), whose program was replaced since it "+
+				"started; the vault is unlocked in a new one", msg.ended)
+		}
 		return nil
 	}
 	m.status = fmt.Sprintf("The vault is unlocked, but the vault process could not be started: %s; %s",
