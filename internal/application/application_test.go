@@ -780,6 +780,64 @@ func TestArrayItemBoundsStopInvokeBeforeTheProvider(t *testing.T) {
 	}
 }
 
+// Member counts of objects and the uniqueness of arrays are input contracts: the core refuses a violation
+// before the provider runs, but does not refuse a provider response for them.
+func TestObjectBoundsAndUniqueItemsStopInvokeBeforeTheProvider(t *testing.T) {
+	calls := 0
+	shape := `{"type":"object","properties":{` +
+		`"fields":{"type":"object","minProperties":1,"maxProperties":2},` +
+		`"pairs":{"type":"object","minProperties":2},` +
+		`"ids":{"type":"array","uniqueItems":true}},"additionalProperties":false}`
+	descriptor := testDescriptor("fake.rows.create", capability.EffectCreate, capability.ConfirmationNone)
+	descriptor.InputSchema = json.RawMessage(shape)
+	descriptor.OutputSchema = json.RawMessage(shape)
+	handler := capability.Handler(func(context.Context, *config.Resolved, *secret.Resolver, *redact.Redactor,
+		json.RawMessage) (any, error) {
+		calls++
+		return map[string]any{"fields": map[string]any{}, "pairs": map[string]any{"a": 1},
+			"ids": []any{1, 1}}, nil
+	})
+	registry := capability.NewRegistry()
+	if err := registry.Register("fake", capability.Operation{Descriptor: descriptor, Handler: handler}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.New()
+	cfg.Services["service"] = config.Service{Provider: "fake", BaseURL: "https://example.invalid"}
+	cfg.Credentials["key"] = config.Credential{Type: config.CredentialTypeEnv, Values: map[string]string{"token": "T"}}
+	cfg.Connections["books"] = config.Connection{
+		Service: "service", Credential: "key", Permissions: []config.Permission{config.PermissionCreate},
+	}
+	core := New(registry, cfg, secret.NewWith(func(string) string { return "token" }, nil, nil, nil), nil)
+
+	for _, tt := range []struct{ name, arguments, want string }{
+		{"empty object", `{"fields":{}}`, "$.fields must not be empty"},
+		{"too few members", `{"pairs":{"a":1}}`, "$.pairs must have at least 2 members"},
+		{"too many members", `{"fields":{"a":1,"b":2,"c":3}}`, "$.fields must have at most 2 members"},
+		{"repeated scalar", `{"ids":[1,2,3,1]}`, "$.ids[3] repeats $.ids[0]"},
+		{"equal numbers", `{"ids":[1,1.0]}`, "$.ids[1] repeats $.ids[0]"},
+		{"equal exponent number", `{"ids":["x",10,1e1]}`, "$.ids[2] repeats $.ids[1]"},
+		{"nested equal numbers", `{"ids":[{"n":[1]},{"n":[1.0]}]}`, "$.ids[1] repeats $.ids[0]"},
+		{"repeated object", `{"ids":[{"a":[1],"b":2},"x",{"b":2,"a":[1]}]}`, "$.ids[2] repeats $.ids[0]"},
+	} {
+		before := calls
+		_, err := core.Invoke(context.Background(), InvokeRequest{Operation: descriptor.ID, Arguments: json.RawMessage(tt.arguments)})
+		var invalid *InvalidRequestError
+		if !errors.As(err, &invalid) || invalid.Message != tt.want {
+			t.Errorf("%s: Invoke() = %v, want %q", tt.name, err, tt.want)
+		}
+		if calls != before {
+			t.Errorf("%s: provider ran", tt.name)
+		}
+	}
+	if _, err := core.Invoke(context.Background(), InvokeRequest{Operation: descriptor.ID,
+		Arguments: json.RawMessage(`{"fields":{"a":1},"pairs":{"a":1,"b":2},"ids":[1,"1",2]}`)}); err != nil {
+		t.Fatalf("valid input: Invoke() = %v", err)
+	}
+	if calls != 1 {
+		t.Errorf("provider calls = %d, want 1", calls)
+	}
+}
+
 func TestInvokeDispatchesReadAndConfirmedMutation(t *testing.T) {
 	core, calls := testCore(t, []string{"primary"}, nil, true)
 	requests := []InvokeRequest{

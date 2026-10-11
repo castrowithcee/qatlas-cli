@@ -120,7 +120,11 @@ func TestMembersAddNeedsConfirmationAndSendsOnePostAfterTheReads(t *testing.T) {
 	})
 	var calls []call
 	env := f.env(&calls)
-	args := `{"channel_id":"` + chanA + `","user_ids":["` + userInA + `","` + selfID + `","` + userInA + `"]}`
+	repeated := `{"channel_id":"` + chanA + `","user_ids":["` + userInA + `","` + selfID + `","` + userInA + `"]}`
+	if _, err := env.confirmed(channelsMembersAdd.ID, "members", repeated); !isInvalidRequest(err) || len(calls) != 0 {
+		t.Fatalf("err = %v, calls = %+v, want a repeated user refused before any request", err, calls)
+	}
+	args := `{"channel_id":"` + chanA + `","user_ids":["` + userInA + `","` + selfID + `"]}`
 	if _, err := env.invoke(channelsMembersAdd.ID, "members", args); !isConfirmationRequired(err) || len(calls) != 0 {
 		t.Fatalf("err = %v, calls = %+v, want confirmation-required before any request", err, calls)
 	}
