@@ -57,7 +57,7 @@ var messagesSend = capability.Descriptor{
 		`{"type":"object","properties":{"message_id":{"type":"integer"},"date":{"type":"integer"}},"required":["message_id","date"],"additionalProperties":false}`,
 	),
 	Arguments: []capability.Argument{
-		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat", Target: "chat"},
 		{Name: "text", Description: "Message text, from 1 through 4096 characters", Required: true},
 		parseModeArgument,
 		{Name: "reply_to_message_id", Description: "Message of the same chat to reply to"},
@@ -99,7 +99,7 @@ var messagesEdit = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer"}},` +
 		`"required":["message_id"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat", Target: "chat"},
 		{Name: "message_id", Description: "Identifier of the message in the chat", Required: true},
 		{Name: "text", Description: "Replacement text, from 1 through 4096 characters", Required: true},
 		parseModeArgument,
@@ -132,7 +132,7 @@ var messagesEditReplyMarkup = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"integer"},` +
 		`"updated":{"type":"boolean"}},"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat", Target: "chat"},
 		{Name: "message_id", Description: "Identifier of the message in the chat", Required: true},
 		{Name: "inline_keyboard", Description: keyboardArgument + "; omitted or empty removes the keyboard"},
 	},
@@ -164,7 +164,7 @@ var messagesDelete = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
 		`"required":["deleted"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat", Target: "chat"},
 		{Name: "message_id", Description: "Identifier of the message in the chat", Required: true},
 	},
 	Fields: []capability.Field{{Name: "deleted", Description: "True when Telegram accepted the deletion"}},

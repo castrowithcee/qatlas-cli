@@ -144,7 +144,9 @@ type SearchRequest struct {
 //
 // Every value is a scalar. Requires names the required arguments separated by "; ", each as name:form where
 // the compact contract of describe gives a written form or the allowed values, and as the bare name
-// otherwise; optional arguments and members of object arguments stay with describe. Confirm is true for a
+// otherwise; optional arguments and members of object arguments stay with describe. Target names, in the
+// same form, the optional argument that selects a target of the connection, where an offering connection
+// does not bind exactly one such target itself; it never carries a target value. Confirm is true for a
 // tool that needs confirmation. Connections names, separated by spaces, the connections that offer the tool
 // only where they differ from those the answer names once at its top. Reason is set only by a request with
 // All, on a tool the request's connections do not offer; a tool with a reason and no connections is offered
@@ -154,6 +156,7 @@ type SearchHit struct {
 	Title       string            `json:"title"`
 	Effect      capability.Effect `json:"effect"`
 	Requires    string            `json:"requires"`
+	Target      string            `json:"target"`
 	Confirm     bool              `json:"confirm"`
 	Connections string            `json:"connections"`
 	Reason      config.Refusal    `json:"reason"`
@@ -166,7 +169,7 @@ type Hits []SearchHit
 // MarshalJSON writes every entry with its non-empty fields only.
 func (h Hits) MarshalJSON() ([]byte, error) { return marshalHits(h, false) }
 
-// tableHits marshals like Hits, except that all entries share one field set: requires, confirm,
+// tableHits marshals like Hits, except that all entries share one field set: requires, target, confirm,
 // connections, and reason appear when at least one entry has a value there. TOON prints entries of one
 // field set as a table with one row per tool, so the TOON rendering uses it.
 type tableHits Hits
@@ -175,9 +178,10 @@ type tableHits Hits
 func (h tableHits) MarshalJSON() ([]byte, error) { return marshalHits(Hits(h), true) }
 
 func marshalHits(h Hits, common bool) ([]byte, error) {
-	var requires, confirm, connections, reason bool
+	var requires, target, confirm, connections, reason bool
 	for _, hit := range h {
 		requires = requires || hit.Requires != ""
+		target = target || hit.Target != ""
 		confirm = confirm || hit.Confirm
 		connections = connections || hit.Connections != ""
 		reason = reason || hit.Reason != ""
@@ -194,6 +198,7 @@ func marshalHits(h Hits, common bool) ([]byte, error) {
 		}{
 			{"id", true, hit.ID}, {"title", true, hit.Title}, {"effect", true, hit.Effect},
 			{"requires", requires && (common || hit.Requires != ""), hit.Requires},
+			{"target", target && (common || hit.Target != ""), hit.Target},
 			{"confirm", confirm && (common || hit.Confirm), hit.Confirm},
 			{"connections", connections && (common || hit.Connections != ""), hit.Connections},
 			{"reason", reason && (common || hit.Reason != ""), hit.Reason},
@@ -383,6 +388,7 @@ func (c *Core) hits(request SearchRequest, descriptors []capability.Descriptor) 
 		hits = append(hits, SearchHit{
 			ID: descriptor.ID, Title: title, Effect: descriptor.Risk.Effect,
 			Requires: strings.Join(requiredArguments(descriptor), "; "),
+			Target:   strings.Join(c.openTargets(descriptor, names), "; "),
 			Confirm:  descriptor.Risk.Confirmation == capability.ConfirmationRequired,
 			Reason:   c.refusal(request, descriptor),
 		})
@@ -395,6 +401,63 @@ func (c *Core) hits(request SearchRequest, descriptors []capability.Descriptor) 
 		hits[i].Connections = strings.Join(offered[i], " ")
 	}
 	return connections, hits
+}
+
+// openTargets names the target arguments of d, each as name:form, that at least one of the connections
+// does not fix: the argument is then the caller's to give. The form is the written form of the input schema
+// or else the first form of the argument's kind that is no wildcard; a value of a target never appears.
+func (c *Core) openTargets(d capability.Descriptor, connections []string) []string {
+	var open []string
+	var rows []ArgumentRow
+	for _, argument := range d.Arguments {
+		if argument.Target == "" || !c.leavesOpen(d.Provider, argument.Target, connections) {
+			continue
+		}
+		if rows == nil {
+			rows = Compact(d).Arguments
+		}
+		form := ""
+		for _, row := range rows {
+			if row.Name == argument.Name {
+				form = row.Form
+			}
+		}
+		if metadata, ok := c.registry.ProviderMetadata(d.Provider); ok && form == "" {
+			form = firstForm(metadata.Target, argument.Target)
+		}
+		if form == "" {
+			open = append(open, argument.Name)
+		} else {
+			open = append(open, argument.Name+":"+form)
+		}
+	}
+	return open
+}
+
+// leavesOpen reports whether one of the connections does not fix the target of the kind.
+func (c *Core) leavesOpen(providerID, kind string, connections []string) bool {
+	metadata, _ := c.registry.ProviderMetadata(providerID)
+	for _, name := range connections {
+		if !metadata.Target.FixesTarget(kind, c.config.Connections[name].TargetValues()) {
+			return true
+		}
+	}
+	return false
+}
+
+// firstForm is the first form of the kind that is no wildcard.
+func firstForm(target config.TargetMetadata, kind string) string {
+	for _, k := range target.Kinds {
+		if k.Name != kind {
+			continue
+		}
+		for _, form := range k.Forms {
+			if form != "*" && form != target.Wildcard {
+				return form
+			}
+		}
+	}
+	return ""
 }
 
 // searchCursor encodes the continuation after the operation ID last. It binds the cursor to the filters of

@@ -178,7 +178,7 @@ var columnsList = capability.Descriptor{
 		`"has_more":{"type":"boolean"}},` +
 		`"required":["table","columns","start","limit","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
 		{Name: "start", Description: "Zero-based column offset, up to 10000"},
 		{Name: "limit", Description: "Columns per page, from 1 through 100; 25 when omitted"},
 	},
@@ -211,7 +211,7 @@ var rowsList = capability.Descriptor{
 		`"has_more":{"type":"boolean"}},` +
 		`"required":["rows","start","limit","has_more"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
 		{Name: "start", Description: "Zero-based row offset inside the selected table or view, up to 10000"},
 		{Name: "limit", Description: "Rows per page, from 1 through 100; 25 when omitted"},
 	},
@@ -242,7 +242,7 @@ var rowsGet = capability.Descriptor{
 		`"required":["row_id"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(rowSchema),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
 		{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.rows.list", Required: true},
 	},
 	Fields: []capability.Field{
@@ -271,7 +271,7 @@ var rowsDelete = rowMutationDescriptor("delete", capability.EffectDelete, capabi
 	rowTableArgument, rowIDArgument)
 
 var (
-	rowTableArgument  = capability.Argument{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"}
+	rowTableArgument  = capability.Argument{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"}
 	rowIDArgument     = capability.Argument{Name: "row_id", Description: "Row identifier of 22 characters, as returned by seatable.rows.list", Required: true}
 	rowValuesArgument = capability.Argument{Name: "values", Description: "Object of column name to value; link columns are refused", Required: true}
 )

@@ -156,7 +156,7 @@ var sectionsCreate = changing(capability.EffectCreate, capability.IdempotencyNon
 	json.RawMessage(sectionSchema),
 	[]capability.Argument{
 		{Name: "name", Description: "Section name, at most 2048 characters on one line", Required: true},
-		{Name: "project_id", Description: "Project of the connection; the connection's only project when omitted"},
+		{Name: "project_id", Description: "Project of the connection; the connection's only project when omitted", Target: "*"},
 		{Name: "description", Description: "Section description, at most 16383 characters"},
 	},
 	sectionFields,

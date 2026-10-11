@@ -69,7 +69,7 @@ var linksList = capability.Descriptor{
 		`"start":{"type":"integer"},"limit":{"type":"integer"}},` +
 		`"required":["table","column","rows","start","limit"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+		{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
 		{Name: "column", Description: "Name or key of a link column of the table, as returned by seatable.columns.list", Required: true},
 		{Name: "row_ids", Description: "1 to 10 row identifiers of 22 characters in the table", Required: true},
 		{Name: "start", Description: "Zero-based offset of the linked rows per source row, up to 10000"},
@@ -110,7 +110,7 @@ func linkMutationDescriptor(action string, effect capability.Effect, idempotency
 			Confirmation: capability.ConfirmationRequired, OpenWorld: true, DataSensitivity: dataSensitivity},
 		InputSchema: json.RawMessage(input), OutputSchema: json.RawMessage(output),
 		Arguments: []capability.Argument{
-			{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope"},
+			{Name: "table", Description: "Table reference returned by seatable.tables.list; required for an allow-list or * scope", Target: "*"},
 			{Name: "column", Description: "Name or key of a link column of the table", Required: true},
 			{Name: "row_id", Description: "Row identifier of 22 characters of the source row", Required: true},
 			{Name: "other_row_ids", Description: "1 to 50 row identifiers of 22 characters in the linked table", Required: true},

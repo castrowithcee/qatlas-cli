@@ -49,6 +49,7 @@ func TestProviderConformance(t *testing.T) {
 				t.Run(descriptor.ID, func(t *testing.T) {
 					reportViolations(t, descriptorViolations(descriptor))
 					reportViolations(t, routingViolations(metadata, descriptor))
+					reportViolations(t, targetArgumentViolations(metadata, descriptor))
 				})
 			}
 		})
@@ -173,6 +174,29 @@ func TestProviderConformanceDiscoveryParity(t *testing.T) {
 
 // Every check of this suite must be able to fail. Each case breaks exactly one invariant of an otherwise
 // conformant synthetic provider and must be reported by the check that owns it.
+func TestTargetArgumentChecksDetectViolations(t *testing.T) {
+	metadata := config.ProviderMetadata{Target: config.TargetMetadata{Kinds: []config.TargetKind{{Name: "item"}}}}
+	for name, c := range map[string]struct {
+		argument capability.Argument
+		schema   string
+		want     string
+	}{
+		"a required argument": {capability.Argument{Name: "item", Required: true, Target: "item"}, `{}`, "is required"},
+		"a required schema entry": {capability.Argument{Name: "item", Target: "item"}, `{"required":["item"]}`,
+			"is required"},
+		"an unknown kind":  {capability.Argument{Name: "item", Target: "thing"}, `{}`, "does not have"},
+		"a kind-less star": {capability.Argument{Name: "item", Target: "*"}, `{}`, "does not have"},
+	} {
+		d := capability.Descriptor{InputSchema: json.RawMessage(c.schema), Arguments: []capability.Argument{c.argument}}
+		t.Run(name, func(t *testing.T) { assertViolation(t, targetArgumentViolations(metadata, d), c.want) })
+	}
+	ok := capability.Descriptor{InputSchema: json.RawMessage(`{}`),
+		Arguments: []capability.Argument{{Name: "item", Target: "item"}}}
+	if violations := targetArgumentViolations(metadata, ok); len(violations) != 0 {
+		t.Errorf("violations = %q, want none", violations)
+	}
+}
+
 func TestProviderConformanceChecksDetectViolations(t *testing.T) {
 	// An idempotent change may be classified as needing no confirmation.
 	unconfirmedUpdate := conformantDescriptor()
@@ -613,6 +637,32 @@ func permissionViolations(metadata config.ProviderMetadata, descriptors []capabi
 // requires none runs without it. Every other refusal never reaches the handler either, the core itself
 // never reads a secret, discovery offers the operation on exactly the connections that invoke accepts,
 // and every example satisfies the input schema.
+// targetArgumentViolations checks the arguments that select a target: each is optional, in the arguments
+// and in the input schema, and names a kind of the provider, or "*" where the provider has no kinds.
+func targetArgumentViolations(metadata config.ProviderMetadata, d capability.Descriptor) []string {
+	var violations []string
+	var input struct {
+		Required []string `json:"required"`
+	}
+	_ = json.Unmarshal(d.InputSchema, &input)
+	for _, argument := range d.Arguments {
+		if argument.Target == "" {
+			continue
+		}
+		if argument.Required || slices.Contains(input.Required, argument.Name) {
+			violations = append(violations, fmt.Sprintf("target argument %s is required", argument.Name))
+		}
+		kinds := metadata.Target.Kinds
+		known := argument.Target == "*" && len(kinds) == 0 ||
+			slices.ContainsFunc(kinds, func(kind config.TargetKind) bool { return kind.Name == argument.Target })
+		if !known {
+			violations = append(violations, fmt.Sprintf("target argument %s names the kind %q, which the provider "+
+				"does not have", argument.Name, argument.Target))
+		}
+	}
+	return violations
+}
+
 func routingViolations(metadata config.ProviderMetadata, d capability.Descriptor) []string {
 	effect := config.Permission(d.Risk.Effect)
 	others := []config.Permission{}

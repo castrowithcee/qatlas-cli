@@ -31,7 +31,7 @@ var messagesDeleteMany = capability.Descriptor{
 	OutputSchema: json.RawMessage(`{"type":"object","properties":{"deleted":{"type":"boolean"}},` +
 		`"required":["deleted"],"additionalProperties":false}`),
 	Arguments: []capability.Argument{
-		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat"},
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat", Target: "chat"},
 		{Name: "message_ids", Description: "From 1 through 100 positive message identifiers of the chat; repeated " +
 			"identifiers count once", Required: true},
 	},

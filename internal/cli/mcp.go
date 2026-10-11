@@ -104,7 +104,9 @@ func mcpCommandLong() string {
 		"the names of the connections that offer the listed tools, once; the tools as operations,\n" +
 		"has_more, which is true exactly when another match follows, and next_cursor, which is present\n" +
 		"only then. Each tool is the entry 'qatlas tools' prints: id, title, effect, requires, the\n" +
-		"required arguments as name:form separated by semicolons, confirm, true when the tool needs\n" +
+		"required arguments as name:form separated by semicolons, target, the optional argument that\n" +
+		"picks the target as name:form where an offering connection leaves the target open, confirm,\n" +
+		"true when the tool needs\n" +
 		"confirmation, and connections, names separated by spaces, only when fewer of the listed\n" +
 		"connections offer it, plus reason with all; a column no entry uses is left out, and the\n" +
 		"entries otherwise share one field set. That is enough for an ordinary call;\n" +
@@ -806,7 +808,8 @@ func mcpTools() []mcpTool {
 		{
 			Name: "qatlas.search",
 			Description: "Search the configured tool catalog, best matches first. Each operation has id, title, " +
-				"effect, requires (required arguments with their form), confirm, and connections only where " +
+				"effect, requires (required arguments with their form), target (the optional target argument, " +
+				"where a connection leaves the target open), confirm, and connections only where " +
 				"fewer than the connections named once at the top offer it; that suffices for a call, and " +
 				"qatlas.describe adds the optional arguments. all adds the tools no connection offers, each " +
 				"with its reason. For a provider with tool groups and more than 50 matching tools, a first page " +

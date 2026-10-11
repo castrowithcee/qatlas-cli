@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -91,6 +92,75 @@ type TargetKind struct {
 	Name        string
 	Description string
 	Forms       []string
+}
+
+// Placeholder reports whether a segment of a form is a placeholder such as OWNER.
+func Placeholder(segment string) bool {
+	if segment == "" {
+		return false
+	}
+	for _, r := range segment {
+		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
+			return false
+		}
+	}
+	return segment[0] >= 'A' && segment[0] <= 'Z'
+}
+
+// FitsForm reports whether the segments of a target are spelled in the form.
+func FitsForm(segments, form []string) bool {
+	if len(segments) != len(form) {
+		return false
+	}
+	for i, part := range form {
+		switch {
+		case Placeholder(part):
+			if segments[i] == "" || segments[i] == "*" {
+				return false
+			}
+		case segments[i] != part:
+			return false
+		}
+	}
+	return true
+}
+
+// FixesTarget reports whether the targets of a connection leave an argument that selects a target of kind
+// no choice: exactly one target is of the kind, and it names one value rather than a wildcard. A provider
+// without kinds takes kind "*" and has no choice left with exactly one target that is not its wildcard.
+func (t TargetMetadata) FixesTarget(kind string, targets []string) bool {
+	if len(t.Kinds) == 0 {
+		return len(targets) == 1 && targets[0] != t.Wildcard
+	}
+	var own []string
+	for _, target := range targets {
+		if t.kindOf(target) == kind {
+			own = append(own, target)
+		}
+	}
+	return len(own) == 1 && !strings.Contains(own[0], "*")
+}
+
+// kindOf names the kind whose form a target is spelled in. A target that is a fixed form of its own, such
+// as bot, belongs to that kind even where a placeholder form of another kind fits it as well.
+func (t TargetMetadata) kindOf(target string) string {
+	segments := strings.Split(target, "/")
+	found := ""
+	for _, kind := range t.Kinds {
+		for _, form := range kind.Forms {
+			parts := strings.Split(form, "/")
+			if !FitsForm(segments, parts) {
+				continue
+			}
+			if !slices.ContainsFunc(parts, Placeholder) {
+				return kind.Name
+			}
+			if found == "" {
+				found = kind.Name
+			}
+		}
+	}
+	return found
 }
 
 // ToolMetadata is the configuration view of one registered operation: the ID a connection's tools list

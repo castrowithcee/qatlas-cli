@@ -354,7 +354,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 	offered := registryToolIDs(t, "bookstack", offeredBy(capability.EffectRead))
 	requireIDs(t, offered, "bookstack.pages.get", "bookstack.pages.list")
 	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
-	if want := fmt.Sprintf("tools[%d]{id,title,effect,requires}:", len(offered)); len(lines) != len(offered)+2 ||
+	if want := fmt.Sprintf("tools[%d]{id,title,effect,requires,target}:", len(offered)); len(lines) != len(offered)+2 ||
 		lines[0] != "connections[1]: wiki" || lines[1] != want || !strings.HasSuffix(stdout, "\n") {
 		t.Fatalf("stdout = %q, want the connection line, %q and one row per offered tool", stdout, want)
 	}
@@ -365,7 +365,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 		}
 	}
 	// One full row pins the requires column.
-	if want := "\n  bookstack.pages.get,Get a BookStack page,read,id\n"; !strings.Contains(stdout, want) {
+	if want := "\n  bookstack.pages.get,Get a BookStack page,read,id,\"\"\n"; !strings.Contains(stdout, want) {
 		t.Errorf("stdout does not contain %q:\n%s", want, stdout)
 	}
 	for _, absent := range []string{"description", ",tags", "version", "reason", "alerts", "read-only account"} {
@@ -392,7 +392,7 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Errorf("JSON output has an empty requires: %s", jsonOut)
 		}
 		tools := toolSummaries(t, jsonOut)
-		if want := fmt.Sprintf("tools[%d]{id,title,effect,requires}:", len(tools)); !strings.Contains(stdout, want) {
+		if want := fmt.Sprintf("tools[%d]{id,title,effect,requires,target}:", len(tools)); !strings.Contains(stdout, want) {
 			t.Errorf("TOON output lacks the table header %q:\n%s", want, stdout)
 		}
 		for _, tool := range tools {
@@ -413,10 +413,10 @@ func TestToolsListsOneNamespaceAsTOON(t *testing.T) {
 			t.Fatalf("exit=%d stderr=%q", code, stderr)
 		}
 		for _, want := range []string{
-			fmt.Sprintf("connections[1]: wiki\ntools[%d]{id,title,effect,requires,confirm,reason}:\n", len(defaultRegistry().Provider("bookstack"))),
-			`  bookstack.pages.create,Create a BookStack page,create,name,true,effect-not-permitted` + "\n",
-			`  bookstack.pages.delete,Delete a BookStack page,delete,id,true,effect-not-permitted` + "\n",
-			`  bookstack.pages.get,Get a BookStack page,read,id,false,""` + "\n",
+			fmt.Sprintf("connections[1]: wiki\ntools[%d]{id,title,effect,requires,target,confirm,reason}:\n", len(defaultRegistry().Provider("bookstack"))),
+			`  bookstack.pages.create,Create a BookStack page,create,name,"",true,effect-not-permitted` + "\n",
+			`  bookstack.pages.delete,Delete a BookStack page,delete,id,"",true,effect-not-permitted` + "\n",
+			`  bookstack.pages.get,Get a BookStack page,read,id,"",false,""` + "\n",
 		} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("stdout does not contain %q:\n%s", want, stdout)
@@ -1295,5 +1295,28 @@ defaults: {}
 		if at, ok := position[id]; !ok || at > items {
 			t.Errorf("%s at %d, want before github.projectitems.list at %d", id, at, items)
 		}
+	}
+}
+
+// A connection that binds no book leaves book_id open, and the hit shows the written form of the argument,
+// not the form of a configured book target.
+func TestToolsNameTheFormOfTheOpenTargetArgument(t *testing.T) {
+	cfg, _, _ := catalogEnvironment(t)
+	code, stdout, stderr := runTools(t, nil, "tools", "bookstack", "--config", cfg, "--output", "json")
+	if code != exitOK || stderr != "" {
+		t.Fatalf("exit=%d stderr=%q", code, stderr)
+	}
+	targets := map[string]string{}
+	for _, tool := range toolSummaries(t, stdout) {
+		if tool.Target != "" {
+			targets[tool.ID] = tool.Target
+		}
+	}
+	want := map[string]string{
+		"bookstack.chapters.list": "book_id:BOOK_ID", "bookstack.pages.list": "book_id:BOOK_ID",
+		"bookstack.content.search": "book_id:BOOK_ID",
+	}
+	if !reflect.DeepEqual(targets, want) {
+		t.Errorf("targets = %v, want %v", targets, want)
 	}
 }

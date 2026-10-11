@@ -132,7 +132,9 @@ func newToolsCommand(opts *Options, registry *capability.Registry) *cobra.Comman
 			"An entry carries what an ordinary call needs. requires lists the required arguments as\n" +
 			"name:form, separated by semicolons, with the written form or the allowed values after the\n" +
 			"colon where there is one, such as repository:OWNER/REPO; confirm is true for a tool that needs\n" +
-			"--confirm. Optional arguments stay with 'qatlas describe'. connections names once, at the top,\n" +
+			"--confirm. target names the optional argument that picks the target, as name:form, only where an\n" +
+			"offering connection does not bind exactly one such target; it never shows a target value. Other\n" +
+			"optional arguments stay with 'qatlas describe'. connections names once, at the top,\n" +
 			"every connection that offers one of the listed tools; an entry has its own connections, separated\n" +
 			"by spaces, only where fewer of them offer it, and none offers a tool that has a reason and no\n" +
 			"connections. All entries share one set of columns, so the listing is a table with a row per\n" +
