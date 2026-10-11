@@ -267,10 +267,7 @@ func (m *Model) targetFrame() (string, string) {
 		if m.targetEdit < total {
 			label = "edit: "
 		}
-		prefix, width := m.fit(label)
-		in := m.targetInput
-		in.Width = max(width-1, 1)
-		foot.WriteString("\n" + prefix + in.View() + "\n")
+		foot.WriteString("\n" + m.inputLine(label, m.targetInput) + "\n")
 		keys = "enter take · " + save + " · esc cancel entry"
 	case m.targetRemove:
 		target, _ := m.targetList.selected()
