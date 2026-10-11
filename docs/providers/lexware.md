@@ -3,7 +3,8 @@ description: >
   Describes Lexware reads of invoices, sales documents, recurring invoice templates, vouchers, contacts,
   articles, the organization profile and reference data, voucher document downloads, invoice, quotation, order
   confirmation, credit note, delivery note and dunning drafts, issuing of sales vouchers, contact and article
-  writes, article deletion, receipt file uploads, permissions, and credentials.
+  writes, article deletion, receipt file uploads, reading and deleting webhook subscriptions, permissions, and
+  credentials.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -72,6 +73,14 @@ only when its `tools` list names it, in addition to `create` in `permissions`; n
 tools it is offered only when a connection's `tools` list names it, in addition to `delete` in `permissions`;
 no profile ticks it. A repeated call reports the article as missing; after an unclear outcome the error says
 that the article may have been deleted.
+
+`lexware.eventsubscriptions.list` and `lexware.eventsubscriptions.get` read the webhook subscriptions of the
+organization (`read`, in both profiles). Callback URLs are confidential: only scheme and host are shown, an
+unreadable URL is masked completely. Qatlas offers no tool to create a subscription, so no callback to a third
+party can be registered through it. `lexware.eventsubscriptions.delete` removes one subscription for good
+(`delete`), always with confirmation, and only when a connection's `tools` list names it, in addition to
+`delete` in `permissions`; no profile ticks it. A subscription may serve another application's integration,
+which then stops receiving events. A subscription also ends when the API key that created it is revoked.
 
 `lexware.quotations.create` (with a required `expiration_date`), `lexware.orderconfirmations.create`,
 `lexware.creditnotes.create`, `lexware.deliverynotes.create` and `lexware.dunnings.create` create a quotation,
