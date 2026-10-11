@@ -224,6 +224,11 @@ waiting (`pending_update_count`), and, when present, the time of the last delive
 It needs the `bot` target and is refused before the credential is read without it. The webhook URL and every
 other field of Telegram's answer are never returned. It is part of no setup profile.
 
+`telegram.profile.get` (`read`) shows `name`, `description`, and `short_description` of the bot for an optional
+`language_code`; `telegram.profile.setname`, `.setdescription`, and `.setshortdescription` change them. All
+four need the `bot` target and are refused before the credential is read without it. Limits are 64, 512, and
+120 characters; `language_code` is empty or two lowercase letters. An empty value removes the language version.
+
 ## Files
 
 `telegram.files.get` (`read`) returns the size and `file_unique_id` of one file; `telegram.files.download`

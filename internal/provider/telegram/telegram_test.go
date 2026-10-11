@@ -111,7 +111,7 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		case strings.HasPrefix(tool.ID, "telegram.stickers.") || strings.HasPrefix(tool.ID, "telegram.stickersets.") ||
 			tool.ID == topicsIconStickers.ID:
 			want = "stickers"
-		case tool.ID == botGet.ID || tool.ID == webhookGet.ID:
+		case tool.ID == botGet.ID || tool.ID == webhookGet.ID || strings.HasPrefix(tool.ID, "telegram.profile."):
 			want = "bot"
 		}
 		if tool.Group != want {
@@ -119,8 +119,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 89 {
-		t.Fatalf("operation count = %d, want eighty-nine", len(operations))
+	if len(operations) != 93 {
+		t.Fatalf("operation count = %d, want ninety-three", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
