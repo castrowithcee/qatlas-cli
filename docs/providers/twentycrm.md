@@ -150,20 +150,18 @@ metadata API for all objects and fields; default values, settings, and relation 
 the workspace. All nine tools need the Twenty right "Data model": use a connection with an API key of its own.
 The writers are offered only by a connection whose `tools` list names them; no profile ticks them.
 
-- Created are custom objects and non-relational fields; relation types are refused. A field is created on a
-  custom object only; its options are required for selections and refused for other types.
-- An update reads first, refuses system and relation fields, and limits standard ones to label changes.
-- A delete is final: all records of an object or all values of a field are lost. Only deactivated custom
-  objects and non-relational custom fields are accepted.
-- Options are replaced as a whole: a left-out option clears its value in all records. Deactivating hides an
-  object or field from everyone.
-
 ## Views
 
 `views.list` and `views.get` (`read`) are workspace-wide and read a view's columns, filters, filter groups,
 sorts, and groups. Only views visible to the whole workspace are read: a personal view is not listed, and `get`
 answers it like an unknown view, although Twenty serves it by identifier. Widget views are not read. Filter and
 group values are untrusted workspace data of their own data class.
+
+`views.create` and `views.update` (`create`, `update`) are confirmed, need a `tools` entry, and no profile ticks
+them. A new view is always visible to the whole workspace and has no columns, filters, sorts, or groups;
+`update` changes name and icon only, after a read, and refuses a view `get` would not read, a standard view,
+and an index view. The object and fields of a new view are checked against the data model first. Both need
+"Views", which also allows changing personal views of other users: use a key of its own.
 
 ## Writing records
 

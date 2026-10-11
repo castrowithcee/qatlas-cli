@@ -54,7 +54,7 @@
 // of its channels writes the channels it may not reach back unchanged. The notification tool refuses direct
 // and group channels, whose participants it would otherwise have to prove, see boundChannel.
 //
-// The bot tools (GetBots, GetBot, and PatchBot) and the custom emoji list act on data no team or channel
+// The bot tools (GetBots, GetBot, PatchBot, DisableBot, and EnableBot) and the custom emoji list act on data no team or channel
 // target can bound, so they are instance-wide: requireInstanceScope refuses a connection with a channel target
 // before any secret is read, and a live read of the token's teams, see (*Client).requireInstanceTeams, refuses unless every one of
 // them is a bound team. That read runs on every call, so a token that later joins another team locks the
@@ -676,6 +676,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(botsList), Handler: capability.Handler(invokeBotsList)},
 		capability.Operation{Descriptor: withGroup(botsGet), Handler: capability.Handler(invokeBotsGet)},
 		capability.Operation{Descriptor: withGroup(botsUpdate), Handler: capability.Handler(invokeBotsUpdate)},
+		capability.Operation{Descriptor: withGroup(botsDisable), Handler: capability.Handler(invokeBotsDisable)},
+		capability.Operation{Descriptor: withGroup(botsEnable), Handler: capability.Handler(invokeBotsEnable)},
 		capability.Operation{Descriptor: withGroup(emojiList), Handler: capability.Handler(invokeEmojiList)},
 	)
 }
