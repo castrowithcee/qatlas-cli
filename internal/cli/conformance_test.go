@@ -838,6 +838,36 @@ func sampleValue(schema map[string]any) (any, bool) {
 			}
 			object[name] = value
 		}
+		// Optional members fill the object up to minProperties, in name order.
+		names := make([]string, 0, len(properties))
+		for name := range properties {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			if _, ok := object[name]; ok || len(object) >= int(number("minProperties", 0)) {
+				continue
+			}
+			property, _ := properties[name].(map[string]any)
+			if value, ok := sampleValue(property); ok {
+				object[name] = value
+			}
+		}
+		// Without declared members, synthetic keys carry a value of the additionalProperties schema.
+		extra, _ := schema["additionalProperties"].(map[string]any)
+		for i := 0; len(object) < int(number("minProperties", 0)); i++ {
+			value, ok := any("a"), true
+			if extra != nil {
+				value, ok = sampleValue(extra)
+			}
+			if !ok {
+				return nil, false
+			}
+			object["key"+strconv.Itoa(i)] = value
+		}
+		if len(object) > int(number("maxProperties", float64(len(object)))) {
+			return nil, false
+		}
 		return object, true
 	case "array":
 		items, _ := schema["items"].(map[string]any)
@@ -846,6 +876,12 @@ func sampleValue(schema map[string]any) (any, bool) {
 			item, ok := sampleValue(items)
 			if !ok {
 				return nil, false
+			}
+			if schema["uniqueItems"] == true && len(array) > 0 {
+				// Equal samples would repeat; a unique list needs distinguishable ones.
+				if item, ok = distinctSample(items, array); !ok {
+					return nil, false
+				}
 			}
 			array = append(array, item)
 		}
@@ -1000,4 +1036,35 @@ func TestPublishedOutputSchemasStayValid(t *testing.T) {
 			}
 		}
 	}
+}
+
+// distinctSample returns a sample of schema that differs from every value in taken. Strings and numbers
+// vary by suffix or increment; other kinds cannot, so a schema needing them declares an example.
+func distinctSample(schema map[string]any, taken []any) (any, bool) {
+	base, ok := sampleValue(schema)
+	if !ok {
+		return nil, false
+	}
+	for i := 1; i <= len(taken)+1; i++ {
+		var candidate any
+		switch v := base.(type) {
+		case string:
+			candidate = v + strconv.Itoa(i)
+		case float64:
+			candidate = v + float64(i)
+		case int:
+			candidate = v + i
+		default:
+			return nil, false
+		}
+		encoded, _ := json.Marshal(schema)
+		value, _ := json.Marshal(candidate)
+		if application.ValidateJSON(encoded, value) != nil {
+			continue
+		}
+		if !slices.ContainsFunc(taken, func(other any) bool { return reflect.DeepEqual(other, candidate) }) {
+			return candidate, true
+		}
+	}
+	return nil, false
 }
