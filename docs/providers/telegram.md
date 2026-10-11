@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-10
+updated: 2026-10-11
 ---
 
 # Telegram
@@ -43,16 +43,15 @@ combine with chats, and a connection with only `bot` has no chat. A tool that ne
 before the credential is read when the target is missing. Methods that accept only a numeric chat ID refuse an
 `@username` chat locally.
 
-Telegram's tools are sorted into tool groups for display; a group never changes a tool ID, a permission, or a
-tools list. The base URL must be a plain `https` URL with a host and without user, query, or fragment, with no
-exception for local addresses, and redirects are never followed. `config validate` rejects any other base URL.
-Errors never carry Telegram's own error text.
+Tool groups only sort tools for display. The base URL must be a plain `https` URL with a host and without user,
+query, or fragment, with no exception for local addresses, and redirects are never followed. `config validate`
+rejects any other base URL. Errors never carry Telegram's own error text.
 
 The credential provides `bot-token`. Connection permissions only reduce what Qatlas exposes and executes;
 they do not broaden the bot's provider-side rights. An optional `tools` list narrows a connection further
 to named tools, for example `[telegram.messages.send]` for a chat that may receive but never lose messages,
 and never admits an effect `permissions` excludes. Mutations are never retried after an ambiguous network
-result, preventing duplicate sends or unplanned repeated changes.
+result.
 
 `telegram.messages.delete` requires a `tools` list: no permission offers it, so a connection without a `tools`
 list no longer offers it. Its reach is that of the Bot API `deleteMessage`: in a bound chat the bot
@@ -84,7 +83,14 @@ requires a `tools` list. Telegram's own pin rights still apply, and topic-specif
 ChatPermissions boolean is required and sent explicitly, a missing or unknown field is refused before any
 request, and permissions are independent (`use_independent_chat_permissions`). `telegram.senderchats.ban`
 (`delete`, `tools` list) and `telegram.senderchats.unban` (`update`) act on a channel as sender; it is only the
-object of the call, never the target. Join requests are not offered.
+object of the call, never the target.
+
+`telegram.joinrequests.decline` (`update`) declines the pending join request of `user_id` for a bound chat;
+joining is never approved by any tool. `telegram.suggestedposts.approve` (`create`) and
+`telegram.suggestedposts.decline` (`update`, `tools` list only, final) decide a suggested post by `message_id`
+in the direct messages chat of a channel. That chat must be bound by its numeric ID; an `@username` target is
+refused locally. `approve` takes an optional `send_date` in the future, at most 30 days ahead, and `decline` an
+optional `comment` of up to 128 characters for the creator. No price is ever sent.
 
 `telegram.members.promote` (`update`) requires a `tools` list and sets the complete `rights` object of an
 existing member the way `restrict` sets permissions; all `false` demotes. Membership is checked with
@@ -108,10 +114,10 @@ Telegram's fixed actions for about five seconds.
 
 ## Forum topics
 
-`telegram.topics.create` (`create`, never repeated after an unclear result) creates a forum topic with a `name`
-and optionally an `icon_color` from Telegram's fixed list. `telegram.topics.edit`, `telegram.topics.close`,
-`telegram.topics.reopen`, and `telegram.topics.unpinall` (`update`) require exactly one of `message_thread_id`
-and `general: true`, which fixes the method. Editing needs a `name` or an `icon_custom_emoji_id`, a value
+`telegram.topics.create` (`create`) creates a forum topic with a `name` and optionally an `icon_color` from
+Telegram's fixed list. `telegram.topics.edit`, `telegram.topics.close`, `telegram.topics.reopen`, and
+`telegram.topics.unpinall` (`update`) require exactly one of `message_thread_id` and `general: true`, which fixes
+the method. Editing needs a `name` or an `icon_custom_emoji_id`, a value
 `telegram.topics.iconstickers` lists, and an empty one removes the icon; the General topic is only renamed.
 Reopening the General topic also unhides it; `telegram.topics.hidegeneral` hides and closes it, and
 `telegram.topics.unhidegeneral` shows it again. `telegram.topics.unpinall` unpins all messages of a topic, and
@@ -260,7 +266,7 @@ are required and follow the rules above; the options are those of the other medi
 never part of an album. Its result `file_ref` is that of the video.
 
 The result is `message_id`, `date`, and a `file_ref` of the sent file, for an album one such entry per message
-under `messages`. Each tool sends exactly one request and reports an unclear outcome instead of repeating it.
+under `messages`.
 
 ## Stickers
 
@@ -280,8 +286,7 @@ Deleting a set or removing a sticker is final and available only through a tools
 `telegram.stickers.setemojilist`, `telegram.stickers.setkeywords`, `telegram.stickers.setmaskposition`,
 `telegram.stickersets.settitle`, `telegram.stickersets.setthumbnail`, and
 `telegram.stickersets.setcustomemojithumbnail` follow the same rules; a thumbnail comes only from a local file in
-a released directory, and an omitted mask position or thumbnail or an empty keyword list removes the value. Each
-changing tool sends one request and reports an unclear outcome instead of repeating it.
+a released directory, and an omitted mask position or thumbnail or an empty keyword list removes the value.
 
 ## Setup profiles
 
@@ -293,6 +298,5 @@ chat, each one after confirmation. The profile `read` ticks `[read]`, `[telegram
 `telegram.pins.pin`, and `telegram.pins.unpin`; the profile `media` ticks `create` and the nine media send
 tools; the profile `moderation` ticks `update` and `telegram.members.unban`; the profile `chat-admin`
 ticks `update`, `telegram.chats.settitle`, `telegram.chats.setdescription`, and `telegram.chats.setphoto`.
-Every other Telegram tool is in no profile. A profile is a visible starting selection, not a role: only the
-ticked `permissions` and `tools` are saved, every tick can be changed before saving, and a saved connection
-never follows a profile.
+Every other Telegram tool is in no profile. A profile is only a visible starting selection: every tick can be
+changed before saving, and a saved connection never follows a profile.
