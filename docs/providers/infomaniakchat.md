@@ -12,13 +12,12 @@ updated: 2026-10-11
 
 # Infomaniak kChat
 
-Infomaniak kChat is Infomaniak's Mattermost-compatible team chat product. This provider binds one kChat
-instance and one or more of its teams, optionally narrowed to specific channels, and reads and changes
-channels and their members, direct and group channels, messages, threads, the threads the token follows,
-read state, reactions, pins, flags, attachments, users, the own sidebar categories, channel notifications,
-webhooks, and slash commands through the instance's own `/api/v4/...` REST surface; an instance-wide
-connection also reaches bot accounts. kChat renders Markdown and mentions such as `@channel` in a message;
-Qatlas sends the text as written.
+kChat is Infomaniak's Mattermost-compatible team chat product. This provider binds one kChat instance and one
+or more of its teams, optionally narrowed to channels, and reads and changes channels and their members,
+direct and group channels, messages, threads, followed threads, read state, reactions, pins, flags,
+attachments, users, the own sidebar categories, channel notifications, webhooks, and slash commands through
+the instance's `/api/v4/...` REST API; an instance-wide connection also reaches bot accounts. kChat renders
+Markdown and mentions such as `@channel` in a message; Qatlas sends the text as written.
 
 ## Configuration
 
@@ -132,7 +131,7 @@ inside the allow-list and never direct or group channels, sends one request, and
 outside that set, including a file hit without a `channel_id` and a thread whose root is deleted. Because the
 set comes from the token's own channels, a public channel the token has not joined yields no hit.
 
-The `bots` tools and `emoji.list` need an instance-wide connection: all token teams bound, no `channel/`
+The `bots` and `emoji` tools need an instance-wide connection: all token teams bound, no `channel/`
 target. A channel target refuses before any secret is read; otherwise each call reads `/api/v4/users/me/teams`
 and refuses, naming no team, on an unbound, empty, or unreadable answer, so a later-joined team locks them.
 
@@ -153,7 +152,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
 | `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
 | `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*`, `commands.*` |
-| `administration` | `emoji.list` | | `bots.list`, `.get`, `.update`, `.disable`, `.enable` |
+| `administration` | `emoji.list` | `emoji.create` (reads a local file) | `bots.list`, `.get`, `.update`, `.disable`, `.enable`, `emoji.delete` |
 
 The reads need no confirmation; every other tool always does. The tools of the last column are in no profile
 and offered only to a connection whose tools list names them; the role tools alter rights, and
@@ -162,7 +161,7 @@ and offered only to a connection whose tools list names them; the role tools alt
 The terminal editor starts a new connection on the setup profile `read` (all read tools). `messaging` adds
 the opens, sends, edits, pins, flags, reminders, read marks, uploads, reactions, thread following, category
 and notification changes, and the own status tools; `channel-admin` adds `channels.create`, `.update`,
-and `channelmembers.add`. `profile.update`, the integration tools, and the bot tools are in no profile.
+and `channelmembers.add`. `profile.update`, the integration, bot, and emoji-writing tools are in no profile.
 
 Behaviour beyond the schemas:
 
@@ -176,8 +175,7 @@ Behaviour beyond the schemas:
 - `status.set`, `customstatus.set`, `.clear`, `profile.update`, reactions, flags, categories, notifications,
   and thread following always address the token's own user, read from `GET /api/v4/users/me` or `users/me` in
   the path and never from an argument; the status and profile act for it in every team of the instance (for
-  the bot with a bot token). `profile.update` sends only `nickname`, `first_name`, `last_name`, and
-  `position`.
+  the bot with a bot token). `profile.update` sends only `nickname`, `first_name`, `last_name`, `position`.
 - `categories.update` changes only the `display_name` of a custom category and its reachable `channel_ids`;
   other properties are written back as read, and channels the connection cannot reach stay in the category,
   after the given ones. System categories accept only `channel_ids`; `categories.create` and `.delete` handle
@@ -201,6 +199,9 @@ Behaviour beyond the schemas:
   writes the object back as read, no token ever appears, and a callback URL only as scheme and host.
 - The `bots` tools return a fixed field set without any token; `bots.update` sends only the given fields of
   `username`, `display_name`, `description`; `.disable` stops the bot's integrations at once.
+- `emoji.create` takes a `name` and a released local PNG, GIF, or JPEG of up to 1 MiB, checked before any
+  secret is read. Its multipart body holds `image` and `emoji` (JSON `name` and `creator_id`, the token's own
+  user from `users/me`); that format is not proven live, so a wrong one is a `provider-error`.
 - A search term may use kChat's `from:`, `in:`, and `ext:` syntax; the reachable-channel filter applies
   afterwards. The term is never part of an error.
 - Users are output through a fixed field allow-list; `email` only when kChat reports one to the token. Roles,
@@ -232,11 +233,10 @@ Every list is bounded and paginated, and Qatlas never follows a further page on 
 
 ## Confirmation and unclear results
 
-All confirmed tools require confirmation in their own request and change kChat with exactly one request,
-sent after the binding reads, never repeated automatically. An answer that does not match what was
-addressed, such as another post or thread or a missing `OK` status, is an unreadable answer. A failure whose
-request may nonetheless have reached kChat, such as a timeout, a reset, or a 5xx response, says so in its
-message; only the caller decides whether to repeat it.
+All confirmed tools require confirmation in their own request and change kChat with exactly one request, sent
+after the binding reads, never repeated automatically. An answer that does not match what was addressed, such
+as another post or thread or a missing `OK` status, is an unreadable answer. A failure whose request may have
+reached kChat, such as a timeout, a reset, or a 5xx response, says so; only the caller may repeat it.
 
 ## Errors
 
@@ -253,9 +253,8 @@ Errors keep stable classes and never carry the token, a message's text, or a raw
 | `invalid-provider-response` | the answer was unreadable, too large, or malformed |
 | `provider-error` | every other rejection, including a redirect on an endpoint that must not answer with one |
 
-Every refusal described under [Scope](#scope), and every argument outside its fixed set, is an invalid
-request, never a provider error. It names no refused target or hook ID and carries no message text into an
-error or a log.
+Every refusal under [Scope](#scope), and every argument outside its fixed set, is an invalid request, never a
+provider error. It names no refused target or hook ID and carries no message text into an error or a log.
 
 ## Untrusted data
 
@@ -264,15 +263,15 @@ it and never renders it, follows a link in it, or executes anything derived from
 
 ## Boundary
 
-This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV are separate Infomaniak
-products with their own authentication, none of them the token this provider uses; see the `infomaniakdrive`
-provider's documentation for why each is its own sibling provider. Within kChat, this provider offers no team
-creation, change, or deletion, no adding or removing of team members, no invitation, no permanent deletion,
-move, scheme, or moderation change of a channel, no membership change of a direct or group channel, no change
-of another user or of other profile fields, no profile picture, no preview or thumbnail, no custom emoji
-image, creation, or deletion, no removal of another user's reaction, no read state of another user, no new
-webhook, command, bot, or bot token, no command execution, and no change of a webhook or command beyond its
-texts. An edit changes only a message's text, never its attachments, pin state, or properties.
+This provider reaches kChat alone. Infomaniak kDrive, Mail, and CalDAV/CardDAV are separate products with
+their own authentication, not this token; see the `infomaniakdrive` provider's documentation for why each is
+its own sibling provider. Within kChat, this provider offers no team creation, change, or deletion, no adding
+or removing of team members, no invitation, no permanent deletion, move, scheme, or moderation change of a
+channel, no membership change of a direct or group channel, no change of another user or of other profile
+fields, no profile picture, no preview or thumbnail, no custom emoji image, no removal of another user's
+reaction, no read state of another user, no new webhook, command, bot, or bot token, no command execution, and
+no change of a webhook or command beyond its texts. An edit changes only a message's text, never its
+attachments, pin state, or properties.
 
 ## Live test scenario
 
@@ -292,8 +291,9 @@ A live test against a real kChat instance checks, in order:
   and a future read mark are refused; `flagged.list` shows kChat's answer shape; a reminder fires on time.
 - Webhooks and slash commands list without those of other teams or outside the allow-list, channelless
   outgoing webhooks included; a disposable one changes its texts only, then is deleted.
-- Bot tools and `emoji.list` are refused with a channel target or an unbound token team; otherwise both list;
-  a bot is renamed, changes only its description (with or without `username`), and is disabled and enabled.
+- Bot and emoji tools are refused with a channel target or an unbound token team; `bots.list` and `emoji.list`
+  list; a bot is renamed, changes only its description (with or without `username`), and is disabled and
+  enabled; an emoji is created from a PNG, listed, and deleted, which confirms the multipart format.
 - Status, custom status, and profile changes affect only the token's own user and keep other fields; a user
   only in another team is refused by `users.get` and `users.status` and absent from list and search.
 - A custom category is created, filled, renamed, and deleted; channels outside the allow-list stay in it;

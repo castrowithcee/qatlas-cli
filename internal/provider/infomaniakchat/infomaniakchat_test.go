@@ -247,6 +247,19 @@ func coreConfig() *config.Config {
 			// "emojiread" has no tools list, as a read profile gives it, and binds only one of two token teams.
 			"emojiread": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead}},
+			// The emoji connections: "emojiadm" binds both token teams and lists the write tools, "emojiadmch" adds
+			// a channel target, "emojiadm1" binds one of two token teams, "emojinotool" lists no tools.
+			"emojiadm": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionDelete},
+				Tools:       []string{emojiCreate.ID, emojiDelete.ID}},
+			"emojiadmch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionDelete},
+				Tools:       []string{emojiCreate.ID, emojiDelete.ID}},
+			"emojiadm1": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionDelete},
+				Tools:       []string{emojiCreate.ID, emojiDelete.ID}},
+			"emojinotool": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionDelete}},
 			"botno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
 			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
@@ -314,8 +327,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 82 {
-		t.Fatalf("tools = %+v, want 82", metadata.Tools)
+	if len(metadata.Tools) != 84 {
+		t.Fatalf("tools = %+v, want 84", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -342,7 +355,7 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 	if !has("read", emojiList.ID) || has("messaging", emojiList.ID) || has("channel-admin", emojiList.ID) {
 		t.Fatalf("profiles = %+v", profiles)
 	}
-	for _, id := range botToolIDs {
+	for _, id := range append([]string{emojiCreate.ID, emojiDelete.ID}, botToolIDs...) {
 		for profile := range profiles {
 			if has(profile, id) {
 				t.Fatalf("%s is in profile %s", id, profile)
