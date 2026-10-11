@@ -652,9 +652,9 @@ func TestHandoverToASuccessor(t *testing.T) {
 	}
 }
 
-// A process whose own program an update replaced refuses every client; it answers replaced, which still
-// counts as the refusal of a program where nothing takes the vault over.
-func TestServerAnswersReplacedOnceItsProgramIsReplaced(t *testing.T) {
+// A process whose own program was replaced, with no handover prepared or running, locks itself at the next
+// client contact: the client is told it is locked at once, the socket is gone, and the secrets are overwritten.
+func TestServerLocksItselfOnceItsProgramIsReplacedWithoutHandover(t *testing.T) {
 	path := socketIn(t)
 	l, err := Listen(path)
 	if err != nil {
@@ -662,31 +662,75 @@ func TestServerAnswersReplacedOnceItsProgramIsReplaced(t *testing.T) {
 	}
 	s := NewServer(testKey, testSecrets(), testBindings())
 	s.Verify = refuse
-	s.ownProgram = func() (string, bool) { return "/opt/qatlas/bin/qatlas", true }
-	serve(t, s, l)
+	replaced := false
+	s.ownProgram = func() (string, bool) { return "/opt/qatlas/bin/qatlas", replaced }
+	held := s.secrets["wiki-reader"]["token"]
+	served := serve(t, s, l)
 	var attempts atomic.Int32
 	c := NewClient(path, testRecipient)
 	c.Verify = func(net.Conn) error {
 		attempts.Add(1)
 		return nil
 	}
-	began := time.Now()
-	_, _, err = c.Get(context.Background(), "wiki-reader", "token", *testScope())
-	if !errors.Is(err, ErrReplaced) || !errors.Is(err, ErrProgramRefused) {
-		t.Fatalf("Get() from a replaced process error = %v, want ErrReplaced", err)
-	}
-	// Without a successor the client gives up after about two seconds of asking again.
-	if took := time.Since(began); attempts.Load() < 2 || took > replacedLimit+time.Second {
-		t.Fatalf("Get() asked %d times in %v, want it asked again within %v", attempts.Load(), took, replacedLimit)
-	}
 
-	// Any other refusal is final at once.
-	s.ownProgram = func() (string, bool) { return "", false }
-	attempts.Store(0)
+	// A refusal while the program is in place is final at once and leaves the server running.
 	if _, _, err := c.Get(context.Background(), "wiki-reader", "token", *testScope()); !errors.Is(err, ErrProgramRefused) ||
-		errors.Is(err, ErrReplaced) || attempts.Load() != 1 {
+		errors.Is(err, ErrReplaced) || attempts.Load() != 1 || s.stopping() {
 		t.Fatalf("Get() refused = %v after %d attempts, want one refusal", err, attempts.Load())
 	}
+
+	s.mu.Lock()
+	replaced = true
+	s.mu.Unlock()
+	attempts.Store(0)
+	began := time.Now()
+	_, _, err = c.Get(context.Background(), "wiki-reader", "token", *testScope())
+	if !errors.Is(err, ErrNotRunning) || attempts.Load() != 1 || time.Since(began) > replacedLimit {
+		t.Fatalf("Get() from a replaced process = %v after %d attempts, want ErrNotRunning at once", err, attempts.Load())
+	}
+	waitServed(t, served)
+	if string(held) != strings.Repeat("\x00", len(held)) {
+		t.Fatalf("the secret was not overwritten: %q", held)
+	}
+	if _, _, err := c.Get(context.Background(), "wiki-reader", "token", *testScope()); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("Get() after the lock = %v, want ErrNotRunning", err)
+	}
+}
+
+// A program replaced while a handover is prepared is not a reason to lock: a client that arrives before the
+// commit is answered replaced and asked again, and lands at the successor.
+func TestServerKeepsReplacedWhileAHandoverIsPrepared(t *testing.T) {
+	f := newHandoverFixture(t)
+	f.server.Verify = func(net.Conn) error {
+		if f.replaced.Load() {
+			return ErrRefused
+		}
+		return nil
+	}
+	h := f.prepare()
+	f.replaceWithRelease()
+	c, attempts := f.countingClient()
+	type got struct {
+		value string
+		err   error
+	}
+	result := make(chan got, 1)
+	go func() {
+		value, _, err := c.Get(context.Background(), "gh-a", "user", f.scope)
+		result <- got{value, err}
+	}()
+	waitUntil(t, "the request was answered replaced and asked again", func() bool { return attempts.Load() >= 2 })
+	if f.server.stopping() {
+		t.Fatalf("the server locked itself while a handover was prepared")
+	}
+	if _, err := h.Commit(context.Background()); err != nil {
+		t.Fatalf("Commit() = %v", err)
+	}
+	r := <-result
+	if r.err != nil || r.value != "synthetic-value" {
+		t.Fatalf("Get() across the handover = %q, %v, want the successor's answer", r.value, r.err)
+	}
+	waitServed(t, f.served)
 }
 
 // A lock that reaches the old process after the commit is answered replaced and asked again, which locks the
