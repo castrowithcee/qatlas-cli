@@ -83,8 +83,15 @@ func validateAt(schema map[string]json.RawMessage, value any, path string, input
 			}
 		}
 		additional := true
+		var extra map[string]json.RawMessage
 		if raw := schema["additionalProperties"]; len(raw) > 0 {
-			_ = json.Unmarshal(raw, &additional)
+			if json.Unmarshal(raw, &additional) != nil {
+				additional = true
+				// A schema for the other members is held to on input only.
+				if input && json.Unmarshal(raw, &extra) != nil {
+					return fmt.Errorf("schema at %s has invalid additionalProperties", path)
+				}
+			}
 		}
 		if input {
 			if raw := schema["minProperties"]; len(raw) > 0 {
@@ -128,6 +135,11 @@ func validateAt(schema map[string]json.RawMessage, value any, path string, input
 			child := value[name]
 			raw, ok := properties[name]
 			if !ok {
+				if extra != nil {
+					if err := validateAt(extra, child, path+"."+name, input); err != nil {
+						return err
+					}
+				}
 				continue
 			}
 			var childSchema map[string]json.RawMessage
@@ -223,7 +235,70 @@ func validateAt(schema map[string]json.RawMessage, value any, path string, input
 			}
 		}
 	}
+	if raw := schema["anyOf"]; input && len(raw) > 0 {
+		return validateAnyOf(raw, value, path)
+	}
 	return nil
+}
+
+// validateAnyOf accepts value as soon as one branch does. Otherwise it names the failure the way a reader
+// can act on it: the allowed types when no branch has the value's type, the one branch of its type, or the
+// members of which one is required.
+func validateAnyOf(raw json.RawMessage, value any, path string) error {
+	var branches []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &branches); err != nil || len(branches) == 0 {
+		return fmt.Errorf("schema at %s has an invalid anyOf", path)
+	}
+	var errs []error
+	var types, requiredPaths []string
+	onlyRequired, typeMatch := true, -1
+	for i, branch := range branches {
+		err := validateAt(branch, value, path, true)
+		if err == nil {
+			return nil
+		}
+		errs = append(errs, err)
+
+		var names []string
+		if len(branch) != 1 || json.Unmarshal(branch["required"], &names) != nil {
+			onlyRequired = false
+		}
+		for _, name := range names {
+			if !contains(requiredPaths, path+"."+name) {
+				requiredPaths = append(requiredPaths, path+"."+name)
+			}
+		}
+
+		var kind string
+		if json.Unmarshal(branch["type"], &kind) == nil && kind != "" {
+			if !contains(types, kind) {
+				types = append(types, kind)
+			}
+			if typeMatch < 0 && isType(kind, value) {
+				typeMatch = i
+			}
+		}
+	}
+	switch {
+	case onlyRequired:
+		return fmt.Errorf("%s is required", joinOr(requiredPaths))
+	case len(types) > 0 && typeMatch < 0:
+		return fmt.Errorf("%s must be %s", path, joinOr(types))
+	case typeMatch >= 0:
+		return errs[typeMatch]
+	}
+	return errs[0]
+}
+
+// joinOr lists words in English: "a or b", "a, b, or c".
+func joinOr(words []string) string {
+	switch len(words) {
+	case 1:
+		return words[0]
+	case 2:
+		return words[0] + " or " + words[1]
+	}
+	return strings.Join(words[:len(words)-1], ", ") + ", or " + words[len(words)-1]
 }
 
 // equalityKey encodes a decoded JSON value so that equal JSON values yield equal keys. Numbers are
@@ -398,6 +473,7 @@ func requiredArguments(d capability.Descriptor) []string {
 // schemaNode is the part of a JSON schema the compact contract reads. A bound that is absent stays empty.
 type schemaNode struct {
 	Type          string                 `json:"type"`
+	AnyOf         []*schemaNode          `json:"anyOf"`
 	Description   string                 `json:"description"`
 	Enum          []json.RawMessage      `json:"enum"`
 	Form          string                 `json:"x-form"`
@@ -478,10 +554,27 @@ func (n schemaNode) argumentRows(rows []ArgumentRow, key, path, description stri
 	return rows
 }
 
-// typeName is the schema type, with [] for an array of that type, and any where the schema names none.
+// typeName is the schema type, with [] for an array of that type, the types of the branches separated by |
+// for a union, and any where the schema names none.
 func (n schemaNode) typeName() string {
 	if n.Type == "array" && n.Items != nil {
-		return n.Items.typeName() + "[]"
+		item := n.Items.typeName()
+		if strings.Contains(item, "|") {
+			item = "(" + item + ")"
+		}
+		return item + "[]"
+	}
+	if n.Type == "" && len(n.AnyOf) > 0 {
+		var names []string
+		for _, branch := range n.AnyOf {
+			if branch == nil || branch.typeName() == "any" {
+				return "any"
+			}
+			if name := branch.typeName(); !contains(names, name) {
+				names = append(names, name)
+			}
+		}
+		return strings.Join(names, "|")
 	}
 	if n.Type == "" {
 		return "any"
