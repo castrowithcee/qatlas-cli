@@ -316,7 +316,7 @@ func (c *Client) CreateView(ctx context.Context, change *viewChange) (*ViewSumma
 // UpdateView reads the view once, then sends exactly one PATCH. Only custom views change.
 func (c *Client) UpdateView(ctx context.Context, change *viewChange) (*ViewSummary, error) {
 	const op = "update view"
-	current, err := c.readView(ctx, op, change.id)
+	current, err := c.readView(ctx, op, change.id, viewStatusTexts)
 	if err != nil {
 		return nil, err
 	}
