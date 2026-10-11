@@ -177,11 +177,11 @@ func (m *Model) adminAuthView() string {
 	a := m.adminAuth
 	title := "Admin passphrase needed to save"
 	hint := m.adminSessionHint()
-	keys := "enter continue · esc cancel, nothing is saved"
+	keys := "enter ok · esc cancel, nothing saved"
 	if a.locked {
 		title = "Unlock vault to continue"
-		hint = "unlocks the vault and admin mode, then continues; other windows are unaffected"
-		keys = "enter unlock and continue · esc cancel, nothing is saved"
+		hint = "unlocks the vault and admin mode here only"
+		keys = "enter unlock · esc cancel, nothing saved"
 	}
 
 	var b strings.Builder
@@ -197,11 +197,10 @@ func (m *Model) adminAuthView() string {
 func (m *Model) adminSessionHint() string {
 	timeout := m.cfg.VaultAdminTimeout()
 	if timeout <= 0 {
-		return "vault.admin_timeout is 0: this asks again on the very next change; other windows are unaffected"
+		return "vault.admin_timeout is 0: asks again on every change"
 	}
 	minutes := int(timeout.Round(time.Minute) / time.Minute)
-	return fmt.Sprintf("this unlocks admin mode for this window until %dm idle; other windows are unaffected",
-		minutes)
+	return fmt.Sprintf("unlocks admin mode here until %dm idle", minutes)
 }
 
 // startAdminSession begins, or renews, this window's admin session once a passphrase just proved it: through
