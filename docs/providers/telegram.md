@@ -224,6 +224,12 @@ lowercase letters. `telegram.menubutton.get` (`read`) shows only `type` and `tex
 `telegram.menubutton.set` (`update`) sets `commands` or `default`, never a web app. Both address the default
 button or, with a bound `chat` given by numeric ID, that private chat. All five need the `bot` target.
 
+`telegram.profile.setphoto` (`update`) replaces the bot's profile photo with a static JPEG from a `local_path` in
+a directory released for reading (`files`), up to 10 MB; `telegram.profile.removephoto` (`delete`, `tools` list)
+removes it. `telegram.defaultadminrights.get` (`read`) shows the administrator rights the bot requests when added,
+and `telegram.defaultadminrights.set` (`update`, `tools` list) replaces them; both take `for_channels`, and `set`
+requires every right of the Bot API explicitly. All four need the `bot` target.
+
 ## Files
 
 `telegram.files.get` (`read`) returns the size and `file_unique_id` of one file; `telegram.files.download`
