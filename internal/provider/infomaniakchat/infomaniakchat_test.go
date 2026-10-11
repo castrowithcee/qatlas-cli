@@ -229,6 +229,16 @@ func coreConfig() *config.Config {
 				Tools:       webhookToolIDs},
 			"hookno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate, config.PermissionDelete}},
+			// The bot connections: "botall" binds both teams of the token, "botone" only teamA, "botch" adds a
+			// channel target, "botno" holds the permissions without listing the tools.
+			"botall": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: botToolIDs},
+			"botone": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: botToolIDs},
+			"botch": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB, "channel/" + chanA},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}, Tools: botToolIDs},
+			"botno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA, "team/" + teamB},
+				Permissions: []config.Permission{config.PermissionRead, config.PermissionUpdate}},
 			"memberno": {Service: "kc", Credential: "kc-reader", Targets: []string{"team/" + teamA},
 				Permissions: []config.Permission{config.PermissionRead, config.PermissionDelete, config.PermissionUpdate}},
 		},
@@ -294,8 +304,8 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		len(metadata.Target.Kinds) != 2 {
 		t.Fatalf("metadata = %+v", metadata)
 	}
-	if len(metadata.Tools) != 68 {
-		t.Fatalf("tools = %+v, want 68", metadata.Tools)
+	if len(metadata.Tools) != 71 {
+		t.Fatalf("tools = %+v, want 71", metadata.Tools)
 	}
 	profiles := map[string][]string{}
 	for _, profile := range metadata.Profiles {
@@ -364,6 +374,11 @@ func TestRegisterPublishesMetadataAndTools(t *testing.T) {
 		}
 		if has(id, messagesDelete.ID) || has(id, reactionsRemove.ID) {
 			t.Fatalf("profile %s selects a delete tool", id)
+		}
+		for _, bot := range botToolIDs {
+			if has(id, bot) {
+				t.Fatalf("profile %s selects the bot tool %s", id, bot)
+			}
 		}
 		for _, hook := range hookTools {
 			if has(id, hook.ID) {
