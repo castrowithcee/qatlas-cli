@@ -228,7 +228,7 @@ func (m *Model) vaultUnlockPromptView() string {
 func (m *Model) vaultUnlockHint() string {
 	timeout := m.cfg.VaultAdminTimeout()
 	if timeout <= 0 {
-		return "vault.admin_timeout is 0: this asks again on the very next change; other windows are unaffected"
+		return m.adminSessionHint()
 	}
 	minutes := int(timeout.Round(time.Minute) / time.Minute)
 	return fmt.Sprintf("this also starts admin mode for this window, until %dm idle", minutes)

@@ -556,8 +556,7 @@ func (m *Model) beginVaultSecret(credential, role, value string) tea.Cmd {
 	}
 	m.openVaultOffer(
 		"Set a passphrase for the vault?",
-		"this is the vault's very first secret; a passphrase encrypts it, typed masked and twice, or "+
-			"leave this empty and press enter to keep the vault unencrypted",
+		vaultFirstSecretHint,
 		true, true,
 		func(offer vault.PassphraseFunc) tea.Cmd {
 			m.screen = screenForm
@@ -619,6 +618,9 @@ func (m *Model) removeVaultSecret(credential, role string) tea.Cmd {
 	}
 }
 
+// vaultFirstSecretHint explains the optional passphrase offer before the vault's very first secret.
+const vaultFirstSecretHint = "type it twice to encrypt; enter on empty keeps it unencrypted"
+
 // vaultOfferView draws a masked vault passphrase prompt, in the pattern of the masked secret prompt: a
 // title, the masked line, an explanation, and a footer of enter and esc. It has two shapes, the first entry
 // (title and hint of its own) and its confirmation (always worded the same way), told apart by
@@ -635,7 +637,7 @@ func (m *Model) vaultOfferView() string {
 		b.WriteString(m.inputLine("  ", o.input) + "\n")
 		b.WriteString(m.indented("type it again to confirm it") + "\n")
 	}
-	b.WriteString(m.keyHint("enter continue · esc cancel, nothing is saved"))
+	b.WriteString(m.keyHint("enter ok · esc cancel, nothing saved"))
 	return b.String()
 }
 
