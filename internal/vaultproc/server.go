@@ -246,11 +246,15 @@ func (s *Server) serveConn(conn net.Conn) {
 		verify = VerifyProgram
 	}
 	if verify(conn) != nil {
-		// A process whose own program an update replaced refuses every program, the new one included; it
-		// tells so, and the client finds the successor, if there is one, or ends up with the refusal.
+		// A process whose own program an update replaced refuses every program, the new one included. While a
+		// handover is prepared or running it tells so, and the client finds the successor; without one nothing
+		// will take the vault over, so the process locks itself rather than hold the secrets until it idles.
 		code := codeRefused
-		if _, replaced := s.ownProgram(); replaced {
+		switch s.programReplaced() {
+		case replacedHandover:
 			code = codeReplaced
+		case replacedLocked:
+			code = codeLocked
 		}
 		_ = writeMessage(conn, response{V: Version, Error: code})
 		return
@@ -303,6 +307,35 @@ func (s *Server) serveConn(conn net.Conn) {
 		s.stop()
 	}
 	_ = writeMessage(conn, resp)
+}
+
+// The outcomes of programReplaced.
+const (
+	replacedNot      = iota // the program is in place
+	replacedHandover        // replaced while a handover is prepared or committed
+	replacedLocked          // replaced with no handover: the server locked itself
+)
+
+// programReplaced tells whether the program this process runs was replaced, and locks the process if no
+// handover is prepared or committed that would take the vault over. The decision is made under the lock a
+// handover claim takes; stop runs after it, as it takes that lock itself.
+func (s *Server) programReplaced() int {
+	s.mu.Lock()
+	_, replaced := s.ownProgram()
+	handover := s.handingOver || s.pending != nil
+	logger := s.log
+	s.mu.Unlock()
+	switch {
+	case !replaced:
+		return replacedNot
+	case handover:
+		return replacedHandover
+	}
+	if !s.stopping() {
+		logDecision(logger, invokelog.Fields{Path: "cli", Operation: lockOperation, Result: "program-replaced"})
+	}
+	s.stop()
+	return replacedLocked
 }
 
 func (s *Server) requestTimeout() time.Duration {
