@@ -599,6 +599,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: filesUpload, Handler: capability.Handler(invokeFilesUpload)},
 		capability.Operation{Descriptor: vouchersAttach, Handler: capability.Handler(invokeVouchersAttach)},
 		capability.Operation{Descriptor: vouchersCreate, Handler: capability.Handler(invokeVouchersCreate)},
+		capability.Operation{Descriptor: vouchersBook, Handler: capability.Handler(invokeVouchersBook)},
+		capability.Operation{Descriptor: vouchersUpdate, Handler: capability.Handler(invokeVouchersUpdate)},
 	)
 }
 

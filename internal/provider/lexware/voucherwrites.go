@@ -18,14 +18,19 @@ import (
 const (
 	voucherMayExist = "; the voucher may have been created, check the voucher list before repeating it"
 
-	// voucherStatusUnchecked is the only status the tool offers: a voucher that still awaits review.
+	voucherChanged = "; the voucher may have been changed, read it before repeating the change"
+
+	// voucherStatusUnchecked is the status create records: a voucher that still awaits review.
 	voucherStatusUnchecked = "unchecked"
+	// voucherStatusOpen is the booked status. Lexware offers no way back through the API.
+	voucherStatusOpen = "open"
 
 	maxVoucherItems = 100
 	maxVoucherSum   = 1e10
 
 	// netVoucherMessage is the fixed refusal of a net voucher; Lexware forbids it for the status unchecked.
-	netVoucherMessage = "tax_type net is not available here: Lexware accepts net vouchers only as booked vouchers"
+	netVoucherMessage = "tax_type net is not available here: Lexware accepts net vouchers only as booked vouchers, " +
+		"use lexware.vouchers.book without id"
 )
 
 var voucherCreateRisk = capability.Risk{
@@ -52,6 +57,22 @@ const (
 		`"voucher_items":{"type":"array","minItems":1,"maxItems":100,"items":` + voucherItemSchema + `}`
 )
 
+// voucherWriteArguments lists the schema fields shared by create, book and update.
+func voucherWriteArguments(required bool, taxType string) []capability.Argument {
+	return []capability.Argument{
+		{Name: "type", Description: "salesinvoice, salescreditnote, purchaseinvoice or purchasecreditnote", Required: required},
+		{Name: "voucher_date", Description: "Voucher date as YYYY-MM-DD", Required: required},
+		{Name: "total_gross_amount", Description: "Total gross amount, 0 to 10000000000", Required: required},
+		{Name: "total_tax_amount", Description: "Total tax amount, 0 to 10000000000", Required: required},
+		{Name: "tax_type", Description: taxType, Required: required},
+		{Name: "voucher_items", Description: "1 to 100 positions, each with amount, tax_amount, tax_rate_percent (0 to 100) and category_id as a UUID", Required: required},
+		{Name: "voucher_number", Description: "Voucher number, up to 255 characters"},
+		{Name: "due_date", Description: "Date the payment is due as YYYY-MM-DD"},
+		{Name: "contact_id", Description: "Contact identifier as a UUID, as returned by lexware.contacts.list; exclusive with use_collective_contact"},
+		{Name: "use_collective_contact", Description: "true books the voucher to the collective contact; exclusive with contact_id"},
+	}
+}
+
 var vouchersCreate = capability.Descriptor{
 	ID: Provider + ".vouchers.create", Version: 1, Title: "Create a Lexware bookkeeping voucher to check",
 	Description: "Record one bookkeeping voucher with the status unchecked, so that it awaits review in Lexware Office. " +
@@ -64,18 +85,7 @@ var vouchersCreate = capability.Descriptor{
 		`},"required":["type","voucher_date","total_gross_amount","total_tax_amount","tax_type","voucher_items"],` +
 		`"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(articleWriteOutputSchema),
-	Arguments: []capability.Argument{
-		{Name: "type", Description: "salesinvoice, salescreditnote, purchaseinvoice or purchasecreditnote", Required: true},
-		{Name: "voucher_date", Description: "Voucher date as YYYY-MM-DD", Required: true},
-		{Name: "total_gross_amount", Description: "Total gross amount, 0 to 10000000000", Required: true},
-		{Name: "total_tax_amount", Description: "Total tax amount, 0 to 10000000000", Required: true},
-		{Name: "tax_type", Description: "gross; net is refused because Lexware allows it only for booked vouchers", Required: true},
-		{Name: "voucher_items", Description: "1 to 100 positions, each with amount, tax_amount, tax_rate_percent (0 to 100) and category_id as a UUID", Required: true},
-		{Name: "voucher_number", Description: "Voucher number, up to 255 characters"},
-		{Name: "due_date", Description: "Date the payment is due as YYYY-MM-DD"},
-		{Name: "contact_id", Description: "Contact identifier as a UUID, as returned by lexware.contacts.list; exclusive with use_collective_contact"},
-		{Name: "use_collective_contact", Description: "true books the voucher to the collective contact; exclusive with contact_id"},
-	},
+	Arguments:    voucherWriteArguments(true, "gross; net is refused because Lexware allows it only for booked vouchers"),
 	Fields: []capability.Field{
 		{Name: "id", Description: "Identifier of the voucher"},
 		{Name: "created_date", Description: "Creation timestamp reported by Lexware"},
@@ -124,7 +134,9 @@ func validDay(value string) bool {
 
 // validate re-checks the rules of the schema, because the handler is also reachable without it. It touches
 // neither the credential nor the network.
-func (v voucherInput) validate() error {
+//
+// A net voucher is refused for the status unchecked only: Lexware accepts it solely as a booked voucher.
+func (v voucherInput) validate(status string) error {
 	switch v.Type {
 	case "salesinvoice", "salescreditnote", "purchaseinvoice", "purchasecreditnote":
 	default:
@@ -133,9 +145,11 @@ func (v voucherInput) validate() error {
 	switch v.TaxType {
 	case "gross":
 	case "net":
-		return errors.New(netVoucherMessage)
+		if status == voucherStatusUnchecked {
+			return errors.New(netVoucherMessage)
+		}
 	default:
-		return errors.New("tax_type must be gross")
+		return errors.New("tax_type must be gross or net")
 	}
 	if n := len(v.VoucherNumber); n > 255 {
 		return errors.New("voucher_number is too long")
@@ -168,7 +182,7 @@ func (v voucherInput) validate() error {
 }
 
 // voucherPayload builds the provider object from the schema fields only. The status is a parameter so that
-// booking a voucher can reuse the mapping; the tool offers unchecked alone.
+// create (unchecked) and book (open) share the mapping.
 func voucherPayload(status string, v voucherInput) map[string]any {
 	items := make([]map[string]any, 0, len(v.VoucherItems))
 	for _, item := range v.VoucherItems {
@@ -201,7 +215,7 @@ func invokeVouchersCreate(ctx context.Context, resolved *config.Resolved, secret
 	if decoder.Decode(&input) != nil {
 		return nil, providerError(op, "the validated arguments could not be read")
 	}
-	if err := input.validate(); err != nil {
+	if err := input.validate(voucherStatusUnchecked); err != nil {
 		return nil, providerError(op, err.Error())
 	}
 	client, err := Open(ctx, resolved, secrets, red)
@@ -214,7 +228,7 @@ func invokeVouchersCreate(ctx context.Context, resolved *config.Resolved, secret
 // CreateVoucher posts one voucher with the status unchecked: exactly one request, never repeated.
 func (c *Client) CreateVoucher(ctx context.Context, input voucherInput) (*createResult, error) {
 	const op = "create voucher"
-	if err := input.validate(); err != nil {
+	if err := input.validate(voucherStatusUnchecked); err != nil {
 		return nil, providerError(op, err.Error())
 	}
 	return c.postObject(ctx, op, "/v1/vouchers", voucherPayload(voucherStatusUnchecked, input),

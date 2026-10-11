@@ -863,6 +863,23 @@ func conformanceArguments(d capability.Descriptor) (json.RawMessage, bool) {
 // is the first of a few common forms that fits its length and pattern; an operation whose input none of
 // them fits declares an example instead.
 func sampleValue(schema map[string]any) (any, bool) {
+	if branches, ok := schema["anyOf"].([]any); ok && len(branches) > 0 {
+		// The first branch satisfies the union; its keywords add to those beside the anyOf.
+		first, _ := branches[0].(map[string]any)
+		merged := map[string]any{}
+		for keyword, value := range schema {
+			merged[keyword] = value
+		}
+		delete(merged, "anyOf")
+		for keyword, value := range first {
+			if more, ok := value.([]any); ok && keyword == "required" {
+				existing, _ := merged[keyword].([]any)
+				value = append(append([]any{}, existing...), more...)
+			}
+			merged[keyword] = value
+		}
+		return sampleValue(merged)
+	}
 	if enum, ok := schema["enum"].([]any); ok && len(enum) > 0 {
 		return enum[0], true
 	}
