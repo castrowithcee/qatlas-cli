@@ -43,7 +43,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 			d.ID != sharesCreate.ID && d.ID != sharesUpdate.ID && d.ID != sharesDelete.ID && d.ID != commentsDelete.ID && d.ID != deckBoardsDelete.ID &&
 			d.ID != deckStacksDelete.ID && d.ID != talkMessagesDelete.ID && d.ID != deckCardsDelete.ID &&
 			d.ID != talkRoomsDelete.ID && d.ID != talkParticipantsRemove.ID && d.ID != talkParticipantsModerator.ID &&
-			d.ID != eventsDelete.ID {
+			d.ID != eventsDelete.ID && d.ID != calendarsDelete.ID {
 			if d.RequiresToolAllowList {
 				t.Errorf("%s requires a tools list", d.ID)
 			}
@@ -56,7 +56,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 			t.Errorf("%s = %+v", d.ID, d)
 		}
 	}
-	if found != 16 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
+	if found != 17 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
 		t.Fatalf("found = %d, versions = %d/%d", found, filesDelete.Version, foldersDelete.Version)
 	}
 	if !strings.Contains(foldersDelete.Description, "files_trashbin") || !strings.Contains(foldersDelete.Description, "together with everything") {
