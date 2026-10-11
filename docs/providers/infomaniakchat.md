@@ -95,6 +95,7 @@ Per tool family:
 - A `post_id` (`messages.thread`, `.get`, `.update`, `.delete`, `.pin`, `.unpin`, `.markunread`, and the
   `reactions` tools) is bound through its channel: Qatlas reads the post, refuses another or a deleted post,
   applies the allow-list to its channel, and runs the live check before anything is returned or sent.
+- `pins.list` binds its `channel_id` like every channel tool and drops posts kChat reports for another channel.
 - A reply confirms, by reading the named `root_id`, that the root post belongs to the same `channel_id`.
 - A `thread_id` (`threads.get`, `.follow`, `.unfollow`, `.markread`) is a root `post_id`: it is bound like
   one, must not be a reply, and its channel must be in the reachable set of the bound `team_id` described
@@ -198,9 +199,8 @@ Behaviour beyond the schemas:
 - The webhook tools, reads included, need a tools list because an incoming webhook's ID is the secret of its
   post URL; `hook_id` is redacted from every error, and `.update` writes the webhook back as read. An
   outgoing webhook's token is never decoded or sent, and a callback URL appears only as scheme and host.
-- The `bots` tools return only `user_id`, `username`, `display_name`, `description`, `owner_id`, and
-  `deleted`. `bots.update` sends only the given fields of `username` (3 to 22 lowercase letters, digits,
-  `.`, `-`, `_`), `display_name`, and `description`; creating bots and bot tokens are not offered.
+- The `bots` tools return a fixed field set without any token; `bots.update` sends only the given fields of
+  `username`, `display_name`, and `description`.
 - A search term may use kChat's `from:`, `in:`, and `ext:` syntax; the reachable-channel filter applies
   afterwards. The term is never part of an error.
 - Users are output through a fixed field allow-list; `email` only when kChat reports one to the token. Roles,
