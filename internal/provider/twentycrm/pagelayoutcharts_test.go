@@ -262,3 +262,183 @@ func TestPageLayoutWidgetsCreateChartInputSchemaHoldsTheSubset(t *testing.T) {
 		})
 	}
 }
+
+func chartUpdateArgs(chartType, field, operation, rest string) string {
+	if rest != "" {
+		rest = "," + rest
+	}
+	return `{"id":"` + layoutWidgetA + `","chart_type":"` + chartType + `","aggregate_field_id":"` + field +
+		`","aggregate_operation":"` + operation + `"` + rest + `}`
+}
+
+func chartUpdateAnswer(chartType string) string {
+	answer := widgetWire(layoutWidgetA, layoutTabID, "Pipeline", "GRAPH", metaObjID, wGrid)
+	return strings.Replace(answer, `"configuration":{"configurationType":"GRAPH"`,
+		`"configuration":{"configurationType":"`+chartType+`"`, 1)
+}
+
+func TestPageLayoutWidgetsUpdateChartSendsOneCompleteConfigurationForTheObjectOfTheWidget(t *testing.T) {
+	for name, tt := range map[string]struct {
+		chartType, args, configuration, extraBody string
+	}{
+		"aggregate": {chartAggregate, chartUpdateArgs(chartAggregate, flNumber, "SUM", ""),
+			`{"configurationType":"AGGREGATE_CHART","aggregateFieldMetadataId":"` + flNumber +
+				`","aggregateOperation":"SUM","displayDataLabel":true}`, ""},
+		"bar": {chartBar, chartUpdateArgs(chartBar, flText, "COUNT", `"group_by_field_id":"`+flSelect+`","bar_layout":"VERTICAL"`),
+			`{"configurationType":"BAR_CHART","aggregateFieldMetadataId":"` + flText + `","aggregateOperation":"COUNT",` +
+				`"primaryAxisGroupByFieldMetadataId":"` + flSelect + `","layout":"VERTICAL","displayDataLabel":false,` +
+				`"displayLegend":true}`, ""},
+		"line with a filter": {chartLine, chartUpdateArgs(chartLine, flNumber, "SUM", `"group_by_field_id":"`+flDate+
+			`","group_by_date_granularity":"MONTH","color":"blue","filters":[{"field_id":"`+flNumber+
+			`","operand":"GREATER_THAN_OR_EQUAL","number":10}]`),
+			`{"configurationType":"LINE_CHART","aggregateFieldMetadataId":"` + flNumber + `","aggregateOperation":"SUM",` +
+				`"primaryAxisGroupByFieldMetadataId":"` + flDate + `","primaryAxisDateGranularity":"MONTH",` +
+				`"color":"blue","displayDataLabel":false,"displayLegend":true,"filter":{"recordFilters":[{"id":` +
+				`"00000000-0000-4000-8000-000000000002","fieldMetadataId":"` + flNumber + `","operand":"GREATER_THAN_OR_EQUAL",` +
+				`"value":"10","displayValue":"10","type":"NUMBER","recordFilterGroupId":"` + chartGroupID +
+				`","positionInRecordFilterGroup":0}],"recordFilterGroups":[{"id":"` + chartGroupID +
+				`","logicalOperator":"AND"}]}}`, ""},
+		"pie": {chartPie, chartUpdateArgs(chartPie, flBool, "COUNT_TRUE", `"group_by_field_id":"`+flSelect+`","display_legend":false`),
+			`{"configurationType":"PIE_CHART","aggregateFieldMetadataId":"` + flBool + `","aggregateOperation":"COUNT_TRUE",` +
+				`"groupByFieldMetadataId":"` + flSelect + `","displayDataLabel":true,"displayLegend":false,` +
+				`"showCenterMetric":true,"hideEmptyCategory":false}`, ""},
+		"with title and position": {chartAggregate, strings.Replace(chartUpdateArgs(chartAggregate, flNumber, "SUM", ""), `{"id"`,
+			`{"title":"N","position":`+wPosition+`,"id"`, 1),
+			`{"configurationType":"AGGREGATE_CHART","aggregateFieldMetadataId":"` + flNumber +
+				`","aggregateOperation":"SUM","displayDataLabel":true}`, `"title":"N","position":` + wGrid + `,`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fixedChartIDs(t)
+			answer := chartUpdateAnswer(tt.chartType)
+			if tt.extraBody != "" {
+				answer = strings.Replace(answer, `"title":"Pipeline"`, `"title":"N"`, 1)
+			}
+			calls := serveWidgets(t, http.StatusOK, answer)
+			result, err := runColumn(invokePageLayoutWidgetsUpdate, tt.args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, _ := json.Marshal(result)
+			for _, canary := range []string{creatorCn, appCn, "applicationId", "configuration", "filter"} {
+				if strings.Contains(string(out), canary) {
+					t.Errorf("%s reached the output: %s", canary, out)
+				}
+			}
+			if !strings.Contains(string(out), `"type":"GRAPH"`) || !strings.Contains(string(out), `"chart_type":"`+tt.chartType+`"`) {
+				t.Errorf("result = %s", out)
+			}
+			body := `{` + tt.extraBody + `"configuration":` + tt.configuration + `}`
+			sent := columnWrites(calls)
+			if len(sent) != 1 || sent[0].Method != http.MethodPatch || sent[0].URI != pageLayoutWidgetsPath+"/"+layoutWidgetA ||
+				sent[0].Body != body {
+				t.Errorf("writes = %+v, want body %s", sent, body)
+			}
+			if len(*calls) != 5 || (*calls)[3].URI != metadataObjectsPath+"/"+metaObjID {
+				t.Errorf("widget, tab, layout, and the object of the widget are read first: %+v", *calls)
+			}
+		})
+	}
+}
+
+func TestPageLayoutWidgetsUpdateChartRefusesWithoutAWritingRequest(t *testing.T) {
+	bar := func(rest string) string {
+		return chartUpdateArgs(chartBar, flNumber, "SUM", `"group_by_field_id":"`+flSelect+`","bar_layout":"VERTICAL"`+rest)
+	}
+	filter := func(field, rest string) string {
+		return `"filters":[{"field_id":"` + field + `",` + rest + `}]`
+	}
+	forWidget := func(id, args string) string { return strings.Replace(args, layoutWidgetA, id, 1) }
+	for name, tt := range map[string]struct {
+		args  string
+		class provider.Class
+		text  string
+	}{
+		"aggregate with a group":   {chartUpdateArgs(chartAggregate, flNumber, "SUM", `"group_by_field_id":"`+flSelect+`"`), "", "chart_type needs"},
+		"bar without a layout":     {chartUpdateArgs(chartBar, flNumber, "SUM", `"group_by_field_id":"`+flSelect+`"`), "", "chart_type needs"},
+		"line without a group":     {chartUpdateArgs(chartLine, flNumber, "SUM", ""), "", "chart_type needs"},
+		"pie with a second group":  {chartUpdateArgs(chartPie, flNumber, "SUM", `"group_by_field_id":"`+flSelect+`","secondary_group_by_field_id":"`+flText+`"`), "", "chart_type needs"},
+		"chart type missing":       {`{"id":"` + layoutWidgetA + `","aggregate_field_id":"` + flNumber + `","aggregate_operation":"SUM"}`, "", "chart_type needs"},
+		"unknown chart type":       {chartUpdateArgs("GAUGE_CHART", flNumber, "SUM", ""), "", "chart_type"},
+		"object given":             {chartUpdateArgs(chartAggregate, flNumber, "SUM", `"object_id":"`+metaObjID+`"`), "", "object_id"},
+		"field of another object":  {chartUpdateArgs(chartAggregate, flOther, "COUNT", ""), "", "aggregate_field_id"},
+		"group of another object":  {chartUpdateArgs(chartPie, flNumber, "SUM", `"group_by_field_id":"`+flOther+`"`), "", "group_by_field_id"},
+		"operation not for type":   {chartUpdateArgs(chartAggregate, flText, "SUM", ""), "", "not offered"},
+		"operand not for the type": {chartUpdateArgs(chartAggregate, flNumber, "SUM", filter(flNumber, `"operand":"CONTAINS","text":"x"`)), "", "not supported for a field of type NUMBER"},
+		"option not in the schema": {chartUpdateArgs(chartAggregate, flNumber, "SUM", filter(flSelect, `"operand":"IS","options":["Z"]`)), "", "options of this field"},
+		"filter of another object": {chartUpdateArgs(chartAggregate, flNumber, "SUM", filter(flOther, `"operand":"IS_EMPTY"`)), "", "a filter field"},
+		"second equals first":      {bar(`,"secondary_group_by_field_id":"` + flSelect + `"`), "", "must differ"},
+		"rich text widget":         {forWidget(layoutWidgetD, chartUpdateArgs(chartAggregate, flNumber, "SUM", "")), "", "only for a chart widget"},
+		"table widget":             {forWidget(wWidgetTable, chartUpdateArgs(chartAggregate, flNumber, "SUM", "")), "", "only for a chart widget"},
+		"rich text with title":     {forWidget(layoutWidgetD, strings.Replace(chartUpdateArgs(chartAggregate, flNumber, "SUM", ""), `{"id"`, `{"title":"T","id"`, 1)), "", "only for a chart widget"},
+		"unknown widget":           {forWidget(wWidgetNone, chartUpdateArgs(chartAggregate, flNumber, "SUM", "")), provider.ClassNotFound, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := serveWidgets(t, http.StatusOK, chartUpdateAnswer(chartAggregate))
+			_, err := runColumn(invokePageLayoutWidgetsUpdate, tt.args)
+			if err == nil || len(columnWrites(calls)) != 0 {
+				t.Fatalf("err = %v, writes = %+v", err, columnWrites(calls))
+			}
+			if tt.class != "" && classOf(err) != tt.class {
+				t.Errorf("class = %q, err = %v", classOf(err), err)
+			}
+			if tt.class == "" && (!asInvalidOK(err) || !strings.Contains(err.Error(), tt.text)) {
+				t.Errorf("err = %v, want invalid-request with %q", err, tt.text)
+			}
+			if strings.Contains(err.Error(), bodyCanary) {
+				t.Errorf("provider text in the error: %v", err)
+			}
+		})
+	}
+}
+
+func TestPageLayoutWidgetsUpdateChartAnswerMustCarryTheRequestedChart(t *testing.T) {
+	for name, answer := range map[string]string{
+		"other chart":  chartUpdateAnswer(chartPie),
+		"no chart":     widgetWire(layoutWidgetA, layoutTabID, "Pipeline", "GRAPH", metaObjID, wGrid),
+		"other object": strings.Replace(chartUpdateAnswer(chartAggregate), metaObjID, metaOtherID, 1),
+		"not a graph":  widgetWire(layoutWidgetA, layoutTabID, "Pipeline", "STANDALONE_RICH_TEXT", metaObjID, wGrid),
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := serveWidgets(t, http.StatusOK, answer)
+			_, err := runColumn(invokePageLayoutWidgetsUpdate, chartUpdateArgs(chartAggregate, flNumber, "SUM", ""))
+			if classOf(err) != provider.ClassInvalidResponse || !strings.Contains(err.Error(), "before repeating") ||
+				len(columnWrites(calls)) != 1 {
+				t.Errorf("err = %v, writes = %d", err, len(columnWrites(calls)))
+			}
+		})
+	}
+}
+
+func TestPageLayoutWidgetsUpdateInputSchemaHoldsTheChartSubsetWithoutTheObject(t *testing.T) {
+	for name, tt := range map[string]struct {
+		args string
+		ok   bool
+	}{
+		"chart only":        {chartUpdateArgs(chartAggregate, flNumber, "SUM", ""), true},
+		"title only":        {`{"id":"` + layoutWidgetD + `","title":"T"}`, true},
+		"object":            {chartUpdateArgs(chartAggregate, flNumber, "SUM", `"object_id":"`+metaObjID+`"`), false},
+		"option beyond":     {chartUpdateArgs(chartAggregate, flNumber, "SUM", `"legend_position":"top"`), false},
+		"configuration":     {chartUpdateArgs(chartAggregate, flNumber, "SUM", `"configuration":{}`), false},
+		"type change":       {`{"id":"` + layoutWidgetD + `","type":"GRAPH","title":"T"}`, false},
+		"nothing but an id": {`{"id":"` + layoutWidgetD + `"}`, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := serveWidgets(t, http.StatusOK, chartUpdateAnswer(chartAggregate))
+			cfg := coreConfig()
+			all := []config.Permission{config.PermissionRead, config.PermissionCreate, config.PermissionUpdate, config.PermissionDelete}
+			cfg.Connections["crm-internal"] = config.Connection{Service: "crm-selfhosted", Credential: "crm-selfhosted-reader",
+				Permissions: all, Tools: []string{pagelayoutwidgetsUpdate.ID}}
+			stubLimiter(t, internalKey)
+			red := &redact.Redactor{}
+			core := application.New(registry(t), cfg, resolver(red), red)
+			_, err := core.Invoke(context.Background(), application.InvokeRequest{Operation: pagelayoutwidgetsUpdate.ID,
+				Connection: "crm-internal", Arguments: json.RawMessage(tt.args), Confirmed: true})
+			if !tt.ok && (err == nil || len(*calls) != 0) {
+				t.Errorf("err = %v, requests = %+v", err, *calls)
+			}
+			if tt.ok && len(columnWrites(calls)) > 1 {
+				t.Errorf("writes = %+v", columnWrites(calls))
+			}
+		})
+	}
+}

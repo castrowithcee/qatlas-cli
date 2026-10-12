@@ -88,6 +88,20 @@ var chartInputProperties = `"chart_type":` + enumSchema(chartTypes) + `,"object_
 	strings.Replace(chartFilterSchema, "OPERANDS", enumSchema(filterOperands), 1) +
 	`,"display_data_label":{"type":"boolean"},"display_legend":{"type":"boolean"},"color":` + enumSchema(chartColors)
 
+// chartUpdateInputProperties are the chart members of the update input schema: the object stays that of the widget.
+var chartUpdateInputProperties = strings.Replace(chartInputProperties, `"object_id":`+uuidSchema+`,`, "", 1)
+
+// chartUpdateArguments are the chart arguments of an update, without the object.
+var chartUpdateArguments = func() []capability.Argument {
+	var arguments []capability.Argument
+	for _, argument := range chartArguments {
+		if argument.Name != "object_id" {
+			arguments = append(arguments, argument)
+		}
+	}
+	return arguments
+}()
+
 var chartArguments = []capability.Argument{
 	{Name: "chart_type", Description: "Only for GRAPH and required there: AGGREGATE_CHART (one number), BAR_CHART, " +
 		"LINE_CHART, or PIE_CHART"},

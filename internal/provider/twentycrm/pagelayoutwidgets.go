@@ -42,10 +42,13 @@ const (
 	errWidgetMarkdown = "markdown must be 1 through 20000 characters without control characters other than line breaks and tabs"
 	errWidgetType     = "type must be STANDALONE_RICH_TEXT, RECORD_TABLE, or GRAPH; markdown belongs to " +
 		"STANDALONE_RICH_TEXT, view_id to RECORD_TABLE, and the chart arguments to GRAPH, and each type needs its own"
-	errWidgetUpdate    = "give a title, a position, or both; the position is changed as a whole"
-	errWidgetTabGrid   = "the tab is not a grid tab, so widgets cannot be placed in it by position"
-	errWidgetTabFull   = "this dashboard tab already holds the most widgets that can be read back"
-	errWidgetViewTable = "a table widget needs a view of its own: a custom table view of the whole workspace; standard " +
+	errWidgetUpdate    = "give a title, a position, chart arguments, or several of them; the position is changed as a whole"
+	errWidgetChartOnly = "chart arguments are only for a chart widget (GRAPH) whose object is known; the type of a " +
+		"widget cannot change"
+	errWidgetUpdateObject = "object_id cannot be given on an update: the chart keeps the object of the widget"
+	errWidgetTabGrid      = "the tab is not a grid tab, so widgets cannot be placed in it by position"
+	errWidgetTabFull      = "this dashboard tab already holds the most widgets that can be read back"
+	errWidgetViewTable    = "a table widget needs a view of its own: a custom table view of the whole workspace; standard " +
 		"views, index views, personal views, and widget views are refused"
 )
 
@@ -138,30 +141,39 @@ var pagelayoutwidgetsCreate = capability.Descriptor{
 
 var pagelayoutwidgetsUpdate = capability.Descriptor{
 	ID: Provider + ".pagelayoutwidgets.update", Version: 1, Title: "Update a widget of a Twenty CRM dashboard",
-	Description: "Change the title, the position, or both of one widget of a dashboard layout of the Twenty workspace " +
-		"of a connection; nothing else changes, and the position is changed as a whole. Widget, tab, and layout are " +
-		"read first; the layout must be a live dashboard layout. " + widgetWriteNote,
+	Description: "Change the title, the position, the chart, or any of them for one widget of a dashboard layout of the " +
+		"Twenty workspace of a connection; nothing else changes, and the position is changed as a whole. Widget, tab, " +
+		"and layout are read first; the layout must be a live dashboard layout. The chart arguments are only for a " +
+		"chart widget (GRAPH) and replace its whole chart configuration: give chart_type, aggregate field and " +
+		"operation, and everything else the chart should keep, as on twentycrm.pagelayoutwidgets.create; the object " +
+		"stays the one of the widget, whose schema is read first and needs the Twenty permission \"Data model\" too. " +
+		"The type of a widget cannot change. " + widgetWriteNote,
 	Tags:     []string{"twentycrm", "dashboards", "pagelayoutwidgets", "update"},
 	Risk:     pageLayoutWidgetUpdateRisk,
 	Provider: Provider, RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"id":` + uuidSchema + `,"title":{"type":"string",` +
-		`"minLength":1,"maxLength":100},"position":` + widgetGridPositionSchema + `},"required":["id"],` +
-		`"minProperties":2,"additionalProperties":false}`),
+		`"minLength":1,"maxLength":100},"position":` + widgetGridPositionSchema + `,` + chartUpdateInputProperties +
+		`},"required":["id"],"minProperties":2,"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(widgetResultSchema),
-	Arguments: []capability.Argument{
+	Arguments: append([]capability.Argument{
 		{Name: "id", Required: true, Description: "UUID of the widget, as returned by twentycrm.pagelayouts.get"},
 		{Name: "title", Description: "New title, 1 through 100 characters, without control characters"},
 		{Name: "position", Description: "New place in the grid, all four members together: row 0 through 99, column " +
 			"0 through 11, row_span 1 through 100, column_span 1 through 12, integers; column + column_span at most " +
 			"12 and row + row_span at most 100"},
-	},
+	}, chartUpdateArguments...),
 	Fields: []capability.Field{
 		{Name: "id", Description: "The widget"},
 		{Name: "tab_id", Description: "The dashboard tab that holds the widget"},
 		{Name: "title", Description: "Title of the widget, untrusted data"},
+		{Name: "chart_type", Description: "Type of a chart widget"},
 	},
 	Examples: []capability.Example{{Description: "Rename a widget",
-		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000","title":"Notes"}`)}},
+		Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000","title":"Notes"}`)},
+		{Description: "Turn a chart into a pie chart of the number of records per stage",
+			Arguments: json.RawMessage(`{"id":"123e4567-e89b-42d3-a456-426614174000","chart_type":"PIE_CHART",` +
+				`"aggregate_field_id":"123e4567-e89b-42d3-a456-426614174002","aggregate_operation":"COUNT",` +
+				`"group_by_field_id":"123e4567-e89b-42d3-a456-426614174003"}`)}},
 }
 
 // DashboardWidgetResult is the widget as the widget tools report it. It never carries content or configuration.
@@ -206,10 +218,14 @@ type pageLayoutWidgetCreate struct {
 	Configuration    any                `json:"configuration"`
 }
 
-// pageLayoutWidgetPatch is the whole body of a widget update: title and position, nothing else.
+// pageLayoutWidgetPatch is the whole body of a widget update: title, position, and the chart configuration.
+// Twenty replaces the configuration as a whole, so it is built from the chart arguments alone and never merged.
 type pageLayoutWidgetPatch struct {
-	Title    *string             `json:"title,omitempty"`
-	Position *widgetGridPosition `json:"position,omitempty"`
+	Title         *string             `json:"title,omitempty"`
+	Position      *widgetGridPosition `json:"position,omitempty"`
+	Configuration *chartConfiguration `json:"configuration,omitempty"`
+	// chart holds the checked-to-be-given chart arguments until the object schema of the widget is read.
+	chart *chartArgs
 }
 
 // pageLayoutWidgetWire is the positive projection of Twenty's widget: creator, application, and overrides are never
@@ -545,7 +561,8 @@ func (c *Client) readDashboardWidget(ctx context.Context, op, id string) (*pageL
 	return &wire, tab, nil
 }
 
-// UpdatePageLayoutWidget reads the widget, its tab, and the layout, then sends exactly one PATCH.
+// UpdatePageLayoutWidget reads the widget, its tab, and the layout, for a chart also the object schema of the
+// widget, then sends exactly one PATCH.
 func (c *Client) UpdatePageLayoutWidget(ctx context.Context, id string, patch pageLayoutWidgetPatch) (*DashboardWidgetResult, error) {
 	const op = "update dashboard widget"
 	wire, tab, err := c.readDashboardWidget(ctx, op, id)
@@ -556,12 +573,28 @@ func (c *Client) UpdatePageLayoutWidget(ctx context.Context, id string, patch pa
 	if patch.Position != nil && tab.layoutMode != "GRID" {
 		return nil, invalidRequest(errWidgetTabGrid)
 	}
+	want := wantedWidget{id: id, tabID: wire.PageLayoutTabID, typ: wire.Type, title: patch.Title, position: patch.Position}
+	if patch.chart != nil {
+		if wire.Type != widgetTypeGraph || wire.ObjectMetadataID == nil || !validUUID(*wire.ObjectMetadataID) {
+			return nil, invalidRequest(errWidgetChartOnly)
+		}
+		object, err := c.GetMetaObject(ctx, strings.ToLower(*wire.ObjectMetadataID))
+		if err != nil {
+			return nil, err
+		}
+		if !equalUUID(object.ID, *wire.ObjectMetadataID) || !isTrue(object.IsActive) || isTrue(object.IsSystem) {
+			return nil, invalidRequest(errChartObject)
+		}
+		if patch.Configuration, err = buildChartConfiguration(object, *patch.chart); err != nil {
+			return nil, err
+		}
+		want.objectID, want.chartType = strings.ToLower(object.ID), patch.Configuration.ConfigurationType
+	}
 	var answer json.RawMessage
 	if err := c.changeWith(ctx, op, pageLayoutWidgetUpdateUncertain, http.MethodPatch, path, patch, &answer); err != nil {
 		return nil, mapLayoutWritePermission(err)
 	}
-	updated, err := parseWidgetAnswer(op, answer, wantedWidget{id: id, tabID: wire.PageLayoutTabID, typ: wire.Type,
-		title: patch.Title, position: patch.Position})
+	updated, err := parseWidgetAnswer(op, answer, want)
 	if err != nil {
 		return nil, uncertainly(err, pageLayoutWidgetUpdateUncertain)
 	}
@@ -637,6 +670,7 @@ func invokePageLayoutWidgetsUpdate(ctx context.Context, resolved *config.Resolve
 		ID       string              `json:"id"`
 		Title    *string             `json:"title"`
 		Position *widgetPositionArgs `json:"position"`
+		chartArgs
 	}
 	if json.Unmarshal(raw, &args) != nil {
 		return nil, providerError("update dashboard widget", "the validated arguments could not be read")
@@ -644,10 +678,19 @@ func invokePageLayoutWidgetsUpdate(ctx context.Context, resolved *config.Resolve
 	if !validUUID(args.ID) {
 		return nil, invalidRequest("id must be a UUID")
 	}
-	if args.Title == nil && args.Position == nil {
+	if args.Title == nil && args.Position == nil && !args.given() {
 		return nil, invalidRequest(errWidgetUpdate)
 	}
+	if args.ObjectID != "" {
+		return nil, invalidRequest(errWidgetUpdateObject)
+	}
 	var patch pageLayoutWidgetPatch
+	if args.given() {
+		if args.ChartType == "" {
+			return nil, invalidRequest(errChartShape)
+		}
+		patch.chart = &args.chartArgs
+	}
 	if args.Title != nil {
 		title, ok := widgetTitle(*args.Title)
 		if !ok {
