@@ -28,6 +28,7 @@ var numericChatMethods = map[string]bool{
 	"readBusinessMessage":  true,
 	"approveSuggestedPost": true,
 	"declineSuggestedPost": true,
+	"sendGame":             true,
 	"setGameScore":         true,
 	"getGameHighScores":    true,
 	"setChatMenuButton":    true,

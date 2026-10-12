@@ -41,7 +41,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 	for _, d := range reg.Provider(Provider) {
 		if d.ID != filesDelete.ID && d.ID != foldersDelete.ID && d.ID != trashDelete.ID && d.ID != systemtagsDelete.ID &&
 			d.ID != sharesCreate.ID && d.ID != sharesUpdate.ID && d.ID != sharesDelete.ID && d.ID != commentsDelete.ID && d.ID != deckBoardsDelete.ID &&
-			d.ID != deckStacksDelete.ID && d.ID != talkMessagesDelete.ID && d.ID != deckCardsDelete.ID &&
+			d.ID != deckStacksDelete.ID && d.ID != deckLabelsDelete.ID && d.ID != talkMessagesDelete.ID && d.ID != deckCardsDelete.ID &&
 			d.ID != talkRoomsDelete.ID && d.ID != talkParticipantsRemove.ID && d.ID != talkParticipantsModerator.ID &&
 			d.ID != eventsDelete.ID && d.ID != calendarsDelete.ID && d.ID != calendarTrashDelete.ID && d.ID != contactsDelete.ID &&
 			d.ID != tasksDelete.ID {
@@ -57,7 +57,7 @@ func TestDeleteToolsRequireAToolAllowListAndSitInNoProfile(t *testing.T) {
 			t.Errorf("%s = %+v", d.ID, d)
 		}
 	}
-	if found != 20 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
+	if found != 21 || filesDelete.Version != 2 || foldersDelete.Version != 1 {
 		t.Fatalf("found = %d, versions = %d/%d", found, filesDelete.Version, foldersDelete.Version)
 	}
 	if !strings.Contains(foldersDelete.Description, "files_trashbin") || !strings.Contains(foldersDelete.Description, "together with everything") {
