@@ -506,19 +506,25 @@ func samePort(a, b *url.URL) bool {
 	return port(a) == port(b)
 }
 
-// checkFileURL accepts the address Twenty reports for a file only when it is https on exactly the host and
-// port of the connection, names exactly the file of the attachment, and carries nothing but one token. The
-// address is rebuilt from the origin and the token, never used as given, and never reported. An address on
-// another host means the instance serves files from external storage, which is not supported.
+// checkFileURL accepts the address Twenty reports for a file only when it passes checkAddress with the
+// download prefix and the file of the attachment.
 func (c *Client) checkFileURL(op string, file *attachmentFileRef) (string, error) {
+	return c.checkAddress(op, file.URL, fileURLPrefix, file.FileID)
+}
+
+// checkAddress accepts an address Twenty reports only when it is https on exactly the host and port of the
+// connection, names exactly prefix plus fileID, and carries nothing but one token. The address is rebuilt from
+// the origin and the token, never used as given, and never reported. An address on another host means the
+// instance serves files from external storage, which is not supported.
+func (c *Client) checkAddress(op, raw, prefix, fileID string) (string, error) {
 	invalid := func() (string, error) {
 		return "", provider.InvalidResponse(op, "Twenty answered with a file address outside the configured service")
 	}
 	base, err := url.Parse(c.origin)
-	if err != nil || file.URL == "" {
+	if err != nil || raw == "" {
 		return invalid()
 	}
-	parsed, err := url.Parse(file.URL)
+	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme != "https" || parsed.User != nil || parsed.Fragment != "" || parsed.Opaque != "" ||
 		parsed.ForceQuery {
 		return invalid()
@@ -527,11 +533,11 @@ func (c *Client) checkFileURL(op string, file *attachmentFileRef) (string, error
 		return "", &provider.Error{Class: provider.ClassProviderError, Op: op, Message: errExternalStorage}
 	}
 	match := tokenQuery.FindStringSubmatch(parsed.RawQuery)
-	if match == nil || parsed.Path != fileURLPrefix+file.FileID || parsed.EscapedPath() != parsed.Path {
+	if match == nil || parsed.Path != prefix+fileID || parsed.EscapedPath() != parsed.Path {
 		return invalid()
 	}
 	if c.red != nil {
-		c.red.Add(match[1], file.URL)
+		c.red.Add(match[1], raw)
 	}
 	return c.origin + parsed.Path + "?token=" + match[1], nil
 }
