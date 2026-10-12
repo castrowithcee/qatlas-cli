@@ -40,8 +40,8 @@ const (
 		"and column_span from 1 through 12 as integers, with column + column_span at most 12 and row + row_span at most 100"
 	errWidgetTitle    = "title must be 1 through 100 characters without control characters"
 	errWidgetMarkdown = "markdown must be 1 through 20000 characters without control characters other than line breaks and tabs"
-	errWidgetType     = "type must be STANDALONE_RICH_TEXT or RECORD_TABLE; markdown belongs to STANDALONE_RICH_TEXT " +
-		"and view_id to RECORD_TABLE, and each type needs its own"
+	errWidgetType     = "type must be STANDALONE_RICH_TEXT, RECORD_TABLE, or GRAPH; markdown belongs to " +
+		"STANDALONE_RICH_TEXT, view_id to RECORD_TABLE, and the chart arguments to GRAPH, and each type needs its own"
 	errWidgetUpdate    = "give a title, a position, or both; the position is changed as a whole"
 	errWidgetTabGrid   = "the tab is not a grid tab, so widgets cannot be placed in it by position"
 	errWidgetTabFull   = "this dashboard tab already holds the most widgets that can be read back"
@@ -76,7 +76,7 @@ const (
 
 	widgetResultSchema = `{"type":"object","properties":{"id":{"type":"string"},"tab_id":{"type":"string"},` +
 		`"type":{"type":"string"},"title":{"type":"string"},"position":{"type":"object","properties":{` +
-		widgetPositionProps + `},"additionalProperties":false}},"required":["id","tab_id","type","title"],` +
+		widgetPositionProps + `},"additionalProperties":false},"chart_type":{"type":"string"}},"required":["id","tab_id","type","title"],` +
 		`"additionalProperties":false}`
 
 	widgetWriteNote = "The change is visible to all members of the workspace. Needs the Twenty permission \"Layouts\" " +
@@ -91,37 +91,49 @@ var widgetPositionArgument = capability.Argument{Name: "position", Required: tru
 
 var pagelayoutwidgetsCreate = capability.Descriptor{
 	ID: Provider + ".pagelayoutwidgets.create", Version: 1, Title: "Add a widget to a Twenty CRM dashboard tab",
-	Description: "Add one rich text widget (Markdown) or one table widget to a tab of a dashboard layout of the Twenty " +
-		"workspace of a connection. Tab and layout are read first; the layout must be a live dashboard layout. A " +
-		"table widget shows a custom table view of the whole workspace that is read first too, never an index, " +
-		"standard, personal, or widget view, and takes the object of that view. Qatlas builds the widget " +
-		"configuration itself. Other widget types are not offered. " + widgetWriteNote,
+	Description: "Add one rich text widget (Markdown), one table widget, or one chart widget (GRAPH) to a tab of a " +
+		"dashboard layout of the Twenty workspace of a connection. Tab and layout are read first; the layout must be " +
+		"a live dashboard layout. A table widget shows a custom table view of the whole workspace that is read first " +
+		"too, never an index, standard, personal, or widget view, and takes the object of that view. A chart widget " +
+		"is an aggregate number, bar, line, or pie chart of the records of one object, whose schema is read first and " +
+		"needs the Twenty permission \"Data model\" too; every field must belong to the object, be active, and not be " +
+		"a system field. Filters are simple and checked like those of twentycrm.viewfilters.create: " + viewFilterNote +
+		"Display options are only the ones named as arguments. Qatlas builds the widget configuration itself. Other " +
+		"widget types are not offered. " + widgetWriteNote,
 	Tags:     []string{"twentycrm", "dashboards", "pagelayoutwidgets", "create"},
 	Risk:     pageLayoutWriteRisk,
 	Provider: Provider, RequiresToolAllowList: true,
 	InputSchema: json.RawMessage(`{"type":"object","properties":{"tab_id":` + uuidSchema + `,"type":{"type":"string",` +
-		`"enum":["STANDALONE_RICH_TEXT","RECORD_TABLE"]},"title":{"type":"string","minLength":1,"maxLength":100},` +
+		`"enum":["STANDALONE_RICH_TEXT","RECORD_TABLE","GRAPH"]},"title":{"type":"string","minLength":1,"maxLength":100},` +
 		`"position":` + widgetGridPositionSchema + `,"markdown":{"type":"string","minLength":1,"maxLength":20000},` +
-		`"view_id":` + uuidSchema + `},"required":["tab_id","type","title","position"],"additionalProperties":false}`),
+		`"view_id":` + uuidSchema + `,` + chartInputProperties +
+		`},"required":["tab_id","type","title","position"],"additionalProperties":false}`),
 	OutputSchema: json.RawMessage(widgetResultSchema),
-	Arguments: []capability.Argument{
+	Arguments: append([]capability.Argument{
 		{Name: "tab_id", Required: true, Description: "UUID of the dashboard tab, as returned by twentycrm.pagelayouts.get"},
-		{Name: "type", Required: true, Description: "STANDALONE_RICH_TEXT or RECORD_TABLE"},
+		{Name: "type", Required: true, Description: "STANDALONE_RICH_TEXT, RECORD_TABLE, or GRAPH"},
 		{Name: "title", Required: true, Description: "Widget title, 1 through 100 characters, without control characters"},
 		widgetPositionArgument,
 		{Name: "markdown", Description: "Only for STANDALONE_RICH_TEXT and required there: the text as Markdown, 1 through " +
 			"20000 characters, without control characters other than line breaks and tabs"},
 		{Name: "view_id", Description: "Only for RECORD_TABLE and required there: UUID of a custom table view of the " +
 			"whole workspace, as returned by twentycrm.views.list; never an index, standard, or personal view"},
-	},
+	}, chartArguments...),
 	Fields: []capability.Field{
 		{Name: "id", Description: "The new widget; use it with twentycrm.pagelayoutwidgets.update"},
 		{Name: "tab_id", Description: "The dashboard tab that holds the widget"},
 		{Name: "title", Description: "Title of the widget, untrusted data"},
+		{Name: "chart_type", Description: "Type of a chart widget"},
 	},
 	Examples: []capability.Example{{Description: "Add a note",
 		Arguments: json.RawMessage(`{"tab_id":"123e4567-e89b-42d3-a456-426614174000","type":"STANDALONE_RICH_TEXT",` +
-			`"title":"Notes","position":{"row":0,"column":0,"row_span":4,"column_span":6},"markdown":"# Goals"}`)}},
+			`"title":"Notes","position":{"row":0,"column":0,"row_span":4,"column_span":6},"markdown":"# Goals"}`)},
+		{Description: "Add a bar chart of the sum of an amount per stage",
+			Arguments: json.RawMessage(`{"tab_id":"123e4567-e89b-42d3-a456-426614174000","type":"GRAPH",` +
+				`"title":"Amount per stage","position":{"row":4,"column":0,"row_span":6,"column_span":6},` +
+				`"chart_type":"BAR_CHART","object_id":"123e4567-e89b-42d3-a456-426614174001",` +
+				`"aggregate_field_id":"123e4567-e89b-42d3-a456-426614174002","aggregate_operation":"SUM",` +
+				`"group_by_field_id":"123e4567-e89b-42d3-a456-426614174003","bar_layout":"VERTICAL"}`)}},
 }
 
 var pagelayoutwidgetsUpdate = capability.Descriptor{
@@ -159,6 +171,8 @@ type DashboardWidgetResult struct {
 	Type     string          `json:"type"`
 	Title    string          `json:"title"`
 	Position *WidgetPosition `json:"position,omitempty"`
+	// ChartType is set only for a chart widget.
+	ChartType string `json:"chart_type,omitempty"`
 }
 
 // widgetGridPosition is the whole position of a widget in a grid tab.
@@ -198,8 +212,8 @@ type pageLayoutWidgetPatch struct {
 	Position *widgetGridPosition `json:"position,omitempty"`
 }
 
-// pageLayoutWidgetWire is the positive projection of Twenty's widget: creator, application, configuration, and
-// overrides are never decoded.
+// pageLayoutWidgetWire is the positive projection of Twenty's widget: creator, application, and overrides are never
+// decoded, and of the configuration only its type.
 type pageLayoutWidgetWire struct {
 	ID               string          `json:"id"`
 	PageLayoutTabID  string          `json:"pageLayoutTabId"`
@@ -207,6 +221,7 @@ type pageLayoutWidgetWire struct {
 	Type             string          `json:"type"`
 	ObjectMetadataID *string         `json:"objectMetadataId"`
 	Position         json.RawMessage `json:"position"`
+	Configuration    json.RawMessage `json:"configuration"`
 	DeletedAt        *string         `json:"deletedAt"`
 }
 
@@ -218,6 +233,8 @@ type wantedWidget struct {
 	title    *string
 	objectID string
 	position *widgetGridPosition
+	// chartType is the configuration type a chart answer has to carry.
+	chartType string
 }
 
 func widgetTextClean(value string, max int, multiline bool) bool {
@@ -421,11 +438,15 @@ func parseWidgetAnswer(op string, raw json.RawMessage, want wantedWidget) (*Dash
 	if !different && want.objectID != "" {
 		different = wire.ObjectMetadataID == nil || !equalUUID(*wire.ObjectMetadataID, want.objectID)
 	}
+	chartType := chartConfigurationType(wire.Configuration)
+	if want.chartType != "" && chartType != want.chartType {
+		different = true
+	}
 	if different {
 		return nil, provider.InvalidResponse(op, "Twenty answered with a different dashboard widget than the requested one")
 	}
 	return &DashboardWidgetResult{ID: wire.ID, TabID: wire.PageLayoutTabID, Type: enumToken(widgetTypes, wire.Type),
-		Title: metaText(wire.Title, metaNameMax), Position: projectWidgetPosition(wire.Position)}, nil
+		Title: metaText(wire.Title, metaNameMax), Position: projectWidgetPosition(wire.Position), ChartType: chartType}, nil
 }
 
 func mapLayoutWritePermission(err error) error {
@@ -436,13 +457,15 @@ func mapLayoutWritePermission(err error) error {
 	return err
 }
 
-// widgetCreateRequest is a checked create: the body plus the view whose object is read first.
+// widgetCreateRequest is a checked create: the body plus the view or the chart whose object is read first.
 type widgetCreateRequest struct {
 	body   pageLayoutWidgetCreate
 	viewID string
+	chart  *chartArgs
 }
 
-// CreatePageLayoutWidget reads the tab, its layout, and for a table the view, then sends exactly one POST.
+// CreatePageLayoutWidget reads the tab, its layout, and for a table the view or for a chart the object schema,
+// then sends exactly one POST.
 func (c *Client) CreatePageLayoutWidget(ctx context.Context, request widgetCreateRequest) (*DashboardWidgetResult, error) {
 	const op = "add dashboard widget"
 	body := request.body
@@ -461,13 +484,29 @@ func (c *Client) CreatePageLayoutWidget(ctx context.Context, request widgetCreat
 			return nil, err
 		}
 	}
+	chartType := ""
+	if request.chart != nil {
+		object, err := c.GetMetaObject(ctx, strings.ToLower(request.chart.ObjectID))
+		if err != nil {
+			return nil, err
+		}
+		if !isTrue(object.IsActive) || isTrue(object.IsSystem) {
+			return nil, invalidRequest(errChartObject)
+		}
+		configuration, err := buildChartConfiguration(object, *request.chart)
+		if err != nil {
+			return nil, err
+		}
+		body.Configuration, body.ObjectMetadataID, chartType = configuration, strings.ToLower(object.ID),
+			configuration.ConfigurationType
+	}
 	var answer json.RawMessage
 	if err := c.changeWith(ctx, op, pageLayoutWidgetCreateUncertain, http.MethodPost, pageLayoutWidgetsPath, body,
 		&answer); err != nil {
 		return nil, mapLayoutWritePermission(err)
 	}
 	widget, err := parseWidgetAnswer(op, answer, wantedWidget{tabID: body.PageLayoutTabID, typ: body.Type,
-		title: &body.Title, objectID: body.ObjectMetadataID, position: &body.Position})
+		title: &body.Title, objectID: body.ObjectMetadataID, position: &body.Position, chartType: chartType})
 	if err != nil {
 		return nil, uncertainly(err, pageLayoutWidgetCreateUncertain)
 	}
@@ -541,6 +580,7 @@ func invokePageLayoutWidgetsCreate(ctx context.Context, resolved *config.Resolve
 		Position *widgetPositionArgs `json:"position"`
 		Markdown *string             `json:"markdown"`
 		ViewID   *string             `json:"view_id"`
+		chartArgs
 	}
 	if json.Unmarshal(raw, &args) != nil {
 		return nil, providerError("add dashboard widget", "the validated arguments could not be read")
@@ -559,19 +599,25 @@ func invokePageLayoutWidgetsCreate(ctx context.Context, resolved *config.Resolve
 	request := widgetCreateRequest{body: pageLayoutWidgetCreate{PageLayoutTabID: strings.ToLower(args.TabID), Title: title,
 		Type: args.Type, Position: *position}}
 	switch {
-	case args.Type == widgetTypeRichText && args.Markdown != nil && args.ViewID == nil:
+	case args.Type == widgetTypeRichText && args.Markdown != nil && args.ViewID == nil && !args.given():
 		if !widgetTextClean(*args.Markdown, dashboardMarkdownMax, true) {
 			return nil, invalidRequest(errWidgetMarkdown)
 		}
 		configuration := widgetRichTextConfiguration{ConfigurationType: widgetTypeRichText}
 		configuration.Body.Markdown = *args.Markdown
 		request.body.Configuration = configuration
-	case args.Type == widgetTypeTable && args.ViewID != nil && args.Markdown == nil:
+	case args.Type == widgetTypeTable && args.ViewID != nil && args.Markdown == nil && !args.given():
 		if !validUUID(*args.ViewID) {
 			return nil, invalidRequest("view_id must be a UUID")
 		}
 		request.viewID = strings.ToLower(*args.ViewID)
 		request.body.Configuration = widgetTableConfiguration{ConfigurationType: widgetTypeTable, ViewID: request.viewID}
+	case args.Type == widgetTypeGraph && args.Markdown == nil && args.ViewID == nil && args.ChartType != "":
+		if !validUUID(args.ObjectID) {
+			return nil, invalidRequest("object_id must be a UUID")
+		}
+		request.body.Type = widgetTypeGraph
+		request.chart = &args.chartArgs
 	default:
 		return nil, invalidRequest(errWidgetType)
 	}

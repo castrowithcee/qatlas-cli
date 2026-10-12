@@ -19,22 +19,23 @@ import (
 )
 
 const (
-	wTabOther    = "77777777-0000-4000-8000-0000000000c1"
-	wTabGone     = "77777777-0000-4000-8000-0000000000c2"
-	wTabStray    = "77777777-0000-4000-8000-0000000000c3"
-	wTabList     = "77777777-0000-4000-8000-0000000000c4"
-	wTabFull     = "77777777-0000-4000-8000-0000000000c5"
-	wTabMissing  = "77777777-0000-4000-8000-0000000000c6"
-	wLayoutList  = "66666666-0000-4000-8000-0000000000b1"
-	wLayoutFull  = "66666666-0000-4000-8000-0000000000b2"
-	wNewWidget   = "88888888-0000-4000-8000-0000000000d1"
-	wWidgetOther = "88888888-0000-4000-8000-0000000000d2"
-	wWidgetGone  = "88888888-0000-4000-8000-0000000000d3"
-	wWidgetStray = "88888888-0000-4000-8000-0000000000d4"
-	wWidgetList  = "88888888-0000-4000-8000-0000000000d5"
-	wWidgetNone  = "88888888-0000-4000-8000-0000000000d6"
-	wViewKanban  = "66666666-0000-4000-8000-0000000000e1"
-	wViewDeleted = "66666666-0000-4000-8000-0000000000e2"
+	wTabOther     = "77777777-0000-4000-8000-0000000000c1"
+	wTabGone      = "77777777-0000-4000-8000-0000000000c2"
+	wTabStray     = "77777777-0000-4000-8000-0000000000c3"
+	wTabList      = "77777777-0000-4000-8000-0000000000c4"
+	wTabFull      = "77777777-0000-4000-8000-0000000000c5"
+	wTabMissing   = "77777777-0000-4000-8000-0000000000c6"
+	wLayoutList   = "66666666-0000-4000-8000-0000000000b1"
+	wLayoutFull   = "66666666-0000-4000-8000-0000000000b2"
+	wNewWidget    = "88888888-0000-4000-8000-0000000000d1"
+	wWidgetOther  = "88888888-0000-4000-8000-0000000000d2"
+	wWidgetGone   = "88888888-0000-4000-8000-0000000000d3"
+	wWidgetStray  = "88888888-0000-4000-8000-0000000000d4"
+	wWidgetList   = "88888888-0000-4000-8000-0000000000d5"
+	wWidgetNone   = "88888888-0000-4000-8000-0000000000d6"
+	wViewKanban   = "66666666-0000-4000-8000-0000000000e1"
+	wViewDeleted  = "66666666-0000-4000-8000-0000000000e2"
+	wObjectSystem = "66666666-0000-4000-8000-0000000000e3"
 
 	wPosition = `{"row":0,"column":1,"row_span":4,"column_span":6}`
 	wGrid     = `{"layoutMode":"GRID","row":0,"column":1,"rowSpan":4,"columnSpan":6}`
@@ -120,6 +121,13 @@ func serveWidgets(t *testing.T, status int, answer string) *[]colCall {
 			return jsonResponse(status, answer), nil
 		}
 		path := request.URL.Path
+		switch path {
+		case metadataObjectsPath + "/" + metaObjID:
+			return jsonResponse(http.StatusOK, filterObjectJSON), nil
+		case metadataObjectsPath + "/" + wObjectSystem:
+			return jsonResponse(http.StatusOK, strings.Replace(strings.Replace(filterObjectJSON, metaObjID, wObjectSystem, 1),
+				`"isSystem":false,"fields"`, `"isSystem":true,"fields"`, 1)), nil
+		}
 		for prefix, bodies := range map[string]map[string]string{pageLayoutsPath: layouts, pageLayoutTabsPath: tabs,
 			pageLayoutWidgetsPath: widgets, viewsPath: views} {
 			if body, ok := bodies[strings.TrimPrefix(path, prefix+"/")]; ok && strings.HasPrefix(path, prefix+"/") {

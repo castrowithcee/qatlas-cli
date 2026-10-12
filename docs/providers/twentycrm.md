@@ -167,9 +167,10 @@ embedded page shows only its origin. Titles are untrusted data of their own data
 tab; `records.destroy` also destroys its layouts, `delete` leaves them.
 
 The tab and widget write tools are confirmed, need a `tools` entry and the right "Layouts"; no profile ticks
-them. Each reads first and refuses what `get` would not read. A tab is empty, in grid mode; a widget is Markdown
-text or the table of a custom workspace table view (no index, standard, personal, or widget view). `delete`
-removes for good, without restore; a deleted tab takes its widgets. No tool deletes a layout.
+them. Each reads first and refuses what `get` would not read. Tabs are empty grid tabs; a widget is Markdown, a
+custom workspace TABLE view (no index, standard, or personal view), or a chart (aggregate, bar, line, pie), which
+also reads the object schema ("Data model"): its fields are active non-system fields of the object fit for their
+role, filters work as on views. `delete` is permanent and takes a tab's widgets; no tool deletes a layout.
 
 ## Writing records
 
@@ -270,8 +271,7 @@ identifiers are distinct UUIDs of that object.
   preview in a dry run that no argument controls.
 - `records.merge` takes the arguments of the preview and merges for real: the other records are deleted and
   their relations are moved to the remaining record. Whether the deleted records can be restored is not
-  promised. It is offered only by a connection whose `tools` list names it, and no profile ticks it. Preview
-  first, then merge.
+  promised. It is offered only by a connection whose `tools` list names it, and no profile ticks it.
 - Results are untrusted records; a merge answer must name one of the given records, and a 403 points to the
   object permissions of the role of the key.
 
