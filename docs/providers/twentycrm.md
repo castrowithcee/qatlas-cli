@@ -1,9 +1,9 @@
 ---
 description: >
   Describes Twenty CRM company, object catalog, record read, write, duplicate and merge, and trash
-  operations, note and task links, attachment read and download, workflow read and control, member, role,
-  AI agent and skill, view, dashboard, and data model read and write, webhooks, object targets, connection
-  permissions, and safety boundaries.
+  operations, note and task links, attachment read, download, and upload, workflow read and control, member,
+  role, AI agent and skill, view, dashboard, and data model read and write, webhooks, object targets,
+  connection permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -33,7 +33,7 @@ A target has the form `object/NAME` with the singular camelCase API name of an o
   on every connection that should not see all of them.
 - System objects (messages, calendar events, attachments, workflows, workspace members, and the like) are
   never reachable through the object and record tools and cannot be a target; workflows, workspace
-  members, and attachments have their own read tools. The two link objects of notes and tasks are system
+  members, and attachments have their own tools. The two link objects of notes and tasks are system
   objects too; only the link tools touch them. Qatlas keeps them in a fixed list, so an object a later
   Twenty version marks as a system object stays reachable on a connection without targets until the list
   is updated.
@@ -218,18 +218,18 @@ from an argument. An object that the schema gives no single link relation cannot
 ## Attachments
 
 `attachments.list` and `attachments.get` (`read`) read the files attached to a record of any reachable object;
-the system object `attachment` is reachable through no other tool. The linking field (`target<Object>Id`) comes
-from the workspace schema, never from an argument. `list` returns no download address and counts attachments
-without a file or without exactly one reachable target in `omitted`. Labels and content are untrusted data.
+`attachments.upload` (`create`, not idempotent) adds one. The linking field (`target<Object>Id`) comes from the
+workspace schema, never from an argument. `list` counts attachments without a file or without exactly one
+reachable target in `omitted`. Labels and content are untrusted.
 
-- `get` reads the attachment first and needs exactly one target on a reachable object; otherwise it answers
-  as if the attachment did not exist, before a download. An attachment without a file is an error.
-- The content is returned inline up to 4 MiB, or written to `local_path` in a directory the connection
-  releases for writing (an existing file only with confirmation); the result then holds only metadata.
-- Qatlas fetches the download address Twenty reports only if it is https on exactly the host and port of the
-  connection, with the path of the attachment's file and the signed `token` as its only query. The request
-  carries no API key and follows no redirect; the token appears in no result or error. An instance that
-  serves files from external storage (another host, or a redirect) is not supported.
+- `get` needs exactly one target on a reachable object, else it answers as if the attachment did not exist.
+- `upload` takes `local_path` in a directory released for reading, or inline content up to 4 MiB; 1 byte to
+  100 MiB. It reads the record first, needs the Upload File right and create rights on attachments, sends each
+  step once, and names the file id from the upload on. Twenty drops unfinished uploads after 24 hours; a
+  completed file without an attachment stays.
+- Qatlas uses a file address Twenty reports only if it is https on exactly the host and port of the connection,
+  with the file's own path and the signed `token` as its only query. The request carries no API key and follows
+  no redirect; the token appears in no result or error. External storage (another host) is not supported.
 
 ## Webhooks
 
