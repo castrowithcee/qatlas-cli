@@ -160,12 +160,20 @@ func requireBusiness(resolved *config.Resolved, id string) error {
 	if err != nil {
 		return providerError("check scope", "the configured Telegram targets are unusable")
 	}
-	for _, bound := range set.businesses {
+	if !set.hasBusiness(id) {
+		return providerError("check scope", "this connection does not bind that business connection")
+	}
+	return nil
+}
+
+// hasBusiness reports whether the connection binds exactly this business connection.
+func (s targetSet) hasBusiness(id string) bool {
+	for _, bound := range s.businesses {
 		if bound == id {
-			return nil
+			return true
 		}
 	}
-	return providerError("check scope", "this connection does not bind that business connection")
+	return false
 }
 
 // requireNumericChat refuses locally, before any I/O, an @username for a method that accepts only a numeric
