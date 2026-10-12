@@ -35,7 +35,7 @@ var updatesList = capability.Descriptor{
 	ID:          Provider + ".updates.list",
 	Version:     1,
 	Title:       "List Telegram updates",
-	Description: "Read pending incoming messages and events of the bound chats, and inline queries with the bot target, without consuming them",
+	Description: "Read pending incoming messages and events of the bound chats and business connections, and inline queries with the bot target, without consuming them",
 	Tags:        []string{"telegram", "updates", "read"},
 	Risk: capability.Risk{
 		Effect:          capability.EffectRead,
@@ -60,7 +60,9 @@ var updatesList = capability.Descriptor{
 		`"media":{"type":"object","properties":{"kind":{"type":"string"},"size":{"type":"integer"},` +
 		`"mime_type":{"type":"string"},"file_name":{"type":"string"},"file_ref":{"type":"string"}}},` +
 		`"callback_data":{"type":"string"},"callback_ref":{"type":"string"},"join_request_ref":{"type":"string"},` +
-		`"query":{"type":"string"},"result_id":{"type":"string"},"inline_ref":{"type":"string"}},` +
+		`"query":{"type":"string"},"result_id":{"type":"string"},"inline_ref":{"type":"string"},` +
+		`"business_chat_ref":{"type":"string"},"message_ids":{"type":"array","items":{"type":"integer"}},` +
+		`"is_enabled":{"type":"boolean"}},` +
 		`"required":["update_id","type","chat"]}},` +
 		`"skipped":{"type":"integer"},"last_update_id":{"type":"integer"}},` +
 		`"required":["updates","skipped"],"additionalProperties":false}`),
@@ -69,8 +71,8 @@ var updatesList = capability.Descriptor{
 		{Name: "wait_seconds", Description: "Seconds to wait for a new update when none is pending, from 0 through 10; default 0"},
 	},
 	Fields: []capability.Field{
-		{Name: "updates", Description: "Updates of the bound chats and, with the bot target, inline queries and chosen inline results, oldest first"},
-		{Name: "skipped", Description: "Number of fetched updates left out because they belong to no bound chat or have an unsupported type"},
+		{Name: "updates", Description: "Updates of the bound chats and business connections and, with the bot target, inline queries and chosen inline results, oldest first; business updates name their chat only as business_chat_ref"},
+		{Name: "skipped", Description: "Number of fetched updates left out because they belong to no bound chat or business connection or have an unsupported type"},
 		{Name: "last_update_id", Description: "Highest update identifier seen, including skipped updates"},
 	},
 	Examples: []capability.Example{{
@@ -177,13 +179,14 @@ func invokeUpdatesList(ctx context.Context, resolved *config.Resolved, secrets *
 	if resolved == nil {
 		return nil, providerError("list updates", "no connection was selected")
 	}
-	// The tool reads every bound chat; it needs at least one before any credential is resolved.
+	// The tool reads every bound chat and business connection; it needs one of them before any credential is
+	// resolved.
 	set, err := targetsOf(resolved)
 	if err != nil {
 		return nil, providerError("list updates", "the configured Telegram targets are unusable")
 	}
-	if len(set.chats) == 0 {
-		return nil, providerError("list updates", "this connection binds no chat target")
+	if len(set.chats) == 0 && len(set.businesses) == 0 {
+		return nil, providerError("list updates", "this connection binds no chat or business target")
 	}
 	client, err := Open(ctx, resolved, secrets, red)
 	if err != nil {
@@ -225,6 +228,9 @@ type updateOut struct {
 	Query            string     `json:"query,omitempty"`
 	ResultID         string     `json:"result_id,omitempty"`
 	InlineRef        string     `json:"inline_ref,omitempty"`
+	BusinessChatRef  string     `json:"business_chat_ref,omitempty"`
+	MessageIDs       []int64    `json:"message_ids,omitempty"`
+	IsEnabled        *bool      `json:"is_enabled,omitempty"`
 }
 
 // Only the fields below are decoded, so nothing else of an update can reach the output.
@@ -248,14 +254,16 @@ type tgFile struct {
 }
 
 type tgMessage struct {
-	MessageID       int64   `json:"message_id"`
-	MessageThreadID int64   `json:"message_thread_id"`
-	Date            int64   `json:"date"`
-	Chat            tgChat  `json:"chat"`
-	From            *tgUser `json:"from"`
-	Text            string  `json:"text"`
-	Caption         string  `json:"caption"`
-	ReplyTo         *struct {
+	MessageID int64 `json:"message_id"`
+	// BusinessConnectionID is set on the messages of a business connection only.
+	BusinessConnectionID string  `json:"business_connection_id"`
+	MessageThreadID      int64   `json:"message_thread_id"`
+	Date                 int64   `json:"date"`
+	Chat                 tgChat  `json:"chat"`
+	From                 *tgUser `json:"from"`
+	Text                 string  `json:"text"`
+	Caption              string  `json:"caption"`
+	ReplyTo              *struct {
 		MessageID int64 `json:"message_id"`
 	} `json:"reply_to_message"`
 	Photo     []tgFile `json:"photo"`
@@ -315,6 +323,15 @@ type tgUpdate struct {
 	ChatJoinRequest      *tgEvent    `json:"chat_join_request"`
 	ChatBoost            *tgEvent    `json:"chat_boost"`
 	RemovedChatBoost     *tgEvent    `json:"removed_chat_boost"`
+
+	BusinessConnection     *tgBusinessConnection `json:"business_connection"`
+	BusinessMessage        *tgMessage            `json:"business_message"`
+	EditedBusinessMessage  *tgMessage            `json:"edited_business_message"`
+	DeletedBusinessMessage *struct {
+		BusinessConnectionID string  `json:"business_connection_id"`
+		Chat                 tgChat  `json:"chat"`
+		MessageIDs           []int64 `json:"message_ids"`
+	} `json:"deleted_business_messages"`
 }
 
 // candidate is a supported update before it is matched to a bound chat and its references are signed.
@@ -327,6 +344,8 @@ type candidate struct {
 	// botOnly marks an update that belongs to no chat; only the bot target binds it.
 	botOnly  bool
 	inlineID string
+	// business is the business connection an update belongs to; only a business/<id> target binds it.
+	business string
 }
 
 func capText(value string, limit int) string {
@@ -373,6 +392,7 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 	c.out.UpdateID = u.UpdateID
 	message := func(kind string, m *tgMessage) (candidate, bool) {
 		c.out.Type, c.chat = kind, m.Chat.ID
+		c.business = m.BusinessConnectionID
 		c.out.MessageID, c.out.Date, c.out.MessageThreadID = m.MessageID, m.Date, m.MessageThreadID
 		if m.ReplyTo != nil {
 			c.out.ReplyToMessageID = m.ReplyTo.MessageID
@@ -383,7 +403,10 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		if kind, file := m.media(); file != nil {
 			c.out.Media = &mediaOut{Kind: kind, Size: file.FileSize, MimeType: capText(file.MimeType, maxNameRunes),
 				FileName: capText(file.FileName, maxNameRunes)}
-			c.fileID = file.FileID
+			if c.business == "" {
+				// The file tools address bound chats; a business file is listed but not downloadable.
+				c.fileID = file.FileID
+			}
 		}
 		return c, true
 	}
@@ -421,6 +444,28 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 		c, _ = event("chat_join_request", u.ChatJoinRequest)
 		c.joinQuery = u.ChatJoinRequest.QueryID
 		return c, true
+	// A business message without a connection ID is unsupported and falls through to the skipped count.
+	case u.BusinessMessage != nil && u.BusinessMessage.BusinessConnectionID != "":
+		return message("business_message", u.BusinessMessage)
+	case u.EditedBusinessMessage != nil && u.EditedBusinessMessage.BusinessConnectionID != "":
+		return message("edited_business_message", u.EditedBusinessMessage)
+	case u.DeletedBusinessMessage != nil:
+		d := u.DeletedBusinessMessage
+		if d.BusinessConnectionID == "" {
+			return candidate{}, false
+		}
+		c.out.Type, c.chat, c.business = "deleted_business_messages", d.Chat.ID, d.BusinessConnectionID
+		c.out.MessageIDs = d.MessageIDs[:min(len(d.MessageIDs), maxDeleteMessages)]
+		return c, true
+	case u.BusinessConnection != nil:
+		b := u.BusinessConnection
+		if b.ID == "" {
+			return candidate{}, false
+		}
+		enabled := b.IsEnabled
+		c.out.Type, c.chat, c.business = "business_connection", b.UserChatID, b.ID
+		c.out.Date, c.out.From, c.out.IsEnabled = b.Date, sender(b.User), &enabled
+		return c, true
 	case u.CallbackQuery != nil:
 		q := u.CallbackQuery
 		if q.Message == nil {
@@ -451,13 +496,13 @@ func classify(u tgUpdate) (c candidate, ok bool) {
 	return candidate{}, false
 }
 
-// ListUpdates fetches pending updates with one getUpdates request and returns only those of bound chats and,
-// with the bot target, chatless inline updates. It sends neither offset nor allowed_updates, so Telegram keeps
-// every update; nothing is acknowledged.
+// ListUpdates fetches pending updates with one getUpdates request and returns only those of bound chats,
+// bound business connections, and, with the bot target, chatless inline updates. It sends neither offset nor
+// allowed_updates, so Telegram keeps every update; nothing is acknowledged.
 func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]any, error) {
 	const op = "list updates"
-	if len(c.set.chats) == 0 {
-		return nil, providerError(op, "this connection binds no chat target")
+	if len(c.set.chats) == 0 && len(c.set.businesses) == 0 {
+		return nil, providerError(op, "this connection binds no chat or business target")
 	}
 	if limit < 1 || limit > maxUpdateLimit || wait < 0 || wait > maxWaitSeconds {
 		return nil, providerError(op, "limit or wait_seconds is outside the supported range")
@@ -501,6 +546,15 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 			candidates = append(candidates, cand)
 			continue
 		}
+		if ok && cand.business != "" {
+			// A business update is shown only for a business connection this connection binds.
+			if !validBusinessID(cand.business) || !c.set.hasBusiness(cand.business) {
+				skipped++
+				continue
+			}
+			candidates = append(candidates, cand)
+			continue
+		}
 		if !ok || cand.chat == 0 {
 			skipped++
 			continue
@@ -530,6 +584,12 @@ func (c *Client) ListUpdates(ctx context.Context, limit, wait int) (map[string]a
 			if cand.inlineID != "" {
 				cand.out.InlineRef = signRef(c.token, refInlineQuery, botTarget, cand.inlineID)
 			}
+			updates = append(updates, cand.out)
+			continue
+		}
+		if cand.business != "" {
+			cand.out.Chat = businessBinding(cand.business)
+			cand.out.BusinessChatRef = c.businessChatRef(cand.business, cand.chat)
 			updates = append(updates, cand.out)
 			continue
 		}

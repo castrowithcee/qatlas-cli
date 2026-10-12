@@ -204,9 +204,9 @@ func TestUpdatesListArgumentsAndScope(t *testing.T) {
 	if int(defaultTimeout.Seconds()) <= maxWaitSeconds {
 		t.Error("the HTTP timeout does not exceed the longest long poll")
 	}
-	// No chat target: refused before the credential is read.
+	// Neither a chat nor a business target: refused before the credential is read.
 	resolver := secret.NewWith(func(string) string { t.Error("credential read"); return "" }, nil, nil, &redact.Redactor{})
-	for _, targets := range [][]string{{"bot"}, {"business/x"}} {
+	for _, targets := range [][]string{{"bot"}} {
 		_, err := invokeUpdatesList(context.Background(), resolvedWith(targets...), resolver, &redact.Redactor{}, json.RawMessage(`{}`))
 		if err == nil {
 			t.Errorf("targets %v accepted", targets)
