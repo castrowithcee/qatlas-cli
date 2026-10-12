@@ -424,6 +424,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(deckCommentsCreate, groupDeck), Handler: deckBound(invokeDeckCommentsCreate)},
 		capability.Operation{Descriptor: inGroup(deckCommentsUpdate, groupDeck), Handler: deckBound(invokeDeckCommentsUpdate)},
 		capability.Operation{Descriptor: inGroup(deckCommentsDelete, groupDeck), Handler: deckBound(invokeDeckCommentsDelete)},
+		capability.Operation{Descriptor: inGroup(deckAttachmentsList, groupDeck), Handler: deckBound(invokeDeckAttachmentsList)},
+		capability.Operation{Descriptor: inGroup(deckAttachmentsGet, groupDeck), Handler: deckBound(invokeDeckAttachmentsGet)},
+		capability.Operation{Descriptor: inGroup(deckAttachmentsUpload, groupDeck), Handler: deckBound(invokeDeckAttachmentsUpload)},
+		capability.Operation{Descriptor: inGroup(deckAttachmentsDelete, groupDeck), Handler: deckBound(invokeDeckAttachmentsDelete)},
 		capability.Operation{Descriptor: inGroup(talkRoomsList, groupTalk), Handler: invokeTalkRoomsList},
 		capability.Operation{Descriptor: inGroup(talkRoomsGet, groupTalk), Handler: invokeTalkRoomsGet},
 		capability.Operation{Descriptor: inGroup(talkRoomsCreate, groupTalk), Handler: invokeTalkRoomsCreate},
@@ -1065,7 +1069,12 @@ func (c *Client) GetFile(ctx context.Context, path string) (*Content, error) {
 
 // readInline reads the GET of an absolute URL, built from checked segments, up to the inline limit.
 func (c *Client) readInline(ctx context.Context, op, target, tooLarge string) ([]byte, http.Header, error) {
-	response, err := c.webdavTo(ctx, op, http.MethodGet, target, nil, "", "", "", nil)
+	return c.readInlineWith(ctx, op, target, tooLarge, nil)
+}
+
+// readInlineWith is readInline with extra request headers.
+func (c *Client) readInlineWith(ctx context.Context, op, target, tooLarge string, extra http.Header) ([]byte, http.Header, error) {
+	response, err := c.webdavTo(ctx, op, http.MethodGet, target, nil, "", "", "", extra)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1155,11 +1164,19 @@ func (c *Client) DownloadFile(ctx context.Context, path string, download *localf
 // downloadTo streams the GET of an absolute URL, built from checked segments, into the prepared local file
 // and commits it. It returns the headers of the answer.
 func (c *Client) downloadTo(ctx context.Context, op, target string, download *localfile.Download, done *bool) (http.Header, error) {
+	return c.downloadToWith(ctx, op, target, download, done, nil)
+}
+
+// downloadToWith is downloadTo with extra request headers.
+func (c *Client) downloadToWith(ctx context.Context, op, target string, download *localfile.Download, done *bool, extra http.Header) (http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
 	}
 	req.Header.Set("Authorization", c.auth)
+	for name, values := range extra {
+		req.Header[name] = values
+	}
 	response, err := c.transferClient().Do(req)
 	if err != nil {
 		return nil, provider.Transport(op, "Nextcloud", err)

@@ -174,25 +174,35 @@ type deckBoardState struct {
 // the hint. It never repeats the request and never reads the body of a failed answer into an error.
 func (c *Client) deckSend(ctx context.Context, op, hint, method string, payload any, suffix ...string) (json.RawMessage, error) {
 	var body io.Reader
+	contentType := ""
 	if payload != nil {
 		encoded, err := json.Marshal(payload)
 		if err != nil {
 			return nil, providerError(op, "the request could not be built")
 		}
-		body = bytes.NewReader(encoded)
+		body, contentType = bytes.NewReader(encoded), "application/json"
 	}
+	return c.deckDo(ctx, c.http, op, hint, method, body, -1, contentType, suffix...)
+}
+
+// deckDo is the single request of deckSend; a body of known length may be a stream, and client sets the timeout.
+func (c *Client) deckDo(ctx context.Context, client *http.Client, op, hint, method string, body io.Reader, length int64,
+	contentType string, suffix ...string) (json.RawMessage, error) {
 	segments := append(append(append([]string{}, c.install...), deckRoot...), suffix...)
 	req, err := http.NewRequestWithContext(ctx, method, c.origin+escapePath(segments), body)
 	if err != nil {
 		return nil, providerError(op, "the request could not be built")
 	}
+	if length >= 0 {
+		req.ContentLength = length
+	}
 	req.Header.Set("Authorization", c.auth)
 	req.Header.Set("OCS-APIRequest", "true")
 	req.Header.Set("Accept", "application/json")
-	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
-	response, err := c.http.Do(req)
+	response, err := client.Do(req)
 	if err != nil {
 		return nil, sentTransportError(op, err, hint)
 	}
