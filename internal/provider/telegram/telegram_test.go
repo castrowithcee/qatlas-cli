@@ -71,12 +71,12 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		metadata.ValidateBaseURL(defaultURL) != nil {
 		t.Errorf("ValidateBaseURL does not enforce the origin rule")
 	}
-	if len(metadata.Groups) != 15 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
-		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "chats" || metadata.Groups[4].ID != "invitelinks" ||
-		metadata.Groups[5].ID != "bot" || metadata.Groups[6].ID != "files" || metadata.Groups[7].ID != "media" ||
-		metadata.Groups[8].ID != "members" || metadata.Groups[9].ID != "interactions" ||
-		metadata.Groups[10].ID != "stickers" || metadata.Groups[11].ID != "topics" ||
-		metadata.Groups[12].ID != "suggestedposts" || metadata.Groups[13].ID != "queries" || metadata.Groups[14].ID != "games" {
+	if len(metadata.Groups) != 16 || metadata.Groups[0].ID != "messages" || metadata.Groups[1].ID != "pins" ||
+		metadata.Groups[2].ID != "updates" || metadata.Groups[3].ID != "business" || metadata.Groups[4].ID != "chats" ||
+		metadata.Groups[5].ID != "invitelinks" || metadata.Groups[6].ID != "bot" || metadata.Groups[7].ID != "files" ||
+		metadata.Groups[8].ID != "media" || metadata.Groups[9].ID != "members" || metadata.Groups[10].ID != "interactions" ||
+		metadata.Groups[11].ID != "stickers" || metadata.Groups[12].ID != "topics" ||
+		metadata.Groups[13].ID != "suggestedposts" || metadata.Groups[14].ID != "queries" || metadata.Groups[15].ID != "games" {
 		t.Errorf("groups = %+v", metadata.Groups)
 	}
 	for _, tool := range metadata.Tools {
@@ -86,6 +86,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 			want = "updates"
 		case strings.HasPrefix(tool.ID, "telegram.pins."):
 			want = "pins"
+		case strings.HasPrefix(tool.ID, "telegram.business."):
+			want = "business"
 		case strings.HasPrefix(tool.ID, "telegram.members.") || strings.HasPrefix(tool.ID, "telegram.senderchats.") ||
 			tool.ID == joinrequestsDecline.ID:
 			want = "members"
@@ -125,8 +127,8 @@ func TestRegisterContainsMetadataAndMessageDescriptors(t *testing.T) {
 		}
 	}
 	operations := reg.Provider(Provider)
-	if len(operations) != 108 {
-		t.Fatalf("operation count = %d, want one hundred and eight", len(operations))
+	if len(operations) != 111 {
+		t.Fatalf("operation count = %d, want one hundred and eleven", len(operations))
 	}
 	descriptor, _, ok := reg.Lookup("telegram.messages.send")
 	if !ok {
@@ -154,7 +156,8 @@ func TestDeleteRequiresAToolAllowListAndStaysInTheMessagingProfile(t *testing.T)
 			d.ID == senderchatsBan.ID || d.ID == reactionsRemove.ID || d.ID == reactionsRemoveAll.ID ||
 			d.ID == updatesConfirm.ID || d.ID == locationsStopLive.ID || d.ID == topicsDelete.ID ||
 			d.ID == topicsUnpinAll.ID || d.ID == suggestedpostsDecline.ID || d.ID == commandsDelete.ID ||
-			d.ID == profileRemovePhoto.ID || d.ID == defaultAdminRightsSet.ID || d.ID == inlineAnswer.ID
+			d.ID == profileRemovePhoto.ID || d.ID == defaultAdminRightsSet.ID || d.ID == inlineAnswer.ID ||
+			d.ID == businessDeleteMessages.ID
 		if d.RequiresToolAllowList != want {
 			t.Errorf("%s RequiresToolAllowList = %v, want %v", d.ID, d.RequiresToolAllowList, want)
 		}

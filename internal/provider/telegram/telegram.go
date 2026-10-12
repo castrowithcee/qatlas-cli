@@ -177,7 +177,8 @@ var messagesDelete = capability.Descriptor{
 var toolGroups = []config.ToolGroup{
 	{ID: groupMessages, Title: "Messages", Description: "Send, forward, copy, edit (text, caption, media), and delete messages in the bound chats"},
 	{ID: groupPins, Title: "Pins", Description: "Pin and unpin messages in the bound chats"},
-	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats"},
+	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats and business connections"},
+	{ID: groupBusiness, Title: "Business", Description: "Read a bound business connection, mark its messages as read, and delete them"},
 	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats; change their title, description, photo, default permissions, and group sticker set; leave a chat"},
 	{ID: groupInviteLinks, Title: "Invite links", Description: "Read the primary invite link and revoke invite links of the bound chats"},
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot; read and set its " +
@@ -324,6 +325,9 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: topicsUnpinAll, Handler: capability.Handler(invokeTopicsUnpinAll)},
 		capability.Operation{Descriptor: topicsHideGeneral, Handler: capability.Handler(invokeTopicsHideGeneral)},
 		capability.Operation{Descriptor: topicsUnhideGeneral, Handler: capability.Handler(invokeTopicsUnhideGeneral)},
+		capability.Operation{Descriptor: businessGet, Handler: capability.Handler(invokeBusinessGet)},
+		capability.Operation{Descriptor: businessMarkRead, Handler: capability.Handler(invokeBusinessMarkRead)},
+		capability.Operation{Descriptor: businessDeleteMessages, Handler: capability.Handler(invokeBusinessDeleteMessages)},
 		capability.Operation{Descriptor: updatesConfirm, Handler: capability.Handler(invokeUpdatesConfirm)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 		capability.Operation{Descriptor: botGet, Handler: capability.Handler(invokeBotGet)},

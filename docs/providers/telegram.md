@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 # Telegram
@@ -14,21 +14,18 @@ A connection binds one bot token to its targets, given as `target` (one) or `tar
 (a numeric chat ID, also negative, or an `@username`), `bot`, or `business/<id>`. Every changing tool requires
 confirmation, and Telegram's own restrictions still apply.
 
-`telegram.messages.send` sends text; `parse_mode` (`HTML` or `MarkdownV2`) formats it, and Telegram's parser
-decides whether the markup is valid. `reply_to_message_id` replies only within the same chat; `message_thread_id`,
-`disable_notification`, `protect_content`, and `disable_link_preview` set topic, silence, protection, and preview.
+`telegram.messages.send` sends text; Telegram's parser decides whether `parse_mode` markup is valid, and
+`reply_to_message_id` replies only within the same chat.
 
 `inline_keyboard` attaches an inline keyboard whose buttons carry exactly one of `url` (a plain `https://`
 link with a host, or a `tg://` link) or `callback_data`. Web-app, login, pay, and `switch_inline_query` buttons
 and reply keyboards are not offered. The limits are checked before the credential is read.
 
-`telegram.messages.edit` accepts `parse_mode`, `disable_link_preview`, and `inline_keyboard` besides the text;
-reply, topic, silent, and protect do not apply to edits. An edit without `inline_keyboard` removes an existing
-keyboard. `telegram.messages.editreplymarkup` changes only the keyboard of a message: it sets `inline_keyboard`
-or, when that is omitted or empty, removes the keyboard. `telegram.messages.editcaption` (`update`) sets the
-caption of a media message; the required `caption` (up to 1024 characters) removes it when empty.
-`telegram.messages.editmedia` (`update`) replaces the media with a photo, video, animation, or document (`type`)
-from `local_path` or `file_ref` under the rules of the media send tools and returns the new `file_ref`.
+`telegram.messages.edit` takes no reply, topic, silent, or protect option; an edit without `inline_keyboard` removes
+an existing keyboard, as does `telegram.messages.editreplymarkup` without one. `telegram.messages.editcaption`
+(`update`) removes the caption when it is empty. `telegram.messages.editmedia` (`update`) replaces the media with a
+photo, video, animation, or document from `local_path` or `file_ref` under the rules of the media send tools and
+returns the new `file_ref`.
 
 The chat tools take an optional `chat` argument, the forward and copy tools also `from_chat`. It must equal a
 bound chat target exactly: an `@username` never matches a numeric ID, and `bot` or `business/<id>` is no chat.
@@ -70,10 +67,8 @@ link to the original, and its `caption` replaces the caption of a single message
 `message_ids`. The result is only `message_id` or `message_ids`; Telegram skips sources it cannot transfer
 without notice, so the list can be shorter than the request.
 
-`telegram.pins.pin` pins one message by `message_id`; `disable_notification` pins silently.
-`telegram.pins.unpin` unpins `message_id`, or the most recently pinned message when it is omitted.
-`telegram.pins.unpinall` unpins every pinned message of the chat and, like `telegram.messages.delete`,
-requires a `tools` list. Telegram's own pin rights still apply, and topic-specific unpinning is not offered.
+`telegram.pins.unpinall` unpins every pinned message of the chat and, like `telegram.messages.delete`, requires a
+`tools` list; topic-specific unpinning is not offered.
 
 ## Moderating members
 
@@ -123,24 +118,21 @@ it; `telegram.topics.hidegeneral` hides and closes it, and `telegram.topics.unhi
 `telegram.topics.unpinall` unpins all messages of a topic, and `telegram.topics.delete` (`delete`) removes a
 topic with all its messages; both require a `tools` list.
 
-## Locations, venues, contacts, and dice
+## Locations, venues, contacts, dice, and games
 
 `telegram.locations.send`, `telegram.venues.send`, `telegram.contacts.send`, and `telegram.dice.send` (`create`)
-send one structured value to a bound chat, checked against the Bot API limits before the credential is read;
-place identifiers and vCards are not offered. The tools share `reply_to_message_id`, `message_thread_id`,
-`disable_notification`, and `protect_content`; keyboards and paid broadcasts are not offered. Locations, venues,
-and contacts carry the data class `telegram-personal-data` and appear only in the request, never in errors,
-logs, or the audit trail. The result is only `message_id` and `date`. `telegram.locations.editlive` (`update`)
-moves a live location within these limits, and omitted optional values keep their setting;
-`telegram.locations.stoplive` (`update`, idempotent) ends it through a `tools` list only.
+send one structured value to a bound chat, checked against the Bot API limits before the credential is read; place
+identifiers and vCards are not offered. The tools share `reply_to_message_id`, `message_thread_id`,
+`disable_notification`, and `protect_content`; keyboards and paid broadcasts are not offered. Locations, venues, and
+contacts carry the data class `telegram-personal-data` and appear only in the request, never in errors, logs, or the
+audit trail. `telegram.locations.editlive` (`update`) moves a live location within these limits, and omitted
+optional values keep their setting; `telegram.locations.stoplive` (`update`, idempotent) ends it through a `tools`
+list only.
 
-## Games
-
-`telegram.games.send` (`create`) sends a game registered with BotFather, `telegram.games.setscore` (`update`)
-sets a player's score, and `telegram.games.highscores` (`read`) lists the scores around a player. The three
-tools are in the `games` group and in no profile; the chat must be bound as a numeric chat ID. `force` is sent
-only when given. Scores and players carry the data class `telegram-member-data` and are shown through a fixed
-list of fields; inline game messages and keyboards are not offered.
+`telegram.games.send` (`create`), `telegram.games.setscore` (`update`), and `telegram.games.highscores` (`read`)
+send a game registered with BotFather, set a player's score, and list the scores around a player, only in a chat
+bound by its numeric ID. Scores carry the data class `telegram-member-data`; inline game messages and keyboards are
+not offered.
 
 ## Invite links
 
@@ -157,9 +149,9 @@ new one that the result does not contain; creating, exporting, or editing invite
 
 ## Reading updates
 
-`telegram.updates.list` (`read`) shows the pending updates of the bot, without `chat`, for every bound chat. It
-needs at least one chat target. Only updates of bound chats appear; every other update, whatever its chat or type,
-is only counted in `skipped`, and `last_update_id` names the highest update seen, skipped ones included. An
+`telegram.updates.list` (`read`) shows the pending updates of the bot, without `chat`, for every bound chat and
+business connection. It needs at least one chat or business target. Every other update, whatever its chat or
+type, is only counted in `skipped`, and `last_update_id` names the highest update seen, skipped ones included. An
 `@username` target is matched through a fixed `getChat` call on the configured name; the ID that returns is used
 for matching only. A long poll (`wait_seconds`) waits for a new update.
 
@@ -188,6 +180,17 @@ press and a join request query answer within 10 seconds.
 an `inline_ref`, and a location is never shown. `telegram.inline.answer` (`create`, `tools` list) needs `bot` and
 an `inline_ref` and sends text articles only, never a URL, media, or keyboard.
 
+## Business connections
+
+The tools of the group `business` need the target `business/<id>` of the connection named in `business`, carry
+the data class `telegram-business-content`, and are in no setup profile. `telegram.business.get` (`read`) shows
+account, status, and bot rights of one connection. `telegram.updates.list` shows business updates only for a
+bound connection, as `business/<id>` in `chat`; their chat appears only as `business_chat_ref`, a signed
+reference bound to that connection, and a business file has no `file_ref`. `telegram.business.markread`
+(`update`) marks one message in the chat of such a reference as read. `telegram.business.deletemessages`
+(`delete`, `tools` list) deletes up to 100 messages; the rights the account granted the bot decide which go,
+and skipped ones are not reported.
+
 ## Reading chats and members
 
 The four chat read tools address a bound chat through `chat` as above and return fixed fields only:
@@ -203,7 +206,7 @@ The four chat read tools address a bound chat through `chat` as above and return
 data of a bound group or channel; Telegram refuses private chats.
 
 `telegram.chats.setphoto` takes only a `local_path`, never a `file_ref` or URL, and repeating it has an unknown
-effect. The photo is limited to 10 MB.
+effect.
 
 `telegram.chats.setpermissions` sets the default member permissions of a bound group or supergroup. Like
 `telegram.members.restrict`, it takes the complete `permissions` object: every boolean is required, a missing
@@ -258,7 +261,7 @@ is never part of one. Each file comes from exactly one of `local_path` or `file_
 per item, and a URL is never a source. The options of `telegram.messages.send` that apply (`parse_mode`,
 `reply_to_message_id`, `message_thread_id`, `disable_notification`, `protect_content`) carry over, plus a
 `caption` of at most 1024 characters, which an album shows on its first item; a video note takes neither caption
-nor `parse_mode`. Duration, performer, title, thumbnail, streaming, and spoiler settings are not offered.
+nor `parse_mode`.
 
 A `file_ref` must come from the selected chat itself: one issued for another target, even another bound chat,
 for another token, or of another kind is refused before the credential is read, and a raw file identifier is
