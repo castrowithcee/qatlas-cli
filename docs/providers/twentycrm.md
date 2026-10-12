@@ -2,8 +2,8 @@
 description: >
   Describes Twenty CRM company, object catalog, record read, write, duplicate and merge, and trash
   operations, note and task links, attachment read and download, workflow read and control, member, role,
-  view, dashboard, and data model read and write, webhooks, object targets, connection permissions, and
-  safety boundaries.
+  AI agent and skill, view, dashboard, and data model read and write, webhooks, object targets, connection
+  permissions, and safety boundaries.
 type: knowledge
 edit: shared
 created: 2026-09-12
@@ -63,7 +63,6 @@ Relation, array, and rich-text fields cannot be sorted by.
 - A value or an answer above the bounds is an invalid response; Qatlas does not cut it.
 - Record values are untrusted workspace content, often personal data. They appear only in a result, never in
   errors, logs, or audit entries, and carry their own data class.
-- The role of the API key is the ceiling: Twenty returns only what the role grants, and Qatlas adds no right.
 
 ## Filtering and counting records
 
@@ -106,8 +105,7 @@ checked arguments as variables only; there is no free GraphQL. A failed query sh
 
 ## Reading workflows
 
-`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) are workspace-wide. `workflow`,
-`workflowVersion`, and `workflowRun` are system objects, so the record tools never reach them.
+`workflows.list`, `workflows.get`, and `workflowruns.list` (`read`) are workspace-wide.
 
 - Step and trigger settings, run outputs, context, state, and error texts are never read out.
 - A workflow run cannot be started with an API key: Twenty refuses it, and Qatlas does not work around that.
@@ -132,6 +130,12 @@ personal data with their own data class; avatars, user identifiers, and member a
 confirmed, need a `tools` entry, and assign nothing. They change only a role that a first read shows editable and
 without API keys. A rights call covers one non-system object checked against the data model ("Data model"). Flags
 are replaced as a whole. All need "Roles", so use a key of its own; no profile ticks them.
+
+## Logic functions and AI agents (read-only)
+
+`agents.list`, `agents.get`, `skills.list`, and `skills.get` (`read`) are workspace-wide and need the Twenty
+right "AI". Prompts, skill content, and the instructions and settings of agent triggers are never read out;
+a trigger shows only its kind.
 
 ## Data model
 
