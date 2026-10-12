@@ -278,6 +278,8 @@ func gridPosition(args *widgetPositionArgs) (*widgetGridPosition, bool) {
 // dashboardTabTarget is a live tab of a live dashboard layout.
 type dashboardTabTarget struct {
 	layoutMode string
+	title      string
+	layoutID   string
 	widgets    []json.RawMessage
 }
 
@@ -335,7 +337,8 @@ func (c *Client) readDashboardTab(ctx context.Context, op, tabID string, texts p
 		if entry.DeletedAt != nil || !ok {
 			break
 		}
-		return &dashboardTabTarget{layoutMode: deref(entry.LayoutMode), widgets: widgets}, nil
+		return &dashboardTabTarget{layoutMode: deref(entry.LayoutMode), title: tab.Title, layoutID: tab.PageLayoutID,
+			widgets: widgets}, nil
 	}
 	return nil, provider.ClassifyStatus(op, http.StatusNotFound, texts)
 }
@@ -471,35 +474,46 @@ func (c *Client) CreatePageLayoutWidget(ctx context.Context, request widgetCreat
 	return widget, nil
 }
 
-// UpdatePageLayoutWidget reads the widget, its tab, and the layout, then sends exactly one PATCH.
-func (c *Client) UpdatePageLayoutWidget(ctx context.Context, id string, patch pageLayoutWidgetPatch) (*DashboardWidgetResult, error) {
-	const op = "update dashboard widget"
+// readDashboardWidget reads the widget, its tab, and the layout. Everything that is not a live widget of a live
+// tab of a live dashboard layout answers as an unknown widget.
+func (c *Client) readDashboardWidget(ctx context.Context, op, id string) (*pageLayoutWidgetWire, *dashboardTabTarget, error) {
 	if !validUUID(id) {
-		return nil, invalidRequest("the widget id must be a UUID")
+		return nil, nil, invalidRequest("the widget id must be a UUID")
 	}
-	path := pageLayoutWidgetsPath + "/" + url.PathEscape(id)
 	var current json.RawMessage
-	if err := c.getWith(ctx, op, path, nil, pageLayoutResponseBytes, &current, widgetStatusTexts); err != nil {
-		return nil, err
+	if err := c.getWith(ctx, op, pageLayoutWidgetsPath+"/"+url.PathEscape(id), nil, pageLayoutResponseBytes, &current,
+		widgetStatusTexts); err != nil {
+		return nil, nil, err
 	}
 	entity, err := unwrapMeta(op, current, "pageLayoutWidget")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var wire pageLayoutWidgetWire
 	if json.Unmarshal(entity, &wire) != nil || !equalUUID(wire.ID, id) || !validUUID(wire.PageLayoutTabID) {
-		return nil, provider.InvalidResponse(op, "Twenty answered with a different dashboard widget than the requested one")
+		return nil, nil, provider.InvalidResponse(op, "Twenty answered with a different dashboard widget than the requested one")
 	}
 	if wire.DeletedAt != nil {
-		return nil, provider.ClassifyStatus(op, http.StatusNotFound, widgetStatusTexts)
+		return nil, nil, provider.ClassifyStatus(op, http.StatusNotFound, widgetStatusTexts)
 	}
 	tab, err := c.readDashboardTab(ctx, op, wire.PageLayoutTabID, widgetStatusTexts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !tab.holds(id) {
-		return nil, provider.ClassifyStatus(op, http.StatusNotFound, widgetStatusTexts)
+		return nil, nil, provider.ClassifyStatus(op, http.StatusNotFound, widgetStatusTexts)
 	}
+	return &wire, tab, nil
+}
+
+// UpdatePageLayoutWidget reads the widget, its tab, and the layout, then sends exactly one PATCH.
+func (c *Client) UpdatePageLayoutWidget(ctx context.Context, id string, patch pageLayoutWidgetPatch) (*DashboardWidgetResult, error) {
+	const op = "update dashboard widget"
+	wire, tab, err := c.readDashboardWidget(ctx, op, id)
+	if err != nil {
+		return nil, err
+	}
+	path := pageLayoutWidgetsPath + "/" + url.PathEscape(id)
 	if patch.Position != nil && tab.layoutMode != "GRID" {
 		return nil, invalidRequest(errWidgetTabGrid)
 	}

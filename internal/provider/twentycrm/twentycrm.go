@@ -304,6 +304,8 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: inGroup(pagelayouttabsCreate, dashboardsGroup), Handler: capability.Handler(invokePageLayoutTabsCreate)},
 		capability.Operation{Descriptor: inGroup(pagelayoutwidgetsCreate, dashboardsGroup), Handler: capability.Handler(invokePageLayoutWidgetsCreate)},
 		capability.Operation{Descriptor: inGroup(pagelayoutwidgetsUpdate, dashboardsGroup), Handler: capability.Handler(invokePageLayoutWidgetsUpdate)},
+		capability.Operation{Descriptor: inGroup(pagelayoutwidgetsDelete, dashboardsGroup), Handler: capability.Handler(invokePageLayoutWidgetsDelete)},
+		capability.Operation{Descriptor: inGroup(pagelayouttabsDelete, dashboardsGroup), Handler: capability.Handler(invokePageLayoutTabsDelete)},
 		capability.Operation{Descriptor: inGroup(viewsList, viewsGroup), Handler: capability.Handler(invokeViewsList)},
 		capability.Operation{Descriptor: inGroup(viewsGet, viewsGroup), Handler: capability.Handler(invokeViewsGet)},
 		capability.Operation{Descriptor: inGroup(viewsCreate, viewsGroup), Handler: capability.Handler(invokeViewsCreate)},
