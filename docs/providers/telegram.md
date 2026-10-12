@@ -182,14 +182,15 @@ an `inline_ref` and sends text articles only, never a URL, media, or keyboard.
 
 ## Business connections
 
-The tools of the group `business` need the target `business/<id>` of the connection named in `business`, carry
-the data class `telegram-business-content`, and are in no setup profile. `telegram.business.get` (`read`) shows
-account, status, and bot rights of one connection. `telegram.updates.list` shows business updates only for a
-bound connection, as `business/<id>` in `chat`; their chat appears only as `business_chat_ref`, a signed
-reference bound to that connection, and a business file has no `file_ref`. `telegram.business.markread`
-(`update`) marks one message in the chat of such a reference as read. `telegram.business.deletemessages`
-(`delete`, `tools` list) deletes up to 100 messages; the rights the account granted the bot decide which go,
-and skipped ones are not reported.
+The tools of the groups `business` and `stories` need the target `business/<id>` of the connection named in
+`business`, carry the data class `telegram-business-content`, and are in no setup profile. `telegram.business.get`
+(`read`) shows account, status, and bot rights of one connection. `telegram.updates.list` shows business updates
+only for a bound connection, as `business/<id>` in `chat`; their chat appears only as `business_chat_ref`, a signed
+reference bound to that connection, and a business file has no `file_ref`. `telegram.business.markread` (`update`)
+marks one message in the chat of such a reference as read. `telegram.business.deletemessages` (`delete`, `tools`
+list) deletes up to 100 messages; the rights the account granted the bot decide which go, and skipped ones are not
+reported. `telegram.stories.post` and `.edit` take a story only from `local_path`; it runs 6, 12, 24, or 48 hours,
+`.repost` copies only between bound connections, and `.delete` needs the `tools` list.
 
 ## Reading chats and members
 

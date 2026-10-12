@@ -194,7 +194,16 @@ func invokeBusinessGetWith(ctx context.Context, resolved *config.Resolved, secre
 
 // GetBusinessConnection performs one getBusinessConnection request and returns the allow-listed fields.
 func (c *Client) GetBusinessConnection(ctx context.Context, id string) (*businessOut, error) {
-	const op = "get business connection"
+	got, err := c.fetchBusinessConnection(ctx, "get business connection", id)
+	if err != nil {
+		return nil, err
+	}
+	return &businessOut{ID: id, User: sender(got.User), BusinessChatRef: c.businessChatRef(id, got.UserChatID),
+		Date: got.Date, IsEnabled: got.IsEnabled, Rights: got.Rights}, nil
+}
+
+// fetchBusinessConnection performs exactly one read of a bound business connection.
+func (c *Client) fetchBusinessConnection(ctx context.Context, op, id string) (*tgBusinessConnection, error) {
 	if !validBusinessID(id) || !c.set.hasBusiness(id) {
 		return nil, providerError(op, "this connection does not bind that business connection")
 	}
@@ -210,8 +219,7 @@ func (c *Client) GetBusinessConnection(ctx context.Context, id string) (*busines
 	if json.Unmarshal(raw, &got) != nil || got.ID != id {
 		return nil, invalidResponse(op)
 	}
-	return &businessOut{ID: id, User: sender(got.User), BusinessChatRef: c.businessChatRef(id, got.UserChatID),
-		Date: got.Date, IsEnabled: got.IsEnabled, Rights: got.Rights}, nil
+	return &got, nil
 }
 
 func invokeBusinessMarkRead(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,

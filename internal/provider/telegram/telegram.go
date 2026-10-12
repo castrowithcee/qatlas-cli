@@ -179,6 +179,7 @@ var toolGroups = []config.ToolGroup{
 	{ID: groupPins, Title: "Pins", Description: "Pin and unpin messages in the bound chats"},
 	{ID: groupUpdates, Title: "Updates", Description: "Read incoming messages and events of the bound chats and business connections"},
 	{ID: groupBusiness, Title: "Business", Description: "Read a bound business connection, mark its messages as read, and delete them"},
+	{ID: groupStories, Title: "Stories", Description: "Post, edit, repost, and delete stories of the bound business connections"},
 	{ID: groupChats, Title: "Chats", Description: "Read master data, administrators, and members of the bound chats; change their title, description, photo, default permissions, and group sticker set; leave a chat"},
 	{ID: groupInviteLinks, Title: "Invite links", Description: "Read the primary invite link and revoke invite links of the bound chats"},
 	{ID: groupBot, Title: "Bot", Description: "Read the identity and webhook status of the bot; read and set its " +
@@ -328,6 +329,10 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: businessGet, Handler: capability.Handler(invokeBusinessGet)},
 		capability.Operation{Descriptor: businessMarkRead, Handler: capability.Handler(invokeBusinessMarkRead)},
 		capability.Operation{Descriptor: businessDeleteMessages, Handler: capability.Handler(invokeBusinessDeleteMessages)},
+		capability.Operation{Descriptor: storiesPost, Handler: capability.Handler(invokeStoriesPost)},
+		capability.Operation{Descriptor: storiesEdit, Handler: capability.Handler(invokeStoriesEdit)},
+		capability.Operation{Descriptor: storiesRepost, Handler: capability.Handler(invokeStoriesRepost)},
+		capability.Operation{Descriptor: storiesDelete, Handler: capability.Handler(invokeStoriesDelete)},
 		capability.Operation{Descriptor: updatesConfirm, Handler: capability.Handler(invokeUpdatesConfirm)},
 		capability.Operation{Descriptor: updatesList, Handler: capability.Handler(invokeUpdatesList)},
 		capability.Operation{Descriptor: botGet, Handler: capability.Handler(invokeBotGet)},
