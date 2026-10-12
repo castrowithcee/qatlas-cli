@@ -354,3 +354,56 @@ func (c *Client) DeleteBusinessMessages(ctx context.Context, id string, ids []in
 	}
 	return map[string]any{"deleted": true}, nil
 }
+
+// sendBusinessReply sends one message as a bound business connection. Scope, option, and reference format, kind,
+// and binding are checked before the credential is resolved; the signature is checked before the request.
+func sendBusinessReply(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver, red *redact.Redactor,
+	httpClient *http.Client, id, chat string, o SendOptions) (map[string]any, error) {
+	const op = "send business message"
+	if err := scopeBusiness(op, resolved, id); err != nil {
+		return nil, err
+	}
+	// Topics and inline keyboards are not offered on behalf of a business account.
+	if o.MessageThreadID != 0 || len(o.InlineKeyboard) > 0 {
+		return nil, providerError(op, "message_thread_id and inline_keyboard are not available with business")
+	}
+	if chat == "" {
+		return nil, providerError(op, "chat must be the business_chat_ref of this business connection")
+	}
+	parsed, err := parseRef(resolved, refBusinessChat, chat)
+	if err != nil {
+		return nil, err
+	}
+	if parsed.binding != businessBinding(id) {
+		return nil, providerError(op, "the reference does not belong to this business connection")
+	}
+	client, err := openWithHTTP(ctx, resolved, secrets, red, httpClient)
+	if err != nil {
+		return nil, err
+	}
+	return client.SendBusiness(ctx, id, parsed, o)
+}
+
+// SendBusiness verifies the reference's signature, then performs exactly one sendMessage request on behalf of
+// the business connection, without retrying an ambiguous result.
+func (c *Client) SendBusiness(ctx context.Context, id string, parsed parsedRef, o SendOptions) (map[string]any, error) {
+	const op = "send business message"
+	if !validBusinessID(id) || !c.set.hasBusiness(id) {
+		return nil, providerError(op, "this connection does not bind that business connection")
+	}
+	if parsed.kind != refBusinessChat || parsed.binding != businessBinding(id) {
+		return nil, providerError(op, "the reference does not belong to this business connection")
+	}
+	if o.MessageThreadID != 0 || len(o.InlineKeyboard) > 0 {
+		return nil, providerError(op, "message_thread_id and inline_keyboard are not available with business")
+	}
+	value, err := c.checkRef(parsed)
+	if err != nil {
+		return nil, err
+	}
+	chat, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || chat == 0 {
+		return nil, providerError(op, "the reference is malformed")
+	}
+	return c.send(ctx, id, chat, o)
+}
