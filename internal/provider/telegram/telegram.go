@@ -46,8 +46,8 @@ var messagesSend = capability.Descriptor{
 	Provider: Provider,
 	Group:    groupMessages,
 	InputSchema: json.RawMessage(
-		`{"type":"object","properties":{"chat":{"type":"string","minLength":1,"maxLength":128},"text":{"type":"string","minLength":1,"maxLength":4096},` +
-			`"parse_mode":{"type":"string","enum":["HTML","MarkdownV2"]},` +
+		`{"type":"object","properties":{"chat":{"type":"string","minLength":1,"maxLength":2048},"text":{"type":"string","minLength":1,"maxLength":4096},` +
+			`"parse_mode":{"type":"string","enum":["HTML","MarkdownV2"]},` + businessConnectionSchema + `,` +
 			`"reply_to_message_id":{"type":"integer","minimum":1},"message_thread_id":{"type":"integer","minimum":1},` +
 			`"disable_notification":{"type":"boolean"},"protect_content":{"type":"boolean"},` +
 			`"disable_link_preview":{"type":"boolean"},"inline_keyboard":` + keyboardSchema +
@@ -57,9 +57,12 @@ var messagesSend = capability.Descriptor{
 		`{"type":"object","properties":{"message_id":{"type":"integer"},"date":{"type":"integer"}},"required":["message_id","date"],"additionalProperties":false}`,
 	),
 	Arguments: []capability.Argument{
-		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat", Target: "chat"},
+		{Name: "chat", Description: "Bound chat to address; optional when the connection binds exactly one chat; " +
+			"with business, the business_chat_ref of that business connection is required instead", Target: "chat"},
 		{Name: "text", Description: "Message text, from 1 through 4096 characters", Required: true},
 		parseModeArgument,
+		{Name: "business", Description: "Reply on behalf of this bound business connection (business/CONNECTION_ID target); " +
+			"chat must then be its business_chat_ref, and message_thread_id and inline_keyboard are refused"},
 		{Name: "reply_to_message_id", Description: "Message of the same chat to reply to"},
 		{Name: "message_thread_id", Description: "Forum topic to send into"},
 		{Name: "disable_notification", Description: "Send silently"},
@@ -397,8 +400,14 @@ func Register(reg *capability.Registry) error {
 
 func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
 	red *redact.Redactor, raw json.RawMessage) (any, error) {
+	return invokeMessagesSendWith(ctx, resolved, secrets, red, raw, newHTTPClient())
+}
+
+func invokeMessagesSendWith(ctx context.Context, resolved *config.Resolved, secrets *secret.Resolver,
+	red *redact.Redactor, raw json.RawMessage, httpClient *http.Client) (any, error) {
 	var arguments struct {
-		Chat string `json:"chat"`
+		Chat     string  `json:"chat"`
+		Business *string `json:"business"`
 		SendOptions
 	}
 	if err := decodeStrict(raw, &arguments); err != nil {
@@ -409,7 +418,10 @@ func invokeMessagesSend(ctx context.Context, resolved *config.Resolved, secrets 
 	if err := arguments.SendOptions.validate(); err != nil {
 		return nil, err
 	}
-	client, err := openChat(ctx, resolved, secrets, red, arguments.Chat)
+	if arguments.Business != nil {
+		return sendBusinessReply(ctx, resolved, secrets, red, httpClient, *arguments.Business, arguments.Chat, arguments.SendOptions)
+	}
+	client, err := openChatWithHTTP(ctx, resolved, secrets, red, arguments.Chat, httpClient)
 	if err != nil {
 		return nil, err
 	}
@@ -653,21 +665,28 @@ func (c *Client) Send(ctx context.Context, o SendOptions) (map[string]any, error
 	if c.target == "" {
 		return nil, providerError("send message", "no chat was selected")
 	}
+	return c.send(ctx, "", c.target, o)
+}
+
+// send performs the sendMessage request; a non-empty businessID sends on behalf of that business connection.
+func (c *Client) send(ctx context.Context, businessID string, chatID any, o SendOptions) (map[string]any, error) {
 	if err := o.validate(); err != nil {
 		return nil, err
 	}
 	body := struct {
-		ChatID              string              `json:"chat_id"`
-		Text                string              `json:"text"`
-		ParseMode           string              `json:"parse_mode,omitempty"`
-		ReplyParameters     *replyParameters    `json:"reply_parameters,omitempty"`
-		MessageThreadID     int64               `json:"message_thread_id,omitempty"`
-		DisableNotification bool                `json:"disable_notification,omitempty"`
-		ProtectContent      bool                `json:"protect_content,omitempty"`
-		LinkPreviewOptions  *linkPreviewOptions `json:"link_preview_options,omitempty"`
-		ReplyMarkup         *replyMarkup        `json:"reply_markup,omitempty"`
+		BusinessConnectionID string              `json:"business_connection_id,omitempty"`
+		ChatID               any                 `json:"chat_id"`
+		Text                 string              `json:"text"`
+		ParseMode            string              `json:"parse_mode,omitempty"`
+		ReplyParameters      *replyParameters    `json:"reply_parameters,omitempty"`
+		MessageThreadID      int64               `json:"message_thread_id,omitempty"`
+		DisableNotification  bool                `json:"disable_notification,omitempty"`
+		ProtectContent       bool                `json:"protect_content,omitempty"`
+		LinkPreviewOptions   *linkPreviewOptions `json:"link_preview_options,omitempty"`
+		ReplyMarkup          *replyMarkup        `json:"reply_markup,omitempty"`
 	}{
-		ChatID: c.target, Text: o.Text, ParseMode: o.ParseMode, MessageThreadID: o.MessageThreadID,
+		BusinessConnectionID: businessID,
+		ChatID:               chatID, Text: o.Text, ParseMode: o.ParseMode, MessageThreadID: o.MessageThreadID,
 		DisableNotification: o.DisableNotification, ProtectContent: o.ProtectContent,
 		ReplyMarkup: markupOf(o.InlineKeyboard),
 	}
