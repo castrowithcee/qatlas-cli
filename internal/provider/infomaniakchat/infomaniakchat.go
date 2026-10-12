@@ -565,7 +565,7 @@ func Register(reg *capability.Registry) error {
 				channelsMembersList.ID, directList.ID, messagesList.ID, messagesThread.ID, messagesGet.ID, messagesFiles.ID, filesInfo.ID,
 				filesDownload.ID, reactionsList.ID, pinsList.ID, flaggedList.ID, usersGet.ID, usersList.ID,
 				usersSearch.ID, usersStatus.ID, messagesSearch.ID, filesSearch.ID, channelsSearch.ID, archivedChannelsList.ID,
-				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID, emojiList.ID},
+				threadsList.ID, threadsGet.ID, channelsUnread.ID, categoriesList.ID, emojiList.ID, usergroupsList.ID},
 		}, {
 			ID: "messaging", Title: "Read, send, edit, and react",
 			Description: "also opens a confirmed direct or group channel with members of the bound teams, sends " +
@@ -643,6 +643,7 @@ func Register(reg *capability.Registry) error {
 		capability.Operation{Descriptor: withGroup(messagesRemind), Handler: capability.Handler(invokeRemind)},
 		capability.Operation{Descriptor: withGroup(usersGet), Handler: capability.Handler(invokeUsersGet)},
 		capability.Operation{Descriptor: withGroup(usersList), Handler: capability.Handler(invokeUsersList)},
+		capability.Operation{Descriptor: withGroup(usergroupsList), Handler: capability.Handler(invokeUserGroupsList)},
 		capability.Operation{Descriptor: withGroup(usersSearch), Handler: capability.Handler(invokeUsersSearch)},
 		capability.Operation{Descriptor: withGroup(usersStatus), Handler: capability.Handler(invokeUsersStatus)},
 		capability.Operation{Descriptor: withGroup(statusSet), Handler: capability.Handler(invokeStatusSet)},
