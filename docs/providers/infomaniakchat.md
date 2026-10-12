@@ -150,7 +150,7 @@ Every tool ID starts with `infomaniakchat.`; the tool group is the first column:
 | `files` | `files.info`, `.search`, `.download` (writes a local file) | `files.upload` (reads a local file) | |
 | `threads` | `threads.list`, `.get` | `threads.follow`, `.unfollow`, `.markread` | |
 | `reactions` | `reactions.list` | `reactions.add` | `reactions.remove` |
-| `users` | `users.get`, `.list`, `.search`, `.status` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
+| `users` | `users.get`, `.list`, `.search`, `.status`, `usergroups.list` | `status.set`, `customstatus.set`, `.clear`, `profile.update` | |
 | `integrations` | | | `incomingwebhooks.*`, `outgoingwebhooks.*`, `commands.*` |
 | `administration` | `emoji.list` | | `bots.list`, `.get`, `.update`, `.disable`, `.enable`, `roles.get` (a `POST` that changes nothing), `emoji.create` (reads a local file), `.delete` |
 
