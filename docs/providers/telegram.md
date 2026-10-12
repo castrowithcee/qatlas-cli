@@ -5,7 +5,7 @@ description: >
 type: knowledge
 edit: shared
 created: 2026-09-12
-updated: 2026-10-11
+updated: 2026-10-12
 ---
 
 # Telegram
@@ -149,9 +149,9 @@ new one that the result does not contain; creating, exporting, or editing invite
 
 ## Reading updates
 
-`telegram.updates.list` (`read`) shows the pending updates of the bot, without `chat`, for every bound chat. It
-needs at least one chat target. Only updates of bound chats appear; every other update, whatever its chat or type,
-is only counted in `skipped`, and `last_update_id` names the highest update seen, skipped ones included. An
+`telegram.updates.list` (`read`) shows the pending updates of the bot, without `chat`, for every bound chat and
+business connection. It needs at least one chat or business target. Every other update, whatever its chat or
+type, is only counted in `skipped`, and `last_update_id` names the highest update seen, skipped ones included. An
 `@username` target is matched through a fixed `getChat` call on the configured name; the ID that returns is used
 for matching only. A long poll (`wait_seconds`) waits for a new update.
 
@@ -180,6 +180,17 @@ press and a join request query answer within 10 seconds.
 an `inline_ref`, and a location is never shown. `telegram.inline.answer` (`create`, `tools` list) needs `bot` and
 an `inline_ref` and sends text articles only, never a URL, media, or keyboard.
 
+## Business connections
+
+The tools of the group `business` need the target `business/<id>` of the connection named in `business`, carry
+the data class `telegram-business-content`, and are in no setup profile. `telegram.business.get` (`read`) shows
+account, status, and bot rights of one connection. `telegram.updates.list` shows business updates only for a
+bound connection, as `business/<id>` in `chat`; their chat appears only as `business_chat_ref`, a signed
+reference bound to that connection, and a business file has no `file_ref`. `telegram.business.markread`
+(`update`) marks one message in the chat of such a reference as read. `telegram.business.deletemessages`
+(`delete`, `tools` list) deletes up to 100 messages; the rights the account granted the bot decide which go,
+and skipped ones are not reported.
+
 ## Reading chats and members
 
 The four chat read tools address a bound chat through `chat` as above and return fixed fields only:
@@ -195,7 +206,7 @@ The four chat read tools address a bound chat through `chat` as above and return
 data of a bound group or channel; Telegram refuses private chats.
 
 `telegram.chats.setphoto` takes only a `local_path`, never a `file_ref` or URL, and repeating it has an unknown
-effect. The photo is limited to 10 MB.
+effect.
 
 `telegram.chats.setpermissions` sets the default member permissions of a bound group or supergroup. Like
 `telegram.members.restrict`, it takes the complete `permissions` object: every boolean is required, a missing
@@ -250,7 +261,7 @@ is never part of one. Each file comes from exactly one of `local_path` or `file_
 per item, and a URL is never a source. The options of `telegram.messages.send` that apply (`parse_mode`,
 `reply_to_message_id`, `message_thread_id`, `disable_notification`, `protect_content`) carry over, plus a
 `caption` of at most 1024 characters, which an album shows on its first item; a video note takes neither caption
-nor `parse_mode`. Duration, performer, title, thumbnail, streaming, and spoiler settings are not offered.
+nor `parse_mode`.
 
 A `file_ref` must come from the selected chat itself: one issued for another target, even another bound chat,
 for another token, or of another kind is refused before the credential is read, and a raw file identifier is
