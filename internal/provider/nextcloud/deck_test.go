@@ -125,7 +125,7 @@ func TestDeckBoardGetReportsLabelsACLAndMembersBounded(t *testing.T) {
 	}
 	var detail DeckBoardDetail
 	if err := json.Unmarshal(result, &detail); err != nil || len(detail.Labels) != 1 || detail.Labels[0].ID != "5" ||
-		len(detail.ACL) != 1 || detail.ACL[0].Participant.Type != "group" || !detail.ACL[0].CanEdit ||
+		len(detail.ACL) != 1 || detail.ACL[0].ID != "1" || detail.ACL[0].Participant.Type != "group" || !detail.ACL[0].CanEdit ||
 		len(detail.Members) != 1 || detail.Members[0].ID != "bob" {
 		t.Errorf("detail = %s, %v", result, err)
 	}

@@ -99,6 +99,7 @@ type DeckBoardsResult struct {
 
 // DeckACL is one sharing entry of a board.
 type DeckACL struct {
+	ID          string     `json:"id"`
 	Participant DeckPerson `json:"participant"`
 	CanEdit     bool       `json:"can_edit"`
 	CanShare    bool       `json:"can_share"`
@@ -202,6 +203,7 @@ type rawLabel struct {
 }
 
 type rawACL struct {
+	ID          flexString  `json:"id"`
 	Participant rawPerson   `json:"participant"`
 	Type        json.Number `json:"type"`
 	Edit        bool        `json:"permissionEdit"`
@@ -408,7 +410,8 @@ func (c *Client) GetDeckBoard(ctx context.Context, boardID string) (*DeckBoardDe
 			break
 		}
 		detail.ACL = append(detail.ACL, DeckACL{
-			Participant: *person, CanEdit: entry.Edit, CanShare: entry.Share, CanManage: entry.Manage, Owner: entry.Owner,
+			ID: cut.text(string(entry.ID), maxDeckTitleBytes), Participant: *person,
+			CanEdit: entry.Edit, CanShare: entry.Share, CanManage: entry.Manage, Owner: entry.Owner,
 		})
 	}
 	for _, member := range raw.Users {
@@ -677,9 +680,9 @@ const (
 		`"required":["id","title","archived"],"additionalProperties":false}`
 	deckBoardDetailSchema = `{"type":"object","properties":{` + deckBoardProperties + `,` +
 		`"labels":{"type":"array","items":` + deckLabelSchema + `},` +
-		`"acl":{"type":"array","items":{"type":"object","properties":{"participant":` + deckPersonSchema + `,` +
+		`"acl":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"participant":` + deckPersonSchema + `,` +
 		`"can_edit":{"type":"boolean"},"can_share":{"type":"boolean"},"can_manage":{"type":"boolean"},` +
-		`"owner":{"type":"boolean"}},"required":["participant","can_edit","can_share","can_manage","owner"],` +
+		`"owner":{"type":"boolean"}},"required":["id","participant","can_edit","can_share","can_manage","owner"],` +
 		`"additionalProperties":false}},` +
 		`"members":{"type":"array","items":` + deckPersonSchema + `}},` +
 		`"required":["id","title","archived","labels","acl","members"],"additionalProperties":false}`
