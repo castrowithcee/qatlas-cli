@@ -160,16 +160,16 @@ refuse a foreign, inactive, or system field, column and sort also an unsortable 
 ## Dashboards
 
 `pagelayouts.list` and `pagelayouts.get` (`read`) are workspace-wide and read dashboard layouts with tabs and
-widgets. A layout of another type or a trashed one is not listed and `get` treats it as unknown, though Twenty
-serves it by identifier. A widget shows type, title, position, object, and chart type (`unknown` for an unknown
-type), no content, filter, or chart data; an embedded page shows only its origin. Titles are untrusted data of
-their own data class. On the object `dashboard`, `records.create` and `records.batchcreate` without a layout
-identifier also create a layout with one tab; `records.destroy` also destroys its layouts, `delete` leaves them.
+widgets. Other layout types and trashed layouts are not listed and `get` treats them as unknown. A widget shows
+type, title, position, object, and chart type (`unknown` if unknown), no content, filter, or chart data; an
+embedded page shows only its origin. Titles are untrusted data of their own data class. On the object
+`dashboard`, `records.create` and `records.batchcreate` without a layout identifier also create a layout with one
+tab; `records.destroy` also destroys its layouts, `delete` leaves them.
 
-`pagelayouttabs.create`, `pagelayoutwidgets.create`, and `pagelayoutwidgets.update` are confirmed, need a `tools`
-entry and the right "Layouts"; no profile ticks them. Each reads first, refuses what `get` would not read, and
-changes it for all members. A tab is empty, in grid mode; a widget is Markdown text or the table of a custom
-workspace table view (no index, standard, personal, or widget view). `update` changes title and position only.
+The tab and widget write tools are confirmed, need a `tools` entry and the right "Layouts"; no profile ticks
+them. Each reads first and refuses what `get` would not read. A tab is empty, in grid mode; a widget is Markdown
+text or the table of a custom workspace table view (no index, standard, personal, or widget view). `delete`
+removes for good, without restore; a deleted tab takes its widgets. No tool deletes a layout.
 
 ## Writing records
 
