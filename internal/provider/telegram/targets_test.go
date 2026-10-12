@@ -227,7 +227,7 @@ func TestChatArgumentIsDeclared(t *testing.T) {
 		messagesEditCaption, messagesEditMedia, locationsEditLive, locationsStopLive, chatsSetPermissions,
 		chatsSetStickerSet, chatsDeleteStickerSet, chatsLeave, topicsCreate, topicsEdit, topicsClose, topicsReopen,
 		topicsDelete, topicsUnpinAll, topicsHideGeneral, topicsUnhideGeneral, joinrequestsDecline,
-		suggestedpostsApprove, suggestedpostsDecline} {
+		suggestedpostsApprove, suggestedpostsDecline, gamesSend, gamesSetScore, gamesHighScores} {
 		found := false
 		for _, a := range d.Arguments {
 			found = found || (a.Name == "chat" && !a.Required)
