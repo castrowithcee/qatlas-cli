@@ -160,16 +160,16 @@ another object and an inactive or system one, column and sort also an unsortable
 ## Dashboards
 
 `pagelayouts.list` and `pagelayouts.get` (`read`) are workspace-wide and read dashboard layouts with tabs and
-widgets. A layout of another type or a trashed one is not listed, and `get` answers it like an unknown one,
-although Twenty serves it by identifier. Titles are untrusted workspace data of their own data class.
+widgets. A layout of another type or a trashed one is not listed and `get` treats it as unknown, though Twenty
+serves it by identifier. A widget shows type, title, position, object, and chart type (`unknown` for an unknown
+type), no content, filter, or chart data; an embedded page shows only its origin. Titles are untrusted data of
+their own data class. On the object `dashboard`, `records.create` and `records.batchcreate` without a layout
+identifier also create a layout with one tab; `records.destroy` also destroys its layouts, `delete` leaves them.
 
-- A widget is reduced to type, title, position, object, and chart type (`unknown` for an unknown type).
-  Configurations, rich text, filters, and chart data are never read; an embedded page shows only its origin.
-- On the object `dashboard`, `records.create` and `records.batchcreate` without a layout identifier also create
-  a layout with one tab, and `records.destroy` also destroys its layouts. `delete` leaves them.
-
-`pagelayouttabs.create` is confirmed, needs a `tools` entry and the Twenty right "Layouts"; no profile ticks it.
-It reads the layout first, refuses what `get` would not read, and adds an empty grid tab for all members.
+`pagelayouttabs.create`, `pagelayoutwidgets.create`, and `pagelayoutwidgets.update` are confirmed, need a `tools`
+entry and the right "Layouts"; no profile ticks them. Each reads first, refuses what `get` would not read, and
+changes it for all members. A tab is empty, in grid mode; a widget is Markdown text or the table of a custom
+workspace table view (no index, standard, personal, or widget view). `update` changes title and position only.
 
 ## Writing records
 

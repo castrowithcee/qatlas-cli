@@ -247,6 +247,7 @@ type viewRecord struct {
 	IsCustom           *bool           `json:"isCustom"`
 	IsActive           *bool           `json:"isActive"`
 	Visibility         string          `json:"visibility"`
+	DeletedAt          *string         `json:"deletedAt"`
 	AnyFieldFilter     *string         `json:"anyFieldFilterValue"`
 	MainGroupByFieldID *string         `json:"mainGroupByFieldMetadataId"`
 	ViewFields         json.RawMessage `json:"viewFields"`
