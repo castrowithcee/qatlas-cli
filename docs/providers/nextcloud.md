@@ -158,13 +158,13 @@ access or request, without naming it, and listings drop unbound and deleted boar
 so a stack, card, label, sharing entry, or target stack counts only when a read of the bound board shows it there.
 Provider text is untrusted, capped, and marked `truncated` when cut; comments and attachments are not read.
 
-Every change needs `confirm` and sends one request after at most one read of the bound board; an unclear outcome is
-reported as possibly applied and never repeated. `deckboards.create` needs the general `deck` target, since a
-`deck/BOARD_ID` binding would not hold the new board. Board, stack, label, and sharing changes refuse without the manage
-right; card changes leave the edit right to Deck. `deckacl.*` shares with users and groups only and refuses team and
-owner entries. `deckcards.update` needs the card's `last_modified` as read and refuses a card changed since; an archived
-card can only be restored. A new stack or card without `order` goes last. Deck deletes boards and cards softly, but
-Qatlas offers no restore; a deleted stack takes its cards. All `delete` and `deckacl` tools need a tools list.
+Every change needs `confirm` and sends one request after at most two reads; an unclear outcome is reported as possibly
+applied and never repeated. `deckboards.create` needs the general `deck` target, as a `deck/BOARD_ID` binding cannot
+hold the new board. Board, stack, label, and sharing changes refuse without the manage right; card changes leave the
+edit right to Deck. `deckcards.update` needs the card's `last_modified` as read and refuses a card changed since; an
+archived card can only be restored. Cards take only the board's labels and user members; `deckacl.*` shares with users
+and groups only and refuses team and owner entries. Deck deletes boards and cards softly, with no Qatlas restore; a
+deleted stack takes its cards. Every `delete` and `deckacl` tool needs a tools list.
 
 ## Talk
 
