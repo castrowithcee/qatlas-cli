@@ -60,12 +60,11 @@ those of others; in a private chat it also deletes incoming messages.
 `telegram.messages.delete` and also only through a `tools` list. Telegram skips missing or undeletable
 identifiers silently, so success does not say which messages are gone.
 
-`telegram.messages.forward` and `telegram.messages.copy` (`create`) move messages from `from_chat` to `chat`,
-two bound chats that follow the rule for `chat` above and may be the same. The source is one `message_id` or
-`message_ids` in strictly ascending order; another order is refused rather than sorted. `copy` leaves out the
-link to the original, and its `caption` replaces the caption of a single message and is refused with
-`message_ids`. The result is only `message_id` or `message_ids`; Telegram skips sources it cannot transfer
-without notice, so the list can be shorter than the request.
+`telegram.messages.forward` and `telegram.messages.copy` (`create`) move messages from `from_chat` to `chat`, two
+bound chats that follow the rule for `chat` above and may be the same. The source is one `message_id` or
+`message_ids` in strictly ascending order; another order is refused rather than sorted. `copy` leaves out the link
+to the original, and its `caption` replaces the caption of a single message and is refused with `message_ids`.
+Telegram skips sources it cannot transfer without notice, so the list can be shorter than the request.
 
 `telegram.pins.unpinall` unpins every pinned message of the chat and, like `telegram.messages.delete`, requires a
 `tools` list; topic-specific unpinning is not offered.
@@ -182,15 +181,16 @@ an `inline_ref` and sends text articles only, never a URL, media, or keyboard.
 
 ## Business connections
 
-The tools of the group `business` need the target `business/<id>` of the connection named in `business`, carry the
-data class `telegram-business-content`, and are in no setup profile; Telegram still applies the rights the account
-granted the bot. `telegram.updates.list` shows business updates only for a bound connection, as `business/<id>` in
-`chat`; their chat appears only as `business_chat_ref`, a signed reference bound to that connection, and a business
-file has no `file_ref`. Only such a reference addresses a chat: `telegram.business.markread` marks a message in it
-as read, and `telegram.messages.send` with `business` replies to it, without topic or keyboard. A `tools` list is
-needed for `telegram.business.deletemessages`, which does not report skipped messages, `.setusername`, as the old
-name can be lost, and `.removephoto`. `.setphoto` takes a static JPEG from `local_path`; `.gifts` and `.starbalance`
-only read, without any identifier that could move or convert a gift.
+The tools of the groups `business` and `stories` need the target `business/<id>` of the connection named in
+`business`, carry the data class `telegram-business-content`, and are in no setup profile. `telegram.updates.list`
+shows business updates only for a bound connection, as `business/<id>` in `chat`; their chat appears only as
+`business_chat_ref`, a signed reference bound to that connection, and a business file has no `file_ref`. Only such a
+reference addresses a chat: `telegram.business.markread` marks a message in it as read, and `telegram.messages.send`
+with `business` replies to it, without topic or keyboard. A `tools` list is needed for
+`telegram.business.deletemessages`, which does not report skipped messages, `.setusername`, as the old name can be
+lost, and `.removephoto`. `.setphoto` takes a static JPEG from `local_path`; `.gifts` and `.starbalance` only read,
+without any identifier that could move or convert a gift. `telegram.stories.post` and `.edit` take media only from
+`local_path`, `.repost` copies only between bound connections, and `.delete` needs the `tools` list.
 
 ## Reading chats and members
 

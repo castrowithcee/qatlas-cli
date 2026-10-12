@@ -158,15 +158,16 @@ func TestDefaultRegistry(t *testing.T) {
 		93: "telegram.stickersets.addsticker", 94: "telegram.stickersets.create", 95: "telegram.stickersets.delete",
 		96: "telegram.stickersets.get", 97: "telegram.stickersets.setcustomemojithumbnail",
 		98: "telegram.stickersets.setthumbnail", 99: "telegram.stickersets.settitle",
-		100: "telegram.suggestedposts.approve", 101: "telegram.suggestedposts.decline",
-		102: "telegram.topics.close", 103: "telegram.topics.create", 104: "telegram.topics.delete",
-		105: "telegram.topics.edit", 106: "telegram.topics.hidegeneral", 107: "telegram.topics.iconstickers",
-		108: "telegram.topics.reopen", 109: "telegram.topics.unhidegeneral", 110: "telegram.topics.unpinall",
-		111: "telegram.updates.confirm", 112: "telegram.updates.list", 113: "telegram.venues.send",
-		114: "telegram.videonotes.send", 115: "telegram.videos.send", 116: "telegram.voice.send",
-		117: "telegram.webhook.get",
+		100: "telegram.stories.delete", 101: "telegram.stories.edit", 102: "telegram.stories.post",
+		103: "telegram.stories.repost", 104: "telegram.suggestedposts.approve",
+		105: "telegram.suggestedposts.decline", 106: "telegram.topics.close", 107: "telegram.topics.create",
+		108: "telegram.topics.delete", 109: "telegram.topics.edit", 110: "telegram.topics.hidegeneral",
+		111: "telegram.topics.iconstickers", 112: "telegram.topics.reopen", 113: "telegram.topics.unhidegeneral",
+		114: "telegram.topics.unpinall", 115: "telegram.updates.confirm", 116: "telegram.updates.list",
+		117: "telegram.venues.send", 118: "telegram.videonotes.send", 119: "telegram.videos.send",
+		120: "telegram.voice.send", 121: "telegram.webhook.get",
 	}
-	ok2 := len(operations) == 118
+	ok2 := len(operations) == 122
 	for i, id := range wantIDs {
 		ok2 = ok2 && i < len(operations) && operations[i].ID == id
 	}
